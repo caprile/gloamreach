@@ -1,6 +1,6 @@
 import Phaser from "phaser";
 
-const SPEED = 190; // pixels per second
+const SPEED = 95; // pixels per second
 
 // The player character. It owns its own input and movement so MainScene stays
 // focused on the world. Movement supports both WASD and the arrow keys, and is
@@ -52,5 +52,23 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       const len = Math.hypot(vx, vy);
       body.setVelocity((vx / len) * SPEED, (vy / len) * SPEED);
     }
+  }
+
+  // Quick rotate-punch tween played on a successful chop/mine hit. Stands in
+  // for a real swing animation until there's a facing direction / weapon
+  // sprite system to attach one to.
+  playSwing(): void {
+    this.scene.tweens.killTweensOf(this);
+    this.setAngle(0);
+    this.scene.tweens.add({
+      targets: this,
+      angle: 25,
+      duration: 70,
+      yoyo: true,
+      ease: "Sine.easeOut",
+      onComplete: () => {
+        this.setAngle(0);
+      },
+    });
   }
 }

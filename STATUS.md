@@ -5,14 +5,74 @@ Last updated: 2026-07-06
 ## Where things stand
 
 Core loop works: move (WASD/arrows), gather (branches/rocks free; trees/boulders
-need the right tool kind equipped), craft (T), manage inventory/hotbar (Tab,
-1-9, scroll wheel), equip tools via the hotbar. Recipe discovery is gated by
-"have you picked up the ingredients" + skill level; unlocks announce themselves
-via a toast + persistent event log (bottom-right, collapsible). Placeable
-items (currently just the campfire) skip the backpack entirely — crafting one
-enters a placement mode instead (see below).
+need the right tool kind equipped and now take multiple hits, see below), craft
+(T), manage inventory/hotbar (Tab, 1-9, scroll wheel), equip tools via the
+hotbar. Recipe discovery is gated by "have you picked up the ingredients" +
+skill level; unlocks announce themselves via a toast + persistent event log
+(bottom-right, collapsible). Placeable items (currently just the campfire)
+skip the backpack entirely — crafting one enters a placement mode instead.
 
-### Just finished: Placement mode for build/placeable items
+### Just finished: Move speed halved + tool hit-rate cooldown
+
+Two small follow-ups requested right after M2 landed (M2's multi-hit change
+made LMB-spam farming worse, since nothing capped how fast repeated hits
+could land):
+
+- **`Player.ts`**: `SPEED` halved (190 → 95 px/s) — movement felt too fast.
+- **Tool hit cooldown**: `toolCooldownMs(tool)` (`src/entities/ResourceNode.ts`),
+  same `Record<ToolType, number>` pattern as `toolDamage`/`toolKind`
+  (`stone_axe`/`stone_pickaxe` both `500`ms for now). `MainScene.tryInteract()`
+  tracks `lastToolHitAt` (via `this.time.now`) and bails out silently (no
+  swing, no `takeHit`) if a chop/mine attempt comes in before the cooldown
+  elapses — spamming LMB now can't out-farm the tool's swing rate. Pickups are
+  unaffected (single-click, no cooldown, same as before).
+- This is the first piece of "attack speed" as a per-tool/weapon concept;
+  future tiers/weapons can tune their own cooldown independently, and this is
+  the hook combat (roadmap item 4) will reuse for weapon attack speed.
+
+Verified via `preview_eval`: first hit registers, an immediate second click on
+the same node is blocked (health unchanged), and after waiting past the
+cooldown window a hit lands again. Type-check clean, no console errors.
+
+### Previously: Resource node health / multi-hit (Milestone 2)
+
+Plan file: `.claude/plans/radiant-gliding-seal.md`.
+
+Trees and boulders now take 3 hits to fell instead of one:
+
+- **`ResourceNode`** (`src/entities/ResourceNode.ts`) gained `health`/
+  `maxHealth` (set via a new `health` field on `ResourceNodeConfig`) and a
+  `takeHit(damage)` method — decrements health, plays shake+tint feedback,
+  returns `true` only once health hits 0. The resource `amount` is awarded
+  **only on the depleting hit**, not per-hit — no partial-yield/overflow
+  logic needed, matches loose-drops still being deferred to M3.
+- **Tool damage** is a new `toolDamage(tool)` function next to the existing
+  `toolKind()`/`requiredKind()` pattern, backed by a `Record<ToolType, number>`
+  (`stone_axe`/`stone_pickaxe` both deal `1` for now) — future higher tiers
+  return a bigger number and fell nodes in fewer hits without any node-data
+  changes.
+- **Hit feedback** lives entirely in `ResourceNode.playHitFeedback()`: a quick
+  side-to-side shake tween plus a tint interpolated from white toward a
+  darker "damaged" shade as health drops — the first shake/tint-style effect
+  in the codebase (tween conventions follow `EventLogUI.ts`'s established
+  style: short durations, named eases, cleanup via callbacks).
+- **`Player.playSwing()`** (`src/entities/Player.ts`) is a quick rotate-punch
+  tween (angle 0→25→0) played on every successful chop/mine hit — a stand-in
+  for a real swing animation since there's no facing-direction or
+  weapon-sprite system yet; kills any in-flight swing tween first so rapid
+  clicks can't leave the player stuck mid-rotation.
+- Pickups (branch/rock) are untouched — `health: 1`, but they never go
+  through `takeHit`, so behavior is identical to before.
+- Trees/boulders that survive a hit stay in `this.nodes` and keep showing
+  their hover prompt; nothing is removed/credited until the depleting hit.
+
+Verified via `preview_eval` (health decrementing per hit, resource awarded
+only on the 3rd/depleting hit for both chop and mine, node correctly removed
+from `nodes` only when depleted, rapid back-to-back hits leaving no stuck
+tween/angle state) plus a `preview_screenshot` for the tint darkening. Type-
+check clean, no console errors.
+
+### Previously: Placement mode for build/placeable items
 
 Plan file: `.claude/plans/ancient-painting-petal.md`.
 
@@ -120,13 +180,30 @@ clean throughout. No console errors.
 
 ### Up next
 
-Back to the inventory-overhaul roadmap: **Milestone 2** (resource node
-health/multi-hit, tool damage, swing animation + node decay/shake per hit),
-then **Milestone 3** (loose world drops with stack consolidation + magnet
-auto-pickup — plan file `.claude/plans/bug-i-can-drag-twinkling-engelbart.md`).
+Back to the inventory-overhaul roadmap: **Milestone 3** (loose world drops
+with stack consolidation + magnet auto-pickup — plan file
+`.claude/plans/bug-i-can-drag-twinkling-engelbart.md`).
 
-Per `CLAUDE.md` convention (one milestone/feature per session), M2 should
+Per `CLAUDE.md` convention (one milestone/feature per session), M3 should
 start in a fresh chat session rather than continuing this one.
+
+**Beyond M3**, three more feature requests were raised (2026-07-06) and given
+a rough sequencing — none started yet:
+
+- **Stamina** (sprint/jump/tool-swing cost, max pool + regen) — already sat at
+  roadmap item 3 ("Stamina, sprint, jump," right after loose drops/magnet in
+  `CLAUDE.md`'s Roadmap section); no change to its position. It depends on the
+  hit-rate-cooldown concept above existing first (stamina cost per swing needs
+  a swing-rate to hook a cost into), which is now done.
+- **Equipped item visible on the player sprite** — deliberately deferred to
+  sit alongside **Combat** (roadmap item 4). `Player` is currently a static
+  sprite with no facing direction or weapon-attachment system; M2's "swing" is
+  a placeholder rotate tween, not a real animation. Building a real
+  facing/weapon-visual system once (for combat) and reusing it for tools
+  avoids doing it twice.
+- Tool/weapon attack-speed values (`TOOL_COOLDOWN_MS` in
+  `src/entities/ResourceNode.ts`) will need a weapon-side equivalent when
+  Combat is built — same pattern, different table.
 
 ### Known rough edges / deferred (see plan's "Out of scope" section)
 

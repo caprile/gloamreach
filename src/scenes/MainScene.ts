@@ -4,6 +4,8 @@ import {
   ResourceNode,
   requiredKind,
   toolKind,
+  toolDamage,
+  toolCooldownMs,
   type NodeAction,
   type ToolType,
 } from "../entities/ResourceNode";
@@ -58,6 +60,7 @@ export class MainScene extends Phaser.Scene {
 
   private promptText!: Phaser.GameObjects.Text; // fixed bottom-right hover prompt
   private hoveredNode: ResourceNode | null = null;
+  private lastToolHitAt = 0; // this.time.now of the last successful chop/mine hit
 
   // Placement mode: crafting a placeable recipe (e.g. campfire) enters this
   // instead of landing in the backpack. A ghost preview follows the cursor,
@@ -285,6 +288,7 @@ export class MainScene extends Phaser.Scene {
         displayName: string;
         loose: boolean;
         solid: boolean;
+        health: number;
       },
     ) => {
       for (let i = 0; i < count; i++) {
@@ -300,6 +304,7 @@ export class MainScene extends Phaser.Scene {
           action: cfg.action,
           displayName: cfg.displayName,
           loose: cfg.loose,
+          health: cfg.health,
         });
         this.nodes.push(node);
         if (cfg.solid) solids.add(node);
@@ -308,11 +313,11 @@ export class MainScene extends Phaser.Scene {
 
     // Free pickups. Branches are "loose" (future magnet); rocks are NOT loose
     // until picked, so they'll always need a manual pickup.
-    scatter(18, { texture: "branch", resource: "wood", amount: 1, action: "pickup", displayName: "Branch", loose: true, solid: false });
-    scatter(14, { texture: "rock", resource: "stone", amount: 1, action: "pickup", displayName: "Rock", loose: false, solid: false });
+    scatter(18, { texture: "branch", resource: "wood", amount: 1, action: "pickup", displayName: "Branch", loose: true, solid: false, health: 1 });
+    scatter(14, { texture: "rock", resource: "stone", amount: 1, action: "pickup", displayName: "Rock", loose: false, solid: false, health: 1 });
     // Tool-gated: chop trees (needs an axe out), mine boulders (needs a pickaxe out).
-    scatter(10, { texture: "tree", resource: "wood", amount: 5, action: "chop", displayName: "Tree", loose: false, solid: true });
-    scatter(8, { texture: "boulder", resource: "stone", amount: 5, action: "mine", displayName: "Boulder", loose: false, solid: true });
+    scatter(10, { texture: "tree", resource: "wood", amount: 5, action: "chop", displayName: "Tree", loose: false, solid: true, health: 3 });
+    scatter(8, { texture: "boulder", resource: "stone", amount: 5, action: "mine", displayName: "Boulder", loose: false, solid: true, health: 3 });
   }
 
   // Each frame: find which node the mouse is over (in world space) and update
@@ -379,6 +384,15 @@ export class MainScene extends Phaser.Scene {
       if (!this.equippedTool || toolKind(this.equippedTool) !== kind) return;
       // (Future: also gate success on tool TIER here — a stone axe may be too
       // weak for a hardwood tree, which would show "[LMB] Chop" but fail.)
+
+      // Cap hit rate so holding/spamming LMB can't out-farm the tool's swing.
+      const cooldownMs = toolCooldownMs(this.equippedTool);
+      if (this.time.now - this.lastToolHitAt < cooldownMs) return;
+      this.lastToolHitAt = this.time.now;
+
+      this.player.playSwing();
+      const depleted = node.takeHit(toolDamage(this.equippedTool));
+      if (!depleted) return; // node survives the hit; stays interactable
     }
 
     this.addToBackpack(node.resource, node.amount);
