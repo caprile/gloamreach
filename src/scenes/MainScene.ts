@@ -22,6 +22,7 @@ import { CraftingMenu } from "../ui/CraftingMenu";
 import { InventoryMenu, BACKPACK_SIZE, type ArmorSlotView } from "../ui/InventoryMenu";
 import { HotbarUI } from "../ui/HotbarUI";
 import { EventLogUI } from "../ui/EventLogUI";
+import { KeybindsUI } from "../ui/KeybindsUI";
 
 const HOTBAR_KEYS = ["ONE", "TWO", "THREE", "FOUR", "FIVE", "SIX", "SEVEN", "EIGHT", "NINE"];
 
@@ -59,6 +60,7 @@ export class MainScene extends Phaser.Scene {
   private inventoryMenu!: InventoryMenu;
   private hotbarUI!: HotbarUI;
   private eventLogUI!: EventLogUI;
+  private keybindsUI!: KeybindsUI;
 
   // Active drag (from any container): the source slot + a floating ghost icon.
   private dragSource: { container: ItemContainer; index: number } | null = null;
@@ -149,7 +151,7 @@ export class MainScene extends Phaser.Scene {
     // Mouse wheel cycles the hotbar selection (looping), unless the pointer is
     // over the event log (which scrolls its own history).
     this.input.on("wheel", (p: Phaser.Input.Pointer, _o: unknown, _dx: number, dy: number) => {
-      if (this.eventLogUI.isPointerOver(p)) return;
+      if (this.eventLogUI.isPointerOver(p) || this.keybindsUI.isPointerOver(p)) return;
       this.cycleHotbar(dy > 0 ? 1 : -1);
     });
 
@@ -256,7 +258,8 @@ export class MainScene extends Phaser.Scene {
   private pointerOverHud(pointer: Phaser.Input.Pointer): boolean {
     return (
       this.hotbarUI.slotAt(pointer.x, pointer.y) !== null ||
-      this.eventLogUI.isPointerOver(pointer)
+      this.eventLogUI.isPointerOver(pointer) ||
+      this.keybindsUI.isPointerOver(pointer)
     );
   }
 
@@ -698,20 +701,15 @@ export class MainScene extends Phaser.Scene {
       .setDepth(2000)
       .setVisible(false);
 
-    // Top-left static controls reminder.
-    this.add
-      .text(
-        12,
-        10,
-        "Move: WASD / Arrows     Interact: Left Click     Craft: T     Inventory: Tab     Auto-pickup: V",
-        {
-          fontFamily: "monospace",
-          fontSize: "14px",
-          color: "#c8d0dc",
-        },
-      )
-      .setScrollFactor(0)
-      .setDepth(1000);
+    // Top-left collapsible keybind reference (was a single always-on line;
+    // moved to a collapsible panel since the bind list keeps growing).
+    this.keybindsUI = new KeybindsUI(this, [
+      "Move: WASD / Arrows",
+      "Interact: Left Click",
+      "Craft: T",
+      "Inventory: Tab",
+      "Auto-pickup: V",
+    ]);
 
     // Placement-mode hint, directly under the controls line above — small so
     // it stays clear of the crafting/inventory tabs in the top-right.

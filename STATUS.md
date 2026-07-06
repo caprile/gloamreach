@@ -2,6 +2,23 @@
 
 Last updated: 2026-07-06
 
+### Small fix: collapsible Keybinds panel
+
+The top-left "Move: WASD..." line was a single always-visible line that would
+only keep growing as more binds get added. Replaced with **`src/ui/KeybindsUI.ts`**
+(new) — a collapsible top-left panel mirroring `EventLogUI`'s header
+collapse/expand mechanics (click header to toggle `[+]`/`[-]`), but simpler:
+no scrolling/toasts, just a static list of bind strings passed in once from
+`MainScene.createHud()`. Starts **collapsed** by default (the point of the
+change was to declutter). Wired into `pointerOverHud()` and the wheel-routing
+check alongside `eventLogUI` so clicks/scroll over the panel don't leak
+through to world interaction or hotbar cycling.
+
+Verified via `preview_eval` (real simulated mouse events toggling collapse
+state, `isPointerOver` gating wheel-driven hotbar cycling while expanded) plus
+`preview_screenshot` for collapsed/expanded layout. Type-check clean, no
+console errors.
+
 ## Where things stand
 
 Core loop works: move (WASD/arrows), gather (branches/rocks free; trees/boulders
