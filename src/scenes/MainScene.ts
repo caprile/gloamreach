@@ -27,6 +27,7 @@ const TILE = 32;
 const WORLD_W = TILE * 40; // 1280px wide (bigger world comes with generation later)
 const WORLD_H = TILE * 30; // 960px tall
 const REACH = 64; // how close (px) the player must be to interact
+const PLACEMENT_RADIUS = REACH * 1.25; // how far from the player a placed item may land
 
 // The main gameplay scene: build the world, spawn the player and resources,
 // follow the camera, and run the mouse-driven interaction + HUD.
@@ -58,6 +59,19 @@ export class MainScene extends Phaser.Scene {
   private promptText!: Phaser.GameObjects.Text; // fixed bottom-right hover prompt
   private hoveredNode: ResourceNode | null = null;
 
+  // Placement mode: crafting a placeable recipe (e.g. campfire) enters this
+  // instead of landing in the backpack. A ghost preview follows the cursor,
+  // clamped to PLACEMENT_RADIUS of the player; LMB commits (deducts cost,
+  // spawns a world object), RMB cancels for free (nothing was spent yet).
+  private placementMode: { recipe: Recipe } | null = null;
+  private placementGhost: Phaser.GameObjects.Image | null = null;
+  private placedObjects: Phaser.GameObjects.Image[] = [];
+  private placementHintText!: Phaser.GameObjects.Text; // small hint under the top-left controls line
+  // The "Place" button click that enters placement mode fires through to the
+  // scene's global pointerdown too (same underlying click) — swallow that one
+  // event so it isn't also read as the first placement click.
+  private suppressNextPointerdown = false;
+
   constructor() {
     super("MainScene");
   }
@@ -83,6 +97,16 @@ export class MainScene extends Phaser.Scene {
     // while a menu is open, or when the click lands on a fixed HUD element
     // (hotbar / event log) so a click there doesn't also hit the world behind.
     this.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
+      if (this.suppressNextPointerdown) {
+        this.suppressNextPointerdown = false;
+        return;
+      }
+      if (this.placementMode) {
+        if (this.pointerOverHud(pointer)) return;
+        if (pointer.leftButtonDown()) this.attemptPlaceObject();
+        else if (pointer.rightButtonDown()) this.cancelPlacement();
+        return;
+      }
       if (pointer.leftButtonDown() && !this.anyMenuOpen() && !this.pointerOverHud(pointer)) {
         this.tryInteract();
       }
@@ -120,14 +144,17 @@ export class MainScene extends Phaser.Scene {
     // Tab is captured so the browser doesn't shift focus off the canvas.
     this.input.keyboard!.addCapture("TAB");
     this.input.keyboard!.on("keydown-TAB", () => {
+      if (this.placementMode) return this.cancelPlacement();
       this.craftingMenu.close();
       this.inventoryMenu.toggle();
     });
     this.input.keyboard!.on("keydown-T", () => {
+      if (this.placementMode) return this.cancelPlacement();
       this.inventoryMenu.close();
       this.craftingMenu.toggle();
     });
     this.input.keyboard!.on("keydown-ESC", () => {
+      if (this.placementMode) return this.cancelPlacement();
       this.craftingMenu.close();
       this.inventoryMenu.close();
     });
@@ -142,7 +169,8 @@ export class MainScene extends Phaser.Scene {
 
   update(): void {
     this.player.update();
-    if (!this.anyMenuOpen()) this.updateHover();
+    if (this.placementMode) this.updatePlacementGhost();
+    else if (!this.anyMenuOpen()) this.updateHover();
   }
 
   private anyMenuOpen(): boolean {
@@ -401,6 +429,7 @@ export class MainScene extends Phaser.Scene {
       crafting: this.crafting,
       isOwned: (recipe) => this.backpack.count(outputKey(recipe)) > 0,
       craft: (recipe) => this.craftRecipe(recipe),
+      startPlacement: (recipe) => this.startPlacement(recipe),
     });
   }
 
@@ -417,6 +446,69 @@ export class MainScene extends Phaser.Scene {
     this.crafting.craft(recipe, this.backpack);
     this.addToBackpack(key, 1);
     this.recomputeEquipped();
+    this.refreshHud();
+    this.inventoryMenu.refresh();
+  }
+
+  // --- Placement mode (world-placed items: campfire, building pieces) ---
+
+  // Enters placement mode without spending anything yet — cost is only
+  // deducted per-unit, on each successful LMB placement (see
+  // attemptPlaceObject). Cancelling is always free.
+  private startPlacement(recipe: Recipe): void {
+    this.suppressNextPointerdown = true;
+    this.placementMode = { recipe };
+    const texture = itemDef(outputKey(recipe))?.texture;
+    const pos = this.clampedPlacementPoint();
+    this.placementGhost = this.add.image(pos.x, pos.y, texture ?? "").setAlpha(0.5).setDepth(500);
+  }
+
+  private cancelPlacement(): void {
+    this.placementMode = null;
+    this.placementGhost?.destroy();
+    this.placementGhost = null;
+    this.placementHintText.setVisible(false);
+    this.input.setDefaultCursor("default");
+  }
+
+  // Cursor's world position, clamped to PLACEMENT_RADIUS of the player so a
+  // placement is always valid regardless of how far away the mouse is.
+  private clampedPlacementPoint(): { x: number; y: number } {
+    const pointer = this.input.activePointer;
+    const world = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
+    const dist = Phaser.Math.Distance.Between(this.player.x, this.player.y, world.x, world.y);
+    if (dist <= PLACEMENT_RADIUS) return { x: world.x, y: world.y };
+    const angle = Phaser.Math.Angle.Between(this.player.x, this.player.y, world.x, world.y);
+    return {
+      x: this.player.x + Math.cos(angle) * PLACEMENT_RADIUS,
+      y: this.player.y + Math.sin(angle) * PLACEMENT_RADIUS,
+    };
+  }
+
+  private updatePlacementGhost(): void {
+    if (!this.placementMode || !this.placementGhost) return;
+    const pos = this.clampedPlacementPoint();
+    this.placementGhost.setPosition(pos.x, pos.y);
+    const name = itemDef(outputKey(this.placementMode.recipe))?.name ?? "item";
+    this.placementHintText.setText(`[LMB] Place ${name}   [RMB] Cancel`).setVisible(true);
+    this.input.setDefaultCursor("pointer");
+  }
+
+  // LMB while in placement mode: deducts cost and spawns the world object,
+  // then re-arms placement mode so another can be placed immediately.
+  private attemptPlaceObject(): void {
+    if (!this.placementMode) return;
+    const recipe = this.placementMode.recipe;
+    if (!this.crafting.canAfford(recipe, this.backpack)) {
+      const name = itemDef(outputKey(recipe))?.name ?? "item";
+      this.eventLog.add("info", `Out of materials for ${name}`);
+      this.cancelPlacement();
+      return;
+    }
+    this.crafting.craft(recipe, this.backpack);
+    const pos = this.clampedPlacementPoint();
+    const texture = itemDef(outputKey(recipe))?.texture;
+    this.placedObjects.push(this.add.image(pos.x, pos.y, texture ?? ""));
     this.refreshHud();
     this.inventoryMenu.refresh();
   }
@@ -472,6 +564,18 @@ export class MainScene extends Phaser.Scene {
       )
       .setScrollFactor(0)
       .setDepth(1000);
+
+    // Placement-mode hint, directly under the controls line above — small so
+    // it stays clear of the crafting/inventory tabs in the top-right.
+    this.placementHintText = this.add
+      .text(12, 30, "", {
+        fontFamily: "monospace",
+        fontSize: "12px",
+        color: "#ffe08a",
+      })
+      .setScrollFactor(0)
+      .setDepth(1000)
+      .setVisible(false);
 
     this.refreshHud();
   }

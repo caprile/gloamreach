@@ -8,9 +8,55 @@ Core loop works: move (WASD/arrows), gather (branches/rocks free; trees/boulders
 need the right tool kind equipped), craft (T), manage inventory/hotbar (Tab,
 1-9, scroll wheel), equip tools via the hotbar. Recipe discovery is gated by
 "have you picked up the ingredients" + skill level; unlocks announce themselves
-via a toast + persistent event log (bottom-right, collapsible).
+via a toast + persistent event log (bottom-right, collapsible). Placeable
+items (currently just the campfire) skip the backpack entirely — crafting one
+enters a placement mode instead (see below).
 
-### Just finished: Milestone 1 of the inventory-overhaul plan, plus a UI polish pass
+### Just finished: Placement mode for build/placeable items
+
+Plan file: `.claude/plans/ancient-painting-petal.md`.
+
+Items flagged `placeable: true` in `Items.ts` (currently just `campfire`) no
+longer land in the backpack when crafted. Instead:
+
+- The crafting menu's button reads **"Place"** instead of "Craft" for these
+  recipes (`isPlaceableRecipe()` in `Recipes.ts`, checked in `CraftingMenu.ts`).
+  Clicking it closes the crafting menu and enters **placement mode**
+  (`MainScene.startPlacement`) — no cost is deducted yet.
+- A semi-transparent ghost preview follows the cursor, clamped to
+  `PLACEMENT_RADIUS = REACH * 1.25` (80px) of the player (recomputed live each
+  frame, so walking repositions the radius). A small hint —
+  `[LMB] Place <item>   [RMB] Cancel` — shows under the top-left controls
+  line (`placementHintText`, 12px, `(12, 30)` — deliberately NOT the shared
+  bottom-right gather-prompt text, and deliberately not overlapping the
+  hotbar or the `[T] Craft` tab).
+- **LMB** (`attemptPlaceObject`) deducts the recipe cost only at that moment,
+  spawns a plain world image at the ghost's position, and **re-arms**
+  placement mode immediately so the next one can be placed without reopening
+  the crafting menu — this loop is the "ask to place another" behavior,
+  expressed as the persisting prompt rather than a separate confirm dialog.
+  Running out of materials mid-loop auto-cancels with an event-log message.
+- **RMB**, **Escape**, or **Tab** cancel placement mode outright — free,
+  since nothing is spent until a successful LMB.
+- A same-click double-fire bug (Phaser fires both the "Place" button's own
+  `pointerdown` and the scene-wide generic `pointerdown` for one click, which
+  was placing the object right where "Place" was clicked) is fixed via a
+  one-shot `suppressNextPointerdown` flag consumed by the scene's global
+  pointerdown handler.
+- No loose-world-drop system was needed for this — since materials are only
+  spent on a successful LMB, a cancelled placement has nothing to destroy.
+  That concept is still deferred to Milestone 3 (or to whenever destroying
+  *already-placed* build pieces becomes a feature).
+- Placed objects are currently just visual (`this.add.image`, no physics
+  body, no interaction) — intentionally minimal; a real placed-object entity
+  can come later alongside the destroy-for-pieces feature.
+
+Verified via `preview_eval` (radius clamping, cost-only-on-LMB, free RMB
+cancel, Escape/Tab cancelling instead of opening menus, the double-click fix
+via simulated real Phaser pointer events, and clicking "Place" through the
+actual crafting-menu UI). Type-check clean, no console errors.
+
+### Previously: Milestone 1 of the inventory-overhaul plan, plus a UI polish pass
 
 Plan file: `.claude/plans/bug-i-can-drag-twinkling-engelbart.md` (3 milestones;
 M1 done, M2/M3 not started).
@@ -74,9 +120,10 @@ clean throughout. No console errors.
 
 ### Up next
 
-**Milestone 2** (see plan file): resource node health/multi-hit, tool damage,
-swing animation + node decay/shake per hit. Then **Milestone 3**: loose
-world drops with stack consolidation + magnet auto-pickup.
+Back to the inventory-overhaul roadmap: **Milestone 2** (resource node
+health/multi-hit, tool damage, swing animation + node decay/shake per hit),
+then **Milestone 3** (loose world drops with stack consolidation + magnet
+auto-pickup — plan file `.claude/plans/bug-i-can-drag-twinkling-engelbart.md`).
 
 Per `CLAUDE.md` convention (one milestone/feature per session), M2 should
 start in a fresh chat session rather than continuing this one.
@@ -84,4 +131,7 @@ start in a fresh chat session rather than continuing this one.
 ### Known rough edges / deferred (see plan's "Out of scope" section)
 
 Carry weight, tool durability, craft-quantity selector, stacking exceptions
-beyond durability — all intentionally deferred, not forgotten.
+beyond durability — all intentionally deferred, not forgotten. Placed
+objects (campfire) have no collision/overlap checks and can't be destroyed
+yet — deferred until a destroy-for-pieces feature exists, at which point the
+loose-world-drop system (Milestone 3) will be needed for real.

@@ -1,6 +1,7 @@
 import type { ResourceType } from "./Inventory";
 import type { ToolType } from "../entities/ResourceNode";
 import type { SkillType } from "./Skills";
+import { itemDef } from "./Items";
 
 // Tabs in the crafting sidebar. More will be added as content grows.
 export type RecipeCategory = "tools" | "weapons" | "armor" | "crafting" | "build";
@@ -103,4 +104,10 @@ export function itemNameFor(itemId: string): string | undefined {
 // ItemDef/ItemContainer key for that recipe's output.
 export function outputKey(recipe: Recipe): string {
   return recipe.output.kind === "tool" ? recipe.output.tool : recipe.output.itemId;
+}
+
+// True for recipes whose output should be placed in the world (via placement
+// mode) instead of landing in the backpack.
+export function isPlaceableRecipe(recipe: Recipe): boolean {
+  return recipe.output.kind === "item" && !!itemDef(recipe.output.itemId)?.placeable;
 }

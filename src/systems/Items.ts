@@ -18,6 +18,10 @@ export interface ItemDef {
   hotbarable: boolean; // may this sit in a 1-9 hotbar slot?
   tool?: ToolType; // set for tool items — selecting it in the hotbar equips it
   stats?: ItemStat[];
+  // World-placed items (campfires, building pieces) skip the backpack
+  // entirely — crafting one enters placement mode instead. Per-item, not
+  // inferred from category.
+  placeable?: boolean;
 }
 
 export const ITEM_DEFS: Record<string, ItemDef> = {
@@ -128,6 +132,7 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     maxStack: 99,
     hotbarable: false,
     stats: [{ label: "Type", value: "Build" }],
+    placeable: true,
   },
 };
 

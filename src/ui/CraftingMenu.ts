@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { outputKey, type Recipe, type RecipeCategory } from "../systems/Recipes";
+import { isPlaceableRecipe, outputKey, type Recipe, type RecipeCategory } from "../systems/Recipes";
 import type { Crafting } from "../systems/Crafting";
 import type { ResourceType } from "../systems/Inventory";
 import type { ItemContainer } from "../systems/ItemContainer";
@@ -23,6 +23,7 @@ export interface CraftingMenuDeps {
   crafting: Crafting;
   isOwned: (recipe: Recipe) => boolean;
   craft: (recipe: Recipe) => void;
+  startPlacement: (recipe: Recipe) => void;
 }
 
 // Right-side crafting panel, toggled with T, the top-right icon, or Escape
@@ -224,8 +225,9 @@ export class CraftingMenu {
     y += 8;
 
     const affordable = this.deps.crafting.canAfford(recipe, this.deps.backpack);
+    const placeable = isPlaceableRecipe(recipe);
     const btn = this.scene.add
-      .text(x0, y, "Craft", {
+      .text(x0, y, placeable ? "Place" : "Craft", {
         fontFamily: "monospace",
         fontSize: "14px",
         color: affordable ? "#0a0a0a" : "#4a4a4a",
@@ -237,8 +239,13 @@ export class CraftingMenu {
       .setInteractive({ useHandCursor: affordable })
       .on("pointerdown", () => {
         if (!affordable) return;
-        this.deps.craft(recipe);
-        this.render();
+        if (placeable) {
+          this.deps.startPlacement(recipe);
+          this.close();
+        } else {
+          this.deps.craft(recipe);
+          this.render();
+        }
       });
     this.rows.push(btn);
   }
