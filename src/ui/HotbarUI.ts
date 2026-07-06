@@ -2,6 +2,7 @@ import Phaser from "phaser";
 import type { Hotbar } from "../systems/Hotbar";
 import type { ItemContainer } from "../systems/ItemContainer";
 import { itemDef } from "../systems/Items";
+import { Tooltip } from "./Tooltip";
 
 const SLOT_SIZE = 40;
 const SLOT_GAP = 6;
@@ -12,6 +13,8 @@ export interface HotbarUIDeps {
   beginDrag: (container: ItemContainer, index: number, pointer: Phaser.Input.Pointer) => void;
   // Right-click quick-moves the slot's stack back to the backpack.
   quickMove: (container: ItemContainer, index: number) => void;
+  // Suppress tooltips while a drag is in progress.
+  isDragging: () => boolean;
 }
 
 // Always-visible bottom-center bar of 9 slots. Renders the hotbar's
@@ -24,6 +27,7 @@ export class HotbarUI {
   private hotbar: Hotbar;
   private deps: HotbarUIDeps;
   private rows: Phaser.GameObjects.GameObject[] = [];
+  private tooltipUI: Tooltip;
   private originX: number;
   private originY: number;
 
@@ -31,6 +35,7 @@ export class HotbarUI {
     this.scene = scene;
     this.hotbar = hotbar;
     this.deps = deps;
+    this.tooltipUI = new Tooltip(scene);
     const totalW = SLOT_COUNT * SLOT_SIZE + (SLOT_COUNT - 1) * SLOT_GAP;
     this.originX = (scene.scale.width - totalW) / 2;
     this.originY = scene.scale.height - SLOT_SIZE - 14;
@@ -39,6 +44,10 @@ export class HotbarUI {
 
   refresh(): void {
     this.render();
+  }
+
+  hideTooltip(): void {
+    this.tooltipUI.hide();
   }
 
   // Which hotbar slot (if any) contains the given screen point — used as a
@@ -59,6 +68,7 @@ export class HotbarUI {
 
   private render(): void {
     this.clear();
+    this.hideTooltip();
     const selected = this.hotbar.selected();
 
     for (let i = 0; i < SLOT_COUNT; i++) {
@@ -74,6 +84,11 @@ export class HotbarUI {
         .setScrollFactor(0)
         .setDepth(2500)
         .setInteractive({ useHandCursor: true })
+        .on("pointerover", () => {
+          if (stack && !this.deps.isDragging())
+            this.tooltipUI.show(stack.key, { x, y, width: SLOT_SIZE, height: SLOT_SIZE }, "above");
+        })
+        .on("pointerout", () => this.tooltipUI.hide())
         .on("pointerdown", (pointer: Phaser.Input.Pointer) => {
           if (pointer.rightButtonDown()) this.deps.quickMove(this.hotbar.container, i);
           else this.deps.beginDrag(this.hotbar.container, i, pointer);

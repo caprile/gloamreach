@@ -55,7 +55,6 @@ export class MainScene extends Phaser.Scene {
   private dragSource: { container: ItemContainer; index: number } | null = null;
   private dragGhost: Phaser.GameObjects.Image | null = null;
 
-  private hudText!: Phaser.GameObjects.Text;
   private promptText!: Phaser.GameObjects.Text; // fixed bottom-right hover prompt
   private hoveredNode: ResourceNode | null = null;
 
@@ -99,6 +98,7 @@ export class MainScene extends Phaser.Scene {
     this.hotbarUI = new HotbarUI(this, this.hotbar, {
       beginDrag: (c, i, p) => this.beginItemDrag(c, i, p),
       quickMove: (c, i) => this.quickMoveItem(c, i),
+      isDragging: () => this.dragSource !== null,
     });
     this.eventLogUI = new EventLogUI(this, this.eventLog);
 
@@ -190,6 +190,7 @@ export class MainScene extends Phaser.Scene {
     if (!def) return;
     this.dragSource = { container, index };
     this.inventoryMenu.hideTooltip();
+    this.hotbarUI.hideTooltip();
     this.dragGhost = this.add
       .image(pointer.x, pointer.y, def.texture)
       .setScrollFactor(0)
@@ -442,11 +443,6 @@ export class MainScene extends Phaser.Scene {
   // --- HUD ---
 
   private createHud(): void {
-    this.hudText = this.add
-      .text(12, 10, "", { fontFamily: "monospace", fontSize: "20px", color: "#ffffff" })
-      .setScrollFactor(0)
-      .setDepth(1000);
-
     // Hover prompt, anchored to the bottom-right of the screen.
     this.promptText = this.add
       .text(this.scale.width - 12, this.scale.height - 12, "", {
@@ -461,12 +457,11 @@ export class MainScene extends Phaser.Scene {
       .setDepth(2000)
       .setVisible(false);
 
-    // Sits just under the top HUD line rather than the bottom of the screen
-    // so it doesn't get covered by the hotbar.
+    // Top-left static controls reminder.
     this.add
       .text(
         12,
-        36,
+        10,
         "Move: WASD / Arrows     Interact: Left Click     Craft: T     Inventory: Tab",
         {
           fontFamily: "monospace",
@@ -481,10 +476,6 @@ export class MainScene extends Phaser.Scene {
   }
 
   private refreshHud(): void {
-    const toolLabel = this.equippedTool ? this.equippedTool.replace("_", " ") : "None";
-    this.hudText.setText(
-      `Wood: ${this.backpack.count("wood")}     Stone: ${this.backpack.count("stone")}     Tool: ${toolLabel}`,
-    );
     this.craftingMenu?.refresh();
     this.inventoryMenu?.refresh();
   }

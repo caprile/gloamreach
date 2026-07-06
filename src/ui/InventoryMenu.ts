@@ -2,6 +2,7 @@ import Phaser from "phaser";
 import type { EquipSlot } from "../systems/Equipment";
 import type { ItemContainer } from "../systems/ItemContainer";
 import { itemDef } from "../systems/Items";
+import { Tooltip } from "./Tooltip";
 
 export interface ArmorSlotView {
   id: EquipSlot;
@@ -22,18 +23,29 @@ export interface InventoryMenuDeps {
 
 const PANEL_X = 16;
 const PANEL_Y = 48;
-const PANEL_W = 300;
-const PANEL_H = 470;
 const SLOT = 46;
 const GAP = 6;
-export const BACKPACK_COLS = 5;
-export const BACKPACK_ROWS = 4;
+export const BACKPACK_COLS = 6;
+export const BACKPACK_ROWS = 6;
 export const BACKPACK_SIZE = BACKPACK_COLS * BACKPACK_ROWS;
+const ARMOR_COLS = 3;
 
 // Fixed layout anchors so render() and slotIndexAt() stay in lockstep.
-const ARMOR_Y = PANEL_Y + 56; // 104
+// Backpack grid sits on the left, equipment grid to its right — both start
+// at the same row (GRID_Y).
+const GRID_Y = PANEL_Y + 56;
 const BACKPACK_X = PANEL_X + 12; // 28
-const BACKPACK_Y = ARMOR_Y + 3 * (SLOT + GAP) + 28; // 288
+const BACKPACK_Y = GRID_Y;
+const BACKPACK_W = BACKPACK_COLS * SLOT + (BACKPACK_COLS - 1) * GAP; // 306
+const BACKPACK_H = BACKPACK_ROWS * SLOT + (BACKPACK_ROWS - 1) * GAP; // 306
+
+const GRID_GAP = 24;
+const ARMOR_X = BACKPACK_X + BACKPACK_W + GRID_GAP; // 358
+const ARMOR_Y = GRID_Y;
+const ARMOR_W = ARMOR_COLS * SLOT + (ARMOR_COLS - 1) * GAP; // 150
+
+const PANEL_W = ARMOR_X + ARMOR_W - PANEL_X + 12; // 504
+const PANEL_H = BACKPACK_Y + BACKPACK_H - PANEL_Y + 20; // 382
 
 // Top-left grid inventory (Tab). Renders the backpack ItemContainer as a grid
 // plus worn-equipment placeholders. Slots are drag sources (and the whole
@@ -49,11 +61,12 @@ export class InventoryMenu {
   private bg: Phaser.GameObjects.Rectangle;
   private open = false;
   private rows: Phaser.GameObjects.GameObject[] = [];
-  private tooltip: Phaser.GameObjects.GameObject[] = [];
+  private tooltipUI: Tooltip;
 
   constructor(scene: Phaser.Scene, deps: InventoryMenuDeps) {
     this.scene = scene;
     this.deps = deps;
+    this.tooltipUI = new Tooltip(scene);
 
     this.bg = scene.add
       .rectangle(PANEL_X, PANEL_Y, PANEL_W, PANEL_H, 0x0a0a0a, 0.93)
@@ -83,8 +96,7 @@ export class InventoryMenu {
   }
 
   hideTooltip(): void {
-    for (const t of this.tooltip) t.destroy();
-    this.tooltip = [];
+    this.tooltipUI.hide();
   }
 
   // Backpack slot index under a screen point, or null (used as a drop target).
@@ -118,17 +130,17 @@ export class InventoryMenu {
     const x0 = PANEL_X + 12;
 
     this.addText(x0, PANEL_Y + 10, "Inventory", 15, "#ffffff");
-    this.addText(x0, PANEL_Y + 36, "Equipment", 12, "#8a93a3");
-    this.renderArmor(x0, ARMOR_Y);
-    this.addText(x0, BACKPACK_Y - 20, "Backpack", 12, "#8a93a3");
+    this.addText(BACKPACK_X, PANEL_Y + 36, "Backpack", 12, "#8a93a3");
+    this.addText(ARMOR_X, PANEL_Y + 36, "Equipment", 12, "#8a93a3");
     this.renderBackpack();
+    this.renderArmor(ARMOR_X, ARMOR_Y);
   }
 
   private renderArmor(x0: number, y0: number): void {
     const slots = this.deps.armorSlots();
     slots.forEach((slot, i) => {
-      const col = i % 3;
-      const row = Math.floor(i / 3);
+      const col = i % ARMOR_COLS;
+      const row = Math.floor(i / ARMOR_COLS);
       const x = x0 + col * (SLOT + GAP);
       const y = y0 + row * (SLOT + GAP);
 
@@ -162,7 +174,8 @@ export class InventoryMenu {
         .setDepth(3001)
         .setInteractive({ useHandCursor: true })
         .on("pointerover", () => {
-          if (stack && !this.deps.isDragging()) this.showTooltip(stack.key, x + SLOT + 8, y);
+          if (stack && !this.deps.isDragging())
+            this.tooltipUI.show(stack.key, { x, y, width: SLOT, height: SLOT }, "right");
         })
         .on("pointerout", () => this.hideTooltip())
         .on("pointerdown", (pointer: Phaser.Input.Pointer) => {
@@ -186,46 +199,6 @@ export class InventoryMenu {
         this.addText(x + SLOT - 4, y + SLOT - 3, `${stack.count}`, 11, "#ffffff", 1, 1);
       }
     }
-  }
-
-  private showTooltip(key: string, x: number, y: number): void {
-    this.hideTooltip();
-    const def = itemDef(key);
-    if (!def) return;
-
-    const lines = [def.name, "", def.description];
-    if (def.stats?.length) {
-      lines.push("");
-      for (const s of def.stats) lines.push(`${s.label}: ${s.value}`);
-    }
-
-    const text = this.scene.add
-      .text(0, 0, lines.join("\n"), {
-        fontFamily: "monospace",
-        fontSize: "12px",
-        color: "#e8ecf2",
-        wordWrap: { width: 180 },
-      })
-      .setScrollFactor(0)
-      .setDepth(4501);
-
-    const padX = 8;
-    const padY = 6;
-    const w = text.width + padX * 2;
-    const h = text.height + padY * 2;
-    let tx = x;
-    if (tx + w > this.scene.scale.width - 4) tx = x - w - SLOT - 16;
-    const ty = Math.min(y, this.scene.scale.height - h - 4);
-
-    const bgBox = this.scene.add
-      .rectangle(tx, ty, w, h, 0x000000, 0.92)
-      .setOrigin(0, 0)
-      .setStrokeStyle(1, 0x555e6e)
-      .setScrollFactor(0)
-      .setDepth(4500);
-    text.setPosition(tx + padX, ty + padY);
-
-    this.tooltip.push(bgBox, text);
   }
 
   private addText(
