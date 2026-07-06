@@ -2,6 +2,121 @@
 
 Last updated: 2026-07-06
 
+### Follow-up tuning pass on the stamina bar/panels (same day)
+
+Right after the stamina milestone landed, the user requested a round of
+polish based on actually seeing it in the preview:
+
+- **Bar visuals** — was a bright cyan 220x14 bar with a color-shift-on-
+  deplete effect; now a small (76x20, ~1.5-2x a hotbar slot) fixed dark
+  goldenrod (`0xb8860b`) bar with no color changes on deplete/regen, and a
+  centered numeric text label (`staminaBarText`) showing the rounded current
+  value (e.g. `"72"`).
+- **Event log relocated** — was bottom-right, expanded by default, growing
+  upward. Now stacks directly under the top-left Keybinds panel (both
+  `PANEL_X = 12`, same width), defaults **collapsed** like Keybinds, and
+  grows downward. This was ahead of the bottom-center HUD area (hotbar +
+  stamina bar) getting busier as more bars land there.
+  - **Real coupling needed, not just a one-time position**: since
+    `KeybindsUI` can expand/collapse independently, `EventLogUI`'s top
+    position has to track it live, not just be computed once at
+    construction — the first pass (`topY` set once in the constructor) left
+    the Log panel overlapped whenever Keybinds was expanded after Log was
+    already positioned, caught via `preview_screenshot` during verification.
+    Fixed with `KeybindsUI(scene, binds, onToggle?)` — an `onToggle` callback
+    fired after every collapse toggle — wired in `MainScene` to call the new
+    `EventLogUI.setTopY(keybindsUI.bottom + 8)`, so Log always repositions
+    the instant Keybinds' height changes.
+- **Stamina usage bumped up** — the shipped numbers (`SPRINT_DRAIN_PER_SEC:
+  18`, `DASH_STAMINA_COST: 15`, `toolStaminaCost: 6`) felt too cheap. Now
+  `SPRINT_DRAIN_PER_SEC: 33` (a full 100-stamina bar drains from continuous
+  sprint in ~3s — matches the user's explicit target), `DASH_STAMINA_COST:
+  25` (4 dashes/full bar), `toolStaminaCost: 12` (both stone tools). Regen
+  (20/s, 800ms delay) unchanged — draining faster than it refills is
+  intentional.
+  - **Forward-looking note left as a comment** (`src/systems/Stamina.ts`,
+    next to `MAX_STAMINA`): a future food system will scale max stamina down
+    as food depletes, with 0 food intended to reach roughly this same
+    "~3s full sprint" feel on a much smaller pool. Not implemented — no food
+    system exists yet — just documented so the eventual hookup target is
+    clear.
+
+Verified via `preview_eval` (sprint draining the full bar in ~3.1s real
+time, confirmed via `performance.now()` timing, with the bar's text reading
+`"0"` and speed reverted to base at the end) and `preview_screenshot`
+(bar size/color/number, Log correctly stacked under both collapsed and
+*expanded* Keybinds — the overlap bug was caught this way before the
+`onToggle` fix). Type-check clean, no console errors.
+
+### Just finished: Stamina, sprint, dash (roadmap item 3)
+
+Plan file: `read-the-plan-from-happy-ripple.md` (global plans dir).
+
+The player now has a stamina pool — the first player stat/resource bar in
+the game (no health system exists yet either):
+
+- **`src/systems/Stamina.ts`** (new) — a small Phaser-free state class:
+  `current`/`max`, `canAfford(amount)`, `spend(amount)` (fails silently if
+  unaffordable, re-arms a regen delay on success), and `tick(delta)` (called
+  every frame from `MainScene.update()`, regenerates after the delay elapses).
+  100 max, ~20/s regen, an 800ms delay after any spend before regen resumes.
+- **Sprint** — hold **Shift** while moving multiplies speed by 1.6x and
+  drains stamina at 18/s. Gated on affording *that frame's* drain cost
+  (not just "stamina > 0") — an early version used a `> 0` check and a bug
+  surfaced during `preview_eval` testing: a partial remainder too small to
+  spend would sit there regenerating just enough to keep passing a `>0`
+  check forever, so sprint's speed multiplier never actually turned off
+  under sustained holding. Fixed by checking `canAfford(costThisFrame)`
+  instead, matching how dash is already gated.
+- **Dash** — **Spacebar** while holding a movement direction triggers a
+  quick 340px/s burst for 160ms, spending 15 stamina and starting its own
+  600ms cooldown (independent of stamina, so it can't be chain-spammed even
+  with a full pool). `Player.update()` was widened to
+  `update(delta, canSprint, canDash): PlayerFrameResult` — `MainScene`
+  computes both stamina gates and reads back `sprinting`/`dashStarted` to
+  know what to spend, rather than `Player` reaching into scene state
+  directly. Mid-dash, `Player.update()` returns early and lets Arcade
+  physics carry the velocity set when the dash started, ignoring normal
+  input until the burst window elapses.
+  - **This replaced an original "cosmetic hop jump on Spacebar" plan.**
+    Jump was scoped first (matching the older roadmap wording), but the
+    user corrected it mid-planning: Spacebar should be a dash/dodge instead,
+    with no jump concept at all. Removed before any jump code was written.
+  - No i-frames/damage-avoidance from dash — deliberately deferred, since
+    there's no health/damage system yet to interact with (Combat, roadmap
+    item 4).
+- **Tool-swing stamina cost** — `toolStaminaCost(tool)` in
+  `src/entities/ResourceNode.ts`, a third `Record<ToolType, number>` table
+  alongside the existing `toolDamage`/`toolCooldownMs` (both stone tools:
+  6 stamina/hit). `MainScene.tryInteract()` checks affordability right after
+  the existing hit-rate cooldown check and before updating
+  `lastToolHitAt` — an exhausted swing attempt doesn't burn the cooldown
+  either, so the very next swing can land the instant stamina recovers
+  enough, without also waiting out an unrelated cooldown window.
+- **HUD stamina bar** — centered directly above the hotbar (two overlapping
+  `Rectangle`s: a dark track + a cyan fill that scales/recolors). Per the
+  user, this is meant to anchor a future vertical stack — HP is planned to
+  land above it once Combat ships, maybe a mana-like bar after that. Added a
+  `top` getter to `HotbarUI` (exposing its existing private `originY`) so
+  the bar (and future bars) can anchor without duplicating the hotbar's
+  centering math. `KeybindsUI` gained two new lines ("Sprint: Hold Shift",
+  "Dash: Space (while moving)") but was otherwise untouched.
+
+Verified via `preview_eval`: sprint's speed multiplier (1.6x) and stamina
+drain while Shift+movement held (via direct `Key.isDown` manipulation, since
+Phaser's `Key` objects don't respond to synthetic property writes for
+`JustDown` — that needs `_justDown` set directly, which was used for the
+dash tests instead); sprint hard-blocking once a frame's cost is
+unaffordable (post-fix); dash's velocity spike to 340, the mid-dash lockout,
+cooldown blocking a too-soon re-dash and allowing one after 600ms elapses
+(all via a single self-contained `preview_eval` call with real `setTimeout`
+waits, to avoid inter-tool-call latency confusing the cooldown math); dash
+silently failing when unaffordable; tool swings costing exactly
+`toolStaminaCost` and being silently blocked (no `takeHit`, no negative
+stamina) when exhausted; and the regen-delay math directly against the
+`Stamina` class. Plus `preview_screenshot` for the bar's placement/fill and
+the expanded Keybinds panel. Type-check clean, no console errors.
+
 ### Small fix: collapsible Keybinds panel
 
 The top-left "Move: WASD..." line was a single always-visible line that would
@@ -21,8 +136,9 @@ console errors.
 
 ## Where things stand
 
-Core loop works: move (WASD/arrows), gather (branches/rocks free; trees/boulders
-need the right tool kind equipped and now take multiple hits, see below), craft
+Core loop works: move (WASD/arrows, sprint on Shift, dash on Spacebar — both
+stamina-gated, see below), gather (branches/rocks free; trees/boulders need
+the right tool kind equipped and now take multiple hits, see below), craft
 (T), manage inventory/hotbar (Tab, 1-9, scroll wheel), equip tools via the
 hotbar. Recipe discovery is gated by "have you picked up the ingredients" +
 skill level; unlocks announce themselves via a toast + persistent event log
@@ -30,7 +146,9 @@ skill level; unlocks announce themselves via a toast + persistent event log
 skip the backpack entirely — crafting one enters a placement mode instead.
 Chopping/mining a tree/boulder now explodes its yield into scattered loose
 pieces on the ground instead of crediting the backpack instantly (see below),
-with an auto-pickup magnet (toggle: `V`) to collect them.
+with an auto-pickup magnet (toggle: `V`) to collect them. A stamina bar
+(centered above the hotbar) gates sprint/dash/tool-swings and regenerates
+after a short delay.
 
 ### Just finished: Milestone 3 — loose world drops + magnet auto-pickup
 
@@ -277,28 +395,31 @@ clean throughout. No console errors.
 
 ### Up next
 
-M3 (loose drops/consolidation/magnet) is done. Next up per the roadmap is
-**Stamina** (sprint/jump/tool-swing cost, max pool + regen — roadmap item 3),
-per the sequencing below. Per `CLAUDE.md` convention (one milestone/feature
-per session), it should start in a fresh chat session rather than continuing
-this one.
+Stamina/sprint/dash (roadmap item 3) is done. Next up per the roadmap is
+**Combat** (roadmap item 4): enemies, attack, health/damage, death & respawn.
+Per `CLAUDE.md` convention (one milestone/feature per session), it should
+start in a fresh chat session rather than continuing this one.
 
-**Sequencing notes** (from a 2026-07-06 batch of feature requests, still
-relevant):
+**Sequencing notes:**
 
-- **Stamina** — already sat at roadmap item 3, right after loose
-  drops/magnet in `CLAUDE.md`'s Roadmap section; no change to its position.
-  It depends on the hit-rate-cooldown concept (done in M2) and now M3's
-  swing/pickup actions existing first, so a cost can hook into them.
 - **Equipped item visible on the player sprite** — deliberately deferred to
-  sit alongside **Combat** (roadmap item 4). `Player` is currently a static
-  sprite with no facing direction or weapon-attachment system; M2's "swing" is
-  a placeholder rotate tween, not a real animation. Building a real
-  facing/weapon-visual system once (for combat) and reusing it for tools
-  avoids doing it twice.
+  sit alongside **Combat**. `Player` is currently a static sprite with no
+  facing direction or weapon-attachment system; M2's "swing" and the new
+  dash are both placeholder tweens/velocity bursts, not real animations.
+  Building a real facing/weapon-visual system once (for combat) and reusing
+  it for tools avoids doing it twice.
+- **Dash i-frames** — the dash is currently a pure movement burst with no
+  invulnerability window, deliberately deferred until there's a health/damage
+  system for it to interact with. Combat can layer this on without reshaping
+  the stamina/dash system itself.
+- **Player health bar** — Combat will need the game's first HP bar. Per the
+  user, it should stack directly above the new stamina bar (centered above
+  the hotbar) — `HotbarUI.top`/the stamina bar's position math are the
+  anchor to reuse rather than re-deriving hotbar-relative placement.
 - Tool/weapon attack-speed values (`TOOL_COOLDOWN_MS` in
-  `src/entities/ResourceNode.ts`) will need a weapon-side equivalent when
-  Combat is built — same pattern, different table.
+  `src/entities/ResourceNode.ts`) and stamina costs (`toolStaminaCost`) will
+  need weapon-side equivalents when Combat is built — same pattern, different
+  tables.
 
 ### Known rough edges / deferred (see plan's "Out of scope" section)
 

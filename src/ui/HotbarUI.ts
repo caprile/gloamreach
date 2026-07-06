@@ -42,6 +42,13 @@ export class HotbarUI {
     this.render();
   }
 
+  // Top edge of the hotbar row, in screen space — lets other fixed HUD
+  // elements (the stamina bar, and future HP/mana bars) anchor directly
+  // above it without duplicating the centering math.
+  get top(): number {
+    return this.originY;
+  }
+
   refresh(): void {
     this.render();
   }

@@ -6,12 +6,14 @@ import {
   toolKind,
   toolDamage,
   toolCooldownMs,
+  toolStaminaCost,
   type NodeAction,
   type ToolType,
 } from "../entities/ResourceNode";
 import type { ResourceType } from "../systems/Inventory";
 import { Skills, type SkillType } from "../systems/Skills";
 import { Crafting } from "../systems/Crafting";
+import { Stamina } from "../systems/Stamina";
 import { outputKey, type Recipe } from "../systems/Recipes";
 import { itemDef } from "../systems/Items";
 import { ItemContainer, moveSlot } from "../systems/ItemContainer";
@@ -37,6 +39,8 @@ const MAGNET_PICKUP_DIST = 14; // px — close enough to the player to collect
 const DROP_SCATTER_MIN = 20; // px — min distance a drop piece explodes out to
 const DROP_SCATTER_MAX = 45; // px — max distance a drop piece explodes out to
 const DROP_CONSOLIDATE_RADIUS = 28; // px — merge a landed piece into another this close
+const SPRINT_DRAIN_PER_SEC = 33; // stamina/sec while sprinting — full bar in ~3s
+const DASH_STAMINA_COST = 25; // flat cost per dash — 4 dashes per full bar
 
 // The main gameplay scene: build the world, spawn the player and resources,
 // follow the camera, and run the mouse-driven interaction + HUD.
@@ -69,6 +73,9 @@ export class MainScene extends Phaser.Scene {
   private promptText!: Phaser.GameObjects.Text; // fixed bottom-right hover prompt
   private hoveredNode: ResourceNode | null = null;
   private lastToolHitAt = 0; // this.time.now of the last successful chop/mine hit
+  private stamina = new Stamina();
+  private staminaBarFill!: Phaser.GameObjects.Rectangle; // fixed HUD bar, centered above the hotbar
+  private staminaBarText!: Phaser.GameObjects.Text; // numeric current-stamina label inside the bar
   // Whether loose drop pieces auto-fly to the player when in range. Toggled
   // with V; doesn't affect pre-placed branches/rocks (always manual).
   private magnetEnabled = true;
@@ -138,7 +145,11 @@ export class MainScene extends Phaser.Scene {
       quickMove: (c, i) => this.quickMoveItem(c, i),
       isDragging: () => this.dragSource !== null,
     });
-    this.eventLogUI = new EventLogUI(this, this.eventLog);
+    this.createStaminaBar();
+    // Stacks directly under the Keybinds panel (top-left column), clear of
+    // the bottom-center HUD cluster (hotbar + stamina bar) which is expected
+    // to grow.
+    this.eventLogUI = new EventLogUI(this, this.eventLog, this.keybindsUI.bottom + 8);
 
     // Scene-level drag: a slot starts it, the pointer drags a ghost icon, and
     // release resolves the move against whichever container is under the
@@ -183,7 +194,24 @@ export class MainScene extends Phaser.Scene {
   }
 
   update(_time: number, delta: number): void {
-    this.player.update();
+    // Gate sprint on affording *this frame's* drain (not just "stamina > 0")
+    // — otherwise a partial remainder that's too small to spend keeps
+    // regenerating just enough to pass a ">0" check forever, and sprint never
+    // actually hard-blocks.
+    const sprintCost = SPRINT_DRAIN_PER_SEC * (delta / 1000);
+    const canSprint = this.stamina.canAfford(sprintCost);
+    const canDash = this.stamina.canAfford(DASH_STAMINA_COST);
+    const frame = this.player.update(delta, canSprint, canDash);
+
+    if (frame.sprinting) {
+      this.stamina.spend(sprintCost);
+    }
+    if (frame.dashStarted) {
+      this.stamina.spend(DASH_STAMINA_COST);
+    }
+    this.stamina.tick(delta);
+    this.refreshStaminaBar();
+
     if (this.placementMode) this.updatePlacementGhost();
     else if (!this.anyMenuOpen()) this.updateHover();
     this.updateMagnet(delta);
@@ -444,7 +472,12 @@ export class MainScene extends Phaser.Scene {
       // Cap hit rate so holding/spamming LMB can't out-farm the tool's swing.
       const cooldownMs = toolCooldownMs(this.equippedTool);
       if (this.time.now - this.lastToolHitAt < cooldownMs) return;
+
+      const staminaCost = toolStaminaCost(this.equippedTool);
+      if (!this.stamina.canAfford(staminaCost)) return; // exhausted — silent, same as the guards above
+
       this.lastToolHitAt = this.time.now;
+      this.stamina.spend(staminaCost);
 
       this.player.playSwing();
       const depleted = node.takeHit(toolDamage(this.equippedTool));
@@ -703,13 +736,19 @@ export class MainScene extends Phaser.Scene {
 
     // Top-left collapsible keybind reference (was a single always-on line;
     // moved to a collapsible panel since the bind list keeps growing).
-    this.keybindsUI = new KeybindsUI(this, [
-      "Move: WASD / Arrows",
-      "Interact: Left Click",
-      "Craft: T",
-      "Inventory: Tab",
-      "Auto-pickup: V",
-    ]);
+    this.keybindsUI = new KeybindsUI(
+      this,
+      [
+        "Move: WASD / Arrows",
+        "Sprint: Hold Shift",
+        "Dash: Space (while moving)",
+        "Interact: Left Click",
+        "Craft: T",
+        "Inventory: Tab",
+        "Auto-pickup: V",
+      ],
+      () => this.eventLogUI?.setTopY(this.keybindsUI.bottom + 8),
+    );
 
     // Placement-mode hint, directly under the controls line above — small so
     // it stays clear of the crafting/inventory tabs in the top-right.
@@ -729,5 +768,47 @@ export class MainScene extends Phaser.Scene {
   private refreshHud(): void {
     this.craftingMenu?.refresh();
     this.inventoryMenu?.refresh();
+  }
+
+  // Stamina bar: centered directly above the hotbar, sized close to a single
+  // hotbar slot (not a full-width bar) since it's meant to start small — this
+  // is the first player stat bar in the game, and future HP/mana bars should
+  // stack above this one the same way, using hotbarUI.top as the shared
+  // anchor.
+  private createStaminaBar(): void {
+    const barW = 76;
+    const barH = 20;
+    const gap = 8;
+    const barX = this.scale.width / 2 - barW / 2;
+    const barY = this.hotbarUI.top - gap - barH;
+    this.add
+      .rectangle(barX, barY, barW, barH, 0x1a1f2a, 0.95)
+      .setOrigin(0, 0)
+      .setStrokeStyle(1, 0x3a4250)
+      .setScrollFactor(0)
+      .setDepth(2000);
+    // Dark/muted yellow rather than a bright/neon fill — a fixed color, no
+    // depletion/regen color-shift.
+    this.staminaBarFill = this.add
+      .rectangle(barX + 1, barY + 1, barW - 2, barH - 2, 0xb8860b, 1)
+      .setOrigin(0, 0)
+      .setScrollFactor(0)
+      .setDepth(2001);
+    this.staminaBarText = this.add
+      .text(barX + barW / 2, barY + barH / 2, "", {
+        fontFamily: "monospace",
+        fontSize: "12px",
+        color: "#1a1200",
+      })
+      .setOrigin(0.5, 0.5)
+      .setScrollFactor(0)
+      .setDepth(2002);
+    this.refreshStaminaBar();
+  }
+
+  private refreshStaminaBar(): void {
+    const frac = this.stamina.value() / this.stamina.max;
+    this.staminaBarFill.setScale(Math.max(0, frac), 1);
+    this.staminaBarText.setText(`${Math.round(this.stamina.value())}`);
   }
 }

@@ -41,6 +41,17 @@ export function toolCooldownMs(tool: ToolType): number {
   return TOOL_COOLDOWN_MS[tool];
 }
 
+// Stamina spent per successful swing with a tool (chop/mine only — pickups
+// are free). Future tiers can return a smaller number for a more "efficient"
+// tool.
+const TOOL_STAMINA_COST: Record<ToolType, number> = {
+  stone_axe: 12,
+  stone_pickaxe: 12,
+};
+export function toolStaminaCost(tool: ToolType): number {
+  return TOOL_STAMINA_COST[tool];
+}
+
 export interface ResourceNodeConfig {
   x: number;
   y: number;

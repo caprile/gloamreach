@@ -57,11 +57,16 @@ get their own file under `src/systems/` or `src/entities/`, not bolted onto `Mai
 ## Controls (current)
 
 - **Move:** WASD / Arrow keys
+- **Sprint:** hold **Shift** while moving — faster movement, drains stamina
+- **Dash:** **Spacebar** while moving — a quick movement burst, costs stamina and has
+  its own cooldown. Purely a movement burst for now (no i-frames/damage-avoidance —
+  there's no health/damage system yet; that comes with Combat).
 - **Interact:** **Left click** on a hovered object that's in reach (see below)
-- **Spacebar:** reserved for **jump** (not implemented yet)
+- **Auto-pickup (magnet) toggle:** **V**
 
 There is **no keyboard interact key** (no E, no Space for gathering) — interaction is
-mouse-driven only. Don't reintroduce a keybind for this without being asked.
+mouse-driven only. Don't reintroduce a keybind for this without being asked. Spacebar is
+**dash**, not jump — there's no jump/hop mechanic in the game.
 
 ## Interaction & resource model (important — don't regress this)
 
@@ -89,13 +94,20 @@ mouse-driven only. Don't reintroduce a keybind for this without being asked.
 
 ## Roadmap (see plan file for full detail)
 
-Not yet built — next up in rough order:
-1. **Crafting & tools** — actually craft a stone axe/pickaxe from resources and equip
-   one (replacing manual `equippedTool` assignment via console/eval).
+**Done so far** (see `STATUS.md` for full detail on each):
+1. **Crafting & tools** — craft a stone axe/pickaxe from resources and equip one, plus a
+   full slot-based inventory/hotbar grid UI and a crafting menu with recipe discovery.
 2. **Loose-object drops + magnet** — chopping/mining spawns loose drops instead of
-   crediting inventory directly; magnet radius auto-collects loose items.
-3. **Stamina, sprint, jump** (jump on Spacebar).
-4. **Combat** — enemies, attack, health/damage, death & respawn.
+   crediting inventory directly; magnet radius (toggle `V`) auto-collects loose items.
+3. **Stamina, sprint, dash** — a stamina pool (HUD bar centered above the hotbar) that
+   gates sprint (hold Shift) and dash (Spacebar, a movement burst — not a jump; no
+   jump/hop mechanic exists). Tool-swing hits now also cost stamina.
+
+**Not yet built — next up in rough order:**
+4. **Combat** — enemies, attack, health/damage, death & respawn. Equipped-item-on-sprite
+   visuals are deliberately deferred to land alongside this, since it needs a real
+   facing/weapon-attachment system built once and reused. Dash's i-frame potential is
+   also deferred to here.
 5. **Progression** — XP, levels, stats.
 6. **World & discovery** — much bigger generated world, biomes, map.
 7. **Bosses.**

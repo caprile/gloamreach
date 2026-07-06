@@ -1,12 +1,11 @@
 import Phaser from "phaser";
 import type { EventLog, LogEntry, LogKind } from "../systems/EventLog";
 
+const PANEL_X = 12; // matches KeybindsUI's PANEL_X so the two stack in one column
 const PANEL_W = 260;
 const HEADER_H = 22;
 const LINE_H = 18;
 const MAX_LINES = 6;
-const RIGHT_MARGIN = 12;
-const BOTTOM_MARGIN = 62; // sits above the hotbar row; corner stays free for the hover prompt
 
 const KIND_COLORS: Record<LogKind, { text: string; border: number; fill: number }> = {
   recipe: { text: "#ffe08a", border: 0xffe08a, fill: 0x3a2f10 },
@@ -29,31 +28,42 @@ const RECIPE_TOAST_HOLD_MS = 2400;
 const RECIPE_TOAST_FADE_MS = 600;
 const RECIPE_TOAST_STAGGER_MS = 200;
 
-// Persistent event feed anchored bottom-right. Collapsible via the header,
-// scrollable with the mouse wheel, and pops a fading toast near the top when
-// a new entry arrives so unlocks feel like a "big deal".
+// Persistent event feed, stacked top-left directly under KeybindsUI (out of
+// the way of the bottom-center HUD cluster, which is expected to grow as
+// more stat bars land there). Collapsible via the header — defaults
+// collapsed/hidden, same as KeybindsUI — scrollable with the mouse wheel,
+// and pops a fading toast near the top when a new entry arrives so unlocks
+// feel like a "big deal".
 export class EventLogUI {
   private scene: Phaser.Scene;
   private log: EventLog;
-  private collapsed = false;
+  private collapsed = true;
   private scrollOffset = 0; // entries scrolled up from the newest
   private rows: Phaser.GameObjects.GameObject[] = [];
   private activeToasts = 0;
-  private rightX: number;
-  private bottomY: number;
+  private topY: number;
   private recipeToastQueue: LogEntry[] = [];
   private recipeToastQueueBusy = false;
   private activeRecipeToasts = 0;
 
-  constructor(scene: Phaser.Scene, log: EventLog) {
+  // `topY` is the fixed top edge of this panel — the caller (MainScene)
+  // computes it once from KeybindsUI's current bottom edge so the two panels
+  // stack without overlapping.
+  constructor(scene: Phaser.Scene, log: EventLog, topY: number) {
     this.scene = scene;
     this.log = log;
-    this.rightX = scene.scale.width - RIGHT_MARGIN;
-    this.bottomY = scene.scale.height - BOTTOM_MARGIN;
+    this.topY = topY;
 
     log.onAdd((entry) => this.onNewEntry(entry));
 
     scene.input.on("wheel", this.onWheel, this);
+    this.render();
+  }
+
+  // Called by the scene when KeybindsUI's collapse state changes, so this
+  // panel stays stacked directly beneath it instead of getting overlapped.
+  setTopY(topY: number): void {
+    this.topY = topY;
     this.render();
   }
 
@@ -75,12 +85,12 @@ export class EventLogUI {
   // expanded). The scene uses this to route the wheel: over the log = scroll
   // the log, otherwise cycle the hotbar.
   isPointerOver(pointer: Phaser.Input.Pointer): boolean {
-    const top = this.bottomY - HEADER_H - (this.collapsed ? 0 : this.bodyHeight());
+    const h = HEADER_H + (this.collapsed ? 0 : this.bodyHeight());
     return (
-      pointer.x >= this.rightX - PANEL_W &&
-      pointer.x <= this.rightX &&
-      pointer.y >= top &&
-      pointer.y <= this.bottomY
+      pointer.x >= PANEL_X &&
+      pointer.x <= PANEL_X + PANEL_W &&
+      pointer.y >= this.topY &&
+      pointer.y <= this.topY + h
     );
   }
 
@@ -99,10 +109,9 @@ export class EventLogUI {
 
   private render(): void {
     this.clear();
-    const leftX = this.rightX - PANEL_W;
-
-    const bodyH = this.collapsed ? 0 : this.bodyHeight();
-    const headerTop = this.bottomY - HEADER_H - bodyH;
+    const leftX = PANEL_X;
+    const rightX = PANEL_X + PANEL_W;
+    const headerTop = this.topY;
 
     // Header bar (click to collapse/expand).
     const header = this.scene.add
@@ -130,7 +139,7 @@ export class EventLogUI {
     );
     this.rows.push(
       this.scene.add
-        .text(this.rightX - 8, headerTop + 4, this.collapsed ? "[+]" : "[-]", {
+        .text(rightX - 8, headerTop + 4, this.collapsed ? "[+]" : "[-]", {
           fontFamily: "monospace",
           fontSize: "13px",
           color: "#8a93a3",
@@ -145,7 +154,7 @@ export class EventLogUI {
     const bodyTop = headerTop + HEADER_H;
     this.rows.push(
       this.scene.add
-        .rectangle(leftX, bodyTop, PANEL_W, bodyH, 0x0a0a0a, 0.9)
+        .rectangle(leftX, bodyTop, PANEL_W, this.bodyHeight(), 0x0a0a0a, 0.9)
         .setOrigin(0, 0)
         .setScrollFactor(0)
         .setDepth(2600),
