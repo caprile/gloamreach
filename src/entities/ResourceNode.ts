@@ -49,24 +49,35 @@ export interface ResourceNodeConfig {
   amount: number;
   action: NodeAction;
   displayName: string; // shown in the "[LMB] Pick up <name>" prompt
-  // Whether this is a "loose" object eligible for the future magnet
-  // auto-pickup. Branches are loose; rocks are not loose until picked.
+  // Whether this is a "loose" object eligible for magnet auto-pickup. Only
+  // pieces spawned from a depleted tree/boulder are loose; pre-placed
+  // branches/rocks are always manual-click.
   loose: boolean;
   // Hits to deplete at damage 1 (chop/mine only; pickups go through
   // deplete() directly and never call takeHit, so this is unused for them).
   health: number;
+  // Marks a piece spawned by spawnLooseDrop's "explode" (as opposed to a
+  // pre-placed branch/rock). Consolidation and the magnet only ever touch
+  // drop pieces.
+  isDrop?: boolean;
 }
 
-// A single interactable object in the world (branch, rock, tree, boulder).
+// A single interactable object in the world (branch, rock, tree, boulder, or
+// a loose drop piece exploded out of a depleted tree/boulder).
 export class ResourceNode extends Phaser.GameObjects.Sprite {
   readonly resource: ResourceType;
-  readonly amount: number;
+  amount: number;
   readonly action: NodeAction;
   readonly displayName: string;
   readonly loose: boolean;
+  readonly isDrop: boolean;
   readonly maxHealth: number;
   health: number;
   depleted = false;
+  // True while a drop piece's spawn-scatter tween is still running — the
+  // magnet loop skips it so it isn't fighting the scatter tween over x/y.
+  exploding = false;
+  private countLabel: Phaser.GameObjects.Text | null = null;
 
   constructor(scene: Phaser.Scene, cfg: ResourceNodeConfig) {
     super(scene, cfg.x, cfg.y, cfg.texture);
@@ -75,9 +86,48 @@ export class ResourceNode extends Phaser.GameObjects.Sprite {
     this.action = cfg.action;
     this.displayName = cfg.displayName;
     this.loose = cfg.loose;
+    this.isDrop = cfg.isDrop ?? false;
     this.maxHealth = cfg.health;
     this.health = cfg.health;
     scene.add.existing(this);
+  }
+
+  // Updates the stack amount and keeps the count label (shown only when
+  // amount > 1) in sync.
+  setAmount(n: number): void {
+    this.amount = n;
+    if (this.amount > 1) {
+      if (!this.countLabel) {
+        this.countLabel = this.scene.add
+          .text(this.x, this.y + this.displayHeight / 2 + 2, "", {
+            fontFamily: "monospace",
+            fontSize: "10px",
+            color: "#ffffff",
+            stroke: "#000000",
+            strokeThickness: 3,
+          })
+          .setOrigin(0.5, 0);
+      }
+      this.countLabel.setText(`x${this.amount}`);
+    } else {
+      this.countLabel?.destroy();
+      this.countLabel = null;
+    }
+  }
+
+  // Slow, small vertical bob loop so a loose piece reads as "interactable
+  // clutter" at a glance. Only used for drop pieces once they finish
+  // exploding — pre-placed branches/rocks stay fully static.
+  startBob(): void {
+    const baseY = this.y;
+    this.scene.tweens.add({
+      targets: this,
+      y: baseY - 3,
+      duration: 1100,
+      yoyo: true,
+      repeat: -1,
+      ease: "Sine.easeInOut",
+    });
   }
 
   // Applies damage from a chop/mine hit. Plays shake+decay feedback either
@@ -114,10 +164,24 @@ export class ResourceNode extends Phaser.GameObjects.Sprite {
     this.setTint(Phaser.Display.Color.GetColor(shade.r, shade.g, shade.b));
   }
 
-  // For M1 we simply remove the node when harvested. Later, chopping/mining
-  // will instead spawn loose drops on the ground (see roadmap).
+  // Keeps the count label glued to the sprite through explosion scatter,
+  // magnet pull, and bob tweens, all of which move x/y directly.
+  preUpdate(time: number, delta: number): void {
+    super.preUpdate(time, delta);
+    this.countLabel?.setPosition(this.x, this.y + this.displayHeight / 2 + 2);
+  }
+
+  // Trees/boulders spawn loose drop pieces instead (see MainScene.spawnLooseDrop);
+  // this just removes the node itself once harvested/collected. Killing our
+  // own tweens first matters for drop pieces: startBob()'s repeat:-1 tween
+  // never completes on its own, so without this it keeps animating a
+  // destroyed sprite forever (e.g. a piece merged away by consolidateDrop,
+  // or clicked mid-explosion) — a leaked tween per piece that piles up over
+  // a play session and drags the frame rate down.
   deplete(): void {
     this.depleted = true;
+    this.scene.tweens.killTweensOf(this);
+    this.countLabel?.destroy();
     this.destroy();
   }
 }

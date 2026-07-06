@@ -30,6 +30,12 @@ const WORLD_W = TILE * 40; // 1280px wide (bigger world comes with generation la
 const WORLD_H = TILE * 30; // 960px tall
 const REACH = 64; // how close (px) the player must be to interact
 const PLACEMENT_RADIUS = REACH * 1.25; // how far from the player a placed item may land
+const MAGNET_RADIUS = 100; // px — loose drop pieces within this of the player get pulled in
+const MAGNET_SPEED = 220; // px/s a pulled piece travels toward the player
+const MAGNET_PICKUP_DIST = 14; // px — close enough to the player to collect
+const DROP_SCATTER_MIN = 20; // px — min distance a drop piece explodes out to
+const DROP_SCATTER_MAX = 45; // px — max distance a drop piece explodes out to
+const DROP_CONSOLIDATE_RADIUS = 28; // px — merge a landed piece into another this close
 
 // The main gameplay scene: build the world, spawn the player and resources,
 // follow the camera, and run the mouse-driven interaction + HUD.
@@ -61,6 +67,9 @@ export class MainScene extends Phaser.Scene {
   private promptText!: Phaser.GameObjects.Text; // fixed bottom-right hover prompt
   private hoveredNode: ResourceNode | null = null;
   private lastToolHitAt = 0; // this.time.now of the last successful chop/mine hit
+  // Whether loose drop pieces auto-fly to the player when in range. Toggled
+  // with V; doesn't affect pre-placed branches/rocks (always manual).
+  private magnetEnabled = true;
 
   // Placement mode: crafting a placeable recipe (e.g. campfire) enters this
   // instead of landing in the backpack. A ghost preview follows the cursor,
@@ -164,16 +173,59 @@ export class MainScene extends Phaser.Scene {
     HOTBAR_KEYS.forEach((key, i) => {
       this.input.keyboard!.on(`keydown-${key}`, () => this.selectHotbarSlot(i));
     });
+    this.input.keyboard!.on("keydown-V", () => this.toggleMagnet());
 
     // Seed recipe discovery (no-op at a fresh start, but keeps state correct
     // if the initial inventory ever changes).
     this.refreshDiscovery();
   }
 
-  update(): void {
+  update(_time: number, delta: number): void {
     this.player.update();
     if (this.placementMode) this.updatePlacementGhost();
     else if (!this.anyMenuOpen()) this.updateHover();
+    this.updateMagnet(delta);
+  }
+
+  private toggleMagnet(): void {
+    this.magnetEnabled = !this.magnetEnabled;
+    this.eventLog.add("info", `Auto-pickup: ${this.magnetEnabled ? "ON" : "OFF"}`);
+  }
+
+  // Pulls loose drop pieces (not pre-placed branches/rocks) toward the
+  // player every frame they're within MAGNET_RADIUS, collecting them once
+  // close enough. Purely radius-gated, no "lock on" — a piece stops dead the
+  // instant the player is no longer within range.
+  private updateMagnet(delta: number): void {
+    if (!this.magnetEnabled) return;
+    const step = MAGNET_SPEED * (delta / 1000);
+    const toCollect: ResourceNode[] = [];
+
+    for (const node of this.nodes) {
+      if (!node.isDrop || !node.loose || node.depleted || node.exploding) continue;
+      const dist = Phaser.Math.Distance.Between(this.player.x, this.player.y, node.x, node.y);
+      if (dist > MAGNET_RADIUS) continue;
+      // The idle bob tween keeps yoyo-ing `y` on its own schedule; kill it
+      // once the magnet takes over the node's position, or it fights the
+      // pull and the piece appears to hover at a fixed offset instead of
+      // closing the gap.
+      this.tweens.killTweensOf(node);
+      if (dist <= MAGNET_PICKUP_DIST) {
+        toCollect.push(node);
+        continue;
+      }
+      const angle = Phaser.Math.Angle.Between(node.x, node.y, this.player.x, this.player.y);
+      node.x += Math.cos(angle) * step;
+      node.y += Math.sin(angle) * step;
+    }
+
+    if (toCollect.length === 0) return;
+    for (const node of toCollect) {
+      this.addToBackpack(node.resource, node.amount);
+      node.deplete();
+    }
+    this.nodes = this.nodes.filter((n) => !n.depleted);
+    this.refreshHud();
   }
 
   private anyMenuOpen(): boolean {
@@ -311,9 +363,10 @@ export class MainScene extends Phaser.Scene {
       }
     };
 
-    // Free pickups. Branches are "loose" (future magnet); rocks are NOT loose
-    // until picked, so they'll always need a manual pickup.
-    scatter(18, { texture: "branch", resource: "wood", amount: 1, action: "pickup", displayName: "Branch", loose: true, solid: false, health: 1 });
+    // Free pickups. Pre-placed branches/rocks are always manual-click — only
+    // pieces spawned from a depleted tree/boulder are "loose"/magnet-eligible
+    // (see spawnLooseDrop).
+    scatter(18, { texture: "branch", resource: "wood", amount: 1, action: "pickup", displayName: "Branch", loose: false, solid: false, health: 1 });
     scatter(14, { texture: "rock", resource: "stone", amount: 1, action: "pickup", displayName: "Rock", loose: false, solid: false, health: 1 });
     // Tool-gated: chop trees (needs an axe out), mine boulders (needs a pickaxe out).
     scatter(10, { texture: "tree", resource: "wood", amount: 5, action: "chop", displayName: "Tree", loose: false, solid: true, health: 3 });
@@ -393,6 +446,14 @@ export class MainScene extends Phaser.Scene {
       this.player.playSwing();
       const depleted = node.takeHit(toolDamage(this.equippedTool));
       if (!depleted) return; // node survives the hit; stays interactable
+
+      this.spawnLooseDrop(node.resource, node.amount, node.x, node.y);
+      node.deplete();
+      this.nodes = this.nodes.filter((n) => n !== node);
+      this.hoveredNode = null;
+      this.promptText.setVisible(false);
+      this.refreshHud();
+      return;
     }
 
     this.addToBackpack(node.resource, node.amount);
@@ -401,6 +462,79 @@ export class MainScene extends Phaser.Scene {
     this.hoveredNode = null;
     this.promptText.setVisible(false);
     this.refreshHud();
+  }
+
+  // Depleting a tree/boulder "explodes" its yield into 2-4 scattered loose
+  // pieces instead of crediting the backpack directly. Pieces that land near
+  // another piece of the same resource consolidate into one stack.
+  private spawnLooseDrop(resource: ResourceType, amount: number, x: number, y: number): void {
+    const pieceCount = amount > 1 ? Phaser.Math.Between(2, Math.min(4, amount)) : 1;
+    const base = Math.floor(amount / pieceCount);
+    let remainder = amount - base * pieceCount;
+
+    const def = itemDef(resource);
+    for (let i = 0; i < pieceCount; i++) {
+      const pieceAmount = base + (remainder > 0 ? 1 : 0);
+      if (remainder > 0) remainder--;
+
+      const node = new ResourceNode(this, {
+        x,
+        y,
+        texture: def?.texture ?? resource,
+        resource,
+        amount: pieceAmount,
+        action: "pickup",
+        displayName: def?.name ?? resource,
+        loose: true,
+        isDrop: true,
+        health: 1,
+      });
+      node.exploding = true;
+      node.setAmount(pieceAmount);
+      this.nodes.push(node);
+
+      const angle = Phaser.Math.FloatBetween(0, Math.PI * 2);
+      const dist = Phaser.Math.Between(DROP_SCATTER_MIN, DROP_SCATTER_MAX);
+      const targetX = x + Math.cos(angle) * dist;
+      const targetY = y + Math.sin(angle) * dist;
+
+      this.tweens.add({
+        targets: node,
+        x: targetX,
+        y: targetY,
+        duration: 250,
+        ease: "Cubic.easeOut",
+        onComplete: () => {
+          node.exploding = false;
+          // The piece may already have been clicked and collected mid-flight
+          // (pieces are hoverable/clickable immediately, even while
+          // exploding) — don't resurrect it with a fresh bob tween.
+          if (node.depleted) return;
+          node.startBob();
+          this.consolidateDrop(node);
+        },
+      });
+    }
+  }
+
+  // After a drop piece lands, merge it into another nearby piece of the same
+  // resource (if any) so the ground doesn't accumulate lots of tiny stacks.
+  private consolidateDrop(node: ResourceNode): void {
+    if (node.depleted) return;
+    const existing = this.nodes.find(
+      (n) =>
+        n !== node &&
+        n.isDrop &&
+        n.loose &&
+        !n.depleted &&
+        !n.exploding &&
+        n.resource === node.resource &&
+        Phaser.Math.Distance.Between(n.x, n.y, node.x, node.y) <= DROP_CONSOLIDATE_RADIUS,
+    );
+    if (!existing) return;
+    existing.setAmount(existing.amount + node.amount);
+    node.deplete();
+    this.nodes = this.nodes.filter((n) => !n.depleted);
   }
 
   // Add an item to the backpack and record it as discovered (which may unlock
@@ -569,7 +703,7 @@ export class MainScene extends Phaser.Scene {
       .text(
         12,
         10,
-        "Move: WASD / Arrows     Interact: Left Click     Craft: T     Inventory: Tab",
+        "Move: WASD / Arrows     Interact: Left Click     Craft: T     Inventory: Tab     Auto-pickup: V",
         {
           fontFamily: "monospace",
           fontSize: "14px",

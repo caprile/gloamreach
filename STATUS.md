@@ -11,8 +11,88 @@ hotbar. Recipe discovery is gated by "have you picked up the ingredients" +
 skill level; unlocks announce themselves via a toast + persistent event log
 (bottom-right, collapsible). Placeable items (currently just the campfire)
 skip the backpack entirely — crafting one enters a placement mode instead.
+Chopping/mining a tree/boulder now explodes its yield into scattered loose
+pieces on the ground instead of crediting the backpack instantly (see below),
+with an auto-pickup magnet (toggle: `V`) to collect them.
 
-### Just finished: Move speed halved + tool hit-rate cooldown
+### Just finished: Milestone 3 — loose world drops + magnet auto-pickup
+
+Plan file: `.claude/plans/bright-prancing-starlight.md`.
+
+Depleting a tree/boulder no longer credits the backpack directly — it
+"explodes" into 2-4 scattered loose pieces that must be collected:
+
+- **`ResourceNode`** (`src/entities/ResourceNode.ts`): `amount` is now
+  mutable (stacks can grow via consolidation), plus new fields `isDrop`
+  (marks a spawned piece vs. a pre-placed branch/rock) and `exploding`
+  (true while the spawn-scatter tween runs, so the magnet doesn't fight it
+  over x/y). `setAmount()` keeps a small `x<N>` world-space count label
+  (only shown when >1) glued to the sprite via a `preUpdate` override — this
+  is what makes the label track through the explode tween, magnet pull, and
+  bob without extra bookkeeping. `startBob()` is a slow yoyo'd vertical
+  tween, used only on landed drop pieces, that reads as "loose item" (the
+  brainstormed alternative to a blink — chosen over blink/glow for being
+  less flickery/noisy).
+- **`MainScene.spawnLooseDrop()`** splits a depleted node's yield into 2-4
+  pieces, each a `ResourceNode` with `action:"pickup", loose:true,
+  isDrop:true`, tweened outward from the origin to a random point 20-45px
+  away (`Cubic.easeOut`, 250ms — the "explode"). On landing, each piece runs
+  `consolidateDrop()`: if another non-exploding piece of the same resource
+  sits within 28px, it merges in (`setAmount`) and destroys itself, so
+  repeated fells in one area collapse into fewer stacks instead of
+  carpeting the ground.
+- **`MainScene.updateMagnet()`** runs every frame (`update()` now takes
+  Phaser's `delta`), pulling any `isDrop && loose && !exploding` piece
+  within `MAGNET_RADIUS` (100px) toward the player at `MAGNET_SPEED`
+  (220px/s), collecting it into the backpack once within 14px. Toggled with
+  **`V`** (`magnetEnabled`, default on) — logs an event-log entry on toggle,
+  and the binding is listed in the top-left controls line. Purely
+  radius-gated per frame (deliberately no "lock on"/persistence, per user
+  correction) — a piece stops dead the instant the player leaves
+  `MAGNET_RADIUS`, and resumes/fully closes the gap the instant they're back
+  inside it.
+- **Bug fix during this milestone**: pulled pieces appeared to trail the
+  player at a fixed offset instead of reaching them. Root cause was the idle
+  `startBob()` tween — its yoyo/repeat-forever `y` animation kept
+  overwriting the magnet's manual `node.y` write every frame, fighting for
+  the property. Fixed by `this.tweens.killTweensOf(node)` the moment a piece
+  enters magnet range, before applying the pull.
+- **Follow-up bug fix (freeze/perf-death during extended play)**:
+  `startBob()`'s `repeat: -1` tween never completes on its own, and nothing
+  was stopping it when the piece it targeted got destroyed — either merged
+  away by `consolidateDrop`, or clicked mid-explosion (pieces are
+  hoverable/clickable immediately, even while still `exploding`). Each such
+  piece left a tween permanently animating a destroyed sprite; over a play
+  session of repeatedly breaking rocks/trees these piled up unbounded and
+  dragged the frame rate down to what looked like a stuck/crashed game.
+  Fixed by killing a node's own tweens in `ResourceNode.deplete()`, plus a
+  `node.depleted` guard in the explosion tween's `onComplete` so an
+  already-collected piece doesn't get a *new* bob tween started on it after
+  the fact. Verified via `preview_eval`: depleting every boulder/tree in the
+  world while never letting the magnet collect them (worst case) left tween
+  count matching live-piece count exactly (no orphans), and fully collecting
+  everything afterward left zero leaked node tweens.
+- **Revised from the original plan**: pre-placed branches/rocks are now
+  *both* `loose:false` — always manual-click, never magnet-eligible. Only
+  spawned drop pieces are loose. `CLAUDE.md`'s "loose flag" bullet was
+  updated to match (the old text said branches were loose; superseded).
+- **Unrelated fix bundled in**: `vite.config.ts` hardcoded port 5173, which
+  meant the Preview tooling's `autoPort` fallback (used when another
+  session's dev server already holds 5173) couldn't actually redirect Vite
+  to a free port. Now reads `process.env.PORT` (falls back to 5173), and
+  `.claude/launch.json` no longer hardcodes `--port`/`port` and sets
+  `autoPort: true` — future sessions running alongside another chat's `dev`
+  server will just work instead of hitting a blank/unreachable preview.
+
+Verified via `preview_eval` (explode scatter into multiple pieces summing to
+the original amount, landing-site consolidation merging pieces and their
+count labels, magnet pulling a landed piece in and crediting the backpack
+while `exploding` pieces and pre-placed branches/rocks are correctly
+untouched, the `V` toggle stopping/resuming the pull and logging both
+transitions) plus `preview_screenshot` for the scatter/label rendering.
+Type-check clean, no console errors.
+
+### Previously: Move speed halved + tool hit-rate cooldown
 
 Two small follow-ups requested right after M2 landed (M2's multi-hit change
 made LMB-spam farming worse, since nothing capped how fast repeated hits
@@ -180,21 +260,19 @@ clean throughout. No console errors.
 
 ### Up next
 
-Back to the inventory-overhaul roadmap: **Milestone 3** (loose world drops
-with stack consolidation + magnet auto-pickup — plan file
-`.claude/plans/bug-i-can-drag-twinkling-engelbart.md`).
+M3 (loose drops/consolidation/magnet) is done. Next up per the roadmap is
+**Stamina** (sprint/jump/tool-swing cost, max pool + regen — roadmap item 3),
+per the sequencing below. Per `CLAUDE.md` convention (one milestone/feature
+per session), it should start in a fresh chat session rather than continuing
+this one.
 
-Per `CLAUDE.md` convention (one milestone/feature per session), M3 should
-start in a fresh chat session rather than continuing this one.
+**Sequencing notes** (from a 2026-07-06 batch of feature requests, still
+relevant):
 
-**Beyond M3**, three more feature requests were raised (2026-07-06) and given
-a rough sequencing — none started yet:
-
-- **Stamina** (sprint/jump/tool-swing cost, max pool + regen) — already sat at
-  roadmap item 3 ("Stamina, sprint, jump," right after loose drops/magnet in
-  `CLAUDE.md`'s Roadmap section); no change to its position. It depends on the
-  hit-rate-cooldown concept above existing first (stamina cost per swing needs
-  a swing-rate to hook a cost into), which is now done.
+- **Stamina** — already sat at roadmap item 3, right after loose
+  drops/magnet in `CLAUDE.md`'s Roadmap section; no change to its position.
+  It depends on the hit-rate-cooldown concept (done in M2) and now M3's
+  swing/pickup actions existing first, so a cost can hook into them.
 - **Equipped item visible on the player sprite** — deliberately deferred to
   sit alongside **Combat** (roadmap item 4). `Player` is currently a static
   sprite with no facing direction or weapon-attachment system; M2's "swing" is
@@ -208,7 +286,8 @@ a rough sequencing — none started yet:
 ### Known rough edges / deferred (see plan's "Out of scope" section)
 
 Carry weight, tool durability, craft-quantity selector, stacking exceptions
-beyond durability — all intentionally deferred, not forgotten. Placed
+beyond durability — all intentionally deferred, not forgotten. The magnet
+(M3) has no carry-weight gating yet since that system doesn't exist. Placed
 objects (campfire) have no collision/overlap checks and can't be destroyed
-yet — deferred until a destroy-for-pieces feature exists, at which point the
-loose-world-drop system (Milestone 3) will be needed for real.
+yet — deferred until a destroy-for-pieces feature exists, which can now
+reuse the M3 loose-drop system for the resulting pieces.

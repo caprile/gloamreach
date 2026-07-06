@@ -81,10 +81,11 @@ mouse-driven only. Don't reintroduce a keybind for this without being asked.
     (`origin (1,1)`, `scrollFactor 0`) — NOT floating above the object in world space.
     This was an intentional change from an earlier "prompt above the object" version;
     don't revert to world-space prompts.
-- **`loose` flag:** branches are `loose: true`; rocks are `loose: false` ("not loose
-  until picked"). This distinction exists now specifically so the future magnet
-  auto-pickup only affects loose ground items, not just-mined ore/stone. Preserve this
-  flag when adding new resource types.
+- **`loose` flag:** pre-placed branches and rocks are both `loose: false` — always
+  manual-click, never magnet-eligible. Only loose drop **pieces** spawned when a
+  tree/boulder depletes (`MainScene.spawnLooseDrop`) are `loose: true` (and
+  `isDrop: true`), and those are what the magnet (toggle: `V`) pulls toward the
+  player. Preserve this distinction when adding new resource types.
 
 ## Roadmap (see plan file for full detail)
 
