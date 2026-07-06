@@ -8,6 +8,7 @@ export interface LogEntry {
   id: number;
   kind: LogKind;
   message: string;
+  icon?: string; // texture key, shown on the recipe-unlock toast
 }
 
 export class EventLog {
@@ -15,8 +16,8 @@ export class EventLog {
   private seq = 0;
   private listeners: ((entry: LogEntry) => void)[] = [];
 
-  add(kind: LogKind, message: string): LogEntry {
-    const entry: LogEntry = { id: this.seq++, kind, message };
+  add(kind: LogKind, message: string, icon?: string): LogEntry {
+    const entry: LogEntry = { id: this.seq++, kind, message, icon };
     this.entries.push(entry);
     for (const cb of this.listeners) cb(entry);
     return entry;

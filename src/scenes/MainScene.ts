@@ -10,7 +10,7 @@ import {
 import type { ResourceType } from "../systems/Inventory";
 import { Skills, type SkillType } from "../systems/Skills";
 import { Crafting } from "../systems/Crafting";
-import type { Recipe } from "../systems/Recipes";
+import { outputKey, type Recipe } from "../systems/Recipes";
 import { itemDef } from "../systems/Items";
 import { ItemContainer, moveSlot } from "../systems/ItemContainer";
 import { EventLog } from "../systems/EventLog";
@@ -376,7 +376,8 @@ export class MainScene extends Phaser.Scene {
   private refreshDiscovery(): void {
     const unlocked = this.crafting.refresh(this.discovered, this.skills);
     for (const recipe of unlocked) {
-      this.eventLog.add("recipe", `New Recipe Unlocked! ${recipe.name}`);
+      const icon = itemDef(outputKey(recipe))?.texture;
+      this.eventLog.add("recipe", `New Recipe Unlocked! ${recipe.name}`, icon);
     }
     this.craftingMenu?.refresh();
     this.inventoryMenu?.refresh();
@@ -479,9 +480,4 @@ export class MainScene extends Phaser.Scene {
     this.craftingMenu?.refresh();
     this.inventoryMenu?.refresh();
   }
-}
-
-// The item key a recipe produces (tool type or item id).
-function outputKey(recipe: Recipe): string {
-  return recipe.output.kind === "tool" ? recipe.output.tool : recipe.output.itemId;
 }

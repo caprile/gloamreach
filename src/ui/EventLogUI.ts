@@ -14,6 +14,21 @@ const KIND_COLORS: Record<LogKind, { text: string; border: number; fill: number 
   info: { text: "#c8d0dc", border: 0x8a93a3, fill: 0x1a1f2a },
 };
 
+// Recipe-unlock toast: a small right-anchored card (icon + text) that slides
+// in from the right edge, holds while stacked under earlier ones, then fades.
+// Kept off the center of the screen and clear of the bottom-right log panel,
+// per the user's request not to block the play area.
+const RECIPE_TOAST_W = 220;
+const RECIPE_TOAST_H = 40;
+const RECIPE_TOAST_GAP = 6;
+const RECIPE_TOAST_TOP = 48;
+const RECIPE_TOAST_RIGHT_MARGIN = 12;
+const RECIPE_TOAST_ICON_SIZE = 24;
+const RECIPE_TOAST_SLIDE_MS = 280;
+const RECIPE_TOAST_HOLD_MS = 2400;
+const RECIPE_TOAST_FADE_MS = 600;
+const RECIPE_TOAST_STAGGER_MS = 200;
+
 // Persistent event feed anchored bottom-right. Collapsible via the header,
 // scrollable with the mouse wheel, and pops a fading toast near the top when
 // a new entry arrives so unlocks feel like a "big deal".
@@ -26,6 +41,9 @@ export class EventLogUI {
   private activeToasts = 0;
   private rightX: number;
   private bottomY: number;
+  private recipeToastQueue: LogEntry[] = [];
+  private recipeToastQueueBusy = false;
+  private activeRecipeToasts = 0;
 
   constructor(scene: Phaser.Scene, log: EventLog) {
     this.scene = scene;
@@ -41,7 +59,8 @@ export class EventLogUI {
 
   private onNewEntry(entry: LogEntry): void {
     this.scrollOffset = 0; // jump to newest
-    this.showToast(entry);
+    if (entry.kind === "recipe") this.enqueueRecipeToast(entry);
+    else this.showToast(entry);
     this.render();
   }
 
@@ -191,6 +210,79 @@ export class EventLogUI {
         text.destroy();
         box.destroy();
         this.activeToasts = Math.max(0, this.activeToasts - 1);
+      },
+    });
+  }
+
+  // Recipe unlocks queue up and slide in one at a time (staggered) rather
+  // than all popping in on the same frame if several unlock together (e.g.
+  // one skill level-up revealing multiple recipes at once).
+  private enqueueRecipeToast(entry: LogEntry): void {
+    this.recipeToastQueue.push(entry);
+    if (!this.recipeToastQueueBusy) this.processRecipeToastQueue();
+  }
+
+  private processRecipeToastQueue(): void {
+    const entry = this.recipeToastQueue.shift();
+    if (!entry) {
+      this.recipeToastQueueBusy = false;
+      return;
+    }
+    this.recipeToastQueueBusy = true;
+    this.spawnRecipeToast(entry);
+    this.scene.time.delayedCall(RECIPE_TOAST_STAGGER_MS, () => this.processRecipeToastQueue());
+  }
+
+  private spawnRecipeToast(entry: LogEntry): void {
+    const colors = KIND_COLORS.recipe;
+    const slot = this.activeRecipeToasts++;
+    const y = RECIPE_TOAST_TOP + slot * (RECIPE_TOAST_H + RECIPE_TOAST_GAP);
+    const restX = this.scene.scale.width - RECIPE_TOAST_RIGHT_MARGIN - RECIPE_TOAST_W;
+    const startX = this.scene.scale.width + 20;
+
+    const container = this.scene.add.container(startX, y).setScrollFactor(0).setDepth(6000);
+
+    const box = this.scene.add
+      .rectangle(0, 0, RECIPE_TOAST_W, RECIPE_TOAST_H, colors.fill, 0.95)
+      .setOrigin(0, 0)
+      .setStrokeStyle(2, colors.border);
+    container.add(box);
+
+    const hasIcon = !!entry.icon;
+    if (entry.icon) {
+      const icon = this.scene.add
+        .image(10 + RECIPE_TOAST_ICON_SIZE / 2, RECIPE_TOAST_H / 2, entry.icon)
+        .setDisplaySize(RECIPE_TOAST_ICON_SIZE, RECIPE_TOAST_ICON_SIZE);
+      container.add(icon);
+    }
+
+    const textX = hasIcon ? 10 + RECIPE_TOAST_ICON_SIZE + 8 : 10;
+    const text = this.scene.add
+      .text(textX, RECIPE_TOAST_H / 2, entry.message, {
+        fontFamily: "monospace",
+        fontSize: "12px",
+        color: colors.text,
+        wordWrap: { width: RECIPE_TOAST_W - textX - 8 },
+      })
+      .setOrigin(0, 0.5);
+    container.add(text);
+
+    this.scene.tweens.add({
+      targets: container,
+      x: restX,
+      duration: RECIPE_TOAST_SLIDE_MS,
+      ease: "Cubic.easeOut",
+      onComplete: () => {
+        this.scene.tweens.add({
+          targets: container,
+          alpha: 0,
+          delay: RECIPE_TOAST_HOLD_MS,
+          duration: RECIPE_TOAST_FADE_MS,
+          onComplete: () => {
+            container.destroy();
+            this.activeRecipeToasts = Math.max(0, this.activeRecipeToasts - 1);
+          },
+        });
       },
     });
   }

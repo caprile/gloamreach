@@ -98,3 +98,9 @@ export function itemNameFor(itemId: string): string | undefined {
   const recipe = RECIPES.find((r) => r.output.kind === "item" && r.output.itemId === itemId);
   return recipe?.output.kind === "item" ? recipe.output.itemName : undefined;
 }
+
+// The item key a recipe produces (tool type or item id) — doubles as the
+// ItemDef/ItemContainer key for that recipe's output.
+export function outputKey(recipe: Recipe): string {
+  return recipe.output.kind === "tool" ? recipe.output.tool : recipe.output.itemId;
+}

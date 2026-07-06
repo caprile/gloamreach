@@ -1,8 +1,9 @@
 import Phaser from "phaser";
-import type { Recipe, RecipeCategory } from "../systems/Recipes";
+import { outputKey, type Recipe, type RecipeCategory } from "../systems/Recipes";
 import type { Crafting } from "../systems/Crafting";
 import type { ResourceType } from "../systems/Inventory";
 import type { ItemContainer } from "../systems/ItemContainer";
+import { itemDef } from "../systems/Items";
 
 const CATEGORIES: { id: RecipeCategory; label: string }[] = [
   { id: "tools", label: "Tools" },
@@ -151,13 +152,31 @@ export class CraftingMenu {
       this.rows.push(t);
     }
 
+    const iconSize = 18;
     for (const recipe of recipes) {
       const affordable = this.deps.crafting.canAfford(recipe, this.deps.backpack);
       const owned = this.deps.isOwned(recipe);
       const isSelected = this.selected?.id === recipe.id;
       const label = `${owned ? "* " : ""}${recipe.name}`;
+      const selectRecipe = () => {
+        this.selected = recipe;
+        this.render();
+      };
+
+      const texture = itemDef(outputKey(recipe))?.texture;
+      if (texture) {
+        const icon = this.scene.add
+          .image(x0 + iconSize / 2, y + iconSize / 2 + 1, texture)
+          .setDisplaySize(iconSize, iconSize)
+          .setScrollFactor(0)
+          .setDepth(3001)
+          .setInteractive({ useHandCursor: true })
+          .on("pointerdown", selectRecipe);
+        this.rows.push(icon);
+      }
+
       const t = this.scene.add
-        .text(x0, y, label, {
+        .text(x0 + iconSize + 6, y, label, {
           fontFamily: "monospace",
           fontSize: "14px",
           color: isSelected ? "#ffe08a" : affordable ? "#ffffff" : "#5b6472",
@@ -167,10 +186,7 @@ export class CraftingMenu {
         .setScrollFactor(0)
         .setDepth(3001)
         .setInteractive({ useHandCursor: true })
-        .on("pointerdown", () => {
-          this.selected = recipe;
-          this.render();
-        });
+        .on("pointerdown", selectRecipe);
       this.rows.push(t);
       y += 22;
     }
