@@ -71,6 +71,14 @@ export class BootScene extends Phaser.Scene {
     g.fillRect(8, 7, 8, 6);
     g.generateTexture("boulder", 30, 24);
 
+    // Boar — melee enemy. 26x20: brown body + a darker snout patch.
+    g.clear();
+    g.fillStyle(0x6b4a2a, 1);
+    g.fillRect(2, 4, 22, 14);
+    g.fillStyle(0x4a3018, 1);
+    g.fillRect(0, 8, 6, 6); // snout
+    g.generateTexture("boar", 26, 20);
+
     this.makeItemIcons(g);
 
     g.destroy(); // we only needed it to bake textures
@@ -174,5 +182,13 @@ export class BootScene extends Phaser.Scene {
     g.fillStyle(0xf0c040, 1);
     g.fillTriangle(9, 16, 15, 16, 12, 8);
     g.generateTexture("icon_campfire", ICON, ICON);
+
+    // Boar Meat: a raw-meat chunk (reuses the shishkabob's red tones).
+    g.clear();
+    g.fillStyle(0xb0452c, 1);
+    g.fillRect(5, 6, 14, 12);
+    g.fillStyle(0xd06a4a, 1);
+    g.fillRect(7, 8, 8, 6);
+    g.generateTexture("icon_boar_meat", ICON, ICON);
   }
 }

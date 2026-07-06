@@ -2,7 +2,7 @@
 // etc.). Kept as plain data so the UI can render/scroll it and a future
 // save/load can persist it. Listeners fire on each new entry so the UI can
 // pop a toast + refresh.
-export type LogKind = "recipe" | "levelup" | "info";
+export type LogKind = "recipe" | "levelup" | "info" | "combat";
 
 export interface LogEntry {
   id: number;

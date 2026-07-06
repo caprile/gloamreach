@@ -4,5 +4,6 @@
 // still names the crafting-ingredient/resource keys used across recipes,
 // resource nodes, and drops. "leather" has no drop source yet (future
 // hunting/skinning); recipes can reference it but it stays undiscovered until
-// something drops it.
-export type ResourceType = "wood" | "stone" | "leather";
+// something drops it. "boar_meat" drops from defeated Boars (see Enemy.ts /
+// MainScene.spawnLooseDrop).
+export type ResourceType = "wood" | "stone" | "leather" | "boar_meat";

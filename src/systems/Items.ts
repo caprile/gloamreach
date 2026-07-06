@@ -1,4 +1,5 @@
 import type { ToolType } from "../entities/ResourceNode";
+import type { WeaponType } from "./Weapons";
 
 // Central display + behaviour metadata for every item that can live in the
 // inventory: raw resources AND crafted outputs. Keyed by the item's stable
@@ -17,6 +18,7 @@ export interface ItemDef {
   maxStack: number; // 99 for stackables; 1 for durability items (tools/weapons)
   hotbarable: boolean; // may this sit in a 1-9 hotbar slot?
   tool?: ToolType; // set for tool items — selecting it in the hotbar equips it
+  weapon?: WeaponType; // set for weapon items — selecting it in the hotbar equips it
   stats?: ItemStat[];
   // World-placed items (campfires, building pieces) skip the backpack
   // entirely — crafting one enters placement mode instead. Per-item, not
@@ -60,9 +62,11 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     maxStack: 1,
     hotbarable: true,
     tool: "stone_axe",
+    weapon: "stone_axe", // doubles as a melee weapon — same equipped item, no separate slot
     stats: [
       { label: "Type", value: "Axe" },
       { label: "Gather", value: "Wood" },
+      { label: "Damage", value: "6" },
     ],
   },
   stone_pickaxe: {
@@ -96,6 +100,7 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     texture: "icon_wood_club",
     maxStack: 1,
     hotbarable: true,
+    weapon: "wood_club",
     stats: [
       { label: "Type", value: "Weapon" },
       { label: "Damage", value: "3" },
@@ -108,6 +113,7 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     texture: "icon_stone_club",
     maxStack: 1,
     hotbarable: true,
+    weapon: "stone_club",
     stats: [
       { label: "Type", value: "Weapon" },
       { label: "Damage", value: "5" },
@@ -133,6 +139,16 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     hotbarable: false,
     stats: [{ label: "Type", value: "Build" }],
     placeable: true,
+  },
+
+  // --- loot ---
+  boar_meat: {
+    key: "boar_meat",
+    name: "Boar Meat",
+    description: "Raw meat from a boar. Can be cooked.",
+    texture: "icon_boar_meat",
+    maxStack: 99,
+    hotbarable: false,
   },
 };
 

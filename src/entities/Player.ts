@@ -6,12 +6,15 @@ const DASH_SPEED = 340; // px/s during a dash burst
 const DASH_DURATION_MS = 160; // how long the burst overrides normal movement
 const DASH_COOLDOWN_MS = 600; // minimum time between dashes, independent of stamina
 
+export type Facing = "up" | "down" | "left" | "right";
+
 // Per-frame report so MainScene can apply stamina costs without duplicating
 // Player's input-reading logic.
 export interface PlayerFrameResult {
   moving: boolean;
   sprinting: boolean; // moving && canSprint && shift held
   dashStarted: boolean; // true only on the frame a dash begins (for stamina spend)
+  facing: Facing; // current facing; persists while idle
 }
 
 // The player character. It owns its own input and movement so MainScene stays
@@ -29,6 +32,10 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   private spaceKey: Phaser.Input.Keyboard.Key;
   private lastDashAt = -Infinity;
   private dashingUntil = 0;
+  private facing: Facing = "down";
+  private equippedIcon: Phaser.GameObjects.Image | null = null;
+  private equippedIconTexture: string | null = null;
+  private static readonly ICON_OFFSET = 16; // px from player center, in facing direction
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
     super(scene, x, y, "player");
@@ -60,7 +67,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     // Mid-dash: let Arcade physics carry the velocity set when the dash
     // started; ignore normal input until it expires.
     if (now < this.dashingUntil) {
-      return { moving: true, sprinting: false, dashStarted: false };
+      return { moving: true, sprinting: false, dashStarted: false, facing: this.facing };
     }
 
     const left = this.cursors.left.isDown || this.wasd.left.isDown;
@@ -76,9 +83,16 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     if (down) vy += 1;
     const moving = vx !== 0 || vy !== 0;
 
-    // Dash requires a held movement direction — there's no facing/last-
-    // direction memory yet (a real facing system is deliberately deferred to
-    // land alongside Combat, per the roadmap).
+    // 4-way facing from the last-held movement direction; persists while
+    // idle. Vertical wins ties on diagonal input (arbitrary but deterministic).
+    if (moving) {
+      if (vy !== 0 && (vx === 0 || Math.abs(vy) >= Math.abs(vx))) {
+        this.facing = vy < 0 ? "up" : "down";
+      } else if (vx !== 0) {
+        this.facing = vx < 0 ? "left" : "right";
+      }
+    }
+
     const wantsDash =
       moving &&
       Phaser.Input.Keyboard.JustDown(this.spaceKey) &&
@@ -89,7 +103,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       body.setVelocity((vx / len) * DASH_SPEED, (vy / len) * DASH_SPEED);
       this.lastDashAt = now;
       this.dashingUntil = now + DASH_DURATION_MS;
-      return { moving: true, sprinting: false, dashStarted: true };
+      return { moving: true, sprinting: false, dashStarted: true, facing: this.facing };
     }
 
     const sprinting = moving && canSprint && this.shiftKey.isDown;
@@ -100,7 +114,66 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       const speed = sprinting ? SPEED * SPRINT_MULTIPLIER : SPEED;
       body.setVelocity((vx / len) * speed, (vy / len) * speed);
     }
-    return { moving, sprinting, dashStarted: false };
+    return { moving, sprinting, dashStarted: false, facing: this.facing };
+  }
+
+  getFacing(): Facing {
+    return this.facing;
+  }
+
+  // Called by MainScene whenever the equipped tool/weapon changes (hotbar
+  // select/cycle/drag/craft). Pass null to hide (nothing equipped).
+  setEquippedIcon(texture: string | null): void {
+    this.equippedIconTexture = texture;
+    if (!texture) {
+      this.equippedIcon?.setVisible(false);
+      return;
+    }
+    if (!this.equippedIcon) {
+      this.equippedIcon = this.scene.add.image(this.x, this.y, texture).setDepth(11);
+    } else {
+      this.equippedIcon.setTexture(texture);
+    }
+    this.equippedIcon.setVisible(true);
+  }
+
+  // Called every frame (even while frozen/dead) so the icon tracks
+  // position/facing without requiring a full Player.update().
+  syncEquippedIconPosition(): void {
+    if (!this.equippedIcon || !this.equippedIconTexture) return;
+    const offset = Player.ICON_OFFSET;
+    let ox = 0;
+    let oy = 0;
+    switch (this.facing) {
+      case "up":
+        oy = -offset;
+        break;
+      case "down":
+        oy = offset;
+        break;
+      case "left":
+        ox = -offset;
+        break;
+      case "right":
+        ox = offset;
+        break;
+    }
+    this.equippedIcon.setPosition(this.x + ox, this.y + oy);
+  }
+
+  // Small lunge tween on the equipped-item icon, played alongside playSwing()
+  // on a successful weapon hit.
+  playEquippedSwing(): void {
+    if (!this.equippedIcon) return;
+    this.scene.tweens.killTweensOf(this.equippedIcon);
+    this.equippedIcon.setScale(1);
+    this.scene.tweens.add({
+      targets: this.equippedIcon,
+      scale: 1.3,
+      duration: 70,
+      yoyo: true,
+      ease: "Sine.easeOut",
+    });
   }
 
   // Quick rotate-punch tween played on a successful chop/mine hit. Stands in

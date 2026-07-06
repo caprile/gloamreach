@@ -10,10 +10,18 @@ import {
   type NodeAction,
   type ToolType,
 } from "../entities/ResourceNode";
+import { Enemy } from "../entities/Enemy";
 import type { ResourceType } from "../systems/Inventory";
 import { Skills, type SkillType } from "../systems/Skills";
 import { Crafting } from "../systems/Crafting";
 import { Stamina } from "../systems/Stamina";
+import { Health } from "../systems/Health";
+import {
+  weaponDamage,
+  weaponCooldownMs,
+  weaponStaminaCost,
+  type WeaponType,
+} from "../systems/Weapons";
 import { outputKey, type Recipe } from "../systems/Recipes";
 import { itemDef } from "../systems/Items";
 import { ItemContainer, moveSlot } from "../systems/ItemContainer";
@@ -57,6 +65,7 @@ export class MainScene extends Phaser.Scene {
   // The single tool the player currently has "out". Driven by the selected
   // hotbar slot.
   private equippedTool: ToolType | null = null;
+  private equippedWeapon: WeaponType | null = null;
   private hotbar = new Hotbar();
   private equipment = new Equipment();
   private eventLog = new EventLog();
@@ -72,13 +81,26 @@ export class MainScene extends Phaser.Scene {
 
   private promptText!: Phaser.GameObjects.Text; // fixed bottom-right hover prompt
   private hoveredNode: ResourceNode | null = null;
+  private hoveredEnemy: Enemy | null = null;
   private lastToolHitAt = 0; // this.time.now of the last successful chop/mine hit
+  private lastWeaponHitAt = 0; // mirrors lastToolHitAt, separate clock for weapon swings
   private stamina = new Stamina();
   private staminaBarFill!: Phaser.GameObjects.Rectangle; // fixed HUD bar, centered above the hotbar
   private staminaBarText!: Phaser.GameObjects.Text; // numeric current-stamina label inside the bar
   // Whether loose drop pieces auto-fly to the player when in range. Toggled
   // with V; doesn't affect pre-placed branches/rocks (always manual).
   private magnetEnabled = true;
+
+  // --- Combat ---
+  private enemies: Enemy[] = [];
+  private enemyGroup!: Phaser.Physics.Arcade.Group;
+  private health = new Health();
+  private healthBarFill!: Phaser.GameObjects.Rectangle;
+  private healthBarText!: Phaser.GameObjects.Text;
+  private isDead = false;
+  private invulnerableUntil = 0; // this.time.now threshold; incoming damage skipped before this
+  private readonly RESPAWN_DELAY_MS = 2000;
+  private readonly POST_RESPAWN_INVULN_MS = 1500;
 
   // Placement mode: crafting a placeable recipe (e.g. campfire) enters this
   // instead of landing in the backpack. A ghost preview follows the cursor,
@@ -114,6 +136,14 @@ export class MainScene extends Phaser.Scene {
     this.spawnNodes(solids);
     this.physics.add.collider(this.player, solids);
 
+    // Enemies: physical collision with solids and the player (separation
+    // only — the actual bite trigger is manual distance math, matching how
+    // REACH-based interaction already works).
+    this.enemyGroup = this.physics.add.group();
+    this.spawnEnemies();
+    this.physics.add.collider(this.enemyGroup, solids);
+    this.physics.add.collider(this.player, this.enemyGroup);
+
     // Left-click interacts with whatever is hovered and in reach. Suppressed
     // while a menu is open, or when the click lands on a fixed HUD element
     // (hotbar / event log) so a click there doesn't also hit the world behind.
@@ -146,6 +176,7 @@ export class MainScene extends Phaser.Scene {
       isDragging: () => this.dragSource !== null,
     });
     this.createStaminaBar();
+    this.createHealthBar();
     // Stacks directly under the Keybinds panel (top-left column), clear of
     // the bottom-center HUD cluster (hotbar + stamina bar) which is expected
     // to grow.
@@ -194,6 +225,17 @@ export class MainScene extends Phaser.Scene {
   }
 
   update(_time: number, delta: number): void {
+    if (this.isDead) {
+      // Frozen: no Player.update() (no input/movement), but ambient systems
+      // keep running so the world doesn't visually freeze too.
+      this.stamina.tick(delta);
+      this.refreshStaminaBar();
+      this.player.syncEquippedIconPosition();
+      this.updateEnemies(delta);
+      this.updateMagnet(delta);
+      return;
+    }
+
     // Gate sprint on affording *this frame's* drain (not just "stamina > 0")
     // — otherwise a partial remainder that's too small to spend keeps
     // regenerating just enough to pass a ">0" check forever, and sprint never
@@ -211,10 +253,12 @@ export class MainScene extends Phaser.Scene {
     }
     this.stamina.tick(delta);
     this.refreshStaminaBar();
+    this.player.syncEquippedIconPosition();
 
     if (this.placementMode) this.updatePlacementGhost();
     else if (!this.anyMenuOpen()) this.updateHover();
     this.updateMagnet(delta);
+    this.updateEnemies(delta);
   }
 
   private toggleMagnet(): void {
@@ -273,10 +317,15 @@ export class MainScene extends Phaser.Scene {
     this.recomputeEquipped();
   }
 
-  // The equipped tool is whatever tool sits in the selected hotbar slot.
+  // The equipped tool/weapon is whatever sits in the selected hotbar slot —
+  // single source of truth for both, plus the on-player equipped-item icon.
   private recomputeEquipped(): void {
     const stack = this.hotbar.get(this.hotbar.selected());
-    this.equippedTool = (stack && itemDef(stack.key)?.tool) || null;
+    const def = stack ? itemDef(stack.key) : undefined;
+    this.equippedTool = def?.tool ?? null;
+    this.equippedWeapon = def?.weapon ?? null;
+    const iconTexture = def && (def.tool || def.weapon) ? def.texture : null;
+    this.player.setEquippedIcon(iconTexture);
     this.hotbarUI.refresh();
     this.refreshHud();
   }
@@ -404,26 +453,62 @@ export class MainScene extends Phaser.Scene {
     scatter(8, { texture: "boulder", resource: "stone", amount: 5, action: "mine", displayName: "Boulder", loose: false, solid: true, health: 3 });
   }
 
-  // Each frame: find which node the mouse is over (in world space) and update
-  // the bottom-right prompt + cursor.
+  // Scatter Boars around the world, same seeded-RNG approach as spawnNodes(),
+  // with a slightly larger clear zone so the player doesn't spawn standing
+  // next to one.
+  private spawnEnemies(): void {
+    const rng = new Phaser.Math.RandomDataGenerator(["boar-country"]);
+    const COUNT = 6;
+    for (let i = 0; i < COUNT; i++) {
+      const x = rng.between(60, WORLD_W - 60);
+      const y = rng.between(60, WORLD_H - 60);
+      if (Phaser.Math.Distance.Between(x, y, WORLD_W / 2, WORLD_H / 2) < 150) continue;
+      const enemy = new Enemy(this, { x, y, texture: "boar", displayName: "Boar" });
+      this.enemies.push(enemy);
+      this.enemyGroup.add(enemy);
+    }
+  }
+
+  // Each frame: find whichever node OR enemy the mouse is over (in world
+  // space) — whichever is closest overall — and update the bottom-right
+  // prompt + cursor. Only one of hoveredNode/hoveredEnemy is ever set.
   private updateHover(): void {
     const pointer = this.input.activePointer;
     const world = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
 
-    let hovered: ResourceNode | null = null;
+    let hoveredNode: ResourceNode | null = null;
+    let hoveredEnemy: Enemy | null = null;
     let best = Infinity;
+
     for (const node of this.nodes) {
       if (node.depleted) continue;
       const radius = Math.max(node.displayWidth, node.displayHeight) / 2 + 6;
       const d = Phaser.Math.Distance.Between(world.x, world.y, node.x, node.y);
       if (d <= radius && d < best) {
-        hovered = node;
+        hoveredNode = node;
+        hoveredEnemy = null;
         best = d;
       }
     }
-    this.hoveredNode = hovered;
+    for (const enemy of this.enemies) {
+      if (enemy.depleted) continue;
+      const radius = Math.max(enemy.displayWidth, enemy.displayHeight) / 2 + 6;
+      const d = Phaser.Math.Distance.Between(world.x, world.y, enemy.x, enemy.y);
+      if (d <= radius && d < best) {
+        hoveredEnemy = enemy;
+        hoveredNode = null;
+        best = d;
+      }
+    }
 
-    const prompt = hovered ? this.promptFor(hovered) : null;
+    this.hoveredNode = hoveredNode;
+    this.hoveredEnemy = hoveredEnemy;
+
+    const prompt = hoveredNode
+      ? this.promptFor(hoveredNode)
+      : hoveredEnemy
+        ? this.promptForEnemy(hoveredEnemy)
+        : null;
     if (prompt) {
       this.promptText.setText(prompt).setVisible(true);
       this.input.setDefaultCursor("pointer");
@@ -454,8 +539,22 @@ export class MainScene extends Phaser.Scene {
     return null; // no tool of the right kind out → show nothing
   }
 
-  // Left-click action on the currently hovered, in-reach node.
+  // Mirrors promptFor()'s gating rules: out of reach -> nothing; no weapon
+  // equipped -> nothing (never reveal what's required); else the attack verb.
+  private promptForEnemy(enemy: Enemy): string | null {
+    const inReach =
+      Phaser.Math.Distance.Between(this.player.x, this.player.y, enemy.x, enemy.y) <= REACH;
+    if (!inReach) return null;
+    if (!this.equippedWeapon) return null;
+    return `[LMB] Attack ${enemy.displayName}`;
+  }
+
+  // Left-click action on the currently hovered, in-reach node (or enemy).
   private tryInteract(): void {
+    if (this.hoveredEnemy) {
+      this.tryAttackEnemy(this.hoveredEnemy);
+      return;
+    }
     const node = this.hoveredNode;
     if (!node || node.depleted) return;
     const inReach =
@@ -498,6 +597,98 @@ export class MainScene extends Phaser.Scene {
     this.hoveredNode = null;
     this.promptText.setVisible(false);
     this.refreshHud();
+  }
+
+  // Left-click action on the currently hovered, in-reach enemy. Mirrors
+  // tryInteract()'s tool-swing guards (cooldown, stamina afford, silent fail).
+  private tryAttackEnemy(enemy: Enemy): void {
+    if (enemy.depleted || !this.equippedWeapon) return;
+    const inReach =
+      Phaser.Math.Distance.Between(this.player.x, this.player.y, enemy.x, enemy.y) <= REACH;
+    if (!inReach) return;
+
+    const cooldownMs = weaponCooldownMs(this.equippedWeapon);
+    if (this.time.now - this.lastWeaponHitAt < cooldownMs) return;
+
+    const staminaCost = weaponStaminaCost(this.equippedWeapon);
+    if (!this.stamina.canAfford(staminaCost)) return; // exhausted — silent, same as tool guard
+
+    this.lastWeaponHitAt = this.time.now;
+    this.stamina.spend(staminaCost);
+    this.player.playSwing();
+    this.player.playEquippedSwing();
+
+    const dmg = weaponDamage(this.equippedWeapon);
+    const depleted = enemy.takeHit(dmg);
+    this.spawnDamageNumber(enemy.x, enemy.y, dmg);
+    if (!depleted) return;
+
+    const dropX = enemy.x;
+    const dropY = enemy.y;
+    enemy.playDeathFeedback(() => {
+      this.spawnLooseDrop("boar_meat", Phaser.Math.Between(1, 2), dropX, dropY);
+    });
+    this.enemies = this.enemies.filter((e) => e !== enemy);
+    this.eventLog.add("combat", `Defeated ${enemy.displayName}`);
+    this.hoveredEnemy = null;
+    this.promptText.setVisible(false);
+  }
+
+  // Floating combat-text on a successful hit. Plain white for now — once dmg
+  // types/resistances exist, this is the spot to color/vary the text.
+  private spawnDamageNumber(x: number, y: number, amount: number): void {
+    const text = this.add
+      .text(x, y - 14, `${amount}`, {
+        fontFamily: "monospace",
+        fontSize: "14px",
+        color: "#ffffff",
+        stroke: "#000000",
+        strokeThickness: 3,
+      })
+      .setOrigin(0.5, 0.5)
+      .setDepth(50);
+    this.tweens.add({
+      targets: text,
+      y: text.y - 24,
+      alpha: 0,
+      duration: 700,
+      ease: "Cubic.easeOut",
+      onComplete: () => text.destroy(),
+    });
+  }
+
+  // Runs every frame: ticks each enemy's AI/movement and applies any bite
+  // that lands to the player's Health.
+  private updateEnemies(delta: number): void {
+    const now = this.time.now;
+    for (const enemy of this.enemies) {
+      const bit = enemy.update(delta, this.player.x, this.player.y, now);
+      if (bit) this.applyDamageToPlayer(enemy.biteDamage);
+    }
+  }
+
+  private applyDamageToPlayer(amount: number): void {
+    if (this.isDead) return;
+    if (this.time.now < this.invulnerableUntil) return;
+    const died = this.health.takeDamage(amount);
+    this.refreshHealthBar();
+    if (died) this.onPlayerDeath();
+  }
+
+  private onPlayerDeath(): void {
+    this.isDead = true;
+    this.player.setVelocity(0, 0);
+    this.eventLog.add("combat", "You died...");
+    this.time.delayedCall(this.RESPAWN_DELAY_MS, () => this.respawnPlayer());
+  }
+
+  private respawnPlayer(): void {
+    this.player.setPosition(WORLD_W / 2, WORLD_H / 2);
+    this.health.reset();
+    this.refreshHealthBar();
+    this.invulnerableUntil = this.time.now + this.POST_RESPAWN_INVULN_MS;
+    this.isDead = false;
+    this.eventLog.add("combat", "Respawned");
   }
 
   // Depleting a tree/boulder "explodes" its yield into 2-4 scattered loose
@@ -810,5 +1001,43 @@ export class MainScene extends Phaser.Scene {
     const frac = this.stamina.value() / this.stamina.max;
     this.staminaBarFill.setScale(Math.max(0, frac), 1);
     this.staminaBarText.setText(`${Math.round(this.stamina.value())}`);
+  }
+
+  // HP bar: stacks directly above the stamina bar via the same hotbarUI.top
+  // anchor, one more slot up. Crimson fill vs. the stamina bar's goldenrod.
+  private createHealthBar(): void {
+    const barW = 76;
+    const barH = 20;
+    const gap = 8;
+    const barX = this.scale.width / 2 - barW / 2;
+    const staminaBarY = this.hotbarUI.top - gap - barH;
+    const barY = staminaBarY - gap - barH;
+    this.add
+      .rectangle(barX, barY, barW, barH, 0x1a1f2a, 0.95)
+      .setOrigin(0, 0)
+      .setStrokeStyle(1, 0x3a4250)
+      .setScrollFactor(0)
+      .setDepth(2000);
+    this.healthBarFill = this.add
+      .rectangle(barX + 1, barY + 1, barW - 2, barH - 2, 0xb02020, 1)
+      .setOrigin(0, 0)
+      .setScrollFactor(0)
+      .setDepth(2001);
+    this.healthBarText = this.add
+      .text(barX + barW / 2, barY + barH / 2, "", {
+        fontFamily: "monospace",
+        fontSize: "12px",
+        color: "#ffffff",
+      })
+      .setOrigin(0.5, 0.5)
+      .setScrollFactor(0)
+      .setDepth(2002);
+    this.refreshHealthBar();
+  }
+
+  private refreshHealthBar(): void {
+    const frac = this.health.value() / this.health.max;
+    this.healthBarFill.setScale(Math.max(0, frac), 1);
+    this.healthBarText.setText(`${Math.round(this.health.value())}`);
   }
 }

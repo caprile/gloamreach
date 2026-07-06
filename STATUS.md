@@ -2,6 +2,159 @@
 
 Last updated: 2026-07-06
 
+### Combat polish pass (same day, right after the foundation landed)
+
+Three small enhancements requested after trying the Combat foundation out:
+
+- **Axe doubles as a weapon** — `stone_axe` now carries both `tool:
+  "stone_axe"` and `weapon: "stone_axe"` in its `ItemDef` (`src/systems/
+  Items.ts`). Since `MainScene.recomputeEquipped()` already derives
+  `equippedTool`/`equippedWeapon` independently from the same selected
+  hotbar stack, this needed zero scene-level changes — having the axe out
+  now lets you both chop trees and fight, no separate weapon slot.
+  `WeaponType` (`src/systems/Weapons.ts`) gained a `"stone_axe"` member with
+  its own combat numbers (6 dmg/500ms/12 stamina — distinct from its
+  `toolDamage` of 1 used for chopping, since those are tuned against very
+  different health pools). Pickaxe wasn't extended the same way (not asked
+  for), but the same one-line change would do it if wanted.
+- **Enemy HP bars** — `Enemy.ts` now owns a thin (22x3px) two-Rectangle bar
+  (dark track + red fill, no number) that stays glued above the sprite via
+  a `preUpdate()` override — the same "sync every frame regardless of
+  MainScene's own update cadence" trick `ResourceNode` already uses for its
+  count label. Always visible (not gated on "has taken damage"), destroyed
+  alongside the enemy in `playDeathFeedback()`.
+- **Floating damage numbers** — `MainScene.spawnDamageNumber(x, y, amount)`
+  spawns plain white/black-outline text at the hit enemy's position that
+  rises 24px and fades over 700ms, then destroys itself. Called from
+  `tryAttackEnemy()` right after `enemy.takeHit(dmg)`. Deliberately just a
+  plain number for now — damage types (slash/pierce/blunt) and resistances
+  were flagged as a "later" concern, not built; the spot to hook in
+  type-based coloring is called out with a comment on `spawnDamageNumber`.
+
+Verified via `preview_eval`: axe equips as both tool and weapon
+simultaneously from one hotbar slot; an axe hit deals exactly 6 (not the
+tool's chop damage of 1); the HP bar's fill `scaleX` matches
+`health/maxHealth` after a real frame tick and its position tracks the
+enemy after it moves; the damage-number text object carries the exact
+weapon damage dealt and becomes inactive/alpha-0 (destroyed) ~700ms later
+(captured by temporarily wrapping `scene.add.text` to grab the exact
+object, since a naive "any Text with digit content" filter was catching
+the unrelated stamina/HP bar labels); enemy HP bar Rectangles are destroyed
+(not leaked) when the enemy dies. Type-check clean, no console errors.
+
+**Balance observation, not acted on:** during testing, a fresh spawn's HP
+dropped noticeably within a few real seconds of idling — 6 Boars scattered
+in a 1280x960 world with a 140px aggro radius and only a 150px spawn-clear
+zone means an enemy can start closing in almost immediately. Not asked to
+fix; flagging in case it feels too aggressive once played for real (easy
+knobs: bigger clear zone, smaller aggro radius, or fewer Boars).
+
+**User decision on future enemy variety (2026-07-06):** the shipped Boar is
+a **proof-of-concept for the player/enemy interaction loop**, not a
+template whose exact numbers get copied onto future enemies. As
+Gremlin/Snake and later enemies get built, each is expected to tune its own
+**aggro radius + aggro condition**, **deaggro time/radius/condition**,
+**DPS**, **HP**, **speed**, and **attack methods** independently — including
+different *conditions*, not just different numbers on the same logic (e.g.
+a future enemy might aggro on line-of-sight or noise instead of flat
+radius, or deaggro on a timer instead of radius hysteresis). Implication:
+don't generalize `Enemy.ts`'s current constants into one shared config
+table too early, and don't assume the current idle/chase/bite three-state
+machine is the final shape — revisit the architecture once a second enemy
+actually needs different behavioral logic, not just different numbers. See
+the plan file's section 19 for the fuller note.
+
+### Just finished: Combat foundation (roadmap item 4, scoped down)
+
+Plan file: `.claude/plans/polymorphic-sparking-lynx.md`.
+
+The user's first-biome design notes (folded into `CLAUDE.md`'s "First biome
+— content notes" section) describe a much bigger combat roster than one
+pass could reasonably cover — 3 enemies with distinct AI, a ranged
+Slingshot/ammo system, Workbench gating. Asked to scope it down, the user
+picked **"Foundation + one enemy"**: build the real combat systems (health,
+facing, equipped-weapon visuals, melee equip, death/respawn) against a
+single simplified enemy, leaving Gremlin/Snake/ranged/ambush/charge/
+fire-fear/Workbench as explicit follow-ups.
+
+- **`src/systems/Health.ts`** (new) — a Phaser-free pool adapted from
+  `Stamina.ts`'s shape but not copied verbatim: `takeDamage`/`heal`/`reset`/
+  `isDead`, no passive regen (that's deferred to a future food/rest system).
+- **Facing direction** (`src/entities/Player.ts`) — the player finally
+  tracks a 4-way `Facing` (`up`/`down`/`left`/`right`), persisting while
+  idle, vertical winning ties on diagonal input. Widened `PlayerFrameResult`
+  to report it every frame.
+- **Equipped-item-on-sprite visual** — long deferred (per `CLAUDE.md`,
+  pending "a real facing/weapon-attachment system"). Resolved with zero new
+  art pipeline: `Player` attaches a small child `Image` reusing the
+  item's existing 24x24 icon texture (the same ones already baked for
+  tooltips), offset 16px from the player's center in the current facing
+  direction, hidden when nothing's equipped. `MainScene.recomputeEquipped()`
+  is still the single place equip state is derived — it now also drives
+  this icon (`player.setEquippedIcon(...)`), and calls
+  `player.syncEquippedIconPosition()` every frame (even during the death
+  freeze) so it never lags a moved/teleported player.
+- **Melee weapon equip** (`src/systems/Weapons.ts`, new) — `WeaponType =
+  "wood_club" | "stone_club"` plus damage/cooldown/stamina-cost tables,
+  exactly mirroring `ResourceNode.ts`'s existing tool-table pattern.
+  `ItemDef` gained a `weapon?: WeaponType` field alongside `tool?: ToolType`;
+  `wood_club`/`stone_club` (previously inert item stubs with display-only
+  "Damage" tooltip text) now actually equip via the hotbar, the same way
+  tools already did — no parallel equip path.
+- **`src/entities/Enemy.ts`** (new) — a single enemy for this pass, "Boar":
+  an Arcade-physics sprite (unlike the non-physics `ResourceNode`) with a
+  simple idle-wander / chase state machine (aggro 140px, deaggro 200px —
+  hysteresis to avoid boundary flicker) and a cooldown-gated melee bite (8
+  dmg, 1s cooldown). `takeHit()`/hit feedback (shake + white-to-red tint
+  lerp) mirror `ResourceNode`'s feel; `playDeathFeedback()` fades and
+  destroys, then hands control back to `MainScene` to award loot. No charge
+  attack, no fire-fear, no ranged attack — explicitly out of scope.
+- **Attack reuses the existing hover/interact model**, not a parallel one —
+  `updateHover()` now tracks whichever of a `ResourceNode` or an `Enemy` is
+  closest to the cursor (only one prompt ever shows), gated the same way
+  tool-kind gating already works: no weapon equipped → show nothing; weapon
+  equipped + in reach → `[LMB] Attack <name>`. `tryInteract()` dispatches to
+  a new `tryAttackEnemy()` when an enemy is hovered, using the identical
+  cooldown/stamina-afford/silent-fail guard shape `tryInteract()`'s tool
+  branch already used.
+- **Enemy death loot** reuses the existing loose-drop/magnet pipeline
+  unchanged rather than instant-crediting the backpack — `ResourceType`
+  widened to include `boar_meat` (same trivial-extension precedent as
+  `leather`), dropped via `spawnLooseDrop("boar_meat", ...)` at the kill
+  position.
+- **Player death & respawn** — a new `Health` instance on `MainScene`,
+  a red HP bar stacked directly above the stamina bar (same
+  `hotbarUI.top`-anchored construction pattern, 28px higher). On death:
+  freezes the player (skips `Player.update()` entirely, though ambient
+  systems — stamina tick, magnet, enemy AI, equipped-icon sync — keep
+  running so the world doesn't visually pause too), toasts "You died...",
+  and after a 2s delay teleports back to world-center spawn, refills health,
+  and grants a 1.5s post-respawn invulnerability window. New `"combat"`
+  `LogKind` (red-ish) added to `EventLog`/`EventLogUI` for all of this
+  rather than overloading `"info"`.
+- 6 Boars scattered map-wide via the same seeded-RNG scatter pattern
+  `spawnNodes()` already used (slightly larger clear zone around player
+  spawn); a physics collider keeps player/enemy bodies from passing through
+  each other, but the actual bite/attack range check stays manual distance
+  math against a tight `MELEE_RANGE` (28px) — consistent with how `REACH`
+  already works, not a Phaser overlap callback.
+
+Verified via `preview_eval` (facing tracking + persistence while idle;
+equipped-icon visibility/texture/position-by-facing and hiding on an empty
+slot; tool/weapon equip mutual exclusivity; enemy idle/chase state
+transitions and velocity direction; melee attack cooldown and stamina-
+afford gating both silently blocking extra hits; a full kill draining
+exact per-hit damage, removing the enemy, logging "Defeated Boar", and
+crediting `boar_meat` to the backpack via the existing magnet pipeline;
+one-shot player death freezing movement while leaving enemy AI running;
+automatic respawn via the real delayed-call timer resetting position/
+health and opening the invulnerability window) plus `preview_screenshot`/
+`preview_inspect` for the HP bar (exactly 28px above the stamina bar,
+matching X/width) and the on-player equipped-icon rendering. Regression-
+checked the existing chop/mine flow and confirmed hovering a node vs. an
+enemy always resolves to exactly one prompt (whichever is closer). Type-
+check clean, no console errors.
+
 ### Follow-up tuning pass on the stamina bar/panels (same day)
 
 Right after the stamina milestone landed, the user requested a round of
@@ -50,7 +203,9 @@ time, confirmed via `performance.now()` timing, with the bar's text reading
 
 ### Just finished: Stamina, sprint, dash (roadmap item 3)
 
-Plan file: `read-the-plan-from-happy-ripple.md` (global plans dir).
+Plan file: `.claude/plans/read-the-plan-from-happy-ripple.md` (was only in the
+global plans dir at the time; recovered and copied into the repo later — see
+CLAUDE.md's "Plans must be committed in-repo" convention).
 
 The player now has a stamina pool — the first player stat/resource bar in
 the game (no health system exists yet either):
@@ -148,7 +303,14 @@ Chopping/mining a tree/boulder now explodes its yield into scattered loose
 pieces on the ground instead of crediting the backpack instantly (see below),
 with an auto-pickup magnet (toggle: `V`) to collect them. A stamina bar
 (centered above the hotbar) gates sprint/dash/tool-swings and regenerates
-after a short delay.
+after a short delay. Combat exists in foundation form: equip a club via the
+hotbar (same flow as tools) to fight Boars scattered around the world —
+`[LMB] Attack` when one's hovered in reach, same prompt-gating convention as
+chop/mine. A red HP bar (above the stamina bar) tracks player health; dying
+freezes the player briefly, then respawns them at world center with full
+health and a short invulnerability window. The equipped tool/weapon now
+shows as a small icon on the player, offset toward whichever direction
+they're last facing.
 
 ### Just finished: Milestone 3 — loose world drops + magnet auto-pickup
 
@@ -395,31 +557,34 @@ clean throughout. No console errors.
 
 ### Up next
 
-Stamina/sprint/dash (roadmap item 3) is done. Next up per the roadmap is
-**Combat** (roadmap item 4): enemies, attack, health/damage, death & respawn.
-Per `CLAUDE.md` convention (one milestone/feature per session), it should
-start in a fresh chat session rather than continuing this one.
+Combat (roadmap item 4) now exists in **foundation** form (see "Just
+finished" above) — health/damage, facing, equipped-item visuals, melee
+weapon equip, one enemy (Boar), death & respawn. Per `CLAUDE.md` convention
+(one milestone/feature per session), the follow-ups below should each start
+in a fresh chat session rather than continuing this one.
 
-**Sequencing notes:**
+**Explicitly deferred from this pass (not forgotten — see `CLAUDE.md`'s
+"First biome — content notes" for the fuller design):**
 
-- **Equipped item visible on the player sprite** — deliberately deferred to
-  sit alongside **Combat**. `Player` is currently a static sprite with no
-  facing direction or weapon-attachment system; M2's "swing" and the new
-  dash are both placeholder tweens/velocity bursts, not real animations.
-  Building a real facing/weapon-visual system once (for combat) and reusing
-  it for tools avoids doing it twice.
-- **Dash i-frames** — the dash is currently a pure movement burst with no
-  invulnerability window, deliberately deferred until there's a health/damage
-  system for it to interact with. Combat can layer this on without reshaping
-  the stamina/dash system itself.
-- **Player health bar** — Combat will need the game's first HP bar. Per the
-  user, it should stack directly above the new stamina bar (centered above
-  the hotbar) — `HotbarUI.top`/the stamina bar's position math are the
-  anchor to reuse rather than re-deriving hotbar-relative placement.
-- Tool/weapon attack-speed values (`TOOL_COOLDOWN_MS` in
-  `src/entities/ResourceNode.ts`) and stamina costs (`toolStaminaCost`) will
-  need weapon-side equivalents when Combat is built — same pattern, different
-  tables.
+- **Gremlin** (ranged rock-throw + melee claw, keep-distance AI) and
+  **Snake** (hidden-in-grass ambush) — the other two first-biome enemies.
+  Gremlin's ranged attack means this is also where the game's first
+  projectile system needs to get built.
+- **Boar's charge attack + fear-of-fire** (flees near a torch/campfire) —
+  the shipped Boar this pass is bite-only/no-fear, a deliberate
+  simplification.
+- **Slingshot + Slingshot Pellets** — first ranged *weapon* + first
+  consumable-ammo concept.
+- **Workbench crafting-tier gate** — `Recipe.tier` still exists as the
+  unused hook for this (see `Recipes.ts`); nothing enforces it yet.
+- **Dash i-frames** — dash is still a pure movement burst with no
+  invulnerability window. Now that Health exists, this is unblocked
+  whenever it's wanted; just not bundled into this pass.
+- **Cooking/food** (Empty Shishkabob + raw meat → cooked over a campfire) —
+  no rest/food/hunger system exists yet; `boar_meat` currently just sits in
+  the backpack as a plain stackable with no use.
+- Combat XP/skill (`Skills.ts` still only has `axes`/`pickaxes`) — ties into
+  roadmap item 5 (Progression) more than item 4.
 
 ### Known rough edges / deferred (see plan's "Out of scope" section)
 
