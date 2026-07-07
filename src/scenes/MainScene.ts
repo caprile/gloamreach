@@ -32,7 +32,9 @@ import { EventLog } from "../systems/EventLog";
 import { Biome, type ZoneType } from "../systems/Biome";
 import { Equipment, EQUIP_SLOTS } from "../systems/Equipment";
 import { Hotbar } from "../systems/Hotbar";
+import { ProcessingStation } from "../systems/Processing";
 import { CraftingMenu } from "../ui/CraftingMenu";
+import { DryingRackMenu } from "../ui/DryingRackMenu";
 import { InventoryMenu, BACKPACK_SIZE, type ArmorSlotView } from "../ui/InventoryMenu";
 import { HotbarUI } from "../ui/HotbarUI";
 import { EventLogUI } from "../ui/EventLogUI";
@@ -88,6 +90,14 @@ export class MainScene extends Phaser.Scene {
   // of range, instead of only reflecting proximity as of when the menu opened.
   private craftingMenuLastNearWorkbench: boolean | null = null;
   private inventoryMenu!: InventoryMenu;
+  private dryingRackMenu!: DryingRackMenu;
+  // Placed Drying Racks + their live processing state. Parallel to
+  // placedObjects (the racks' images live there too, tagged "drying_rack"),
+  // but paired with a ProcessingStation each so update() can tick them and the
+  // menu can bind to whichever one the player opened.
+  private dryingRacks: { image: Phaser.GameObjects.Image; station: ProcessingStation }[] = [];
+  private openRack: ProcessingStation | null = null; // the rack the menu is bound to
+  private hoveredRack: Phaser.GameObjects.Image | null = null;
   private hotbarUI!: HotbarUI;
   private eventLogUI!: EventLogUI;
   private keybindsUI!: KeybindsUI;
@@ -225,6 +235,7 @@ export class MainScene extends Phaser.Scene {
     this.createHud();
     this.createCraftingMenu();
     this.createInventoryMenu();
+    this.createDryingRackMenu();
     this.hotbarUI = new HotbarUI(this, this.hotbar, {
       beginDrag: (c, i, p) => this.beginItemDrag(c, i, p),
       quickMove: (c, i) => this.quickMoveItem(c, i),
@@ -256,16 +267,19 @@ export class MainScene extends Phaser.Scene {
     this.input.keyboard!.addCapture("TAB");
     this.input.keyboard!.on("keydown-TAB", () => {
       if (this.placementMode) return this.cancelPlacement();
+      this.closeDryingRackMenu();
       this.craftingMenu.close();
       this.inventoryMenu.toggle();
     });
     this.input.keyboard!.on("keydown-T", () => {
       if (this.placementMode) return this.cancelPlacement();
+      this.closeDryingRackMenu();
       this.inventoryMenu.close();
       this.craftingMenu.toggle();
     });
     this.input.keyboard!.on("keydown-ESC", () => {
       if (this.placementMode) return this.cancelPlacement();
+      this.closeDryingRackMenu();
       this.craftingMenu.close();
       this.inventoryMenu.close();
     });
@@ -291,6 +305,7 @@ export class MainScene extends Phaser.Scene {
       this.updateEnemies(delta);
       this.updateMagnet(delta);
       this.updateTreeOcclusion(delta);
+      this.updateProcessing(delta);
       return;
     }
 
@@ -321,6 +336,20 @@ export class MainScene extends Phaser.Scene {
     this.updateEnemies(delta);
     this.updateTreeOcclusion(delta);
     this.updateCraftingMenuWorkbenchProximity();
+    this.updateProcessing(delta);
+  }
+
+  // Advance every placed Drying Rack's drying, and (while its menu is open)
+  // re-render so the progress bar / counts / live preview stay current. Racks
+  // keep drying even while their menu is closed and during the death freeze —
+  // it's real-time processing, not gated on the player watching.
+  private updateProcessing(delta: number): void {
+    for (const rack of this.dryingRacks) rack.station.tick(delta);
+    if (this.dryingRackMenu.isOpen()) {
+      // The bound rack could have finished emptying/producing — keep the menu
+      // in sync with the same station instance it was opened on.
+      this.dryingRackMenu.refresh();
+    }
   }
 
   // While the crafting menu is open, re-render it the instant Workbench
@@ -386,7 +415,7 @@ export class MainScene extends Phaser.Scene {
   }
 
   private anyMenuOpen(): boolean {
-    return this.craftingMenu.isOpen() || this.inventoryMenu.isOpen();
+    return this.craftingMenu.isOpen() || this.inventoryMenu.isOpen() || this.dryingRackMenu.isOpen();
   }
 
   private selectHotbarSlot(slot: number): void {
@@ -466,6 +495,20 @@ export class MainScene extends Phaser.Scene {
     const stack = src.container.slot(src.index);
     if (!stack) return;
 
+    // Drying Rack menu open: dropping on the input slot loads the stack into
+    // the rack; otherwise the rack's own backpack grid is the drop target.
+    if (this.dryingRackMenu.isOpen()) {
+      if (this.dryingRackMenu.isOverInput(pointer.x, pointer.y)) {
+        this.loadRackInput(src.container, src.index);
+        return;
+      }
+      const bagIndex = this.dryingRackMenu.slotIndexAt(pointer.x, pointer.y);
+      if (bagIndex === null) return; // dropped on nothing; snaps back
+      moveSlot(src.container, src.index, this.backpack, bagIndex);
+      this.afterItemMove();
+      return;
+    }
+
     // Prefer a hotbar slot under the pointer, else a backpack slot.
     const hotIndex = this.hotbarUI.slotAt(pointer.x, pointer.y);
     if (hotIndex !== null) {
@@ -499,6 +542,76 @@ export class MainScene extends Phaser.Scene {
   private afterItemMove(): void {
     this.recomputeEquipped();
     this.inventoryMenu.refresh();
+    this.dryingRackMenu.refresh();
+  }
+
+  // --- Drying Rack (processing station) ---
+
+  private createDryingRackMenu(): void {
+    this.dryingRackMenu = new DryingRackMenu(this, {
+      backpack: this.backpack,
+      station: () => this.openRack,
+      beginDrag: (c, i, p) => this.beginItemDrag(c, i, p),
+      quickLoad: (i) => this.loadRackInput(this.backpack, i),
+      isDragging: () => this.dragSource !== null,
+      collectOutput: () => this.collectRackOutput(),
+      retrieveInput: () => this.retrieveRackInput(),
+    });
+  }
+
+  private openDryingRackMenu(image: Phaser.GameObjects.Image): void {
+    const rack = this.dryingRacks.find((r) => r.image === image);
+    if (!rack) return;
+    this.craftingMenu.close();
+    this.inventoryMenu.close();
+    this.openRack = rack.station;
+    this.dryingRackMenu.openMenu();
+  }
+
+  private closeDryingRackMenu(): void {
+    this.dryingRackMenu.close();
+    this.openRack = null;
+  }
+
+  // Move a whole stack from `container[index]` into the open rack's input slot,
+  // if it's a valid input for that station. Invalid drops just snap back.
+  private loadRackInput(container: ItemContainer, index: number): void {
+    const station = this.openRack;
+    if (!station) return;
+    const stack = container.slot(index);
+    if (!stack || !station.canAccept(stack.key)) return;
+    station.addInput(stack.key, stack.count);
+    container.set(index, null);
+    this.afterItemMove();
+  }
+
+  // Move the rack's ready output into the backpack (discovery may unlock the
+  // armor recipe once twine/gremlin_leather are first collected).
+  private collectRackOutput(): void {
+    const station = this.openRack;
+    if (!station?.output) return;
+    const out = station.output;
+    if (!this.backpack.hasRoomFor(out.key, out.count)) {
+      this.eventLog.add("info", "Inventory full");
+      return;
+    }
+    station.takeOutput();
+    this.addToBackpack(out.key, out.count);
+    this.afterItemMove();
+  }
+
+  // Pull the still-drying raw input back out into the backpack.
+  private retrieveRackInput(): void {
+    const station = this.openRack;
+    if (!station?.input) return;
+    const inp = station.input;
+    if (!this.backpack.hasRoomFor(inp.key, inp.count)) {
+      this.eventLog.add("info", "Inventory full");
+      return;
+    }
+    station.takeInput();
+    this.addToBackpack(inp.key, inp.count);
+    this.afterItemMove();
   }
 
   // A random, distinct RNG stream per call. Now that the biome layout is
@@ -629,6 +742,48 @@ export class MainScene extends Phaser.Scene {
     scatter(70, { texture: "tree", resource: "wood", amount: 5, action: "chop", displayName: "Tree", loose: false, solid: false, health: 3, zone: "forest", avoidCreek: true });
     scatter(14, { texture: "tree", resource: "wood", amount: 5, action: "chop", displayName: "Tree", loose: false, solid: false, health: 3, zone: "grassy", avoidCreek: true });
     scatter(18, { texture: "boulder", resource: "stone", amount: 5, action: "mine", displayName: "Boulder", loose: false, solid: false, health: 3, zone: "grassy", avoidCreek: true });
+    // Blackberry bushes — free forest pickup (Milestone H). A future food item;
+    // no eating mechanic yet, so it just sits in inventory for now.
+    scatter(16, { texture: "blackberry_bush", resource: "blackberry", amount: 2, action: "pickup", displayName: "Blackberries", loose: false, solid: false, health: 1, zone: "forest", avoidCreek: true });
+
+    // Cattail — free pickup, but a bespoke spawn constraint (creek *edge*, not
+    // just "not on the creek"), so it can't reuse scatter's zone/avoidCreek
+    // sampling. Feeds the Drying Rack's twine output.
+    const CATTAIL_COUNT = 22;
+    for (let i = 0; i < CATTAIL_COUNT; i++) {
+      const { x, y } = this.pickCreekEdgePoint(rng, 100);
+      const node = new ResourceNode(this, {
+        x,
+        y,
+        texture: "cattail",
+        resource: "cattail",
+        amount: 1,
+        action: "pickup",
+        displayName: "Cattail",
+        loose: false,
+        health: 1,
+      });
+      this.nodes.push(node);
+    }
+  }
+
+  // Like pickSpawnPoint, but rejection-samples for a creek-*border* cell (dry
+  // land adjacent to water) — the reedy bank where Cattail grows. Falls back to
+  // the last draw after a cap so a creek with no reachable edge can't hang.
+  private pickCreekEdgePoint(
+    rng: Phaser.Math.RandomDataGenerator,
+    clearRadius: number,
+  ): { x: number; y: number } {
+    let last = { x: WORLD_W / 2, y: WORLD_H / 2 };
+    for (let attempt = 0; attempt < 300; attempt++) {
+      const x = rng.between(60, WORLD_W - 60);
+      const y = rng.between(60, WORLD_H - 60);
+      last = { x, y };
+      if (Phaser.Math.Distance.Between(x, y, WORLD_W / 2, WORLD_H / 2) < clearRadius) continue;
+      if (!this.biome.isCreekEdge(x, y)) continue;
+      return { x, y };
+    }
+    return last;
   }
 
   // Scatter Boars around the world. Milestone B: retuned for the 2x world +
@@ -710,6 +865,7 @@ export class MainScene extends Phaser.Scene {
 
     let hoveredNode: ResourceNode | null = null;
     let hoveredEnemy: Enemy | null = null;
+    let hoveredRack: Phaser.GameObjects.Image | null = null;
     let best = Infinity;
 
     for (const node of this.nodes) {
@@ -719,6 +875,7 @@ export class MainScene extends Phaser.Scene {
       if (d <= radius && d < best) {
         hoveredNode = node;
         hoveredEnemy = null;
+        hoveredRack = null;
         best = d;
       }
     }
@@ -729,18 +886,33 @@ export class MainScene extends Phaser.Scene {
       if (d <= radius && d < best) {
         hoveredEnemy = enemy;
         hoveredNode = null;
+        hoveredRack = null;
+        best = d;
+      }
+    }
+    for (const rack of this.dryingRacks) {
+      const image = rack.image;
+      const radius = Math.max(image.displayWidth, image.displayHeight) / 2 + 6;
+      const d = Phaser.Math.Distance.Between(world.x, world.y, image.x, image.y);
+      if (d <= radius && d < best) {
+        hoveredRack = image;
+        hoveredNode = null;
+        hoveredEnemy = null;
         best = d;
       }
     }
 
     this.hoveredNode = hoveredNode;
     this.hoveredEnemy = hoveredEnemy;
+    this.hoveredRack = hoveredRack;
 
     const prompt = hoveredNode
       ? this.promptFor(hoveredNode)
       : hoveredEnemy
         ? this.promptForEnemy(hoveredEnemy)
-        : null;
+        : hoveredRack
+          ? this.promptForRack(hoveredRack)
+          : null;
     if (prompt) {
       this.promptText.setText(prompt).setVisible(true);
       this.input.setDefaultCursor("pointer");
@@ -781,10 +953,28 @@ export class MainScene extends Phaser.Scene {
     return `[LMB] Attack ${enemy.displayName}`;
   }
 
-  // Left-click action on the currently hovered, in-reach node (or enemy).
+  // A placed Drying Rack: prompt to open its processing menu when in reach.
+  private promptForRack(image: Phaser.GameObjects.Image): string | null {
+    const inReach =
+      Phaser.Math.Distance.Between(this.player.x, this.player.y, image.x, image.y) <= REACH;
+    return inReach ? "[LMB] Use Drying Rack" : null;
+  }
+
+  // Left-click action on the currently hovered, in-reach node (or enemy/rack).
   private tryInteract(): void {
     if (this.hoveredEnemy) {
       this.tryAttackEnemy(this.hoveredEnemy);
+      return;
+    }
+    if (this.hoveredRack) {
+      const inReach =
+        Phaser.Math.Distance.Between(
+          this.player.x,
+          this.player.y,
+          this.hoveredRack.x,
+          this.hoveredRack.y,
+        ) <= REACH;
+      if (inReach) this.openDryingRackMenu(this.hoveredRack);
       return;
     }
     const node = this.hoveredNode;
@@ -1161,6 +1351,9 @@ export class MainScene extends Phaser.Scene {
     // recipes' visibility (see Crafting.refresh's workbenchPlaced gate) —
     // re-run discovery so that happens immediately, not just on next pickup.
     if (key === "workbench") this.refreshDiscovery();
+    // A placed Drying Rack gets its own processing state, ticked in update()
+    // and bound to the menu when the player interacts with this image.
+    if (key === "drying_rack") this.dryingRacks.push({ image, station: new ProcessingStation() });
     this.refreshHud();
     this.inventoryMenu.refresh();
   }

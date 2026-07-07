@@ -2,7 +2,76 @@
 
 Last updated: 2026-07-07
 
-### Just finished: Fixed enemies still walking off world bounds (Arcade Group defaults gotcha)
+### Just finished: Milestone H — Harvestables + Drying Rack (first processing station)
+
+Plan file: `.claude/plans/let-s-proceed-with-option-crystalline-petal.md` (Milestone H, the
+last open item in the first-biome content pass — **built on Opus per the plan's "net-new
+architecture → Opus" guidance**). This introduces the game's **first timed processing
+system** (load raw input → wait → collect a different output, distinct from Crafting's
+instant spend-get model) and its **first drag-and-drop interaction**.
+
+- **New resources** (`Inventory.ts` `ResourceType`, `Items.ts` `ITEM_DEFS`, `BootScene.ts`
+  icons + world textures): `cattail`, `blackberry` (harvestables) and `twine`,
+  `gremlin_leather` (processed outputs). New world sprites `cattail`, `blackberry_bush`,
+  `drying_rack`; new icons for all four resources plus `icon_drying_rack` and
+  `icon_gremlin_leather_armor`.
+- **Harvestables** (`MainScene.spawnNodes`): **Blackberry bushes** (16, forest, free
+  pickup — a future food item, no eating mechanic yet, deliberately per the plan).
+  **Cattail** (22) uses a bespoke spawn constraint — the reedy **creek *border*** (dry land
+  adjacent to water), not just "off the creek". New `Biome.isCreekEdge(x,y)` (4-neighborhood
+  creek-adjacency) + `MainScene.pickCreekEdgePoint()` rejection sampler, since scatter's
+  zone/avoidCreek sampling can't express "shoreline". Verified: all 22 cattails land on
+  creek-edge cells (0 on water); all 16 berries in forest (0 on water).
+- **New file `src/systems/Processing.ts`** — framework-light like Stamina/Biome (no Phaser
+  dep, owns no GameObjects). `PROCESS_RECIPES` (ratios locked in the plan: `cattail→twine`
+  **2:1** at 3s/unit, `gremlin_skin→gremlin_leather` **1:1** at 4s/unit — durations were a
+  first-pass tuning call, unset in the plan). `ProcessingStation` holds `input`/`output`
+  slots + progress; `tick(deltaMs)` produces as many whole batches as elapsed time allows
+  (so a rack left running while its menu was closed catches up in one tick, not one
+  batch/frame); `previewOutput()` returns the total yield (produced + still-extractable)
+  for the live preview; `canAccept()` enforces one-input-type-at-a-time.
+- **Drying Rack** — new placeable (`drying_rack` recipe: tier 0, 8 wood + 1 leather, `misc`
+  tab), placed via the exact existing campfire/workbench placement flow. Each placed rack
+  gets its own `ProcessingStation`, tracked in a new `dryingRacks[]` (paired with its image),
+  ticked every frame in a new `MainScene.updateProcessing()` (runs in both the normal and
+  death-freeze update branches — drying is real-time, not gated on the player watching).
+- **New file `src/ui/DryingRackMenu.ts`** — the game's first processing-station UI and
+  first drag-and-drop. Opened by interacting with a placed rack (`[LMB] Use Drying Rack`
+  hover prompt, gated on reach; racks are hover-tested alongside nodes/enemies in
+  `updateHover`). Shows the **backpack alongside** the station's input/output; backpack
+  items that aren't a valid input for this station are **dimmed** (affordance only, keyed
+  off `station.canAccept`, mirroring the crafting menu's grey-out pattern). Player **drags**
+  a valid item onto the input slot (`resolveItemDrag` now routes to `loadRackInput` when the
+  drop is over the input box, reusing MainScene's existing shared drag controller);
+  right-click a valid stack **quick-loads** the whole thing. A **live output preview box**
+  under the input shows the projected total (e.g. 10 cattail → "5 Twine"); a **progress bar**
+  + "Drying…/Idle/Empty" status; a **Collect** button moves ready output to the backpack;
+  clicking a loaded input pulls the raw material back out. Re-rendered every frame while open
+  (MainScene drives it) so progress/counts/preview stay live as drying advances on its own.
+  Flat `scrollFactor(0)` objects, no Containers — same input-hit-testing constraint as the
+  other menus.
+- **Downstream payoff wired in**: `gremlin_leather_armor` recipe (tier 1, `armor` tab —
+  which already existed — 2 gremlin_leather + 2 twine) gives the two processed outputs a
+  crafting sink. It's discoverable once twine + gremlin_leather are first collected AND a
+  Workbench has been placed (tier-1 gate). **Not yet wearable** — the armor-equip system
+  doesn't exist yet, so it sits in inventory like boar_meat/shishkabob do; that's expected.
+  The Slingshot's twine ingredient remains a noted-not-built downstream hook.
+
+Verified via `preview_eval` (snapshotting **primitive values**, not live object refs — a
+gotcha this session: returning live `st.input`/`st.output` refs let the still-running game
+loop mutate them to completion before the tool serialized the result, which briefly looked
+like a tick bug but wasn't): spawn constraints exact (22 cattail all creek-edge, 16 berries
+all forest, 0 on water); station 2:1/1:1 ratios + 3s/4s pacing + half-progress fraction;
+`loadRackInput`/`collectRackOutput`/`retrieveRackInput` move items correctly and respect a
+full backpack; menu open/close/binding + `anyMenuOpen`; discovery unlocks `drying_rack`
+(tier 0) and `gremlin_leather_armor` (tier 1, needs a bench); drop-target geometry
+(backpack slot indices + input box) matches the drawn boxes; and a full simulated
+drag-from-backpack-onto-input-slot loads the stack and empties the bag slot end to end.
+Type-check clean (`tsc --noEmit`), no console errors, `preview_screenshot` shows the world
+booting with cattails on the banks + blackberry bushes in the trees, and the rack menu
+rendering correctly (dimmed non-inputs, mid-progress bar, Collect button).
+
+### Previously: Fixed enemies still walking off world bounds (Arcade Group defaults gotcha)
 
 User reported enemies were *still* able to run off the map/screen, despite `Enemy.ts`'s
 constructor already calling `this.setCollideWorldBounds(true)` (added in an earlier

@@ -337,7 +337,23 @@ on proximity to any placed workbench, with non-silent feedback.
 
 ---
 
-## Milestone H — Harvestables + Drying Rack (processing stations) — added 2026-07-07
+## Milestone H — Harvestables + Drying Rack (processing stations) — SHIPPED (2026-07-07)
+
+**Shipped notes:** built on Opus per the guidance below. New `src/systems/Processing.ts`
+(`ProcessingStation` + `PROCESS_RECIPES`: `cattail→twine` 2:1 @ 3s/unit,
+`gremlin_skin→gremlin_leather` 1:1 @ 4s/unit — durations were a first-pass tuning call) and
+`src/ui/DryingRackMenu.ts` (backpack-alongside with non-input dimming, drag/right-click
+quick-load into the input slot, live output preview, progress bar, Collect button). Cattail
+spawns on creek borders via new `Biome.isCreekEdge` + `MainScene.pickCreekEdgePoint`;
+Blackberry bushes in forest (free pickup, no eating mechanic yet). Drying Rack is a tier-0
+placeable (8 wood + 1 leather) reusing the campfire/workbench placement flow; each placed
+rack has its own station, ticked every frame in `MainScene.updateProcessing()` (real-time,
+continues while the menu is closed / during death freeze). Added `gremlin_leather_armor`
+(tier-1 armor recipe, 2 gremlin_leather + 2 twine) as a sink for the outputs — not yet
+wearable. Slingshot's twine ingredient remains a noted downstream hook. See `STATUS.md` for
+the full entry + verification. **With this, the whole A–H first-biome plan is done.**
+
+**Original plan (below) — added 2026-07-07:**
 
 **Goal:** two new gatherable resources tied to specific terrain/flora, and the game's
 **first "processing station" concept** — a crafting table that isn't "spend resources, get

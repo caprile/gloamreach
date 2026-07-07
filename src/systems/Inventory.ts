@@ -6,10 +6,18 @@
 // from defeated Boars (see Enemy.ts / MainScene.spawnLooseDrop). "gremlin_skin"
 // drops only from the ranged Gremlin variant (feeds the Drying Rack's
 // gremlin_leather output); "gremlin_blood" drops from either Gremlin variant.
+// "cattail" (creek-edge harvestable) and "gremlin_skin" are the Drying Rack's
+// raw inputs; "twine" and "gremlin_leather" are its processed outputs.
+// "blackberry" is a forest-bush harvestable (a future food item — no eating
+// mechanic yet).
 export type ResourceType =
   | "wood"
   | "stone"
   | "leather"
   | "boar_meat"
   | "gremlin_blood"
-  | "gremlin_skin";
+  | "gremlin_skin"
+  | "cattail"
+  | "blackberry"
+  | "twine"
+  | "gremlin_leather";

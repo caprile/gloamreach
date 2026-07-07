@@ -188,6 +188,28 @@ export class Biome {
     return this.creek[this.cellIndex(worldX, worldY)];
   }
 
+  // A "creek border" cell: dry land (not creek itself) directly adjacent to a
+  // creek cell — the reedy bank. Cattail spawns here (see MainScene), a spawn
+  // constraint distinct from avoidCreek (which only keeps things off the water
+  // itself, with no notion of the shoreline). 4-neighborhood is enough — a
+  // diagonal-only touch reads as "near" rather than "on the bank."
+  isCreekEdge(worldX: number, worldY: number): boolean {
+    const cx = Phaser.Math.Clamp(Math.floor(worldX / CELL), 0, this.cols - 1);
+    const cy = Phaser.Math.Clamp(Math.floor(worldY / CELL), 0, this.rows - 1);
+    if (this.creek[cy * this.cols + cx]) return false; // on the water, not its edge
+    const neighbors = [
+      [cx - 1, cy],
+      [cx + 1, cy],
+      [cx, cy - 1],
+      [cx, cy + 1],
+    ];
+    for (const [nx, ny] of neighbors) {
+      if (nx < 0 || ny < 0 || nx >= this.cols || ny >= this.rows) continue;
+      if (this.creek[ny * this.cols + nx]) return true;
+    }
+    return false;
+  }
+
   // Bilinear-sample a numeric cell grid at a world position, treating each
   // cell's value as anchored to its center (so two adjacent cells' values
   // blend smoothly across the 40px gap between their centers, rather than

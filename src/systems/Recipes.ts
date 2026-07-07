@@ -101,6 +101,24 @@ export const RECIPES: Recipe[] = [
     costs: { wood: 10 },
     output: { kind: "item", itemId: "workbench", itemName: "Workbench" },
   },
+  {
+    id: "drying_rack",
+    name: "Drying Rack",
+    description: "A placeable rack that slowly dries raw goods into refined materials.",
+    category: "misc",
+    tier: 0,
+    costs: { wood: 8, leather: 1 },
+    output: { kind: "item", itemId: "drying_rack", itemName: "Drying Rack" },
+  },
+  {
+    id: "gremlin_leather_armor",
+    name: "Gremlin Leather Armor",
+    description: "Light armor stitched from cured gremlin leather and twine.",
+    category: "armor",
+    tier: 1,
+    costs: { gremlin_leather: 2, twine: 2 },
+    output: { kind: "item", itemId: "gremlin_leather_armor", itemName: "Gremlin Leather Armor" },
+  },
 ];
 
 export function itemNameFor(itemId: string): string | undefined {

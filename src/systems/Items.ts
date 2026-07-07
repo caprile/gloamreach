@@ -175,6 +175,65 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     maxStack: 99,
     hotbarable: false,
   },
+
+  // --- harvestables ---
+  cattail: {
+    key: "cattail",
+    name: "Cattail",
+    description: "A reed from the creek's edge. Dried into twine at a Drying Rack.",
+    texture: "icon_cattail",
+    maxStack: 99,
+    hotbarable: false,
+  },
+  blackberry: {
+    key: "blackberry",
+    name: "Blackberries",
+    description: "Sweet wild berries from a forest bush.",
+    texture: "icon_blackberry",
+    maxStack: 99,
+    hotbarable: false,
+  },
+
+  // --- processed goods (Drying Rack outputs) ---
+  twine: {
+    key: "twine",
+    name: "Twine",
+    description: "Cord twisted from dried reeds. Crafting material.",
+    texture: "icon_twine",
+    maxStack: 99,
+    hotbarable: false,
+  },
+  gremlin_leather: {
+    key: "gremlin_leather",
+    name: "Gremlin Leather",
+    description: "Cured gremlin hide. Used to craft armor.",
+    texture: "icon_gremlin_leather",
+    maxStack: 99,
+    hotbarable: false,
+  },
+
+  // --- processing station ---
+  drying_rack: {
+    key: "drying_rack",
+    name: "Drying Rack",
+    description: "A placeable rack that slowly dries raw goods into refined materials.",
+    texture: "icon_drying_rack",
+    maxStack: 99,
+    hotbarable: false,
+    stats: [{ label: "Type", value: "Station" }],
+    placeable: true,
+  },
+
+  // --- armor ---
+  gremlin_leather_armor: {
+    key: "gremlin_leather_armor",
+    name: "Gremlin Leather Armor",
+    description: "Light armor stitched from cured gremlin leather and twine.",
+    texture: "icon_gremlin_leather_armor",
+    maxStack: 1,
+    hotbarable: false,
+    stats: [{ label: "Type", value: "Armor" }],
+  },
 };
 
 export function itemDef(key: string): ItemDef | undefined {

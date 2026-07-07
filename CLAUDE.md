@@ -155,6 +155,19 @@ mouse-driven only. Don't reintroduce a keybind for this without being asked. Spa
    (**O**, mirrors the magnet's **V** toggle pattern) — `rangeRingEnabled` gates
    `updateAttackRangeRing()` independently of equip state, for players who find it
    distracting.
+4e. **Harvestables + Drying Rack** (Milestone H — the last item in the first-biome plan) —
+   two new free-pickup harvestables (**Cattail** at the creek's edge via a new
+   `Biome.isCreekEdge` predicate; **Blackberry** bushes in the forest — a future food item,
+   no eating mechanic yet) and the game's **first timed processing station**: the
+   **Drying Rack**. New `src/systems/Processing.ts` (`ProcessingStation` + `PROCESS_RECIPES`
+   — `cattail→twine` 2:1, `gremlin_skin→gremlin_leather` 1:1, converted over time, distinct
+   from Crafting's instant model) and `src/ui/DryingRackMenu.ts` (the game's **first
+   drag-and-drop UI**: backpack shown alongside with non-input items dimmed, drag/quick-load
+   into the input slot, live output preview, progress bar, Collect). Racks are placeables
+   (reuse the campfire/workbench placement flow) each with their own station, ticked every
+   frame. Adds a `gremlin_leather_armor` recipe (armor tab, workbench-gated) as a sink for
+   the two processed outputs — **not yet wearable** (armor-equip system doesn't exist).
+   With this, **the entire first-biome content plan (A–H) is shipped.** See `STATUS.md`.
 
 **Not yet built — next up in rough order:**
 5. **Progression** — XP, levels, stats.

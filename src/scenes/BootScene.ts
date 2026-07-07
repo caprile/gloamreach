@@ -116,6 +116,42 @@ export class BootScene extends Phaser.Scene {
     g.fillRect(0, 0, 6, 6);
     g.generateTexture("gremlin_rock", 6, 6);
 
+    // Cattail — creek-edge harvestable. 14x28: slim green reed + a brown
+    // seed-head near the top, reads as a waterside plant.
+    g.clear();
+    g.fillStyle(0x4f8a3a, 1);
+    g.fillRect(6, 4, 3, 24); // stalk
+    g.fillStyle(0x3c6d2c, 1);
+    g.fillRect(3, 12, 3, 12); // leaf blade
+    g.fillStyle(0x6b3f1f, 1);
+    g.fillRect(5, 4, 5, 9); // seed head
+    g.generateTexture("cattail", 14, 28);
+
+    // Blackberry bush — forest harvestable. 24x20: leafy green mound dotted
+    // with dark purple berries.
+    g.clear();
+    g.fillStyle(0x2f5d2c, 1);
+    g.fillRect(2, 6, 20, 14);
+    g.fillRect(5, 3, 14, 6);
+    g.fillStyle(0x3a1a4a, 1);
+    g.fillRect(6, 10, 3, 3);
+    g.fillRect(13, 8, 3, 3);
+    g.fillRect(16, 13, 3, 3);
+    g.fillRect(9, 14, 3, 3);
+    g.generateTexture("blackberry_bush", 24, 20);
+
+    // Drying Rack — processing station. 30x34: two upright posts with three
+    // horizontal cross-rails, a simple wooden drying frame.
+    g.clear();
+    g.fillStyle(0x6b4a26, 1);
+    g.fillRect(3, 2, 4, 32); // left post
+    g.fillRect(23, 2, 4, 32); // right post
+    g.fillStyle(0x855f31, 1);
+    g.fillRect(3, 6, 24, 3); // top rail
+    g.fillRect(3, 16, 24, 3); // mid rail
+    g.fillRect(3, 26, 24, 3); // bottom rail
+    g.generateTexture("drying_rack", 30, 34);
+
     this.makeItemIcons(g);
 
     g.destroy(); // we only needed it to bake textures
@@ -253,5 +289,66 @@ export class BootScene extends Phaser.Scene {
     g.fillRect(3, 10, 3, 10);
     g.fillRect(18, 10, 3, 10);
     g.generateTexture("icon_workbench", ICON, ICON);
+
+    // Cattail: a slim reed with a brown seed head.
+    g.clear();
+    g.fillStyle(0x4f8a3a, 1);
+    g.fillRect(11, 4, 3, 18);
+    g.fillStyle(0x3c6d2c, 1);
+    g.fillRect(7, 10, 3, 10);
+    g.fillStyle(0x6b3f1f, 1);
+    g.fillRect(10, 4, 5, 8);
+    g.generateTexture("icon_cattail", ICON, ICON);
+
+    // Blackberries: a cluster of dark purple berries.
+    g.clear();
+    g.fillStyle(0x3a1a4a, 1);
+    g.fillRect(6, 8, 6, 6);
+    g.fillRect(12, 10, 6, 6);
+    g.fillRect(9, 13, 6, 6);
+    g.fillStyle(0x5a2f6a, 1);
+    g.fillRect(7, 9, 2, 2);
+    g.fillRect(13, 11, 2, 2);
+    g.generateTexture("icon_blackberry", ICON, ICON);
+
+    // Twine: a coil of tan cord.
+    g.clear();
+    g.fillStyle(0xc9a86a, 1);
+    g.fillRect(4, 8, 16, 8);
+    g.fillStyle(0x9c7d44, 1);
+    g.fillRect(6, 10, 3, 4);
+    g.fillRect(11, 10, 3, 4);
+    g.fillRect(16, 10, 2, 4);
+    g.generateTexture("icon_twine", ICON, ICON);
+
+    // Gremlin Leather: a cured greenish-tan hide (darker/refined vs. raw skin).
+    g.clear();
+    g.fillStyle(0x6a6a3a, 1);
+    g.fillRect(4, 5, 16, 14);
+    g.fillStyle(0x8a8a52, 1);
+    g.fillRect(7, 8, 10, 8);
+    g.generateTexture("icon_gremlin_leather", ICON, ICON);
+
+    // Drying Rack: a small wooden frame (matches the world sprite).
+    g.clear();
+    g.fillStyle(0x6b4a26, 1);
+    g.fillRect(4, 3, 3, 18);
+    g.fillRect(17, 3, 3, 18);
+    g.fillStyle(0x855f31, 1);
+    g.fillRect(4, 6, 16, 2);
+    g.fillRect(4, 12, 16, 2);
+    g.fillRect(4, 18, 16, 2);
+    g.generateTexture("icon_drying_rack", ICON, ICON);
+
+    // Gremlin Leather Armor: a chest-piece silhouette in cured-leather tones.
+    g.clear();
+    g.fillStyle(0x6a6a3a, 1);
+    g.fillRect(5, 5, 14, 15);
+    g.fillStyle(0x53532c, 1);
+    g.fillRect(2, 5, 4, 7); // left shoulder
+    g.fillRect(18, 5, 4, 7); // right shoulder
+    g.fillStyle(0x8a8a52, 1);
+    g.fillRect(10, 8, 4, 9); // center seam
+    g.generateTexture("icon_gremlin_leather_armor", ICON, ICON);
   }
 }
