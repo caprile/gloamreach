@@ -26,6 +26,7 @@ import { outputKey, type Recipe } from "../systems/Recipes";
 import { itemDef } from "../systems/Items";
 import { ItemContainer, moveSlot } from "../systems/ItemContainer";
 import { EventLog } from "../systems/EventLog";
+import { Biome, type ZoneType } from "../systems/Biome";
 import { Equipment, EQUIP_SLOTS } from "../systems/Equipment";
 import { Hotbar } from "../systems/Hotbar";
 import { CraftingMenu } from "../ui/CraftingMenu";
@@ -37,8 +38,8 @@ import { KeybindsUI } from "../ui/KeybindsUI";
 const HOTBAR_KEYS = ["ONE", "TWO", "THREE", "FOUR", "FIVE", "SIX", "SEVEN", "EIGHT", "NINE"];
 
 const TILE = 32;
-const WORLD_W = TILE * 40; // 1280px wide (bigger world comes with generation later)
-const WORLD_H = TILE * 30; // 960px tall
+const WORLD_W = TILE * 80; // 2560px wide — a procedurally generated biome (see Biome.ts)
+const WORLD_H = TILE * 60; // 1920px tall
 const REACH = 64; // how close (px) the player must be to interact
 const PLACEMENT_RADIUS = REACH * 1.25; // how far from the player a placed item may land
 const MAGNET_RADIUS = 100; // px — loose drop pieces within this of the player get pulled in
@@ -54,6 +55,7 @@ const DASH_STAMINA_COST = 25; // flat cost per dash — 4 dashes per full bar
 // follow the camera, and run the mouse-driven interaction + HUD.
 export class MainScene extends Phaser.Scene {
   private player!: Player;
+  private biome!: Biome; // procedural zone layout, generated fresh each session
   private nodes: ResourceNode[] = [];
   private skills = new Skills();
   private crafting = new Crafting();
@@ -120,8 +122,15 @@ export class MainScene extends Phaser.Scene {
   }
 
   create(): void {
-    // Ground: one repeating grass texture stretched across the whole world.
-    this.add.tileSprite(0, 0, WORLD_W, WORLD_H, "grass").setOrigin(0, 0);
+    // Procedural biome layout — must exist before spawning so nodes/enemies
+    // can query zone type for placement. Seeded randomly per session (not a
+    // fixed string) so the world differs every run.
+    this.biome = new Biome(WORLD_W, WORLD_H, this.sessionRng());
+
+    // Ground: one repeating grass texture (the "grassy" look), with the biome
+    // overlay baked on top of it — both kept below every entity.
+    this.add.tileSprite(0, 0, WORLD_W, WORLD_H, "grass").setOrigin(0, 0).setDepth(-10);
+    this.buildBiomeTexture();
 
     // Keep the player and camera inside the world.
     this.physics.world.setBounds(0, 0, WORLD_W, WORLD_H);
@@ -406,9 +415,69 @@ export class MainScene extends Phaser.Scene {
     this.inventoryMenu.refresh();
   }
 
-  // Scatter resources around the world, keeping a clear area around the start.
+  // A random, distinct RNG stream per call. Now that the biome layout is
+  // procedural, a fixed content seed no longer reproduces a coherent world
+  // anyway (the zones under it differ each session), so node/enemy scatter is
+  // session-random too — kept as separate generators so tuning one stream
+  // doesn't perturb another's draw sequence.
+  private sessionRng(): Phaser.Math.RandomDataGenerator {
+    return new Phaser.Math.RandomDataGenerator([String(Date.now()), String(Math.random())]);
+  }
+
+  // Draw x/y within world margins, biased to a preferred zone via rejection
+  // sampling and kept out of the player's spawn clearing. Falls back to the
+  // last draw after a cap so a tiny/absent zone can't hang the loop.
+  private pickSpawnPoint(
+    rng: Phaser.Math.RandomDataGenerator,
+    preferred: ZoneType | null,
+    clearRadius: number,
+    avoidCreek = false,
+  ): { x: number; y: number } {
+    let last = { x: WORLD_W / 2, y: WORLD_H / 2 };
+    for (let attempt = 0; attempt < 200; attempt++) {
+      const x = rng.between(60, WORLD_W - 60);
+      const y = rng.between(60, WORLD_H - 60);
+      last = { x, y };
+      if (Phaser.Math.Distance.Between(x, y, WORLD_W / 2, WORLD_H / 2) < clearRadius) continue;
+      if (preferred && this.biome.zoneAt(x, y) !== preferred) continue;
+      // Creek overlays forest/grassy cells, so a "forest" point can still land
+      // on water — keep trees (tall canopy) off the creek where they look wrong.
+      if (avoidCreek && this.biome.isCreekAt(x, y)) continue;
+      return { x, y };
+    }
+    return last;
+  }
+
+  // One-time background bake: a single RenderTexture over the whole world,
+  // depth just above the grass and below every entity. Forest cells get a
+  // darker-green overlay; grassy cells are left showing the base grass; creek
+  // cells draw a translucent blue on top of whichever zone they cross. Flat
+  // per-cell fills keep the visual WYSIWYG with the gameplay grid.
+  private buildBiomeTexture(): void {
+    const cell = this.biome.cellSize;
+    const g = this.make.graphics({}, false); // offscreen; not on the display list
+    this.biome.forEachCell((cx, cy, zone, isCreek) => {
+      const px = cx * cell;
+      const py = cy * cell;
+      if (zone === "forest") {
+        g.fillStyle(0x24421c, 0.55);
+        g.fillRect(px, py, cell, cell);
+      }
+      if (isCreek) {
+        g.fillStyle(0x3a6ea5, 0.6);
+        g.fillRect(px, py, cell, cell);
+      }
+    });
+    const rt = this.add.renderTexture(0, 0, WORLD_W, WORLD_H).setOrigin(0, 0).setDepth(-9);
+    rt.draw(g);
+    g.destroy();
+  }
+
+  // Scatter resources around the world, biased by biome zone (trees + branches
+  // cluster in forest, boulders favor the grassy open), keeping a clear area
+  // around the start.
   private spawnNodes(solids: Phaser.Physics.Arcade.StaticGroup): void {
-    const rng = new Phaser.Math.RandomDataGenerator(["explore-and-gather"]);
+    const rng = this.sessionRng();
 
     const scatter = (
       count: number,
@@ -421,12 +490,12 @@ export class MainScene extends Phaser.Scene {
         loose: boolean;
         solid: boolean;
         health: number;
+        zone: ZoneType | null;
+        avoidCreek?: boolean;
       },
     ) => {
       for (let i = 0; i < count; i++) {
-        const x = rng.between(60, WORLD_W - 60);
-        const y = rng.between(60, WORLD_H - 60);
-        if (Phaser.Math.Distance.Between(x, y, WORLD_W / 2, WORLD_H / 2) < 100) continue;
+        const { x, y } = this.pickSpawnPoint(rng, cfg.zone, 100, cfg.avoidCreek ?? false);
         const node = new ResourceNode(this, {
           x,
           y,
@@ -445,24 +514,24 @@ export class MainScene extends Phaser.Scene {
 
     // Free pickups. Pre-placed branches/rocks are always manual-click — only
     // pieces spawned from a depleted tree/boulder are "loose"/magnet-eligible
-    // (see spawnLooseDrop).
-    scatter(18, { texture: "branch", resource: "wood", amount: 1, action: "pickup", displayName: "Branch", loose: false, solid: false, health: 1 });
-    scatter(14, { texture: "rock", resource: "stone", amount: 1, action: "pickup", displayName: "Rock", loose: false, solid: false, health: 1 });
-    // Tool-gated: chop trees (needs an axe out), mine boulders (needs a pickaxe out).
-    scatter(10, { texture: "tree", resource: "wood", amount: 5, action: "chop", displayName: "Tree", loose: false, solid: true, health: 3 });
-    scatter(8, { texture: "boulder", resource: "stone", amount: 5, action: "mine", displayName: "Boulder", loose: false, solid: true, health: 3 });
+    // (see spawnLooseDrop). Counts scaled up for the larger world.
+    scatter(40, { texture: "branch", resource: "wood", amount: 1, action: "pickup", displayName: "Branch", loose: false, solid: false, health: 1, zone: "forest" });
+    scatter(30, { texture: "rock", resource: "stone", amount: 1, action: "pickup", displayName: "Rock", loose: false, solid: false, health: 1, zone: null });
+    // Tool-gated. Trees are dense in the forest and sparse in the grassy open;
+    // both stay off the creek (a tree on water looks wrong). Boulders favor the
+    // grassy open.
+    scatter(70, { texture: "tree", resource: "wood", amount: 5, action: "chop", displayName: "Tree", loose: false, solid: true, health: 3, zone: "forest", avoidCreek: true });
+    scatter(14, { texture: "tree", resource: "wood", amount: 5, action: "chop", displayName: "Tree", loose: false, solid: true, health: 3, zone: "grassy", avoidCreek: true });
+    scatter(18, { texture: "boulder", resource: "stone", amount: 5, action: "mine", displayName: "Boulder", loose: false, solid: true, health: 3, zone: "grassy", avoidCreek: true });
   }
 
-  // Scatter Boars around the world, same seeded-RNG approach as spawnNodes(),
-  // with a slightly larger clear zone so the player doesn't spawn standing
-  // next to one.
+  // Scatter Boars around the world. Forest-preferred (their common habitat);
+  // count/aggro tuning for the larger world is Milestone B's concern.
   private spawnEnemies(): void {
-    const rng = new Phaser.Math.RandomDataGenerator(["boar-country"]);
-    const COUNT = 6;
+    const rng = this.sessionRng();
+    const COUNT = 8;
     for (let i = 0; i < COUNT; i++) {
-      const x = rng.between(60, WORLD_W - 60);
-      const y = rng.between(60, WORLD_H - 60);
-      if (Phaser.Math.Distance.Between(x, y, WORLD_W / 2, WORLD_H / 2) < 150) continue;
+      const { x, y } = this.pickSpawnPoint(rng, "forest", 200);
       const enemy = new Enemy(this, { x, y, texture: "boar", displayName: "Boar" });
       this.enemies.push(enemy);
       this.enemyGroup.add(enemy);

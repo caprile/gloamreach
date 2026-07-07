@@ -1,6 +1,245 @@
 # Status
 
-Last updated: 2026-07-06
+Last updated: 2026-07-07
+
+### Noted, not acted on: Boar's obstacle-avoidance movement feels bad
+
+User feedback after the "stuck between multiple trees" fixes (below): the movement
+*works* now (no more freezing/oscillating/losing the player — see those entries), but the
+zigzag pattern from the randomized near-tangent escape headings "is kind of trash" to look
+at. Two directions raised, **neither implemented**: (1) smooth/improve the avoidance
+heuristic itself, or (2) skip the problem entirely by letting Boars **walk through trees**
+(exempt tree solids from the enemy collider). Needs a product decision first — logged in
+the plan file (`.claude/plans/let-s-proceed-with-option-crystalline-petal.md`, Milestone
+B's follow-up note) and in memory, to revisit whenever Milestone B (Boar tuning) is
+actually picked up.
+
+### Just finished: default "give up after prolonged failed pursuit" behavior
+
+Formalizes a standing decision (see memory / the note in the Combat
+foundation entry below) with concrete numbers, implemented as **reusable
+base-class behavior on `Enemy`** (not a Boar-only special case), so future
+enemies that subclass `Enemy` can opt into the same mechanism instead of
+reimplementing it:
+
+- **`CHASE_GIVEUP_MS` (30s):** if continuous pursuit (`state === "chasing"`)
+  runs this long without landing a single attack, the enemy gives up —
+  `state` flips to `"idle"` and it enters a **re-aggro immunity window**
+  (`enterGivenUpState()`). This is a *pursuit* clock (`pursuitClockStart`),
+  distinct from the pre-existing distance-based deaggro
+  (`dist > DEAGGRO_RADIUS`) — that one still fires instantly with no
+  immunity, since "the target simply walked away" isn't the same as "I've
+  been trying and failing for half a minute."
+  - The clock resets on `startPursuit()` (fresh chase begins) and
+    `markAttackLanded()` (an attack actually connects) — a fight that's
+    landing hits never times out, only a fruitless one does.
+- **`POST_GIVEUP_IMMUNITY_MS` (5s):** while active, ordinary aggro-radius
+  proximity (`canAggro()`) is ignored — the enemy won't re-engage just
+  because the player is nearby again, for a short cooldown.
+- **Two overrides, both requested explicitly:**
+  1. **`CLOSE_REAGGRO_RADIUS` (50px):** proximity tighter than this still
+     re-triggers aggro even mid-immunity — the player standing right next to
+     a "fled" enemy still wakes it up.
+  2. **Being attacked** (`takeHit()`) unconditionally clears
+     `aggroImmuneUntil` and, if idle, immediately flips back to `"chasing"`
+     — an enemy doesn't pointlessly tank hits without fighting back just
+     because it recently gave up.
+- Implemented as `protected` fields/helpers (`pursuitClockStart`,
+  `aggroImmuneUntil`, `startPursuit`/`markAttackLanded`/`hasGivenUpPursuit`/
+  `canAggro`/`enterGivenUpState`) on the `Enemy` base class specifically so a
+  future subclass overriding `update()` entirely (per the standing "don't
+  assume the 3-state machine is final" decision) can still call the same
+  helpers rather than re-deriving the mechanism — the *numbers* stay
+  per-enemy-tunable, but the *mechanism* is meant to be a shared default.
+
+Verified via `preview_eval`, all via direct state manipulation rather than
+waiting 30 real seconds (reading/writing the "private" TS fields works fine
+at runtime): backdating `pursuitClockStart` by 31s while mid-chase (dist
+inside aggro, outside melee, so no bite could land and reset the clock)
+correctly gave up and set a ~5s immunity window; staying within ordinary
+aggro range during that window correctly held `idle`; moving within
+`CLOSE_REAGGRO_RADIUS` correctly force-reaggro'd mid-immunity; calling
+`takeHit()` on an idle+immune enemy correctly cleared immunity and flipped
+to `chasing` synchronously; letting immunity expire naturally (backdating
+`aggroImmuneUntil` into the past) correctly allowed normal-range re-aggro
+again; landing an actual bite mid-chase correctly reset the clock (confirmed
+`pursuitClockStart` recent afterward); and — checked separately with an
+explicit clean-slate reset after an earlier test's incidental interaction
+briefly muddied one assertion — plain distance-based deaggro (target simply
+out of `DEAGGRO_RADIUS`) still sets **no** immunity and re-aggros instantly
+on return, unchanged from before this feature. No console errors.
+
+### Just finished: Milestone A — world resize + procedural biome generation
+
+Plan file: `.claude/plans/let-s-proceed-with-option-crystalline-petal.md` (the
+"first-biome content pass" — 7 milestones A–G; **only A is done**, B–G are
+future sessions). This is the foundation the enemy/spawn milestones (B Boar
+tuning, C Gremlin, D Snake) all depend on.
+
+The flat 1280x960 single-grass world is now a **2560x1920 procedurally
+generated biome** with three readable sub-areas:
+
+- **`src/systems/Biome.ts`** (new) — framework-light like `Stamina.ts` (only
+  `Phaser.Math.RandomDataGenerator`, owns no GameObjects). A coarse **40px
+  zone-lookup grid** (deliberately independent of the 32px render `TILE` — it's
+  a gameplay/query grid, not a tilemap; 64x48 = 3072 cells, flat arrays).
+  Generation: (1) **Voronoi** — 6-10 random seed points each tagged
+  forest/grassy, every cell takes its nearest seed's type; (2) **cellular-
+  automaton smoothing** (4 passes, double-buffered, flip a cell when ≥5/8
+  Moore neighbors disagree) to round the jagged Voronoi edges into organic
+  blobs; (3) a separate **random-walk creek** carved edge-to-edge (horizontal
+  or vertical, wobbling laterally, tapering 1-2 cell width) into its own
+  `boolean[]` grid decoupled from zone type — a cell can be forest AND creek.
+  A **degenerate-layout guard** re-rolls (cap 3) if either zone covers <10%.
+- **Query API:** `zoneAt(x,y)` and `isCreekAt(x,y)` — both O(1) flat-array
+  bounds-checked lookups. `isCreekAt` is deliberately the cheap primitive a
+  future **"Wet" status debuff** hooks into (creek is visual-only + walkable
+  this pass — no collision, per user decision).
+- **Rendering** (`MainScene.buildBiomeTexture()`): a **one-time bake** into a
+  single world-sized `RenderTexture` at depth -9 (grass tileSprite dropped to
+  -10, all entities stay at default 0 above both). Forest cells get a
+  translucent darker-green overlay; grassy cells left showing the base grass;
+  creek cells a translucent blue on top. Flat per-cell fills keep the visual
+  WYSIWYG with the gameplay grid (no art/logic mismatch). One GameObject total
+  — not one per tile.
+- **Zone-biased spawning** (`spawnNodes`/`spawnEnemies`): new `pickSpawnPoint(rng,
+  preferred, clearRadius, avoidCreek)` helper does **rejection sampling** (cap
+  200 attempts, graceful fallback to last draw so a tiny/absent zone can't
+  hang). Trees are **dense in forest (70) + sparse in grassy (14)**; boulders
+  (18) prefer grassy; branches (40) prefer forest; loose rocks (30) anywhere;
+  8 Boars prefer forest. Trees + boulders pass `avoidCreek: true` — the creek
+  overlays forest/grassy cells, so without it a "forest" point could land a
+  tree on the water (looked wrong). Counts scaled up for the 4x-area world.
+- **Follow-up tuning (same session, from playtest feedback):** tree density
+  raised and split forest/grassy (was a flat 28 forest-only); trees pulled off
+  the creek; Boar **`BITE_DAMAGE` 8 → 25** so ~4 bites kill a full-health (100)
+  player — the old 8 (≈12 hits) felt far too weak. Boar count/aggro-radius
+  tuning is still **Milestone B**; only the damage was bumped here on request.
+- **Unrelated bug fixes bundled in (playtest reports, not part of any
+  milestone):** (1) Boars had **no obstacle avoidance** — the chase branch
+  aimed straight at the player every frame, so a tree/boulder directly between
+  them fully blocked the Boar (it just pushed into the solid forever). Fixed
+  with a minimal steer-around: `Enemy` now checks `body.touching.none` (set by
+  the existing collider against the solids group) and, if blocked, offsets the
+  chase angle by a **fixed per-instance ±60°** (`avoidDir`, randomized once at
+  construction so it doesn't flicker between left/right every frame) to slide
+  along the obstacle instead of pushing into it. Not real pathfinding — just
+  enough to get around a single tree. (2) The Boar sprite never flipped to
+  face its direction of travel. Added `applyFacing(vx)` (flips `flipX` once
+  horizontal velocity is decisive, i.e. `|vx| > 5`, to avoid flicker near
+  zero), called from both the chase-move and idle-wander branches, plus once
+  when settling into bite range (faces the player). Verified via `preview_eval`
+  with **real physics ticks** (not manual position math): placed a Boar and
+  player on opposite sides of a real tree, forced `chasing`, and let 2.5s of
+  actual physics run — distance-to-player closed (90px → 78.5px) instead of
+  staying frozen, and `flipX` matched the sign of `body.velocity.x`. Ran
+  longer (6 more seconds) and confirmed the Boar fully closed the gap, bit the
+  player enough times to kill them at the new 25 dmg rate, and the existing
+  death/respawn pipeline fired correctly (teleport to world center, health
+  reset to 100, no console errors) — full end-to-end proof the chase-around-
+  obstacle path actually reaches and kills, not just "unstuck but never
+  arrives."
+- **Follow-up fix to the fix (same session, from a second playtest report):**
+  the reactive per-frame `touching` check above still visibly vibrated left-
+  right in place at certain approach angles — losing contact for a single
+  frame immediately re-aimed straight at the player, which re-hit the
+  obstacle next frame, re-triggering avoidance, forever. Fixed with
+  **hysteresis**: a new `avoidUntil` timestamp is (re-)armed to `now +
+  AVOID_HOLD_MS` (450ms) every frame contact is detected, and the offset
+  heading stays committed until that window fully expires — so it now commits
+  to a slide for at least ~450ms past the *last* contact instead of
+  re-deciding every frame. Also widened the offset from ±60° to a fixed ±90°
+  (`AVOID_TURN`). Also addressed in the same pass: **the Boar only ever
+  flipped left/right** — replaced with **full continuous rotation**
+  (`applyFacing(vx, vy)` now calls `setRotation(Math.atan2(vy, vx) + Math.PI)`,
+  the `+PI` correcting for the texture's nose being drawn pointing left at
+  rotation 0), so it now visibly points in its exact direction of travel
+  instead of only two discrete states. Skips the rotation update when
+  velocity is near-zero so it keeps its last facing while stopped/biting.
+  Verified via `preview_eval` sampling real position/velocity/rotation every
+  150ms for 3.6s with a Boar and player placed in exact head-on alignment
+  across a tree (the reported "stuck" geometry): only **3 heading changes**
+  occurred (each held 150-1050ms, not per-frame), rotation values were
+  genuine intermediate angles (90°→1°→8°→...→129°→...→166°, not just 0°/180°
+  snaps), and the Boar again fully closed the gap and killed the player
+  (health reset to 100 + `isDead: false` afterward, matching a completed
+  death/respawn cycle) — repeat proof it reliably reaches the target now, not
+  just "visibly calmer but still failing to arrive." No console errors.
+- **Third round (same session, "still gets stuck between multiple trees"):**
+  the touching-flag/hysteresis approach above was fundamentally too easy to
+  defeat with 2+ close obstacles — a fixed offset angle could just aim
+  straight into a *second* tree, wedging the Boar (frozen, near-zero velocity,
+  for 5+ seconds straight in one reproduction). Replaced the whole mechanism
+  with **ground-truth stuck detection**: every `STUCK_CHECK_INTERVAL_MS`
+  (350ms), compare actual displacement to `STUCK_DISPLACEMENT_PX` (12); if
+  too small, commit to a **randomized escape heading** for
+  `ESCAPE_DURATION_MS` (900ms) instead of re-deciding every frame. This alone
+  fixed the permanent-freeze case but surfaced two follow-on bugs, found via
+  `preview_eval` traces with real physics ticks (position/velocity/state
+  sampled every 150-300ms) against deliberately placed obstacle clusters
+  (found by scanning `s.nodes` for trees within 70-90px of each other) with
+  every *other* enemy parked off-map to rule out cross-contamination (an
+  earlier trace briefly looked like a "runaway" bug but was actually a
+  *different*, untracked Boar independently killing the player mid-test):
+  1. **Escape angle range had a net-backward bias.** The first attempt biased
+     escape headings to ±(99°-162°) off the direct-to-player line to avoid
+     "near-forward" (re-hits the obstacle) — but that whole range has a
+     *negative* cosine projection onto the goal direction, meaning every
+     single escape attempt had a small backward component. Chained across
+     several consecutive stuck-cycles (common against a real 3-4 tree
+     cluster), this reliably walked the Boar out past `DEAGGRO_RADIUS` over a
+     few seconds. Fixed by narrowing the range to near-tangent, ±(65°-100°) —
+     roughly perpendicular to the goal, which slides around an obstacle at
+     close to constant distance instead of steadily retreating.
+  2. **Deaggro could fire mid-maneuver.** Even with a good escape angle,
+     `state` flips `chasing`→`idle` the instant `dist > DEAGGRO_RADIUS`
+     (140/200 at the time) on ANY frame — including mid-escape, when the
+     Boar is deliberately taking a temporary detour. Getting flipped to idle
+     right then abandoned the maneuver permanently (it'd just idle-wander a
+     step away from finishing). Fixed by gating the deaggro check on
+     `now >= escapeUntil` (only allowed once the current escape commitment
+     has fully ended) and widening `DEAGGRO_RADIUS` 200→**280** to give
+     chained escape attempts against wide/dense clusters more slack before
+     giving up at all.
+  3. **Escape side re-randomized on every stuck-trigger**, which zigzagged
+     between both sides of a wide obstacle instead of committing to one edge
+     (classic wall-following needs a persistent side). Replaced the per-
+     trigger coin flip with `escapeSide: 1 | -1`, fixed once per Boar
+     instance (mirroring the original `avoidDir` idea from the first
+     attempt, but now combined with the corrected tangent-range angle and
+     ground-truth stuck detection instead of the flawed `touching`-flag
+     reactive version).
+  - **Verified** via `preview_eval` against the map's actual densest tree
+    clusters (auto-detected by scanning `s.nodes` for trees within 70-90px of
+    each other, 2-4 trees per cluster), placing the Boar and player at a fixed
+    150px separation through each cluster's centroid (a bbox-edge-relative
+    placement was tried first and turned out to be its own test bug — wide
+    clusters could push the *initial* separation past `DEAGGRO_RADIUS` before
+    any movement happened at all, invalidating that run). Across multiple
+    dense (3-4 tree) clusters, the Boar consistently reached melee range
+    (worst observed case: ~8.4s against a 4-tree cluster; most resolved in
+    2-5s) without freezing, oscillating, or losing the player. Also hit (and
+    recovered from) the documented "backgrounded preview tab stalls Phaser's
+    loop" quirk mid-testing — resolved per `CLAUDE.md`'s guidance by
+    `preview_stop`/`preview_start` fresh rather than trusting a stuck tab's
+    output. No console errors. This remains a **heuristic, not real
+    pathfinding** (none exists in the project) — it resolves every
+    configuration tested during this pass, but isn't a mathematical
+    guarantee against arbitrarily adversarial obstacle layouts.
+- **Seeded-RNG convention changed:** biome layout, node scatter, and enemy
+  scatter are now **three separate session-random generators** (`sessionRng()`,
+  seeded off `Date.now()` + `Math.random()`), replacing the old fixed strings
+  (`"explore-and-gather"`, `"boar-country"`). Rationale: once the biome layout
+  is random per session, a fixed content seed no longer reproduces a coherent
+  world anyway, so the reproducibility benefit was already gone.
+
+Verified via `preview_eval` (world 2560x1920 / 64x48 grid; a sampled layout at
+forest 0.69 / grassy 0.31 / creek 0.06 with all 28 trees + 8 boars in forest and
+all 18 boulders in grassy — zone bias working; **40 fresh random seeds** all
+landed in [0.11, 0.86] forest coverage with zero degenerate layouts, confirming
+the re-roll guard) plus `preview_screenshot` (winding blue creek, darker forest
+vs lighter grassy, entities placed sensibly). Type-check clean, no console
+errors.
 
 ### Combat polish pass (same day, right after the foundation landed)
 
