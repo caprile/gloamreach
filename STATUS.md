@@ -2,6 +2,110 @@
 
 Last updated: 2026-07-07
 
+### Just finished: Leather re-added to Stone Pickaxe/Stone Club + Workbench-gated recipes hidden until a bench exists
+
+Follow-up requests right after the Workbench (Milestone G) + follow-up-fixes entries
+below landed:
+
+- **Leather is back as a cost** on Stone Pickaxe (`wood: 3, stone: 4, leather: 1`, per
+  `CLAUDE.md`'s target numbers) and Stone Club (`wood: 3, stone: 2, leather: 1`) — the
+  previous session had dropped it because `leather` has no drop source yet, which made
+  those two recipes permanently undiscoverable. **User clarified that's intentional**:
+  leather-gating both recipes is correct game design; it's fine that they don't show up
+  until a leather source (Snake, still unbuilt) exists. Plan file updated — Milestone D
+  (Snake) is now called out as **prioritized next** specifically because it's the game's
+  only planned leather source (see
+  `.claude/plans/let-s-proceed-with-option-crystalline-petal.md`, Milestone D's "Why
+  prioritized" note).
+- **Workbench-gated recipes are now invisible until a Workbench has ever been placed** —
+  previously, `tier >= 1` recipes (Stone Pickaxe, Stone Club) would appear in the
+  discovered-recipes list as soon as their *ingredients* were known, even with zero
+  workbenches ever placed (they'd just always fail the *craft*-time proximity check).
+  Per user request, discovery itself is now gated too: `Crafting.refresh()` gained a
+  third `workbenchPlaced: boolean` param — a `tier > 0` recipe is skipped entirely (not
+  added to `discoveredIds`) unless `workbenchPlaced` is true, checked *before* the
+  existing ingredients/skill checks. `MainScene.hasWorkbenchPlaced()` (new — "has the
+  player ever placed one, anywhere," distinct from `isNearWorkbench`'s "currently in
+  range") supplies this in `refreshDiscovery()`. `attemptPlaceObject()` now calls
+  `refreshDiscovery()` immediately after a successful Workbench placement (previously it
+  only refreshed the HUD/inventory) so tier-1 recipes can appear the instant one lands,
+  without waiting for the next resource pickup to trigger discovery.
+
+Verified via `preview_eval`: with `wood`/`stone`/`leather` all discovered but no
+Workbench placed, `stone_pickaxe`/`stone_club` are absent from
+`crafting.discoveredRecipes()`; placing a workbench (both via a direct
+`placedObjects.push` and via the real `startPlacement()`/`attemptPlaceObject()` flow)
+immediately adds them. Type-check clean, no console errors.
+
+### Just finished: Stone Axe is tool-only + Workbench (Milestone G)
+
+Plan file: `.claude/plans/let-s-proceed-with-option-crystalline-petal.md` (Milestone G,
+now done — "fully independent," not blocked on B/C/D). Two related requests in one
+session: nerf the axe, then build the Workbench crafting-tier gate it was blocking on
+(the notes call for Stone Pickaxe/Stone Club to be workbench-gated).
+
+- **Stone Axe is tool-only again** — the Combat-polish-pass decision to give it
+  `weapon: "stone_axe"` (so it doubled as both tool and weapon from one hotbar slot) is
+  reverted: `ItemDef.stone_axe` no longer sets `weapon`, its "Damage" tooltip stat is
+  gone, and `"stone_axe"` was removed from `WeaponType` (`src/systems/Weapons.ts`) along
+  with its damage/cooldown/stamina-cost table entries. Reason: it made the axe a
+  no-brainer over the Wood Club (free weapon slot + tool in one item), undermining
+  weapon choice. `MainScene.recomputeEquipped()` needed no changes — it already derives
+  `equippedWeapon` from `ItemDef.weapon`, so removing the field was sufficient. Wood Club
+  stays a normal tier-0 (no workbench) weapon.
+- **Workbench, new placeable** (`workbench` in `Items.ts`/`Recipes.ts`, new
+  `icon_workbench` texture in `BootScene.ts` — brown tabletop + legs) — tier 0, 6 wood/4
+  stone, placed via the exact same placement-mode flow the campfire already uses.
+- **Tier enforcement (new, previously just an unused `Recipe.tier` hook):** Stone Pickaxe
+  and Stone Club retargeted `tier: 0` → `tier: 1`. `MainScene.isNearWorkbench(x, y,
+  radius = WORKBENCH_RANGE)` (100px — looser than `REACH`, "am I near it" not a precise
+  click) filters `placedObjects` by a new `image.setData("itemKey", ...)` tag (set in
+  `attemptPlaceObject()`) within range. Both `MainScene.craftRecipe()` (belt-and-
+  suspenders, mirrors the existing `canAfford` guard) and `CraftingMenu`'s new
+  `isCraftable()` helper (`canAfford && (tier === 0 || isNearWorkbench())`, composed at
+  the call site — `Crafting.canAfford` stays pure resource-math, unchanged) gate on this.
+  `CraftingMenuDeps` gained `isNearWorkbench: () => boolean`, wired from `MainScene` off
+  the player's live position.
+- **Non-silent feedback** — per the plan, tier-gating never says "tier 1" or a px number;
+  the crafting-menu detail panel shows an amber (`#e3b25a`) "Requires a nearby Workbench"
+  line, distinct from the existing red "can't afford" resource-line color, whenever
+  `recipe.tier >= 1 && !isNearWorkbench()`.
+
+Verified via `preview_eval`: crafting Stone Axe onto the hotbar has `equippedTool:
+"stone_axe"` but `equippedWeapon: null`; Stone Pickaxe craft attempt silently no-ops
+(inventory count stays 0, no resources deducted) with no workbench placed, then succeeds
+(count 1, wood deducted) once a workbench object is placed within range; opening the
+crafting menu on the Stone Pickaxe detail panel while far from any workbench renders the
+exact "Requires a nearby Workbench" line among the other detail rows. Type-check clean,
+no console errors.
+
+**Follow-up fixes (same day, from playtest feedback right after landing):**
+
+- **Live workbench-proximity refresh** — the amber "Requires a nearby Workbench" line and
+  the affordable/craftable state only reflected proximity as of when the crafting menu
+  was opened; walking into or out of range while it stayed open never updated it.
+  `MainScene.update()` now calls a new `updateCraftingMenuWorkbenchProximity()` every
+  frame that compares `isNearWorkbench()` against a cached
+  `craftingMenuLastNearWorkbench` and only calls `craftingMenu.refresh()` (a full
+  re-render) on an actual state change — avoids re-rendering every frame while sitting
+  still near/far from a bench.
+- **Workbench cost changed to 10 wood** (was 6 wood/4 stone) — no stone cost anymore, per
+  user request.
+- **Stone Club recipe fixed — it could never actually be discovered.** Its cost included
+  `leather`, which has zero drop sources anywhere in the current game (`ResourceType`
+  exists, but nothing awards it — `leather`'s intended source, Snake, is still an
+  unbuilt milestone). `Crafting.refresh()`'s discovery check requires every cost
+  ingredient to have been picked up at least once, so a `leather`-costing recipe was
+  permanently locked. Dropped `leather` from the cost, matching the recipe to
+  `CLAUDE.md`'s own target numbers for Stone Club (3 wood/2 stone) — `leather` will come
+  back into weapon costs once Snake ships a real source for it.
+
+Verified via `preview_eval`: placing a workbench and walking the player in/out of
+`WORKBENCH_RANGE` while the crafting menu stays open toggles the amber line and button
+affordability live, without needing to close/reopen the menu; Workbench recipe now costs
+exactly `{wood: 10}`; discovering `wood`+`stone` (no `leather`) now unlocks Stone Club.
+Type-check clean, no console errors.
+
 ### Just finished: 16:9 resolution, smoothed biome borders, crafting-menu inventory count
 
 Three small QoL fixes requested in the same session, unrelated to each other:

@@ -11,13 +11,18 @@ import type { Skills } from "./Skills";
 export class Crafting {
   private discoveredIds = new Set<string>();
 
-  // Call after any resource pickup or skill level-up — cheap no-op if
-  // nothing newly qualifies. Returns the recipes that unlocked on THIS call
-  // so the caller can announce them in the event log.
-  refresh(discoveredItems: ReadonlySet<string>, skills: Skills): Recipe[] {
+  // Call after any resource pickup, skill level-up, or workbench placement —
+  // cheap no-op if nothing newly qualifies. Returns the recipes that
+  // unlocked on THIS call so the caller can announce them in the event log.
+  // `workbenchPlaced` gates tier 1+ recipes from even appearing until the
+  // player has placed a Workbench at least once (separate from — and prior
+  // to — the *currently near a workbench* check that gates actually
+  // crafting/placing an already-discovered recipe).
+  refresh(discoveredItems: ReadonlySet<string>, skills: Skills, workbenchPlaced: boolean): Recipe[] {
     const newlyUnlocked: Recipe[] = [];
     for (const recipe of RECIPES) {
       if (this.discoveredIds.has(recipe.id)) continue;
+      if (recipe.tier > 0 && !workbenchPlaced) continue;
       if (this.ingredientsKnown(recipe, discoveredItems) && this.skillMet(recipe, skills)) {
         this.discoveredIds.add(recipe.id);
         newlyUnlocked.push(recipe);

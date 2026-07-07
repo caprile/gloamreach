@@ -190,5 +190,14 @@ export class BootScene extends Phaser.Scene {
     g.fillStyle(0xd06a4a, 1);
     g.fillRect(7, 8, 8, 6);
     g.generateTexture("icon_boar_meat", ICON, ICON);
+
+    // Workbench: a brown tabletop with four legs.
+    g.clear();
+    g.fillStyle(0x8a5a2e, 1);
+    g.fillRect(2, 6, 20, 4);
+    g.fillStyle(0x5c3a1c, 1);
+    g.fillRect(3, 10, 3, 10);
+    g.fillRect(18, 10, 3, 10);
+    g.generateTexture("icon_workbench", ICON, ICON);
   }
 }

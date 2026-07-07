@@ -121,15 +121,19 @@ mouse-driven only. Don't reintroduce a keybind for this without being asked. Spa
    jump/hop mechanic exists). Tool-swing hits now also cost stamina.
 4. **Combat (foundation + polish)** — player health/damage + death & respawn, 4-way
    facing, equipped-item-on-sprite visuals (reuses existing item icons, no new art
-   pipeline), melee weapon equip via the hotbar (same flow as tools — the axe is both a
-   tool *and* a weapon at once via `ItemDef.tool`/`ItemDef.weapon` both set), one enemy
-   ("Boar": simple chase AI + melee bite) with a thin always-on HP bar, and floating
-   damage numbers on hit (plain numbers for now — no dmg type/resistance system, see
-   below). Attack reuses the existing hover/interact/prompt-gating model rather than a
+   pipeline), melee weapon equip via the hotbar (same flow as tools). The stone axe is
+   **tool-only** (no `ItemDef.weapon`) — it was too strong as a free weapon-slot bonus on
+   top of being a tool, so weapons stay a separate equip choice (Wood Club, Stone Club).
+   One enemy ("Boar": simple chase AI + melee bite) with a thin always-on HP bar, and
+   floating damage numbers on hit (plain numbers for now — no dmg type/resistance system,
+   see below). Attack reuses the existing hover/interact/prompt-gating model rather than a
    parallel system. **Deliberately deferred** to a follow-up pass: Gremlin (ranged +
    melee) and Snake (ambush) from the first-biome roster, Boar's charge/fire-fear, the
-   Slingshot + ammo ranged-weapon system, Workbench crafting-tier gating, dash i-frames,
-   and cooking/food. See **First biome — content notes** below.
+   Slingshot + ammo ranged-weapon system, dash i-frames, and cooking/food. See **First
+   biome — content notes** below.
+4a. **Workbench** — a placeable crafting-tier gate (Milestone G of the first-biome plan).
+   Stone Pickaxe and Stone Club now require proximity to a placed Workbench; Stone Axe,
+   Torch, Wood Club, and the Workbench itself remain craftable anywhere (tier 0).
 
 **Not yet built — next up in rough order:**
 5. **Progression** — XP, levels, stats.
@@ -148,24 +152,42 @@ answers. This spans **Combat** (4) and **World & discovery** (6) above, and intr
 two mechanics not yet on the roadmap at all: a **Workbench** crafting-tier gate and a
 **cooking/food** system.
 
-**Workbench (new crafting-tier gate, not yet built):** `Recipe.tier` already exists in
-`Recipes.ts` as an unused hook for this ("Tier 1+ will require a matching crafting bench
-(TBD)"). Per the notes, no-workbench recipes: Stone Axe, Torch, Wood Club, Empty
-Shishkabob. Workbench-required: Stone Pickaxe, Stone Club, Slingshot.
+**Workbench (crafting-tier gate) — shipped:** a placeable `workbench` item/recipe
+(tier 0, **10 wood**, mirrors the campfire's placement flow). `Recipe.tier >= 1` recipes
+(currently Stone Pickaxe, Stone Club) are **invisible in the crafting menu until the
+player has placed a Workbench at least once** (`MainScene.hasWorkbenchPlaced()` gates
+`Crafting.refresh()`'s discovery, separately from the usual "ingredients known" check —
+this is intentional: a tier-1 recipe whose ingredients happen to already be known
+shouldn't suddenly appear before any bench exists). Once discovered, actually
+crafting/placing one still requires being within `WORKBENCH_RANGE` (~100px,
+`MainScene.isNearWorkbench`) of any placed workbench — non-silent: the crafting-menu
+detail panel shows an amber "Requires a nearby Workbench" line rather than just greying
+out the button, and **re-renders live** as the player walks in/out of range while the
+menu is open (not just a snapshot from when it was opened). Placed objects are tagged via
+`image.setData("itemKey", ...)` so both proximity checks can filter `placedObjects` by
+type without a bigger array-type change. Per the notes, Slingshot (not yet built) is also
+intended to require a workbench once it exists.
 
 **Tools**
 - Stone Axe — 2 stone, 3 wood, no workbench. (Current placeholder recipe: 3 wood/2
-  stone — same total, revisit exact split.)
-- Stone Pickaxe — 4 stone, 3 wood, 1 leather scrap, requires workbench. (Current
-  placeholder: 3 wood/2 stone, no leather, no workbench gate.)
+  stone — same total, revisit exact split.) **Tool-only, not a weapon** (see item 4
+  above) — deliberately doesn't equip as a weapon anymore, so it's not a free
+  weapon-slot bonus on top of being the tool everyone crafts first.
+- Stone Pickaxe — 4 stone, 3 wood, 1 leather scrap, requires workbench (now enforced;
+  recipe now matches these numbers exactly).
 - Torch — 1 wood, 1 gremlin blood, no workbench. (Current placeholder: 1 wood only —
   gremlin blood doesn't exist yet since gremlins don't exist yet.)
 
-**Weapons** — Wood Club/Stone Club now equip and deal real damage (Combat's foundation
-pass wired up `ItemDef.weapon`/`Weapons.ts`); Workbench gating is still not enforced.
-- Wood Club — 4 wood, no workbench. (Recipe already matches: 4 wood.)
-- Stone Club — 2 stone, 3 wood, requires workbench. (Current recipe: 2 wood/2
-  stone/1 leather — differs, revisit; workbench gate not enforced yet.)
+**Weapons**
+- Wood Club — 4 wood, no workbench. (Recipe matches: 4 wood.)
+- Stone Club — 2 stone, 3 wood, 1 leather, requires workbench (now enforced; recipe now
+  matches these numbers exactly).
+- **`leather` currently has no drop source anywhere in the game** (see `Inventory.ts`) —
+  this is a known, intentional gap, not a bug: the user confirmed leather-gating Stone
+  Pickaxe/Stone Club is correct design even though it makes both permanently
+  undiscoverable until a source exists. Snake (Milestone D, still unbuilt) is the
+  intended source and has been **bumped ahead of B/C in practical priority** for exactly
+  this reason — see the plan file's Milestone D "Why prioritized" note.
 - Slingshot — first ranged weapon: 2 wood + 2 leather scraps, requires workbench,
   consumes a new ammo item (**Slingshot Pellets**, crafted 5 stone → 25 pellets). First
   "consumable ammo" concept in the game.
@@ -206,8 +228,9 @@ pass wired up `ItemDef.weapon`/`Weapons.ts`); Workbench gating is still not enfo
 - "leather" (current `Items.ts` key) vs "leather scrap" (notes) — same material, pick
   one name.
 - New resources needed: Gremlin Blood, Boar Meat, Slingshot Pellets.
-- Workbench: where is it placed, does it gate by proximity or just "owned," is it a
-  placeable like the campfire? Needs its own design pass.
+- ~~Workbench: where is it placed, does it gate by proximity or just "owned," is it a
+  placeable like the campfire?~~ **Resolved/shipped:** placeable exactly like the
+  campfire, gates `tier >= 1` recipes by proximity (~100px) to any placed workbench.
 - Rested status (from campfire) — what buff, undesigned.
 - Ranged/projectile attacks (Gremlin's rock throw, the Slingshot) — first projectile
   system in the game.

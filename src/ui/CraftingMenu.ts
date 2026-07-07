@@ -23,6 +23,14 @@ export interface CraftingMenuDeps {
   crafting: Crafting;
   craft: (recipe: Recipe) => void;
   startPlacement: (recipe: Recipe) => void;
+  isNearWorkbench: () => boolean;
+}
+
+// A recipe is affordable to craft/place right now — resource cost AND
+// (for tier 1+) Workbench proximity. Composed here at the call site rather
+// than inside Crafting.canAfford, which stays pure resource-math.
+function isCraftable(deps: CraftingMenuDeps, recipe: Recipe): boolean {
+  return deps.crafting.canAfford(recipe, deps.backpack) && (recipe.tier === 0 || deps.isNearWorkbench());
 }
 
 // Right-side crafting panel, toggled with T, the top-right icon, or Escape
@@ -136,8 +144,8 @@ export class CraftingMenu {
       .discoveredRecipes()
       .filter((r) => r.category === this.activeCategory)
       .sort((a, b) => {
-        const aAfford = this.deps.crafting.canAfford(a, this.deps.backpack) ? 0 : 1;
-        const bAfford = this.deps.crafting.canAfford(b, this.deps.backpack) ? 0 : 1;
+        const aAfford = isCraftable(this.deps, a) ? 0 : 1;
+        const bAfford = isCraftable(this.deps, b) ? 0 : 1;
         if (aAfford !== bAfford) return aAfford - bAfford;
         return a.name.localeCompare(b.name);
       });
@@ -154,7 +162,7 @@ export class CraftingMenu {
 
     const iconSize = 18;
     for (const recipe of recipes) {
-      const affordable = this.deps.crafting.canAfford(recipe, this.deps.backpack);
+      const affordable = isCraftable(this.deps, recipe);
       const isSelected = this.selected?.id === recipe.id;
       const label = recipe.name;
       const selectRecipe = () => {
@@ -222,6 +230,17 @@ export class CraftingMenu {
     }
     y += 8;
 
+    if (recipe.tier >= 1 && !this.deps.isNearWorkbench()) {
+      const t = this.scene.add.text(x0, y, "Requires a nearby Workbench", {
+        fontFamily: "monospace",
+        fontSize: "12px",
+        color: "#e3b25a",
+      });
+      t.setScrollFactor(0).setDepth(3001);
+      this.rows.push(t);
+      y += 18;
+    }
+
     const placeable = isPlaceableRecipe(recipe);
     // Placeable recipes (build pieces) don't land in the backpack at all, so
     // an inventory count for them would just always read 0 — only show this
@@ -238,7 +257,7 @@ export class CraftingMenu {
       y += 18;
     }
 
-    const affordable = this.deps.crafting.canAfford(recipe, this.deps.backpack);
+    const affordable = isCraftable(this.deps, recipe);
     const btn = this.scene.add
       .text(x0, y, placeable ? "Place" : "Craft", {
         fontFamily: "monospace",

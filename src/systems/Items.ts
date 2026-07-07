@@ -62,11 +62,9 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     maxStack: 1,
     hotbarable: true,
     tool: "stone_axe",
-    weapon: "stone_axe", // doubles as a melee weapon — same equipped item, no separate slot
     stats: [
       { label: "Type", value: "Axe" },
       { label: "Gather", value: "Wood" },
-      { label: "Damage", value: "6" },
     ],
   },
   stone_pickaxe: {
@@ -135,6 +133,17 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     name: "Campfire",
     description: "A placeable fire for light, warmth, and cooking.",
     texture: "icon_campfire",
+    maxStack: 99,
+    hotbarable: false,
+    stats: [{ label: "Type", value: "Build" }],
+    placeable: true,
+  },
+
+  workbench: {
+    key: "workbench",
+    name: "Workbench",
+    description: "A placeable bench required for more advanced recipes.",
+    texture: "icon_workbench",
     maxStack: 99,
     hotbarable: false,
     stats: [{ label: "Type", value: "Build" }],

@@ -50,6 +50,7 @@ const DROP_SCATTER_MAX = 45; // px — max distance a drop piece explodes out to
 const DROP_CONSOLIDATE_RADIUS = 28; // px — merge a landed piece into another this close
 const SPRINT_DRAIN_PER_SEC = 33; // stamina/sec while sprinting — full bar in ~3s
 const DASH_STAMINA_COST = 25; // flat cost per dash — 4 dashes per full bar
+const WORKBENCH_RANGE = 100; // px — looser than REACH; "am I near it," not a precise click
 
 // The main gameplay scene: build the world, spawn the player and resources,
 // follow the camera, and run the mouse-driven interaction + HUD.
@@ -76,6 +77,11 @@ export class MainScene extends Phaser.Scene {
   private equipment = new Equipment();
   private eventLog = new EventLog();
   private craftingMenu!: CraftingMenu;
+  // Tracks the last-seen Workbench-proximity result while the crafting menu
+  // is open, so it can re-render (and clear/set the "Requires a nearby
+  // Workbench" line + affordability) the instant the player walks in or out
+  // of range, instead of only reflecting proximity as of when the menu opened.
+  private craftingMenuLastNearWorkbench: boolean | null = null;
   private inventoryMenu!: InventoryMenu;
   private hotbarUI!: HotbarUI;
   private eventLogUI!: EventLogUI;
@@ -274,6 +280,22 @@ export class MainScene extends Phaser.Scene {
     this.updateMagnet(delta);
     this.updateEnemies(delta);
     this.updateTreeOcclusion(delta);
+    this.updateCraftingMenuWorkbenchProximity();
+  }
+
+  // While the crafting menu is open, re-render it the instant Workbench
+  // proximity changes (walking in/out of WORKBENCH_RANGE) rather than only
+  // reflecting proximity as of when the menu was opened.
+  private updateCraftingMenuWorkbenchProximity(): void {
+    if (!this.craftingMenu.isOpen()) {
+      this.craftingMenuLastNearWorkbench = null;
+      return;
+    }
+    const near = this.isNearWorkbench(this.player.x, this.player.y);
+    if (near !== this.craftingMenuLastNearWorkbench) {
+      this.craftingMenuLastNearWorkbench = near;
+      this.craftingMenu.refresh();
+    }
   }
 
   private toggleMagnet(): void {
@@ -904,9 +926,9 @@ export class MainScene extends Phaser.Scene {
   }
 
   // Re-run recipe discovery and announce anything newly unlocked. Call after
-  // any resource pickup or skill level-up.
+  // any resource pickup, skill level-up, or workbench placement.
   private refreshDiscovery(): void {
-    const unlocked = this.crafting.refresh(this.discovered, this.skills);
+    const unlocked = this.crafting.refresh(this.discovered, this.skills, this.hasWorkbenchPlaced());
     for (const recipe of unlocked) {
       const icon = itemDef(outputKey(recipe))?.texture;
       this.eventLog.add("recipe", `New Recipe Unlocked! ${recipe.name}`, icon);
@@ -933,6 +955,7 @@ export class MainScene extends Phaser.Scene {
       crafting: this.crafting,
       craft: (recipe) => this.craftRecipe(recipe),
       startPlacement: (recipe) => this.startPlacement(recipe),
+      isNearWorkbench: () => this.isNearWorkbench(this.player.x, this.player.y),
     });
   }
 
@@ -942,6 +965,7 @@ export class MainScene extends Phaser.Scene {
     // eat the resources (the bug this replaces). Then create the item — a 2nd
     // tool now makes a new stack instead of a silent no-op.
     if (!this.crafting.canAfford(recipe, this.backpack)) return;
+    if (recipe.tier > 0 && !this.isNearWorkbench(this.player.x, this.player.y)) return;
     if (!this.backpack.hasRoomFor(key, 1)) {
       this.eventLog.add("info", "Inventory full");
       return;
@@ -1010,10 +1034,35 @@ export class MainScene extends Phaser.Scene {
     }
     this.crafting.craft(recipe, this.backpack);
     const pos = this.clampedPlacementPoint();
-    const texture = itemDef(outputKey(recipe))?.texture;
-    this.placedObjects.push(this.add.image(pos.x, pos.y, texture ?? ""));
+    const key = outputKey(recipe);
+    const texture = itemDef(key)?.texture;
+    const image = this.add.image(pos.x, pos.y, texture ?? "");
+    image.setData("itemKey", key);
+    this.placedObjects.push(image);
+    // Placing a Workbench for the first time can newly unlock tier 1+
+    // recipes' visibility (see Crafting.refresh's workbenchPlaced gate) —
+    // re-run discovery so that happens immediately, not just on next pickup.
+    if (key === "workbench") this.refreshDiscovery();
     this.refreshHud();
     this.inventoryMenu.refresh();
+  }
+
+  // "Am I near a placed Workbench" — used to gate actually crafting/placing
+  // an already-discovered tier-1+ recipe. Loose proximity, not a precise
+  // click, so it's a bigger radius than REACH.
+  private isNearWorkbench(x: number, y: number, radius: number = WORKBENCH_RANGE): boolean {
+    return this.placedObjects.some(
+      (obj) =>
+        obj.getData("itemKey") === "workbench" &&
+        Phaser.Math.Distance.Between(x, y, obj.x, obj.y) <= radius,
+    );
+  }
+
+  // Has the player ever placed a Workbench, anywhere — separate from (and
+  // prior to) isNearWorkbench's "currently in range" check. Gates whether
+  // tier 1+ recipes are discoverable/visible at all in the crafting menu.
+  private hasWorkbenchPlaced(): boolean {
+    return this.placedObjects.some((obj) => obj.getData("itemKey") === "workbench");
   }
 
   // --- Inventory ---

@@ -18,9 +18,8 @@ export interface Recipe {
   name: string;
   description: string;
   category: RecipeCategory;
-  // Tier 0 recipes are craftable from the default menu anywhere. Tier 1+
-  // will require a matching crafting bench (TBD) — not enforced yet since
-  // none exist.
+  // Tier 0 recipes are craftable anywhere. Tier 1+ requires proximity to a
+  // placed Workbench — see MainScene.isNearWorkbench / CraftingMenuDeps.
   tier: number;
   costs: Partial<Record<ResourceType, number>>;
   requiredSkill?: { skill: SkillType; level: number };
@@ -43,8 +42,8 @@ export const RECIPES: Recipe[] = [
     name: "Stone Pickaxe",
     description: "A crude pickaxe for mining boulders.",
     category: "tools",
-    tier: 0,
-    costs: { wood: 3, stone: 2 },
+    tier: 1,
+    costs: { wood: 3, stone: 4, leather: 1 },
     requiredSkill: { skill: "pickaxes", level: 0 },
     output: { kind: "tool", tool: "stone_pickaxe" },
   },
@@ -71,8 +70,8 @@ export const RECIPES: Recipe[] = [
     name: "Stone Club",
     description: "A heavier club with a stone head.",
     category: "weapons",
-    tier: 0,
-    costs: { wood: 2, stone: 2, leather: 1 },
+    tier: 1,
+    costs: { wood: 3, stone: 2, leather: 1 },
     output: { kind: "item", itemId: "stone_club", itemName: "Stone Club" },
   },
   {
@@ -92,6 +91,15 @@ export const RECIPES: Recipe[] = [
     tier: 0,
     costs: { wood: 5, stone: 3 },
     output: { kind: "item", itemId: "campfire", itemName: "Campfire" },
+  },
+  {
+    id: "workbench",
+    name: "Workbench",
+    description: "A placeable bench required for more advanced recipes.",
+    category: "build",
+    tier: 0,
+    costs: { wood: 10 },
+    output: { kind: "item", itemId: "workbench", itemName: "Workbench" },
   },
 ];
 

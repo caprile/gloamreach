@@ -194,9 +194,20 @@ stats table), but **override `update()`** with a genuinely different state machi
 
 ---
 
-## Milestone D — Snake (depends on A; independent of B/C)
+## Milestone D — Snake (depends on A; independent of B/C) — PRIORITIZED NEXT (2026-07-07)
 
 **Goal:** First hidden/ambush enemy — structurally different from Boar and Gremlin.
+
+**Why prioritized (2026-07-07):** Stone Pickaxe and Stone Club (`src/systems/Recipes.ts`)
+were changed to require `leather` again (user decision — leather-gating is intentional,
+not a bug), but `leather` has **zero drop sources** anywhere in the game right now.
+Discovery for those two recipes is correctly gated so they don't show up as
+"permanently stuck" (see Milestone G's follow-up: tier 1+ recipes are hidden entirely
+until a Workbench is placed, separate from ingredient discovery) — but they still can't
+ever be *finished* discovering without a leather source. Snake is that source (see
+below — drops 1 `leather` on death), so it jumps ahead of B/C in practical priority even
+though the plan's original ordering had no hard dependency forcing this. Still start it
+in its own fresh session per project convention.
 
 ### New file: `src/entities/Snake.ts`
 Subclass `Enemy` for rendering reuse; override `update()` with `hidden | striking | fleeing | idle`.
@@ -258,7 +269,7 @@ Most self-contained milestone; safe any time.
 
 ---
 
-## Milestone G — Workbench (fully independent)
+## Milestone G — Workbench (fully independent) — DONE
 
 **Goal:** Placeable Workbench via the existing campfire placement flow; gate `tier >= 1` recipes
 on proximity to any placed workbench, with non-silent feedback.
@@ -295,8 +306,14 @@ A (world + biome) ──┬─→ B (Boar tuning) ─→ C (projectiles + Gremli
 
 E (dodge + i-frames)  — independent, any time
 F (attack-range ring) — independent, any time
-G (workbench)         — independent, any time
+G (workbench)         — DONE (2026-07-07)
 ```
+
+**Priority note (2026-07-07):** D (Snake) is bumped ahead of B/C in practical priority —
+see Milestone D's "Why prioritized" callout above — because it's the only planned source
+of `leather`, which Stone Pickaxe/Stone Club now require. D has no hard dependency on
+B/C, so this doesn't violate the sequencing above, just reorders which pending milestone
+to pick up next.
 
 - **Hard:** A before B/C/D (all need final `WORLD_W/H` + `biome.zoneAt()`).
 - **Soft:** B before C/D (avoids interleaving unrelated edits to `spawnEnemies()`); C-then-D not
