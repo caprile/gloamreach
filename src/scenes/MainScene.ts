@@ -12,6 +12,8 @@ import {
 } from "../entities/ResourceNode";
 import { Enemy } from "../entities/Enemy";
 import { Snake } from "../entities/Snake";
+import { RangedGremlin, MeleeGremlin } from "../entities/Gremlin";
+import { Projectile, type ProjectileConfig } from "../entities/Projectile";
 import type { ResourceType } from "../systems/Inventory";
 import { Skills, type SkillType } from "../systems/Skills";
 import { Crafting } from "../systems/Crafting";
@@ -107,6 +109,10 @@ export class MainScene extends Phaser.Scene {
   // --- Combat ---
   private enemies: Enemy[] = [];
   private enemyGroup!: Phaser.Physics.Arcade.Group;
+  // Enemy-fired projectiles (currently just the ranged Gremlin's rock throw).
+  // No playerProjectiles group yet — nothing fires one until the Slingshot
+  // exists, and it'd need its own overlap-vs-enemies wiring at that point.
+  private enemyProjectiles!: Phaser.Physics.Arcade.Group;
   private health = new Health();
   private healthBarFill!: Phaser.GameObjects.Rectangle;
   private healthBarText!: Phaser.GameObjects.Text;
@@ -163,6 +169,22 @@ export class MainScene extends Phaser.Scene {
     this.spawnEnemies();
     this.physics.add.collider(this.enemyGroup, solids);
     this.physics.add.collider(this.player, this.enemyGroup);
+
+    // Enemy projectiles (Gremlin's rock throw) hit the player via overlap,
+    // reusing the same i-frame-respecting entry point melee damage already
+    // goes through.
+    this.enemyProjectiles = this.physics.add.group();
+    this.physics.add.overlap(this.enemyProjectiles, this.player, (a, b) => {
+      // Phaser doesn't guarantee (object1, object2) argument order for a
+      // Group-vs-single-object overlap matches registration order — blindly
+      // trusting the first arg as "the projectile" and destroying it crashed
+      // the game once it happened to be the player instead (this.player then
+      // had no `.scene`, so the next Player.update() threw). Pick whichever
+      // argument actually is a Projectile instead of assuming a slot.
+      const projectile = (a instanceof Projectile ? a : b) as Projectile;
+      this.applyDamageToPlayer(projectile.damage);
+      projectile.destroy();
+    });
 
     // Left-click interacts with whatever is hovered and in reach. Suppressed
     // while a menu is open, or when the click lands on a fixed HUD element
@@ -586,9 +608,7 @@ export class MainScene extends Phaser.Scene {
         y,
         texture: "boar",
         displayName: "Boar",
-        lootResource: "boar_meat",
-        lootMin: 1,
-        lootMax: 2,
+        loot: [{ resource: "boar_meat", min: 1, max: 2 }],
         maxHealth: 20,
         biteDamage: 25,
       });
@@ -607,6 +627,36 @@ export class MainScene extends Phaser.Scene {
       this.enemies.push(snake);
       this.enemyGroup.add(snake);
     }
+
+    // Gremlins: grassy-preferred with occasional forest wandering-in (per
+    // CLAUDE.md's first-biome content notes). Melee-only variant is more
+    // common; the ranged variant is rarer and stronger (only leather-style
+    // gate: it's the sole gremlin_skin source, feeding the Drying Rack).
+    const RANGED_GREMLIN_COUNT = 4;
+    for (let i = 0; i < RANGED_GREMLIN_COUNT; i++) {
+      const { x, y } = this.pickSpawnPoint(rng, "grassy", 200);
+      const gremlin = new RangedGremlin(this, { x, y });
+      this.enemies.push(gremlin);
+      this.enemyGroup.add(gremlin);
+    }
+    const MELEE_GREMLIN_COUNT = 6;
+    for (let i = 0; i < MELEE_GREMLIN_COUNT; i++) {
+      const { x, y } = this.pickSpawnPoint(rng, "grassy", 200);
+      const gremlin = new MeleeGremlin(this, { x, y });
+      this.enemies.push(gremlin);
+      this.enemyGroup.add(gremlin);
+    }
+  }
+
+  // Spawns a projectile and tracks it in the right physics group by source —
+  // currently only enemy-sourced projectiles exist (Gremlin's rock throw),
+  // the Slingshot will need its own playerProjectiles group + overlap-vs-
+  // enemies wiring once it lands.
+  private spawnProjectile(cfg: ProjectileConfig): Projectile {
+    const projectile = new Projectile(this, cfg);
+    this.enemyProjectiles.add(projectile);
+    projectile.launch(); // see Projectile.launch()'s comment — group.add() zeroes velocity
+    return projectile;
   }
 
   // Each frame: find whichever node OR enemy the mouse is over (in world
@@ -767,7 +817,9 @@ export class MainScene extends Phaser.Scene {
     const dropY = enemy.y;
     const loot = enemy.rollLoot();
     enemy.playDeathFeedback(() => {
-      this.spawnLooseDrop(loot.resource, loot.amount, dropX, dropY);
+      for (const drop of loot) {
+        this.spawnLooseDrop(drop.resource, drop.amount, dropX, dropY);
+      }
     });
     this.enemies = this.enemies.filter((e) => e !== enemy);
     this.eventLog.add("combat", `Defeated ${enemy.displayName}`);

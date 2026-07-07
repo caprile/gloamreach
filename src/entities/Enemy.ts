@@ -26,14 +26,22 @@ const CHASE_GIVEUP_MS = 30000;
 const POST_GIVEUP_IMMUNITY_MS = 5000;
 const CLOSE_REAGGRO_RADIUS = 50; // px — overrides the immunity window even before it expires
 
+// One independently-rolled drop entry. Most enemies (Boar, Snake) have a
+// single entry; the ranged Gremlin variant drops two (skin + blood) — see
+// EnemyConfig.loot below, which is why this is an array rather than a single
+// resource/min/max triple.
+export interface LootEntry {
+  resource: ResourceType;
+  min: number;
+  max: number;
+}
+
 export interface EnemyConfig {
   x: number;
   y: number;
   texture: string;
   displayName: string;
-  lootResource: ResourceType;
-  lootMin: number;
-  lootMax: number;
+  loot: LootEntry[];
   maxHealth: number;
   biteDamage: number;
 }
@@ -43,9 +51,7 @@ export interface EnemyConfig {
 // see CLAUDE.md's "First biome — content notes" for the fuller roster.
 export class Enemy extends Phaser.Physics.Arcade.Sprite {
   readonly displayName: string;
-  private readonly lootResource: ResourceType;
-  private readonly lootMin: number;
-  private readonly lootMax: number;
+  private readonly loot: LootEntry[];
   private readonly biteDamageValue: number;
   readonly maxHealth: number;
   health: number;
@@ -72,14 +78,13 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   constructor(scene: Phaser.Scene, cfg: EnemyConfig) {
     super(scene, cfg.x, cfg.y, cfg.texture);
     this.displayName = cfg.displayName;
-    this.lootResource = cfg.lootResource;
-    this.lootMin = cfg.lootMin;
-    this.lootMax = cfg.lootMax;
+    this.loot = cfg.loot;
     this.maxHealth = cfg.maxHealth;
     this.health = cfg.maxHealth;
     this.biteDamageValue = cfg.biteDamage;
     scene.add.existing(this);
     scene.physics.add.existing(this);
+    this.setCollideWorldBounds(true); // matches Player — without this, chase/flee/kite AI can walk enemies off the map
     this.setDepth(cfg.y); // Y-sorted against the player/trees, see preUpdate
 
     const barX = cfg.x - Enemy.BAR_W / 2;
@@ -121,11 +126,15 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     return this.biteDamageValue;
   }
 
-  // Resource dropped on death — data-driven per EnemyConfig so MainScene's
+  // Resource(s) dropped on death — data-driven per EnemyConfig so MainScene's
   // attack handler doesn't need per-species branching (Boar -> boar_meat,
-  // Snake -> leather, etc.).
-  rollLoot(): { resource: ResourceType; amount: number } {
-    return { resource: this.lootResource, amount: Phaser.Math.Between(this.lootMin, this.lootMax) };
+  // Snake -> leather, ranged Gremlin -> skin + blood, etc.). Each entry is
+  // rolled independently.
+  rollLoot(): { resource: ResourceType; amount: number }[] {
+    return this.loot.map((entry) => ({
+      resource: entry.resource,
+      amount: Phaser.Math.Between(entry.min, entry.max),
+    }));
   }
 
   // --- give-up / re-aggro-immunity helpers (see constants above) ---

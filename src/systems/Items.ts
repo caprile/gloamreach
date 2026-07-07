@@ -159,6 +159,22 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     maxStack: 99,
     hotbarable: false,
   },
+  gremlin_blood: {
+    key: "gremlin_blood",
+    name: "Gremlin Blood",
+    description: "Dark blood from a slain gremlin. Crafting material.",
+    texture: "icon_gremlin_blood",
+    maxStack: 99,
+    hotbarable: false,
+  },
+  gremlin_skin: {
+    key: "gremlin_skin",
+    name: "Gremlin Skin",
+    description: "Tough hide from a ranged gremlin. Processed into leather at a Drying Rack.",
+    texture: "icon_gremlin_skin",
+    maxStack: 99,
+    hotbarable: false,
+  },
 };
 
 export function itemDef(key: string): ItemDef | undefined {

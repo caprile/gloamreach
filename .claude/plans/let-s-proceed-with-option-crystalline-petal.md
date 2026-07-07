@@ -150,7 +150,7 @@ the movement/zigzag half of Milestone B, not the numeric tuning half.
 
 ---
 
-## Milestone C — Projectile system + Gremlin (depends on A; recommended after B)
+## Milestone C — Projectile system + Gremlin (depends on A; recommended after B) — SHIPPED (2026-07-07)
 
 **Goal:** Build the game's **first projectile system** (reusable later for the Slingshot) and
 ship Gremlin.
@@ -180,12 +180,30 @@ stats table), but **override `update()`** with a genuinely different state machi
   player's current position (no leading).
 - **Melee fallback:** player closes to ~24px → `meleeing`, claw (higher DPS than the throw,
   punishing the close).
-- Drops 1 **Gremlin Blood** on death via loose/isDrop drop pipeline (new `gremlin_blood`
-  `ResourceType`, mirrors the `boar_meat` precedent).
+
+**Two gremlin variants — added 2026-07-07, before this milestone is built:**
+- **Ranged Gremlin (stronger)** — the `idle | kiting | throwing | meleeing` state machine
+  above, full ranged+melee kit as originally designed. On death drops **both** 1 **Gremlin
+  Skin** (new `gremlin_skin` resource, drying-rack input — see Milestone H) **and** 1
+  **Gremlin Blood**.
+- **Melee Gremlin (weaker)** — a simpler variant, melee-only (no `kiting`/`throwing`
+  states, no projectile spawns) — closer to Boar's chase/bite shape than the ranged
+  variant's kiting AI, but still its own tuned numbers per the standing "own condition, own
+  numbers" rule, not a Boar copy. Drops **1 Gremlin Blood only** (no skin) — skin is
+  exclusively a ranged-Gremlin drop, since the drying rack's `gremlin_skin → gremlin_leather`
+  output feeds gremlin leather armor (Milestone H) and shouldn't be trivially farmable from
+  the weak variant.
+- Both variants likely share a common base (e.g. `GremlinBase extends Enemy` holding the
+  loot-drop-on-death plumbing) with the ranged-only state machine living in a subclass —
+  exact split TBD at implementation time; don't over-design this ahead of writing the code.
 
 ### Existing files touched
-- Wherever `ResourceType` lives (likely `src/systems/Inventory.ts` — verify): add `gremlin_blood`.
-- **`spawnEnemies()`:** Gremlin weighted toward **grassy** with occasional forest.
+- Wherever `ResourceType` lives (likely `src/systems/Inventory.ts` — verify): add
+  `gremlin_blood` and `gremlin_skin` (new, ranged-Gremlin-only drop feeding Milestone H's
+  drying rack).
+- **`spawnEnemies()`:** Gremlin weighted toward **grassy** with occasional forest. Spawn mix
+  between the two variants (e.g. melee more common, ranged rarer/stronger) is a tuning call
+  for implementation time, not locked here.
 - **`tryAttackEnemy()` / enemy update loop:** verify hit application is generic (`.takeHit()` on
   the hovered target), not hardcoded to `Enemy`. **Likely small refactor:** `Enemy.update()`
   today returns a bare `boolean` ("bite landed"); to express "threw a projectile" / "no event",
@@ -316,15 +334,124 @@ on proximity to any placed workbench, with non-silent feedback.
 
 ---
 
+## Milestone H — Harvestables + Drying Rack (processing stations) — added 2026-07-07
+
+**Goal:** two new gatherable resources tied to specific terrain/flora, and the game's
+**first "processing station" concept** — a crafting table that isn't "spend resources, get
+item instantly" (Workbench/Campfire) but instead "load raw items in, wait, get a different
+item out." This is new architecture, not a reskin of the existing recipe/craft flow — **use
+Opus for this milestone** (mirrors the Milestone A/C "net-new architecture → Opus" guidance
+above), not Sonnet.
+
+### New harvestables
+- **Cattail** — a gatherable flora, found **only at the border of creek cells**
+  (`biome.isCreekAt`-adjacent, not creek-interior or generic grassy/forest — a new spawn
+  constraint distinct from anything `pickSpawnPoint` currently supports; likely needs a
+  new "near creek edge" predicate rather than reusing `avoidCreek`). Free pickup (no tool),
+  same interaction model as branches/rocks. Feeds the Drying Rack (below) as its raw input
+  for **twine**.
+- **Blackberries** — a food item, found as **bushes in the wooded (forest) areas** — a new
+  gatherable flora type, harvested the same way (free pickup). **The food/consumable
+  concept doesn't exist in the game yet** (Shishkabob/cooked-meat is still on the roadmap
+  per `CLAUDE.md`'s cooking notes) — Blackberries are a raw pickup now; what "eating" one
+  actually does (heal? buff? stamina/food-pool interaction?) is undesigned and out of scope
+  until the food system itself is built. Don't invent an eating mechanic just to give this
+  milestone an end-to-end payoff — it's fine for Blackberries to sit in inventory unused
+  until food lands.
+
+### New file: `src/systems/Processing.ts` (or similar — new architectural concept)
+Distinct from `src/systems/Crafting.ts`'s instant recipe-craft model:
+- A **processing station** (Drying Rack first, but architect for reuse — e.g. a future
+  Campfire-cooking flow could plausibly share this rather than being bespoke) has its own
+  **input slot(s)**, a **process definition** (`input item → output item`, plus a **process
+  duration**), and **runs over time** rather than resolving on click like `Crafting.craftRecipe()`
+  does today.
+- **New UI surface needed**: unlike the Workbench (which just gates an existing recipe by
+  proximity, no new UI), the Drying Rack needs **its own menu for loading items in** — a
+  new `src/ui/` panel, opened by interacting with a placed Drying Rack (mirrors how
+  `CraftingMenu` opens, but shows the rack's own input/output/progress instead of the
+  global recipe list).
+
+  **Interaction flow — locked in 2026-07-07 (user spec):**
+  1. Walk up to the processing station (Drying Rack), interact with it (same hover/reach
+     prompt model as everything else — `[LMB] Use`/similar, gated on being in range).
+  2. Interacting opens the station's **own processing menu side-by-side with the player's
+     inventory** — the inventory is shown *alongside* the process panel, not hidden behind
+     it, since the whole interaction is dragging from one into the other.
+  3. **Item dimming**: while the menu is open, only inventory items that are a valid input
+     for *this* station light up at full brightness; every other item is faded/dulled out
+     (a visual affordance, not a hard block — mirrors the existing "grey out unaffordable"
+     pattern in `CraftingMenu`, but keyed off "is this a valid input" rather than "can I
+     afford this").
+  4. **Drag-and-drop**: the player drags a valid (lit) item from inventory into the
+     station's input box/slot. This is the **first drag-and-drop interaction in the
+     game** — everything so far (hotbar equip, crafting) has been click-based. Flag this
+     explicitly at implementation time; it's new interaction plumbing, not a reuse of an
+     existing pattern.
+  5. **Live output preview**: as soon as a valid item (or stack) is dragged into the input
+     box, a **preview box directly underneath it** shows what the output will be *and its
+     count*, computed from the item's conversion ratio — before the player commits/confirms
+     anything. E.g. dragging in a stack of 10 Cattail (2:1 ratio) previews "5 Twine";
+     dragging in Gremlin Skin (1:1 ratio) previews a 1:1 count of Gremlin Leather.
+  6. Multiple input slots may exist per station (exact count TBD at implementation time —
+     start with the single-slot case described above and only add more if the design needs
+     it); process **runs over time** per the process duration, not instantly on drop.
+- **Recipes for this pass (ratios locked in 2026-07-07):**
+  - `cattail → twine`, **2:1** (2 Cattail → 1 Twine) — e.g. 10 Cattail previews/produces 5
+    Twine.
+  - `gremlin_skin → gremlin_leather`, **1:1** — **only the ranged Gremlin variant**
+    (Milestone C, above) drops `gremlin_skin`, so this output is gated behind that enemy
+    existing and being killable, same "leather-gates-recipes" precedent Snake set for
+    `leather`/Stone Pickaxe.
+- **Placement**: Drying Rack is a new placeable, following the existing
+  Campfire/Workbench placement-mode flow (`attemptPlaceObject`, `image.setData("itemKey",
+  ...)` tagging) — no new placement architecture needed there, only the processing/menu
+  layer above is new.
+
+### Downstream recipe hooks (not built this milestone, just noted so they aren't lost)
+- **Twine** is used in the **Slingshot** recipe (`CLAUDE.md` currently lists Slingshot as
+  `2 wood + 2 leather`, workbench-gated — this adds `twine` as a further ingredient/gate
+  once Milestone H ships; exact split TBD).
+- **Twine + Gremlin Leather** craft **Gremlin Leather Armor** — a new armor recipe (the
+  `"armor"` crafting-menu tab already exists per `STATUS.md`'s tab-reorg entry, so this
+  slots into an existing tab, not a new one).
+
+### Existing files touched
+- `ResourceType` gains `cattail`, `blackberry`, `twine`, `gremlin_leather` (and
+  `gremlin_skin` from Milestone C, if not already added there).
+- `src/systems/Items.ts` / `Recipes.ts`: new `drying_rack` placeable recipe (tier TBD — likely
+  `tier: 0` like Campfire/Workbench, since it's a *type* of gate, not a *tier* gate), new
+  `gremlin_leather_armor` recipe once twine/gremlin_leather exist.
+- `spawnNodes()` / biome query layer: new creek-adjacent spawn predicate for Cattail; new
+  forest-bush spawn for Blackberries.
+
+### Open questions (flag before implementation, not answered here)
+- **Interaction flow, item-dimming, drag-and-drop, and live output-preview are now
+  locked in** (see above, 2026-07-07) — remaining UI open question is just exact layout/
+  visual polish (panel sizing, slot art, whether/how a "processing..." progress state is
+  shown while a batch is running, whether processing continues while the menu is closed).
+- Process duration for both recipes (cattail→twine, gremlin_skin→gremlin_leather) —
+  unset (ratios are locked: 2:1 and 1:1 respectively, but *time* per batch is not).
+- Blackberries' actual in-game effect once the food system exists — explicitly deferred,
+  not part of this milestone.
+- Twine's exact role in the Slingshot recipe (added ingredient vs. replacing something) —
+  TBD at implementation time.
+
+---
+
 ## Sequencing & dependencies
 
 ```
 A (world + biome) ──┬─→ B (Boar tuning) ─→ C (projectiles + Gremlin) ─→ D (Snake)
                     └─→ [zone-query plumbing in spawnNodes/spawnEnemies shared by B/C/D]
+                    (A, C, D all done; B's numeric-tuning half is the only open item left here)
 
 E (dodge + i-frames)  — independent, any time
 F (attack-range ring) — independent, any time
 G (workbench)         — DONE (2026-07-07)
+H (harvestables + Drying Rack) — depends on A (biome creek query) for Cattail placement;
+                                  gremlin_leather output depends on C (ranged Gremlin's
+                                  gremlin_skin drop) — otherwise independent
 ```
 
 **Priority note (2026-07-07):** D (Snake) is bumped ahead of B/C in practical priority —
@@ -333,7 +460,21 @@ of `leather`, which Stone Pickaxe/Stone Club now require. D has no hard dependen
 B/C, so this doesn't violate the sequencing above, just reorders which pending milestone
 to pick up next.
 
-- **Hard:** A before B/C/D (all need final `WORLD_W/H` + `biome.zoneAt()`).
+**Priority note #2 (2026-07-07):** with D shipped, **C (projectiles + Gremlin) is next up**
+— picked over B's remaining numeric-tuning half because H's `gremlin_skin →
+gremlin_leather` recipe (Gremlin Leather Armor's whole reason to exist) is blocked on the
+ranged Gremlin variant existing. B's open half (Boar `AGGRO_RADIUS`/`DEAGGRO_RADIUS`/count
+retuning) is small, independent, and can slot in any later session without blocking
+anything else. C now explicitly includes **both Gremlin variants** (ranged: kiting +
+rock-throw + melee fallback, drops Gremlin Skin + Gremlin Blood; melee-only: weaker,
+Boar-shaped chase/bite, drops Gremlin Blood only) — see Milestone C's "Two gremlin
+variants" note above.
+
+- **Hard:** A before B/C/D (all need final `WORLD_W/H` + `biome.zoneAt()`). A before H
+  (Cattail's creek-border spawn needs `Biome`'s creek query). C before H's
+  `gremlin_skin → gremlin_leather` recipe specifically (needs the ranged Gremlin variant's
+  drop to exist) — though H's Cattail/twine half has no dependency on C at all and could
+  ship first if Gremlin isn't done yet.
 - **Soft:** B before C/D (avoids interleaving unrelated edits to `spawnEnemies()`); C-then-D not
   simultaneous (both edit `spawnEnemies()`).
 - **None:** E/F/G any order, low mutual conflict (E→`Player.ts`+1 line; F→`MainScene` create/update;
@@ -353,6 +494,9 @@ to pick up next.
 
 - **A** and **C** (biome generation algorithm; first projectile system) are net-new architecture —
   good candidates for **Opus**.
+- **H** (Drying Rack / processing-station concept — first "load item, wait, get output"
+  system + its own load-in UI menu, distinct from instant-craft) is also net-new
+  architecture — **use Opus**, per the note in Milestone H above.
 - **B, D, E, F, G** reuse established patterns — **Sonnet** is appropriate.
 
 ## Verification (each milestone)
@@ -371,6 +515,11 @@ to pick up next.
    - **F:** ring visible only when equipped; radius = REACH; cleared when unequipped.
    - **G:** tier-1 recipe blocked with amber "Requires a nearby Workbench" until within range of a
      placed workbench, then craftable; workbench itself craftable anywhere.
+   - **H:** Cattail only spawns near creek-border cells (assert via `biome.isCreekAt`
+     proximity check across sampled spawn points); Blackberry bushes only in forest zone;
+     Drying Rack menu accepts Cattail → produces Twine after its process duration, and
+     Gremlin Skin → Gremlin Leather likewise; ranged Gremlin drops Gremlin Skin + Gremlin
+     Blood while melee Gremlin drops Gremlin Blood only.
 4. `preview_console_logs` (level `error`) — Phaser boot banner / Vite HMR noise is normal.
 5. If a backgrounded preview tab hangs `preview_eval`/`preview_screenshot`, `preview_stop` then
    `preview_start` fresh (known quirk).

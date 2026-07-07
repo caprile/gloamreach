@@ -2,6 +2,233 @@
 
 Last updated: 2026-07-07
 
+### Just finished: Enemies no longer walk off world bounds
+
+Enemies were missing `setCollideWorldBounds(true)` — `Player.ts` has always had this, but
+`Enemy.ts`'s constructor never did, so chase/flee/kite AI (Boar chasing, Snake fleeing,
+RangedGremlin kiting) could push an enemy straight through the edge of the 2560x1920
+world. Fixed with a one-line addition in `Enemy.ts`'s constructor, right next to
+`scene.physics.add.existing(this)` — mirrors `Player`'s existing call exactly. Applies to
+every `Enemy` subclass (Boar, Snake, RangedGremlin, MeleeGremlin) for free, no per-species
+changes needed.
+
+### Noted, not acted on: Hold LMB to continuously attack/chop/mine
+
+User request (2026-07-07): holding left-mouse-button down should continuously
+attack/chop/mine the hovered target, rather than requiring a fresh click per hit. Today
+`tryInteract()` only fires from the `pointerdown` event handler — a held button doesn't
+re-trigger it. The existing per-tool/weapon cooldown gating (`lastToolHitAt`/
+`lastWeaponHitAt` + `toolCooldownMs`/`weaponCooldownMs`) already caps the effective hit
+rate correctly, so the fix is purely about *triggering* on hold (checking
+`pointer.isDown` each frame against the cooldown, alongside — or instead of — the
+one-shot `pointerdown` handler), not about changing any damage/cooldown numbers. Not
+implemented yet — flagging for a future session.
+
+### Noted, not acted on: Player attack speed too high starting off (needs per-item tuning)
+
+User feedback (2026-07-07): starting weapon/tool attack speed feels too fast right out of
+the gate. Current cooldowns live in `weaponCooldownMs()` (`src/systems/Weapons.ts`: Wood
+Club 450ms, Stone Club 550ms) and `toolCooldownMs()` (`src/entities/ResourceNode.ts`: both
+stone tools 500ms) — these should be tuned up (slower) for the starting tier. Longer-term,
+the user wants attack speed to be a **buffable stat** (something that can later be sped up
+via gear/skills/consumables) and to **vary per item** (already partly true via the
+per-`WeaponType`/`ToolType` cooldown tables, but the starting values across the board are
+too fast and haven't been deliberately tuned as a set). Not implemented yet — flagging for
+a future session; when tackled, revisit both tables together rather than one weapon at a
+time so the relative pacing across items stays coherent.
+
+### Just finished: Fixed the real freeze — projectile-overlap callback was destroying the player
+
+The hysteresis fix below didn't resolve the reported freeze; the user then reproduced it
+again and this time captured the actual browser console error, which pinned it down
+immediately:
+
+```
+Player.ts:71 Uncaught TypeError: Cannot read properties of undefined (reading 'time')
+    at Player.update (Player.ts:71:28)
+    at MainScene.update (MainScene.ts:283:31)
+```
+
+**Root cause**: `MainScene`'s `enemyProjectiles` vs `player` overlap callback
+(`this.physics.add.overlap(this.enemyProjectiles, this.player, (proj) => {...})`) assumed
+Phaser always calls the callback as `(object1, object2)` matching registration order —
+i.e. that the first argument is always the projectile. That's a real Phaser gotcha for a
+**Group-vs-single-object** overlap specifically: argument order isn't guaranteed to match
+registration order the way it reliably does for single-vs-single. When it came back
+swapped, `proj` was actually **the player**, and `projectile.destroy()` destroyed the
+player sprite instead of the projectile — leaving `this.player` a dead reference with no
+`.scene`, so the very next frame's `this.player.update()` (`Player.ts:71`,
+`this.scene.time.now`) threw and killed the game loop. This exactly matches the reported
+repro ("right when projectile hits me the game freezes") — freezes right where the earlier
+"known verification gap" note (this session's Milestone C entry) had flagged the live
+overlap path as unverified.
+
+- **Fix** (`MainScene.ts`, the overlap callback): instead of trusting argument position,
+  pick whichever of the two callback args is actually `instanceof Projectile` and destroy
+  *that* one — correct regardless of which slot Phaser puts it in.
+
+Verified: type-check clean, world boots and renders with no console errors. Real-time
+physics-driven overlap firing still couldn't be exercised end-to-end via `preview_eval`
+this session (same environment throttling as before — manual `world.step()`/`world.update()`
+calls don't reproduce a live overlap outside the real per-frame loop), but the fix removes
+the exact failure mode the user's own console trace identified, and the surrounding logic
+(damage application, i-frames) was already verified correct in the prior entry.
+
+### Just finished: RangedGremlin melee/ranged mode hysteresis (freeze report follow-up)
+
+User reported the game "freezing" while engaging a ranged Gremlin at melee range, right
+after the combat-pattern rework below shipped. Extensive stress-testing (300 synthetic
+frame ticks via direct `s.update()` calls, 200 direct `updateEnemies()` calls, a full
+attack-to-kill sequence via `tryAttackEnemy()`) turned up **zero exceptions and no
+infinite loop** — so this wasn't a crash in the reproducible sense. It did turn up a real
+design gap, though: the melee↔ranged mode toggle used a **single shared distance
+threshold** (`RANGED_MELEE_RANGE`, 24px) for both entering and leaving melee — every other
+aggro/deaggro transition in this codebase (Boar/Snake/MeleeGremlin) deliberately uses a
+*gap* between its enter/exit radii specifically to avoid boundary flicker, and this one
+didn't. With the player-enemy physics collider constantly separating overlapping bodies,
+hovering right at ~24px could flip the mode every single frame — very plausibly reading
+as a "freeze"/stutter even without a real crash.
+
+- **New `RANGED_MELEE_EXIT_RANGE` (40px)** — entering melee still triggers at 24px, but
+  leaving it now requires backing out past 40px, not just past 24px again. Implemented as
+  an explicit two-branch check (`if mode is meleeing: only leave past exit range; else:
+  only enter at/under the enter range`) rather than a single ternary re-evaluated every
+  frame, so the mode is now sticky within that 16px buffer band instead of knife-edged.
+
+Verified via `preview_eval`: jittering the player back and forth across the *old* 24px
+boundary (samples at 22-38px) all correctly stayed in `"meleeing"` instead of flickering;
+only actually crossing 40px flipped it back to `"ranged"`. Type-check clean, no console
+errors, world renders normally. **Flagged to the user**: since no crash was reproducible
+despite significant effort, if the freeze persists after this fix, the browser console
+error (F12 → Console) at the moment it happens would be the fastest way to pin down an
+actual exception, if one exists beyond this flicker issue.
+
+### Just finished: RangedGremlin combat pattern rework + HP doubled
+
+Playtest follow-up right after Milestone C landed — the ranged Gremlin's old
+kiting/throwing/melee-fallback split didn't match the intended feel:
+
+- **New pattern**: once the player is in range, the Gremlin **always kites** (backs
+  directly away) while managing a **2-shot burst** (`BURST_SHOT_COUNT`, fired
+  `BURST_SHOT_INTERVAL_MS` (180ms) apart — a quick "double tap"), then a longer
+  `BURST_COOLDOWN_MS` (2400ms) before the next burst — replacing the old flat
+  `THROW_COOLDOWN_MS` single-shot-per-cooldown behavior and the old
+  `PREFERRED_RANGE` band (no more "hold ground between preferred and aggro" state;
+  it's just always retreating now while in ranged mode).
+- **Melee is now a real two-way mode toggle, not a one-way fallback**: `this.mode =
+  dist <= RANGED_MELEE_RANGE ? "meleeing" : "ranged"` is recomputed every frame off
+  the same threshold — closing inside melee range flips it into meleeing (fights
+  back, same claw/cooldown as before); backing back out immediately flips it back
+  to ranged/kiting, resuming the burst cycle. Previously melee was only entered as
+  a fallback and there was no explicit "kiting" mode separate from "throwing."
+  `RangedMode` narrowed from `"idle" | "kiting" | "throwing" | "meleeing"` to
+  `"idle" | "ranged" | "meleeing"`.
+- **`RANGED_MAX_HEALTH` doubled, 16 → 32** — the old HP felt too fragile for how
+  much pressure the ranged pattern is meant to apply.
+
+Verified via `preview_eval`: a fresh contact fires shot 1 immediately, a second
+shot at +100ms is correctly withheld (inside `BURST_SHOT_INTERVAL_MS`), fires at
++200ms (burst complete), stays withheld through +500ms (burst cooldown), and a
+new burst starts once `BURST_COOLDOWN_MS` has elapsed (4 total projectiles spawned
+across that sequence, matching the expected 1/1/2/2/3 running counts at each
+checkpoint). Separately: a Gremlin placed within `RANGED_MELEE_RANGE` immediately
+reports `mode: "meleeing"`, zero velocity, and lands a claw hit (respecting its own
+cooldown on a second call); moving the player back out to 100px on the same
+Gremlin flips it back to `mode: "ranged"` with velocity pointing away from the
+player. `maxHealth` confirmed at 32. Type-check clean, no console errors,
+`preview_screenshot` shows the world/enemies rendering normally.
+
+### Just finished: Projectile system + Gremlin (Milestone C) — two variants
+
+Plan file: `.claude/plans/let-s-proceed-with-option-crystalline-petal.md` (Milestone C,
+now done — picked ahead of B's remaining Boar-tuning half since it unblocks the
+Drying Rack's `gremlin_skin → gremlin_leather` line, per the plan's "Priority note #2").
+
+- **New file `src/entities/Projectile.ts`** — the game's first ranged-attack primitive,
+  generic and reusable (not Gremlin-specific): `ProjectileConfig` (`x, y, angle, speed,
+  damage, texture, maxRangePx, sourceIsPlayer`), self-destroys once traveled distance
+  reaches `maxRangePx` (distance-based despawn, not a timer, so faster projectiles
+  aren't accidentally shorter-ranged). A `ProjectileHost` interface
+  (`spawnProjectile(cfg): Projectile`) lets `Enemy` subclasses call
+  `(this.scene as unknown as ProjectileHost).spawnProjectile(...)` without importing
+  `MainScene` directly (would be circular — `MainScene` already imports entity classes).
+  **Gotcha hit + fixed**: setting the physics body's velocity in the constructor was
+  silently zeroed the moment `MainScene.spawnProjectile()` added the sprite to the
+  `enemyProjectiles` Arcade Group — Arcade Groups overwrite a freshly-enabled body's
+  velocity with their own (zeroed) defaults on `add()`. Fixed by storing the computed
+  velocity and exposing a `launch()` method the spawner calls *after* `group.add()`.
+- **`MainScene.ts`**: new `enemyProjectiles` Arcade group + an overlap collider against
+  the player that calls the same `applyDamageToPlayer()` entry point melee damage
+  already goes through (so it respects i-frames/death same as everything else), then
+  destroys the projectile. No `playerProjectiles` group yet — nothing fires one until
+  the Slingshot exists; that'll need its own group + overlap-vs-enemies wiring then.
+- **`src/entities/Enemy.ts` loot generalized**: `EnemyConfig.lootResource/lootMin/lootMax`
+  (single-drop) replaced with `loot: LootEntry[]` (one or more independently-rolled
+  `{resource, min, max}` entries) and `rollLoot()` now returns an array instead of a
+  single object — needed because the ranged Gremlin drops two different resources
+  (skin + blood) on death, and the existing single-entry shape couldn't express that
+  without per-species branching in `MainScene`. Boar and Snake's spawn configs updated to
+  the new one-entry-array shape (behavior unchanged); `MainScene.tryAttackEnemy()` now
+  loops over `rollLoot()`'s array, spawning one loose-drop pile per entry.
+- **New file `src/entities/Gremlin.ts`** — two separate classes per the plan's "two
+  gremlin variants" note (added 2026-07-07), each with its own state machine/numbers
+  rather than one class with a "ranged?" flag:
+  - **`RangedGremlin`** (stronger) — `idle | kiting | throwing | meleeing` state machine.
+    Aggro 160px (larger than melee — notices earlier), backs away below `PREFERRED_RANGE`
+    (120px), holds and throws rocks on a 2s cooldown between preferred and aggro range,
+    falls back to a claw (10 dmg) if the player closes to melee range (24px). Drops
+    **Gremlin Skin + Gremlin Blood** (skin is exclusive to this variant — feeds the
+    Drying Rack's `gremlin_leather` output, and shouldn't be trivially farmable from the
+    weak variant). 16 max HP. Overrides `isAggro()`/`takeHit()` off its own `mode` field
+    (doesn't use `Enemy`'s shared `state` field), mirroring the pattern `Snake` already
+    established for enemies with bespoke state machines.
+  - **`MeleeGremlin`** (weaker) — plain `idle | chasing` chase-and-claw, no
+    kiting/throwing states at all, but its own tuned numbers (not copied from Boar):
+    130px aggro, 70px/s chase speed, 8 dmg claw (vs Boar's 25), 12 max HP. Drops
+    **Gremlin Blood only** (no skin).
+  - Both reuse `Enemy`'s protected give-up/re-aggro-immunity helpers
+    (`startPursuit`/`hasGivenUpPursuit`/`canAggro`/`enterGivenUpState`/`markAttackLanded`)
+    rather than reimplementing that mechanism, same as `Snake` does.
+- **`ResourceType`** gained `gremlin_blood` and `gremlin_skin`; new `ItemDef` entries +
+  `icon_gremlin_blood`/`icon_gremlin_skin` textures (`BootScene.ts`, matching the
+  `boar_meat` icon precedent). New `gremlin`/`gremlin_weak`/`gremlin_rock` placeholder
+  textures — the ranged variant is drawn bigger with a lighter belly highlight so it
+  visually reads as tougher than the smaller, duller melee variant.
+- **`MainScene.spawnEnemies()`**: 4 `RangedGremlin` + 6 `MeleeGremlin`, both
+  grassy-preferred (per `CLAUDE.md`'s first-biome content notes) — melee more common,
+  ranged rarer/stronger, matching the plan's tuning note.
+
+Verified via `preview_eval`: spawn counts match (8 Enemy/Boar, 6 Snake, 4 RangedGremlin, 6
+MeleeGremlin); `RangedGremlin.update()` correctly transitions idle→throwing on first
+contact at mid-range (spawns a real projectile into `enemyProjectiles`, confirmed via
+group child count), transitions to kiting when the player closes inside
+`PREFERRED_RANGE` (velocity vector points away, confirmed by sign/magnitude), and
+correctly melees (returns `true`, respects `RANGED_MELEE_COOLDOWN_MS`) once inside
+`RANGED_MELEE_RANGE`; `rollLoot()` returns exactly `[gremlin_skin, gremlin_blood]` for
+`RangedGremlin` and `[gremlin_blood]` for `MeleeGremlin`; `applyDamageToPlayer` correctly
+deducts a projectile's `damage` and correctly no-ops during the i-frame window (tested by
+calling it directly, matching the project's established "drive state directly via
+`preview_eval`" convention). Type-check clean (`tsc --noEmit`), no console errors, world
+boots and renders normally in `preview_screenshot` with both gremlin variants visible.
+
+**Known verification gap, flagged rather than glossed over**: the live
+Phaser-physics-driven overlap between a real in-flight projectile and the player (as
+opposed to calling `applyDamageToPlayer` directly) could not be exercised end-to-end this
+session — the preview browser tab was backgrounded throughout (`document.hasFocus()`
+false), and real-time `requestAnimationFrame`/scene-`postupdate` ticks were severely
+throttled-to-frozen (a 30-tick wait via scene events timed out after 30s with only a
+couple of frames having run), matching `CLAUDE.md`'s documented "backgrounded preview tab
+stalls Phaser's loop" quirk, just more severe than previously seen. What *is* confirmed:
+the overlap collider is registered correctly (`physics.world.colliders` shows the new
+`overlapOnly: true` entry alongside the existing solids/enemy colliders), the
+projectile's velocity is correctly non-zero after the `launch()` fix, and the damage-
+application path it calls into is independently correct. The remaining gap is narrow —
+whether Arcade Physics's own overlap detection fires for two small moving bodies, which
+is exercised elsewhere in this same engine version — but it's true that this specific
+path wasn't watched happen live, so a fresh session with a focused/foreground preview tab
+should double check a real thrown rock actually lands before calling ranged combat fully
+battle-tested.
+
 ### Just finished: Snake deaggro + fight-back-before-fleeing behavior
 
 Follow-up playtest feedback on Snake right after the previous fixes: it never deaggro'd

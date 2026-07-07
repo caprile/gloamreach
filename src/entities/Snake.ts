@@ -49,9 +49,7 @@ export class Snake extends Enemy {
       y: cfg.y,
       texture: "snake",
       displayName: "Snake",
-      lootResource: "leather",
-      lootMin: 1,
-      lootMax: 1,
+      loot: [{ resource: "leather", min: 1, max: 1 }],
       maxHealth: MAX_HEALTH,
       biteDamage: BITE_DAMAGE,
     });

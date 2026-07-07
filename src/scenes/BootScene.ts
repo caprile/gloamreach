@@ -89,6 +89,33 @@ export class BootScene extends Phaser.Scene {
     g.fillRect(0, 1, 6, 6); // head
     g.generateTexture("snake", 20, 8);
 
+    // Ranged Gremlin — stronger variant. 18x22: a squat purple-green
+    // humanoid with a lighter belly patch, reads as "bigger/tougher" than the
+    // melee variant below.
+    g.clear();
+    g.fillStyle(0x5a7a3a, 1);
+    g.fillRect(2, 4, 14, 16);
+    g.fillStyle(0x3f5a28, 1);
+    g.fillRect(4, 0, 10, 6); // head
+    g.fillStyle(0x8ab05a, 1);
+    g.fillRect(5, 10, 8, 6); // belly highlight
+    g.generateTexture("gremlin", 18, 22);
+
+    // Melee Gremlin — weaker variant. Smaller (14x16), duller color, no
+    // belly highlight, so it visually reads as the lesser threat.
+    g.clear();
+    g.fillStyle(0x4a5a3a, 1);
+    g.fillRect(1, 3, 12, 12);
+    g.fillStyle(0x33421f, 1);
+    g.fillRect(3, 0, 8, 5); // head
+    g.generateTexture("gremlin_weak", 14, 16);
+
+    // Gremlin's thrown rock — tiny gray projectile.
+    g.clear();
+    g.fillStyle(0x8a8a8a, 1);
+    g.fillRect(0, 0, 6, 6);
+    g.generateTexture("gremlin_rock", 6, 6);
+
     this.makeItemIcons(g);
 
     g.destroy(); // we only needed it to bake textures
@@ -200,6 +227,23 @@ export class BootScene extends Phaser.Scene {
     g.fillStyle(0xd06a4a, 1);
     g.fillRect(7, 8, 8, 6);
     g.generateTexture("icon_boar_meat", ICON, ICON);
+
+    // Gremlin Blood: a small dark-red droplet.
+    g.clear();
+    g.fillStyle(0x8a1f2a, 1);
+    g.fillTriangle(12, 3, 6, 15, 18, 15);
+    g.fillRect(6, 12, 12, 8);
+    g.fillStyle(0xb04050, 1);
+    g.fillRect(9, 14, 5, 4);
+    g.generateTexture("icon_gremlin_blood", ICON, ICON);
+
+    // Gremlin Skin: a mottled greenish hide square.
+    g.clear();
+    g.fillStyle(0x4a5a2e, 1);
+    g.fillRect(4, 5, 16, 14);
+    g.fillStyle(0x6a8a3e, 1);
+    g.fillRect(7, 8, 10, 8);
+    g.generateTexture("icon_gremlin_skin", ICON, ICON);
 
     // Workbench: a brown tabletop with four legs.
     g.clear();
