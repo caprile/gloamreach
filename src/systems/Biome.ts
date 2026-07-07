@@ -6,7 +6,7 @@ import Phaser from "phaser";
 //
 // Framework-light like Stamina/Inventory: the only Phaser dependency is
 // RandomDataGenerator for seeded pseudo-randomness. It owns no GameObjects;
-// MainScene bakes the visual once from forEachCell().
+// MainScene bakes the visual once by supersampling forestWeight()/creekWeight().
 
 export type ZoneType = "forest" | "grassy";
 
@@ -36,6 +36,11 @@ export class Biome {
   readonly rows: number;
   private zones: ZoneType[] = []; // length cols*rows
   private creek: boolean[] = []; // length cols*rows; a cell can be forest AND creek
+  // Numeric mirrors of the two grids above (forest=1/grassy=0, creek 1/0),
+  // kept only so forestWeight()/creekWeight() can bilinear-sample them for
+  // smooth render-time boundaries instead of hard per-cell edges.
+  private zoneNum: Float32Array = new Float32Array(0);
+  private creekNum: Float32Array = new Float32Array(0);
 
   constructor(worldW: number, worldH: number, rng: Phaser.Math.RandomDataGenerator) {
     this.worldW = worldW;
@@ -61,6 +66,11 @@ export class Biome {
       if (this.zonesBalanced()) break;
     }
     this.creek = this.carveCreek(rng);
+
+    this.zoneNum = new Float32Array(this.zones.length);
+    for (let i = 0; i < this.zones.length; i++) this.zoneNum[i] = this.zones[i] === "forest" ? 1 : 0;
+    this.creekNum = new Float32Array(this.creek.length);
+    for (let i = 0; i < this.creek.length; i++) this.creekNum[i] = this.creek[i] ? 1 : 0;
   }
 
   // Assign each cell to its nearest random seed point's zone type. Naive
@@ -178,16 +188,44 @@ export class Biome {
     return this.creek[this.cellIndex(worldX, worldY)];
   }
 
-  // Iterate every cell (grid coords + zone/creek) so the scene can bake a
-  // one-time background visual. Kept here so callers never touch the flat
-  // arrays directly.
-  forEachCell(cb: (cx: number, cy: number, zone: ZoneType, isCreek: boolean) => void): void {
-    for (let y = 0; y < this.rows; y++) {
-      for (let x = 0; x < this.cols; x++) {
-        const i = y * this.cols + x;
-        cb(x, y, this.zones[i], this.creek[i]);
-      }
-    }
+  // Bilinear-sample a numeric cell grid at a world position, treating each
+  // cell's value as anchored to its center (so two adjacent cells' values
+  // blend smoothly across the 40px gap between their centers, rather than
+  // snapping hard at the cell boundary). Used only for rendering — gameplay
+  // queries (zoneAt/isCreekAt) stay hard-edged per-cell lookups.
+  private bilinear(grid: Float32Array, worldX: number, worldY: number): number {
+    const gx = worldX / CELL - 0.5;
+    const gy = worldY / CELL - 0.5;
+    const x0 = Math.floor(gx);
+    const y0 = Math.floor(gy);
+    const tx = gx - x0;
+    const ty = gy - y0;
+    const sample = (cx: number, cy: number): number => {
+      const cxs = Phaser.Math.Clamp(cx, 0, this.cols - 1);
+      const cys = Phaser.Math.Clamp(cy, 0, this.rows - 1);
+      return grid[cys * this.cols + cxs];
+    };
+    const v00 = sample(x0, y0);
+    const v10 = sample(x0 + 1, y0);
+    const v01 = sample(x0, y0 + 1);
+    const v11 = sample(x0 + 1, y0 + 1);
+    const top = v00 + (v10 - v00) * tx;
+    const bot = v01 + (v11 - v01) * tx;
+    return top + (bot - top) * ty;
+  }
+
+  // 0 (fully grassy) .. 1 (fully forest), smoothly interpolated — the render
+  // bake blends the forest overlay's alpha by this instead of an on/off fill,
+  // turning the old blocky 40px-stepped zone boundary into a soft gradient
+  // band a couple of cells wide.
+  forestWeight(worldX: number, worldY: number): number {
+    return this.bilinear(this.zoneNum, worldX, worldY);
+  }
+
+  // Same idea for the creek overlay, so its banks fade in/out instead of
+  // stair-stepping too.
+  creekWeight(worldX: number, worldY: number): number {
+    return this.bilinear(this.creekNum, worldX, worldY);
   }
 
   // Diagnostics for verification (coverage ratios, etc.).

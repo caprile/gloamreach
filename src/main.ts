@@ -6,11 +6,20 @@ import { MainScene } from "./scenes/MainScene";
 // Scenes run in the order listed until one starts another.
 const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO, // WebGL if available, else Canvas
-  width: 800,
-  height: 600,
+  width: 1920,
+  height: 1080,
   parent: "game",
   backgroundColor: "#12141a",
   pixelArt: true, // crisp scaling for pixel textures
+  scale: {
+    // FIT scales the 1920x1080 canvas down/up to whatever the browser window
+    // allows while preserving the 16:9 aspect ratio (letterboxed, not
+    // stretched) instead of the previous fixed 800x600 canvas.
+    mode: Phaser.Scale.FIT,
+    autoCenter: Phaser.Scale.CENTER_BOTH,
+    width: 1920,
+    height: 1080,
+  },
   physics: {
     default: "arcade",
     arcade: {

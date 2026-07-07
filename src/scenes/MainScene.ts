@@ -455,25 +455,37 @@ export class MainScene extends Phaser.Scene {
   }
 
   // One-time background bake: a single RenderTexture over the whole world,
-  // depth just above the grass and below every entity. Forest cells get a
-  // darker-green overlay; grassy cells are left showing the base grass; creek
-  // cells draw a translucent blue on top of whichever zone they cross. Flat
-  // per-cell fills keep the visual WYSIWYG with the gameplay grid.
+  // depth just above the grass and below every entity. Forest gets a darker-
+  // green overlay, grassy is left showing the base grass, and creek draws a
+  // translucent blue on top of whichever zone it crosses.
+  //
+  // Rendered at a finer SUPERSAMPLE stride than the 40px zone-lookup grid,
+  // with alpha driven by Biome's bilinear forestWeight()/creekWeight() rather
+  // than each cell's own hard on/off value — this turns the old blocky,
+  // staircase-edged zone boundary (one big flat-colored 40px square at a
+  // time) into a soft multi-cell-wide gradient band, which reads as a
+  // rounded line rather than a low-res jagged edge.
+  private static readonly BIOME_SUPERSAMPLE = 8;
+
   private buildBiomeTexture(): void {
-    const cell = this.biome.cellSize;
+    const step = MainScene.BIOME_SUPERSAMPLE;
     const g = this.make.graphics({}, false); // offscreen; not on the display list
-    this.biome.forEachCell((cx, cy, zone, isCreek) => {
-      const px = cx * cell;
-      const py = cy * cell;
-      if (zone === "forest") {
-        g.fillStyle(0x24421c, 0.55);
-        g.fillRect(px, py, cell, cell);
+    for (let py = 0; py < WORLD_H; py += step) {
+      for (let px = 0; px < WORLD_W; px += step) {
+        const cx = px + step / 2;
+        const cy = py + step / 2;
+        const forestW = this.biome.forestWeight(cx, cy);
+        if (forestW > 0.02) {
+          g.fillStyle(0x24421c, 0.55 * forestW);
+          g.fillRect(px, py, step, step);
+        }
+        const creekW = this.biome.creekWeight(cx, cy);
+        if (creekW > 0.02) {
+          g.fillStyle(0x3a6ea5, 0.6 * creekW);
+          g.fillRect(px, py, step, step);
+        }
       }
-      if (isCreek) {
-        g.fillStyle(0x3a6ea5, 0.6);
-        g.fillRect(px, py, cell, cell);
-      }
-    });
+    }
     const rt = this.add.renderTexture(0, 0, WORLD_W, WORLD_H).setOrigin(0, 0).setDepth(-9);
     rt.draw(g);
     g.destroy();
@@ -919,7 +931,6 @@ export class MainScene extends Phaser.Scene {
     this.craftingMenu = new CraftingMenu(this, {
       backpack: this.backpack,
       crafting: this.crafting,
-      isOwned: (recipe) => this.backpack.count(outputKey(recipe)) > 0,
       craft: (recipe) => this.craftRecipe(recipe),
       startPlacement: (recipe) => this.startPlacement(recipe),
     });

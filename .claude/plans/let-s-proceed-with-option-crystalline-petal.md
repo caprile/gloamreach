@@ -68,6 +68,21 @@ once in `create()`, never touched per-frame:
   avoids art/logic mismatch where the ground looks like one zone but `zoneAt()` says another.
 - Individual trees/rocks/enemies stay sprite-per-object (dozens, not thousands) — unchanged.
 
+**Follow-up note — REVISED 2026-07-07** (see `STATUS.md`'s "16:9 resolution, smoothed
+biome borders, crafting-menu inventory count" entry): the "flat per-cell fills, WYSIWYG
+with the gameplay grid" decision above was reversed after a playtest complaint that zone
+boundaries read as big jagged 40px staircases ("angular drops"). `Biome.ts` gained
+bilinear `forestWeight(x,y)`/`creekWeight(x,y)` queries (interpolating the same
+underlying zone/creek grids, values anchored at cell centers), and
+`MainScene.buildBiomeTexture()` now supersamples the bake at an 8px stride, blending each
+overlay's alpha continuously by the interpolated weight instead of a hard on/off fill per
+cell. Boundaries now render as a soft multi-cell gradient band that reads as a rounded
+line. **Gameplay queries are unchanged** — `zoneAt()`/`isCreekAt()` stay hard-edged
+per-cell lookups for spawning logic; only the render bake got smoothed, so there's no
+render/logic mismatch beyond "the edge visually blurs over ~1 cell before the hard
+gameplay boundary." `forEachCell()` (no longer used by anything once the bake stopped
+iterating cells directly) was deleted rather than left dead.
+
 ### Existing files touched
 - **`src/scenes/MainScene.ts`:** `WORLD_W`→`TILE*80` (2560), `WORLD_H`→`TILE*60` (1920) (~L39–41).
   New `private biome!: Biome;` built in `create()` *before* `spawnNodes()`/`spawnEnemies()`. New

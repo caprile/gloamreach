@@ -2,6 +2,38 @@
 
 Last updated: 2026-07-07
 
+### Just finished: 16:9 resolution, smoothed biome borders, crafting-menu inventory count
+
+Three small QoL fixes requested in the same session, unrelated to each other:
+
+- **Resolution**: `main.ts`'s Phaser config was a fixed 800x600 canvas from the very first
+  session. Bumped the base resolution to 1920x1080 and added `scale: { mode: Phaser.Scale.FIT,
+  autoCenter: Phaser.Scale.CENTER_BOTH }` so it scales to fit the browser window
+  letterboxed at 16:9 instead of stretching or clipping. Verified safe first — every HUD
+  element already anchors off `scene.scale.width/height` rather than hardcoded 800/600
+  (`CraftingMenu`, `Tooltip`, `EventLogUI`, `HotbarUI`, `MainScene`'s HP/stamina bars), so
+  nothing needed repositioning.
+- **Biome border smoothing**: the forest/grassy/creek overlay bake
+  (`MainScene.buildBiomeTexture()`) previously filled one flat-colored rectangle per 40px
+  `Biome` zone-lookup cell, so boundaries were big jagged 40px staircases. `Biome.ts` now
+  exposes `forestWeight(x,y)`/`creekWeight(x,y)` — bilinear interpolation across the same
+  underlying zone/creek grids (cell values anchored at cell centers) — and the bake
+  supersamples at an 8px stride, blending each overlay's alpha by the interpolated weight
+  instead of a hard on/off fill. Same zone data, same gameplay grid/queries
+  (`zoneAt`/`isCreekAt` untouched, still hard-edged for spawning logic) — only the render
+  bake changed, into a soft multi-cell gradient band that reads as a rounded line.
+  `forEachCell()` (now unused) was deleted rather than left dead. Verified visually via
+  `preview_screenshot`: forest/grassy boundary is a smooth wavy curve, not a staircase.
+- **Crafting menu**: the `*` prefix on already-crafted-at-least-once recipes (`isOwned`)
+  is gone — per user feedback it read as visual noise. In its place, the recipe **detail**
+  panel (opened by clicking a recipe) now shows `In inventory: X` (via
+  `backpack.count(outputKey(recipe))`) for any recipe whose output actually lands in the
+  backpack — skipped for placeable recipes (build pieces go into the world, not the
+  backpack, so a count would always read 0). `CraftingMenuDeps.isOwned` and its only
+  caller (`MainScene.createCraftingMenu`) were removed as dead code rather than left
+  unused. Verified via `preview_eval`: crafted a Stone Axe with the detail panel open,
+  confirmed the line went from `In inventory: 0` to `In inventory: 1` live.
+
 ### Just finished: Trees/boulders no longer solid + Y-depth occlusion fade + no-spawn-in-water fix
 
 Plan file: `.claude/plans/review-the-plan-and-witty-cloud.md`. Resolves the Milestone B

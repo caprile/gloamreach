@@ -21,7 +21,6 @@ const MARGIN_TOP = 70; // leaves world visible above and below the panel
 export interface CraftingMenuDeps {
   backpack: ItemContainer;
   crafting: Crafting;
-  isOwned: (recipe: Recipe) => boolean;
   craft: (recipe: Recipe) => void;
   startPlacement: (recipe: Recipe) => void;
 }
@@ -156,9 +155,8 @@ export class CraftingMenu {
     const iconSize = 18;
     for (const recipe of recipes) {
       const affordable = this.deps.crafting.canAfford(recipe, this.deps.backpack);
-      const owned = this.deps.isOwned(recipe);
       const isSelected = this.selected?.id === recipe.id;
-      const label = `${owned ? "* " : ""}${recipe.name}`;
+      const label = recipe.name;
       const selectRecipe = () => {
         this.selected = recipe;
         this.render();
@@ -224,8 +222,23 @@ export class CraftingMenu {
     }
     y += 8;
 
-    const affordable = this.deps.crafting.canAfford(recipe, this.deps.backpack);
     const placeable = isPlaceableRecipe(recipe);
+    // Placeable recipes (build pieces) don't land in the backpack at all, so
+    // an inventory count for them would just always read 0 — only show this
+    // for recipes whose output actually goes into the backpack.
+    if (!placeable) {
+      const have = this.deps.backpack.count(outputKey(recipe));
+      const t = this.scene.add.text(x0, y, `In inventory: ${have}`, {
+        fontFamily: "monospace",
+        fontSize: "12px",
+        color: "#9aa4b5",
+      });
+      t.setScrollFactor(0).setDepth(3001);
+      this.rows.push(t);
+      y += 18;
+    }
+
+    const affordable = this.deps.crafting.canAfford(recipe, this.deps.backpack);
     const btn = this.scene.add
       .text(x0, y, placeable ? "Place" : "Craft", {
         fontFamily: "monospace",
