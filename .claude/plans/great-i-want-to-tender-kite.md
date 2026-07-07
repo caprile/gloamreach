@@ -88,6 +88,13 @@ Behavior:
   panel (`src/ui/KeybindsUI.ts`) replacing the single always-on controls line,
   since the bind list will keep growing as more systems land.
 
+**Long-term design notes (added 2026-07-07):** biome→boss→portal meta-loop, safe center
+spawn per biome, Valheim-style death tombstone (drop inventory, keep hotbar), inventory-
+limited biome transitions, item/station upgrade tiers, HP regen + food/spell/potion
+sustain, and a ~10-15% camera/world zoom-in experiment. Full detail lives in
+`CLAUDE.md`'s "Long-term design notes" section (kept there since it's the doc every
+session auto-loads) — this pointer exists so this plan file doesn't drift out of sync.
+
 **Not yet built, in rough order:**
 - **Movement systems**: **stamina**, **sprint**, and **jump** (jump on Spacebar) — next up.
 - **M3 Combat**: enemies that chase, player attack, health/damage, death & respawn.

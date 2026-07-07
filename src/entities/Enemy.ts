@@ -3,8 +3,8 @@ import type { ResourceType } from "../systems/Inventory";
 
 export type EnemyState = "idle" | "chasing";
 
-const AGGRO_RADIUS = 140; // px — player enters this range, Boar starts chasing
-const DEAGGRO_RADIUS = 280; // wider gap than AGGRO_RADIUS to avoid boundary flicker
+const AGGRO_RADIUS = 105; // px — player enters this range, Boar starts chasing (Milestone B: tuned down from 140, "too aggressive" playtest flag)
+const DEAGGRO_RADIUS = 190; // wider gap than AGGRO_RADIUS to avoid boundary flicker (kept ~2x aggro, same ratio as before)
 const CHASE_SPEED = 60; // px/s — slower than player base (95), so it's escapable
 const WANDER_SPEED = 20; // px/s idle wander
 const MELEE_RANGE = 28; // px — how close the Boar must be to bite

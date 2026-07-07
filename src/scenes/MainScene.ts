@@ -596,13 +596,18 @@ export class MainScene extends Phaser.Scene {
     scatter(18, { texture: "boulder", resource: "stone", amount: 5, action: "mine", displayName: "Boulder", loose: false, solid: false, health: 3, zone: "grassy", avoidCreek: true });
   }
 
-  // Scatter Boars around the world. Forest-preferred (their common habitat);
-  // count/aggro tuning for the larger world is Milestone B's concern.
+  // Scatter Boars around the world. Milestone B: retuned for the 2x world +
+  // AGGRO_RADIUS reduction above — 80/20 forest/grassy split (forest is their
+  // common habitat, grassy is a rare wander-in), clear zone widened to ~2x
+  // the new (smaller) aggro radius.
   private spawnEnemies(): void {
     const rng = this.sessionRng();
-    const COUNT = 8;
-    for (let i = 0; i < COUNT; i++) {
-      const { x, y } = this.pickSpawnPoint(rng, "forest", 200);
+    const BOAR_CLEAR_RADIUS = 220;
+    const BOAR_COUNT = 12;
+    const BOAR_FOREST_COUNT = Math.round(BOAR_COUNT * 0.8);
+    const BOAR_GRASSY_COUNT = BOAR_COUNT - BOAR_FOREST_COUNT;
+    const spawnBoar = (zone: "forest" | "grassy") => {
+      const { x, y } = this.pickSpawnPoint(rng, zone, BOAR_CLEAR_RADIUS);
       const enemy = new Enemy(this, {
         x,
         y,
@@ -614,7 +619,9 @@ export class MainScene extends Phaser.Scene {
       });
       this.enemies.push(enemy);
       this.enemyGroup.add(enemy);
-    }
+    };
+    for (let i = 0; i < BOAR_FOREST_COUNT; i++) spawnBoar("forest");
+    for (let i = 0; i < BOAR_GRASSY_COUNT; i++) spawnBoar("grassy");
 
     // Snakes: grassy-preferred (per CLAUDE.md's first-biome content notes),
     // the game's only leather source (see plan Milestone D's "why

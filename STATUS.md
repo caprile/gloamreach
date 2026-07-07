@@ -2,6 +2,29 @@
 
 Last updated: 2026-07-07
 
+### Just finished: Boar tuning for the 2x world (Milestone B)
+
+Plan file: `.claude/plans/let-s-proceed-with-option-crystalline-petal.md` (Milestone B —
+the numeric-tuning half; the movement/zigzag half was already resolved earlier via
+non-solid trees). Addresses the long-standing "Boar too aggressive" flag from `STATUS.md`
+now that the world is the larger 2560x1920 size.
+
+- **`src/entities/Enemy.ts`**: `AGGRO_RADIUS` 140 → 105 (smaller, per the plan —
+  complaint was aggression, not size), `DEAGGRO_RADIUS` 280 → 190 (kept the same ~1.8x
+  ratio to AGGRO_RADIUS for the hysteresis gap).
+- **`src/scenes/MainScene.ts` `spawnEnemies()`**: Boar count 8 → 12, now split 80%
+  forest / 20% grassy (was 100% forest) via two `pickSpawnPoint` calls instead of one —
+  matches "Boar common in Forest, rare in grassy" from the plan. Player-spawn clear
+  radius 200 → 220 (~2x the new, smaller aggro radius, keeping the same ratio the plan
+  called out as the actual point of the original 150→200 change).
+
+Verified via `preview_eval`: spawn counts are exactly 12 Boars (11 forest / 1 grassy in
+the sampled run — consistent with 80/20 weighting under normal RNG variance); real
+`Enemy.update()` calls confirm a Boar stays `idle` at 110px and flips to `chasing` at
+100px (matching the new `AGGRO_RADIUS`), and a chasing Boar stays `chasing` at 185px but
+drops to `idle` past 195px (matching the new `DEAGGRO_RADIUS`). Type-check clean, no
+console errors, world renders normally in `preview_screenshot`.
+
 ### Just finished: Enemies no longer walk off world bounds
 
 Enemies were missing `setCollideWorldBounds(true)` — `Player.ts` has always had this, but

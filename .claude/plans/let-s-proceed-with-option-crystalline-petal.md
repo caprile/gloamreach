@@ -107,7 +107,7 @@ kept as three *separate* `RandomDataGenerator` instances:
 
 ---
 
-## Milestone B — Boar tuning for the new world (depends on A)
+## Milestone B — Boar tuning for the new world (depends on A) — DONE (2026-07-07)
 
 **Goal:** Retune Boar per `STATUS.md`'s "too aggressive" flag, for the 2× world + forest density.
 
@@ -145,8 +145,11 @@ once a future *solid* obstacle exists. See [[survivor-rpg-non-solid-trees-y-sort
 the full design record.
 
 Milestone B's original scope above (retuning `AGGRO_RADIUS`/`DEAGGRO_RADIUS`/Boar counts
-for the "too aggressive" complaint) is **still open** — this follow-up note only resolved
-the movement/zigzag half of Milestone B, not the numeric tuning half.
+for the "too aggressive" complaint) is now **also done** (2026-07-07): `AGGRO_RADIUS`
+140→105, `DEAGGRO_RADIUS` 280→190, Boar count 8→12 split 80% forest/20% grassy, spawn
+clear radius 200→220. See `STATUS.md`'s "Boar tuning for the 2x world" entry for full
+detail/verification. Milestone B is fully closed — both halves (movement + numeric
+tuning) are done.
 
 ---
 

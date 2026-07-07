@@ -150,6 +150,44 @@ mouse-driven only. Don't reintroduce a keybind for this without being asked. Spa
 8. **ARPG loot** — rarity, randomized drops/recipes, replayability.
 9. **Cross-cutting:** save/load (localStorage), real pixel-art tilesets.
 
+## Long-term design notes (idea stage, added 2026-07-07)
+
+Directional notes on the overall game-loop shape, from the user, not yet implemented.
+These inform how later roadmap items (World & discovery, Bosses, ARPG loot) should be
+built, so a future session picking up any of those should read this first.
+
+- **Core meta-loop:** the game is a series of **biomes**, each gated by a **boss**. Loop
+  per biome: **Enter Biome → Craft/Gather/Fight → Fight Biome Boss → Portal to Next
+  Biome.** Number of biomes TBD (not locked).
+- **Biome spawn point:** entering a biome drops the player in a **safe area at the map
+  center** — visually distinct from the rest of the terrain (placeholder: a plain circle
+  for now, real art later) and **no enemies spawn there**. This is a new concept beyond
+  the current single always-random spawn point.
+- **Death — Valheim-style tombstone:** dying **drops your inventory** as a recoverable
+  object in the world (a "tombstone") that the player can walk back to and reclaim —
+  **not** the current instant-respawn-with-stats-reset-only behavior, and not a full
+  wipe. The **hotbar (equipped tools/weapons) is kept on death**, only the backpack
+  inventory is dropped. Not yet designed: tombstone despawn timer (if any), whether
+  other players/enemies can interact with it (n/a until multiplayer/looting-enemies
+  exist), exact drop-object visual.
+- **Inter-biome inventory constraint:** moving between biomes, you only bring what fits
+  in your **inventory** (not unlimited stockpiling) — this is meant to keep runs tight
+  and force choices about what to carry forward. Inventory **expansion** (more slots) is
+  a future unlock via items/spells, not fixed forever at the current size.
+- **Item upgrades:** tools/weapons/armor should support an **upgrade** concept (tiers
+  beyond crafting a whole new item) — exact mechanic (upgrade materials? a forge
+  action? in-place recipe?) undecided.
+- **Crafting-station upgrades:** Workbench (and future stations, e.g. the planned Drying
+  Rack) should similarly support **upgrade tiers**, not just "placed or not" — mirrors
+  the item-upgrade concept above but for stations gating recipes.
+- **HP/stamina sustain loop:** beyond the current no-passive-regen `Health.ts`, add
+  **HP regeneration** and ways to actively manage HP/stamina via **food, spells, and
+  potions** — cooking (Shishkabob, per the First biome notes below) is the first piece
+  of this; spells/potions are new systems not yet started.
+- **Camera/world scale:** the user wants the game to feel more **zoomed in** — try
+  scaling the view ~**10-15% larger** (camera zoom, or a global sprite/world scale bump)
+  as a quick experiment before committing to a specific number.
+
 ## First biome — content notes (idea stage, not locked)
 
 Early design notes for the first biome's content (source: the user's own notes, added
