@@ -43,9 +43,19 @@ const GRID_GAP = 24;
 const ARMOR_X = BACKPACK_X + BACKPACK_W + GRID_GAP; // 358
 const ARMOR_Y = GRID_Y;
 const ARMOR_W = ARMOR_COLS * SLOT + (ARMOR_COLS - 1) * GAP; // 150
+const ARMOR_ROWS_MAX = 3; // EQUIP_SLOTS is 9 slots / 3 cols = 3 rows
+const ARMOR_H = ARMOR_ROWS_MAX * SLOT + (ARMOR_ROWS_MAX - 1) * GAP; // 150
 
 const PANEL_W = ARMOR_X + ARMOR_W - PANEL_X + 12; // 504
 const PANEL_H = BACKPACK_Y + BACKPACK_H - PANEL_Y + 20; // 382
+
+// Trash drop target: sits below the armor grid, in the panel's otherwise-
+// empty lower-right corner. Dragging a stack here permanently deletes it (see
+// MainScene.destroyStack) — distinct from dragging out to the game world,
+// which drops it as a recoverable loose pickup instead.
+const TRASH_SIZE = 46;
+const TRASH_X = ARMOR_X;
+const TRASH_Y = ARMOR_Y + ARMOR_H + 24;
 
 // Top-left grid inventory (Tab). Renders the backpack ItemContainer as a grid
 // plus worn-equipment placeholders. Slots are drag sources (and the whole
@@ -99,6 +109,24 @@ export class InventoryMenu {
     this.tooltipUI.hide();
   }
 
+  // Whether a screen point falls within the panel — see CraftingMenu's
+  // containsPoint for why this matters to drag resolution.
+  containsPoint(screenX: number, screenY: number): boolean {
+    if (!this.open) return false;
+    return screenX >= PANEL_X && screenX <= PANEL_X + PANEL_W && screenY >= PANEL_Y && screenY <= PANEL_Y + PANEL_H;
+  }
+
+  // The trash drop target — dragging a stack here destroys it permanently.
+  isOverTrash(screenX: number, screenY: number): boolean {
+    if (!this.open) return false;
+    return (
+      screenX >= TRASH_X &&
+      screenX <= TRASH_X + TRASH_SIZE &&
+      screenY >= TRASH_Y &&
+      screenY <= TRASH_Y + TRASH_SIZE
+    );
+  }
+
   // Backpack slot index under a screen point, or null (used as a drop target).
   slotIndexAt(screenX: number, screenY: number): number | null {
     if (!this.open) return null;
@@ -134,6 +162,22 @@ export class InventoryMenu {
     this.addText(ARMOR_X, PANEL_Y + 36, "Equipment", 12, "#8a93a3");
     this.renderBackpack();
     this.renderArmor(ARMOR_X, ARMOR_Y);
+    this.renderTrash();
+  }
+
+  // Drag a stack here to permanently delete it. Dragging a stack out of the
+  // panel entirely (onto the game world) drops it as a recoverable pickup
+  // instead — this is the only-way-to-lose-it-for-good option.
+  private renderTrash(): void {
+    const box = this.scene.add
+      .rectangle(TRASH_X, TRASH_Y, TRASH_SIZE, TRASH_SIZE, 0x2a1414, 0.9)
+      .setOrigin(0, 0)
+      .setStrokeStyle(1, 0x7a3a3a)
+      .setScrollFactor(0)
+      .setDepth(3001);
+    this.rows.push(box);
+    this.addText(TRASH_X + TRASH_SIZE / 2, TRASH_Y + TRASH_SIZE / 2, "✕", 20, "#c25a5a", 0.5, 0.5);
+    this.addText(TRASH_X + TRASH_SIZE / 2, TRASH_Y + TRASH_SIZE + 6, "Destroy", 10, "#8a6060", 0.5, 0);
   }
 
   private renderArmor(x0: number, y0: number): void {

@@ -155,19 +155,32 @@ mouse-driven only. Don't reintroduce a keybind for this without being asked. Spa
    (**O**, mirrors the magnet's **V** toggle pattern) — `rangeRingEnabled` gates
    `updateAttackRangeRing()` independently of equip state, for players who find it
    distracting.
-4e. **Harvestables + Drying Rack** (Milestone H — the last item in the first-biome plan) —
-   two new free-pickup harvestables (**Cattail** at the creek's edge via a new
-   `Biome.isCreekEdge` predicate; **Blackberry** bushes in the forest — a future food item,
-   no eating mechanic yet) and the game's **first timed processing station**: the
-   **Drying Rack**. New `src/systems/Processing.ts` (`ProcessingStation` + `PROCESS_RECIPES`
-   — `cattail→twine` 2:1, `gremlin_skin→gremlin_leather` 1:1, converted over time, distinct
-   from Crafting's instant model) and `src/ui/DryingRackMenu.ts` (the game's **first
-   drag-and-drop UI**: backpack shown alongside with non-input items dimmed, drag/quick-load
-   into the input slot, live output preview, progress bar, Collect). Racks are placeables
-   (reuse the campfire/workbench placement flow) each with their own station, ticked every
-   frame. Adds a `gremlin_leather_armor` recipe (armor tab, workbench-gated) as a sink for
-   the two processed outputs — **not yet wearable** (armor-equip system doesn't exist).
-   With this, **the entire first-biome content plan (A–H) is shipped.** See `STATUS.md`.
+4e. **Harvestables + Drying Rack** (Milestone H — the last item in the first-biome plan,
+   reworked same-day per playtest feedback — see below) — two new free-pickup harvestables
+   (**Cattail**, growing IN the shallow water right at the creek's edge — `Biome.isCreekEdge`
+   returns true for a *water* cell touching dry land, not the other way around; **Blackberry**
+   bushes in the forest, a future food item, no eating mechanic yet) and the game's **first
+   processing station**: the **Drying Rack**. `src/systems/Processing.ts`
+   (`ProcessingStation` + `PROCESS_RECIPES` — `cattail→twine` 2:1, `gremlin_skin→
+   gremlin_leather` 1:1) converts **instantly**, not over time — the player loads raw input,
+   picks how much of it to run via a slider/typed number in `src/ui/DryingRackMenu.ts` (the
+   game's **first drag-and-drop UI**: backpack shown alongside with non-input items dimmed,
+   drag/quick-load into the input slot, live "→ N Twine" preview), and output auto-deposits
+   into the backpack (or drops on the floor if full — no "Collect" step). The Drying Rack is
+   **tier 1** (requires a nearby Workbench to craft/place, like Stone Pickaxe/Club) — 8
+   wood + 1 leather. Placed objects (Workbench/Campfire/Drying Rack) now support a generic
+   **right-click Upgrade/Destroy popup** (`src/ui/ContextMenu.ts`): Destroy turns any one
+   back into a recoverable loose pickup, Minecraft-style (a Drying Rack's loaded input is
+   refunded too); Upgrade (Workbench only so far) consumes a new `workbench_upgrade` item
+   (discoverable once twine has been produced) and tags that specific placed instance —
+   the mechanical payoff of an upgraded tier is intentionally undesigned past that. A new
+   `gremlin_leather_armor` recipe (armor tab, workbench-gated) sinks the two processed
+   outputs — **not yet wearable** (armor-equip system doesn't exist). Also added this
+   session: a general **Drop/Destroy** system for any inventory stack — drag it out to the
+   game world to drop it as a magnet-cooldown-gated pickup, or onto the `InventoryMenu`'s
+   trash box to delete it outright. With Milestone H shipped, **the entire first-biome
+   content plan (A–H) is done.** See `STATUS.md` for full detail on both the initial ship
+   and the same-day rework.
 
 **Not yet built — next up in rough order:**
 5. **Progression** — XP, levels, stats.

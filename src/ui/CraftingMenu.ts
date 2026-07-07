@@ -100,6 +100,19 @@ export class CraftingMenu {
     return this.open;
   }
 
+  // Whether a screen point falls within the panel — used to distinguish "drag
+  // dropped over this open menu but missed a target" (snap back) from "drag
+  // dropped out in the world" (drop the item), see MainScene.resolveItemDrag.
+  containsPoint(screenX: number, screenY: number): boolean {
+    if (!this.open) return false;
+    return (
+      screenX >= this.panelX &&
+      screenX <= this.panelX + PANEL_W &&
+      screenY >= this.panelY &&
+      screenY <= this.panelY + PANEL_H
+    );
+  }
+
   // Call after any inventory/skill/craft state change so affordability and
   // owned state stay in sync while the menu is open.
   refresh(): void {

@@ -216,12 +216,22 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
   drying_rack: {
     key: "drying_rack",
     name: "Drying Rack",
-    description: "A placeable rack that slowly dries raw goods into refined materials.",
+    description: "A placeable rack that dries raw goods into refined materials on demand. Requires a nearby Workbench to build.",
     texture: "icon_drying_rack",
     maxStack: 99,
     hotbarable: false,
     stats: [{ label: "Type", value: "Station" }],
     placeable: true,
+  },
+
+  // --- upgrades ---
+  workbench_upgrade: {
+    key: "workbench_upgrade",
+    name: "Workbench Upgrade",
+    description: "Consumed to upgrade a placed Workbench. Right-click a Workbench to apply it.",
+    texture: "icon_workbench_upgrade",
+    maxStack: 99,
+    hotbarable: false,
   },
 
   // --- armor ---

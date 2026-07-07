@@ -1,25 +1,25 @@
 import type { ResourceType } from "./Inventory";
 
 // The game's first "processing" concept, deliberately distinct from Crafting's
-// instant spend-resources-get-item model: a processing station loads a raw
-// input item, then converts it into an output item *over time* (a batch every
-// `durationMsPerOutput`). Framework-light like Stamina/Biome — no Phaser
-// dependency, owns no GameObjects; MainScene ticks it and the DryingRackMenu
-// renders it. Architected for reuse (a future campfire-cooking flow could share
-// this), not hardcoded to the Drying Rack.
+// instant spend-resources-get-item model: a processing station holds a raw
+// input and converts a player-chosen amount of it into an output item, all at
+// once on demand (not a spend-and-immediately-receive-the-crafted-item click —
+// the input has to be loaded first, and the player picks how much of it to run
+// through). Framework-light like Stamina/Biome — no Phaser dependency, owns no
+// GameObjects; MainScene ticks nothing here (conversion is instant) and the
+// DryingRackMenu renders/drives it. Architected for reuse (a future campfire-
+// cooking flow could share this), not hardcoded to the Drying Rack.
 
 export interface ProcessRecipe {
   input: ResourceType;
   output: ResourceType;
   inputPerOutput: number; // input units consumed per one output unit produced
-  durationMsPerOutput: number; // real time to dry one output unit
 }
 
-// Ratios locked in the plan (2:1 cattail→twine, 1:1 skin→leather); durations
-// are a first-pass tuning call (unset in the plan).
+// Ratios locked in the plan: 2:1 cattail->twine, 1:1 skin->leather.
 export const PROCESS_RECIPES: ProcessRecipe[] = [
-  { input: "cattail", output: "twine", inputPerOutput: 2, durationMsPerOutput: 3000 },
-  { input: "gremlin_skin", output: "gremlin_leather", inputPerOutput: 1, durationMsPerOutput: 4000 },
+  { input: "cattail", output: "twine", inputPerOutput: 2 },
+  { input: "gremlin_skin", output: "gremlin_leather", inputPerOutput: 1 },
 ];
 
 export function processRecipeFor(inputKey: string): ProcessRecipe | undefined {
@@ -37,23 +37,25 @@ export interface ProcSlot {
   count: number;
 }
 
-// One placed station's live state: what's loaded, what's dried and ready to
-// collect, and progress toward the next batch. One station holds one input
-// type at a time (its recipe is derived from the loaded input).
+export interface ProcessResult {
+  key: string;
+  count: number;
+}
+
+// One placed station's live state: just whatever raw input is currently
+// loaded. Processing itself is instant and stateless (no progress/output slot
+// to track between frames) — the player picks how much of the loaded input to
+// run, hits Process, and the result is handed straight back to the caller to
+// deposit into the backpack (or drop on the floor if it doesn't fit).
 export class ProcessingStation {
   input: ProcSlot | null = null;
-  output: ProcSlot | null = null;
-  private progressMs = 0;
 
-  // Can this station accept `key` right now? Only a valid input, and only when
-  // it isn't already busy with a different input type or holding a different
-  // output that must be collected first.
+  // Can this station accept `key` right now? Only a valid input, and only
+  // while it isn't already loaded with a different input type.
   canAccept(key: string): boolean {
     const recipe = processRecipeFor(key);
     if (!recipe) return false;
-    if (this.input && this.input.key !== key) return false;
-    if (this.output && this.output.key !== recipe.output) return false;
-    return true;
+    return !this.input || this.input.key === key;
   }
 
   // Add `count` of `key` to the input slot (assumes canAccept passed).
@@ -62,75 +64,43 @@ export class ProcessingStation {
     else this.input = { key, count };
   }
 
-  // The total output the loaded input WILL yield — units already dried plus
-  // whole units still extractable from the remaining raw input. Drives the
-  // live preview box (stays roughly constant as raw converts to dried).
-  previewOutput(): ProcSlot | null {
-    if (!this.input) return this.output;
+  // How much raw input is loaded right now — the slider's upper bound.
+  maxProcessable(): number {
+    return this.input?.count ?? 0;
+  }
+
+  // What running `amount` units of the loaded input through would yield:
+  // the input actually consumed (rounded down to a whole multiple of the
+  // recipe's ratio — a partial remainder can't produce a partial output) and
+  // the output units produced. Used for the live preview as the slider moves.
+  previewFor(amount: number): { consumed: number; output: number } {
+    if (!this.input) return { consumed: 0, output: 0 };
     const recipe = processRecipeFor(this.input.key);
-    if (!recipe) return this.output;
-    const pending = Math.floor(this.input.count / recipe.inputPerOutput);
-    const have = this.output?.count ?? 0;
-    if (pending + have === 0) return this.output;
-    return { key: recipe.output, count: pending + have };
+    if (!recipe) return { consumed: 0, output: 0 };
+    const clamped = Math.max(0, Math.min(Math.floor(amount), this.input.count));
+    const consumed = clamped - (clamped % recipe.inputPerOutput);
+    return { consumed, output: consumed / recipe.inputPerOutput };
   }
 
-  // Advance drying by `deltaMs`. Produces as many whole batches as the elapsed
-  // time allows — so a rack left running while its menu was closed catches up
-  // in one tick rather than only ever making one batch per frame.
-  tick(deltaMs: number): void {
-    if (!this.input) {
-      this.progressMs = 0;
-      return;
-    }
+  // Instantly convert `amount` units of the loaded input. Returns the
+  // produced output (null if nothing could be produced, e.g. amount rounds
+  // down to 0). Draining the input slot to 0 clears it.
+  process(amount: number): ProcessResult | null {
+    if (!this.input) return null;
     const recipe = processRecipeFor(this.input.key);
-    if (!recipe) return;
-
-    this.progressMs += deltaMs;
-    while (
-      this.input &&
-      this.input.count >= recipe.inputPerOutput &&
-      this.progressMs >= recipe.durationMsPerOutput
-    ) {
-      this.progressMs -= recipe.durationMsPerOutput;
-      this.input.count -= recipe.inputPerOutput;
-      if (this.input.count <= 0) this.input = null;
-      if (this.output && this.output.key === recipe.output) this.output.count += 1;
-      else this.output = { key: recipe.output, count: 1 };
-    }
-
-    // Don't bank progress toward a batch there's no longer enough input for.
-    if (!this.input || this.input.count < recipe.inputPerOutput) this.progressMs = 0;
+    if (!recipe) return null;
+    const { consumed, output } = this.previewFor(amount);
+    if (output <= 0) return null;
+    this.input.count -= consumed;
+    if (this.input.count <= 0) this.input = null;
+    return { key: recipe.output, count: output };
   }
 
-  isProcessing(): boolean {
-    if (!this.input) return false;
-    const recipe = processRecipeFor(this.input.key);
-    return !!recipe && this.input.count >= recipe.inputPerOutput;
-  }
-
-  // Fraction [0,1] toward the next output unit — for the progress bar. 0 when
-  // idle (nothing loaded, or not enough input left for another batch).
-  progressFraction(): number {
-    if (!this.input) return 0;
-    const recipe = processRecipeFor(this.input.key);
-    if (!recipe || this.input.count < recipe.inputPerOutput) return 0;
-    return Math.max(0, Math.min(1, this.progressMs / recipe.durationMsPerOutput));
-  }
-
-  // Remove and return the ready output (to move into the backpack), clearing it.
-  takeOutput(): ProcSlot | null {
-    const out = this.output;
-    this.output = null;
-    return out;
-  }
-
-  // Remove and return any loaded raw input (player pulling items back out),
-  // resetting progress.
+  // Pull the loaded raw input back out (player retrieving unprocessed
+  // material), clearing the slot.
   takeInput(): ProcSlot | null {
     const inp = this.input;
     this.input = null;
-    this.progressMs = 0;
     return inp;
   }
 }

@@ -104,11 +104,20 @@ export const RECIPES: Recipe[] = [
   {
     id: "drying_rack",
     name: "Drying Rack",
-    description: "A placeable rack that slowly dries raw goods into refined materials.",
+    description: "A placeable rack that dries raw goods into refined materials on demand.",
     category: "misc",
-    tier: 0,
+    tier: 1,
     costs: { wood: 8, leather: 1 },
     output: { kind: "item", itemId: "drying_rack", itemName: "Drying Rack" },
+  },
+  {
+    id: "workbench_upgrade",
+    name: "Workbench Upgrade",
+    description: "Reinforcement parts for a Workbench. Right-click a placed Workbench to apply.",
+    category: "crafting",
+    tier: 1,
+    costs: { wood: 10, stone: 8, twine: 3 },
+    output: { kind: "item", itemId: "workbench_upgrade", itemName: "Workbench Upgrade" },
   },
   {
     id: "gremlin_leather_armor",

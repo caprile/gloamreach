@@ -15,10 +15,12 @@ export interface DryingRackMenuDeps {
   // into the rack, no drag needed.
   quickLoad: (index: number) => void;
   isDragging: () => boolean;
-  // Move the rack's ready output into the backpack.
-  collectOutput: () => void;
-  // Pull any loaded (still-drying) input back out into the backpack.
+  // Pull the loaded (unprocessed) raw input back out into the backpack.
   retrieveInput: () => void;
+  // Instantly process `amount` units of the loaded input. The scene deposits
+  // the result into the backpack (or drops it on the floor if there's no
+  // room) — this menu only picks the amount and asks for it to happen.
+  processAmount: (amount: number) => void;
 }
 
 const SLOT = 46;
@@ -27,24 +29,29 @@ const COLS = 6;
 const ROWS = 6;
 const BACKPACK_W = COLS * SLOT + (COLS - 1) * GAP; // 306
 const BACKPACK_H = ROWS * SLOT + (ROWS - 1) * GAP; // 306
-const IO_SLOT = 56; // the input / output boxes are a touch larger than a grid cell
+const IO_SLOT = 56;
+const SLIDER_W = 170;
+const SLIDER_H = 10;
 const DEPTH_BG = 3000;
 const DEPTH_ITEM = 3001;
 const DEPTH_TEXT = 3002;
 
-// The Drying Rack's processing menu (Milestone H) — the game's first
-// processing-station UI and its first drag-and-drop interaction. Opened by
-// interacting with a placed rack; shows the player's backpack alongside the
-// station's input/output so items can be dragged in. Backpack items that AREN'T
-// a valid input for this station are dimmed (an affordance, not a hard block),
-// mirroring the crafting menu's grey-out-unaffordable pattern but keyed off
-// "is this a valid input" instead.
+// The Drying Rack's processing menu (Milestone H, reworked to instant
+// processing) — the game's first processing-station UI and its first drag-
+// and-drop interaction. Opened by interacting with a placed rack; shows the
+// player's backpack alongside the station's input so items can be dragged in.
+// Backpack items that AREN'T a valid input for this station are dimmed (an
+// affordance, not a hard block), mirroring the crafting menu's grey-out-
+// unaffordable pattern but keyed off "is this a valid input" instead.
+//
+// Processing itself is instant, not timed: the player loads raw input, picks
+// how much of it to run via a slider (or types an exact number), and hits
+// Process. There's no output slot to "collect" — the scene deposits the
+// result straight into the backpack (or drops it on the floor if full).
 //
 // Like the other menus, everything here is a flat scrollFactor(0) GameObject
-// (no Containers) so input hit-testing survives camera scroll — see the note in
-// CraftingMenu.ts. Rendered fresh each frame while open (MainScene drives it) so
-// the progress bar, counts, and live output preview stay current as drying
-// advances on its own.
+// (no Containers) so input hit-testing survives camera scroll — see the note
+// in CraftingMenu.ts.
 export class DryingRackMenu {
   private scene: Phaser.Scene;
   private deps: DryingRackMenuDeps;
@@ -61,21 +68,28 @@ export class DryingRackMenu {
   private backpackY: number;
   private processX: number;
   private inputBox: { x: number; y: number } = { x: 0, y: 0 };
+  private sliderTrack: { x: number; y: number; w: number } = { x: 0, y: 0, w: SLIDER_W };
+
+  // How much of the loaded input the player currently has selected to run
+  // through the station. Reset to the full loaded amount whenever the menu
+  // opens; clamped down if the loaded amount shrinks (e.g. after processing).
+  private selectedAmount = 0;
+  private sliderDragging = false;
 
   constructor(scene: Phaser.Scene, deps: DryingRackMenuDeps) {
     this.scene = scene;
     this.deps = deps;
     this.tooltipUI = new Tooltip(scene);
 
-    this.panelW = 560;
-    this.panelH = 380;
+    this.panelW = 600;
+    this.panelH = 400;
     this.panelX = scene.scale.width / 2 - this.panelW / 2;
     this.panelY = scene.scale.height / 2 - this.panelH / 2;
     this.backpackX = this.panelX + 16;
-    this.backpackY = this.panelY + 52;
+    this.backpackY = this.panelY + 90;
     this.processX = this.backpackX + BACKPACK_W + 30;
-    // Input box sits below the "Input" label in the process column.
-    this.inputBox = { x: this.processX + 40, y: this.backpackY + 24 };
+    this.inputBox = { x: this.processX + 40, y: this.backpackY };
+    this.sliderTrack = { x: this.processX, y: this.backpackY + IO_SLOT + 34, w: SLIDER_W };
 
     this.bg = scene.add
       .rectangle(this.panelX, this.panelY, this.panelW, this.panelH, 0x0a0a0a, 0.95)
@@ -89,12 +103,15 @@ export class DryingRackMenu {
     if (this.open) return;
     this.open = true;
     this.bg.setVisible(true);
+    const station = this.deps.station();
+    this.selectedAmount = station?.maxProcessable() ?? 0;
     this.render();
   }
 
   close(): void {
     if (!this.open) return;
     this.open = false;
+    this.sliderDragging = false;
     this.bg.setVisible(false);
     this.clearRows();
     this.tooltipUI.hide();
@@ -104,9 +121,20 @@ export class DryingRackMenu {
     return this.open;
   }
 
-  // MainScene calls this every frame while open so drying progress, counts, and
-  // the live output preview refresh even without user input.
+  // MainScene calls this every frame while open so counts/preview refresh
+  // immediately after a process/load/retrieve action.
   refresh(): void {
+    if (this.open) this.render();
+  }
+
+  // Call after loading new input into the station — defaults the slider to
+  // the full newly-loaded amount, matching the common case of "I dragged in
+  // the whole stack and want to process all of it" without an extra step.
+  // Doesn't fire on every refresh() so it never fights a manual slider
+  // adjustment mid-session.
+  selectFullAmount(): void {
+    const station = this.deps.station();
+    this.selectedAmount = station?.maxProcessable() ?? 0;
     if (this.open) this.render();
   }
 
@@ -114,8 +142,20 @@ export class DryingRackMenu {
     this.tooltipUI.hide();
   }
 
-  // Backpack slot index under a screen point (drop target for moving items back
-  // into the bag), or null.
+  // Whether a screen point falls within the panel — see CraftingMenu's
+  // containsPoint for why this matters to drag resolution.
+  containsPoint(screenX: number, screenY: number): boolean {
+    if (!this.open) return false;
+    return (
+      screenX >= this.panelX &&
+      screenX <= this.panelX + this.panelW &&
+      screenY >= this.panelY &&
+      screenY <= this.panelY + this.panelH
+    );
+  }
+
+  // Backpack slot index under a screen point (drop target for moving items
+  // back into the bag), or null.
   slotIndexAt(screenX: number, screenY: number): number | null {
     if (!this.open) return null;
     const dx = screenX - this.backpackX;
@@ -141,6 +181,24 @@ export class DryingRackMenu {
     );
   }
 
+  // --- slider drag (driven by MainScene's shared global pointermove/up) ---
+
+  isDraggingSlider(): boolean {
+    return this.sliderDragging;
+  }
+
+  endSliderDrag(): void {
+    this.sliderDragging = false;
+  }
+
+  updateSliderFromPointer(screenX: number): void {
+    const station = this.deps.station();
+    const max = station?.maxProcessable() ?? 0;
+    const frac = Phaser.Math.Clamp((screenX - this.sliderTrack.x) / this.sliderTrack.w, 0, 1);
+    this.selectedAmount = Math.round(frac * max);
+    this.render();
+  }
+
   private clearRows(): void {
     for (const r of this.rows) r.destroy();
     this.rows = [];
@@ -152,10 +210,25 @@ export class DryingRackMenu {
     const station = this.deps.station();
     if (!station) return;
 
+    const max = station.maxProcessable();
+    this.selectedAmount = Phaser.Math.Clamp(this.selectedAmount, 0, max);
+
     this.addText(this.panelX + 16, this.panelY + 14, "Drying Rack", 16, "#ffffff");
-    this.addText(this.backpackX, this.panelY + 34, "Backpack", 12, "#8a93a3");
+    const desc = itemDef("drying_rack")?.description ?? "";
+    const descText = this.scene.add
+      .text(this.panelX + 16, this.panelY + 38, desc, {
+        fontFamily: "monospace",
+        fontSize: "11px",
+        color: "#8a93a3",
+        wordWrap: { width: this.panelW - 32 },
+      })
+      .setScrollFactor(0)
+      .setDepth(DEPTH_TEXT);
+    this.rows.push(descText);
+
+    this.addText(this.backpackX, this.backpackY - 18, "Backpack", 12, "#8a93a3");
     this.renderBackpack(station);
-    this.renderProcess(station);
+    this.renderProcess(station, max);
   }
 
   private renderBackpack(station: ProcessingStation): void {
@@ -205,80 +278,123 @@ export class DryingRackMenu {
     }
   }
 
-  private renderProcess(station: ProcessingStation): void {
+  private renderProcess(station: ProcessingStation, max: number): void {
     const px = this.processX;
 
     // --- Input ---
-    this.addText(px, this.backpackY + 4, "Input", 12, "#8a93a3");
+    this.addText(px, this.backpackY - 18, "Input", 12, "#8a93a3");
     const ib = this.inputBox;
     this.renderSlotBox(ib.x, ib.y, station.input, station.input ? "#8fe38f" : "#3a4250");
     if (station.input) {
-      // Clicking a loaded input pulls it back out into the backpack.
-      const hit = this.scene.add
-        .rectangle(ib.x, ib.y, IO_SLOT, IO_SLOT, 0xffffff, 0.001)
-        .setOrigin(0, 0)
+      const takeOut = this.scene.add
+        .text(ib.x + IO_SLOT + 12, ib.y + 4, "Take Out", {
+          fontFamily: "monospace",
+          fontSize: "12px",
+          color: "#c8d0dc",
+          backgroundColor: "#20242e",
+          padding: { x: 6, y: 3 },
+        })
         .setScrollFactor(0)
         .setDepth(DEPTH_TEXT)
         .setInteractive({ useHandCursor: true })
         .on("pointerdown", () => this.deps.retrieveInput());
-      this.rows.push(hit);
-    } else {
-      this.addText(ib.x + IO_SLOT / 2, ib.y + IO_SLOT + 8, "drag reeds\nor skins here", 10, "#5b6472", 0.5, 0);
+      this.rows.push(takeOut);
     }
 
-    // --- Progress ---
-    const barY = ib.y + IO_SLOT + 30;
-    const barW = 150;
-    const barX = px;
-    const barBg = this.scene.add
-      .rectangle(barX, barY, barW, 10, 0x1a1f2a, 0.95)
+    // --- Amount selector (slider + numeric entry) ---
+    const amountY = ib.y + IO_SLOT + 8;
+    const amountLabel = station.input
+      ? `Amount: ${this.selectedAmount} / ${max}`
+      : "Amount: — (load an input first)";
+    const amountText = this.scene.add
+      .text(px, amountY, amountLabel, {
+        fontFamily: "monospace",
+        fontSize: "12px",
+        color: "#e8ecf2",
+      })
+      .setScrollFactor(0)
+      .setDepth(DEPTH_TEXT)
+      .setInteractive({ useHandCursor: !!station.input })
+      .on("pointerdown", () => this.promptForAmount(max));
+    this.rows.push(amountText);
+
+    const track = this.sliderTrack;
+    const trackBg = this.scene.add
+      .rectangle(track.x, track.y, track.w, SLIDER_H, 0x1a1f2a, 0.95)
       .setOrigin(0, 0)
       .setStrokeStyle(1, 0x3a4250)
       .setScrollFactor(0)
-      .setDepth(DEPTH_ITEM);
-    this.rows.push(barBg);
-    const frac = station.progressFraction();
-    if (frac > 0) {
-      const fill = this.scene.add
-        .rectangle(barX + 1, barY + 1, (barW - 2) * frac, 8, 0xc9a86a, 1)
-        .setOrigin(0, 0)
-        .setScrollFactor(0)
-        .setDepth(DEPTH_ITEM + 1);
-      this.rows.push(fill);
-    }
-    const status = station.isProcessing() ? "Drying…" : station.input ? "Idle" : "Empty";
-    this.addText(barX + barW + 8, barY - 2, status, 11, "#9aa4b5");
+      .setDepth(DEPTH_ITEM)
+      .setInteractive({ useHandCursor: !!station.input })
+      .on("pointerdown", (pointer: Phaser.Input.Pointer) => {
+        if (!station.input) return;
+        this.sliderDragging = true;
+        this.updateSliderFromPointer(pointer.x);
+      });
+    this.rows.push(trackBg);
+    const frac = max > 0 ? this.selectedAmount / max : 0;
+    const fill = this.scene.add
+      .rectangle(track.x + 1, track.y + 1, Math.max(0, (track.w - 2) * frac), SLIDER_H - 2, 0xc9a86a, 1)
+      .setOrigin(0, 0)
+      .setScrollFactor(0)
+      .setDepth(DEPTH_ITEM + 1);
+    this.rows.push(fill);
+    // Handle knob at the current position.
+    const knobX = track.x + track.w * frac;
+    const knob = this.scene.add
+      .rectangle(knobX, track.y + SLIDER_H / 2, 8, SLIDER_H + 8, 0xffffff, 1)
+      .setOrigin(0.5, 0.5)
+      .setScrollFactor(0)
+      .setDepth(DEPTH_ITEM + 2);
+    this.rows.push(knob);
 
-    // --- Output (live preview + collectable) ---
-    const outLabelY = barY + 26;
-    this.addText(px, outLabelY, "Output", 12, "#8a93a3");
-    const preview = station.previewOutput();
-    const ob = { x: ib.x, y: outLabelY + 20 };
-    this.renderSlotBox(ob.x, ob.y, preview, preview ? "#d0b070" : "#3a4250");
+    // --- Live preview + Process button ---
+    const preview = station.previewFor(this.selectedAmount);
+    const previewLabel =
+      preview.output > 0 && station.input
+        ? `-> ${preview.output} ${itemDef(this.previewOutputKey(station))?.name ?? ""}`
+        : "-> nothing yet";
+    const previewY = track.y + 22;
+    this.addText(px, previewY, previewLabel, 13, preview.output > 0 ? "#8fe38f" : "#5b6472");
 
-    // Down-arrow between input and output boxes.
-    this.addText(ib.x + IO_SLOT / 2, ib.y + IO_SLOT + 2, "↓", 16, "#6b7280", 0.5, 0);
-
-    const ready = station.output?.count ?? 0;
-    const readyColor = ready > 0 ? "#8fe38f" : "#5b6472";
-    this.addText(ob.x + IO_SLOT + 12, ob.y + 4, `Ready: ${ready}`, 12, readyColor);
-
-    const canCollect = ready > 0;
+    const canProcess = preview.output > 0;
     const btn = this.scene.add
-      .text(ob.x + IO_SLOT + 12, ob.y + 24, "Collect", {
+      .text(px, previewY + 26, "Process", {
         fontFamily: "monospace",
         fontSize: "14px",
-        color: canCollect ? "#0a0a0a" : "#4a4a4a",
-        backgroundColor: canCollect ? "#8fe38f" : "#2a2a2a",
+        color: canProcess ? "#0a0a0a" : "#4a4a4a",
+        backgroundColor: canProcess ? "#8fe38f" : "#2a2a2a",
         padding: { x: 10, y: 5 },
       })
       .setScrollFactor(0)
       .setDepth(DEPTH_TEXT)
-      .setInteractive({ useHandCursor: canCollect })
+      .setInteractive({ useHandCursor: canProcess })
       .on("pointerdown", () => {
-        if (canCollect) this.deps.collectOutput();
+        if (canProcess) this.deps.processAmount(this.selectedAmount);
       });
     this.rows.push(btn);
+  }
+
+  private previewOutputKey(station: ProcessingStation): string {
+    // previewFor doesn't return the output key directly (only the count) —
+    // derive it the same way ProcessingStation.process does, via the loaded
+    // input's own recipe. Cheap local lookup; avoids widening previewFor's
+    // return type just for a label.
+    const key = station.input?.key;
+    if (key === "cattail") return "twine";
+    if (key === "gremlin_skin") return "gremlin_leather";
+    return "";
+  }
+
+  private promptForAmount(max: number): void {
+    if (max <= 0) return;
+    // eslint-disable-next-line no-alert
+    const raw = window.prompt(`Amount to process (0-${max}):`, `${this.selectedAmount}`);
+    if (raw === null) return;
+    const n = Math.floor(Number(raw));
+    if (Number.isNaN(n)) return;
+    this.selectedAmount = Phaser.Math.Clamp(n, 0, max);
+    this.render();
   }
 
   // A single item box showing an icon + count (or empty). `stroke` is a hex
@@ -289,7 +405,7 @@ export class DryingRackMenu {
     slot: { key: string; count: number } | null,
     stroke: string,
   ): void {
-    const strokeColor = Phaser.Display.Color.HexStringToColor(stroke || "#3a4250").color;
+    const strokeColor = Phaser.Display.Color.HexStringToColor(stroke).color;
     const box = this.scene.add
       .rectangle(x, y, IO_SLOT, IO_SLOT, 0x14181f, 0.9)
       .setOrigin(0, 0)

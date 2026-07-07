@@ -2,7 +2,84 @@
 
 Last updated: 2026-07-07
 
-### Just finished: Milestone H — Harvestables + Drying Rack (first processing station)
+### Just finished: Drying Rack rework (instant processing + slider), placed-object Upgrade/Destroy, inventory Drop/Destroy
+
+Playtest follow-up right after Milestone H landed — several user-requested changes to the
+system, all in one session:
+
+- **Cattail now spawns IN the shallow water at the creek's edge**, not on the surrounding
+  land. `Biome.isCreekEdge` was inverted: it now returns true for a *creek* cell that
+  touches dry land (the outer ring of the water), instead of a *land* cell that touches
+  creek. Verified: all 22 cattails land on-water (`isCreekAt` true), 0 on land.
+- **Drying Rack now requires a Workbench**: its recipe tier 0→1. This doubles as "must be
+  placed near a Workbench," since tier-1 gating already checks proximity at craft/place
+  time. **Bug found + fixed while verifying this**: `attemptPlaceObject()` (the placeable
+  path) never actually enforced the tier/workbench-proximity gate — only `craftRecipe()`
+  (the backpack-item path) did. Harmless before (every placeable was tier 0), but silently
+  let a tier-1 placeable go down anywhere once Drying Rack became one. Added the same
+  `recipe.tier > 0 && !isNearWorkbench(...)` guard to `attemptPlaceObject()`.
+- **New `workbench_upgrade` item/recipe** (tier 1, `wood: 10, stone: 8, twine: 3`) — costing
+  `twine` means it's only discoverable once the player has produced twine at least once,
+  which is exactly "making twine unlocks Workbench Upgrade" via the existing
+  ingredient-known discovery mechanism, no bespoke flag needed.
+- **New generic placed-object right-click menu** (`src/ui/ContextMenu.ts`) — Right-click any
+  placed object (Workbench/Campfire/Drying Rack) within reach pops "Upgrade" (only shown for
+  Workbench; consumes 1 `workbench_upgrade`, tags `tier: 1` on that specific placed image via
+  `setData`, tints it gold — the *mechanical* payoff of an upgraded tier is intentionally
+  undesigned this pass, this just wires the consume-and-flag mechanism + a visual tell) and
+  "Destroy" (always shown; removes the object and spawns it back as a Minecraft-style
+  recoverable loose pickup — a Drying Rack's still-loaded raw input is refunded the same way
+  first, so destroying one doesn't eat whatever was inside it). One system covers every
+  placeable type, not per-type code.
+- **Drying Rack reworked to instant processing** — `src/systems/Processing.ts` dropped its
+  `tick()`/duration model entirely. `ProcessingStation` now just holds the loaded input;
+  `previewFor(amount)`/`process(amount)` let the player pick *how much* of the loaded stack
+  to run through in one instant action (rounds down to a whole multiple of the recipe's
+  ratio — e.g. processing 7 of a 2:1 input consumes 6, yields 3, leaves 1 loaded). No more
+  progress bar or "Collect" button: processed output auto-deposits into the backpack, and
+  overflow (backpack full) drops on the floor next to the player instead of being lost —
+  same fallback the new Drop/Destroy system below uses.
+- **`DryingRackMenu` UI reworked**: removed the progress bar, output slot, and "drag reeds or
+  skins here" hint (replaced with the Drying Rack's own `itemDef` description, always
+  visible). Added an **amount slider** (drag the track, or click the "Amount: N / max" label
+  to type an exact number via `window.prompt` — a pragmatic choice given this project has no
+  DOM text-input UI anywhere yet) driving a live "→ M Twine" preview, and a **Process**
+  button. The slider's drag gesture reuses the same global `pointermove`/`pointerup` pair
+  `MainScene` already had for item-drag ghosts (`DryingRackMenu.isDraggingSlider()` /
+  `updateSliderFromPointer()` / `endSliderDrag()`), rather than a separate input path.
+  Loading input resets the slider to the new full amount (`selectFullAmount()`, called from
+  `loadRackInput`) — but only on a fresh load, not every re-render, so it never fights a
+  manual mid-session adjustment.
+- **New inventory Drop/Destroy system** — dragging a stack out of any open menu **onto the
+  game world** (not over any panel or fixed HUD) drops it as a recoverable loose pickup near
+  the player; dragging it onto a new **trash box** in the `InventoryMenu` (bottom-right,
+  below the equipment grid) destroys it permanently, no refund. Both reuse the same
+  `resolveItemDrag()` entry point item-move already used, branching on where the pointer
+  ended up. `ResourceNode.resource` was widened from `ResourceType` to a plain `string` (and
+  gained an optional `magnetReadyAt` cooldown field) so a dropped/destroyed-placeable pickup
+  can carry *any* item key (tools, weapons, the Drying Rack itself), not just raw resources
+  — `spawnLooseDrop()` picked up a `magnetCooldownMs` param (default 0, unchanged behavior
+  for normal resource-node drops) so player-initiated drops don't instantly fly back into
+  the inventory that just released them; `updateMagnet()` now skips a piece until its
+  `magnetReadyAt` has passed. Manual click-pickup is unaffected by the cooldown.
+
+Verified via `preview_eval`: all 22 cattails now `isCreekAt`-true (was land-adjacent before);
+Drying Rack placement blocked far from a Workbench and succeeds standing at one (confirming
+the `attemptPlaceObject` fix); `workbench_upgrade` undiscoverable until wood+stone+twine are
+all known; `previewFor`/`process` round correctly on non-multiple amounts (7 of a 2:1 ratio
+→ consumes 6, yields 3, 1 remains loaded — confirmed across two sequential partial-amount
+calls); a full backpack correctly floor-drops processing output/retrieved input with an
+active magnet cooldown; dragging a stack onto the trash box destroys it with no floor
+pickup, dragging one out to the world spawns a magnet-cooldown-gated pickup; right-click
+context menu opens on a placed Workbench, "Upgrade" consumes the item and sets
+`tier: 1` + gold tint, "Destroy" removes the object, spawns it back as a pickup, and (for a
+Drying Rack with loaded input) also refunds that input as separate loose pieces; normal
+chop/mine interaction still works unchanged post-rework. Type-check clean (`tsc --noEmit`),
+no console errors, `preview_screenshot` confirms the reworked rack menu (description text,
+slider, live preview, Process button, no progress bar), the inventory trash box, and the
+context menu popup all render correctly.
+
+### Previously: Milestone H — Harvestables + Drying Rack (first processing station)
 
 Plan file: `.claude/plans/let-s-proceed-with-option-crystalline-petal.md` (Milestone H, the
 last open item in the first-biome content pass — **built on Opus per the plan's "net-new

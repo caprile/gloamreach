@@ -340,18 +340,38 @@ on proximity to any placed workbench, with non-silent feedback.
 ## Milestone H — Harvestables + Drying Rack (processing stations) — SHIPPED (2026-07-07)
 
 **Shipped notes:** built on Opus per the guidance below. New `src/systems/Processing.ts`
-(`ProcessingStation` + `PROCESS_RECIPES`: `cattail→twine` 2:1 @ 3s/unit,
-`gremlin_skin→gremlin_leather` 1:1 @ 4s/unit — durations were a first-pass tuning call) and
-`src/ui/DryingRackMenu.ts` (backpack-alongside with non-input dimming, drag/right-click
-quick-load into the input slot, live output preview, progress bar, Collect button). Cattail
-spawns on creek borders via new `Biome.isCreekEdge` + `MainScene.pickCreekEdgePoint`;
-Blackberry bushes in forest (free pickup, no eating mechanic yet). Drying Rack is a tier-0
-placeable (8 wood + 1 leather) reusing the campfire/workbench placement flow; each placed
-rack has its own station, ticked every frame in `MainScene.updateProcessing()` (real-time,
-continues while the menu is closed / during death freeze). Added `gremlin_leather_armor`
-(tier-1 armor recipe, 2 gremlin_leather + 2 twine) as a sink for the outputs — not yet
-wearable. Slingshot's twine ingredient remains a noted downstream hook. See `STATUS.md` for
-the full entry + verification. **With this, the whole A–H first-biome plan is done.**
+(`ProcessingStation` + `PROCESS_RECIPES`: `cattail→twine` 2:1, `gremlin_skin→gremlin_leather`
+1:1) and `src/ui/DryingRackMenu.ts` (backpack-alongside with non-input dimming, drag/
+right-click quick-load into the input slot, live output preview). Cattail spawns via new
+`Biome.isCreekEdge` + `MainScene.pickCreekEdgePoint`; Blackberry bushes in forest (free
+pickup, no eating mechanic yet). Drying Rack reuses the campfire/workbench placement flow.
+Added `gremlin_leather_armor` (tier-1 armor recipe, 2 gremlin_leather + 2 twine) as a sink
+for the outputs — not yet wearable. Slingshot's twine ingredient remains a noted downstream
+hook. **With this, the whole A–H first-biome plan is done.**
+
+**Same-day rework (playtest feedback, still 2026-07-07):** the initial ship above used a
+*timed* progress-bar model and land-adjacent Cattail placement; both were reworked per user
+spec. **Cattail** now spawns on the water itself at the creek's edge (`isCreekEdge` inverted
+to mean "creek cell touching land," not "land cell touching creek"). **Processing is now
+instant**, not timed: `ProcessingStation` dropped `tick()`/duration entirely in favor of
+`previewFor(amount)`/`process(amount)`, letting the player choose how much of the loaded
+input to run via a slider (+ typed-number entry via `window.prompt`, the pragmatic choice
+given no DOM-text-input UI exists anywhere else in the project) — output auto-deposits into
+the backpack or drops on the floor if full, no "Collect" step. **Drying Rack is now tier 1**
+(requires a nearby Workbench, matching Stone Pickaxe/Club's precedent) — this surfaced a
+real pre-existing gap: `attemptPlaceObject()` never actually enforced the tier/workbench
+gate (only `craftRecipe()` did), harmless while every placeable was tier 0, fixed alongside
+this change. **New `workbench_upgrade` item** (tier 1, costs `twine` — so it's naturally
+undiscoverable until twine has been produced, no bespoke flag needed) plus a **generic
+right-click Upgrade/Destroy popup** (`src/ui/ContextMenu.ts`) on every placed object:
+Destroy returns it to a recoverable Minecraft-style loose pickup (refunding a Drying Rack's
+loaded input too); Upgrade (Workbench only) consumes the item and tags that instance's tier
+— the mechanical payoff of an upgraded tier is intentionally left undesigned. Also added a
+general **inventory Drop/Destroy** system (drag a stack out to the world = recoverable
+magnet-cooldown-gated pickup; drag onto the `InventoryMenu`'s new trash box = permanent
+delete) — required widening `ResourceNode.resource` from `ResourceType` to a plain `string`
+so a dropped/destroyed-placeable pickup can carry any item key, not just raw resources. See
+`STATUS.md`'s "Drying Rack rework" entry for full verification detail.
 
 **Original plan (below) — added 2026-07-07:**
 

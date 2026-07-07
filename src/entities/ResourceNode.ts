@@ -1,5 +1,4 @@
 import Phaser from "phaser";
-import type { ResourceType } from "../systems/Inventory";
 
 // A specific craftable tool (tiers can grow later, e.g. iron_axe).
 export type ToolType = "stone_axe" | "stone_pickaxe";
@@ -56,7 +55,12 @@ export interface ResourceNodeConfig {
   x: number;
   y: number;
   texture: string;
-  resource: ResourceType;
+  // The item key this node yields (a ResourceType for gatherables, but also
+  // any arbitrary ItemDef key for player-dropped/destroyed-station pickups —
+  // see MainScene.dropStackToWorld/destroyPlacedObject). Kept as a plain
+  // string rather than ResourceType so this node can carry tools/weapons/
+  // placeables too, not just raw resources.
+  resource: string;
   amount: number;
   action: NodeAction;
   displayName: string; // shown in the "[LMB] Pick up <name>" prompt
@@ -71,12 +75,18 @@ export interface ResourceNodeConfig {
   // pre-placed branch/rock). Consolidation and the magnet only ever touch
   // drop pieces.
   isDrop?: boolean;
+  // this.time.now threshold before which the magnet won't pull this piece in
+  // (manual click-pickup is unaffected). Used for player-dropped items and
+  // destroyed-placeable pickups so they don't instantly fly back into the
+  // inventory that just released them. Defaults to 0 (immediately eligible),
+  // matching every existing drop source's behavior.
+  magnetReadyAt?: number;
 }
 
 // A single interactable object in the world (branch, rock, tree, boulder, or
 // a loose drop piece exploded out of a depleted tree/boulder).
 export class ResourceNode extends Phaser.GameObjects.Sprite {
-  readonly resource: ResourceType;
+  readonly resource: string;
   amount: number;
   readonly action: NodeAction;
   readonly displayName: string;
@@ -85,6 +95,7 @@ export class ResourceNode extends Phaser.GameObjects.Sprite {
   readonly maxHealth: number;
   health: number;
   depleted = false;
+  readonly magnetReadyAt: number;
   // True while a drop piece's spawn-scatter tween is still running — the
   // magnet loop skips it so it isn't fighting the scatter tween over x/y.
   exploding = false;
@@ -100,6 +111,7 @@ export class ResourceNode extends Phaser.GameObjects.Sprite {
     this.isDrop = cfg.isDrop ?? false;
     this.maxHealth = cfg.health;
     this.health = cfg.health;
+    this.magnetReadyAt = cfg.magnetReadyAt ?? 0;
     scene.add.existing(this);
     // Trees/boulders are tall enough to visually occlude the player/enemies
     // walking past them, so they're Y-sorted against them (see

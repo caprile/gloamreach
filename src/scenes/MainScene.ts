@@ -34,6 +34,7 @@ import { Equipment, EQUIP_SLOTS } from "../systems/Equipment";
 import { Hotbar } from "../systems/Hotbar";
 import { ProcessingStation } from "../systems/Processing";
 import { CraftingMenu } from "../ui/CraftingMenu";
+import { ContextMenu, type ContextMenuItem } from "../ui/ContextMenu";
 import { DryingRackMenu } from "../ui/DryingRackMenu";
 import { InventoryMenu, BACKPACK_SIZE, type ArmorSlotView } from "../ui/InventoryMenu";
 import { HotbarUI } from "../ui/HotbarUI";
@@ -57,6 +58,10 @@ const SPRINT_DRAIN_PER_SEC = 33; // stamina/sec while sprinting — full bar in 
 const DASH_STAMINA_COST = 25; // flat cost per dash — 4 dashes per full bar
 const DASH_IFRAME_MS = 150; // outlasts the dash burst itself (Milestone E)
 const WORKBENCH_RANGE = 100; // px — looser than REACH; "am I near it," not a precise click
+// A player-dropped or destroyed-station item pickup ignores the magnet for
+// this long so it doesn't instantly fly back into the inventory/station that
+// just released it. Manual click-pickup is unaffected.
+const DROPPED_ITEM_MAGNET_COOLDOWN_MS = 1500;
 
 // The main gameplay scene: build the world, spawn the player and resources,
 // follow the camera, and run the mouse-driven interaction + HUD.
@@ -98,6 +103,9 @@ export class MainScene extends Phaser.Scene {
   private dryingRacks: { image: Phaser.GameObjects.Image; station: ProcessingStation }[] = [];
   private openRack: ProcessingStation | null = null; // the rack the menu is bound to
   private hoveredRack: Phaser.GameObjects.Image | null = null;
+  // Right-click "Upgrade / Destroy" popup for any placed object (Workbench,
+  // Campfire, Drying Rack, ...) — a single generic system, not per-type.
+  private contextMenu!: ContextMenu;
   private hotbarUI!: HotbarUI;
   private eventLogUI!: EventLogUI;
   private keybindsUI!: KeybindsUI;
@@ -212,7 +220,18 @@ export class MainScene extends Phaser.Scene {
     // Left-click interacts with whatever is hovered and in reach. Suppressed
     // while a menu is open, or when the click lands on a fixed HUD element
     // (hotbar / event log) so a click there doesn't also hit the world behind.
+    // Right-click on a placed object (Workbench/Campfire/Drying Rack) opens a
+    // generic Upgrade/Destroy context menu.
     this.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
+      // The context menu's own rows have their own pointerdown handlers (which
+      // already ran by the time this global listener fires — Phaser processes
+      // hit-tested game objects before the input plugin's own event). Any
+      // click while it's open is swallowed here either way, so it can't also
+      // be read as a world interact/placement click.
+      if (this.contextMenu.isOpen()) {
+        if (!this.contextMenu.containsPoint(pointer.x, pointer.y)) this.contextMenu.close();
+        return;
+      }
       if (this.suppressNextPointerdown) {
         this.suppressNextPointerdown = false;
         return;
@@ -223,8 +242,11 @@ export class MainScene extends Phaser.Scene {
         else if (pointer.rightButtonDown()) this.cancelPlacement();
         return;
       }
-      if (pointer.leftButtonDown() && !this.anyMenuOpen() && !this.pointerOverHud(pointer)) {
+      if (this.anyMenuOpen() || this.pointerOverHud(pointer)) return;
+      if (pointer.leftButtonDown()) {
         this.tryInteract();
+      } else if (pointer.rightButtonDown()) {
+        this.tryOpenContextMenu(pointer);
       }
     });
 
@@ -232,6 +254,7 @@ export class MainScene extends Phaser.Scene {
     // the browser context menu on the canvas.
     this.input.mouse!.disableContextMenu();
 
+    this.contextMenu = new ContextMenu(this);
     this.createHud();
     this.createCraftingMenu();
     this.createInventoryMenu();
@@ -250,11 +273,18 @@ export class MainScene extends Phaser.Scene {
 
     // Scene-level drag: a slot starts it, the pointer drags a ghost icon, and
     // release resolves the move against whichever container is under the
-    // pointer (backpack grid or hotbar).
+    // pointer (backpack grid or hotbar). The Drying Rack's amount slider
+    // shares this same global pointermove/up pair for its own drag gesture.
     this.input.on("pointermove", (p: Phaser.Input.Pointer) => {
       if (this.dragGhost) this.dragGhost.setPosition(p.x, p.y);
+      if (this.dryingRackMenu.isOpen() && this.dryingRackMenu.isDraggingSlider()) {
+        this.dryingRackMenu.updateSliderFromPointer(p.x);
+      }
     });
-    this.input.on("pointerup", (p: Phaser.Input.Pointer) => this.resolveItemDrag(p));
+    this.input.on("pointerup", (p: Phaser.Input.Pointer) => {
+      this.resolveItemDrag(p);
+      this.dryingRackMenu.endSliderDrag();
+    });
 
     // Mouse wheel cycles the hotbar selection (looping), unless the pointer is
     // over the event log (which scrolls its own history).
@@ -278,6 +308,7 @@ export class MainScene extends Phaser.Scene {
       this.craftingMenu.toggle();
     });
     this.input.keyboard!.on("keydown-ESC", () => {
+      if (this.contextMenu.isOpen()) return this.contextMenu.close();
       if (this.placementMode) return this.cancelPlacement();
       this.closeDryingRackMenu();
       this.craftingMenu.close();
@@ -305,7 +336,6 @@ export class MainScene extends Phaser.Scene {
       this.updateEnemies(delta);
       this.updateMagnet(delta);
       this.updateTreeOcclusion(delta);
-      this.updateProcessing(delta);
       return;
     }
 
@@ -336,20 +366,6 @@ export class MainScene extends Phaser.Scene {
     this.updateEnemies(delta);
     this.updateTreeOcclusion(delta);
     this.updateCraftingMenuWorkbenchProximity();
-    this.updateProcessing(delta);
-  }
-
-  // Advance every placed Drying Rack's drying, and (while its menu is open)
-  // re-render so the progress bar / counts / live preview stay current. Racks
-  // keep drying even while their menu is closed and during the death freeze —
-  // it's real-time processing, not gated on the player watching.
-  private updateProcessing(delta: number): void {
-    for (const rack of this.dryingRacks) rack.station.tick(delta);
-    if (this.dryingRackMenu.isOpen()) {
-      // The bound rack could have finished emptying/producing — keep the menu
-      // in sync with the same station instance it was opened on.
-      this.dryingRackMenu.refresh();
-    }
   }
 
   // While the crafting menu is open, re-render it the instant Workbench
@@ -389,6 +405,7 @@ export class MainScene extends Phaser.Scene {
 
     for (const node of this.nodes) {
       if (!node.isDrop || !node.loose || node.depleted || node.exploding) continue;
+      if (this.time.now < node.magnetReadyAt) continue; // player-dropped cooldown
       const dist = Phaser.Math.Distance.Between(this.player.x, this.player.y, node.x, node.y);
       if (dist > MAGNET_RADIUS) continue;
       // The idle bob tween keeps yoyo-ing `y` on its own schedule; kill it
@@ -415,7 +432,12 @@ export class MainScene extends Phaser.Scene {
   }
 
   private anyMenuOpen(): boolean {
-    return this.craftingMenu.isOpen() || this.inventoryMenu.isOpen() || this.dryingRackMenu.isOpen();
+    return (
+      this.craftingMenu.isOpen() ||
+      this.inventoryMenu.isOpen() ||
+      this.dryingRackMenu.isOpen() ||
+      this.contextMenu.isOpen()
+    );
   }
 
   private selectHotbarSlot(slot: number): void {
@@ -496,16 +518,28 @@ export class MainScene extends Phaser.Scene {
     if (!stack) return;
 
     // Drying Rack menu open: dropping on the input slot loads the stack into
-    // the rack; otherwise the rack's own backpack grid is the drop target.
+    // the rack; the rack's own backpack grid is a rearrange target; dropped
+    // outside the whole panel is a world-drop, same as any other menu.
     if (this.dryingRackMenu.isOpen()) {
       if (this.dryingRackMenu.isOverInput(pointer.x, pointer.y)) {
         this.loadRackInput(src.container, src.index);
         return;
       }
-      const bagIndex = this.dryingRackMenu.slotIndexAt(pointer.x, pointer.y);
-      if (bagIndex === null) return; // dropped on nothing; snaps back
-      moveSlot(src.container, src.index, this.backpack, bagIndex);
-      this.afterItemMove();
+      const rackBagIndex = this.dryingRackMenu.slotIndexAt(pointer.x, pointer.y);
+      if (rackBagIndex !== null) {
+        moveSlot(src.container, src.index, this.backpack, rackBagIndex);
+        this.afterItemMove();
+        return;
+      }
+      if (!this.dryingRackMenu.containsPoint(pointer.x, pointer.y)) {
+        this.dropStackToWorld(src.container, src.index, stack);
+      }
+      return;
+    }
+
+    // Inventory menu open: its trash box permanently destroys the stack.
+    if (this.inventoryMenu.isOpen() && this.inventoryMenu.isOverTrash(pointer.x, pointer.y)) {
+      this.destroyStack(src.container, src.index, stack);
       return;
     }
 
@@ -514,12 +548,52 @@ export class MainScene extends Phaser.Scene {
     if (hotIndex !== null) {
       if (!itemDef(stack.key)?.hotbarable) return; // reject; snaps back
       moveSlot(src.container, src.index, this.hotbar.container, hotIndex);
-    } else {
-      const bagIndex = this.inventoryMenu.slotIndexAt(pointer.x, pointer.y);
-      if (bagIndex === null) return; // dropped on nothing; snaps back
+      this.afterItemMove();
+      return;
+    }
+    const bagIndex = this.inventoryMenu.slotIndexAt(pointer.x, pointer.y);
+    if (bagIndex !== null) {
       moveSlot(src.container, src.index, this.backpack, bagIndex);
+      this.afterItemMove();
+      return;
     }
 
+    // Nothing resolved: if the drop isn't even over an open menu's panel or
+    // fixed HUD, it was dragged out into the game world — drop it there as a
+    // recoverable loose pickup. Missing a slot while still inside an open
+    // panel just snaps back (unchanged prior behavior).
+    const overPanel =
+      this.pointerOverHud(pointer) ||
+      (this.inventoryMenu.isOpen() && this.inventoryMenu.containsPoint(pointer.x, pointer.y)) ||
+      (this.craftingMenu.isOpen() && this.craftingMenu.containsPoint(pointer.x, pointer.y));
+    if (!overPanel) this.dropStackToWorld(src.container, src.index, stack);
+  }
+
+  // Remove a whole stack from the inventory and spawn it as a recoverable
+  // loose pickup near the player (magnet-cooldown gated so it doesn't
+  // instantly fly back in) — the "Drop" half of the drop/destroy pair.
+  private dropStackToWorld(
+    container: ItemContainer,
+    index: number,
+    stack: { key: string; count: number },
+  ): void {
+    container.set(index, null);
+    const name = itemDef(stack.key)?.name ?? stack.key;
+    this.spawnLooseDrop(stack.key, stack.count, this.player.x, this.player.y, DROPPED_ITEM_MAGNET_COOLDOWN_MS);
+    this.eventLog.add("info", `Dropped ${name} x${stack.count}`);
+    this.afterItemMove();
+  }
+
+  // Permanently remove a whole stack from the inventory — no refund, no
+  // floor pickup. The "Destroy" half of the drop/destroy pair.
+  private destroyStack(
+    container: ItemContainer,
+    index: number,
+    stack: { key: string; count: number },
+  ): void {
+    container.set(index, null);
+    const name = itemDef(stack.key)?.name ?? stack.key;
+    this.eventLog.add("info", `Destroyed ${name} x${stack.count}`);
     this.afterItemMove();
   }
 
@@ -554,8 +628,8 @@ export class MainScene extends Phaser.Scene {
       beginDrag: (c, i, p) => this.beginItemDrag(c, i, p),
       quickLoad: (i) => this.loadRackInput(this.backpack, i),
       isDragging: () => this.dragSource !== null,
-      collectOutput: () => this.collectRackOutput(),
       retrieveInput: () => this.retrieveRackInput(),
+      processAmount: (amount) => this.processRackAmount(amount),
     });
   }
 
@@ -582,35 +656,38 @@ export class MainScene extends Phaser.Scene {
     if (!stack || !station.canAccept(stack.key)) return;
     station.addInput(stack.key, stack.count);
     container.set(index, null);
+    this.dryingRackMenu.selectFullAmount();
     this.afterItemMove();
   }
 
-  // Move the rack's ready output into the backpack (discovery may unlock the
-  // armor recipe once twine/gremlin_leather are first collected).
-  private collectRackOutput(): void {
+  // Instantly convert `amount` units of the rack's loaded input. The result
+  // auto-lands in the backpack if there's room; any overflow drops on the
+  // floor next to the player instead of being silently lost (per user spec —
+  // processed output is never a "collect" step the player can forget).
+  private processRackAmount(amount: number): void {
     const station = this.openRack;
-    if (!station?.output) return;
-    const out = station.output;
-    if (!this.backpack.hasRoomFor(out.key, out.count)) {
-      this.eventLog.add("info", "Inventory full");
-      return;
+    if (!station) return;
+    const result = station.process(amount);
+    if (!result) return;
+    const leftover = this.addToBackpack(result.key, result.count);
+    if (leftover > 0) {
+      this.spawnLooseDrop(result.key, leftover, this.player.x, this.player.y, DROPPED_ITEM_MAGNET_COOLDOWN_MS);
+      this.eventLog.add("info", "Backpack full — some output landed on the floor");
     }
-    station.takeOutput();
-    this.addToBackpack(out.key, out.count);
     this.afterItemMove();
   }
 
-  // Pull the still-drying raw input back out into the backpack.
+  // Pull the loaded (unprocessed) raw input back out into the backpack.
   private retrieveRackInput(): void {
     const station = this.openRack;
     if (!station?.input) return;
     const inp = station.input;
-    if (!this.backpack.hasRoomFor(inp.key, inp.count)) {
-      this.eventLog.add("info", "Inventory full");
-      return;
-    }
+    const leftover = this.addToBackpack(inp.key, inp.count);
     station.takeInput();
-    this.addToBackpack(inp.key, inp.count);
+    if (leftover > 0) {
+      this.spawnLooseDrop(inp.key, leftover, this.player.x, this.player.y, DROPPED_ITEM_MAGNET_COOLDOWN_MS);
+      this.eventLog.add("info", "Backpack full — some input landed on the floor");
+    }
     this.afterItemMove();
   }
 
@@ -1152,13 +1229,24 @@ export class MainScene extends Phaser.Scene {
 
   // Depleting a tree/boulder "explodes" its yield into 2-4 scattered loose
   // pieces instead of crediting the backpack directly. Pieces that land near
-  // another piece of the same resource consolidate into one stack.
-  private spawnLooseDrop(resource: ResourceType, amount: number, x: number, y: number): void {
+  // another piece of the same resource consolidate into one stack. Also
+  // reused (with a nonzero magnetCooldownMs) for player-dropped items,
+  // processed Drying Rack output/input overflow, and destroyed-placeable
+  // pickups — `resource` is a plain item key rather than ResourceType so it
+  // can carry tools/weapons/placeables too, not just raw resources.
+  private spawnLooseDrop(
+    resource: string,
+    amount: number,
+    x: number,
+    y: number,
+    magnetCooldownMs = 0,
+  ): void {
     const pieceCount = amount > 1 ? Phaser.Math.Between(2, Math.min(4, amount)) : 1;
     const base = Math.floor(amount / pieceCount);
     let remainder = amount - base * pieceCount;
 
     const def = itemDef(resource);
+    const magnetReadyAt = this.time.now + magnetCooldownMs;
     for (let i = 0; i < pieceCount; i++) {
       const pieceAmount = base + (remainder > 0 ? 1 : 0);
       if (remainder > 0) remainder--;
@@ -1174,6 +1262,7 @@ export class MainScene extends Phaser.Scene {
         loose: true,
         isDrop: true,
         health: 1,
+        magnetReadyAt,
       });
       node.exploding = true;
       node.setAmount(pieceAmount);
@@ -1340,6 +1429,15 @@ export class MainScene extends Phaser.Scene {
       this.cancelPlacement();
       return;
     }
+    // Tier 1+ placeables (the Drying Rack) need the player standing near a
+    // Workbench to place, same gate craftRecipe() already applies to
+    // non-placeable tier 1+ recipes — this was previously a no-op since every
+    // placeable was tier 0, so it never actually got exercised until now.
+    if (recipe.tier > 0 && !this.isNearWorkbench(this.player.x, this.player.y)) {
+      this.eventLog.add("info", "Requires a nearby Workbench");
+      this.cancelPlacement();
+      return;
+    }
     this.crafting.craft(recipe, this.backpack);
     const pos = this.clampedPlacementPoint();
     const key = outputKey(recipe);
@@ -1374,6 +1472,101 @@ export class MainScene extends Phaser.Scene {
   // tier 1+ recipes are discoverable/visible at all in the crafting menu.
   private hasWorkbenchPlaced(): boolean {
     return this.placedObjects.some((obj) => obj.getData("itemKey") === "workbench");
+  }
+
+  // --- Placed-object management (right-click Upgrade/Destroy) ---
+
+  // Nearest placed object under a world point, within a small hover radius,
+  // or null. Generic across every placeable type (Workbench, Campfire,
+  // Drying Rack, ...) — one system covers all of them, not a per-type one.
+  private findPlacedObjectNear(worldX: number, worldY: number): Phaser.GameObjects.Image | null {
+    let best: Phaser.GameObjects.Image | null = null;
+    let bestDist = Infinity;
+    for (const obj of this.placedObjects) {
+      const radius = Math.max(obj.displayWidth, obj.displayHeight) / 2 + 6;
+      const d = Phaser.Math.Distance.Between(worldX, worldY, obj.x, obj.y);
+      if (d <= radius && d < bestDist) {
+        best = obj;
+        bestDist = d;
+      }
+    }
+    return best;
+  }
+
+  // Right-click on a placed object, in reach, opens its Upgrade/Destroy popup.
+  private tryOpenContextMenu(pointer: Phaser.Input.Pointer): void {
+    const world = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
+    const obj = this.findPlacedObjectNear(world.x, world.y);
+    if (!obj) return;
+    const inReach = Phaser.Math.Distance.Between(this.player.x, this.player.y, obj.x, obj.y) <= REACH;
+    if (!inReach) return;
+    this.openContextMenuForObject(obj, pointer.x, pointer.y);
+  }
+
+  private openContextMenuForObject(obj: Phaser.GameObjects.Image, screenX: number, screenY: number): void {
+    const itemKey = obj.getData("itemKey") as string;
+    const items: ContextMenuItem[] = [];
+
+    // Only the Workbench supports an upgrade right now — Drying Rack/Campfire
+    // upgrade tiers are undesigned (see CLAUDE.md's long-term notes), so their
+    // row is simply omitted rather than shown permanently disabled.
+    if (itemKey === "workbench") {
+      const tier = (obj.getData("tier") as number | undefined) ?? 0;
+      const alreadyMax = tier >= 1;
+      const hasUpgradeItem = this.backpack.count("workbench_upgrade") > 0;
+      items.push({
+        label: alreadyMax ? "Upgrade (maxed)" : "Upgrade",
+        enabled: !alreadyMax && hasUpgradeItem,
+        onClick: () => this.upgradeWorkbench(obj),
+      });
+    }
+
+    items.push({ label: "Destroy", enabled: true, onClick: () => this.destroyPlacedObject(obj) });
+    this.contextMenu.show(screenX, screenY, items);
+  }
+
+  // Consumes a Workbench Upgrade item and marks this specific placed
+  // Workbench as upgraded. The mechanical payoff (recipes/behavior gated on
+  // an upgraded bench) is intentionally undesigned this pass — this wires up
+  // the consume-and-flag mechanism plus a visual tell for future recipes to
+  // hook into.
+  private upgradeWorkbench(obj: Phaser.GameObjects.Image): void {
+    if (this.backpack.count("workbench_upgrade") <= 0) return;
+    this.backpack.removeCount("workbench_upgrade", 1);
+    obj.setData("tier", 1);
+    obj.setTint(0xffe08a);
+    this.eventLog.add("info", "Workbench upgraded!");
+    this.afterItemMove();
+  }
+
+  // Minecraft-style destroy: the object vanishes and drops as a recoverable
+  // loose pickup of itself — not "pieces," a simpler result that's equally
+  // recoverable. A Drying Rack's still-loaded raw input is refunded the same
+  // way first, so destroying one doesn't just eat whatever was inside it.
+  private destroyPlacedObject(obj: Phaser.GameObjects.Image): void {
+    const itemKey = obj.getData("itemKey") as string;
+    const name = itemDef(itemKey)?.name ?? itemKey;
+
+    const rackIndex = this.dryingRacks.findIndex((r) => r.image === obj);
+    if (rackIndex !== -1) {
+      const station = this.dryingRacks[rackIndex].station;
+      if (station.input) {
+        this.spawnLooseDrop(
+          station.input.key,
+          station.input.count,
+          obj.x,
+          obj.y,
+          DROPPED_ITEM_MAGNET_COOLDOWN_MS,
+        );
+      }
+      if (this.openRack === station) this.closeDryingRackMenu();
+      this.dryingRacks.splice(rackIndex, 1);
+    }
+
+    this.spawnLooseDrop(itemKey, 1, obj.x, obj.y, DROPPED_ITEM_MAGNET_COOLDOWN_MS);
+    this.placedObjects = this.placedObjects.filter((o) => o !== obj);
+    obj.destroy();
+    this.eventLog.add("info", `Destroyed ${name}`);
   }
 
   // --- Inventory ---
