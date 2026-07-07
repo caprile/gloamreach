@@ -10,7 +10,7 @@ const CATEGORIES: { id: RecipeCategory; label: string }[] = [
   { id: "weapons", label: "Weapons" },
   { id: "armor", label: "Armor" },
   { id: "crafting", label: "Crafting" },
-  { id: "build", label: "Build Pieces" },
+  { id: "misc", label: "Misc" },
 ];
 
 const PANEL_W = 340;

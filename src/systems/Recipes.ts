@@ -4,7 +4,7 @@ import type { SkillType } from "./Skills";
 import { itemDef } from "./Items";
 
 // Tabs in the crafting sidebar. More will be added as content grows.
-export type RecipeCategory = "tools" | "weapons" | "armor" | "crafting" | "build";
+export type RecipeCategory = "tools" | "weapons" | "armor" | "crafting" | "misc";
 
 // What crafting a recipe produces. Tools plug into the existing
 // equip/unequip flow; everything else is just a counted inventory item
@@ -87,7 +87,7 @@ export const RECIPES: Recipe[] = [
     id: "campfire",
     name: "Campfire",
     description: "A placeable fire for light, warmth, and cooking.",
-    category: "build",
+    category: "misc",
     tier: 0,
     costs: { wood: 5, stone: 3 },
     output: { kind: "item", itemId: "campfire", itemName: "Campfire" },
@@ -96,7 +96,7 @@ export const RECIPES: Recipe[] = [
     id: "workbench",
     name: "Workbench",
     description: "A placeable bench required for more advanced recipes.",
-    category: "build",
+    category: "crafting",
     tier: 0,
     costs: { wood: 10 },
     output: { kind: "item", itemId: "workbench", itemName: "Workbench" },

@@ -58,7 +58,8 @@ src/
   entities/
     Player.ts            Arcade-physics sprite; WASD/arrow movement, facing, equipped-icon visual.
     ResourceNode.ts       Gatherable/interactable world object (branch, rock, tree, boulder).
-    Enemy.ts              Arcade-physics enemy (currently just "Boar") — chase AI, melee bite.
+    Enemy.ts              Arcade-physics enemy base (Boar's chase/wander/melee-bite AI).
+    Snake.ts               Subclasses Enemy; own hidden/striking/fleeing ambush state machine.
   systems/
     Inventory.ts          Plain resource-count tracker (wood/stone). Seed of crafting later.
     Health.ts              Player health pool (takeDamage/heal/reset) — no passive regen.
@@ -128,12 +129,18 @@ mouse-driven only. Don't reintroduce a keybind for this without being asked. Spa
    floating damage numbers on hit (plain numbers for now — no dmg type/resistance system,
    see below). Attack reuses the existing hover/interact/prompt-gating model rather than a
    parallel system. **Deliberately deferred** to a follow-up pass: Gremlin (ranged +
-   melee) and Snake (ambush) from the first-biome roster, Boar's charge/fire-fear, the
-   Slingshot + ammo ranged-weapon system, dash i-frames, and cooking/food. See **First
-   biome — content notes** below.
+   melee) from the first-biome roster, Boar's charge/fire-fear, the Slingshot + ammo
+   ranged-weapon system, dash i-frames, and cooking/food. See **First biome — content
+   notes** below.
 4a. **Workbench** — a placeable crafting-tier gate (Milestone G of the first-biome plan).
    Stone Pickaxe and Stone Club now require proximity to a placed Workbench; Stone Axe,
    Torch, Wood Club, and the Workbench itself remain craftable anywhere (tier 0).
+4b. **Snake** (Milestone D of the first-biome plan) — first ambush enemy and the game's
+   only `leather` source, unlocking Stone Pickaxe/Stone Club's discovery. `src/entities/
+   Snake.ts` subclasses `Enemy` but fully overrides `update()` with its own
+   hidden/striking/fleeing state machine (tight ambush radius, hit-and-retreat, re-hide
+   cooldown) rather than reusing Boar's chase AI — see **First biome — content notes**
+   below.
 
 **Not yet built — next up in rough order:**
 5. **Progression** — XP, levels, stats.
@@ -182,12 +189,10 @@ intended to require a workbench once it exists.
 - Wood Club — 4 wood, no workbench. (Recipe matches: 4 wood.)
 - Stone Club — 2 stone, 3 wood, 1 leather, requires workbench (now enforced; recipe now
   matches these numbers exactly).
-- **`leather` currently has no drop source anywhere in the game** (see `Inventory.ts`) —
-  this is a known, intentional gap, not a bug: the user confirmed leather-gating Stone
-  Pickaxe/Stone Club is correct design even though it makes both permanently
-  undiscoverable until a source exists. Snake (Milestone D, still unbuilt) is the
-  intended source and has been **bumped ahead of B/C in practical priority** for exactly
-  this reason — see the plan file's Milestone D "Why prioritized" note.
+- **`leather` now has a drop source**: Snake (Milestone D, shipped — see the Enemies
+  section below), which is why it was **bumped ahead of B/C in practical priority** — see
+  the plan file's Milestone D "Why prioritized" note. Stone Pickaxe/Stone Club are now
+  discoverable once a player has defeated at least one Snake.
 - Slingshot — first ranged weapon: 2 wood + 2 leather scraps, requires workbench,
   consumes a new ammo item (**Slingshot Pellets**, crafted 5 stone → 25 pellets). First
   "consumable ammo" concept in the game.
@@ -203,8 +208,21 @@ intended to require a workbench once it exists.
 **Enemies (first combat content)**
 - Gremlin — not yet built. Medium damage; ranged rock throw + melee claw; prefers to
   keep distance, claws only when player closes in; drops 1 Gremlin Blood.
-- Snake — not yet built. Low damage; hides in grass, ambushes with a bite once the
-  player gets close; drops 1 leather scrap.
+- Snake — **shipped** (`src/entities/Snake.ts`, Milestone D): hidden at low alpha in
+  grass, tight ambush-radius trigger (45px, vs Boar's 140px aggro), strike → flee →
+  re-hide (hit-and-retreat, not a sustained chase) with its own cooldown before it can
+  ambush again. **Deaggros while chasing** if it goes 4s without landing a bite or the
+  player gets past 150px (own condition/numbers, not Boar's 30s/280px) — it's a
+  hit-and-run ambusher, not a sustained hunter. Getting attacked branches on whether it's
+  already bitten the player this engagement: hasn't yet → reveals and fights back;
+  already has → flees a few seconds then wants to strike again (rather than fully
+  disengaging). Low HP, high bite dmg (11 HP, 20 bite dmg, tuned up from an initial 5
+  after playtest) vs Boar's 20/25. Drops 1 `leather` — reuses the existing `leather`
+  `ResourceType`/item key (display name is **"Leather Scraps"**, per the naming
+  resolution below; the key itself stays `leather`), no duplicate `leather_scrap` type.
+  This is currently the game's **only
+  leather source**, which is why it was prioritized ahead of B/C. Its HP bar (like Boar's)
+  only shows once actually aggro'd — see `Enemy.isAggro()` — not while idle/hidden.
 - Boar — **shipped in simplified form** (`src/entities/Enemy.ts`): melee bite only,
   simple aggro-radius chase AI, drops 1-2 boar_meat. No charge attack, no fear-of-fire
   yet — those (plus the "high damage, high aggro range" tuning) are still open
@@ -225,8 +243,10 @@ intended to require a workbench once it exists.
 - Branch on ground — pickup, 1 wood (matches current).
 
 **Open questions / naming to resolve before implementation:**
-- "leather" (current `Items.ts` key) vs "leather scrap" (notes) — same material, pick
-  one name.
+- ~~"leather" (current `Items.ts` key) vs "leather scrap" (notes) — same material, pick
+  one name.~~ **Resolved:** display name is **"Leather Scraps"** (`Items.ts`'s `name`
+  field); the `ResourceType`/item **key** stays `leather` (renaming it would've meant
+  touching every drop/cost reference for a cosmetic-only change).
 - New resources needed: Gremlin Blood, Boar Meat, Slingshot Pellets.
 - ~~Workbench: where is it placed, does it gate by proximity or just "owned," is it a
   placeable like the campfire?~~ **Resolved/shipped:** placeable exactly like the

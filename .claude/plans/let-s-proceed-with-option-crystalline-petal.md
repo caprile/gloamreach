@@ -194,7 +194,7 @@ stats table), but **override `update()`** with a genuinely different state machi
 
 ---
 
-## Milestone D — Snake (depends on A; independent of B/C) — PRIORITIZED NEXT (2026-07-07)
+## Milestone D — Snake (depends on A; independent of B/C) — SHIPPED (2026-07-07)
 
 **Goal:** First hidden/ambush enemy — structurally different from Boar and Gremlin.
 
@@ -220,7 +220,25 @@ Subclass `Enemy` for rendering reuse; override `update()` with `hidden | strikin
 - Own numbers (do NOT copy Boar): low dmg (~4–5), low HP (~10–12).
 - Drops **1 leather** on death. **Naming resolution:** reuse the existing `leather` key (Stone
   Club already consumes it) — do NOT add a duplicate `leather_scrap` type. Note this explicitly
-  in-session so it isn't relitigated.
+  in-session so it isn't relitigated. **Display name resolved 2026-07-07 to "Leather Scraps"**
+  (`Items.ts` `name` field only — the `ResourceType`/item key stays `leather`).
+
+**Playtest follow-ups (same day, 2026-07-07), after initial ship:**
+- Bite damage 5 → 20 (kept HP low at 11 — high-risk low-HP glass cannon, not low damage).
+- Enemy HP bars now only render while aggro'd, not at rest — new `Enemy.isAggro()`
+  (protected, default `state === "chasing"`), overridden in `Snake` as `mode !== "hidden"`.
+  Applies to Boar too (bar was previously always visible).
+- **Deaggro while chasing** — it never gave up if it just never landed a hit. Added own
+  condition (own numbers, not Boar's 30s/280px): `CHASE_GIVEUP_MS` (4000) and
+  `CHASE_GIVEUP_RADIUS` (150px), checked every frame in `striking`.
+- **`takeHit()` branches on whether it's already bitten the player this engagement**
+  (new `hasBitten` field): hasn't bitten yet → reveal + fight back (`striking`) instead of
+  fleeing; already bitten → flee a few seconds (`RETALIATION_FLEE_MS`, 2500) then want to
+  strike again (`reengageAfterFlee`), rather than fully disengaging. Uninterrupted
+  bite → flee → re-hide loop unchanged.
+- Workbench recipe moved `category: "build"` → `"crafting"`; Campfire moved
+  `"build"` → new `"misc"` category. `RecipeCategory`'s `"build"` value removed entirely;
+  `CraftingMenu.ts`'s tab list now Tools/Weapons/Armor/Crafting/Misc.
 
 ### Existing files touched
 - **`spawnEnemies()`:** Snake weighted toward **grassy**; keep a clear zone around player spawn.

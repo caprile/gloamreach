@@ -46,8 +46,8 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
   },
   leather: {
     key: "leather",
-    name: "Leather",
-    description: "Tanned hide. Crafting material.",
+    name: "Leather Scraps",
+    description: "Scraps of hide. Crafting material.",
     texture: "icon_leather",
     maxStack: 99,
     hotbarable: false,

@@ -2,6 +2,125 @@
 
 Last updated: 2026-07-07
 
+### Just finished: Snake deaggro + fight-back-before-fleeing behavior
+
+Follow-up playtest feedback on Snake right after the previous fixes: it never deaggro'd
+while chasing (would pursue forever if it just never landed a hit), and every hit from
+the player made it flee immediately — even before it had ever landed a bite of its own,
+which read as "runs away for no reason."
+
+- **New deaggro while `striking`** (`src/entities/Snake.ts`): own condition (per
+  CLAUDE.md's "different condition, not different number" rule), not a copy of Boar's
+  30s/no-hit-landed giveup — Snake gives up much faster since it's a hit-and-run
+  ambusher, not a sustained hunter. New `CHASE_GIVEUP_MS` (4000) and
+  `CHASE_GIVEUP_RADIUS` (150px) — either the player stays out of melee range for 4s of
+  continuous pursuit, or gets farther than 150px, and it gives up (`giveUp()`: back to
+  `hidden`, alpha down, `ambushReadyAt` cooldown starts). Checked every frame at the top
+  of the `striking` branch, before the melee/chase logic.
+- **`takeHit()` now branches on whether it's already landed a bite this engagement** (new
+  `hasBitten` field, reset whenever it fully re-hides): hasn't bitten yet → reveal and
+  fight back (`enterStriking()`) instead of fleeing; already bitten → flee for a few
+  seconds (new `RETALIATION_FLEE_MS`, 2500) then **want to strike again** rather than
+  fully disengaging. `beginFlee()` gained a `reengage: boolean` param — post-bite flee
+  (bit landed, no retaliation) ends back in `hidden` with the long rehide cooldown;
+  post-retaliation-hit flee ends back in `striking` with a fresh pursuit clock. The
+  original "bite → flee → hide" loop (no interruptions) is unchanged.
+
+Verified via `preview_eval` (single synchronous blocks, per the project's cooldown-timing
+testing convention): a snake stuck chasing a kiting player (held just outside melee, well
+within giveup radius) auto-deaggros back to `hidden` once `CHASE_GIVEUP_MS` elapses; a
+snake chasing a player who suddenly jumps past `CHASE_GIVEUP_RADIUS` deaggros
+immediately; hitting a snake that hasn't bitten the player yet flips it straight to
+`striking` (alpha 1) without ever fleeing; hitting a snake that already landed a bite
+(currently `fleeing`) sets `reengageAfterFlee: true` and, after `RETALIATION_FLEE_MS`
+elapses, lands back in `striking`; an uninterrupted bite still ends the cycle in `hidden`
+after the normal (shorter) post-bite flee. Type-check clean, no console errors.
+
+### Just finished: Snake playtest follow-ups + crafting-menu tab reorg
+
+Four small fixes requested right after Snake (Milestone D) landed, in the same session:
+
+- **Snake bite damage 5 → 20** (`src/entities/Snake.ts`) — a landed ambush bite should
+  actually hurt; the low-HP (11) side of its tradeoff stays as-is, only the damage side
+  was under-tuned.
+- **Enemy HP bars now only show while aggro'd**, not at rest. New `Enemy.isAggro()`
+  (protected, default `this.state === "chasing"`) gates `healthBarBg`/`healthBarFill`
+  visibility every frame in `preUpdate()`. `Snake` overrides it (`this.mode !== "hidden"`)
+  since it tracks aggro via its own mode field, not the shared `state` field — mirrors how
+  `Snake.takeHit()` already had its own override pattern.
+- **"Leather" → "Leather Scraps"** — display-name-only rename in `Items.ts` (`name`/
+  `description`), resolving the open naming question CLAUDE.md had flagged ("leather" key
+  vs "leather scrap" from the design notes). The `ResourceType`/item **key** stays
+  `"leather"` — renaming the key would've meant touching `Snake.ts`, `Recipes.ts`,
+  `Inventory.ts`, and every drop/cost reference for a cosmetic change with no functional
+  upside.
+- **Crafting-menu tab reorg**: `RecipeCategory`'s `"build"` tab is gone, replaced with a
+  new `"misc"` tab. Workbench moved `"build"` → `"crafting"` (now sits in the Crafting tab
+  next to Shishkabob); Campfire moved `"build"` → `"misc"` (first occupant of the new Misc
+  tab, where future placeables like it will live). `CraftingMenu.ts`'s `CATEGORIES` list
+  updated to match (`Build Pieces` label removed, `Misc` added). No recipe **costs**
+  changed, only `category`.
+
+Verified via `preview_eval`: forcing a Boar into `chasing` and a Snake into `striking`
+both flip their HP bar to visible; both start hidden/idle with bars invisible. Snake's
+`biteDamage` getter reads `20`. Crafting menu's `crafting` category recipe list includes
+both `"Shishkabob"` and `"Workbench"`; `misc` includes `"Campfire"`; `preview_screenshot`
+confirms the five tabs read Tools/Weapons/Armor/Crafting/Misc and the event log fires
+"New Recipe Unlocked: Campfire" once wood/stone are known. Type-check clean, no console
+errors.
+
+### Just finished: Snake (Milestone D) — first ambush enemy, first leather source
+
+Plan file: `.claude/plans/let-s-proceed-with-option-crystalline-petal.md` (Milestone D,
+now done — prioritized ahead of B/C specifically because it's the only planned source of
+`leather`, which Stone Pickaxe/Stone Club require to ever finish discovering).
+
+- **New file `src/entities/Snake.ts`**, subclassing `Enemy` for rendering/HP-bar/depth
+  reuse but **fully overriding `update()`** with its own `hidden | striking | fleeing`
+  state machine — not a re-tuned copy of Boar's chase AI (per the "different condition,
+  not just different number" standing decision in CLAUDE.md). `hidden`: motionless at
+  alpha 0.35 ("in the grass," reuses the placeholder texture, no new art) — dist to
+  player must cross a *tight* `AMBUSH_RADIUS` (45px, vs Boar's 140) **and** be past its
+  own `ambushReadyAt` cooldown to trigger `striking` (alpha snaps to 1, lunges in). On a
+  landed bite it immediately `beginFlee()`s (retreats away from the player for
+  `FLEE_DURATION_MS`), then re-hides (`ambushReadyAt = now + REHIDE_COOLDOWN_MS`, alpha
+  back to 0.35) — hit-and-retreat, not a sustained chase. Own numbers only: 11 max HP, 5
+  bite damage (vs Boar's 20/25). **Getting attacked directly always reveals + flees**,
+  even while nominally "hidden" (`Snake.takeHit()` overrides the base reaction) — a weak
+  ambush enemy doesn't stand and fight once actually engaged, distinct from Boar's
+  idle-to-chasing-on-hit.
+- **`Enemy.ts` made loot and combat stats data-driven** (new `EnemyConfig` fields
+  `lootResource`/`lootMin`/`lootMax`/`maxHealth`/`biteDamage`, replacing the old
+  module-level `MAX_HEALTH`/`BITE_DAMAGE` constants and the hardcoded `"boar_meat"` drop
+  in `MainScene.tryAttackEnemy()`) — new `Enemy.rollLoot()` returns `{resource, amount}`
+  generically so MainScene doesn't need per-species branching. `applyFacing()` promoted
+  private → protected so Snake can reuse the same 360°-rotation helper instead of
+  duplicating it. `Snake`'s own `lastStrikeBiteAt` field is intentionally *not* named
+  `lastBiteAt` — that name collides with `Enemy`'s existing private field of the same
+  name (TS treats same-named private fields in base/derived classes as incompatible
+  declarations, caught by `tsc`).
+- **`MainScene.spawnEnemies()`**: Boar spawn now passes its stats explicitly through the
+  new config fields (behavior unchanged — still 20 HP/25 dmg, forest-preferred, count 8).
+  New Snake spawn loop (count 6) biased to **grassy** zone via the existing
+  `pickSpawnPoint(rng, "grassy", 200)`, per the plan's "Snake weighted toward grassy."
+- **New `snake` texture** in `BootScene.ts` (20x8 — long green body + darker head patch,
+  low-profile silhouette that reads as "in the grass" even before the hidden-alpha fade).
+- **Naming resolution locked in** (per the plan's explicit callout): reused the existing
+  `leather` `ResourceType`/item key for Snake's drop — no duplicate `leather_scrap` type
+  was added.
+
+Verified via `preview_eval` (single synchronous eval blocks per the project's "run
+cooldown-timing tests in one call" convention, since the real game loop's own
+`updateEnemies()` would otherwise clobber manually-set state between separate tool
+calls): a Snake spawns hidden at alpha 0.35; stepping `update()` with a player 10px away
+triggers striking (alpha 1) then a landed bite (`bit: true`) on the next call; jumping
+the clock past `FLEE_DURATION_MS` returns it to hidden (alpha 0.35); a further call
+during the re-hide cooldown does not re-trigger striking; `takeHit()` on a hidden Snake
+immediately sets alpha to 1 and flees; `rollLoot()` returns exactly `{resource:
+"leather", amount: 1}`; Boar's stats are unchanged post-refactor (20 HP, 25 bite dmg,
+1-2 boar_meat). Type-check clean, no console errors, world renders normally in
+`preview_screenshot`.
+
 ### Just finished: Leather re-added to Stone Pickaxe/Stone Club + Workbench-gated recipes hidden until a bench exists
 
 Follow-up requests right after the Workbench (Milestone G) + follow-up-fixes entries

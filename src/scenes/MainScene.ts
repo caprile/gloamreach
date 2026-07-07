@@ -11,6 +11,7 @@ import {
   type ToolType,
 } from "../entities/ResourceNode";
 import { Enemy } from "../entities/Enemy";
+import { Snake } from "../entities/Snake";
 import type { ResourceType } from "../systems/Inventory";
 import { Skills, type SkillType } from "../systems/Skills";
 import { Crafting } from "../systems/Crafting";
@@ -580,9 +581,31 @@ export class MainScene extends Phaser.Scene {
     const COUNT = 8;
     for (let i = 0; i < COUNT; i++) {
       const { x, y } = this.pickSpawnPoint(rng, "forest", 200);
-      const enemy = new Enemy(this, { x, y, texture: "boar", displayName: "Boar" });
+      const enemy = new Enemy(this, {
+        x,
+        y,
+        texture: "boar",
+        displayName: "Boar",
+        lootResource: "boar_meat",
+        lootMin: 1,
+        lootMax: 2,
+        maxHealth: 20,
+        biteDamage: 25,
+      });
       this.enemies.push(enemy);
       this.enemyGroup.add(enemy);
+    }
+
+    // Snakes: grassy-preferred (per CLAUDE.md's first-biome content notes),
+    // the game's only leather source (see plan Milestone D's "why
+    // prioritized" note — Stone Pickaxe/Stone Club need it to ever be
+    // discoverable).
+    const SNAKE_COUNT = 6;
+    for (let i = 0; i < SNAKE_COUNT; i++) {
+      const { x, y } = this.pickSpawnPoint(rng, "grassy", 200);
+      const snake = new Snake(this, { x, y });
+      this.enemies.push(snake);
+      this.enemyGroup.add(snake);
     }
   }
 
@@ -742,8 +765,9 @@ export class MainScene extends Phaser.Scene {
 
     const dropX = enemy.x;
     const dropY = enemy.y;
+    const loot = enemy.rollLoot();
     enemy.playDeathFeedback(() => {
-      this.spawnLooseDrop("boar_meat", Phaser.Math.Between(1, 2), dropX, dropY);
+      this.spawnLooseDrop(loot.resource, loot.amount, dropX, dropY);
     });
     this.enemies = this.enemies.filter((e) => e !== enemy);
     this.eventLog.add("combat", `Defeated ${enemy.displayName}`);

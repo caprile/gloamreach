@@ -79,6 +79,16 @@ export class BootScene extends Phaser.Scene {
     g.fillRect(0, 8, 6, 6); // snout
     g.generateTexture("boar", 26, 20);
 
+    // Snake — hidden/ambush enemy. 20x8: long green body + darker head patch.
+    // Low profile reads as "in the grass" even before the hidden-alpha fade
+    // (Snake.ts) is applied.
+    g.clear();
+    g.fillStyle(0x3e6b2f, 1);
+    g.fillRect(1, 2, 18, 4);
+    g.fillStyle(0x274a1c, 1);
+    g.fillRect(0, 1, 6, 6); // head
+    g.generateTexture("snake", 20, 8);
+
     this.makeItemIcons(g);
 
     g.destroy(); // we only needed it to bake textures

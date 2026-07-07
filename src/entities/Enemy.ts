@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import type { ResourceType } from "../systems/Inventory";
 
 export type EnemyState = "idle" | "chasing";
 
@@ -7,9 +8,7 @@ const DEAGGRO_RADIUS = 280; // wider gap than AGGRO_RADIUS to avoid boundary fli
 const CHASE_SPEED = 60; // px/s — slower than player base (95), so it's escapable
 const WANDER_SPEED = 20; // px/s idle wander
 const MELEE_RANGE = 28; // px — how close the Boar must be to bite
-const BITE_DAMAGE = 25; // ~4 bites kills a full-health (100) player
 const BITE_COOLDOWN_MS = 1000;
-const MAX_HEALTH = 20;
 
 // Default "give up eventually" behavior for any non-boss enemy (user
 // decision, see STATUS.md/memory): if 30s of continuous pursuit passes
@@ -32,6 +31,11 @@ export interface EnemyConfig {
   y: number;
   texture: string;
   displayName: string;
+  lootResource: ResourceType;
+  lootMin: number;
+  lootMax: number;
+  maxHealth: number;
+  biteDamage: number;
 }
 
 // A simple melee enemy (currently only "Boar"). Ranged attacks, ambush AI,
@@ -39,8 +43,12 @@ export interface EnemyConfig {
 // see CLAUDE.md's "First biome — content notes" for the fuller roster.
 export class Enemy extends Phaser.Physics.Arcade.Sprite {
   readonly displayName: string;
-  readonly maxHealth = MAX_HEALTH;
-  health = MAX_HEALTH;
+  private readonly lootResource: ResourceType;
+  private readonly lootMin: number;
+  private readonly lootMax: number;
+  private readonly biteDamageValue: number;
+  readonly maxHealth: number;
+  health: number;
   depleted = false;
   state: EnemyState = "idle";
   private lastBiteAt = -Infinity;
@@ -64,6 +72,12 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   constructor(scene: Phaser.Scene, cfg: EnemyConfig) {
     super(scene, cfg.x, cfg.y, cfg.texture);
     this.displayName = cfg.displayName;
+    this.lootResource = cfg.lootResource;
+    this.lootMin = cfg.lootMin;
+    this.lootMax = cfg.lootMax;
+    this.maxHealth = cfg.maxHealth;
+    this.health = cfg.maxHealth;
+    this.biteDamageValue = cfg.biteDamage;
     scene.add.existing(this);
     scene.physics.add.existing(this);
     this.setDepth(cfg.y); // Y-sorted against the player/trees, see preUpdate
@@ -89,13 +103,29 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     this.setDepth(this.y);
     const barX = this.x - Enemy.BAR_W / 2;
     const barY = this.y - Enemy.BAR_OFFSET_Y;
-    this.healthBarBg.setPosition(barX, barY).setDepth(this.depth + 1);
-    this.healthBarFill.setPosition(barX, barY).setDepth(this.depth + 1);
+    const aggro = this.isAggro();
+    this.healthBarBg.setPosition(barX, barY).setDepth(this.depth + 1).setVisible(aggro);
+    this.healthBarFill.setPosition(barX, barY).setDepth(this.depth + 1).setVisible(aggro);
     this.healthBarFill.setScale(Math.max(0, this.health / this.maxHealth), 1);
   }
 
+  // Whether the HP bar should be shown right now — only while actively
+  // aggro'd on the player, not at rest. Base default matches Boar's own
+  // state field; Snake overrides this since it tracks aggro via its own
+  // hidden/striking/fleeing mode instead of the shared `state` field.
+  protected isAggro(): boolean {
+    return this.state === "chasing";
+  }
+
   get biteDamage(): number {
-    return BITE_DAMAGE;
+    return this.biteDamageValue;
+  }
+
+  // Resource dropped on death — data-driven per EnemyConfig so MainScene's
+  // attack handler doesn't need per-species branching (Boar -> boar_meat,
+  // Snake -> leather, etc.).
+  rollLoot(): { resource: ResourceType; amount: number } {
+    return { resource: this.lootResource, amount: Phaser.Math.Between(this.lootMin, this.lootMax) };
   }
 
   // --- give-up / re-aggro-immunity helpers (see constants above) ---
@@ -207,7 +237,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   // vector is that vector's angle offset by PI. Skips the update while
   // nearly stopped so it keeps its last facing (e.g. mid-bite) instead of
   // snapping to an arbitrary angle from a near-zero velocity.
-  private applyFacing(vx: number, vy: number): void {
+  protected applyFacing(vx: number, vy: number): void {
     if (Math.abs(vx) < 3 && Math.abs(vy) < 3) return;
     this.setRotation(Math.atan2(vy, vx) + Math.PI);
   }
