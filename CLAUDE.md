@@ -81,6 +81,9 @@ get their own file under `src/systems/` or `src/entities/`, not bolted onto `Mai
   (see below) — attacking an enemy requires a weapon equipped via the hotbar, same
   flow as tools.
 - **Auto-pickup (magnet) toggle:** **V**
+- **Attack-range ring toggle:** **O** — hides/shows the reach-preview ring around the
+  player (still equip-gated when shown; `O` only controls whether it's allowed to draw
+  at all).
 
 There is **no keyboard interact key** (no E, no Space for gathering) — interaction is
 mouse-driven only. Don't reintroduce a keybind for this without being asked. Spacebar is
@@ -141,6 +144,17 @@ mouse-driven only. Don't reintroduce a keybind for this without being asked. Spa
    hidden/striking/fleeing state machine (tight ambush radius, hit-and-retreat, re-hide
    cooldown) rather than reusing Boar's chase AI — see **First biome — content notes**
    below.
+4c. **Gremlin + projectiles** (Milestone C) and **Boar tuning for the 2x world**
+   (Milestone B) — shipped; see `STATUS.md` for detail.
+4d. **Dash i-frames + attack-range ring** (Milestones E/F of the first-biome plan) —
+   dash now grants a brief `invulnerableUntil` window (150ms, outlasting the sharper
+   105ms dash burst) via the same field/guard `applyDamageToPlayer()` already used for
+   respawn invuln; a subtle reach-preview ring (radius = `REACH`) now shows around the
+   player whenever a tool or weapon is equipped, gated on equip state only (not target
+   proximity, to avoid flicker during approach). The ring also has its own on/off toggle
+   (**O**, mirrors the magnet's **V** toggle pattern) — `rangeRingEnabled` gates
+   `updateAttackRangeRing()` independently of equip state, for players who find it
+   distracting.
 
 **Not yet built — next up in rough order:**
 5. **Progression** — XP, levels, stats.

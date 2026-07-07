@@ -2,7 +2,91 @@
 
 Last updated: 2026-07-07
 
-### Just finished: Boar tuning for the 2x world (Milestone B)
+### Just finished: Fixed enemies still walking off world bounds (Arcade Group defaults gotcha)
+
+User reported enemies were *still* able to run off the map/screen, despite `Enemy.ts`'s
+constructor already calling `this.setCollideWorldBounds(true)` (added in an earlier
+session — see the "Enemies no longer walk off world bounds" entry further down). Root
+cause was one level up: `MainScene.create()` builds `this.enemyGroup =
+this.physics.add.group()` with **no config**, then `spawnEnemies()` calls
+`this.enemyGroup.add(enemy)` for every spawned enemy. Phaser's `PhysicsGroup.
+createCallbackHandler` re-applies the **group's own defaults** to every member's body on
+`add()` — including `setCollideWorldBounds`, which defaults to `false` unless the group
+is configured with `collideWorldBounds: true`. That silently *undid* the per-entity
+`setCollideWorldBounds(true)` the instant each enemy was added to the group, for every
+enemy type (Boar/`Enemy`, `Snake`, `RangedGremlin`, `MeleeGremlin`) — same class of bug
+as the already-documented `Projectile` velocity-zeroing gotcha (STATUS.md, Milestone C),
+just resetting a boolean instead of a vector, and in a different Group (`enemyGroup` vs
+`enemyProjectiles`). See `[[survivor-rpg-phaser-arcade-group-defaults-reset]]` in memory
+for the general pattern — this is the second time it's bitten this codebase and is worth
+checking any time a fresh Group is created and used to `.add()` already-constructed
+entities that set body properties in their own constructor.
+
+- **Fix** (`src/scenes/MainScene.ts`, `create()`): `this.physics.add.group({
+  collideWorldBounds: true })` instead of the no-config call. Applies to every current
+  and future `Enemy` subclass automatically — no per-species change needed, same as the
+  original per-entity fix intended.
+
+Verified via `preview_eval`: before the fix, `enemyGroup.getChildren()[i].body.
+collideWorldBounds` read `false` for every spawned enemy (confirming the bug
+reproduces). After the fix and a page reload, all 28 spawned enemies across all four
+types (`Enemy`: 12, `Snake`: 6, `RangedGremlin`: 4, `MeleeGremlin`: 6) report
+`collideWorldBounds: true`. Type-check clean, no console errors, world renders normally.
+
+### Previously: Range-ring toggle (O key)
+
+Follow-up to the attack-range ring below, same session — user asked for a way to turn
+the ring on/off. Mirrors the existing magnet toggle (`V`) pattern exactly:
+
+- **`src/scenes/MainScene.ts`**: new `rangeRingEnabled = true` field, `keydown-O` binds
+  to a new `toggleRangeRing()` (flips the flag, logs to the event log, and clears the
+  Graphics immediately if turning off so it doesn't linger a stale frame). `updateAttackRangeRing()`
+  now checks `!this.rangeRingEnabled` before the equip check — toggle wins even while a
+  weapon/tool is equipped. Added `"Range ring: O"` to the `KeybindsUI` list.
+
+Verified via `preview_eval`: with a tool equipped, `updateAttackRangeRing()` draws (14
+commands), calling `toggleRangeRing()` clears it to 0 regardless of equip state, toggling
+again restores the draw. Confirmed the real `keydown-O` event (via
+`scene.input.keyboard.emit`) flips `rangeRingEnabled` end-to-end, not just the
+direct-method-call path. Type-check clean, no console errors, `preview_screenshot` shows
+the ring rendering around the player when enabled.
+
+### Just finished: Dash i-frames (Milestone E) + attack-range ring (Milestone F)
+
+Plan file: `.claude/plans/let-s-proceed-with-option-crystalline-petal.md` (Milestones E
+and F — both flagged "fully independent," picked up together since they're small and
+don't touch overlapping code).
+
+- **Milestone E — dash → dodge + i-frames** (`src/entities/Player.ts`,
+  `src/scenes/MainScene.ts`): `DASH_SPEED` 340→450 and `DASH_DURATION_MS` 160→105 for a
+  sharper burst-then-stop feel (net displacement stays similar). New
+  `DASH_IFRAME_MS` (150, in `MainScene.ts`) set on `this.invulnerableUntil` at the same
+  site `DASH_STAMINA_COST` is already spent (`frame.dashStarted` branch in `update()`) —
+  slightly outlasts the dash itself. Reuses the existing `invulnerableUntil` field/guard
+  in `applyDamageToPlayer()` unchanged (already generic to any code setting it) — same
+  mechanism as respawn invuln, different constant, not shared. `DASH_COOLDOWN_MS` (600)
+  left as-is per the plan.
+- **Milestone F — attack-range indicator** (`src/scenes/MainScene.ts`): new
+  `attackRangeRing: Phaser.GameObjects.Graphics` created in `create()` (depth -5, just
+  above ground/-10, below entities), redrawn each frame in a new
+  `updateAttackRangeRing()` called alongside `syncEquippedIconPosition()` in both
+  `update()` branches (normal and the frozen-on-death branch, so it doesn't vanish on
+  death). Equipped-gated only (`!equippedTool && !equippedWeapon` → `clear()` and
+  return — empty draw, cheapest hide), deliberately **not** target-gated per the plan
+  (would flicker during approach). Radius = flat `REACH` (64) — no per-weapon range
+  table exists yet, so the ring reads the same constant all melee already uses.
+
+Verified via `preview_eval`: `updateAttackRangeRing()` with nothing equipped leaves the
+Graphics' `commandBuffer` empty (len 0); equipping `stone_axe` and calling it again
+produces draw commands (len 14); unequipping clears it back to 0 — confirms the
+show/hide gating end-to-end without needing real mouse/pointer simulation. Manually
+set `invulnerableUntil` to mirror the dash-start branch and confirmed
+`time.now < invulnerableUntil` reads true immediately after, matching what
+`applyDamageToPlayer()`'s existing guard checks. Type-check clean
+(`tsc --noEmit`), `preview_screenshot` shows the world booting normally with no ring
+visible pre-equip (correct), no console errors.
+
+### Previously: Boar tuning for the 2x world (Milestone B)
 
 Plan file: `.claude/plans/let-s-proceed-with-option-crystalline-petal.md` (Milestone B —
 the numeric-tuning half; the movement/zigzag half was already resolved earlier via

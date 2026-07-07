@@ -53,6 +53,7 @@ const DROP_SCATTER_MAX = 45; // px — max distance a drop piece explodes out to
 const DROP_CONSOLIDATE_RADIUS = 28; // px — merge a landed piece into another this close
 const SPRINT_DRAIN_PER_SEC = 33; // stamina/sec while sprinting — full bar in ~3s
 const DASH_STAMINA_COST = 25; // flat cost per dash — 4 dashes per full bar
+const DASH_IFRAME_MS = 150; // outlasts the dash burst itself (Milestone E)
 const WORKBENCH_RANGE = 100; // px — looser than REACH; "am I near it," not a precise click
 
 // The main gameplay scene: build the world, spawn the player and resources,
@@ -76,6 +77,7 @@ export class MainScene extends Phaser.Scene {
   // hotbar slot.
   private equippedTool: ToolType | null = null;
   private equippedWeapon: WeaponType | null = null;
+  private attackRangeRing!: Phaser.GameObjects.Graphics;
   private hotbar = new Hotbar();
   private equipment = new Equipment();
   private eventLog = new EventLog();
@@ -105,6 +107,7 @@ export class MainScene extends Phaser.Scene {
   // Whether loose drop pieces auto-fly to the player when in range. Toggled
   // with V; doesn't affect pre-placed branches/rocks (always manual).
   private magnetEnabled = true;
+  private rangeRingEnabled = true;
 
   // --- Combat ---
   private enemies: Enemy[] = [];
@@ -157,6 +160,10 @@ export class MainScene extends Phaser.Scene {
     this.player = new Player(this, WORLD_W / 2, WORLD_H / 2);
     this.cameras.main.startFollow(this.player, true, 0.1, 0.1);
 
+    // Reach preview ring — only drawn while a tool/weapon is equipped, kept
+    // just above the ground and below entities (Milestone F).
+    this.attackRangeRing = this.add.graphics().setDepth(-5);
+
     // Trees and boulders are solid; the player bumps into them.
     const solids = this.physics.add.staticGroup();
     this.spawnNodes(solids);
@@ -165,7 +172,13 @@ export class MainScene extends Phaser.Scene {
     // Enemies: physical collision with solids and the player (separation
     // only — the actual bite trigger is manual distance math, matching how
     // REACH-based interaction already works).
-    this.enemyGroup = this.physics.add.group();
+    // `collideWorldBounds: true` here is required, not redundant with Enemy's
+    // own setCollideWorldBounds(true) call — Arcade Group.add() re-applies the
+    // group's defaults (collideWorldBounds: false unless set here) to every
+    // member's body on add(), silently undoing whatever the entity's own
+    // constructor set. Same class of gotcha as Projectile's velocity-zeroing
+    // (see STATUS.md), just hitting a boolean instead of a vector.
+    this.enemyGroup = this.physics.add.group({ collideWorldBounds: true });
     this.spawnEnemies();
     this.physics.add.collider(this.enemyGroup, solids);
     this.physics.add.collider(this.player, this.enemyGroup);
@@ -260,6 +273,7 @@ export class MainScene extends Phaser.Scene {
       this.input.keyboard!.on(`keydown-${key}`, () => this.selectHotbarSlot(i));
     });
     this.input.keyboard!.on("keydown-V", () => this.toggleMagnet());
+    this.input.keyboard!.on("keydown-O", () => this.toggleRangeRing());
 
     // Seed recipe discovery (no-op at a fresh start, but keeps state correct
     // if the initial inventory ever changes).
@@ -273,6 +287,7 @@ export class MainScene extends Phaser.Scene {
       this.stamina.tick(delta);
       this.refreshStaminaBar();
       this.player.syncEquippedIconPosition();
+      this.updateAttackRangeRing();
       this.updateEnemies(delta);
       this.updateMagnet(delta);
       this.updateTreeOcclusion(delta);
@@ -293,10 +308,12 @@ export class MainScene extends Phaser.Scene {
     }
     if (frame.dashStarted) {
       this.stamina.spend(DASH_STAMINA_COST);
+      this.invulnerableUntil = this.time.now + DASH_IFRAME_MS;
     }
     this.stamina.tick(delta);
     this.refreshStaminaBar();
     this.player.syncEquippedIconPosition();
+    this.updateAttackRangeRing();
 
     if (this.placementMode) this.updatePlacementGhost();
     else if (!this.anyMenuOpen()) this.updateHover();
@@ -324,6 +341,12 @@ export class MainScene extends Phaser.Scene {
   private toggleMagnet(): void {
     this.magnetEnabled = !this.magnetEnabled;
     this.eventLog.add("info", `Auto-pickup: ${this.magnetEnabled ? "ON" : "OFF"}`);
+  }
+
+  private toggleRangeRing(): void {
+    this.rangeRingEnabled = !this.rangeRingEnabled;
+    this.eventLog.add("info", `Range ring: ${this.rangeRingEnabled ? "ON" : "OFF"}`);
+    if (!this.rangeRingEnabled) this.attackRangeRing.clear();
   }
 
   // Pulls loose drop pieces (not pre-placed branches/rocks) toward the
@@ -388,6 +411,18 @@ export class MainScene extends Phaser.Scene {
     this.player.setEquippedIcon(iconTexture);
     this.hotbarUI.refresh();
     this.refreshHud();
+  }
+
+  // Subtle reach preview — visible whenever a tool or weapon is equipped
+  // (unarmed has no reach to communicate), radius = flat REACH since all
+  // melee currently shares one range (Milestone F).
+  private updateAttackRangeRing(): void {
+    this.attackRangeRing.clear();
+    if (!this.rangeRingEnabled) return;
+    if (!this.equippedTool && !this.equippedWeapon) return;
+    this.attackRangeRing
+      .lineStyle(1.5, 0xffffff, 0.25)
+      .strokeCircle(this.player.x, this.player.y, REACH);
   }
 
   // True when a screen point lands on a fixed HUD element that should swallow
@@ -1197,6 +1232,7 @@ export class MainScene extends Phaser.Scene {
         "Craft: T",
         "Inventory: Tab",
         "Auto-pickup: V",
+        "Range ring: O",
       ],
       () => this.eventLogUI?.setTopY(this.keybindsUI.bottom + 8),
     );

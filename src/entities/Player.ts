@@ -2,8 +2,8 @@ import Phaser from "phaser";
 
 const SPEED = 95; // pixels per second
 const SPRINT_MULTIPLIER = 1.6; // sprint speed = SPEED * this
-const DASH_SPEED = 340; // px/s during a dash burst
-const DASH_DURATION_MS = 160; // how long the burst overrides normal movement
+const DASH_SPEED = 450; // px/s during a dash burst — sharp snap, not a glide
+const DASH_DURATION_MS = 105; // how long the burst overrides normal movement
 const DASH_COOLDOWN_MS = 600; // minimum time between dashes, independent of stamina
 
 export type Facing = "up" | "down" | "left" | "right";

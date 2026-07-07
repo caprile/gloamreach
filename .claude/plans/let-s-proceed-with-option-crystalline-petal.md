@@ -269,7 +269,7 @@ Subclass `Enemy` for rendering reuse; override `update()` with `hidden | strikin
 
 ---
 
-## Milestone E — Dash → dodge + i-frames (fully independent)
+## Milestone E — Dash → dodge + i-frames (fully independent) — DONE (2026-07-07)
 
 **Goal:** Snappier dodge feel + brief invulnerability, reusing the existing `invulnerableUntil`.
 
@@ -290,7 +290,7 @@ Most self-contained milestone; safe any time.
 
 ---
 
-## Milestone F — Player attack-range indicator (fully independent)
+## Milestone F — Player attack-range indicator (fully independent) — DONE (2026-07-07)
 
 **Goal:** Subtle ring showing current reach, consistent with "don't show more than necessary."
 
@@ -492,6 +492,15 @@ variants" note above.
    projectile/none/melee) — small refactor, flag it, not a blocker.
 4. **Workbench range/cost + all enemy stat numbers are placeholders** — tune during each session's
    `preview_eval` pass; don't treat this doc's numbers as final.
+5. **Arcade `Group.add()` silently resets body properties to the group's defaults** — bit
+   this codebase twice: `Projectile`'s velocity zeroed on `enemyProjectiles.add()`
+   (Milestone C), and `Enemy.setCollideWorldBounds(true)` silently undone by
+   `enemyGroup.add()` (fixed 2026-07-07 by configuring `physics.add.group({
+   collideWorldBounds: true })` instead of relying on each entity's own constructor).
+   Any future entity that sets a body property in its own constructor and later gets
+   `.add()`-ed into a bare `physics.add.group()` is at risk of the same silent reset —
+   either configure the group's defaults to match, or re-apply the property after
+   `.add()`, not before.
 
 ## Model guidance (per CLAUDE.md)
 
