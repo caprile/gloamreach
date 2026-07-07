@@ -2,6 +2,71 @@
 
 Last updated: 2026-07-07
 
+### Just finished: Trees/boulders no longer solid + Y-depth occlusion fade + no-spawn-in-water fix
+
+Plan file: `.claude/plans/review-the-plan-and-witty-cloud.md`. Resolves the Milestone B
+follow-up below by picking the "let enemies (and the player) walk through trees" option
+over improving the escape-heading heuristic further, plus adds a Stardew-Valley-style
+occlusion fade and fixes a water-spawn bug surfaced in the same discussion.
+
+- **Trees/boulders are no longer solid** (`MainScene.spawnNodes()`): their `scatter()`
+  configs flipped `solid: true` → `false`, so they're no longer added to the `solids`
+  static group. That group (and its colliders against both `player` and `enemyGroup`)
+  stays wired up unchanged — it's just empty for now, reserved for future
+  structures/walls/mountains that genuinely should block movement.
+- **`Enemy.ts`'s obstacle-avoidance heuristic was deleted outright**, not left inert: the
+  ground-truth stuck-detection + randomized near-tangent escape-heading + per-instance
+  `escapeSide` mechanism (see the entry below) is gone along with its constants
+  (`STUCK_CHECK_INTERVAL_MS`, `STUCK_DISPLACEMENT_PX`, `ESCAPE_DURATION_MS`) and fields.
+  With nothing solid left to get stuck on, chase movement is back to a plain "always head
+  straight at the player" angle every frame. Verified via `preview_eval` with real physics
+  ticks: a Boar forced into `chasing` across the map's densest tree cluster (auto-detected
+  the same way prior sessions did) cut a perfectly straight line through it (y didn't
+  move at all, x closed monotonically) all the way to melee range — no zigzag.
+- **Y-depth sorting (new)**: previously `Player`/`Enemy` were pinned to fixed depths
+  (10/9) regardless of Y position specifically so trees could never visually cover them —
+  a comment on `Player.ts` said so outright. That's superseded now: `Player` and `Enemy`
+  both track `depth = this.y` every frame (in their own `preUpdate()` overrides, so it
+  keeps working even while the player is frozen on death), and `ResourceNode` sets a
+  one-time `depth = y` at construction for any non-pickup node (trees/boulders — ground
+  clutter like branches/rocks/loose drops stays at the default depth, never occluding,
+  same as before). The player's equipped-item icon and the enemy HP bar both now track
+  `owner.depth + 1` per frame instead of a stale fixed depth, so they stay glued visually
+  on top of whichever owns them regardless of the new Y-based scale.
+- **Occlusion fade (new)**: `MainScene.updateTreeOcclusion()`, run every frame (both the
+  normal path and the death-freeze path, alongside `updateMagnet`/`updateEnemies`), fades
+  a tree/boulder's alpha down (to `0.45`) when the player is horizontally overlapping it
+  and positioned close enough "above/behind" it (per the new Y-sort) that it would
+  otherwise be drawn over them — and back to `1` once they're clear. Deliberately **fades
+  the obstruction, not the player/enemy** (explicit user correction during planning — the
+  Stardew-style effect people usually mean is "make the thing in front translucent," not
+  "make the character translucent"). Implemented as a manual per-frame `Phaser.Math.Linear`
+  alpha lerp rather than a Tween, specifically so it can't fight
+  `ResourceNode.playHitFeedback()`'s own tweens (shake/tint) on the same object. A
+  dedicated `obstacleNodes` array (populated alongside `nodes` in `spawnNodes()`, filtered
+  to non-pickup nodes) avoids filtering the full, much larger `nodes` list every frame.
+  Verified via `preview_eval`: placing the player directly above a tree dropped its alpha
+  to `0.46` within 500ms and raised the player's computed depth below the tree's (matching
+  the intended draw order), and moving far away recovered it back to `~1`.
+  `preview_screenshot` confirms the visual read — a faded, ghostly tree with the player
+  (blue square) fully visible in front of it, distinct from the solid-green unfaded trees
+  elsewhere in frame.
+- **Bug fix**: pre-placed branches/rocks could previously spawn inside the creek (their
+  `scatter()` calls never passed `avoidCreek: true`, unlike trees/boulders which already
+  did). Now both do. Verified via `preview_eval`: scanning every pre-placed branch/rock
+  against `biome.isCreekAt()` returns zero hits.
+- **Line-of-sight-gated aggro was explicitly scoped out** — raised as a discussion point,
+  but the user clarified the intended rule is "only things you can't move through block
+  line of sight." Since trees/boulders are now non-solid, they don't block LOS either —
+  there's nothing to build this session. This becomes relevant automatically once a
+  future *solid* obstacle (wall, mountain, etc.) exists; no code was added for it now
+  beyond keeping solidity as the single source of truth for both movement-blocking and
+  (eventually) LOS-blocking.
+- Regression-checked: chop/mine hover/interact (manual `REACH` distance math, not
+  collision-based) is unaffected by trees/boulders going non-solid — confirmed via
+  `preview_eval` (equipping a stone axe and hovering a tree still resolves
+  `[LMB] Chop`). No console errors throughout. Type-check clean.
+
 ### Noted, not acted on: Boar's obstacle-avoidance movement feels bad
 
 User feedback after the "stuck between multiple trees" fixes (below): the movement

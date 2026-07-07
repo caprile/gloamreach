@@ -3,28 +3,12 @@ import Phaser from "phaser";
 export type EnemyState = "idle" | "chasing";
 
 const AGGRO_RADIUS = 140; // px — player enters this range, Boar starts chasing
-// Wider than a plain "avoid boundary flicker" gap needs — dense obstacle
-// clusters can take several chained escape maneuvers to clear, and each one
-// can push the Boar temporarily further from the player. Too tight a margin
-// here means it gives up and wanders off mid-navigation instead of finishing
-// the maneuver. See STATUS.md for the obstacle-avoidance history.
-const DEAGGRO_RADIUS = 280;
+const DEAGGRO_RADIUS = 280; // wider gap than AGGRO_RADIUS to avoid boundary flicker
 const CHASE_SPEED = 60; // px/s — slower than player base (95), so it's escapable
 const WANDER_SPEED = 20; // px/s idle wander
 const MELEE_RANGE = 28; // px — how close the Boar must be to bite
 const BITE_DAMAGE = 25; // ~4 bites kills a full-health (100) player
 const BITE_COOLDOWN_MS = 1000;
-// No real pathfinding exists. Rather than reacting to the physics `touching`
-// flag (a fixed offset from that can just aim straight into a SECOND nearby
-// obstacle and wedge forever — see STATUS.md), progress is measured directly:
-// if actual movement over a short window is too small, commit to a randomized
-// escape heading for a while. Randomizing each attempt (instead of a fixed
-// per-instance offset) is what breaks a deterministic "approach -> wedge ->
-// back off -> approach the exact same wedge again" loop between clustered
-// obstacles.
-const STUCK_CHECK_INTERVAL_MS = 350; // how often to sample position for progress
-const STUCK_DISPLACEMENT_PX = 12; // below this over one interval counts as "not progressing"
-const ESCAPE_DURATION_MS = 900; // commit to a chosen escape heading this long before retrying direct
 const MAX_HEALTH = 20;
 
 // Default "give up eventually" behavior for any non-boss enemy (user
@@ -62,18 +46,6 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   private lastBiteAt = -Infinity;
   private wanderTarget: { x: number; y: number } | null = null;
   private nextWanderAt = 0;
-  // Obstacle-escape state (see STUCK_* / ESCAPE_* constants above).
-  private lastProgressCheckAt = 0;
-  private lastProgressX: number;
-  private lastProgressY: number;
-  private escapeAngle = 0;
-  private escapeUntil = 0;
-  // Which side (left/right of the direct-to-player line) escape attempts
-  // pick, fixed per-instance. Re-randomizing this every time it gets stuck
-  // makes it zigzag between both sides of a wide obstacle instead of
-  // consistently working around one edge — classic wall-following needs a
-  // committed side, not a fresh coin flip each attempt.
-  private readonly escapeSide: 1 | -1 = Math.random() < 0.5 ? 1 : -1;
   // Give-up/immunity state (see CHASE_GIVEUP_MS etc. above) — protected so a
   // future subclass overriding update() entirely can still reuse the same
   // clock/helpers below rather than reimplementing the mechanism.
@@ -92,33 +64,33 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   constructor(scene: Phaser.Scene, cfg: EnemyConfig) {
     super(scene, cfg.x, cfg.y, cfg.texture);
     this.displayName = cfg.displayName;
-    this.lastProgressX = cfg.x;
-    this.lastProgressY = cfg.y;
     scene.add.existing(this);
     scene.physics.add.existing(this);
-    this.setDepth(9); // just under the player (10)
+    this.setDepth(cfg.y); // Y-sorted against the player/trees, see preUpdate
 
     const barX = cfg.x - Enemy.BAR_W / 2;
     const barY = cfg.y - Enemy.BAR_OFFSET_Y;
     this.healthBarBg = scene.add
       .rectangle(barX, barY, Enemy.BAR_W, Enemy.BAR_H, 0x1a1f2a, 0.85)
-      .setOrigin(0, 0.5)
-      .setDepth(9);
+      .setOrigin(0, 0.5);
     this.healthBarFill = scene.add
       .rectangle(barX, barY, Enemy.BAR_W, Enemy.BAR_H, 0xd02020, 1)
-      .setOrigin(0, 0.5)
-      .setDepth(9);
+      .setOrigin(0, 0.5);
   }
 
   // Keeps the HP bar glued to the sprite (and its fill in sync with current
   // health) every frame, independent of MainScene's own update() cadence —
-  // same reasoning as ResourceNode's count-label preUpdate override.
+  // same reasoning as ResourceNode's count-label preUpdate override. Also
+  // keeps the enemy's own depth Y-sorted against the player and trees/
+  // boulders (which are now walk-through-able but still visually occlude
+  // whatever is "behind" them, see MainScene.updateTreeOcclusion).
   preUpdate(time: number, delta: number): void {
     super.preUpdate(time, delta);
+    this.setDepth(this.y);
     const barX = this.x - Enemy.BAR_W / 2;
     const barY = this.y - Enemy.BAR_OFFSET_Y;
-    this.healthBarBg.setPosition(barX, barY);
-    this.healthBarFill.setPosition(barX, barY);
+    this.healthBarBg.setPosition(barX, barY).setDepth(this.depth + 1);
+    this.healthBarFill.setPosition(barX, barY).setDepth(this.depth + 1);
     this.healthBarFill.setScale(Math.max(0, this.health / this.maxHealth), 1);
   }
 
@@ -171,13 +143,9 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
       this.state = "chasing";
       this.startPursuit(now);
     } else if (this.state === "chasing") {
-      // Don't deaggro mid-escape: navigating around a cluster can temporarily
-      // push the Boar past DEAGGRO_RADIUS on its way around, and giving up
-      // right then meant it would never actually finish the maneuver — it'd
-      // just permanently idle a step away from getting through. This is the
-      // ordinary "target left" case — no re-aggro immunity, it resumes
-      // instantly if the player comes back.
-      if (dist > DEAGGRO_RADIUS && now >= this.escapeUntil) {
+      // Ordinary "target left" case — no re-aggro immunity, resumes instantly
+      // if the player comes back within range.
+      if (dist > DEAGGRO_RADIUS) {
         this.state = "idle";
       } else if (this.hasGivenUpPursuit(now)) {
         // 30s of trying without landing a single hit — back off instead of
@@ -198,38 +166,13 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
         }
         return false;
       }
-      // Ground-truth stuck detection: sample actual displacement every
-      // STUCK_CHECK_INTERVAL_MS. If it's too small — wedged against one
-      // obstacle, oscillating between several, whatever the cause — commit to
-      // a fresh randomized heading for ESCAPE_DURATION_MS. A new random pick
-      // each time (rather than a fixed offset) is what prevents repeating the
-      // exact same failed maneuver against the same obstacle layout forever.
+      // Trees/boulders no longer block movement, so there's nothing left to
+      // get stuck on — chase straight at the player every frame (the old
+      // ground-truth stuck-detection/escape-heading heuristic that used to
+      // live here is gone, see STATUS.md history).
       const directAngle = Phaser.Math.Angle.Between(this.x, this.y, playerX, playerY);
-      if (now - this.lastProgressCheckAt >= STUCK_CHECK_INTERVAL_MS) {
-        const moved = Phaser.Math.Distance.Between(this.x, this.y, this.lastProgressX, this.lastProgressY);
-        if (moved < STUCK_DISPLACEMENT_PX && now >= this.escapeUntil) {
-          // Biased to near-tangent (roughly perpendicular to the direct-to-
-          // player line): near-forward just re-hits the same obstacle, and
-          // anything past ~100° has a net-negative cosine projection onto the
-          // goal direction — i.e. it's *backward*, so repeated escapes in
-          // that range compound into steady drift away from the player
-          // rather than sliding around the obstacle at roughly constant
-          // distance (this was tried and measured: a wider 99-162° range
-          // reliably walked the Boar out of aggro range over several
-          // consecutive attempts). The side itself is fixed per-instance
-          // (escapeSide), not re-picked here, so repeated attempts commit to
-          // working around the same edge instead of zigzagging.
-          const offset = Phaser.Math.FloatBetween(Math.PI * 0.36, Math.PI * 0.56);
-          this.escapeAngle = directAngle + this.escapeSide * offset;
-          this.escapeUntil = now + ESCAPE_DURATION_MS;
-        }
-        this.lastProgressCheckAt = now;
-        this.lastProgressX = this.x;
-        this.lastProgressY = this.y;
-      }
-      const angle = now < this.escapeUntil ? this.escapeAngle : directAngle;
-      const vx = Math.cos(angle) * CHASE_SPEED;
-      const vy = Math.sin(angle) * CHASE_SPEED;
+      const vx = Math.cos(directAngle) * CHASE_SPEED;
+      const vy = Math.sin(directAngle) * CHASE_SPEED;
       body.setVelocity(vx, vy);
       this.applyFacing(vx, vy);
       return false;

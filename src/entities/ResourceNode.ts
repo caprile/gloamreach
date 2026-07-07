@@ -101,6 +101,12 @@ export class ResourceNode extends Phaser.GameObjects.Sprite {
     this.maxHealth = cfg.health;
     this.health = cfg.health;
     scene.add.existing(this);
+    // Trees/boulders are tall enough to visually occlude the player/enemies
+    // walking past them, so they're Y-sorted against them (see
+    // MainScene.updateTreeOcclusion for the fade-when-occluding companion
+    // behavior). Ground clutter (pickups, loose drop pieces) stays at the
+    // default depth (0) — always below player/enemies, same as before.
+    if (this.action !== "pickup") this.setDepth(cfg.y);
   }
 
   // Updates the stack amount and keeps the count label (shown only when

@@ -57,6 +57,10 @@ export class MainScene extends Phaser.Scene {
   private player!: Player;
   private biome!: Biome; // procedural zone layout, generated fresh each session
   private nodes: ResourceNode[] = [];
+  // Subset of `nodes` that can visually occlude the player (trees/boulders —
+  // see updateTreeOcclusion). Ground clutter (pickups/loose drops) never
+  // occludes, so it's excluded up front rather than filtered every frame.
+  private obstacleNodes: ResourceNode[] = [];
   private skills = new Skills();
   private crafting = new Crafting();
   // The single unified item pool. Resources and crafted items alike live here
@@ -242,6 +246,7 @@ export class MainScene extends Phaser.Scene {
       this.player.syncEquippedIconPosition();
       this.updateEnemies(delta);
       this.updateMagnet(delta);
+      this.updateTreeOcclusion(delta);
       return;
     }
 
@@ -268,6 +273,7 @@ export class MainScene extends Phaser.Scene {
     else if (!this.anyMenuOpen()) this.updateHover();
     this.updateMagnet(delta);
     this.updateEnemies(delta);
+    this.updateTreeOcclusion(delta);
   }
 
   private toggleMagnet(): void {
@@ -509,20 +515,28 @@ export class MainScene extends Phaser.Scene {
         });
         this.nodes.push(node);
         if (cfg.solid) solids.add(node);
+        // Trees/boulders (not pickups) are Y-sorted and can render in front
+        // of the player — tracked separately so updateTreeOcclusion() doesn't
+        // have to filter the full (much larger, and growing) nodes list every
+        // frame just to find the handful that can occlude anything.
+        if (cfg.action !== "pickup") this.obstacleNodes.push(node);
       }
     };
 
     // Free pickups. Pre-placed branches/rocks are always manual-click — only
     // pieces spawned from a depleted tree/boulder are "loose"/magnet-eligible
-    // (see spawnLooseDrop). Counts scaled up for the larger world.
-    scatter(40, { texture: "branch", resource: "wood", amount: 1, action: "pickup", displayName: "Branch", loose: false, solid: false, health: 1, zone: "forest" });
-    scatter(30, { texture: "rock", resource: "stone", amount: 1, action: "pickup", displayName: "Rock", loose: false, solid: false, health: 1, zone: null });
+    // (see spawnLooseDrop). Counts scaled up for the larger world. Both stay
+    // off the creek, same reasoning as trees/boulders below.
+    scatter(40, { texture: "branch", resource: "wood", amount: 1, action: "pickup", displayName: "Branch", loose: false, solid: false, health: 1, zone: "forest", avoidCreek: true });
+    scatter(30, { texture: "rock", resource: "stone", amount: 1, action: "pickup", displayName: "Rock", loose: false, solid: false, health: 1, zone: null, avoidCreek: true });
     // Tool-gated. Trees are dense in the forest and sparse in the grassy open;
     // both stay off the creek (a tree on water looks wrong). Boulders favor the
-    // grassy open.
-    scatter(70, { texture: "tree", resource: "wood", amount: 5, action: "chop", displayName: "Tree", loose: false, solid: true, health: 3, zone: "forest", avoidCreek: true });
-    scatter(14, { texture: "tree", resource: "wood", amount: 5, action: "chop", displayName: "Tree", loose: false, solid: true, health: 3, zone: "grassy", avoidCreek: true });
-    scatter(18, { texture: "boulder", resource: "stone", amount: 5, action: "mine", displayName: "Boulder", loose: false, solid: true, health: 3, zone: "grassy", avoidCreek: true });
+    // grassy open. Neither blocks movement (see updateTreeOcclusion for the
+    // Y-sort + fade that replaces solid collision) — only the `solids` group
+    // (currently empty) is reserved for future structures/walls/mountains.
+    scatter(70, { texture: "tree", resource: "wood", amount: 5, action: "chop", displayName: "Tree", loose: false, solid: false, health: 3, zone: "forest", avoidCreek: true });
+    scatter(14, { texture: "tree", resource: "wood", amount: 5, action: "chop", displayName: "Tree", loose: false, solid: false, health: 3, zone: "grassy", avoidCreek: true });
+    scatter(18, { texture: "boulder", resource: "stone", amount: 5, action: "mine", displayName: "Boulder", loose: false, solid: false, health: 3, zone: "grassy", avoidCreek: true });
   }
 
   // Scatter Boars around the world. Forest-preferred (their common habitat);
@@ -733,6 +747,40 @@ export class MainScene extends Phaser.Scene {
     for (const enemy of this.enemies) {
       const bit = enemy.update(delta, this.player.x, this.player.y, now);
       if (bit) this.applyDamageToPlayer(enemy.biteDamage);
+    }
+  }
+
+  // Trees/boulders are non-solid but still Y-sorted (see ResourceNode's
+  // constructor), so one can render in front of the player when standing
+  // "behind" it. Rather than hide the player, fade the obstruction down so
+  // the player is always visible (Stardew Valley's approach) — a manual
+  // per-frame alpha lerp toward a target, not a tween, so it doesn't fight
+  // ResourceNode.playHitFeedback's own tweens on the same object.
+  private static readonly OCCLUSION_FADE_ALPHA = 0.45;
+  private static readonly OCCLUSION_CULL_DIST = 120; // px — skip the finer overlap check beyond this
+  private static readonly OCCLUSION_LERP_PER_SEC = 8; // alpha lerp rate
+  private updateTreeOcclusion(delta: number): void {
+    const px = this.player.x;
+    const py = this.player.y;
+    const t = Math.min(1, (delta / 1000) * MainScene.OCCLUSION_LERP_PER_SEC);
+    for (const node of this.obstacleNodes) {
+      if (node.depleted) continue;
+      const dx = node.x - px;
+      const dy = node.y - py;
+      let target = 1;
+      if (Math.abs(dx) <= MainScene.OCCLUSION_CULL_DIST && Math.abs(dy) <= MainScene.OCCLUSION_CULL_DIST) {
+        const halfW = node.displayWidth / 2;
+        const halfH = node.displayHeight / 2;
+        // "Behind" the tree: the player overlaps it horizontally and sits
+        // above it (smaller y) closely enough that the Y-sorted sprite would
+        // actually be drawn over them.
+        if (Math.abs(dx) <= halfW && dy > 0 && dy <= halfH) {
+          target = MainScene.OCCLUSION_FADE_ALPHA;
+        }
+      }
+      if (node.alpha !== target) {
+        node.setAlpha(Phaser.Math.Linear(node.alpha, target, t));
+      }
     }
   }
 

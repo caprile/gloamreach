@@ -107,20 +107,31 @@ kept as three *separate* `RandomDataGenerator` instances:
 - Fill in the Boar-specific half of the density plumbing stubbed in A. Small/mechanical
   milestone; could tail-end A's session if budget allows.
 
-**Follow-up note (flagged 2026-07-07, not implemented yet):** the obstacle-avoidance
-heuristic added to `Enemy.ts`'s chase logic (ground-truth stuck detection + randomized
-near-tangent escape headings + a persistent per-instance escape side — see STATUS.md's
-"stuck between multiple trees" entries and [[feedback_enemy_obstacle_avoidance]]) works,
-but the user considers the resulting movement **"kind of trash"** — it reads as
-zigzagging rather than a clean path around an obstacle. Worth revisiting when Milestone B
-is actually picked up. One direction explicitly raised: **let Boars just walk through
-trees** (skip the `physics.add.collider(this.enemyGroup, solids)` collision, or exempt
-tree-type solids from it specifically) rather than solving pathing/avoidance at all —
-would eliminate the zigzag problem outright since there'd be nothing to avoid, at the
-cost of enemies visually clipping through trees. Needs a product decision (does clipping
-through trees look acceptable, does it apply to boulders too or just trees, does it apply
-to future enemies uniformly) before implementing — don't build either the "better
-avoidance" or "walk through trees" fix without that discussion.
+**Follow-up note — RESOLVED 2026-07-07** (see `STATUS.md`'s "Trees/boulders no longer
+solid..." entry and the session plan `.claude/plans/review-the-plan-and-witty-cloud.md`):
+the obstacle-avoidance heuristic added to `Enemy.ts`'s chase logic (ground-truth stuck
+detection + randomized near-tangent escape headings + a persistent per-instance escape
+side — see STATUS.md's "stuck between multiple trees" entries and
+[[feedback_enemy_obstacle_avoidance]]) worked, but the user considered the resulting
+movement **"kind of trash"** — zigzagging rather than a clean path around an obstacle.
+The **"walk through trees" direction was chosen** over improving the heuristic further:
+trees and boulders are now non-solid (`solid: false`) for *both* the player and enemies
+(applies to boulders too, not just trees), and the old escape-heading mechanism was
+deleted from `Enemy.ts` outright rather than left inert. Bundled in the same pass so
+removing collision didn't also remove the visual "walking behind a tree" read: real
+Y-depth sorting (player/enemy/tree depth all track Y position, replacing the old fixed
+depths) plus a Stardew-style occlusion fade (the tree/boulder fades to partial alpha, not
+the player, when it would otherwise render in front of them). The `solids` physics group
+stays wired up empty, reserved for future structures/walls/mountains that should still
+block movement. Line-of-sight-gated aggro was raised in the same discussion but scoped
+out: the user's rule is "only things you can't move through block line of sight," so
+non-solid trees/boulders don't need to gate LOS either — this activates automatically
+once a future *solid* obstacle exists. See [[survivor-rpg-non-solid-trees-y-sort]] for
+the full design record.
+
+Milestone B's original scope above (retuning `AGGRO_RADIUS`/`DEAGGRO_RADIUS`/Boar counts
+for the "too aggressive" complaint) is **still open** — this follow-up note only resolved
+the movement/zigzag half of Milestone B, not the numeric tuning half.
 
 ---
 

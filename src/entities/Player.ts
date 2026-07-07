@@ -42,7 +42,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     scene.add.existing(this);
     scene.physics.add.existing(this);
     this.setCollideWorldBounds(true);
-    this.setDepth(10); // draw above ground clutter so the player stays visible
+    this.setDepth(y); // Y-sorted against enemies/trees, kept live in preUpdate
 
     const kb = scene.input.keyboard!;
     this.cursors = kb.createCursorKeys();
@@ -54,6 +54,13 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     };
     this.shiftKey = kb.addKey(Phaser.Input.Keyboard.KeyCodes.SHIFT);
     this.spaceKey = kb.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
+  }
+
+  // Keeps the player Y-sorted against enemies/trees every frame, independent
+  // of MainScene's update() cadence (e.g. still runs while frozen on death).
+  preUpdate(time: number, delta: number): void {
+    super.preUpdate(time, delta);
+    this.setDepth(this.y);
   }
 
   // Called every frame by MainScene. `canSprint`/`canDash` are the scene's
@@ -130,7 +137,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       return;
     }
     if (!this.equippedIcon) {
-      this.equippedIcon = this.scene.add.image(this.x, this.y, texture).setDepth(11);
+      this.equippedIcon = this.scene.add.image(this.x, this.y, texture).setDepth(this.depth + 1);
     } else {
       this.equippedIcon.setTexture(texture);
     }
@@ -141,6 +148,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   // position/facing without requiring a full Player.update().
   syncEquippedIconPosition(): void {
     if (!this.equippedIcon || !this.equippedIconTexture) return;
+    this.equippedIcon.setDepth(this.depth + 1);
     const offset = Player.ICON_OFFSET;
     let ox = 0;
     let oy = 0;
