@@ -2,7 +2,105 @@
 
 Last updated: 2026-07-08
 
-### Just finished: Playtest fixes batch — Gremlin/Gremling naming split, combined Tab menu, bush clustering, upgrade cost display
+### Just finished: Playtest fixes batch #2 — armor equip/unequip polish, upgrade-menu docking, UI/tuning fixes
+
+Follow-up playtest fixes on top of Milestone M, requested directly by the user in the same
+session.
+
+- **Armor Upgrade panel now docks beside the InventoryMenu** instead of floating
+  screen-centered, and no longer closes the inventory when opened. `UpgradeMenu.openMenu()`
+  gained an optional `anchor: {x, y}` — when set, `render()` positions the panel there instead
+  of centering; `MainScene.openArmorUpgradeMenu()` passes `{x: INVENTORY_PANEL_X +
+  INVENTORY_PANEL_W + 12, y: INVENTORY_PANEL_Y}` (both now exported from `InventoryMenu.ts`)
+  and no longer calls `inventoryMenu.close()`. A placed station's Upgrade panel is unaffected
+  (still opens with no anchor → centered, still closes the inventory, since that flow wasn't
+  changed). The panel's existing "[ESC] Close" text is now also clickable (`setInteractive` +
+  `close()` on `pointerdown`) as an explicit close affordance beyond the ESC key.
+- **Unequip now works** — previously there was no way to take off worn armor short of
+  equipping something else into the same slot. Two new gestures, both funneling into a new
+  `MainScene.unequipArmorSlot(slot, toIndex?)`: **drag the equipped item out of its paper-doll
+  slot** (new `beginArmorDrag`/`resolveArmorDrag`, widening `dragSource` to a
+  `{container,index} | {armorSlot} | null` union) drops it into the backpack slot under the
+  cursor (or the first available slot / the floor, if that target's occupied or the drop
+  lands outside any panel); **right-click an occupied slot** now opens a small context menu
+  (reusing `ContextMenu.ts`, same component the placed-station Upgrade/Destroy popup uses)
+  with **"Unequip"/"Upgrade"** rows — an *empty* slot shows the same two rows greyed out
+  ("Equip"/"Upgrade", both `enabled: false`) rather than nothing, so the interaction is
+  consistent regardless of slot state. This replaced the old direct right-click-opens-Upgrade
+  behavior from Milestone M (`InventoryMenuDeps.openArmorUpgrade` → `openArmorContextMenu`).
+- **Event log moved beside Keybinds, not stacked underneath.** `EventLogUI` used to anchor at
+  `keybindsUI.bottom + 8`, landing inside the same top-left region an open `InventoryMenu`
+  panel occupies (y ≥ 48) — so opening the inventory always covered it. Now anchored at
+  `keybindsUI.right + 12, keybindsUI.top` (both new getters on `KeybindsUI`) — same row as
+  Keybinds, clear of the inventory panel in the common (collapsed) case. Dropped the now-dead
+  `onToggle` reposition-callback plumbing between the two (`KeybindsUI` no longer takes one).
+- **Crafting menu now stays open when placement mode starts** — `CraftingMenu.ts`'s "Place"
+  button handler no longer calls `this.close()` after `deps.startPlacement(recipe)`. Matches
+  how a plain "Craft" click already left the menu open; only inventory was staying up before,
+  which was the inconsistency being fixed.
+- **Tuning**: Stone Axe recipe → **4 wood, 4 stone** (was 3 wood/2 stone); Boar loot →
+  **exactly 1 boar_meat and 1 bones** per kill (was 1-2 each).
+
+Verified via `preview_eval`: right-click equips/unequips correctly through the new context
+menu (occupied → real rows, empty → greyed no-ops); a simulated drag from the helmet slot
+onto an occupied backpack slot correctly falls back to the next empty slot rather than
+clobbering it; the Upgrade panel opens at `(532, 48)` — flush against the inventory panel's
+right edge, top-aligned — with the inventory still open behind it; clicking the panel's
+"[ESC] Close" text closes only the panel; a simulated real crafting-menu "Place" click (after
+switching to the Crafting category tab and selecting the Workbench recipe) leaves
+`craftingMenu.isOpen()` true while entering placement mode. Type-check clean, no console
+errors.
+
+### Previously: Milestone M — Gremlin Armor (first wearable armor)
+
+Fifth milestone out of the I–O batch (`.claude/plans/this-is-a-plan-cached-pixel.md`),
+following the playtest fixes batch. Wires up the long-dormant `Equipment.ts` slot system
+for real.
+
+- **`Equipment.ts`** now stores `EquippedItem { key, tier }` per slot instead of a bare
+  `string | null` — a worn piece's upgrade level lives on the same field a placed station's
+  tier does (Milestone K's plumbing, reused rather than re-invented).
+- **Three new armor items** replace the old undifferentiated `gremlin_leather_armor`:
+  **Gremlin Cap** (helmet), **Gremlin Shirt** (chest), **Gremlin Pants** (legs) — new
+  `ItemDef.armorSlot` field, new `BootScene.ts` icons, `Recipes.ts` entries at the plan's
+  costs (tier 1, workbench-gated).
+- **Equip via drag-onto-paper-doll-slot or right-click-in-backpack**, both funneling into
+  `MainScene.equipArmorFromContainer()`: standard swap semantics — whatever was previously
+  worn returns to the backpack (or drops on the floor if full), never silently lost.
+- **Per-piece lvl-2 upgrades, triggered by right-clicking the equipped slot** — this was the
+  one open design question the plan left unresolved (armor doesn't live in the world for a
+  context-menu like stations do); confirmed with the user that right-click on an *occupied*
+  paper-doll slot should open the same `UpgradeMenu.ts` panel a placed station's Upgrade
+  button does. `UpgradeMenu` was generalized from a `StationUpgradeDef`-only panel to a
+  `UpgradeDef = StationUpgradeDef | ArmorUpgradeDef` union (new `src/systems/
+  ArmorUpgrades.ts`, parallel to `StationUpgrades.ts`) — same component, no duplicate UI.
+- **Gremlin Pants' lvl 2 additionally requires a nearby Workbench that has itself reached
+  tier 1** — new `MainScene.isNearWorkbenchAtTier()` + `armorUpgradeBlockReason()`, surfaced
+  in the panel as a distinct `"(Requires nearby Workbench Lvl 2)"` suffix (new optional
+  `UpgradeMenuDeps.extraBlockReason`) rather than lumped under the generic "Missing
+  materials" message. Per the user, this is the template for future armor tiers gating on
+  future Workbench tiers, not a Pants-only special case.
+- **No numeric defense stat** — per the plan's own hedge and the standing "damage
+  types/resistances are later" note, equipping is visual (paper-doll icon) + trackable
+  (tier persists through Destroy/re-equip semantics the same way a station's does) only.
+
+Verified via `preview_eval`: right-click equips all three pieces; equipping a second Cap
+swaps the first back to the backpack with the total item count unchanged; a simulated real
+drag onto the helmet slot's screen coordinates also equips correctly; applying the Shirt's
+lvl-2 upgrade deducts `gremlin_leather`/`bones` and bumps its tier; the Pants lvl-2 upgrade
+is blocked with the Workbench-tier message until a tier-1 Workbench is placed nearby, then
+succeeds; the panel renders the block-reason and "(Applied)" states correctly; the real
+`Crafting`/`Recipes` discovery-and-craft path (not just a direct backpack add) produces a
+`gremlin_cap` once a Workbench is placed and ingredients are known. Type-check clean, no
+console errors. See `.claude/plans/this-is-a-plan-cached-pixel.md`'s Milestone M section for
+full file-level detail.
+
+Also corrected two stale `CLAUDE.md` statements found while updating the roadmap for this
+milestone: the 4f roadmap bullet previously described Blackberry's harvest-without-destroy
+mode (Milestone N) as already shipped when it isn't — bushes still deplete/destroy on
+harvest today, unchanged by this session.
+
+### Previously: Playtest fixes batch — Gremlin/Gremling naming split, combined Tab menu, bush clustering, upgrade cost display
 
 Small independent fixes requested directly by the user (not from the I-O plan's own list),
 landed in one session between Milestone K and Milestone M.

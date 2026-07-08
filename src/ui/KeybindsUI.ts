@@ -17,15 +17,10 @@ export class KeybindsUI {
   private binds: string[];
   private collapsed = true;
   private rows: Phaser.GameObjects.GameObject[] = [];
-  private onToggle?: () => void;
 
-  // `onToggle` fires after collapse state changes — lets the scene reposition
-  // anything stacked below this panel (the event log) so it doesn't get
-  // covered when this one expands.
-  constructor(scene: Phaser.Scene, binds: string[], onToggle?: () => void) {
+  constructor(scene: Phaser.Scene, binds: string[]) {
     this.scene = scene;
     this.binds = binds;
-    this.onToggle = onToggle;
     this.render();
   }
 
@@ -46,10 +41,20 @@ export class KeybindsUI {
     return this.binds.length * LINE_H + PADDING;
   }
 
-  // Bottom edge of the panel in its current (collapsed/expanded) state — lets
-  // other top-left panels (the event log) stack directly beneath it.
+  // Bottom edge of the panel in its current (collapsed/expanded) state.
   get bottom(): number {
     return PANEL_Y + HEADER_H + (this.collapsed ? 0 : this.bodyHeight());
+  }
+
+  // Right edge and top edge — fixed regardless of collapse state, used to
+  // anchor EventLogUI beside this panel (same row) instead of stacking below
+  // it (an open InventoryMenu panel used to cover the log there).
+  get right(): number {
+    return PANEL_X + PANEL_W;
+  }
+
+  get top(): number {
+    return PANEL_Y;
   }
 
   private clear(): void {
@@ -70,7 +75,6 @@ export class KeybindsUI {
       .on("pointerdown", () => {
         this.collapsed = !this.collapsed;
         this.render();
-        this.onToggle?.();
       });
     this.rows.push(header);
 

@@ -34,16 +34,24 @@ import {
   stationDisplayName,
   type StationUpgradeDef,
 } from "../systems/StationUpgrades";
+import { armorUpgradesForItem, type ArmorUpgradeDef } from "../systems/ArmorUpgrades";
 import { EventLog } from "../systems/EventLog";
 import { Biome, type ZoneType } from "../systems/Biome";
-import { Equipment, EQUIP_SLOTS } from "../systems/Equipment";
+import { Equipment, EQUIP_SLOTS, type EquipSlot, type EquippedItem } from "../systems/Equipment";
 import { Hotbar } from "../systems/Hotbar";
 import { ProcessingStation } from "../systems/Processing";
 import { CraftingMenu } from "../ui/CraftingMenu";
 import { ContextMenu, type ContextMenuItem } from "../ui/ContextMenu";
 import { DryingRackMenu } from "../ui/DryingRackMenu";
-import { UpgradeMenu } from "../ui/UpgradeMenu";
-import { InventoryMenu, BACKPACK_SIZE, type ArmorSlotView } from "../ui/InventoryMenu";
+import { UpgradeMenu, type UpgradeDef } from "../ui/UpgradeMenu";
+import {
+  InventoryMenu,
+  BACKPACK_SIZE,
+  PANEL_X as INVENTORY_PANEL_X,
+  PANEL_Y as INVENTORY_PANEL_Y,
+  PANEL_W as INVENTORY_PANEL_W,
+  type ArmorSlotView,
+} from "../ui/InventoryMenu";
 import { HotbarUI } from "../ui/HotbarUI";
 import { EventLogUI } from "../ui/EventLogUI";
 import { KeybindsUI } from "../ui/KeybindsUI";
@@ -122,7 +130,9 @@ export class MainScene extends Phaser.Scene {
   // every discovered upgrade for whichever placed object is currently bound
   // to it (null when closed).
   private upgradeMenu!: UpgradeMenu;
-  private upgradeTarget: Phaser.GameObjects.Image | null = null;
+  // Either a placed object (Workbench/Campfire/Drying Rack) or an equipped
+  // armor slot — the UpgradeMenu deps below branch on which one is set.
+  private upgradeTarget: Phaser.GameObjects.Image | { armorSlot: EquipSlot } | null = null;
   // The floating "<Name> Lvl N" label shown above any placed object that has
   // at least one defined upgrade (see StationUpgrades.ts) — keyed by the
   // placed Image so it can be moved/updated/destroyed alongside it.
@@ -132,7 +142,7 @@ export class MainScene extends Phaser.Scene {
   private keybindsUI!: KeybindsUI;
 
   // Active drag (from any container): the source slot + a floating ghost icon.
-  private dragSource: { container: ItemContainer; index: number } | null = null;
+  private dragSource: { container: ItemContainer; index: number } | { armorSlot: EquipSlot } | null = null;
   private dragGhost: Phaser.GameObjects.Image | null = null;
 
   private promptText!: Phaser.GameObjects.Text; // fixed bottom-right hover prompt
@@ -293,10 +303,10 @@ export class MainScene extends Phaser.Scene {
     });
     this.createStaminaBar();
     this.createHealthBar();
-    // Stacks directly under the Keybinds panel (top-left column), clear of
-    // the bottom-center HUD cluster (hotbar + stamina bar) which is expected
-    // to grow.
-    this.eventLogUI = new EventLogUI(this, this.eventLog, this.keybindsUI.bottom + 8);
+    // Sits beside the Keybinds panel (same top row), not stacked underneath
+    // it — an open InventoryMenu panel occupies that same top-left column
+    // and used to cover the log whenever it was open.
+    this.eventLogUI = new EventLogUI(this, this.eventLog, this.keybindsUI.right + 12, this.keybindsUI.top);
 
     // Scene-level drag: a slot starts it, the pointer drags a ghost icon, and
     // release resolves the move against whichever container is under the
@@ -547,12 +557,34 @@ export class MainScene extends Phaser.Scene {
       .setAlpha(0.85);
   }
 
+  // Left-press on an occupied paper-doll slot — the drag-to-unequip gesture.
+  // Mirrors beginItemDrag but the source is an equipment slot, not a
+  // container/index pair.
+  private beginArmorDrag(slot: EquipSlot, pointer: Phaser.Input.Pointer): void {
+    const eq = this.equipment.get(slot);
+    if (!eq) return;
+    const def = itemDef(eq.key);
+    if (!def) return;
+    this.dragSource = { armorSlot: slot };
+    this.inventoryMenu.hideTooltip();
+    this.dragGhost = this.add
+      .image(pointer.x, pointer.y, def.texture)
+      .setScrollFactor(0)
+      .setDepth(5000)
+      .setAlpha(0.85);
+  }
+
   private resolveItemDrag(pointer: Phaser.Input.Pointer): void {
     if (!this.dragSource) return;
     const src = this.dragSource;
     this.dragSource = null;
     this.dragGhost?.destroy();
     this.dragGhost = null;
+
+    if ("armorSlot" in src) {
+      this.resolveArmorDrag(src.armorSlot, pointer);
+      return;
+    }
 
     const stack = src.container.slot(src.index);
     if (!stack) return;
@@ -581,6 +613,17 @@ export class MainScene extends Phaser.Scene {
     if (this.inventoryMenu.isOpen() && this.inventoryMenu.isOverTrash(pointer.x, pointer.y)) {
       this.destroyStack(src.container, src.index, stack);
       return;
+    }
+
+    // Inventory menu open: dropping onto its matching paper-doll slot equips
+    // an armor item. Dropping a non-armor item, or an armor item on the
+    // wrong slot, just falls through and snaps back (nothing was removed).
+    if (this.inventoryMenu.isOpen()) {
+      const armorSlot = this.inventoryMenu.armorSlotAt(pointer.x, pointer.y);
+      if (armorSlot !== null) {
+        if (itemDef(stack.key)?.armorSlot === armorSlot) this.equipArmorFromContainer(src.container, src.index);
+        return;
+      }
     }
 
     // Prefer a hotbar slot under the pointer, else a backpack slot.
@@ -629,6 +672,25 @@ export class MainScene extends Phaser.Scene {
     if (!overPanel) this.dropStackToWorld(src.container, src.index, stack);
   }
 
+  // Resolves a drag started from an equipped paper-doll slot — the
+  // drag-to-unequip gesture. Dropping back on any paper-doll slot (itself or
+  // another) is a no-op/snap-back; dropping on a backpack slot unequips there
+  // specifically; dropping outside every panel/HUD unequips to the floor.
+  private resolveArmorDrag(slot: EquipSlot, pointer: Phaser.Input.Pointer): void {
+    if (!this.inventoryMenu.isOpen()) return; // can't have started this drag otherwise
+    if (this.inventoryMenu.armorSlotAt(pointer.x, pointer.y) !== null) return;
+
+    const bagIndex = this.inventoryMenu.slotIndexAt(pointer.x, pointer.y);
+    if (bagIndex !== null) {
+      this.unequipArmorSlot(slot, bagIndex);
+      return;
+    }
+
+    if (!this.inventoryMenu.containsPoint(pointer.x, pointer.y) && !this.pointerOverHud(pointer)) {
+      this.unequipArmorSlot(slot);
+    }
+  }
+
   // Remove a whole stack from the inventory and spawn it as a recoverable
   // loose pickup near the player (magnet-cooldown gated so it doesn't
   // instantly fly back in) — the "Drop" half of the drop/destroy pair.
@@ -665,6 +727,11 @@ export class MainScene extends Phaser.Scene {
   private quickMoveItem(container: ItemContainer, index: number): void {
     const stack = container.slot(index);
     if (!stack) return;
+
+    if (container !== this.hotbar.container && itemDef(stack.key)?.armorSlot) {
+      this.equipArmorFromContainer(container, index);
+      return;
+    }
 
     if (container === this.hotbar.container) {
       const to = this.backpack.findAssignable(stack.key);
@@ -1002,8 +1069,8 @@ export class MainScene extends Phaser.Scene {
         texture: "boar",
         displayName: "Boar",
         loot: [
-          { resource: "boar_meat", min: 1, max: 2 },
-          { resource: "bones", min: 1, max: 2 },
+          { resource: "boar_meat", min: 1, max: 1 },
+          { resource: "bones", min: 1, max: 1 },
         ],
         maxHealth: 20,
         biteDamage: 25,
@@ -1717,6 +1784,18 @@ export class MainScene extends Phaser.Scene {
     );
   }
 
+  // Like isNearWorkbench, but additionally requires the nearby Workbench to
+  // have reached at least `minTier` itself (e.g. Gremlin Pants' lvl-2 upgrade
+  // needing a Tool-Sharpener-upgraded Workbench, not just any Workbench).
+  private isNearWorkbenchAtTier(minTier: number, x: number, y: number, radius: number = WORKBENCH_RANGE): boolean {
+    return this.placedObjects.some(
+      (obj) =>
+        obj.getData("itemKey") === "workbench" &&
+        ((obj.getData("tier") as number | undefined) ?? 0) >= minTier &&
+        Phaser.Math.Distance.Between(x, y, obj.x, obj.y) <= radius,
+    );
+  }
+
   // Has the player ever placed a Workbench, anywhere — separate from (and
   // prior to) isNearWorkbench's "currently in range" check. Gates whether
   // tier 1+ recipes are discoverable/visible at all in the crafting menu.
@@ -1766,20 +1845,38 @@ export class MainScene extends Phaser.Scene {
     this.contextMenu.show(screenX, screenY, items);
   }
 
+  // True when the current upgrade target is an equipped armor slot rather
+  // than a placed world object.
+  private isArmorUpgradeTarget(
+    t: Phaser.GameObjects.Image | { armorSlot: EquipSlot },
+  ): t is { armorSlot: EquipSlot } {
+    return !(t instanceof Phaser.GameObjects.Image);
+  }
+
   private createUpgradeMenu(): void {
     this.upgradeMenu = new UpgradeMenu(this, {
       target: () => {
-        const obj = this.upgradeTarget;
-        if (!obj) return null;
-        return { itemKey: obj.getData("itemKey") as string, tier: (obj.getData("tier") as number | undefined) ?? 0 };
+        const t = this.upgradeTarget;
+        if (!t) return null;
+        if (this.isArmorUpgradeTarget(t)) {
+          const eq = this.equipment.get(t.armorSlot);
+          return eq ? { itemKey: eq.key, tier: eq.tier } : null;
+        }
+        return { itemKey: t.getData("itemKey") as string, tier: (t.getData("tier") as number | undefined) ?? 0 };
       },
-      upgradesFor: (itemKey) => upgradesForItem(itemKey),
+      // Station and armor upgrades are keyed by disjoint itemKeys, so
+      // concatenating both tables is safe — only one ever matches.
+      upgradesFor: (itemKey) => [...upgradesForItem(itemKey), ...armorUpgradesForItem(itemKey)],
       isDiscovered: (upg) => this.upgradeIngredientsKnown(upg),
       canAfford: (upg) => this.canAffordUpgrade(upg),
+      extraBlockReason: (upg) => this.armorUpgradeBlockReason(upg),
       formatCost: (upg) => this.formatUpgradeCost(upg),
       displayName: (itemKey, tier) => stationDisplayName(itemKey, tier),
       apply: (upg) => {
-        if (this.upgradeTarget) this.applyStationUpgrade(this.upgradeTarget, upg);
+        const t = this.upgradeTarget;
+        if (!t) return;
+        if (this.isArmorUpgradeTarget(t)) this.applyArmorUpgrade(t.armorSlot, upg as ArmorUpgradeDef);
+        else this.applyStationUpgrade(t, upg as StationUpgradeDef);
       },
     });
   }
@@ -1790,6 +1887,21 @@ export class MainScene extends Phaser.Scene {
     this.closeDryingRackMenu();
     this.upgradeTarget = obj;
     this.upgradeMenu.openMenu();
+  }
+
+  // Right-click on an occupied paper-doll slot opens the same Upgrade panel,
+  // bound to that equipped item instead of a placed object — mirrors
+  // openUpgradeMenu's close-everything-else behavior for consistency.
+  // Docks the panel to the right of the (left-open) InventoryMenu, top edges
+  // aligned, and deliberately leaves the inventory open — unlike a placed
+  // station's centered Upgrade panel, this one is meant to sit alongside the
+  // paper-doll it's editing.
+  private openArmorUpgradeMenu(slot: EquipSlot): void {
+    if (!this.equipment.get(slot)) return;
+    this.craftingMenu.close();
+    this.closeDryingRackMenu();
+    this.upgradeTarget = { armorSlot: slot };
+    this.upgradeMenu.openMenu({ x: INVENTORY_PANEL_X + INVENTORY_PANEL_W + 12, y: INVENTORY_PANEL_Y });
   }
 
   private closeUpgradeMenu(): void {
@@ -1825,21 +1937,31 @@ export class MainScene extends Phaser.Scene {
     this.placedLabels.set(obj, label);
   }
 
-  private upgradeIngredientsKnown(upg: StationUpgradeDef): boolean {
+  private upgradeIngredientsKnown(upg: UpgradeDef): boolean {
     return Object.keys(upg.costs).every((r) => this.discovered.has(r));
   }
 
-  private canAffordUpgrade(upg: StationUpgradeDef): boolean {
+  private canAffordUpgrade(upg: UpgradeDef): boolean {
     return Object.entries(upg.costs).every(([r, n]) => this.backpack.count(r) >= (n ?? 0));
   }
 
   // Owned/required per resource, mirroring CraftingMenu's detail panel
   // (`${resource}: ${have}/${amount}`) so both "what do I need" panels read
   // the same way.
-  private formatUpgradeCost(upg: StationUpgradeDef): string {
+  private formatUpgradeCost(upg: UpgradeDef): string {
     return Object.entries(upg.costs)
       .map(([r, n]) => `${itemDef(r)?.name ?? r}: ${this.backpack.count(r)}/${n}`)
       .join(", ");
+  }
+
+  // Extra gate beyond raw materials — currently only armor upgrades that
+  // declare `requiresWorkbenchTier` (e.g. Gremlin Pants lvl 2 needing a
+  // Tool-Sharpener-upgraded Workbench nearby). Station upgrades never set
+  // this field, so they always pass through null.
+  private armorUpgradeBlockReason(upg: UpgradeDef): string | null {
+    if (!("requiresWorkbenchTier" in upg) || upg.requiresWorkbenchTier === undefined) return null;
+    if (this.isNearWorkbenchAtTier(upg.requiresWorkbenchTier, this.player.x, this.player.y)) return null;
+    return `Requires nearby ${stationDisplayName("workbench", upg.requiresWorkbenchTier)}`;
   }
 
   // Deducts a named upgrade's cost from the backpack and bumps this specific
@@ -1853,6 +1975,19 @@ export class MainScene extends Phaser.Scene {
     this.refreshStationLabel(obj);
     const itemKey = obj.getData("itemKey") as string;
     this.eventLog.add("info", `${stationDisplayName(itemKey, upg.resultTier)} upgraded: ${upg.name}`);
+    this.upgradeMenu.refresh();
+    this.afterItemMove();
+  }
+
+  // Armor's equivalent of applyStationUpgrade — deducts cost and bumps the
+  // EquippedItem's tier in place. Assumes the workbench-tier gate (if any)
+  // was already checked by the UpgradeMenu row being clickable.
+  private applyArmorUpgrade(slot: EquipSlot, upg: ArmorUpgradeDef): void {
+    const eq = this.equipment.get(slot);
+    if (!eq || !this.canAffordUpgrade(upg) || this.armorUpgradeBlockReason(upg)) return;
+    for (const [r, n] of Object.entries(upg.costs)) this.backpack.removeCount(r, n ?? 0);
+    this.equipment.set(slot, { key: eq.key, tier: upg.resultTier });
+    this.eventLog.add("info", `${stationDisplayName(eq.key, upg.resultTier)} upgraded: ${upg.name}`);
     this.upgradeMenu.refresh();
     this.afterItemMove();
   }
@@ -1912,17 +2047,78 @@ export class MainScene extends Phaser.Scene {
       backpack: this.backpack,
       armorSlots: () => this.armorSlots(),
       beginDrag: (c, i, p) => this.beginItemDrag(c, i, p),
+      beginArmorDrag: (slot, p) => this.beginArmorDrag(slot, p),
       quickMove: (c, i) => this.quickMoveItem(c, i),
+      openArmorContextMenu: (slot, x, y) => this.openArmorContextMenu(slot, x, y),
       isDragging: () => this.dragSource !== null,
     });
   }
 
   private armorSlots(): ArmorSlotView[] {
-    return EQUIP_SLOTS.map((s) => ({
-      id: s.id,
-      label: s.label,
-      itemKey: this.equipment.get(s.id),
-    }));
+    return EQUIP_SLOTS.map((s) => {
+      const eq = this.equipment.get(s.id);
+      return { id: s.id, label: s.label, itemKey: eq?.key ?? null, tier: eq?.tier };
+    });
+  }
+
+  // Equip an armor item from `container[index]` into its matching slot,
+  // swapping whatever was previously worn there back to the backpack (or
+  // dropping it on the floor if the backpack is full). Shared by the
+  // right-click-to-equip gesture and drag-onto-slot.
+  private equipArmorFromContainer(container: ItemContainer, index: number): void {
+    const stack = container.slot(index);
+    if (!stack) return;
+    const def = itemDef(stack.key);
+    const slot = def?.armorSlot;
+    if (!slot) return;
+    const previous = this.equipment.get(slot);
+    this.equipment.set(slot, { key: stack.key, tier: stack.tier ?? 0 });
+    container.set(index, null);
+    if (previous) this.returnArmorToBackpack(previous);
+    this.eventLog.add("info", `Equipped ${def.name}`);
+    this.afterItemMove();
+  }
+
+  private returnArmorToBackpack(item: EquippedItem): void {
+    const stack: ItemStack = { key: item.key, count: 1, tier: item.tier || undefined };
+    if (!this.backpack.addStack(stack)) {
+      this.spawnLooseDrop(item.key, 1, this.player.x, this.player.y, DROPPED_ITEM_MAGNET_COOLDOWN_MS, item.tier || undefined);
+    }
+  }
+
+  // Unequip whatever's worn in `slot`. With `toIndex` given and that backpack
+  // slot empty, it lands there specifically (the drag-to-a-particular-slot
+  // case); otherwise it falls back to the first assignable slot, or drops on
+  // the floor if the backpack is full. Also the "Unequip" context-menu action
+  // (no `toIndex`).
+  private unequipArmorSlot(slot: EquipSlot, toIndex?: number): void {
+    const eq = this.equipment.get(slot);
+    if (!eq) return;
+    this.equipment.set(slot, null);
+    if (toIndex !== undefined && this.backpack.slot(toIndex) === null) {
+      this.backpack.set(toIndex, { key: eq.key, count: 1, tier: eq.tier || undefined });
+    } else {
+      this.returnArmorToBackpack(eq);
+    }
+    this.eventLog.add("info", `Unequipped ${itemDef(eq.key)?.name ?? eq.key}`);
+    this.afterItemMove();
+  }
+
+  // Right-click on a paper-doll slot: "Unequip"/"Upgrade" if occupied, or a
+  // greyed informational "Equip"/"Upgrade" if empty (mirrors a placed
+  // station's right-click Upgrade/Destroy popup).
+  private openArmorContextMenu(slot: EquipSlot, screenX: number, screenY: number): void {
+    const eq = this.equipment.get(slot);
+    const items: ContextMenuItem[] = eq
+      ? [
+          { label: "Unequip", enabled: true, onClick: () => this.unequipArmorSlot(slot) },
+          { label: "Upgrade", enabled: true, onClick: () => this.openArmorUpgradeMenu(slot) },
+        ]
+      : [
+          { label: "Equip", enabled: false, onClick: () => {} },
+          { label: "Upgrade", enabled: false, onClick: () => {} },
+        ];
+    this.contextMenu.show(screenX, screenY, items);
   }
 
   // --- HUD ---
@@ -1956,7 +2152,6 @@ export class MainScene extends Phaser.Scene {
         "Auto-pickup: V",
         "Range ring: O",
       ],
-      () => this.eventLogUI?.setTopY(this.keybindsUI.bottom + 8),
     );
 
     // Placement-mode hint, directly under the controls line above — small so

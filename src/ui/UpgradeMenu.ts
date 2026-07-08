@@ -1,5 +1,11 @@
 import Phaser from "phaser";
 import type { StationUpgradeDef } from "../systems/StationUpgrades";
+import type { ArmorUpgradeDef } from "../systems/ArmorUpgrades";
+
+// Either a placed station's upgrade or a worn armor piece's upgrade — both
+// share the same shape the UI actually reads (name/description/resultTier/
+// costs), so one panel serves both without a generic type parameter.
+export type UpgradeDef = StationUpgradeDef | ArmorUpgradeDef;
 
 export interface UpgradeTarget {
   itemKey: string;
@@ -7,15 +13,21 @@ export interface UpgradeTarget {
 }
 
 export interface UpgradeMenuDeps {
-  // The placed object the popup's "Upgrade" button was clicked on, or null
-  // once closed. Re-read every render so it reflects live tier changes.
+  // The placed object / equipped armor slot the popup's "Upgrade" action was
+  // opened for, or null once closed. Re-read every render so it reflects
+  // live tier changes.
   target: () => UpgradeTarget | null;
-  upgradesFor: (itemKey: string) => StationUpgradeDef[];
-  isDiscovered: (upg: StationUpgradeDef) => boolean;
-  canAfford: (upg: StationUpgradeDef) => boolean;
-  formatCost: (upg: StationUpgradeDef) => string;
+  upgradesFor: (itemKey: string) => UpgradeDef[];
+  isDiscovered: (upg: UpgradeDef) => boolean;
+  canAfford: (upg: UpgradeDef) => boolean;
+  // Extra non-material gate beyond canAfford (e.g. armor upgrades that also
+  // require a nearby Workbench at a given tier) — returns a short blocking
+  // reason to display, or null when unblocked. Optional: station upgrades
+  // have none.
+  extraBlockReason?: (upg: UpgradeDef) => string | null;
+  formatCost: (upg: UpgradeDef) => string;
   displayName: (itemKey: string, tier: number) => string;
-  apply: (upg: StationUpgradeDef) => void;
+  apply: (upg: UpgradeDef) => void;
 }
 
 const PANEL_W = 420;
@@ -49,6 +61,11 @@ export class UpgradeMenu {
   private panelX: number;
   private panelY: number;
   private panelH = 200; // recomputed per render based on row content
+  // When set, the panel docks at this fixed top-left point instead of
+  // screen-centering itself — used to attach the panel to the right edge of
+  // an open InventoryMenu (armor upgrades) instead of floating centered like
+  // a placed station's Upgrade panel does.
+  private anchor: { x: number; y: number } | null = null;
 
   constructor(scene: Phaser.Scene, deps: UpgradeMenuDeps) {
     this.scene = scene;
@@ -66,7 +83,8 @@ export class UpgradeMenu {
       .setVisible(false);
   }
 
-  openMenu(): void {
+  openMenu(anchor?: { x: number; y: number }): void {
+    this.anchor = anchor ?? null;
     this.open = true;
     this.bg.setVisible(true);
     this.render();
@@ -118,12 +136,13 @@ export class UpgradeMenu {
       return;
     }
 
-    this.panelX = this.scene.scale.width / 2 - PANEL_W / 2;
+    this.panelX = this.anchor ? this.anchor.x : this.scene.scale.width / 2 - PANEL_W / 2;
     const upgrades = this.deps.upgradesFor(target.itemKey).filter((u) => this.deps.isDiscovered(u));
 
     let cursor = 0;
     this.addText(this.panelX + 16, cursor + 14, this.deps.displayName(target.itemKey, target.tier), 16, "#ffffff");
-    this.addText(this.panelX + PANEL_W - 16, cursor + 14, "[ESC] Close", 11, "#5b6472", 1, 0);
+    const closeText = this.addText(this.panelX + PANEL_W - 16, cursor + 14, "[ESC] Close", 11, "#5b6472", 1, 0);
+    closeText.setInteractive({ useHandCursor: true }).on("pointerdown", () => this.close());
     cursor += HEADER_H;
 
     if (upgrades.length === 0) {
@@ -135,7 +154,7 @@ export class UpgradeMenu {
     cursor += 12;
 
     this.panelH = cursor;
-    this.panelY = this.scene.scale.height / 2 - this.panelH / 2;
+    this.panelY = this.anchor ? this.anchor.y : this.scene.scale.height / 2 - this.panelH / 2;
     this.bg.setPosition(this.panelX, this.panelY).setSize(PANEL_W, this.panelH);
     for (const obj of this.rows) {
       (obj as unknown as { y: number }).y += this.panelY;
@@ -143,17 +162,19 @@ export class UpgradeMenu {
   }
 
   // Returns this row's total height so the caller can advance its cursor.
-  private renderUpgradeRow(upg: StationUpgradeDef, target: UpgradeTarget, rowY: number): number {
+  private renderUpgradeRow(upg: UpgradeDef, target: UpgradeTarget, rowY: number): number {
     const applied = upg.resultTier <= target.tier;
     const locked = !applied && upg.resultTier > target.tier + 1; // requires an earlier tier first
     const affordable = this.deps.canAfford(upg);
-    const clickable = !applied && !locked && affordable;
+    const blockReason = !applied && !locked ? (this.deps.extraBlockReason?.(upg) ?? null) : null;
+    const clickable = !applied && !locked && affordable && !blockReason;
 
     const contentX = this.panelX + 22;
     const nameColor = applied ? "#8fe38f" : clickable ? "#ffffff" : "#5b6472";
     let suffix = "";
     if (applied) suffix = "  (Applied)";
     else if (locked) suffix = "  (Requires previous tier)";
+    else if (blockReason) suffix = `  (${blockReason})`;
     else if (!affordable) suffix = "  (Missing materials)";
 
     this.addText(contentX, rowY + 8, `${upg.name}${suffix}`, 13, nameColor);

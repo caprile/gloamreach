@@ -8,6 +8,7 @@ export interface ArmorSlotView {
   id: EquipSlot;
   label: string;
   itemKey: string | null;
+  tier?: number;
 }
 
 export interface InventoryMenuDeps {
@@ -15,14 +16,22 @@ export interface InventoryMenuDeps {
   armorSlots: () => ArmorSlotView[];
   // Left-press on a filled slot begins dragging that stack.
   beginDrag: (container: ItemContainer, index: number, pointer: Phaser.Input.Pointer) => void;
-  // Right-click quick-moves the stack to the hotbar (if hotbar-able).
+  // Left-press on an occupied equipment slot begins dragging the equipped
+  // item back out (e.g. to unequip it by dropping it in the backpack).
+  beginArmorDrag: (slot: EquipSlot, pointer: Phaser.Input.Pointer) => void;
+  // Right-click quick-moves the stack to the hotbar (if hotbar-able), or
+  // equips it if it's an armor item.
   quickMove: (container: ItemContainer, index: number) => void;
+  // Right-click on an equipment slot opens a small Unequip/Upgrade (or
+  // Equip/Upgrade if empty) context menu — mirrors a placed station's
+  // right-click Upgrade/Destroy popup.
+  openArmorContextMenu: (slot: EquipSlot, screenX: number, screenY: number) => void;
   // Suppress tooltips while a drag is in progress.
   isDragging: () => boolean;
 }
 
-const PANEL_X = 16;
-const PANEL_Y = 48;
+export const PANEL_X = 16;
+export const PANEL_Y = 48;
 const SLOT = 46;
 const GAP = 6;
 export const BACKPACK_COLS = 6;
@@ -46,7 +55,7 @@ const ARMOR_W = ARMOR_COLS * SLOT + (ARMOR_COLS - 1) * GAP; // 150
 const ARMOR_ROWS_MAX = 3; // EQUIP_SLOTS is 9 slots / 3 cols = 3 rows
 const ARMOR_H = ARMOR_ROWS_MAX * SLOT + (ARMOR_ROWS_MAX - 1) * GAP; // 150
 
-const PANEL_W = ARMOR_X + ARMOR_W - PANEL_X + 12; // 504
+export const PANEL_W = ARMOR_X + ARMOR_W - PANEL_X + 12; // 504
 const PANEL_H = BACKPACK_Y + BACKPACK_H - PANEL_Y + 20; // 382
 
 // Trash drop target: sits below the armor grid, in the panel's otherwise-
@@ -127,6 +136,23 @@ export class InventoryMenu {
     );
   }
 
+  // Equipment slot under a screen point, or null — used as a drag-drop
+  // target so dropping a dragged armor stack onto its matching slot equips
+  // it (mirrors slotIndexAt for the backpack grid).
+  armorSlotAt(screenX: number, screenY: number): EquipSlot | null {
+    if (!this.open) return null;
+    const dx = screenX - ARMOR_X;
+    const dy = screenY - ARMOR_Y;
+    if (dx < 0 || dy < 0) return null;
+    const col = Math.floor(dx / (SLOT + GAP));
+    const row = Math.floor(dy / (SLOT + GAP));
+    if (col >= ARMOR_COLS || row >= ARMOR_ROWS_MAX) return null;
+    if (dx - col * (SLOT + GAP) > SLOT || dy - row * (SLOT + GAP) > SLOT) return null;
+    const index = row * ARMOR_COLS + col;
+    const slots = this.deps.armorSlots();
+    return index < slots.length ? slots[index].id : null;
+  }
+
   // Backpack slot index under a screen point, or null (used as a drop target).
   slotIndexAt(screenX: number, screenY: number): number | null {
     if (!this.open) return null;
@@ -191,12 +217,36 @@ export class InventoryMenu {
       const box = this.scene.add
         .rectangle(x, y, SLOT, SLOT, 0x14181f, 0.9)
         .setOrigin(0, 0)
-        .setStrokeStyle(1, 0x3a4250)
+        .setStrokeStyle(1, slot.itemKey ? 0x5b6472 : 0x3a4250)
         .setScrollFactor(0)
-        .setDepth(3001);
+        .setDepth(3001)
+        .setInteractive({ useHandCursor: !!slot.itemKey })
+        .on("pointerover", () => {
+          if (slot.itemKey && !this.deps.isDragging())
+            this.tooltipUI.show(slot.itemKey, { x, y, width: SLOT, height: SLOT }, "right", slot.tier);
+        })
+        .on("pointerout", () => this.hideTooltip())
+        .on("pointerdown", (pointer: Phaser.Input.Pointer) => {
+          if (pointer.rightButtonDown()) {
+            this.deps.openArmorContextMenu(slot.id, pointer.x, pointer.y);
+            return;
+          }
+          if (slot.itemKey) this.deps.beginArmorDrag(slot.id, pointer);
+        });
       this.rows.push(box);
 
-      this.addText(x + SLOT / 2, y + SLOT / 2, slot.label, 10, "#5b6472", 0.5, 0.5);
+      if (slot.itemKey) {
+        const def = itemDef(slot.itemKey);
+        if (def) {
+          const icon = this.scene.add
+            .image(x + SLOT / 2, y + SLOT / 2, def.texture)
+            .setScrollFactor(0)
+            .setDepth(3002);
+          this.rows.push(icon);
+        }
+      } else {
+        this.addText(x + SLOT / 2, y + SLOT / 2, slot.label, 10, "#5b6472", 0.5, 0.5);
+      }
     });
   }
 

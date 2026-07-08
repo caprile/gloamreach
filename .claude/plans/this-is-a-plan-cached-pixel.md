@@ -314,10 +314,68 @@ combined Tab menu) affect how Milestone M's UI/enemy work should read going forw
 
 ---
 
-## Milestone M — Gremlin Armor set (first wearable armor)
+## Milestone M — Gremlin Armor set (first wearable armor) — SHIPPED 2026-07-08
 
-**Goal:** wire up the long-dormant `Equipment.ts` slot system for real, and ship the three
-Gremlin armor pieces with per-piece upgrade levels.
+**Shipped mostly as planned, with one confirmed-with-the-user deviation on the upgrade UI**
+(the plan left this open; see the "Armor upgrade UI" decision below) plus one scope cut
+(no numeric defense stat, per the plan's own "check at implementation time" note).
+
+- **`Equipment.ts`** reworked: slots now store `EquippedItem { key, tier }` instead of a
+  bare `string | null`, so a worn piece's upgrade level lives on the same per-instance-tier
+  concept Milestone K introduced for placed stations.
+- **`Items.ts`**: new `armorSlot?: EquipSlot` field on `ItemDef`. The old undifferentiated
+  `gremlin_leather_armor` ItemDef/Recipe/icon were removed outright (no back-compat shim);
+  replaced with `gremlin_cap`/`gremlin_shirt`/`gremlin_pants` (all `maxStack: 1,
+  hotbarable: false`), plus three new `BootScene.ts` icon generations, and matching
+  `Recipes.ts` entries (`category: "armor", tier: 1`) at the costs specified in the original
+  plan (unchanged).
+- **New `src/systems/ArmorUpgrades.ts`** — `ArmorUpgradeDef` (mirrors `StationUpgradeDef`)
+  plus an extra optional `requiresWorkbenchTier?: number` field. `ARMOR_UPGRADES` has the
+  three lvl-2 entries at the plan's costs; Pants' carries `requiresWorkbenchTier: 1`.
+  `StationUpgrades.ts`'s `stationDisplayName()` now also checks `armorUpgradesForItem()` so
+  a worn piece gets the same "Lvl N" treatment a placed station does.
+- **Equip mechanism** — both requested gestures work: **drag** a backpack armor stack onto
+  its matching paper-doll slot (`InventoryMenu.armorSlotAt()`, wired into
+  `MainScene.resolveItemDrag`), or **right-click** it in the backpack
+  (`MainScene.quickMoveItem`, branching on `itemDef(key)?.armorSlot` before the existing
+  hotbar-quick-move path). Both funnel into one `equipArmorFromContainer()`: swaps whatever
+  was previously worn in that slot back into the backpack via `addStack()` (preserving its
+  tier), or drops it on the floor if the backpack is full (`returnArmorToBackpack()`).
+- **Armor upgrade UI (the plan's open question) — resolved with the user**: right-clicking
+  an *occupied* paper-doll slot opens the same `UpgradeMenu.ts` panel a placed station's
+  Upgrade button opens (`MainScene.openArmorUpgradeMenu()`), reusing the component verbatim.
+  `UpgradeMenu`'s deps/type were widened from `StationUpgradeDef`-only to a new
+  `UpgradeDef = StationUpgradeDef | ArmorUpgradeDef` union (both shapes expose the same
+  `name/description/resultTier/costs` fields the panel reads); `MainScene.upgradeTarget` is
+  now `Phaser.GameObjects.Image | { armorSlot: EquipSlot } | null`, with a small
+  `isArmorUpgradeTarget()` type guard branching `target()`/`apply()` between
+  `applyStationUpgrade()` and the new `applyArmorUpgrade()`. The user also confirmed the
+  generalization implied by Pants' Workbench-tier gate: a future armor tier could similarly
+  gate on a not-yet-built higher Workbench tier, so `requiresWorkbenchTier` was built as a
+  generic optional field rather than a Pants-only special case.
+- **Workbench-tier gate, generalized**: new `MainScene.isNearWorkbenchAtTier(minTier, x, y)`
+  (parallel to `isNearWorkbench`) plus `armorUpgradeBlockReason()` — an extra gate *beyond*
+  material cost, surfaced in the panel via a new optional `UpgradeMenuDeps.extraBlockReason`
+  (renders `"(Requires nearby Workbench Lvl 2)"` instead of lumping it under the generic
+  "Missing materials" suffix, since the two failure reasons are meaningfully different to a
+  player standing right next to an un-upgraded Workbench).
+- **Scope cut (per the plan's own hedge):** no numeric defense/damage-reduction stat —
+  equipping is visual (paper-doll icon) and trackable (tier persists) only, matching the
+  plan's "don't build a new resistance system just for this" guidance.
+
+Verified via `preview_eval`: right-click equips Cap/Shirt/Pants into their slots; equipping
+a second Cap swaps the first back into the backpack (net item count unchanged); a real
+simulated drag (`beginItemDrag`/`resolveItemDrag` onto the helmet slot's screen coords) also
+equips correctly; applying the Shirt's lvl-2 upgrade deducts `gremlin_leather`/`bones` and
+bumps its tier to 1; the Pants lvl-2 upgrade is blocked with `"Requires nearby Workbench Lvl
+2"` when no tier-1 Workbench is nearby, and succeeds once one is placed in range; the
+`UpgradeMenu` panel renders the block-reason suffix and the "(Applied)" state correctly; the
+real `Crafting`/`Recipes` discovery-and-craft path (not just direct `backpack.add`) produces
+a `gremlin_cap` item once a Workbench is placed and ingredients are known. Type-check clean,
+no console errors.
+
+**Original goal (for reference):** wire up the long-dormant `Equipment.ts` slot system for
+real, and ship the three Gremlin armor pieces with per-piece upgrade levels.
 
 - **New items** (replace the current single undifferentiated `gremlin_leather_armor` recipe,
   which predates this per-slot spec and doesn't map to any `EquipSlot`):
@@ -350,6 +408,39 @@ Gremlin armor pieces with per-piece upgrade levels.
     reflect in the paper-doll slot and be trackable, but a numeric defense stat is out of scope
     for this milestone unless a trivial flat-reduction hook already exists to reuse (check at
     implementation time; don't build a new resistance system just for this).
+
+---
+
+## Playtest fixes batch #2 (after M) — SHIPPED 2026-07-08
+
+Same-session follow-up fixes on top of Milestone M, requested directly by the user — not
+part of the original I–O list, mirroring the "Playtest fixes batch (between K and M)"
+section above.
+
+- **Armor Upgrade panel docks beside the InventoryMenu** (top edges aligned, right of it) and
+  no longer closes the inventory when opened — `UpgradeMenu.openMenu()` gained an optional
+  `anchor: {x, y}`; a placed station's Upgrade panel is unaffected (still opens centered, no
+  anchor, still closes the inventory). The panel's "[ESC] Close" text is now also clickable.
+- **Unequip added** — was missing entirely after M shipped. Drag an equipped item out of its
+  paper-doll slot onto a backpack slot to unequip it (`beginArmorDrag`/`resolveArmorDrag`,
+  widening `dragSource` to a `{container,index} | {armorSlot} | null` union); right-click an
+  equipped slot now opens a small context menu ("Unequip"/"Upgrade", reusing `ContextMenu.ts`)
+  instead of jumping straight to the Upgrade panel — an empty slot shows the same two rows
+  greyed out ("Equip"/"Upgrade") rather than nothing.
+- **Event log moved beside Keybinds** instead of stacked underneath it — an open
+  `InventoryMenu` panel occupies the same top-left region below Keybinds and was covering the
+  log whenever the inventory was open. New `KeybindsUI.right`/`.top` getters; dropped the
+  now-dead `onToggle` reposition callback between the two panels.
+- **Crafting menu stays open on "Place"** — previously the Place button closed the crafting
+  menu (but left inventory open), inconsistent with a plain "Craft" click leaving it open.
+- **Tuning**: Stone Axe → 4 wood/4 stone (was 3 wood/2 stone); Boar loot → exactly 1
+  boar_meat + 1 bones per kill (was 1-2 each).
+
+Verified via `preview_eval`: right-click context menu shows real/greyed rows correctly per
+slot state; drag-to-unequip falls back to the next empty backpack slot when the drop target
+is occupied; Upgrade panel opens at `(532, 48)` with the inventory still open; a simulated
+crafting-menu "Place" click leaves `craftingMenu.isOpen()` true. See `STATUS.md`'s "Playtest
+fixes batch #2" entry for full detail. Type-check clean, no console errors.
 
 ---
 
@@ -421,10 +512,11 @@ O (resource audit) — do last, once I/K/L/M's exact numbers are locked; will ve
 ```
 
 Recommended order: **L → I → J → K → M → N → O** (bones first since two other milestones need
-it; J and N can slot in anywhere convenient). **L, I, J, and K are done, plus an unplanned
-playtest fixes batch landed between K and M (see above) — M is next up** (or N, which is
-independent). M's armor items should still read "Gremlin Cap/Shirt/Pants" per the naming
-split's locked decision.
+it; J and N can slot in anywhere convenient). **L, I, J, K, and M are all done** (plus an
+unplanned playtest fixes batch landed between K and M — see above). **N and O remain** — both
+independent of each other; N (blackberry harvest-without-destroy) can slot in any time, O
+(resource-density audit) is still recommended last since it depends on M's now-locked exact
+armor costs.
 
 ## Verification (each milestone, per the project's standing convention)
 

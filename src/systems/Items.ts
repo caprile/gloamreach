@@ -1,5 +1,6 @@
 import type { ToolType } from "../entities/ResourceNode";
 import type { WeaponType } from "./Weapons";
+import type { EquipSlot } from "./Equipment";
 
 // Central display + behaviour metadata for every item that can live in the
 // inventory: raw resources AND crafted outputs. Keyed by the item's stable
@@ -19,6 +20,7 @@ export interface ItemDef {
   hotbarable: boolean; // may this sit in a 1-9 hotbar slot?
   tool?: ToolType; // set for tool items — selecting it in the hotbar equips it
   weapon?: WeaponType; // set for weapon items — selecting it in the hotbar equips it
+  armorSlot?: EquipSlot; // set for armor items — drag-onto-slot or right-click equips it
   stats?: ItemStat[];
   // World-placed items (campfires, building pieces) skip the backpack
   // entirely — crafting one enters placement mode instead. Per-item, not
@@ -235,14 +237,35 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
   },
 
   // --- armor ---
-  gremlin_leather_armor: {
-    key: "gremlin_leather_armor",
-    name: "Gremlin Leather Armor",
-    description: "Light armor stitched from cured gremlin leather and twine.",
-    texture: "icon_gremlin_leather_armor",
+  gremlin_cap: {
+    key: "gremlin_cap",
+    name: "Gremlin Cap",
+    description: "A light cap stitched from cured gremlin leather.",
+    texture: "icon_gremlin_cap",
     maxStack: 1,
     hotbarable: false,
-    stats: [{ label: "Type", value: "Armor" }],
+    armorSlot: "helmet",
+    stats: [{ label: "Type", value: "Armor (Head)" }],
+  },
+  gremlin_shirt: {
+    key: "gremlin_shirt",
+    name: "Gremlin Shirt",
+    description: "A tough shirt of cured gremlin leather reinforced with bone.",
+    texture: "icon_gremlin_shirt",
+    maxStack: 1,
+    hotbarable: false,
+    armorSlot: "chest",
+    stats: [{ label: "Type", value: "Armor (Chest)" }],
+  },
+  gremlin_pants: {
+    key: "gremlin_pants",
+    name: "Gremlin Pants",
+    description: "Leg wraps of cured gremlin leather and scrap hide.",
+    texture: "icon_gremlin_pants",
+    maxStack: 1,
+    hotbarable: false,
+    armorSlot: "legs",
+    stats: [{ label: "Type", value: "Armor (Legs)" }],
   },
 };
 

@@ -177,14 +177,17 @@ mouse-driven only. Don't reintroduce a keybind for this without being asked. Spa
    (discoverable once twine has been produced) and tags that specific placed instance —
    the mechanical payoff of an upgraded tier is intentionally undesigned past that. A new
    `gremlin_leather_armor` recipe (armor tab, workbench-gated) sinks the two processed
-   outputs — **not yet wearable** (armor-equip system doesn't exist). Also added this
+   outputs — **not yet wearable** (armor-equip system doesn't exist). *(Superseded in
+   Milestone M: this single recipe was replaced by three slot-specific pieces — Gremlin
+   Cap/Shirt/Pants — which are wearable; see below.)* Also added this
    session: a general **Drop/Destroy** system for any inventory stack — drag it out to the
    game world to drop it as a magnet-cooldown-gated pickup, or onto the `InventoryMenu`'s
    trash box to delete it outright. With Milestone H shipped, **the entire first-biome
    content plan (A–H) is done.** See `STATUS.md` for full detail on both the initial ship
    and the same-day rework.
 4f. **Drying Rack polish, station-upgrade rework, Gremlin armor (first wearable armor)**
-   — in progress (**Milestones L, I, and J shipped**; K, M–O not yet built). Full detail in
+   — **Milestones L, I, J, K, and M all shipped**; N (blackberry harvest-without-destroy) and
+   O (resource-density audit) are the two remaining items. Full detail in
    `.claude/plans/this-is-a-plan-cached-pixel.md` (Milestones I–O, continuing the A–H
    lettering). Playtest-driven follow-up batch: the
    Drying Rack's slider is now **output-amount based** (auto-scaled 0..max possible output,
@@ -206,16 +209,24 @@ mouse-driven only. Don't reintroduce a keybind for this without being asked. Spa
    directly via the right-click Upgrade popup — no intermediate craftable item), and a
    station's upgrade tier now **survives Destroy → pickup → re-Place** with a visual tell
    at each tier (this also fixes a latent bug: today an upgraded Workbench's tier is
-   silently discarded on Destroy); Blackberry bushes gain a **harvest-without-destroy**
-   mode (berries picked, bush stays in the world — the game's first persistent-after-
-   harvest node); and **Gremlin Armor** (Cap/Shirt/Pants → helmet/chest/legs) finally wires
-   up the long-dormant `Equipment.ts` slot system, replacing the old undifferentiated
-   `gremlin_leather_armor` recipe — equippable by **drag onto the paper-doll slot or
-   right-click**, each piece with its own lvl-2 upgrade cost (Pants' lvl 2 additionally
-   gated on the Workbench's own upgrade tier). A resource-density pass found the new armor
-   set needs far more `gremlin_leather`/`leather` than current spawn counts can supply
-   (RangedGremlin and Snake counts will very likely need bumping — see the plan file's
-   Milestone O for the exact math).
+   silently discarded on Destroy — Milestone K, shipped). **Gremlin Armor** (Milestone M,
+   shipped) finally wires up the long-dormant `Equipment.ts` slot system: **Gremlin
+   Cap/Shirt/Pants** (helmet/chest/legs) replace the old undifferentiated
+   `gremlin_leather_armor` recipe — equip by **drag onto the paper-doll slot or right-click**
+   a backpack item (swap semantics: whatever was worn there returns to the backpack, or drops
+   on the floor if it's full); each piece has its own lvl-2 upgrade, triggered by
+   **right-clicking the equipped paper-doll slot**, which opens the same full-page
+   `UpgradeMenu.ts` panel a placed station's Upgrade button does (reusing that exact
+   component — Milestone K's per-instance-tier plumbing was the reason M could reuse it
+   directly rather than build a parallel system). Gremlin Pants' lvl 2 additionally requires
+   a nearby Workbench that has **itself** reached tier 1 (`isNearWorkbenchAtTier()`,
+   `MainScene.ts`) — a locked decision from the user, and the template for how future armor
+   tiers gate on future Workbench tiers (e.g. a hypothetical lvl-3 armor piece gating on a
+   not-yet-built Workbench lvl 3). Blackberry bushes' harvest-without-destroy mode (N) has
+   **not** shipped yet — bushes still deplete/destroy on harvest today. A resource-density
+   pass (O, not yet done) is still expected to find the new armor set needs far more
+   `gremlin_leather`/`leather` than current spawn counts can supply (RangedGremlin and Snake
+   counts will very likely need bumping — see the plan file's Milestone O for the exact math).
 
 **Not yet built — next up in rough order:**
 5. **Progression** — XP, levels, stats.
@@ -289,8 +300,8 @@ type without a bigger array-type change. Per the notes, Slingshot (not yet built
 intended to require a workbench once it exists.
 
 **Tools**
-- Stone Axe — 2 stone, 3 wood, no workbench. (Current placeholder recipe: 3 wood/2
-  stone — same total, revisit exact split.) **Tool-only, not a weapon** (see item 4
+- Stone Axe — **4 wood, 4 stone**, no workbench (tuned up from an earlier 3 wood/2
+  stone after playtest). **Tool-only, not a weapon** (see item 4
   above) — deliberately doesn't equip as a weapon anymore, so it's not a free
   weapon-slot bonus on top of being the tool everyone crafts first.
 - Stone Pickaxe — 4 stone, 3 wood, 1 leather scrap, requires workbench (now enforced;
@@ -320,14 +331,23 @@ intended to require a workbench once it exists.
 - **Crafting-menu tab reorg (shipped, Milestone 4f/I):** Workbench, Campfire, and Drying Rack
   all live in the **Crafting** tab (campfire is conceptually a processor too); Shishkabob
   moved to **Misc**. See `.claude/plans/this-is-a-plan-cached-pixel.md` Milestone I.
-- **Gremlin Armor (planned, Milestone 4f, not yet built):** three wearable pieces replacing
-  the old undifferentiated `gremlin_leather_armor` recipe — **Gremlin Cap** (helmet slot, 1
+- **Gremlin Armor (shipped, Milestone M):** three wearable pieces replacing the old
+  undifferentiated `gremlin_leather_armor` recipe — **Gremlin Cap** (helmet slot, 1
   gremlin_leather + 5 blackberries; lvl 2: 1 gremlin_leather + 1 blackberry), **Gremlin
   Shirt** (chest slot, 3 gremlin_leather + 1 leather scrap + 5 bones; lvl 2: 2
   gremlin_leather + 2 bones), **Gremlin Pants** (legs slot, 2 gremlin_leather + 2 leather
   scraps + 1 blackberry; lvl 2: 1 gremlin_leather + 1 leather scrap, additionally gated on
-  the Workbench's own upgrade tier). First real use of `Equipment.ts`'s slot system (dormant
-  since Milestone H) — equip via drag-onto-slot or right-click, either should work.
+  a nearby Workbench having reached tier 1 itself). First real use of `Equipment.ts`'s slot
+  system (dormant since Milestone H) — `Equipment` now stores `{key, tier}` per slot instead
+  of a bare item key, since a worn piece's upgrade level lives there. Equip via **drag onto
+  the paper-doll slot** or **right-click a backpack item** (both work, either auto-equips —
+  swapping any previously worn piece back to the backpack, or dropping it on the floor if
+  full). **Right-clicking an already-equipped slot** opens that piece's lvl-2 Upgrade panel
+  — reuses `UpgradeMenu.ts` verbatim (the same panel a placed station's Upgrade button
+  opens), with a new `ArmorUpgradeDef` table (`src/systems/ArmorUpgrades.ts`) parallel to
+  `StationUpgrades.ts`'s `StationUpgradeDef`. No numeric defense/damage-reduction stat yet —
+  per the standing damage-types-are-later note below, equipping is visual/trackable only so
+  far.
 
 **Enemies (first combat content)**
 - Gremlin — not yet built. Medium damage; ranged rock throw + melee claw; prefers to
@@ -348,10 +368,10 @@ intended to require a workbench once it exists.
   leather source**, which is why it was prioritized ahead of B/C. Its HP bar (like Boar's)
   only shows once actually aggro'd — see `Enemy.isAggro()` — not while idle/hidden.
 - Boar — **shipped in simplified form** (`src/entities/Enemy.ts`): melee bite only,
-  simple aggro-radius chase AI, drops 1-2 boar_meat **and 1-2 `bones` (Milestone L,
-  shipped)** — feeds the Drying Rack's updated recipe and Gremlin Shirt. No charge
-  attack, no fear-of-fire yet — those (plus the "high damage, high aggro range" tuning)
-  are still open follow-up work, not forgotten.
+  simple aggro-radius chase AI, drops **exactly 1 boar_meat and 1 `bones`** per kill
+  (tuned down from an initial 1-2/1-2 after playtest) — feeds the Drying Rack's updated
+  recipe and Gremlin Shirt. No charge attack, no fear-of-fire yet — those (plus the
+  "high damage, high aggro range" tuning) are still open follow-up work, not forgotten.
 - **Spawn-count bump likely needed (planned, Milestone 4f/O):** a resource-density audit
   for the new Gremlin Armor set found `gremlin_leather` and `leather` demand will exceed
   what today's spawn counts can ever supply (RangedGremlin's 4-per-session and Snake's

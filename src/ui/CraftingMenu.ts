@@ -291,8 +291,11 @@ export class CraftingMenu {
       .on("pointerdown", () => {
         if (!affordable) return;
         if (placeable) {
+          // Per user request: entering placement mode from the crafting menu
+          // no longer closes it — the panel stays up (mirrors how it already
+          // stayed open for a plain "Craft" click) while the ghost follows
+          // the cursor.
           this.deps.startPlacement(recipe);
-          this.close();
         } else {
           this.deps.craft(recipe);
           this.render();

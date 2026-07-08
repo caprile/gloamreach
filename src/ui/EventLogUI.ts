@@ -1,7 +1,6 @@
 import Phaser from "phaser";
 import type { EventLog, LogEntry, LogKind } from "../systems/EventLog";
 
-const PANEL_X = 12; // matches KeybindsUI's PANEL_X so the two stack in one column
 const PANEL_W = 260;
 const HEADER_H = 22;
 const LINE_H = 18;
@@ -29,9 +28,10 @@ const RECIPE_TOAST_HOLD_MS = 2400;
 const RECIPE_TOAST_FADE_MS = 600;
 const RECIPE_TOAST_STAGGER_MS = 200;
 
-// Persistent event feed, stacked top-left directly under KeybindsUI (out of
-// the way of the bottom-center HUD cluster, which is expected to grow as
-// more stat bars land there). Collapsible via the header — defaults
+// Persistent event feed, anchored top-left beside KeybindsUI (not stacked
+// underneath it — an open InventoryMenu panel covers the same top-left
+// column below Keybinds, so the log used to get hidden behind it whenever
+// the player opened their inventory). Collapsible via the header — defaults
 // collapsed/hidden, same as KeybindsUI — scrollable with the mouse wheel,
 // and pops a fading toast near the top when a new entry arrives so unlocks
 // feel like a "big deal".
@@ -42,29 +42,24 @@ export class EventLogUI {
   private scrollOffset = 0; // entries scrolled up from the newest
   private rows: Phaser.GameObjects.GameObject[] = [];
   private activeToasts = 0;
+  private leftX: number;
   private topY: number;
   private recipeToastQueue: LogEntry[] = [];
   private recipeToastQueueBusy = false;
   private activeRecipeToasts = 0;
 
-  // `topY` is the fixed top edge of this panel — the caller (MainScene)
-  // computes it once from KeybindsUI's current bottom edge so the two panels
-  // stack without overlapping.
-  constructor(scene: Phaser.Scene, log: EventLog, topY: number) {
+  // `x`/`topY` are this panel's fixed top-left anchor — the caller
+  // (MainScene) computes `x` once from KeybindsUI's right edge so the two
+  // panels sit side by side at the same top edge instead of stacking.
+  constructor(scene: Phaser.Scene, log: EventLog, x: number, topY: number) {
     this.scene = scene;
     this.log = log;
+    this.leftX = x;
     this.topY = topY;
 
     log.onAdd((entry) => this.onNewEntry(entry));
 
     scene.input.on("wheel", this.onWheel, this);
-    this.render();
-  }
-
-  // Called by the scene when KeybindsUI's collapse state changes, so this
-  // panel stays stacked directly beneath it instead of getting overlapped.
-  setTopY(topY: number): void {
-    this.topY = topY;
     this.render();
   }
 
@@ -88,8 +83,8 @@ export class EventLogUI {
   isPointerOver(pointer: Phaser.Input.Pointer): boolean {
     const h = HEADER_H + (this.collapsed ? 0 : this.bodyHeight());
     return (
-      pointer.x >= PANEL_X &&
-      pointer.x <= PANEL_X + PANEL_W &&
+      pointer.x >= this.leftX &&
+      pointer.x <= this.leftX + PANEL_W &&
       pointer.y >= this.topY &&
       pointer.y <= this.topY + h
     );
@@ -110,8 +105,8 @@ export class EventLogUI {
 
   private render(): void {
     this.clear();
-    const leftX = PANEL_X;
-    const rightX = PANEL_X + PANEL_W;
+    const leftX = this.leftX;
+    const rightX = this.leftX + PANEL_W;
     const headerTop = this.topY;
 
     // Header bar (click to collapse/expand).

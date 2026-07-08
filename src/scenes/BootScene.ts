@@ -350,7 +350,16 @@ export class BootScene extends Phaser.Scene {
     g.fillRect(4, 18, 16, 2);
     g.generateTexture("icon_drying_rack", ICON, ICON);
 
-    // Gremlin Leather Armor: a chest-piece silhouette in cured-leather tones.
+    // Gremlin Cap: a rounded hood in cured-leather tones.
+    g.clear();
+    g.fillStyle(0x6a6a3a, 1);
+    g.fillRect(5, 8, 14, 10);
+    g.fillCircle(12, 8, 7);
+    g.fillStyle(0x8a8a52, 1);
+    g.fillRect(4, 15, 16, 3); // brim
+    g.generateTexture("icon_gremlin_cap", ICON, ICON);
+
+    // Gremlin Shirt: a chest-piece silhouette in cured-leather tones.
     g.clear();
     g.fillStyle(0x6a6a3a, 1);
     g.fillRect(5, 5, 14, 15);
@@ -359,6 +368,15 @@ export class BootScene extends Phaser.Scene {
     g.fillRect(18, 5, 4, 7); // right shoulder
     g.fillStyle(0x8a8a52, 1);
     g.fillRect(10, 8, 4, 9); // center seam
-    g.generateTexture("icon_gremlin_leather_armor", ICON, ICON);
+    g.generateTexture("icon_gremlin_shirt", ICON, ICON);
+
+    // Gremlin Pants: two leg wraps in cured-leather tones.
+    g.clear();
+    g.fillStyle(0x53532c, 1);
+    g.fillRect(6, 4, 12, 5); // waistband
+    g.fillStyle(0x6a6a3a, 1);
+    g.fillRect(6, 9, 5, 11); // left leg
+    g.fillRect(13, 9, 5, 11); // right leg
+    g.generateTexture("icon_gremlin_pants", ICON, ICON);
   }
 }

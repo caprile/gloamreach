@@ -1,7 +1,8 @@
-// Worn-equipment slots. All placeholders for now — no armor items exist yet,
-// so every slot stays empty. The layout and slot set are here so the
-// Inventory UI can render the paper-doll, and combat/stat systems can hook in
-// later. Slots hold an item key (see Items.ts) or null.
+// Worn-equipment slots — first real occupants are the Gremlin Armor pieces
+// (Milestone M). The layout and slot set are here so the Inventory UI can
+// render the paper-doll, and combat/stat systems can hook in later. Slots
+// hold an EquippedItem (item key + its per-instance upgrade tier, same field
+// a placed station's tier lives on — see StationUpgrades.ts) or null.
 export type EquipSlot =
   | "helmet"
   | "chest"
@@ -12,6 +13,11 @@ export type EquipSlot =
   | "ring2"
   | "special1"
   | "special2";
+
+export interface EquippedItem {
+  key: string;
+  tier: number;
+}
 
 export const EQUIP_SLOTS: { id: EquipSlot; label: string }[] = [
   { id: "helmet", label: "Head" },
@@ -26,7 +32,7 @@ export const EQUIP_SLOTS: { id: EquipSlot; label: string }[] = [
 ];
 
 export class Equipment {
-  private slots: Record<EquipSlot, string | null> = {
+  private slots: Record<EquipSlot, EquippedItem | null> = {
     helmet: null,
     chest: null,
     legs: null,
@@ -38,11 +44,11 @@ export class Equipment {
     special2: null,
   };
 
-  get(slot: EquipSlot): string | null {
+  get(slot: EquipSlot): EquippedItem | null {
     return this.slots[slot];
   }
 
-  set(slot: EquipSlot, itemKey: string | null): void {
-    this.slots[slot] = itemKey;
+  set(slot: EquipSlot, item: EquippedItem | null): void {
+    this.slots[slot] = item;
   }
 }

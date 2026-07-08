@@ -1,5 +1,6 @@
 import type { ResourceType } from "./Inventory";
 import { itemDef } from "./Items";
+import { armorUpgradesForItem } from "./ArmorUpgrades";
 
 // A named upgrade a placed station can receive via its right-click Upgrade
 // popup. Replaces the old generic `workbench_upgrade` consumable: costs are
@@ -36,14 +37,16 @@ export function upgradesForItem(itemKey: string): StationUpgradeDef[] {
 }
 
 // "Workbench Lvl 2" instead of a bare "Workbench" — only for items that
-// actually have upgrades defined; everything else (Campfire, Drying Rack
-// today) keeps its plain item name. Shared by the placed-object label, the
-// Upgrade panel, event-log lines, and item tooltips (backpack/hotbar) so a
-// station's level reads consistently everywhere it's shown. Levels are
-// 1-based for display (tier 0 == "Lvl 1") since "Lvl 0" reads as broken to a
-// player even though the underlying tier field starts at 0.
+// actually have upgrades defined (checked across both the station and armor
+// upgrade tables — a worn Gremlin Cap gets the same "Lvl N" treatment as a
+// placed Workbench); everything else (Campfire, Drying Rack today) keeps its
+// plain item name. Shared by the placed-object label, the Upgrade panel,
+// event-log lines, and item tooltips (backpack/hotbar) so an item's level
+// reads consistently everywhere it's shown. Levels are 1-based for display
+// (tier 0 == "Lvl 1") since "Lvl 0" reads as broken to a player even though
+// the underlying tier field starts at 0.
 export function stationDisplayName(itemKey: string, tier: number): string {
   const base = itemDef(itemKey)?.name ?? itemKey;
-  if (upgradesForItem(itemKey).length === 0) return base;
+  if (upgradesForItem(itemKey).length === 0 && armorUpgradesForItem(itemKey).length === 0) return base;
   return `${base} Lvl ${tier + 1}`;
 }
