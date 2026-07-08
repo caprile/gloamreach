@@ -2,7 +2,62 @@
 
 Last updated: 2026-07-07
 
-### Just finished: Drying Rack rework (instant processing + slider), placed-object Upgrade/Destroy, inventory Drop/Destroy
+### Just finished: Planning session — Drying Rack polish, station-upgrade rework, Gremlin armor (Milestones I–O)
+
+Plan-update session (no code changes) following a fresh round of playtest feedback after
+Milestone H. Full plan: `.claude/plans/this-is-a-plan-cached-pixel.md`, referenced from
+`CLAUDE.md`'s new roadmap item **4f**. Three Explore agents surveyed `Items.ts`/`Recipes.ts`/
+`Inventory.ts`, `Processing.ts`/`DryingRackMenu.ts`/`ResourceNode.ts`/the placement-mode flow,
+and `Enemy.ts`/hotbar/right-click handling before the plan was written, so implementation
+sessions for I–O shouldn't need to re-explore those areas.
+
+**Locked decisions from this session:**
+- **Crafting-menu tab reorg**: Workbench, Campfire, and Drying Rack all move into the
+  **Crafting** tab (campfire is conceptually a processor too, per the user); Shishkabob moves
+  to **Misc**. No new "Stations"/"Processors" tabs — simpler than what was first proposed.
+- **Station-upgrade popup** (right-click "Upgrade") only lists upgrades whose ingredients have
+  all been discovered at least once — mirrors the existing tier-1 recipe-discovery gating,
+  not "show everything greyed out."
+- **Armor equip** supports both **drag onto the paper-doll slot** and **right-click to
+  auto-equip** — matches the existing hotbar right-click-to-quick-move precedent.
+
+**New milestones planned (I–O, continuing the A–H lettering), not yet built:**
+- **I** — Drying Rack polish: slider reworked to represent desired **output** amount
+  (auto-scaled 0..max possible output, not input units), Cattail's description stops
+  spoiling what it processes into, recipe changes to `wood:5, leather:4, bones:2`, tab reorg.
+- **J** — Placement-mode bug fix (a failed tier-gate check no longer cancels placement mode —
+  it stays armed so walking into Workbench range lets the next click succeed) + a new way to
+  re-enter placement mode from an inventory/hotbar item (e.g. a Workbench recovered via
+  Destroy) via right-click or hotbar-select.
+- **K** — Per-instance station tiers + named upgrade system: replaces the single generic
+  `workbench_upgrade` consumable with named recipes (e.g. "Tool Sharpener": 3 twine/5 wood/2
+  stone) applied directly via the right-click Upgrade popup, and fixes a **latent bug found
+  during exploration**: an upgraded Workbench's tier is currently silently discarded on
+  Destroy (no tier tag survives placed-Image → loose-pickup → inventory-stack today).
+  Flagged as new architecture — recommend Opus.
+- **L** — New `bones` resource (Boar loot), unblocks I and M.
+- **M** — Gremlin Armor set (Cap/Shirt/Pants → helmet/chest/legs), the first real use of the
+  long-dormant `Equipment.ts` slot system (exists since Milestone H, nothing ever called
+  `equipment.set()` until now). Replaces the old undifferentiated `gremlin_leather_armor`
+  recipe. Each piece has its own lvl-2 upgrade cost; Pants' lvl 2 additionally requires the
+  Workbench's own upgrade tier.
+- **N** — Blackberry bushes gain a harvest-without-destroy mode (berries picked, bush stays
+  in the world) — the game's first persistent-after-harvest node; no such pattern existed
+  anywhere in the codebase before this.
+- **O** — Resource-density audit. **Two real shortfalls found by math, not guesswork**:
+  the Gremlin Armor set needs ~10 `gremlin_leather` (base + lvl-2 upgrades) but only
+  RangedGremlin drops `gremlin_skin` and only 4 spawn per session (max 4 ever obtainable);
+  new `leather` scrap demand (~9, on top of existing Stone Pickaxe/Club costs) exceeds what
+  6 Snakes per session can ever supply. Recommends bumping RangedGremlin (~4→16-20) and
+  Snake (~6→14-16) spawn counts — a real departure from Milestone C's original
+  "rarer, stronger" ranged-Gremlin tuning intent, called out deliberately rather than
+  silently overridden when O is implemented.
+
+Recommended implementation order: **L → I → J → K → M → N → O** (bones first since two other
+milestones need it; J and N can slot in anywhere convenient). See the plan file for full
+per-milestone detail, file:line references, and verification steps.
+
+### Previously: Drying Rack rework (instant processing + slider), placed-object Upgrade/Destroy, inventory Drop/Destroy
 
 Playtest follow-up right after Milestone H landed — several user-requested changes to the
 system, all in one session:
