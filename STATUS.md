@@ -2,7 +2,120 @@
 
 Last updated: 2026-07-08
 
-### Just finished: Playtest fixes batch #2 — armor equip/unequip polish, upgrade-menu docking, UI/tuning fixes
+### Just finished: Playtest fixes after O — Gremlin spawn spacing + kite/pursue AI loop
+
+Immediate follow-up after Milestone O's spawn-count bump surfaced two issues: Gremlins/
+Gremlings could spawn in dense packs, and the ranged Gremlin's "kiting" AI always fled
+regardless of distance, so a player who just held distance past shot range could never be
+re-engaged. Both fixed in `src/scenes/MainScene.ts`/`src/entities/Gremlin.ts`, addressed now
+rather than deferred to the planned "safe-center, danger-toward-edges" world-gen rework
+(independent, small, worth fixing immediately).
+
+- **Spawn spacing** — new `MainScene.pickSpreadSpawnPoint()` (parallel to `pickSpawnPoint`,
+  same 200-attempt-then-fallback shape) rejects a candidate point if `maxNearby` or more
+  existing points already sit within `minSpacing` of it. `spawnEnemies()`'s Gremlin/Gremling
+  loops now share one `gremlinPoints` pool (both variants count against each other, since
+  they read as one "gremlin problem" to the player) with `GREMLIN_CLUSTER_RADIUS = 140,
+  GREMLIN_CLUSTER_MAX = 2` — no more than 2 gremlin-family enemies within 140px of each other.
+  Snake/Boar spawn loops untouched (density complaint was Gremlin-specific).
+- **Kite/pursue AI loop** (`RangedGremlin.update()`, `src/entities/Gremlin.ts`) — "ranged" mode
+  used to always flee (back directly away) regardless of distance. Reworked into three bands:
+  **< `RANGED_MIN_KITE_DIST` (140px)** flees (unchanged `KITE_SPEED`); **`RANGED_MIN_KITE_DIST`
+  to `PROJECTILE_MAX_RANGE` (140-260px)** holds ground and fires bursts; **>
+  `PROJECTILE_MAX_RANGE` (260px)** pursues straight at the player (new
+  `RANGED_PURSUE_SPEED = 70`) instead of firing. `RANGED_DEAGGRO_RADIUS` bumped 260→400 to
+  leave room for the pursue band — it previously equaled `PROJECTILE_MAX_RANGE` exactly, so
+  any out-of-shot-range distance instantly deaggro'd instead of ever being pursued. This
+  produces the flee→hold→pursue loop as the player closes and backs off, matching
+  Boar/Gremling/Snake's more standard chase-until-engaged pattern instead of a Gremlin being a
+  pure kiter.
+- **Stop-to-shoot (same-day follow-up)** — the gremlin was still firing bursts while moving
+  (kiting away, or approaching), which read wrong. `RangedGremlin.update()` now only starts a
+  *fresh* burst while holding ground in the mid-range band (`inHoldBand`); a burst already
+  underway (`midBurst`) forces `holdingStill = true`, overriding whatever the distance-based
+  flee/pursue branch would otherwise pick, so the gremlin plants itself for the whole 2-shot
+  burst even if the player closes distance mid-burst. Once the burst finishes
+  (`shotsFiredInBurst` resets to 0), normal flee/hold/pursue resumes on the very next frame.
+- **Shoot-while-cornered (second same-day follow-up)** — per the user, a Gremlin being chased
+  in close shouldn't *only* flee; it should still periodically stop and try to shoot back, then
+  resume fleeing. `holdingStill` widened from `midBurst || inHoldBand` to also allow a fresh
+  burst anywhere in shot range (`inShotRange && readyForFreshBurst`, not just the ideal
+  `inHoldBand`) — so a fully-close, off-cooldown gremlin now plants and fires instead of
+  fleeing forever; once that burst's cooldown starts, it resumes fleeing (since `midBurst` and
+  `readyForFreshBurst` are both false again) until the cooldown expires, at which point it
+  plants and fires again. This produces a flee→stop-and-shoot→flee loop while cornered, not a
+  pure kiter that never fights back up close.
+- **Longer stand-still (third same-day follow-up)** — per the user, the plant duration itself
+  needed to be at least 2x longer; it previously resumed fleeing the instant the burst finished
+  (~200ms total stationary time). New `standGroundUntil` timestamp + `RANGED_STAND_GROUND_MS =
+  450`: every frame the gremlin is mid-burst or starting a fresh one, `standGroundUntil` is
+  pushed forward to `now + 450`, so `holdingStill` (now `inHoldBand || now < standGroundUntil`)
+  stays true for a full 450ms *after* the burst's last shot fires, not just for the burst's own
+  duration. Total stand-still time per stop-and-shoot episode is now ~640ms (190ms burst +
+  450ms hold), over 3x the old ~200ms.
+
+Verified via `preview_eval`: a scripted sequence at a fixed close distance (50px) confirms
+`standGroundUntil` reads exactly `now + 450` the instant the burst completes, and sampling
+every 100ms afterward shows the gremlin holding still (`vx: 0`) through the 400ms mark and
+only resuming flee (`vx: -55`) between 400-500ms after burst completion — matching the 450ms
+constant. Earlier 5-frame scripted sequence at the same close distance (50px, well
+inside the old flee-only zone) confirms the loop end to end — frame 1 (cooldown ready) stops
+and fires shot 1 (`vx/vy: 0`); frame 2 stays planted for shot 2 (mid-burst); frame 3 fires
+shot 2 and completes the burst; frame 4 (burst now on cooldown, still close) **flees**
+(`vx: -55`); frame 5 (cooldown expired, still close) **stops and fires again**
+(`shotsFired: 1`, `vx/vy: 0`). Live spawn roster (18 RangedGremlin + 6 MeleeGremling = 24) has a
+max of 1 same-family neighbor within 140px for every entity (no 3+ clusters); a real
+`RangedGremlin.update()` sequence — aggro at 100px, then player backs to 350px (pursue,
+`vx: 70` toward player), then 200px (hold, `vx/vy: 0`), then 50px (flee, `vx: -55` away) —
+confirms all three bands fire correctly on the live object; a forced immediate burst at
+200px shows `vx/vy: 0` while firing, moving the player to 50px away mid-burst keeps velocity
+at `0,0` and the burst still in progress (not yet fleeing), and once the burst completes on a
+later frame velocity flips to fleeing (`vx: -55`) on the very next `update()` call. Type-check
+clean, no console errors, `preview_screenshot` shows the world booting normally.
+
+### Previously: Milestones N + O — Blackberry persist-on-harvest, resource-density spawn bump
+
+Final two milestones of the I–O batch (`.claude/plans/this-is-a-plan-cached-pixel.md`). With
+these, **the entire I–O batch is done.**
+
+- **Milestone N — Blackberry bushes harvest without destroying.** First "stays in the world
+  after harvest" node in the game — every other node (branch/rock/tree/boulder/cattail) still
+  destroys on collect. New `ResourceNodeConfig`/`ResourceNode` fields: `persistent?: boolean`,
+  `pickedTexture?: string`, `regrowMs?: number`, plus a `harvested` runtime flag distinct from
+  `depleted` (a harvested-but-alive bush must stay in `MainScene.nodes`/keep its sprite, unlike
+  a depleted one, which is destroyed and filtered out). `ResourceNode.harvest()` sets
+  `harvested = true`, swaps to `pickedTexture` (new `blackberry_bush_picked` — same leafy mound,
+  no berry dots, `BootScene.ts`), and schedules `regrow()` via `scene.time.delayedCall(regrowMs,
+  ...)` if set; `regrow()` reverts both. `tryInteract()`'s pickup branch now branches on
+  `node.persistent`: persistent nodes call `collectNode()` + `harvest()` and stay in `nodes`;
+  everything else keeps the old `collectNode()` + `deplete()` + remove-from-array path
+  unchanged. `updateHover()`/`tryInteract()`'s existing `node.depleted` gates both grew an
+  `|| node.harvested` check so a harvested bush shows no prompt and can't be re-clicked.
+  Blackberry's `scatterClustered()` call (`MainScene.spawnNodes()`) now passes `persistent:
+  true, pickedTexture: "blackberry_bush_picked", regrowMs: BLACKBERRY_REGROW_MS` (new constant,
+  3 in-game minutes) — **regrow timing was an explicit recommendation, not a locked user
+  decision**, since the original note only specified "berries removed, not the whole bush."
+- **Milestone O — Resource-density spawn bump.** Per the plan's own math (worked out in the
+  planning session, not redone here): RangedGremlin count **4 → 18** and Snake count **6 → 15**
+  (`MainScene.spawnEnemies()`), covering the new Gremlin Armor set's `gremlin_leather`
+  (~10 needed, was capped at 4 ever obtainable) and `leather`/Leather Scraps (~9 new demand on
+  top of already-tight existing costs, was capped at 6) demand with margin. This is a deliberate
+  departure from Milestone C's original "rarer, stronger" ranged-Gremlin tuning intent, called
+  out explicitly rather than silently overridden, per the plan. `bones`/`twine`/other resources
+  already had comfortable margin (Milestone L's Boar loot, existing cattail/bush counts) and
+  needed no change.
+
+Verified via `preview_eval`: a real `tryInteract()` on a hovered blackberry bush credits 2
+`blackberry` to the backpack, sets `harvested: true`, swaps texture to
+`blackberry_bush_picked`, and leaves the bush in `scene.nodes` (not destroyed/depleted); a
+forced re-click on the same harvested bush is a no-op (berries count unchanged) and
+`updateHover()` never re-selects a harvested bush as `hoveredNode`; calling the private
+`regrow()` directly reverts both `harvested` and the texture back to `blackberry_bush`.
+Enemy roster counts confirmed exactly `{Enemy: 12, Snake: 15, RangedGremlin: 18,
+MeleeGremling: 6}` (51 total). Type-check clean (`tsc --noEmit`), no console errors,
+`preview_screenshot` shows the world booting normally with the denser enemy roster.
+
+### Previously: Playtest fixes batch #2 — armor equip/unequip polish, upgrade-menu docking, UI/tuning fixes
 
 Follow-up playtest fixes on top of Milestone M, requested directly by the user in the same
 session.

@@ -444,30 +444,41 @@ fixes batch #2" entry for full detail. Type-check clean, no console errors.
 
 ---
 
-## Milestone N — Blackberry bushes: harvest berries, keep the bush
+## Milestone N — Blackberry bushes: harvest berries, keep the bush — SHIPPED 2026-07-08
 
-**Goal:** first "stays in the world after harvest" node — a genuinely new `ResourceNode`
-behavior, not a variation on the existing hit-until-depleted-then-destroy pattern used by
-every node in the game today (confirmed via exploration — no multi-harvest/persistent node
-exists anywhere currently).
+**Shipped as planned, with the open regrow question resolved as recommended** (a timer, not
+locked by the user's original note — see below).
 
-- Change blackberry bushes (`MainScene.ts:824` scatter config) from `action: "pickup"` +
-  destroy-on-deplete to a new node mode that, on harvest, **yields the berry item but does not
-  destroy the sprite** — swap to a distinct "picked" texture (bare bush, no berries) instead of
-  removing it from the world.
-- **Open design question to settle at implementation time (not locked by the user's note):**
-  does a picked bush ever regrow? The user only said "berries removed, not the whole bush" —
-  regrowth wasn't specified. Recommend a regrow timer (e.g. a few in-game minutes back to
-  harvestable, "picked" texture reverting to full) since it fits the game's Valheim-like
-  foraging feel and keeps blackberries renewable without needing more bushes scattered — but
-  flag this explicitly as a recommendation, not a locked decision, since it wasn't asked.
-- `ResourceNode.ts`: needs a new harvest-without-deplete code path (today `deplete()`,
-  `ResourceNode.ts:210-215`, always destroys) — likely a new `harvestType: "consume" |
-  "berries"` (or similar) config flag rather than overloading existing fields.
+- New `ResourceNodeConfig`/`ResourceNode` fields: `persistent?: boolean`, `pickedTexture?:
+  string`, `regrowMs?: number`, plus a runtime `harvested` flag kept distinct from `depleted`
+  (a harvested bush stays alive/in `MainScene.nodes`, unlike a depleted node which is destroyed
+  and filtered out). `ResourceNode.harvest()` sets `harvested = true`, swaps to `pickedTexture`,
+  and schedules `regrow()` via `scene.time.delayedCall(regrowMs, ...)`; `regrow()` reverts both.
+- `tryInteract()`'s pickup branch now branches on `node.persistent`: persistent nodes call
+  `collectNode()` + `harvest()` (stay in `nodes`); everything else keeps the old
+  `collectNode()` + `deplete()` + remove-from-array path. `updateHover()`/`tryInteract()`'s
+  `node.depleted` gates both grew an `|| node.harvested` check so a harvested bush shows no
+  prompt and can't be re-clicked while picked.
+- **Regrow timing (the open question): resolved with a 3-in-game-minute timer**
+  (`BLACKBERRY_REGROW_MS`, `MainScene.ts`) — a recommendation, not a locked user decision, per
+  the note below.
+- New `blackberry_bush_picked` texture (`BootScene.ts`) — same leafy mound, no berry dots.
+
+Verified via `preview_eval`: a real `tryInteract()` harvest credits 2 berries, sets
+`harvested: true`, swaps texture, and leaves the bush in `scene.nodes`; a forced re-click on
+the harvested bush is a no-op and `updateHover()` never re-selects it; calling the private
+`regrow()` directly reverts both fields. Type-check clean, no console errors.
 
 ---
 
-## Milestone O — Resource-density audit for the new costs
+## Milestone O — Resource-density audit for the new costs — SHIPPED 2026-07-08
+
+**Shipped as planned, using the math already worked out in the planning session (not
+redone).** `RangedGremlin` count **4 → 18** and `Snake` count **6 → 15**
+(`MainScene.spawnEnemies()`) — covers the `gremlin_leather` (~10 needed) and `leather`/Leather
+Scraps (~9 new demand) shortfalls identified below with margin. `bones`/`twine`/other resources
+needed no change. Confirmed via `preview_eval`: live enemy roster reports exactly
+`{Enemy: 12, Snake: 15, RangedGremlin: 18, MeleeGremling: 6}` (51 total).
 
 **Goal:** verify (and very likely retune spawn counts for) enough of each resource exists in
 one session's starting biome to craft the full new content list with margin, per the user's
@@ -497,6 +508,51 @@ not new code beyond spawn-count constants.
 
 ---
 
+## Playtest fixes after O — Gremlin spawn spacing + kite/pursue/stand-ground AI — SHIPPED 2026-07-08
+
+Not part of the original I–O list — immediate playtest follow-up once Milestone O's spawn bump
+was live. Two problems surfaced: Gremlins/Gremlings could spawn in dense packs (a direct side
+effect of the O bump going from 4/6 counts to 18/15), and the ranged Gremlin's kiting AI always
+fled regardless of distance, so a player who just held distance past shot range could never be
+re-engaged, and (per two further rounds of same-day feedback) it wasn't stopping long enough or
+often enough to actually shoot back while being chased in close. Addressed immediately rather
+than deferred to the planned "safe-center, danger-toward-edges" world-gen rework, since all of
+this was small and independent of that larger effort.
+
+- **Spawn spacing** (`MainScene.ts`) — new `pickSpreadSpawnPoint()` (parallel to
+  `pickSpawnPoint`, same 200-attempt-then-fallback shape) rejects a candidate if `maxNearby` or
+  more existing points already sit within `minSpacing`. `spawnEnemies()`'s Gremlin/Gremling
+  loops share one `gremlinPoints` pool (both variants count against each other) with
+  `GREMLIN_CLUSTER_RADIUS = 140, GREMLIN_CLUSTER_MAX = 2` — no more than 2 gremlin-family
+  enemies within 140px of each other. Snake/Boar spawn loops untouched.
+- **Kite/hold/pursue bands** (`RangedGremlin.update()`, `Gremlin.ts`) — "ranged" mode no longer
+  always flees. Three distance bands: **< `RANGED_MIN_KITE_DIST` (140px)** flees;
+  **140-`PROJECTILE_MAX_RANGE` (260px)** holds ground and fires; **> 260px** pursues straight at
+  the player (new `RANGED_PURSUE_SPEED = 70`). `RANGED_DEAGGRO_RADIUS` bumped 260→400 to leave
+  room for the pursue band (previously equaled `PROJECTILE_MAX_RANGE` exactly, so any
+  out-of-shot-range distance instantly deaggro'd instead of ever pursuing).
+- **Stop-to-shoot** — a fresh burst only starts while holding ground; a burst already underway
+  (`midBurst`) forces `holdingStill = true` regardless of the distance-based branch, so a shot
+  never fires mid-movement.
+- **Shoot-while-cornered (locked decision)**: per the user, a Gremlin being chased in close
+  shouldn't purely flee — it should still periodically plant and fire back, then resume
+  fleeing. `holdingStill` widened to also allow a fresh burst anywhere in shot range
+  (`inShotRange && readyForFreshBurst`), not just the ideal hold band.
+- **Longer stand-still (locked decision, "at least 2x as long")**: new `standGroundUntil`
+  timestamp + `RANGED_STAND_GROUND_MS = 450` — every mid-burst/fresh-burst frame pushes
+  `standGroundUntil` to `now + 450`, so the gremlin stays planted a full 450ms *after* the
+  burst's last shot, not just for the burst's own ~190ms. Total stand-still per episode is now
+  ~640ms, over 3x the original ~200ms.
+
+Verified via `preview_eval`: live spawn roster (18 RangedGremlin + 6 MeleeGremling = 24) has a
+max of 1 same-family neighbor within 140px for every entity; scripted `RangedGremlin.update()`
+sequences confirm all three distance bands, the stop-to-shoot-mid-burst override, the
+shoot-while-cornered flee→stop→flee loop at a fixed close distance, and `standGroundUntil`
+holding the gremlin still through the 400ms mark post-burst and releasing it between 400-500ms
+(matching the 450ms constant). Type-check clean, no console errors.
+
+---
+
 ## Sequencing
 
 ```
@@ -512,11 +568,9 @@ O (resource audit) — do last, once I/K/L/M's exact numbers are locked; will ve
 ```
 
 Recommended order: **L → I → J → K → M → N → O** (bones first since two other milestones need
-it; J and N can slot in anywhere convenient). **L, I, J, K, and M are all done** (plus an
-unplanned playtest fixes batch landed between K and M — see above). **N and O remain** — both
-independent of each other; N (blackberry harvest-without-destroy) can slot in any time, O
-(resource-density audit) is still recommended last since it depends on M's now-locked exact
-armor costs.
+it; J and N can slot in anywhere convenient). **All of L, I, J, K, M, N, and O are shipped** (plus
+an unplanned playtest fixes batch landed between K and M — see above). **The entire I–O batch is
+done.**
 
 ## Verification (each milestone, per the project's standing convention)
 

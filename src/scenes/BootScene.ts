@@ -140,6 +140,14 @@ export class BootScene extends Phaser.Scene {
     g.fillRect(9, 14, 3, 3);
     g.generateTexture("blackberry_bush", 24, 20);
 
+    // Picked blackberry bush (Milestone N) — same leafy mound, no berries, so
+    // a harvested bush still reads as a bush rather than vanishing.
+    g.clear();
+    g.fillStyle(0x2f5d2c, 1);
+    g.fillRect(2, 6, 20, 14);
+    g.fillRect(5, 3, 14, 6);
+    g.generateTexture("blackberry_bush_picked", 24, 20);
+
     // Drying Rack — processing station. 30x34: two upright posts with three
     // horizontal cross-rails, a simple wooden drying frame.
     g.clear();

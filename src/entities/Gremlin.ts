@@ -12,8 +12,14 @@ import type { ProjectileConfig, ProjectileHost } from "./Projectile";
 // of, consistent with the standing "own condition, not just a knob" rule.
 
 const RANGED_AGGRO_RADIUS = 160; // larger than melee — ranged notices earlier
-const RANGED_DEAGGRO_RADIUS = 260;
-const KITE_SPEED = 55; // constantly backs away while in ranged mode
+// Wider than PROJECTILE_MAX_RANGE (see below) so there's real room for the
+// "pursue" band between "in range" and "gave up" — previously this equaled
+// PROJECTILE_MAX_RANGE exactly, which meant a player who kited past shot
+// range always deaggro'd instead of being chased back into it.
+const RANGED_DEAGGRO_RADIUS = 400;
+const KITE_SPEED = 55; // backs away while too close (below RANGED_MIN_KITE_DIST)
+const RANGED_MIN_KITE_DIST = 140; // closer than this -> flee; keeps some daylight before melee range
+const RANGED_PURSUE_SPEED = 70; // chases in while out of shot range (beyond PROJECTILE_MAX_RANGE)
 const RANGED_MELEE_RANGE = 24; // player closing to this -> switches to melee mode
 const RANGED_MELEE_EXIT_RANGE = 40; // must back out past this (not just RANGED_MELEE_RANGE) to leave melee mode — hysteresis gap, same reasoning as AGGRO/DEAGGRO_RADIUS elsewhere: without it, the player-enemy physics collider's constant separation jitter flips the mode every frame right at the boundary
 const RANGED_MELEE_COOLDOWN_MS = 900;
@@ -29,6 +35,11 @@ const RANGED_MAX_HEALTH = 32; // doubled 2026-07-07 (was 16) — tanky enough to
 const BURST_SHOT_COUNT = 2;
 const BURST_SHOT_INTERVAL_MS = 180;
 const BURST_COOLDOWN_MS = 2400;
+// Minimum time to stay planted once committing to a reactive stop-and-shoot
+// (see standGroundUntil below) — the previous version resumed fleeing the
+// instant the burst itself finished (~200ms), which read as barely pausing.
+// User feedback: at least 2x that.
+const RANGED_STAND_GROUND_MS = 450;
 
 type RangedMode = "idle" | "ranged" | "meleeing";
 
@@ -47,6 +58,12 @@ export class RangedGremlin extends Enemy {
   private shotsFiredInBurst = 0;
   private nextBurstShotAt = -Infinity;
   private burstCooldownUntil = 0;
+  // Timestamp (this.scene.time.now units) until which the gremlin must stay
+  // planted once it commits to a reactive stop-and-shoot in close — refreshed
+  // every frame the burst is active so it always covers at least
+  // RANGED_STAND_GROUND_MS from the moment the burst actually finishes, not
+  // just from when it started.
+  private standGroundUntil = -Infinity;
 
   constructor(scene: Phaser.Scene, cfg: { x: number; y: number }) {
     super(scene, {
@@ -112,13 +129,56 @@ export class RangedGremlin extends Enemy {
       return false;
     }
 
-    // Ranged mode: always kiting (backing directly away) while managing the
-    // burst-fire cycle below.
-    const awayAngle = Phaser.Math.Angle.Between(playerX, playerY, this.x, this.y);
-    const vx = Math.cos(awayAngle) * KITE_SPEED;
-    const vy = Math.sin(awayAngle) * KITE_SPEED;
-    body.setVelocity(vx, vy);
-    this.applyFacing(vx, vy);
+    // Ranged mode: maintain an optimal kiting band instead of always
+    // fleeing — too close backs away, too far (out of projectile range)
+    // pursues back in, and the band between holds ground to fire. This is
+    // what produces the flee/pursue loop as the player closes and backs off
+    // (playtest feedback: previously "ranged" always fled, so a player who
+    // just held distance past shot range could never be re-engaged).
+    //
+    // The gremlin must stand still to shoot, but it should still *try* to
+    // shoot even while being chased in close — it just has to stop to do so
+    // (playtest feedback: it shouldn't purely flee when cornered, it should
+    // periodically plant and fire back, then resume fleeing). So a fresh
+    // burst can start anywhere in shot range, not just the ideal hold band;
+    // a burst already in progress (midBurst) always keeps it planted
+    // (overriding flee/pursue) until it finishes, so a shot never fires
+    // mid-movement.
+    const midBurst = this.shotsFiredInBurst > 0;
+    const inShotRange = dist <= PROJECTILE_MAX_RANGE;
+    const readyForFreshBurst = !midBurst && now >= this.burstCooldownUntil;
+    const inHoldBand = dist >= RANGED_MIN_KITE_DIST && dist <= PROJECTILE_MAX_RANGE;
+    // Once committing to a reactive stop-and-shoot (starting or mid-burst),
+    // keep pushing standGroundUntil forward so it always covers at least
+    // RANGED_STAND_GROUND_MS from the last such frame — this is what makes
+    // the gremlin stay planted for a beat after the burst itself finishes,
+    // instead of resuming flee/pursue the instant the last shot fires.
+    if (midBurst || (inShotRange && readyForFreshBurst)) {
+      this.standGroundUntil = Math.max(this.standGroundUntil, now + RANGED_STAND_GROUND_MS);
+    }
+    const holdingStill = inHoldBand || now < this.standGroundUntil;
+
+    if (!holdingStill && dist < RANGED_MIN_KITE_DIST) {
+      const awayAngle = Phaser.Math.Angle.Between(playerX, playerY, this.x, this.y);
+      const vx = Math.cos(awayAngle) * KITE_SPEED;
+      const vy = Math.sin(awayAngle) * KITE_SPEED;
+      body.setVelocity(vx, vy);
+      this.applyFacing(vx, vy);
+    } else if (!holdingStill && dist > PROJECTILE_MAX_RANGE) {
+      const towardAngle = Phaser.Math.Angle.Between(this.x, this.y, playerX, playerY);
+      const vx = Math.cos(towardAngle) * RANGED_PURSUE_SPEED;
+      const vy = Math.sin(towardAngle) * RANGED_PURSUE_SPEED;
+      body.setVelocity(vx, vy);
+      this.applyFacing(vx, vy);
+    } else {
+      body.setVelocity(0, 0);
+      this.applyFacing(playerX - this.x, playerY - this.y);
+    }
+
+    // A fresh burst only ever starts while holding ground in-band; a burst
+    // already underway (midBurst) always continues, since holdingStill is
+    // forced true for it above.
+    if (!holdingStill) return false;
 
     if (this.shotsFiredInBurst === 0 && now >= this.burstCooldownUntil) {
       this.fireShot(playerX, playerY, now);

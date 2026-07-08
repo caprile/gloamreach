@@ -222,11 +222,16 @@ mouse-driven only. Don't reintroduce a keybind for this without being asked. Spa
    a nearby Workbench that has **itself** reached tier 1 (`isNearWorkbenchAtTier()`,
    `MainScene.ts`) — a locked decision from the user, and the template for how future armor
    tiers gate on future Workbench tiers (e.g. a hypothetical lvl-3 armor piece gating on a
-   not-yet-built Workbench lvl 3). Blackberry bushes' harvest-without-destroy mode (N) has
-   **not** shipped yet — bushes still deplete/destroy on harvest today. A resource-density
-   pass (O, not yet done) is still expected to find the new armor set needs far more
-   `gremlin_leather`/`leather` than current spawn counts can supply (RangedGremlin and Snake
-   counts will very likely need bumping — see the plan file's Milestone O for the exact math).
+   not-yet-built Workbench lvl 3). **Blackberry bushes now harvest without destroying**
+   (Milestone N, shipped): picking berries swaps the bush to a bare "picked" texture instead
+   of removing it, and it regrows back to harvestable after a timer (3 in-game minutes,
+   `BLACKBERRY_REGROW_MS`) — the game's first "stays in the world after harvest" node
+   (`ResourceNode.persistent`/`pickedTexture`/`regrowMs`/`harvested`, `ResourceNode.ts`). The
+   resource-density pass (Milestone O, shipped) confirmed the new armor set outstripped
+   existing spawn counts and bumped **RangedGremlin 4→18** and **Snake 6→15**
+   (`MainScene.spawnEnemies()`) — a deliberate departure from Milestone C's original "rarer,
+   stronger" ranged-Gremlin tuning intent. **With N and O shipped, the entire I–O batch
+   (`.claude/plans/this-is-a-plan-cached-pixel.md`) is done.**
 
 **Not yet built — next up in rough order:**
 5. **Progression** — XP, levels, stats.
@@ -372,14 +377,13 @@ intended to require a workbench once it exists.
   (tuned down from an initial 1-2/1-2 after playtest) — feeds the Drying Rack's updated
   recipe and Gremlin Shirt. No charge attack, no fear-of-fire yet — those (plus the
   "high damage, high aggro range" tuning) are still open follow-up work, not forgotten.
-- **Spawn-count bump likely needed (planned, Milestone 4f/O):** a resource-density audit
-  for the new Gremlin Armor set found `gremlin_leather` and `leather` demand will exceed
-  what today's spawn counts can ever supply (RangedGremlin's 4-per-session and Snake's
-  6-per-session are each the only source of their respective raw material). Expect
-  RangedGremlin (~4→16-20) and Snake (~6→14-16) counts to increase once Milestone O lands —
-  see the plan file for the exact math; this is a real departure from Milestone C's
-  original "rarer, stronger" ranged-Gremlin tuning intent, called out deliberately rather
-  than silently overridden.
+- **Spawn-count bump shipped (Milestone 4f/O):** a resource-density audit for the new
+  Gremlin Armor set found `gremlin_leather` and `leather` demand exceeded what the old
+  spawn counts could ever supply (RangedGremlin's 4-per-session and Snake's 6-per-session
+  were each the only source of their respective raw material). `MainScene.spawnEnemies()`
+  now spawns **RangedGremlin: 18** (was 4) and **Snake: 15** (was 6) — a real departure
+  from Milestone C's original "rarer, stronger" ranged-Gremlin tuning intent, called out
+  deliberately rather than silently overridden.
 
 **Biome terrain** — three sub-areas within the first biome (not separate biomes):
 - Thicker tree area — small trees/branches/rocks; boar + gremlin spawns.

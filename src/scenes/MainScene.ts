@@ -73,6 +73,7 @@ const SPRINT_DRAIN_PER_SEC = 33; // stamina/sec while sprinting — full bar in 
 const DASH_STAMINA_COST = 25; // flat cost per dash — 4 dashes per full bar
 const DASH_IFRAME_MS = 150; // outlasts the dash burst itself (Milestone E)
 const WORKBENCH_RANGE = 100; // px — looser than REACH; "am I near it," not a precise click
+const BLACKBERRY_REGROW_MS = 3 * 60 * 1000; // a picked bush regrows berries after 3 in-game minutes
 // A player-dropped or destroyed-station item pickup ignores the magnet for
 // this long so it doesn't instantly fly back into the inventory/station that
 // just released it. Manual click-pickup is unaffected.
@@ -856,6 +857,32 @@ export class MainScene extends Phaser.Scene {
     return last;
   }
 
+  // Like pickSpawnPoint, but additionally rejects a candidate if too many
+  // `existing` points already sit within `minSpacing` of it — used to keep
+  // same-family spawns (e.g. the Gremlin/Gremling roster) from clumping into
+  // dense packs, without banning pairs outright. Falls back to the last
+  // candidate after the attempt cap, same as pickSpawnPoint, so a crowded
+  // pool can't hang the loop.
+  private pickSpreadSpawnPoint(
+    rng: Phaser.Math.RandomDataGenerator,
+    zone: ZoneType | null,
+    clearRadius: number,
+    existing: { x: number; y: number }[],
+    minSpacing: number,
+    maxNearby: number,
+  ): { x: number; y: number } {
+    let last = { x: WORLD_W / 2, y: WORLD_H / 2 };
+    for (let attempt = 0; attempt < 200; attempt++) {
+      const { x, y } = this.pickSpawnPoint(rng, zone, clearRadius);
+      last = { x, y };
+      const nearby = existing.filter(
+        (p) => Phaser.Math.Distance.Between(p.x, p.y, x, y) <= minSpacing,
+      ).length;
+      if (nearby < maxNearby) return { x, y };
+    }
+    return last;
+  }
+
   // One-time background bake: a single RenderTexture over the whole world,
   // depth just above the grass and below every entity. Forest gets a darker-
   // green overlay, grassy is left showing the base grass, and creek draws a
@@ -956,6 +983,9 @@ export class MainScene extends Phaser.Scene {
         health: number;
         zone: ZoneType | null;
         avoidCreek?: boolean;
+        persistent?: boolean;
+        pickedTexture?: string;
+        regrowMs?: number;
       },
     ) => {
       const CLUSTER_JITTER = 40;
@@ -984,6 +1014,9 @@ export class MainScene extends Phaser.Scene {
             displayName: cfg.displayName,
             loose: cfg.loose,
             health: cfg.health,
+            persistent: cfg.persistent,
+            pickedTexture: cfg.pickedTexture,
+            regrowMs: cfg.regrowMs,
           });
           this.nodes.push(node);
           if (cfg.solid) solids.add(node);
@@ -1009,7 +1042,9 @@ export class MainScene extends Phaser.Scene {
     scatter(18, { texture: "boulder", resource: "stone", amount: 5, action: "mine", displayName: "Boulder", loose: false, solid: false, health: 3, zone: "grassy", avoidCreek: true });
     // Blackberry bushes — free forest pickup (Milestone H), grouped into
     // patches of 2-4 rather than spread individually across the forest.
-    scatterClustered(16, 2, 4, { texture: "blackberry_bush", resource: "blackberry", amount: 2, action: "pickup", displayName: "Blackberries", loose: false, solid: false, health: 1, zone: "forest", avoidCreek: true });
+    // Persistent (Milestone N): harvesting yields berries but keeps the bush
+    // in the world (picked look) until it regrows.
+    scatterClustered(16, 2, 4, { texture: "blackberry_bush", resource: "blackberry", amount: 2, action: "pickup", displayName: "Blackberries", loose: false, solid: false, health: 1, zone: "forest", avoidCreek: true, persistent: true, pickedTexture: "blackberry_bush_picked", regrowMs: BLACKBERRY_REGROW_MS });
 
     // Cattail — free pickup, but a bespoke spawn constraint (creek *edge*, not
     // just "not on the creek"), so it can't reuse scatter's zone/avoidCreek
@@ -1084,8 +1119,10 @@ export class MainScene extends Phaser.Scene {
     // Snakes: grassy-preferred (per CLAUDE.md's first-biome content notes),
     // the game's only leather source (see plan Milestone D's "why
     // prioritized" note — Stone Pickaxe/Stone Club need it to ever be
-    // discoverable).
-    const SNAKE_COUNT = 6;
+    // discoverable). Bumped 6->15 (Milestone O): the new Gremlin armor set's
+    // leather demand (~9, on top of existing tool costs) exceeded what 6
+    // snakes could ever supply in one session.
+    const SNAKE_COUNT = 15;
     for (let i = 0; i < SNAKE_COUNT; i++) {
       const { x, y } = this.pickSpawnPoint(rng, "grassy", 200);
       const snake = new Snake(this, { x, y });
@@ -1094,20 +1131,45 @@ export class MainScene extends Phaser.Scene {
     }
 
     // Gremlin/Gremling: grassy-preferred with occasional forest wandering-in
-    // (per CLAUDE.md's first-biome content notes). The melee-only "Gremling"
-    // is more common; the ranged "Gremlin" is rarer and stronger (only
-    // leather-style gate: it's the sole gremlin_skin source, feeding the
-    // Drying Rack).
-    const RANGED_GREMLIN_COUNT = 4;
+    // (per CLAUDE.md's first-biome content notes). The ranged "Gremlin" is
+    // the sole gremlin_skin source feeding the Drying Rack -> gremlin_leather.
+    // Bumped 4->18 (Milestone O): Milestone C's original "rarer, stronger"
+    // tuning intent left too little gremlin_leather supply (~10 needed across
+    // the new Gremlin armor set + upgrades, only obtainable 1-per-kill here)
+    // — a deliberate departure from that original intent, not an oversight.
+    // Both variants share one spacing pool (`gremlinPoints`) so the combined
+    // roster reads as spread out rather than clumping into packs — playtest
+    // feedback after the O bump: no more than GREMLIN_CLUSTER_MAX gremlins
+    // (either variant) within GREMLIN_CLUSTER_RADIUS of each other.
+    const GREMLIN_CLUSTER_RADIUS = 140;
+    const GREMLIN_CLUSTER_MAX = 2;
+    const gremlinPoints: { x: number; y: number }[] = [];
+    const RANGED_GREMLIN_COUNT = 18;
     for (let i = 0; i < RANGED_GREMLIN_COUNT; i++) {
-      const { x, y } = this.pickSpawnPoint(rng, "grassy", 200);
+      const { x, y } = this.pickSpreadSpawnPoint(
+        rng,
+        "grassy",
+        200,
+        gremlinPoints,
+        GREMLIN_CLUSTER_RADIUS,
+        GREMLIN_CLUSTER_MAX,
+      );
+      gremlinPoints.push({ x, y });
       const gremlin = new RangedGremlin(this, { x, y });
       this.enemies.push(gremlin);
       this.enemyGroup.add(gremlin);
     }
     const MELEE_GREMLING_COUNT = 6;
     for (let i = 0; i < MELEE_GREMLING_COUNT; i++) {
-      const { x, y } = this.pickSpawnPoint(rng, "grassy", 200);
+      const { x, y } = this.pickSpreadSpawnPoint(
+        rng,
+        "grassy",
+        200,
+        gremlinPoints,
+        GREMLIN_CLUSTER_RADIUS,
+        GREMLIN_CLUSTER_MAX,
+      );
+      gremlinPoints.push({ x, y });
       const gremling = new MeleeGremling(this, { x, y });
       this.enemies.push(gremling);
       this.enemyGroup.add(gremling);
@@ -1138,7 +1200,7 @@ export class MainScene extends Phaser.Scene {
     let best = Infinity;
 
     for (const node of this.nodes) {
-      if (node.depleted) continue;
+      if (node.depleted || node.harvested) continue;
       const radius = Math.max(node.displayWidth, node.displayHeight) / 2 + 6;
       const d = Phaser.Math.Distance.Between(world.x, world.y, node.x, node.y);
       if (d <= radius && d < best) {
@@ -1256,7 +1318,7 @@ export class MainScene extends Phaser.Scene {
       return;
     }
     const node = this.hoveredNode;
-    if (!node || node.depleted) return;
+    if (!node || node.depleted || node.harvested) return;
     const inReach =
       Phaser.Math.Distance.Between(this.player.x, this.player.y, node.x, node.y) <= REACH;
     if (!inReach) return;
@@ -1292,8 +1354,12 @@ export class MainScene extends Phaser.Scene {
     }
 
     this.collectNode(node);
-    node.deplete();
-    this.nodes = this.nodes.filter((n) => n !== node);
+    if (node.persistent) {
+      node.harvest();
+    } else {
+      node.deplete();
+      this.nodes = this.nodes.filter((n) => n !== node);
+    }
     this.hoveredNode = null;
     this.promptText.setVisible(false);
     this.refreshHud();

@@ -85,6 +85,13 @@ export interface ResourceNodeConfig {
   // tier survives into the inventory stack when picked back up. Undefined for
   // ordinary drops.
   tier?: number;
+  // When true, harvesting this (pickup-only) node yields its resource but
+  // leaves the sprite in the world instead of destroying it — swaps to
+  // pickedTexture and, if regrowMs is set, reverts back to harvestable after
+  // that many ms. First used by Blackberry bushes (Milestone N).
+  persistent?: boolean;
+  pickedTexture?: string;
+  regrowMs?: number;
 }
 
 // A single interactable object in the world (branch, rock, tree, boulder, or
@@ -101,6 +108,13 @@ export class ResourceNode extends Phaser.GameObjects.Sprite {
   depleted = false;
   readonly magnetReadyAt: number;
   readonly tier?: number;
+  readonly persistent: boolean;
+  readonly pickedTexture?: string;
+  readonly regrowMs?: number;
+  private readonly freshTexture: string;
+  // True once a persistent node has been harvested but hasn't regrown yet —
+  // still exists in the world, but not interactable/hoverable.
+  harvested = false;
   // True while a drop piece's spawn-scatter tween is still running — the
   // magnet loop skips it so it isn't fighting the scatter tween over x/y.
   exploding = false;
@@ -118,6 +132,10 @@ export class ResourceNode extends Phaser.GameObjects.Sprite {
     this.health = cfg.health;
     this.magnetReadyAt = cfg.magnetReadyAt ?? 0;
     this.tier = cfg.tier;
+    this.persistent = cfg.persistent ?? false;
+    this.pickedTexture = cfg.pickedTexture;
+    this.regrowMs = cfg.regrowMs;
+    this.freshTexture = cfg.texture;
     scene.add.existing(this);
     // Trees/boulders are tall enough to visually occlude the player/enemies
     // walking past them, so they're Y-sorted against them (see
@@ -218,5 +236,23 @@ export class ResourceNode extends Phaser.GameObjects.Sprite {
     this.scene.tweens.killTweensOf(this);
     this.countLabel?.destroy();
     this.destroy();
+  }
+
+  // Persistent-node harvest (Blackberry bushes): yields the resource but
+  // keeps the sprite alive — swaps to the "picked" look and, if regrowMs is
+  // set, schedules a revert back to harvestable. Never called on non-
+  // persistent nodes (those go through takeHit/deplete instead).
+  harvest(): void {
+    this.harvested = true;
+    if (this.pickedTexture) this.setTexture(this.pickedTexture);
+    if (this.regrowMs !== undefined) {
+      this.scene.time.delayedCall(this.regrowMs, () => this.regrow());
+    }
+  }
+
+  private regrow(): void {
+    if (this.depleted) return; // node was destroyed while waiting to regrow
+    this.harvested = false;
+    this.setTexture(this.freshTexture);
   }
 }
