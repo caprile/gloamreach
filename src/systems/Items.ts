@@ -188,7 +188,7 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
   cattail: {
     key: "cattail",
     name: "Cattail",
-    description: "A reed from the creek's edge. Dried into twine at a Drying Rack.",
+    description: "A reed harvested from the creek's edge.",
     texture: "icon_cattail",
     maxStack: 99,
     hotbarable: false,

@@ -70,9 +70,10 @@ export class DryingRackMenu {
   private inputBox: { x: number; y: number } = { x: 0, y: 0 };
   private sliderTrack: { x: number; y: number; w: number } = { x: 0, y: 0, w: SLIDER_W };
 
-  // How much of the loaded input the player currently has selected to run
-  // through the station. Reset to the full loaded amount whenever the menu
-  // opens; clamped down if the loaded amount shrinks (e.g. after processing).
+  // Desired OUTPUT count the player currently has selected to produce (not
+  // input units) — 0..station.maxPossibleOutput(). Reset to the full
+  // possible output whenever the menu opens; clamped down if the loaded
+  // amount shrinks (e.g. after processing).
   private selectedAmount = 0;
   private sliderDragging = false;
 
@@ -104,7 +105,7 @@ export class DryingRackMenu {
     this.open = true;
     this.bg.setVisible(true);
     const station = this.deps.station();
-    this.selectedAmount = station?.maxProcessable() ?? 0;
+    this.selectedAmount = station?.maxPossibleOutput() ?? 0;
     this.render();
   }
 
@@ -134,7 +135,7 @@ export class DryingRackMenu {
   // adjustment mid-session.
   selectFullAmount(): void {
     const station = this.deps.station();
-    this.selectedAmount = station?.maxProcessable() ?? 0;
+    this.selectedAmount = station?.maxPossibleOutput() ?? 0;
     if (this.open) this.render();
   }
 
@@ -193,7 +194,7 @@ export class DryingRackMenu {
 
   updateSliderFromPointer(screenX: number): void {
     const station = this.deps.station();
-    const max = station?.maxProcessable() ?? 0;
+    const max = station?.maxPossibleOutput() ?? 0;
     const frac = Phaser.Math.Clamp((screenX - this.sliderTrack.x) / this.sliderTrack.w, 0, 1);
     this.selectedAmount = Math.round(frac * max);
     this.render();
@@ -210,7 +211,7 @@ export class DryingRackMenu {
     const station = this.deps.station();
     if (!station) return;
 
-    const max = station.maxProcessable();
+    const max = station.maxPossibleOutput();
     this.selectedAmount = Phaser.Math.Clamp(this.selectedAmount, 0, max);
 
     this.addText(this.panelX + 16, this.panelY + 14, "Drying Rack", 16, "#ffffff");
@@ -349,10 +350,14 @@ export class DryingRackMenu {
     this.rows.push(knob);
 
     // --- Live preview + Process button ---
-    const preview = station.previewFor(this.selectedAmount);
+    // The slider/selectedAmount are already in output units — convert to
+    // input units only here, at the previewFor/process call boundary.
+    const recipe = station.recipeForLoaded();
+    const inputAmount = recipe ? this.selectedAmount * recipe.inputPerOutput : 0;
+    const preview = station.previewFor(inputAmount);
     const previewLabel =
-      preview.output > 0 && station.input
-        ? `-> ${preview.output} ${itemDef(this.previewOutputKey(station))?.name ?? ""}`
+      preview.output > 0 && recipe
+        ? `-> ${preview.output} ${itemDef(recipe.output)?.name ?? ""}`
         : "-> nothing yet";
     const previewY = track.y + 22;
     this.addText(px, previewY, previewLabel, 13, preview.output > 0 ? "#8fe38f" : "#5b6472");
@@ -370,20 +375,9 @@ export class DryingRackMenu {
       .setDepth(DEPTH_TEXT)
       .setInteractive({ useHandCursor: canProcess })
       .on("pointerdown", () => {
-        if (canProcess) this.deps.processAmount(this.selectedAmount);
+        if (canProcess) this.deps.processAmount(inputAmount);
       });
     this.rows.push(btn);
-  }
-
-  private previewOutputKey(station: ProcessingStation): string {
-    // previewFor doesn't return the output key directly (only the count) —
-    // derive it the same way ProcessingStation.process does, via the loaded
-    // input's own recipe. Cheap local lookup; avoids widening previewFor's
-    // return type just for a label.
-    const key = station.input?.key;
-    if (key === "cattail") return "twine";
-    if (key === "gremlin_skin") return "gremlin_leather";
-    return "";
   }
 
   private promptForAmount(max: number): void {

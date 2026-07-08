@@ -167,8 +167,10 @@ mouse-driven only. Don't reintroduce a keybind for this without being asked. Spa
    game's **first drag-and-drop UI**: backpack shown alongside with non-input items dimmed,
    drag/quick-load into the input slot, live "→ N Twine" preview), and output auto-deposits
    into the backpack (or drops on the floor if full — no "Collect" step). The Drying Rack is
-   **tier 1** (requires a nearby Workbench to craft/place, like Stone Pickaxe/Club) — 8
-   wood + 1 leather. Placed objects (Workbench/Campfire/Drying Rack) now support a generic
+   **tier 1** (requires a nearby Workbench to craft/place, like Stone Pickaxe/Club) — originally
+   8 wood + 1 leather, changed to **5 wood/4 leather/2 bones** in Milestone 4f/I once `bones`
+   existed (see below); its slider also became **output-amount based** in that same milestone,
+   not the input-unit slider described here. Placed objects (Workbench/Campfire/Drying Rack) now support a generic
    **right-click Upgrade/Destroy popup** (`src/ui/ContextMenu.ts`): Destroy turns any one
    back into a recoverable loose pickup, Minecraft-style (a Drying Rack's loaded input is
    refunded too); Upgrade (Workbench only so far) consumes a new `workbench_upgrade` item
@@ -182,14 +184,15 @@ mouse-driven only. Don't reintroduce a keybind for this without being asked. Spa
    content plan (A–H) is done.** See `STATUS.md` for full detail on both the initial ship
    and the same-day rework.
 4f. **Drying Rack polish, station-upgrade rework, Gremlin armor (first wearable armor)**
-   — in progress (**Milestone L shipped**; I–K, M–O not yet built). Full detail in
+   — in progress (**Milestones L and I shipped**; J, K, M–O not yet built). Full detail in
    `.claude/plans/this-is-a-plan-cached-pixel.md` (Milestones I–O, continuing the A–H
    lettering). Playtest-driven follow-up batch: the
-   Drying Rack's slider becomes **output-amount based** (auto-scaled 0..max possible output,
-   not input units); Cattail's description stops spoiling what it processes into; the Drying
-   Rack recipe changes to **5 wood/4 leather/2 bones** (a new resource — Boar loot); the
-   crafting-menu tab reorg puts **Workbench/Campfire/Drying Rack all in the Crafting tab**
-   (Shishkabob moves to Misc); placement mode gets a bug fix (a failed tier-gate check no
+   Drying Rack's slider is now **output-amount based** (auto-scaled 0..max possible output,
+   not input units — shipped); Cattail's description no longer spoils what it processes into
+   (shipped); the Drying Rack recipe is now **5 wood/4 leather/2 bones** (bones is a new
+   resource — Boar loot, both shipped); the crafting-menu tab reorg now puts
+   **Workbench/Campfire/Drying Rack all in the Crafting tab** (Shishkabob moved to Misc,
+   shipped); placement mode gets a bug fix (a failed tier-gate check no
    longer cancels it — it stays armed so walking into Workbench range lets the next click
    succeed) plus a new way to **re-enter placement mode from an inventory/hotbar item**
    (right-click or hotbar-select a placeable you already own, e.g. one recovered via
@@ -309,9 +312,9 @@ intended to require a workbench once it exists.
 - Empty Shishkabob + Boar Meat → Uncooked Boar Meat Shishkabob → place over a campfire →
   cooks over time → Cooked Boar Meat (consumable). First "combine two items," first
   "cook over time," and first food/consumable mechanic — none of these systems exist yet.
-- **Crafting-menu tab reorg (planned, Milestone 4f):** Workbench, Campfire, and Drying Rack
-  all move into the **Crafting** tab (campfire is conceptually a processor too); Shishkabob
-  moves to **Misc**. See `.claude/plans/this-is-a-plan-cached-pixel.md` Milestone I.
+- **Crafting-menu tab reorg (shipped, Milestone 4f/I):** Workbench, Campfire, and Drying Rack
+  all live in the **Crafting** tab (campfire is conceptually a processor too); Shishkabob
+  moved to **Misc**. See `.claude/plans/this-is-a-plan-cached-pixel.md` Milestone I.
 - **Gremlin Armor (planned, Milestone 4f, not yet built):** three wearable pieces replacing
   the old undifferentiated `gremlin_leather_armor` recipe — **Gremlin Cap** (helmet slot, 1
   gremlin_leather + 5 blackberries; lvl 2: 1 gremlin_leather + 1 blackberry), **Gremlin

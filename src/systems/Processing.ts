@@ -69,6 +69,22 @@ export class ProcessingStation {
     return this.input?.count ?? 0;
   }
 
+  // The recipe currently governing the loaded input, if any — lets callers
+  // (the rack UI) read the output key/ratio without re-deriving it from a
+  // hardcoded input-key switch.
+  recipeForLoaded(): ProcessRecipe | undefined {
+    return this.input ? processRecipeFor(this.input.key) : undefined;
+  }
+
+  // How many whole output units the loaded input could ever produce — the
+  // slider's upper bound now that it represents desired output, not raw
+  // input units (a partial remainder can't produce a partial output).
+  maxPossibleOutput(): number {
+    const recipe = this.recipeForLoaded();
+    if (!recipe || !this.input) return 0;
+    return Math.floor(this.input.count / recipe.inputPerOutput);
+  }
+
   // What running `amount` units of the loaded input through would yield:
   // the input actually consumed (rounded down to a whole multiple of the
   // recipe's ratio — a partial remainder can't produce a partial output) and

@@ -2,7 +2,50 @@
 
 Last updated: 2026-07-08
 
-### Just finished: Milestone L — new `bones` resource (Boar loot)
+### Just finished: Milestone I — Drying Rack polish (output-based slider, recipe, tab reorg)
+
+Second milestone out of the I–O batch (`.claude/plans/this-is-a-plan-cached-pixel.md`),
+next in the recommended `L → I → J → K → M → N → O` order. Small, independent fixes
+bundled because they all touch `DryingRackMenu.ts`/`Processing.ts`/`Items.ts`/`Recipes.ts`
+in one pass:
+
+- **Slider is now output-amount based**, not input-unit based. `src/systems/Processing.ts`
+  gained `ProcessingStation.recipeForLoaded()` (returns the `ProcessRecipe` governing the
+  loaded input, if any) and `maxPossibleOutput()` (`floor(input.count / inputPerOutput)`).
+  `DryingRackMenu.ts`'s `selectedAmount` now means "desired output count" everywhere it's
+  set or read (`openMenu`, `selectFullAmount`, `updateSliderFromPointer`, `render`'s clamp,
+  `promptForAmount`) — e.g. loading 20 cattail (2:1 ratio) now shows a slider scaled 0..10,
+  not 0..20. Input-unit conversion (`selectedAmount * recipe.inputPerOutput`) happens only
+  at the `previewFor`/`process`/`deps.processAmount` call boundary inside `renderProcess()`,
+  per the plan's "call-site conversion only" note — `Processing.ts`'s core `previewFor`/
+  `process` signatures are unchanged. This also let the old hacky `previewOutputKey()`
+  input-key-string-matching helper be deleted in favor of `recipe.output` from
+  `recipeForLoaded()`.
+- **Cattail's description no longer spoils processing** (`Items.ts`) — trimmed from "A reed
+  from the creek's edge. Dried into twine at a Drying Rack." to "A reed harvested from the
+  creek's edge.", matching how other raw pickups are described.
+- **Drying Rack recipe → `wood: 5, leather: 4, bones: 2`** (was `wood: 8, leather: 1`,
+  `Recipes.ts`) — now that `bones` exists (Milestone L).
+- **Crafting-menu tab reorg** (`Recipes.ts` `category` field only, no cost changes):
+  `campfire` moved `misc` → `crafting`, `shishkabob` moved `crafting` → `misc`, `drying_rack`
+  moved `misc` → `crafting` (`workbench` was already `crafting`, untouched). Workbench,
+  Campfire, and Drying Rack now all sit together in the Crafting tab; Misc's sole occupant
+  is now Shishkabob.
+
+Verified via `preview_eval`: `discoveredRecipes()` grouped by category confirms the tab
+reorg (`crafting`: campfire/workbench/drying_rack/workbench_upgrade, `misc`: shishkabob
+only) and the new drying_rack costs (`{bones: 2, leather: 4, wood: 5}`); loading 7 cattail
+(2:1 ratio) into a real placed Drying Rack reports `maxPossibleOutput: 3` (vs. old
+`maxProcessable: 7` input units) with 1 leftover correctly un-selectable; opening the rack
+menu defaults `selectedAmount` to the full possible output (3, not 7); selecting 2 output
+units converts to 4 input units at the process call site, yields +2 twine, and leaves 3
+cattail loaded (7 - 4 = 3) — confirmed via the real `processRackAmount` path, not a direct
+`ProcessingStation.process` call. Type-check clean (`tsc --noEmit`), no console errors,
+`preview_screenshot` shows the reworked rack menu mid-session (live "Amount: 1 / 1" after
+the test above left 1 output's worth of cattail loaded, "-> 1 twine" preview, no progress
+bar/output slot per the earlier rework).
+
+### Previously: Milestone L — new `bones` resource (Boar loot)
 
 First implementation milestone out of the I–O batch planned last session
 (`.claude/plans/this-is-a-plan-cached-pixel.md`), picked first per its own recommended

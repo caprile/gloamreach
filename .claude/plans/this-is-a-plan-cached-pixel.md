@@ -31,10 +31,21 @@ exploration should be needed before implementation.
 
 ---
 
-## Milestone I — Drying Rack polish (slider, description, recipe, tab)
+## Milestone I — Drying Rack polish (slider, description, recipe, tab) — SHIPPED 2026-07-08
 
 **Goal:** small, independent fixes bundled because they all touch `DryingRackMenu.ts`/
 `Processing.ts`/`Items.ts`/`Recipes.ts` in one pass.
+
+**Shipped as planned, no deviations.** `ProcessingStation` gained `recipeForLoaded()` and
+`maxPossibleOutput()` (`Processing.ts`); `DryingRackMenu`'s `selectedAmount` now represents
+desired **output** count (0..`maxPossibleOutput()`) everywhere it's read/written (open,
+`selectFullAmount`, slider drag, numeric prompt, render clamp) — the only place input units
+reappear is the `previewFor`/`process`/`deps.processAmount` call boundary in `renderProcess()`,
+which multiplies by `recipe.inputPerOutput` right before calling out, per the plan's "call-site
+conversion only" note. Cattail's description trimmed to "A reed harvested from the creek's
+edge." (no more "dried into twine" spoiler). Drying Rack recipe → `wood: 5, leather: 4, bones: 2`.
+Tab reorg: `campfire` `misc`→`crafting`, `shishkabob` `crafting`→`misc`, `drying_rack`
+`misc`→`crafting` (`workbench` was already `crafting`, no change needed there).
 
 - **Slider → output-amount based, auto-scaled.** Today `DryingRackMenu.ts`'s `selectedAmount`
   (line 76) is an **input-unit** count (0..`station.maxProcessable()`, `Processing.ts:68-70`);
@@ -275,7 +286,7 @@ O (resource audit) — do last, once I/K/L/M's exact numbers are locked; will ve
 ```
 
 Recommended order: **L → I → J → K → M → N → O** (bones first since two other milestones need
-it; J and N can slot in anywhere convenient). **L is done; I is next up.**
+it; J and N can slot in anywhere convenient). **L and I are done; J is next up.**
 
 ## Verification (each milestone, per the project's standing convention)
 
