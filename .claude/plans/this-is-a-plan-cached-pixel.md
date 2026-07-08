@@ -148,7 +148,7 @@ inventory stack → re-placed Image. `Inventory`/`ItemContainer` currently only 
 
 ---
 
-## Milestone L — New resource: Bones (Boar loot)
+## Milestone L — New resource: Bones (Boar loot) — SHIPPED 2026-07-08
 
 **Goal:** small, mechanical — unblocks Milestone I's Drying Rack recipe and Milestone M's
 Gremlin Shirt.
@@ -159,6 +159,12 @@ Gremlin Shirt.
   spawn config (one-line addition — `LootEntry`'s shape already supports an arbitrary
   `ResourceType`, no type changes needed). Suggested `min: 1, max: 2`, tunable at
   implementation time.
+
+**Shipped as planned, no deviations**: `bones` added to `ResourceType`, new `ItemDef` +
+`icon_bones` texture (two crossed off-white bones), Boar's `loot` array in
+`MainScene.spawnEnemies()` gained `{ resource: "bones", min: 1, max: 2 }` alongside the
+existing `boar_meat` entry. Verified via `preview_eval`: a live Boar's `rollLoot()` returns
+both entries. See `STATUS.md` for full detail.
 
 ---
 
@@ -261,7 +267,7 @@ I (Drying Rack polish)  — needs L (bones) for the recipe-cost change; slider/d
                            parts are independent and can ship without L if sequenced first.
 J (placement robustness + re-place from inventory) — independent, any time.
 K (per-instance tiers + named upgrades) — foundational for M (armor levels reuse this).
-L (bones) — small, independent, unblocks I and M.
+L (bones) — SHIPPED 2026-07-08. small, independent, unblocks I and M.
 M (Gremlin armor) — depends on K (tier/level plumbing) and L (bones for Shirt).
 N (blackberry persist) — independent.
 O (resource audit) — do last, once I/K/L/M's exact numbers are locked; will very likely bump
@@ -269,7 +275,7 @@ O (resource audit) — do last, once I/K/L/M's exact numbers are locked; will ve
 ```
 
 Recommended order: **L → I → J → K → M → N → O** (bones first since two other milestones need
-it; J and N can slot in anywhere convenient).
+it; J and N can slot in anywhere convenient). **L is done; I is next up.**
 
 ## Verification (each milestone, per the project's standing convention)
 

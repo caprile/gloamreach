@@ -159,6 +159,14 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     maxStack: 99,
     hotbarable: false,
   },
+  bones: {
+    key: "bones",
+    name: "Bones",
+    description: "Bones from a slain boar. Crafting material.",
+    texture: "icon_bones",
+    maxStack: 99,
+    hotbarable: false,
+  },
   gremlin_blood: {
     key: "gremlin_blood",
     name: "Gremlin Blood",

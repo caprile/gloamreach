@@ -1,8 +1,31 @@
 # Status
 
-Last updated: 2026-07-07
+Last updated: 2026-07-08
 
-### Just finished: Planning session — Drying Rack polish, station-upgrade rework, Gremlin armor (Milestones I–O)
+### Just finished: Milestone L — new `bones` resource (Boar loot)
+
+First implementation milestone out of the I–O batch planned last session
+(`.claude/plans/this-is-a-plan-cached-pixel.md`), picked first per its own recommended
+`L → I → J → K → M → N → O` order since bones unblocks both Milestone I's Drying Rack
+recipe change and Milestone M's Gremlin Shirt. Small, mechanical addition, no new systems:
+
+- **`src/systems/Inventory.ts`**: added `bones` to the `ResourceType` union.
+- **`src/systems/Items.ts`**: new `bones` `ItemDef` (non-hotbarable, stacks to 99),
+  following the `boar_meat`/`gremlin_blood` loot-item pattern exactly.
+- **`src/scenes/BootScene.ts`**: new `icon_bones` texture (two crossed off-white bone
+  shapes) generated the same way every other placeholder icon is.
+- **`src/scenes/MainScene.ts` `spawnEnemies()`**: Boar's `loot: LootEntry[]` gained a
+  second entry, `{ resource: "bones", min: 1, max: 2 }`, alongside the existing
+  `boar_meat` entry — `LootEntry`/`rollLoot()` already supported multiple independently-
+  rolled entries per enemy (added back in Milestone C for the ranged Gremlin's
+  skin+blood drop), so no type or loot-rolling logic changes were needed.
+
+Verified via `preview_eval`: a live Boar's `rollLoot()` now returns both
+`{resource: "boar_meat", amount: 1-2}` and `{resource: "bones", amount: 1-2}` in one
+call; `icon_bones` texture exists and loads. Type-check clean (`tsc --noEmit`),
+`preview_screenshot` shows the world booting normally, no console errors.
+
+### Previously: Planning session — Drying Rack polish, station-upgrade rework, Gremlin armor (Milestones I–O)
 
 Plan-update session (no code changes) following a fresh round of playtest feedback after
 Milestone H. Full plan: `.claude/plans/this-is-a-plan-cached-pixel.md`, referenced from

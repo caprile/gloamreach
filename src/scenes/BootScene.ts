@@ -264,6 +264,16 @@ export class BootScene extends Phaser.Scene {
     g.fillRect(7, 8, 8, 6);
     g.generateTexture("icon_boar_meat", ICON, ICON);
 
+    // Bones: two crossed off-white bone shapes.
+    g.clear();
+    g.fillStyle(0xe8e0cc, 1);
+    g.fillRect(3, 10, 18, 4);
+    g.fillCircle(4, 10, 2.5);
+    g.fillCircle(4, 14, 2.5);
+    g.fillCircle(20, 10, 2.5);
+    g.fillCircle(20, 14, 2.5);
+    g.generateTexture("icon_bones", ICON, ICON);
+
     // Gremlin Blood: a small dark-red droplet.
     g.clear();
     g.fillStyle(0x8a1f2a, 1);

@@ -182,8 +182,9 @@ mouse-driven only. Don't reintroduce a keybind for this without being asked. Spa
    content plan (A–H) is done.** See `STATUS.md` for full detail on both the initial ship
    and the same-day rework.
 4f. **Drying Rack polish, station-upgrade rework, Gremlin armor (first wearable armor)**
-   — planned, not yet built. Full detail in `.claude/plans/this-is-a-plan-cached-pixel.md`
-   (Milestones I–O, continuing the A–H lettering). Playtest-driven follow-up batch: the
+   — in progress (**Milestone L shipped**; I–K, M–O not yet built). Full detail in
+   `.claude/plans/this-is-a-plan-cached-pixel.md` (Milestones I–O, continuing the A–H
+   lettering). Playtest-driven follow-up batch: the
    Drying Rack's slider becomes **output-amount based** (auto-scaled 0..max possible output,
    not input units); Cattail's description stops spoiling what it processes into; the Drying
    Rack recipe changes to **5 wood/4 leather/2 bones** (a new resource — Boar loot); the
@@ -339,10 +340,10 @@ intended to require a workbench once it exists.
   leather source**, which is why it was prioritized ahead of B/C. Its HP bar (like Boar's)
   only shows once actually aggro'd — see `Enemy.isAggro()` — not while idle/hidden.
 - Boar — **shipped in simplified form** (`src/entities/Enemy.ts`): melee bite only,
-  simple aggro-radius chase AI, drops 1-2 boar_meat. No charge attack, no fear-of-fire
-  yet — those (plus the "high damage, high aggro range" tuning) are still open
-  follow-up work, not forgotten. **Planned (Milestone 4f):** Boar also drops a new `bones`
-  resource (feeds the Drying Rack's updated recipe and Gremlin Shirt).
+  simple aggro-radius chase AI, drops 1-2 boar_meat **and 1-2 `bones` (Milestone L,
+  shipped)** — feeds the Drying Rack's updated recipe and Gremlin Shirt. No charge
+  attack, no fear-of-fire yet — those (plus the "high damage, high aggro range" tuning)
+  are still open follow-up work, not forgotten.
 - **Spawn-count bump likely needed (planned, Milestone 4f/O):** a resource-density audit
   for the new Gremlin Armor set found `gremlin_leather` and `leather` demand will exceed
   what today's spawn counts can ever supply (RangedGremlin's 4-per-session and Snake's

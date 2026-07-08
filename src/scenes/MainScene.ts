@@ -880,7 +880,10 @@ export class MainScene extends Phaser.Scene {
         y,
         texture: "boar",
         displayName: "Boar",
-        loot: [{ resource: "boar_meat", min: 1, max: 2 }],
+        loot: [
+          { resource: "boar_meat", min: 1, max: 2 },
+          { resource: "bones", min: 1, max: 2 },
+        ],
         maxHealth: 20,
         biteDamage: 25,
       });
