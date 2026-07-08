@@ -2,7 +2,77 @@
 
 Last updated: 2026-07-08
 
-### Just finished: Milestone I — Drying Rack polish (output-based slider, recipe, tab reorg)
+### Just finished: Milestone J — Placement-mode robustness + re-placing owned stations
+
+Third milestone out of the I–O batch (`.claude/plans/this-is-a-plan-cached-pixel.md`),
+per the recommended `L → I → J → K → M → N → O` order. Two related fixes to the
+placement flow, both in `src/scenes/MainScene.ts` (+ a one-line-each flag flip in
+`src/systems/Items.ts`):
+
+- **Failed tier-gate no longer cancels placement mode.** `attemptPlaceObject()`'s
+  `recipe.tier > 0 && !isNearWorkbench(...)` branch used to call `cancelPlacement()` —
+  clicking a Drying Rack ghost while not near a Workbench dumped you out of placement mode
+  entirely, forcing a trip back through the crafting menu. It now just logs "Requires a
+  nearby Workbench" and returns, leaving the ghost on the cursor. Because
+  `attemptPlaceObject()` re-checks `isNearWorkbench()` fresh every click, walking into
+  range and clicking again just succeeds — no menu round-trip. Only an explicit cancel
+  (RMB/ESC/TAB/T) or a successful placement leaves placement mode now.
+- **Re-enter placement mode for a placeable you already own** (e.g. a station recovered via
+  Destroy, sitting in the backpack). `placementMode` gained an optional
+  `itemSource: { container, key }`: when armed from an owned stack, each placement consumes
+  one of that stack (`container.removeCount(key, 1)`) instead of the recipe's ingredients,
+  and running out auto-cancels. New `startItemPlacement(container, index, suppressClick)`
+  closes any open menu (placement intercepts world clicks, so a menu would sit in front of
+  the ghost — mirrors the crafting menu's Place flow), arms placement, and spawns the ghost.
+  Entry points (both fire on pointerup, so `startItemPlacement` needs no `suppressNextPointerdown`
+  trick — unlike the crafting menu's Place button):
+  - **Left-click a placeable in the backpack** → enters placement mode for it. Inventory
+    interactions now **match other items**: right-click a backpack placeable **quick-moves it
+    to the hotbar** like any hotbar-able item (`quickMoveItem` no longer special-cases
+    placeables), and the *left*-click gesture is what enters placement — specifically a
+    click-in-place (drag that releases on the same backpack slot it started on), handled in
+    `resolveItemDrag`'s backpack branch. A real drag to a different slot still rearranges;
+    click-in-place on a non-placeable stays a no-op. (This revises Milestone J's first-pass
+    behavior, where right-click entered placement — see decision note below.)
+  - **Selecting a hotbar slot that holds a placeable** — placement mode now *follows the
+    hotbar selection* (playtest follow-up — the original one-shot "arm on number-key" version
+    was reworked): whichever slot is selected drives what's active, exactly like equipping a
+    tool. Selecting a placeable enters place mode (ghost armed for it); selecting a
+    tool/weapon/empty slot **exits** place mode (fixing the reported bug where switching off a
+    workbench mid-placement equipped the club but left you stuck in place mode). All three
+    select gestures route through one `setHotbarSelection(slot)` and behave identically:
+    **number key (1-9)**, **scroll wheel** (`cycleHotbar` — now included, previously excluded),
+    and **left-clicking the slot** (new — a click that releases on the same hotbar slot it
+    started on is a select, not the old no-op re-drop; this also makes left-click select *any*
+    item, equipping tools/weapons too, matching wheel/number). Real drags (releasing on a
+    *different* slot) still rearrange. Placing consumes from the selected slot and re-arms;
+    the last one running out auto-exits.
+  - `campfire`/`workbench`/`drying_rack` are now `hotbarable: true` (were `false`, since
+    before Destroy they never lived in a container) so they can actually be dragged into the
+    hotbar. Consuming from a hotbar slot also refreshes `hotbarUI` (refreshHud only touches
+    the crafting/inventory menus).
+  - Consume-on-success-only carries over unchanged, so cancelling refunds nothing (nothing
+    was spent yet) — the item stays in its slot.
+
+**Decision note (recorded this session):** inventory interactions for placeables should mirror
+every other item — **right-click = quick-move to hotbar**, and **left-click = enter place mode**
+for that placeable (processors/stations especially). This replaced Milestone J's first-pass
+"right-click enters placement" behavior after playtest feedback.
+
+Verified via `preview_eval`: right-clicking a backpack workbench quick-moves it to the hotbar
+(backpack slot cleared, workbench now in hotbar, **not** in place mode); left-click-in-place on
+a backpack Drying Rack enters placement (itemSource from backpack, inventory auto-closed, item
+still in the bag pending a successful place), while left-click-in-place on a non-placeable
+(wood) is a no-op and a real drag to a *different* backpack slot still rearranges; placing a
+2-stack tier-0 workbench from the hotbar twice depletes it (2→1→0, two objects placed, still
+armed) then auto-cancels on the third empty attempt; a tier-1 Drying Rack stays armed on a
+failed workbench-gate click then consumes + registers a `dryingRacks[]` entry once a Workbench
+is nearby; selecting a placeable hotbar slot via number key / wheel / left-click enters place
+mode and selecting a tool/weapon/empty slot exits it (equipping the tool); dragging a Drying
+Rack from the backpack onto a hotbar slot lands there (the `hotbarable` flip). Type-check clean
+(`tsc --noEmit`), no console errors, `preview_screenshot` shows the world booting normally.
+
+### Previously: Milestone I — Drying Rack polish (output-based slider, recipe, tab reorg)
 
 Second milestone out of the I–O batch (`.claude/plans/this-is-a-plan-cached-pixel.md`),
 next in the recommended `L → I → J → K → M → N → O` order. Small, independent fixes

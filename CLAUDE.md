@@ -184,7 +184,7 @@ mouse-driven only. Don't reintroduce a keybind for this without being asked. Spa
    content plan (A–H) is done.** See `STATUS.md` for full detail on both the initial ship
    and the same-day rework.
 4f. **Drying Rack polish, station-upgrade rework, Gremlin armor (first wearable armor)**
-   — in progress (**Milestones L and I shipped**; J, K, M–O not yet built). Full detail in
+   — in progress (**Milestones L, I, and J shipped**; K, M–O not yet built). Full detail in
    `.claude/plans/this-is-a-plan-cached-pixel.md` (Milestones I–O, continuing the A–H
    lettering). Playtest-driven follow-up batch: the
    Drying Rack's slider is now **output-amount based** (auto-scaled 0..max possible output,
@@ -192,11 +192,16 @@ mouse-driven only. Don't reintroduce a keybind for this without being asked. Spa
    (shipped); the Drying Rack recipe is now **5 wood/4 leather/2 bones** (bones is a new
    resource — Boar loot, both shipped); the crafting-menu tab reorg now puts
    **Workbench/Campfire/Drying Rack all in the Crafting tab** (Shishkabob moved to Misc,
-   shipped); placement mode gets a bug fix (a failed tier-gate check no
+   shipped); placement mode got a bug fix (a failed tier-gate check no
    longer cancels it — it stays armed so walking into Workbench range lets the next click
    succeed) plus a new way to **re-enter placement mode from an inventory/hotbar item**
-   (right-click or hotbar-select a placeable you already own, e.g. one recovered via
-   Destroy); the single generic `workbench_upgrade` item is replaced by a **named
+   (placeables are now `hotbarable`; each placement consumes one owned stack instead of recipe
+   ingredients — Milestone J, shipped). Locked interaction model: **hotbar selection drives
+   placement like equipping a tool** (a selected placeable is in place mode; selecting anything
+   else exits it — number key / scroll wheel / left-click all select identically), and
+   **inventory gestures match every other item** — right-click a backpack placeable quick-moves
+   it to the hotbar, while **left-click** on a backpack placeable enters place mode. The single
+   generic `workbench_upgrade` item is replaced by a **named
    per-station upgrade system** (e.g. "Tool Sharpener": 3 twine/5 wood/2 stone, applied
    directly via the right-click Upgrade popup — no intermediate craftable item), and a
    station's upgrade tier now **survives Destroy → pickup → re-Place** with a visual tell

@@ -25,7 +25,7 @@ import {
   weaponStaminaCost,
   type WeaponType,
 } from "../systems/Weapons";
-import { outputKey, type Recipe } from "../systems/Recipes";
+import { outputKey, RECIPES, type Recipe } from "../systems/Recipes";
 import { itemDef } from "../systems/Items";
 import { ItemContainer, moveSlot } from "../systems/ItemContainer";
 import { EventLog } from "../systems/EventLog";
@@ -146,7 +146,12 @@ export class MainScene extends Phaser.Scene {
   // instead of landing in the backpack. A ghost preview follows the cursor,
   // clamped to PLACEMENT_RADIUS of the player; LMB commits (deducts cost,
   // spawns a world object), RMB cancels for free (nothing was spent yet).
-  private placementMode: { recipe: Recipe } | null = null;
+  // `itemSource` is set when placement was armed from an owned stack (a
+  // station recovered via Destroy, re-placed from the backpack/hotbar) — each
+  // placement consumes one of that item instead of the recipe's ingredients.
+  private placementMode:
+    | { recipe: Recipe; itemSource?: { container: ItemContainer; key: string } }
+    | null = null;
   private placementGhost: Phaser.GameObjects.Image | null = null;
   private placedObjects: Phaser.GameObjects.Image[] = [];
   private placementHintText!: Phaser.GameObjects.Text; // small hint under the top-left controls line
@@ -441,14 +446,33 @@ export class MainScene extends Phaser.Scene {
   }
 
   private selectHotbarSlot(slot: number): void {
-    this.hotbar.select(slot);
-    this.recomputeEquipped();
+    this.setHotbarSelection(slot);
   }
 
   private cycleHotbar(dir: number): void {
     const next = (this.hotbar.selected() + dir + this.hotbar.size) % this.hotbar.size;
-    this.hotbar.select(next);
+    this.setHotbarSelection(next);
+  }
+
+  // Single entry point for changing the hotbar selection — number keys, the
+  // scroll wheel, and left-clicking a slot all route here so they behave
+  // identically. Placement mode follows the selection: a selected placeable is
+  // in place mode (ghost armed for it); selecting anything else exits it.
+  private setHotbarSelection(slot: number): void {
+    this.hotbar.select(slot);
     this.recomputeEquipped();
+    const stack = this.hotbar.get(slot);
+    const placeable = !!(stack && itemDef(stack.key)?.placeable);
+    if (placeable) {
+      // Re-arm for the freshly selected slot (cancel first so switching from
+      // one placeable to another repoints the ghost at the new item).
+      if (this.placementMode) this.cancelPlacement();
+      this.startItemPlacement(this.hotbar.container, slot);
+    } else if (this.placementMode) {
+      // Selected a tool/weapon/empty slot — leave placement mode so the
+      // ghost/hint don't linger while something else is equipped.
+      this.cancelPlacement();
+    }
   }
 
   // The equipped tool/weapon is whatever sits in the selected hotbar slot —
@@ -546,6 +570,14 @@ export class MainScene extends Phaser.Scene {
     // Prefer a hotbar slot under the pointer, else a backpack slot.
     const hotIndex = this.hotbarUI.slotAt(pointer.x, pointer.y);
     if (hotIndex !== null) {
+      // A click that never left the hotbar slot it started on isn't a
+      // rearrange — it's a select, identical to a number-key/wheel select
+      // (there's no other click-to-select). setHotbarSelection also drives
+      // placement mode for placeables.
+      if (src.container === this.hotbar.container && src.index === hotIndex) {
+        this.setHotbarSelection(hotIndex);
+        return;
+      }
       if (!itemDef(stack.key)?.hotbarable) return; // reject; snaps back
       moveSlot(src.container, src.index, this.hotbar.container, hotIndex);
       this.afterItemMove();
@@ -553,6 +585,18 @@ export class MainScene extends Phaser.Scene {
     }
     const bagIndex = this.inventoryMenu.slotIndexAt(pointer.x, pointer.y);
     if (bagIndex !== null) {
+      // Left-click-in-place on a backpack placeable enters placement mode for
+      // it (e.g. a station recovered via Destroy) — the inventory analog of
+      // selecting a placeable in the hotbar. Right-click still quick-moves it
+      // to the hotbar like any other item.
+      if (
+        src.container === this.backpack &&
+        src.index === bagIndex &&
+        itemDef(stack.key)?.placeable
+      ) {
+        this.startItemPlacement(this.backpack, bagIndex);
+        return;
+      }
       moveSlot(src.container, src.index, this.backpack, bagIndex);
       this.afterItemMove();
       return;
@@ -598,6 +642,10 @@ export class MainScene extends Phaser.Scene {
   }
 
   // Right-click: move backpack->hotbar (if hotbar-able) or hotbar->backpack.
+  // Placeables are hotbar-able too, so right-clicking one in the backpack just
+  // quick-moves it to the hotbar like any other item (consistent behavior);
+  // entering placement mode from the inventory is the *left*-click gesture (see
+  // resolveItemDrag's backpack click-in-place branch).
   private quickMoveItem(container: ItemContainer, index: number): void {
     const stack = container.slot(index);
     if (!stack) return;
@@ -1390,6 +1438,30 @@ export class MainScene extends Phaser.Scene {
     this.placementGhost = this.add.image(pos.x, pos.y, texture ?? "").setAlpha(0.5).setDepth(500);
   }
 
+  // Re-enter placement mode for a placeable the player already owns (e.g. a
+  // station recovered via Destroy), consuming that stack one-per-placement
+  // rather than recipe ingredients. Reached by selecting a placeable in the
+  // hotbar or left-click-in-place on one in the backpack — both fire on
+  // pointerup, so there's no in-flight pointerdown to swallow (unlike the
+  // crafting menu's Place button, which sets suppressNextPointerdown itself).
+  private startItemPlacement(container: ItemContainer, index: number): void {
+    if (this.placementMode) return;
+    const stack = container.slot(index);
+    if (!stack) return;
+    const def = itemDef(stack.key);
+    if (!def?.placeable) return;
+    const recipe = RECIPES.find((r) => outputKey(r) === stack.key);
+    if (!recipe) return;
+    // Placement intercepts world clicks, so any open menu would sit in front of
+    // the ghost — close them first, mirroring the crafting menu's Place flow.
+    this.craftingMenu.close();
+    this.inventoryMenu.close();
+    this.closeDryingRackMenu();
+    this.placementMode = { recipe, itemSource: { container, key: stack.key } };
+    const pos = this.clampedPlacementPoint();
+    this.placementGhost = this.add.image(pos.x, pos.y, def.texture).setAlpha(0.5).setDepth(500);
+  }
+
   private cancelPlacement(): void {
     this.placementMode = null;
     this.placementGhost?.destroy();
@@ -1426,7 +1498,16 @@ export class MainScene extends Phaser.Scene {
   private attemptPlaceObject(): void {
     if (!this.placementMode) return;
     const recipe = this.placementMode.recipe;
-    if (!this.crafting.canAfford(recipe, this.backpack)) {
+    const itemSource = this.placementMode.itemSource;
+    // Affordability: an item-source placement just needs one of the owned
+    // stack left (running out ends placement); a craft placement needs the
+    // recipe's ingredients.
+    if (itemSource) {
+      if (itemSource.container.count(itemSource.key) < 1) {
+        this.cancelPlacement();
+        return;
+      }
+    } else if (!this.crafting.canAfford(recipe, this.backpack)) {
       const name = itemDef(outputKey(recipe))?.name ?? "item";
       this.eventLog.add("info", `Out of materials for ${name}`);
       this.cancelPlacement();
@@ -1434,14 +1515,16 @@ export class MainScene extends Phaser.Scene {
     }
     // Tier 1+ placeables (the Drying Rack) need the player standing near a
     // Workbench to place, same gate craftRecipe() already applies to
-    // non-placeable tier 1+ recipes — this was previously a no-op since every
-    // placeable was tier 0, so it never actually got exercised until now.
+    // non-placeable tier 1+ recipes. A failed check keeps placement armed (the
+    // ghost stays on the cursor) so walking into range lets the next click
+    // succeed without reopening the crafting menu — only an explicit cancel or
+    // a successful placement leaves placement mode.
     if (recipe.tier > 0 && !this.isNearWorkbench(this.player.x, this.player.y)) {
       this.eventLog.add("info", "Requires a nearby Workbench");
-      this.cancelPlacement();
       return;
     }
-    this.crafting.craft(recipe, this.backpack);
+    if (itemSource) itemSource.container.removeCount(itemSource.key, 1);
+    else this.crafting.craft(recipe, this.backpack);
     const pos = this.clampedPlacementPoint();
     const key = outputKey(recipe);
     const texture = itemDef(key)?.texture;
@@ -1457,6 +1540,9 @@ export class MainScene extends Phaser.Scene {
     if (key === "drying_rack") this.dryingRacks.push({ image, station: new ProcessingStation() });
     this.refreshHud();
     this.inventoryMenu.refresh();
+    // Placing from an owned stack changed a count — keep the hotbar display in
+    // sync too (refreshHud only touches the crafting/inventory menus).
+    if (itemSource) this.hotbarUI.refresh();
   }
 
   // "Am I near a placed Workbench" — used to gate actually crafting/placing

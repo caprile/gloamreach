@@ -72,10 +72,54 @@ Tab reorg: `campfire` `misc`→`crafting`, `shishkabob` `crafting`→`misc`, `dr
 
 ---
 
-## Milestone J — Placement-mode robustness + re-placing owned stations from inventory
+## Milestone J — Placement-mode robustness + re-placing owned stations from inventory — SHIPPED 2026-07-08
 
 **Goal:** fix the "placement mode breaks when tier-gated" bug and add a real way to re-place a
 station/processor that's sitting in the backpack (e.g. recovered via Destroy).
+
+**Shipped, with the interaction model revised twice from playtest feedback (see the two
+follow-up notes at the end of this section).** `placementMode` gained an optional
+`itemSource: { container, key }` tag: when set (armed from an owned stack), each placement
+consumes one of that stack via `container.removeCount(key, 1)` instead of `crafting.craft()`;
+running out auto-cancels. `attemptPlaceObject()`'s tier-gate branch now just logs "Requires a
+nearby Workbench" and returns (ghost/mode preserved) instead of `cancelPlacement()` — walking
+into range and clicking again succeeds. New `startItemPlacement(container, index)` closes open
+menus, arms placement, and creates the ghost (no `suppressNextPointerdown` needed — every entry
+path fires on pointerup, so there's no in-flight pointerdown to swallow). `campfire`/`workbench`/
+`drying_rack` are now `hotbarable: true` so they can be moved into the hotbar in the first place.
+The consume-on-success-only invariant carries over cleanly (cancelling refunds nothing because
+nothing was spent).
+
+**Final interaction model (after both revisions below):**
+- **Hotbar selection drives placement, like equipping a tool.** All selection gestures route
+  through one `setHotbarSelection(slot)` (number keys, scroll wheel, and left-clicking a slot,
+  which now selects like the others): a selected placeable enters place mode; selecting a
+  tool/weapon/empty slot exits it. Left-click-to-select is a click that releases on the same
+  hotbar slot it started on (real drags to a different slot still rearrange).
+- **Inventory interactions match every other item.** Right-click a backpack placeable
+  **quick-moves it to the hotbar** (no special-casing); **left-click-in-place** on a backpack
+  placeable **enters place mode** for it (`resolveItemDrag`'s backpack branch). Non-placeable
+  click-in-place is a no-op; real drags still rearrange.
+
+Verified via `preview_eval`: tier-gate failure keeps placement armed (count/placed unchanged)
+then succeeds once a bench is nearby; two tier-0 placements deplete a 2-stack then auto-cancel;
+right-click on a backpack placeable quick-moves it to the hotbar (not place mode); left-click-in-
+place on a backpack placeable enters place mode (menu auto-closes, item pending place); selecting
+a placeable via number/wheel/left-click enters place mode and selecting a tool/empty slot exits
+it. Type-check clean, no console errors.
+
+**Follow-up #1 (same session) — placement follows hotbar selection.** The first pass armed
+placement as a one-shot on a number-key select and left wheel-cycling out. Per user feedback it
+was reworked so placement mode is a *function of* the current hotbar selection (enters on a
+selected placeable, exits when you select anything else — fixing a bug where switching off a
+placeable mid-placement equipped the new item but stayed in place mode), and left-clicking a
+hotbar slot now selects like number/wheel.
+
+**Follow-up #2 (same session) — inventory gestures match other items.** The first pass had
+*right*-click on a backpack placeable enter placement. Per user decision, right-click should
+behave like every other item (quick-move to hotbar) and **left-click** should be the "enter
+place mode" gesture for placeables/processors in the inventory. `startItemPlacement`'s
+`suppressClick` param was dropped as part of this (no entry path needs it anymore).
 
 - **Bug fix — don't cancel placement mode on a failed tier-gate check.**
   `attemptPlaceObject()` (`MainScene.ts:1436-1440`): today, clicking to place a tier-1 item
@@ -286,7 +330,8 @@ O (resource audit) — do last, once I/K/L/M's exact numbers are locked; will ve
 ```
 
 Recommended order: **L → I → J → K → M → N → O** (bones first since two other milestones need
-it; J and N can slot in anywhere convenient). **L and I are done; J is next up.**
+it; J and N can slot in anywhere convenient). **L, I, and J are done; K is next up** (or N,
+which is independent). K is flagged as net-new architecture — recommend Opus.
 
 ## Verification (each milestone, per the project's standing convention)
 
