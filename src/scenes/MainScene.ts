@@ -12,7 +12,7 @@ import {
 } from "../entities/ResourceNode";
 import { Enemy } from "../entities/Enemy";
 import { Snake } from "../entities/Snake";
-import { RangedGremlin, MeleeGremlin } from "../entities/Gremlin";
+import { RangedGremlin, MeleeGremling } from "../entities/Gremlin";
 import { Projectile, type ProjectileConfig } from "../entities/Projectile";
 import type { ResourceType } from "../systems/Inventory";
 import { Skills, type SkillType } from "../systems/Skills";
@@ -324,17 +324,7 @@ export class MainScene extends Phaser.Scene {
     this.input.keyboard!.addCapture("TAB");
     this.input.keyboard!.on("keydown-TAB", () => {
       if (this.placementMode) return this.cancelPlacement();
-      this.closeDryingRackMenu();
-      this.closeUpgradeMenu();
-      this.craftingMenu.close();
-      this.inventoryMenu.toggle();
-    });
-    this.input.keyboard!.on("keydown-T", () => {
-      if (this.placementMode) return this.cancelPlacement();
-      this.closeDryingRackMenu();
-      this.closeUpgradeMenu();
-      this.inventoryMenu.close();
-      this.craftingMenu.toggle();
+      this.toggleCombinedMenu();
     });
     this.input.keyboard!.on("keydown-ESC", () => {
       if (this.contextMenu.isOpen()) return this.contextMenu.close();
@@ -880,6 +870,62 @@ export class MainScene extends Phaser.Scene {
       }
     };
 
+    // Like scatter(), but places nodes in clumps of clusterMin..clusterMax
+    // around one sampled center per clump instead of spreading each node
+    // independently — used for bushes, which should read as a patch rather
+    // than lone plants dotted around the forest.
+    const scatterClustered = (
+      totalCount: number,
+      clusterMin: number,
+      clusterMax: number,
+      cfg: {
+        texture: string;
+        resource: ResourceType;
+        amount: number;
+        action: NodeAction;
+        displayName: string;
+        loose: boolean;
+        solid: boolean;
+        health: number;
+        zone: ZoneType | null;
+        avoidCreek?: boolean;
+      },
+    ) => {
+      const CLUSTER_JITTER = 40;
+      let placed = 0;
+      while (placed < totalCount) {
+        const remaining = totalCount - placed;
+        const size = Math.min(remaining, rng.between(clusterMin, clusterMax));
+        const center = this.pickSpawnPoint(rng, cfg.zone, 100, cfg.avoidCreek ?? false);
+        for (let i = 0; i < size; i++) {
+          let x = Phaser.Math.Clamp(center.x + rng.between(-CLUSTER_JITTER, CLUSTER_JITTER), 60, WORLD_W - 60);
+          let y = Phaser.Math.Clamp(center.y + rng.between(-CLUSTER_JITTER, CLUSTER_JITTER), 60, WORLD_H - 60);
+          // Jitter can push a point onto the creek even though the cluster
+          // center was checked — fall back to the center itself rather than
+          // rejection-sampling per-node (keeps the clump tight).
+          if (cfg.avoidCreek && this.biome.isCreekAt(x, y)) {
+            x = center.x;
+            y = center.y;
+          }
+          const node = new ResourceNode(this, {
+            x,
+            y,
+            texture: cfg.texture,
+            resource: cfg.resource,
+            amount: cfg.amount,
+            action: cfg.action,
+            displayName: cfg.displayName,
+            loose: cfg.loose,
+            health: cfg.health,
+          });
+          this.nodes.push(node);
+          if (cfg.solid) solids.add(node);
+          if (cfg.action !== "pickup") this.obstacleNodes.push(node);
+        }
+        placed += size;
+      }
+    };
+
     // Free pickups. Pre-placed branches/rocks are always manual-click — only
     // pieces spawned from a depleted tree/boulder are "loose"/magnet-eligible
     // (see spawnLooseDrop). Counts scaled up for the larger world. Both stay
@@ -894,9 +940,9 @@ export class MainScene extends Phaser.Scene {
     scatter(70, { texture: "tree", resource: "wood", amount: 5, action: "chop", displayName: "Tree", loose: false, solid: false, health: 3, zone: "forest", avoidCreek: true });
     scatter(14, { texture: "tree", resource: "wood", amount: 5, action: "chop", displayName: "Tree", loose: false, solid: false, health: 3, zone: "grassy", avoidCreek: true });
     scatter(18, { texture: "boulder", resource: "stone", amount: 5, action: "mine", displayName: "Boulder", loose: false, solid: false, health: 3, zone: "grassy", avoidCreek: true });
-    // Blackberry bushes — free forest pickup (Milestone H). A future food item;
-    // no eating mechanic yet, so it just sits in inventory for now.
-    scatter(16, { texture: "blackberry_bush", resource: "blackberry", amount: 2, action: "pickup", displayName: "Blackberries", loose: false, solid: false, health: 1, zone: "forest", avoidCreek: true });
+    // Blackberry bushes — free forest pickup (Milestone H), grouped into
+    // patches of 2-4 rather than spread individually across the forest.
+    scatterClustered(16, 2, 4, { texture: "blackberry_bush", resource: "blackberry", amount: 2, action: "pickup", displayName: "Blackberries", loose: false, solid: false, health: 1, zone: "forest", avoidCreek: true });
 
     // Cattail — free pickup, but a bespoke spawn constraint (creek *edge*, not
     // just "not on the creek"), so it can't reuse scatter's zone/avoidCreek
@@ -980,10 +1026,11 @@ export class MainScene extends Phaser.Scene {
       this.enemyGroup.add(snake);
     }
 
-    // Gremlins: grassy-preferred with occasional forest wandering-in (per
-    // CLAUDE.md's first-biome content notes). Melee-only variant is more
-    // common; the ranged variant is rarer and stronger (only leather-style
-    // gate: it's the sole gremlin_skin source, feeding the Drying Rack).
+    // Gremlin/Gremling: grassy-preferred with occasional forest wandering-in
+    // (per CLAUDE.md's first-biome content notes). The melee-only "Gremling"
+    // is more common; the ranged "Gremlin" is rarer and stronger (only
+    // leather-style gate: it's the sole gremlin_skin source, feeding the
+    // Drying Rack).
     const RANGED_GREMLIN_COUNT = 4;
     for (let i = 0; i < RANGED_GREMLIN_COUNT; i++) {
       const { x, y } = this.pickSpawnPoint(rng, "grassy", 200);
@@ -991,17 +1038,17 @@ export class MainScene extends Phaser.Scene {
       this.enemies.push(gremlin);
       this.enemyGroup.add(gremlin);
     }
-    const MELEE_GREMLIN_COUNT = 6;
-    for (let i = 0; i < MELEE_GREMLIN_COUNT; i++) {
+    const MELEE_GREMLING_COUNT = 6;
+    for (let i = 0; i < MELEE_GREMLING_COUNT; i++) {
       const { x, y } = this.pickSpawnPoint(rng, "grassy", 200);
-      const gremlin = new MeleeGremlin(this, { x, y });
-      this.enemies.push(gremlin);
-      this.enemyGroup.add(gremlin);
+      const gremling = new MeleeGremling(this, { x, y });
+      this.enemies.push(gremling);
+      this.enemyGroup.add(gremling);
     }
   }
 
   // Spawns a projectile and tracks it in the right physics group by source —
-  // currently only enemy-sourced projectiles exist (Gremlin's rock throw),
+  // currently only enemy-sourced projectiles exist (the ranged Gremlin's rock throw),
   // the Slingshot will need its own playerProjectiles group + overlap-vs-
   // enemies wiring once it lands.
   private spawnProjectile(cfg: ProjectileConfig): Projectile {
@@ -1472,7 +1519,24 @@ export class MainScene extends Phaser.Scene {
       craft: (recipe) => this.craftRecipe(recipe),
       startPlacement: (recipe) => this.startPlacement(recipe),
       isNearWorkbench: () => this.isNearWorkbench(this.player.x, this.player.y),
+      onIconClick: () => this.toggleCombinedMenu(),
     });
+  }
+
+  // Tab opens crafting + inventory together as one combined menu — there's no
+  // standalone crafting window anymore. Driven off inventoryMenu's open state
+  // since both always move in lockstep.
+  private toggleCombinedMenu(): void {
+    this.closeDryingRackMenu();
+    this.closeUpgradeMenu();
+    const opening = !this.inventoryMenu.isOpen();
+    if (opening) {
+      this.inventoryMenu.toggle();
+      this.craftingMenu.toggle();
+    } else {
+      this.inventoryMenu.close();
+      this.craftingMenu.close();
+    }
   }
 
   private craftRecipe(recipe: Recipe): void {
@@ -1769,9 +1833,12 @@ export class MainScene extends Phaser.Scene {
     return Object.entries(upg.costs).every(([r, n]) => this.backpack.count(r) >= (n ?? 0));
   }
 
+  // Owned/required per resource, mirroring CraftingMenu's detail panel
+  // (`${resource}: ${have}/${amount}`) so both "what do I need" panels read
+  // the same way.
   private formatUpgradeCost(upg: StationUpgradeDef): string {
     return Object.entries(upg.costs)
-      .map(([r, n]) => `${n} ${itemDef(r)?.name ?? r}`)
+      .map(([r, n]) => `${itemDef(r)?.name ?? r}: ${this.backpack.count(r)}/${n}`)
       .join(", ");
   }
 

@@ -154,7 +154,7 @@ export class UpgradeMenu {
     let suffix = "";
     if (applied) suffix = "  (Applied)";
     else if (locked) suffix = "  (Requires previous tier)";
-    else if (!affordable) suffix = "  (Can't afford)";
+    else if (!affordable) suffix = "  (Missing materials)";
 
     this.addText(contentX, rowY + 8, `${upg.name}${suffix}`, 13, nameColor);
     this.addText(contentX, rowY + 26, this.deps.formatCost(upg), 11, "#8a93a3");

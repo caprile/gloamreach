@@ -101,14 +101,14 @@ export class BootScene extends Phaser.Scene {
     g.fillRect(5, 10, 8, 6); // belly highlight
     g.generateTexture("gremlin", 18, 22);
 
-    // Melee Gremlin — weaker variant. Smaller (14x16), duller color, no
+    // Gremling — weaker melee-only variant. Smaller (14x16), duller color, no
     // belly highlight, so it visually reads as the lesser threat.
     g.clear();
     g.fillStyle(0x4a5a3a, 1);
     g.fillRect(1, 3, 12, 12);
     g.fillStyle(0x33421f, 1);
     g.fillRect(3, 0, 8, 5); // head
-    g.generateTexture("gremlin_weak", 14, 16);
+    g.generateTexture("gremling_weak", 14, 16);
 
     // Gremlin's thrown rock — tiny gray projectile.
     g.clear();

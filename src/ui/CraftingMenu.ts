@@ -24,6 +24,9 @@ export interface CraftingMenuDeps {
   craft: (recipe: Recipe) => void;
   startPlacement: (recipe: Recipe) => void;
   isNearWorkbench: () => boolean;
+  // The top-right icon opens the combined Tab menu (crafting + inventory),
+  // not just this panel — there's no crafting-only entry point anymore.
+  onIconClick: () => void;
 }
 
 // A recipe is affordable to craft/place right now — resource cost AND
@@ -33,8 +36,11 @@ function isCraftable(deps: CraftingMenuDeps, recipe: Recipe): boolean {
   return deps.crafting.canAfford(recipe, deps.backpack) && (recipe.tier === 0 || deps.isNearWorkbench());
 }
 
-// Right-side crafting panel, toggled with T, the top-right icon, or Escape
-// to close. Only ever lists DISCOVERED recipes (see Crafting.ts) — locked
+// Right-side crafting panel. Opens/closes together with InventoryMenu as one
+// combined Tab menu (see MainScene.toggleCombinedMenu) — there's no
+// crafting-only key anymore; the top-right icon and Escape both go through
+// the same combined toggle. Only ever lists DISCOVERED recipes (see
+// Crafting.ts) — locked
 // recipes are invisible, not greyed. Craftable-but-unaffordable ones are
 // greyed and sorted below craftable ones. Equipping happens in
 // InventoryMenu, not here — this panel only crafts.
@@ -64,7 +70,7 @@ export class CraftingMenu {
     this.panelY = MARGIN_TOP;
 
     this.icon = scene.add
-      .text(scene.scale.width - 16, 16, "[T] Craft", {
+      .text(scene.scale.width - 16, 16, "[Tab] Menu", {
         fontFamily: "monospace",
         fontSize: "14px",
         color: "#ffffff",
@@ -75,7 +81,7 @@ export class CraftingMenu {
       .setScrollFactor(0)
       .setDepth(3000)
       .setInteractive({ useHandCursor: true })
-      .on("pointerdown", () => this.toggle());
+      .on("pointerdown", () => this.deps.onIconClick());
 
     this.bg = scene.add
       .rectangle(this.panelX, this.panelY, PANEL_W, PANEL_H, 0x0a0a0a, 0.93)

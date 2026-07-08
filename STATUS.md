@@ -2,7 +2,50 @@
 
 Last updated: 2026-07-08
 
-### Just finished: Milestone K follow-up round 2 — discovery toast, hover-only label, panel layout, tooltip level
+### Just finished: Playtest fixes batch — Gremlin/Gremling naming split, combined Tab menu, bush clustering, upgrade cost display
+
+Small independent fixes requested directly by the user (not from the I-O plan's own list),
+landed in one session between Milestone K and Milestone M.
+
+- **Gremlin/Gremling naming split.** The two gremlin-family enemies now have distinct names:
+  the ranged+melee variant (`RangedGremlin`, `src/entities/Gremlin.ts`) is **"Gremlin"**; the
+  weaker melee-only variant (renamed `MeleeGremling`) is **"Gremling"** (texture
+  `gremling_weak`, was "Weak Gremlin"). Confirmed with the user: **item/resource names stay
+  "Gremlin ___" regardless of which variant drops them** — `gremlin_blood` drops from both,
+  `gremlin_skin`/`gremlin_leather`/`gremlin_leather_armor` only from the ranged one, and none
+  of those keys/display names change. This reverses an earlier same-session pass that (based on
+  an ambiguous initial request) had renamed everything uniformly to "Gremling" — that pass was
+  undone in full (file back to `Gremlin.ts`, all item keys/textures back to `gremlin_*`) before
+  applying just the melee-only rename on top.
+- **Tab now opens crafting + inventory together; no more standalone crafting key.** `T` no
+  longer toggles `CraftingMenu` on its own — `MainScene.toggleCombinedMenu()` opens/closes both
+  `craftingMenu` and `inventoryMenu` in lockstep, driven by `inventoryMenu.isOpen()` as the
+  source of truth. `CraftingMenu`'s top-right icon changed from `[T] Craft` to `[Tab] Menu` and
+  now calls a new `CraftingMenuDeps.onIconClick` callback instead of toggling itself directly,
+  so the icon and the Tab key both go through the same combined-toggle path. The two panels
+  already sit on opposite sides of the 1920-wide screen (inventory left, crafting right) so
+  showing both at once needed no repositioning.
+- **Blackberry bushes now spawn in clusters of 2-4** instead of scattered individually. New
+  `scatterClustered(totalCount, clusterMin, clusterMax, cfg)` in `MainScene.spawnNodes()`
+  samples one cluster center per clump via the existing `pickSpawnPoint`, then jitters each
+  bush in the clump ±40px around it (falling back to the exact center if jitter pushes a point
+  onto the creek, rather than rejection-sampling per-node — keeps clumps tight). Total bush
+  count unchanged (16); only the distribution changed. `scatter()` itself is untouched and still
+  used for every other node type.
+- **Workbench upgrade popup now shows owned/required material counts**, matching
+  `CraftingMenu`'s detail-panel format. `MainScene.formatUpgradeCost()` changed from `"3 Twine,
+  5 Wood, 2 Stone"` to `"Twine: 3/10, Wood: 5/10, Stone: 2/5"` (have/need per resource,
+  `this.backpack.count(r)` against the upgrade's cost); `UpgradeMenu.ts`'s unaffordable-row
+  suffix changed from `"(Can't afford)"` to `"(Missing materials)"` to match the wording the
+  user asked for.
+
+Verified via `preview_eval` + `preview_screenshot`: Tab opens both panels side by side and
+toggles them together; a spawned Boar/Snake/Gremlin/Gremling roster reports `displayName`
+"Gremlin" for the 4 ranged spawns and "Gremling" for the 6 melee spawns; a test Workbench's
+Upgrade panel renders `"Tool Sharpener  (Missing materials)"` / `"Twine: 2/3, Wood: 5/5, Stone:
+2/2"` when under-resourced. Type-check clean throughout, no console errors.
+
+### Previously: Milestone K follow-up round 2 — discovery toast, hover-only label, panel layout, tooltip level
 
 Second same-day playtest pass on the Milestone K follow-up above: four small, independent fixes.
 

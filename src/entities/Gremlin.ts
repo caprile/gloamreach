@@ -2,12 +2,14 @@ import Phaser from "phaser";
 import { Enemy } from "./Enemy";
 import type { ProjectileConfig, ProjectileHost } from "./Projectile";
 
-// Two gremlin variants (per the first-biome content plan's Milestone C
-// note, added 2026-07-07): a stronger ranged+melee one and a weaker
-// melee-only one. They're deliberately separate classes with their own
-// state machines/numbers rather than one class with a "ranged?" flag — the
-// melee-only variant genuinely has no kiting/throwing states to speak of,
-// consistent with the standing "own condition, not just a knob" rule.
+// Two variants (per the first-biome content plan's Milestone C note, added
+// 2026-07-07): a stronger ranged+melee one, called "Gremlin", and a weaker
+// melee-only one, called "Gremling" (2026-07-08 naming split — same species,
+// distinct names per variant; loot items stay "Gremlin ___" regardless of
+// which one drops them). They're deliberately separate classes with their
+// own state machines/numbers rather than one class with a "ranged?" flag —
+// the melee-only variant genuinely has no kiting/throwing states to speak
+// of, consistent with the standing "own condition, not just a knob" rule.
 
 const RANGED_AGGRO_RADIUS = 160; // larger than melee — ranged notices earlier
 const RANGED_DEAGGRO_RADIUS = 260;
@@ -179,10 +181,12 @@ const MELEE_MAX_HEALTH = 12;
 
 type MeleeMode = "idle" | "chasing";
 
-// Weaker variant: no kiting/throwing states at all — plain chase-and-claw,
-// but with its own tuned numbers (not Boar's), per the standing "own
-// condition/numbers, don't copy" rule. Drops Gremlin Blood only (no skin).
-export class MeleeGremlin extends Enemy {
+// Weaker variant, called "Gremling" (vs. the ranged "Gremlin") — no
+// kiting/throwing states at all, plain chase-and-claw, but with its own tuned
+// numbers (not Boar's), per the standing "own condition/numbers, don't copy"
+// rule. Drops Gremlin Blood only (no skin) — item names stay "Gremlin ___"
+// regardless of which variant drops them.
+export class MeleeGremling extends Enemy {
   private mode: MeleeMode = "idle";
   private lastClawAt = -Infinity;
   private meleeWanderTarget: { x: number; y: number } | null = null;
@@ -192,8 +196,8 @@ export class MeleeGremlin extends Enemy {
     super(scene, {
       x: cfg.x,
       y: cfg.y,
-      texture: "gremlin_weak",
-      displayName: "Weak Gremlin",
+      texture: "gremling_weak",
+      displayName: "Gremling",
       loot: [{ resource: "gremlin_blood", min: 1, max: 1 }],
       maxHealth: MELEE_MAX_HEALTH,
       biteDamage: MELEE_CLAW_DAMAGE,

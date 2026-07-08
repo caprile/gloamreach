@@ -283,6 +283,37 @@ both entries. See `STATUS.md` for full detail.
 
 ---
 
+## Playtest fixes batch (between K and M) — SHIPPED 2026-07-08
+
+Not part of the original I-O list — a small batch of user-requested playtest fixes landed in
+one session, after K and before M. Recorded here since two of them (the naming split, and the
+combined Tab menu) affect how Milestone M's UI/enemy work should read going forward.
+
+- **Gremlin/Gremling naming split.** The ranged+melee enemy is **"Gremlin"**
+  (`RangedGremlin`), the melee-only enemy is **"Gremling"** (`MeleeGremling`, texture
+  `gremling_weak`). **Locked decision (confirmed with the user after an initial ambiguous
+  ask):** item/resource names always stay **"Gremlin ___"** — Gremlin Blood, Gremlin Skin,
+  Gremlin Leather, Gremlin Leather Armor — regardless of which variant actually drops them
+  (`gremlin_blood` drops from both; `gremlin_skin`/`gremlin_leather`/`gremlin_leather_armor`
+  are exclusive to the ranged Gremlin, unchanged from before). **This directly affects
+  Milestone M below**: "Gremlin Cap/Shirt/Pants" keep that naming as originally planned — only
+  the enemy display names split, not the armor items.
+- **Tab combined menu.** `T` no longer opens `CraftingMenu` standalone — Tab opens
+  `CraftingMenu` + `InventoryMenu` together (`MainScene.toggleCombinedMenu()`), and the
+  crafting panel's top-right icon is now `[Tab] Menu` instead of `[T] Craft`. Any future new
+  panel that should coexist with these two should be wired the same way (open/close in
+  lockstep with the pair, not an independent key).
+- **Blackberry bushes cluster (2-4 per patch)** via a new `scatterClustered()` helper in
+  `MainScene.spawnNodes()` — same total count (16), different distribution. Independent of
+  Milestone N's harvest-without-destroy work, which still applies to these clustered bushes.
+- **Workbench upgrade popup shows have/need counts** (`Twine: 3/10, Wood: 5/10, Stone: 2/5`),
+  matching `CraftingMenu`'s detail-panel format, and its unaffordable-row suffix reads
+  "(Missing materials)" instead of "(Can't afford)". This is the pattern Milestone M's armor
+  crafting rows (if they ever move into a similar popup rather than the ordinary
+  `CraftingMenu`) should follow too.
+
+---
+
 ## Milestone M — Gremlin Armor set (first wearable armor)
 
 **Goal:** wire up the long-dormant `Equipment.ts` slot system for real, and ship the three
@@ -390,8 +421,10 @@ O (resource audit) — do last, once I/K/L/M's exact numbers are locked; will ve
 ```
 
 Recommended order: **L → I → J → K → M → N → O** (bones first since two other milestones need
-it; J and N can slot in anywhere convenient). **L, I, and J are done; K is next up** (or N,
-which is independent). K is flagged as net-new architecture — recommend Opus.
+it; J and N can slot in anywhere convenient). **L, I, J, and K are done, plus an unplanned
+playtest fixes batch landed between K and M (see above) — M is next up** (or N, which is
+independent). M's armor items should still read "Gremlin Cap/Shirt/Pants" per the naming
+split's locked decision.
 
 ## Verification (each milestone, per the project's standing convention)
 
