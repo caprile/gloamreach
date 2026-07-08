@@ -81,6 +81,10 @@ export interface ResourceNodeConfig {
   // inventory that just released them. Defaults to 0 (immediately eligible),
   // matching every existing drop source's behavior.
   magnetReadyAt?: number;
+  // Per-instance upgrade tier carried from a destroyed placed station, so its
+  // tier survives into the inventory stack when picked back up. Undefined for
+  // ordinary drops.
+  tier?: number;
 }
 
 // A single interactable object in the world (branch, rock, tree, boulder, or
@@ -96,6 +100,7 @@ export class ResourceNode extends Phaser.GameObjects.Sprite {
   health: number;
   depleted = false;
   readonly magnetReadyAt: number;
+  readonly tier?: number;
   // True while a drop piece's spawn-scatter tween is still running — the
   // magnet loop skips it so it isn't fighting the scatter tween over x/y.
   exploding = false;
@@ -112,6 +117,7 @@ export class ResourceNode extends Phaser.GameObjects.Sprite {
     this.maxHealth = cfg.health;
     this.health = cfg.health;
     this.magnetReadyAt = cfg.magnetReadyAt ?? 0;
+    this.tier = cfg.tier;
     scene.add.existing(this);
     // Trees/boulders are tall enough to visually occlude the player/enemies
     // walking past them, so they're Y-sorted against them (see

@@ -27,7 +27,13 @@ import {
 } from "../systems/Weapons";
 import { outputKey, RECIPES, type Recipe } from "../systems/Recipes";
 import { itemDef } from "../systems/Items";
-import { ItemContainer, moveSlot } from "../systems/ItemContainer";
+import { ItemContainer, moveSlot, type ItemStack } from "../systems/ItemContainer";
+import {
+  STATION_UPGRADES,
+  upgradesForItem,
+  stationDisplayName,
+  type StationUpgradeDef,
+} from "../systems/StationUpgrades";
 import { EventLog } from "../systems/EventLog";
 import { Biome, type ZoneType } from "../systems/Biome";
 import { Equipment, EQUIP_SLOTS } from "../systems/Equipment";
@@ -36,6 +42,7 @@ import { ProcessingStation } from "../systems/Processing";
 import { CraftingMenu } from "../ui/CraftingMenu";
 import { ContextMenu, type ContextMenuItem } from "../ui/ContextMenu";
 import { DryingRackMenu } from "../ui/DryingRackMenu";
+import { UpgradeMenu } from "../ui/UpgradeMenu";
 import { InventoryMenu, BACKPACK_SIZE, type ArmorSlotView } from "../ui/InventoryMenu";
 import { HotbarUI } from "../ui/HotbarUI";
 import { EventLogUI } from "../ui/EventLogUI";
@@ -80,6 +87,11 @@ export class MainScene extends Phaser.Scene {
   // records every item key ever added (drives recipe discovery).
   private backpack = new ItemContainer(BACKPACK_SIZE);
   private discovered = new Set<string>();
+  // Which StationUpgradeDef.id's have already had their "New Upgrade
+  // Unlocked!" toast fired — upgrades live outside the Recipe/Crafting
+  // system, so they need their own one-shot discovery tracking (mirrors
+  // Crafting's internal discoveredIds, just for a different data table).
+  private discoveredUpgradeIds = new Set<string>();
   // The single tool the player currently has "out". Driven by the selected
   // hotbar slot.
   private equippedTool: ToolType | null = null;
@@ -106,6 +118,15 @@ export class MainScene extends Phaser.Scene {
   // Right-click "Upgrade / Destroy" popup for any placed object (Workbench,
   // Campfire, Drying Rack, ...) — a single generic system, not per-type.
   private contextMenu!: ContextMenu;
+  // Full-page panel opened by the context menu's "Upgrade" button, listing
+  // every discovered upgrade for whichever placed object is currently bound
+  // to it (null when closed).
+  private upgradeMenu!: UpgradeMenu;
+  private upgradeTarget: Phaser.GameObjects.Image | null = null;
+  // The floating "<Name> Lvl N" label shown above any placed object that has
+  // at least one defined upgrade (see StationUpgrades.ts) — keyed by the
+  // placed Image so it can be moved/updated/destroyed alongside it.
+  private placedLabels = new Map<Phaser.GameObjects.Image, Phaser.GameObjects.Text>();
   private hotbarUI!: HotbarUI;
   private eventLogUI!: EventLogUI;
   private keybindsUI!: KeybindsUI;
@@ -264,6 +285,7 @@ export class MainScene extends Phaser.Scene {
     this.createCraftingMenu();
     this.createInventoryMenu();
     this.createDryingRackMenu();
+    this.createUpgradeMenu();
     this.hotbarUI = new HotbarUI(this, this.hotbar, {
       beginDrag: (c, i, p) => this.beginItemDrag(c, i, p),
       quickMove: (c, i) => this.quickMoveItem(c, i),
@@ -303,18 +325,21 @@ export class MainScene extends Phaser.Scene {
     this.input.keyboard!.on("keydown-TAB", () => {
       if (this.placementMode) return this.cancelPlacement();
       this.closeDryingRackMenu();
+      this.closeUpgradeMenu();
       this.craftingMenu.close();
       this.inventoryMenu.toggle();
     });
     this.input.keyboard!.on("keydown-T", () => {
       if (this.placementMode) return this.cancelPlacement();
       this.closeDryingRackMenu();
+      this.closeUpgradeMenu();
       this.inventoryMenu.close();
       this.craftingMenu.toggle();
     });
     this.input.keyboard!.on("keydown-ESC", () => {
       if (this.contextMenu.isOpen()) return this.contextMenu.close();
       if (this.placementMode) return this.cancelPlacement();
+      if (this.upgradeMenu.isOpen()) return this.closeUpgradeMenu();
       this.closeDryingRackMenu();
       this.craftingMenu.close();
       this.inventoryMenu.close();
@@ -429,7 +454,7 @@ export class MainScene extends Phaser.Scene {
 
     if (toCollect.length === 0) return;
     for (const node of toCollect) {
-      this.addToBackpack(node.resource, node.amount);
+      this.collectNode(node);
       node.deplete();
     }
     this.nodes = this.nodes.filter((n) => !n.depleted);
@@ -441,7 +466,8 @@ export class MainScene extends Phaser.Scene {
       this.craftingMenu.isOpen() ||
       this.inventoryMenu.isOpen() ||
       this.dryingRackMenu.isOpen() ||
-      this.contextMenu.isOpen()
+      this.contextMenu.isOpen() ||
+      this.upgradeMenu.isOpen()
     );
   }
 
@@ -686,6 +712,7 @@ export class MainScene extends Phaser.Scene {
     if (!rack) return;
     this.craftingMenu.close();
     this.inventoryMenu.close();
+    this.closeUpgradeMenu();
     this.openRack = rack.station;
     this.dryingRackMenu.openMenu();
   }
@@ -1034,6 +1061,15 @@ export class MainScene extends Phaser.Scene {
     this.hoveredEnemy = hoveredEnemy;
     this.hoveredRack = hoveredRack;
 
+    // Station level labels are passive flavor, not part of the interact/
+    // prompt system above — shown purely on hover, independent of the
+    // hovered-node/enemy/rack "winner" (a label and a chop prompt can't
+    // conflict since only stations with upgrades get a label at all).
+    for (const [obj, label] of this.placedLabels) {
+      const radius = Math.max(obj.displayWidth, obj.displayHeight) / 2 + 6;
+      label.setVisible(Phaser.Math.Distance.Between(world.x, world.y, obj.x, obj.y) <= radius);
+    }
+
     const prompt = hoveredNode
       ? this.promptFor(hoveredNode)
       : hoveredEnemy
@@ -1141,12 +1177,29 @@ export class MainScene extends Phaser.Scene {
       return;
     }
 
-    this.addToBackpack(node.resource, node.amount);
+    this.collectNode(node);
     node.deplete();
     this.nodes = this.nodes.filter((n) => n !== node);
     this.hoveredNode = null;
     this.promptText.setVisible(false);
     this.refreshHud();
+  }
+
+  // Credit a picked-up loose node to the backpack, preserving a per-instance
+  // tier (destroyed station) as stack metadata rather than merging by count.
+  // Overflow falls back to dropping the same tier back on the floor.
+  private collectNode(node: ResourceNode): void {
+    if (node.tier !== undefined) {
+      const stack: ItemStack = { key: node.resource, count: node.amount, tier: node.tier };
+      if (!this.backpack.addStack(stack)) {
+        this.spawnLooseDrop(node.resource, node.amount, node.x, node.y, DROPPED_ITEM_MAGNET_COOLDOWN_MS, node.tier);
+        return;
+      }
+      this.discovered.add(node.resource);
+      this.refreshDiscovery();
+      return;
+    }
+    this.addToBackpack(node.resource, node.amount);
   }
 
   // Left-click action on the currently hovered, in-reach enemy. Mirrors
@@ -1291,6 +1344,7 @@ export class MainScene extends Phaser.Scene {
     x: number,
     y: number,
     magnetCooldownMs = 0,
+    tier?: number,
   ): void {
     const pieceCount = amount > 1 ? Phaser.Math.Between(2, Math.min(4, amount)) : 1;
     const base = Math.floor(amount / pieceCount);
@@ -1314,6 +1368,7 @@ export class MainScene extends Phaser.Scene {
         isDrop: true,
         health: 1,
         magnetReadyAt,
+        tier,
       });
       node.exploding = true;
       node.setAmount(pieceAmount);
@@ -1347,6 +1402,7 @@ export class MainScene extends Phaser.Scene {
   // resource (if any) so the ground doesn't accumulate lots of tiny stacks.
   private consolidateDrop(node: ResourceNode): void {
     if (node.depleted) return;
+    if (node.tier !== undefined) return; // tiered station drops carry per-instance state — never merge counts
     const existing = this.nodes.find(
       (n) =>
         n !== node &&
@@ -1354,6 +1410,7 @@ export class MainScene extends Phaser.Scene {
         n.loose &&
         !n.depleted &&
         !n.exploding &&
+        n.tier === undefined &&
         n.resource === node.resource &&
         Phaser.Math.Distance.Between(n.x, n.y, node.x, node.y) <= DROP_CONSOLIDATE_RADIUS,
     );
@@ -1381,8 +1438,19 @@ export class MainScene extends Phaser.Scene {
       const icon = itemDef(outputKey(recipe))?.texture;
       this.eventLog.add("recipe", `New Recipe Unlocked! ${recipe.name}`, icon);
     }
+    // Station upgrades (StationUpgrades.ts) live outside the Recipe/Crafting
+    // system entirely, so they need their own "just became discoverable"
+    // tracking to get the same unlock announcement recipes get.
+    for (const upg of STATION_UPGRADES) {
+      if (this.discoveredUpgradeIds.has(upg.id)) continue;
+      if (!this.upgradeIngredientsKnown(upg)) continue;
+      this.discoveredUpgradeIds.add(upg.id);
+      const icon = itemDef(upg.appliesToItemKey)?.texture;
+      this.eventLog.add("recipe", `New Upgrade Unlocked! ${upg.name}`, icon);
+    }
     this.craftingMenu?.refresh();
     this.inventoryMenu?.refresh();
+    this.upgradeMenu?.refresh();
   }
 
   // Level a skill and log it. No gameplay trigger yet (XP comes later) — this
@@ -1523,14 +1591,33 @@ export class MainScene extends Phaser.Scene {
       this.eventLog.add("info", "Requires a nearby Workbench");
       return;
     }
-    if (itemSource) itemSource.container.removeCount(itemSource.key, 1);
-    else this.crafting.craft(recipe, this.backpack);
+    // An owned placeable carries its per-instance upgrade tier on the stack;
+    // consume that exact slot (not removeCount, which could eat a different
+    // tier's stack) so the tier travels onto the placed image. Crafted
+    // placements always start at tier 0.
+    let placedTier = 0;
+    if (itemSource) {
+      const idx = this.findConsumableStack(itemSource.container, itemSource.key);
+      if (idx === null) {
+        this.cancelPlacement();
+        return;
+      }
+      placedTier = itemSource.container.slot(idx)?.tier ?? 0;
+      itemSource.container.set(idx, null);
+    } else {
+      this.crafting.craft(recipe, this.backpack);
+    }
     const pos = this.clampedPlacementPoint();
     const key = outputKey(recipe);
     const texture = itemDef(key)?.texture;
     const image = this.add.image(pos.x, pos.y, texture ?? "");
     image.setData("itemKey", key);
+    if (placedTier > 0) {
+      image.setData("tier", placedTier);
+      this.applyTierVisual(image, placedTier);
+    }
     this.placedObjects.push(image);
+    this.refreshStationLabel(image);
     // Placing a Workbench for the first time can newly unlock tier 1+
     // recipes' visibility (see Crafting.refresh's workbenchPlaced gate) —
     // re-run discovery so that happens immediately, not just on next pickup.
@@ -1543,6 +1630,16 @@ export class MainScene extends Phaser.Scene {
     // Placing from an owned stack changed a count — keep the hotbar display in
     // sync too (refreshHud only touches the crafting/inventory menus).
     if (itemSource) this.hotbarUI.refresh();
+  }
+
+  // First slot holding `key` — the one an item-source placement consumes.
+  // Placeables are maxStack 1, so each stack is a single instance; this returns
+  // the slot so its per-instance tier can be read before removal.
+  private findConsumableStack(container: ItemContainer, key: string): number | null {
+    for (let i = 0; i < container.size; i++) {
+      if (container.slot(i)?.key === key) return i;
+    }
+    return null;
   }
 
   // "Am I near a placed Workbench" — used to gate actually crafting/placing
@@ -1592,40 +1689,113 @@ export class MainScene extends Phaser.Scene {
     this.openContextMenuForObject(obj, pointer.x, pointer.y);
   }
 
+  // Tiny two-row popup: "Upgrade" always opens the full UpgradeMenu (even
+  // with nothing discovered yet — that renders its own "No upgrades
+  // discovered yet" empty state rather than hiding the button), "Destroy"
+  // always works. The actual upgrade list/costs/affordability live in the
+  // bigger panel now, not here.
   private openContextMenuForObject(obj: Phaser.GameObjects.Image, screenX: number, screenY: number): void {
-    const itemKey = obj.getData("itemKey") as string;
-    const items: ContextMenuItem[] = [];
-
-    // Only the Workbench supports an upgrade right now — Drying Rack/Campfire
-    // upgrade tiers are undesigned (see CLAUDE.md's long-term notes), so their
-    // row is simply omitted rather than shown permanently disabled.
-    if (itemKey === "workbench") {
-      const tier = (obj.getData("tier") as number | undefined) ?? 0;
-      const alreadyMax = tier >= 1;
-      const hasUpgradeItem = this.backpack.count("workbench_upgrade") > 0;
-      items.push({
-        label: alreadyMax ? "Upgrade (maxed)" : "Upgrade",
-        enabled: !alreadyMax && hasUpgradeItem,
-        onClick: () => this.upgradeWorkbench(obj),
-      });
-    }
-
-    items.push({ label: "Destroy", enabled: true, onClick: () => this.destroyPlacedObject(obj) });
+    const items: ContextMenuItem[] = [
+      { label: "Upgrade", enabled: true, onClick: () => this.openUpgradeMenu(obj) },
+      { label: "Destroy", enabled: true, onClick: () => this.destroyPlacedObject(obj) },
+    ];
     this.contextMenu.show(screenX, screenY, items);
   }
 
-  // Consumes a Workbench Upgrade item and marks this specific placed
-  // Workbench as upgraded. The mechanical payoff (recipes/behavior gated on
-  // an upgraded bench) is intentionally undesigned this pass — this wires up
-  // the consume-and-flag mechanism plus a visual tell for future recipes to
-  // hook into.
-  private upgradeWorkbench(obj: Phaser.GameObjects.Image): void {
-    if (this.backpack.count("workbench_upgrade") <= 0) return;
-    this.backpack.removeCount("workbench_upgrade", 1);
-    obj.setData("tier", 1);
-    obj.setTint(0xffe08a);
-    this.eventLog.add("info", "Workbench upgraded!");
+  private createUpgradeMenu(): void {
+    this.upgradeMenu = new UpgradeMenu(this, {
+      target: () => {
+        const obj = this.upgradeTarget;
+        if (!obj) return null;
+        return { itemKey: obj.getData("itemKey") as string, tier: (obj.getData("tier") as number | undefined) ?? 0 };
+      },
+      upgradesFor: (itemKey) => upgradesForItem(itemKey),
+      isDiscovered: (upg) => this.upgradeIngredientsKnown(upg),
+      canAfford: (upg) => this.canAffordUpgrade(upg),
+      formatCost: (upg) => this.formatUpgradeCost(upg),
+      displayName: (itemKey, tier) => stationDisplayName(itemKey, tier),
+      apply: (upg) => {
+        if (this.upgradeTarget) this.applyStationUpgrade(this.upgradeTarget, upg);
+      },
+    });
+  }
+
+  private openUpgradeMenu(obj: Phaser.GameObjects.Image): void {
+    this.craftingMenu.close();
+    this.inventoryMenu.close();
+    this.closeDryingRackMenu();
+    this.upgradeTarget = obj;
+    this.upgradeMenu.openMenu();
+  }
+
+  private closeUpgradeMenu(): void {
+    this.upgradeMenu.close();
+    this.upgradeTarget = null;
+  }
+
+  // Creates (or updates the text of) the floating level label for a placed
+  // station that has at least one defined upgrade — no-op for stations with
+  // no upgrades defined at all (Campfire, Drying Rack today). Starts hidden;
+  // updateHover() is what actually shows it while the mouse is over the
+  // object, same as the world-hover pattern used elsewhere.
+  private refreshStationLabel(obj: Phaser.GameObjects.Image): void {
+    const itemKey = obj.getData("itemKey") as string;
+    if (upgradesForItem(itemKey).length === 0) return;
+    const tier = (obj.getData("tier") as number | undefined) ?? 0;
+    const text = stationDisplayName(itemKey, tier);
+    const existing = this.placedLabels.get(obj);
+    if (existing) {
+      existing.setText(text);
+      return;
+    }
+    const label = this.add
+      .text(obj.x, obj.y - obj.displayHeight / 2 - 6, text, {
+        fontFamily: "monospace",
+        fontSize: "11px",
+        color: "#e8ecf2",
+        backgroundColor: "#0a0a0a",
+        padding: { x: 3, y: 1 },
+      })
+      .setOrigin(0.5, 1)
+      .setVisible(false);
+    this.placedLabels.set(obj, label);
+  }
+
+  private upgradeIngredientsKnown(upg: StationUpgradeDef): boolean {
+    return Object.keys(upg.costs).every((r) => this.discovered.has(r));
+  }
+
+  private canAffordUpgrade(upg: StationUpgradeDef): boolean {
+    return Object.entries(upg.costs).every(([r, n]) => this.backpack.count(r) >= (n ?? 0));
+  }
+
+  private formatUpgradeCost(upg: StationUpgradeDef): string {
+    return Object.entries(upg.costs)
+      .map(([r, n]) => `${n} ${itemDef(r)?.name ?? r}`)
+      .join(", ");
+  }
+
+  // Deducts a named upgrade's cost from the backpack and bumps this specific
+  // placed station's tier (persisted on the Image's data, and carried into the
+  // pickup on Destroy). Generic across stations — the visual tell is shared.
+  private applyStationUpgrade(obj: Phaser.GameObjects.Image, upg: StationUpgradeDef): void {
+    if (!this.canAffordUpgrade(upg)) return;
+    for (const [r, n] of Object.entries(upg.costs)) this.backpack.removeCount(r, n ?? 0);
+    obj.setData("tier", upg.resultTier);
+    this.applyTierVisual(obj, upg.resultTier);
+    this.refreshStationLabel(obj);
+    const itemKey = obj.getData("itemKey") as string;
+    this.eventLog.add("info", `${stationDisplayName(itemKey, upg.resultTier)} upgraded: ${upg.name}`);
+    this.upgradeMenu.refresh();
     this.afterItemMove();
+  }
+
+  // The visual tell for a placed station's upgrade tier — applied at every
+  // render point (live upgrade AND re-placement from a tiered stack) so the two
+  // paths never diverge. Tier 0 clears the tint; higher tiers get a gold cast.
+  private applyTierVisual(image: Phaser.GameObjects.Image, tier: number): void {
+    if (tier <= 0) image.clearTint();
+    else image.setTint(0xffe08a);
   }
 
   // Minecraft-style destroy: the object vanishes and drops as a recoverable
@@ -1634,7 +1804,14 @@ export class MainScene extends Phaser.Scene {
   // way first, so destroying one doesn't just eat whatever was inside it.
   private destroyPlacedObject(obj: Phaser.GameObjects.Image): void {
     const itemKey = obj.getData("itemKey") as string;
-    const name = itemDef(itemKey)?.name ?? itemKey;
+    const tier = (obj.getData("tier") as number | undefined) ?? 0;
+    const name = stationDisplayName(itemKey, tier);
+    if (this.upgradeTarget === obj) this.closeUpgradeMenu();
+    const label = this.placedLabels.get(obj);
+    if (label) {
+      label.destroy();
+      this.placedLabels.delete(obj);
+    }
 
     const rackIndex = this.dryingRacks.findIndex((r) => r.image === obj);
     if (rackIndex !== -1) {
@@ -1652,7 +1829,10 @@ export class MainScene extends Phaser.Scene {
       this.dryingRacks.splice(rackIndex, 1);
     }
 
-    this.spawnLooseDrop(itemKey, 1, obj.x, obj.y, DROPPED_ITEM_MAGNET_COOLDOWN_MS);
+    // Carry the placed instance's upgrade tier into the pickup so re-placing
+    // it restores the same tier (fixes the old bug where Destroy silently
+    // discarded an upgraded Workbench's tier).
+    this.spawnLooseDrop(itemKey, 1, obj.x, obj.y, DROPPED_ITEM_MAGNET_COOLDOWN_MS, tier || undefined);
     this.placedObjects = this.placedObjects.filter((o) => o !== obj);
     obj.destroy();
     this.eventLog.add("info", `Destroyed ${name}`);

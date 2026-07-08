@@ -219,7 +219,7 @@ export class InventoryMenu {
         .setInteractive({ useHandCursor: true })
         .on("pointerover", () => {
           if (stack && !this.deps.isDragging())
-            this.tooltipUI.show(stack.key, { x, y, width: SLOT, height: SLOT }, "right");
+            this.tooltipUI.show(stack.key, { x, y, width: SLOT, height: SLOT }, "right", stack.tier);
         })
         .on("pointerout", () => this.hideTooltip())
         .on("pointerdown", (pointer: Phaser.Input.Pointer) => {

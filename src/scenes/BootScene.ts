@@ -350,20 +350,6 @@ export class BootScene extends Phaser.Scene {
     g.fillRect(4, 18, 16, 2);
     g.generateTexture("icon_drying_rack", ICON, ICON);
 
-    // Workbench Upgrade: a small gear/bolt icon over a wood-tone backing —
-    // reads as "reinforcement parts" rather than a finished item.
-    g.clear();
-    g.fillStyle(0x7a4a22, 1);
-    g.fillRect(3, 3, 18, 18);
-    g.fillStyle(0xc9a86a, 1);
-    g.fillCircle(12, 12, 6);
-    g.fillStyle(0x7a4a22, 1);
-    g.fillRect(10, 3, 4, 4);
-    g.fillRect(10, 17, 4, 4);
-    g.fillRect(3, 10, 4, 4);
-    g.fillRect(17, 10, 4, 4);
-    g.generateTexture("icon_workbench_upgrade", ICON, ICON);
-
     // Gremlin Leather Armor: a chest-piece silhouette in cured-leather tones.
     g.clear();
     g.fillStyle(0x6a6a3a, 1);

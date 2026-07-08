@@ -154,11 +154,71 @@ place mode" gesture for placeables/processors in the inventory. `startItemPlacem
 
 ---
 
-## Milestone K — Per-instance station tiers + named upgrade system
+## Milestone K — Per-instance station tiers + named upgrade system — SHIPPED 2026-07-08
 
-**Goal:** replace the single generic `workbench_upgrade` consumable with a **named, per-station
-upgrade system** (e.g. "Tool Sharpener"), and make a station's upgrade tier **survive
-Destroy → pickup → re-Place**, with a visual tell at each tier. This is genuinely new
+**Shipped as planned, no meaningful deviations.** `ItemStack` gained an optional `tier?: number`
+(`ItemContainer.ts`), additive-only — ordinary stackables never set it. Placeable ItemDefs
+(`workbench`/`campfire`/`drying_rack`) dropped to `maxStack: 1` so two different-tier instances
+never merge into one count (verified: a tier-0 and tier-1 Workbench occupy separate slots). New
+`ItemContainer.addStack()` places a whole stack (preserving `tier`) into the first empty slot for
+tiered pickups, since `add()`'s merge-by-key path would drop the metadata. `ResourceNodeConfig`/
+`ResourceNode` gained a `tier?` field; `spawnLooseDrop()` takes an optional `tier` and tags the
+piece; `consolidateDrop()` refuses to merge tiered pieces. A new `collectNode()` routes both the
+manual-click and magnet pickup paths through `addStack` when tiered (falling back to re-dropping
+the same tier if the backpack is full). `destroyPlacedObject()` reads the placed Image's `tier`
+and threads it into the drop; `attemptPlaceObject()`'s item-source branch consumes the exact slot
+(via new `findConsumableStack`, not `removeCount`, so it can read that slot's tier first) and
+re-applies the tier + visual to the newly placed Image. New `src/systems/StationUpgrades.ts`
+(`StationUpgradeDef` + `STATION_UPGRADES` + `upgradesForItem()`); first entry **Tool Sharpener**
+(`workbench`, resultTier 1, `{ twine: 3, wood: 5, stone: 2 }`). The old `workbench_upgrade`
+ItemDef/Recipe and its BootScene texture were removed entirely. `ContextMenu` upgrade popup
+reworked (`openContextMenuForObject`): lists each matching `StationUpgradeDef` whose next step is
+`tier + 1` and whose ingredients are all discovered (invisible otherwise, not greyed), showing
+name + formatted cost; clicking deducts resources directly and calls the generalized
+`applyStationUpgrade` → `applyTierVisual` (a shared gold-tint tell used at both the live-upgrade
+and re-placement render points, so they never diverge).
+
+**Deviation note (minor):** the visual tell is a shared gold tint (`applyTierVisual`), not a
+distinct per-tier texture — the plan said "swaps texture/tint," and a tint is the minimal generic
+choice that already matched the old `upgradeWorkbench` behavior. A `textureForTier` lookup can slot
+into `applyTierVisual` later if per-tier art is wanted, with no call-site changes.
+
+Verified via `preview_eval`: apply Tool Sharpener → deducts twine 5→2 / wood 40→35 / stone 20→18,
+tags tier=1 + gold tint; Destroy → loose drop carries tier=1 → pickup → inventory stack tier=1 →
+re-place → tier=1 Workbench with tint (not tier=0); tier-0 and tier-1 Workbenches never share a
+slot; popup shows the upgrade only when discovered+affordable (hidden when twine undiscovered,
+absent on a maxed tier-1 bench). Type-check clean, no console errors.
+
+**Same-day follow-up — full Upgrade panel + station level display (playtest feedback).** The
+inline two-line ContextMenu upgrade list felt too cramped once a station could have several
+tiers. Reworked so the context menu's **"Upgrade" button is always present** and always opens a
+new full-page `src/ui/UpgradeMenu.ts` panel (same visual language as `DryingRackMenu`/
+`CraftingMenu`) listing every discovered `StationUpgradeDef` for that station: **already-applied
+tiers now render greyed with "(Applied)" instead of disappearing** (so the whole upgrade path is
+visible, not just the next step), a tier beyond `current + 1` shows "(Requires previous tier)",
+and an empty discovered list shows "No upgrades discovered yet." instead of an absent/blank
+popup. Also added a **"Lvl N" display** (1-based — tier 0 reads as "Lvl 1") in two places: the
+new panel's title (`stationDisplayName()`, e.g. "Workbench Lvl 2") and a small floating text
+label anchored above the placed sprite itself (`refreshStationLabel()`), kept in sync on
+placement/upgrade/destroy. See `STATUS.md`'s "Milestone K follow-up" entry for full file-level
+detail and verification.
+
+**Same-day follow-up round 2 — discovery toast, hover-only label, panel layout, tooltip level
+(more playtest feedback).** Four independent fixes: (1) station upgrades now fire the same
+"New Recipe Unlocked!"-style toast on discovery via a new `discoveredUpgradeIds` tracking set in
+`refreshDiscovery()` — they'd never had one since they live outside the `Recipe`/`Crafting`
+system entirely; (2) the floating "Workbench Lvl N" label is now hover-only (hidden by default,
+toggled by a distance check added to `updateHover()`) instead of always visible; (3)
+`UpgradeMenu.ts`'s row layout was reworked from a fixed row height to one derived from each row's
+actual rendered description height, fixing descriptions overlapping the row below; (4)
+`stationDisplayName()` moved into `StationUpgrades.ts` and `Tooltip.show()` gained an optional
+`tier` param so backpack/hotbar/Drying-Rack tooltips also show "Workbench Lvl N", not just the
+panel and floating label. See `STATUS.md`'s "Milestone K follow-up round 2" entry for full
+file-level detail and verification.
+
+**Original goal (for reference):** replace the single generic `workbench_upgrade` consumable with a
+**named, per-station upgrade system** (e.g. "Tool Sharpener"), and make a station's upgrade tier
+**survive Destroy → pickup → re-Place**, with a visual tell at each tier. This is genuinely new
 architecture — recommend **Opus**, mirroring the Milestone A/C/H "net-new architecture" guidance
 in the existing plan.
 

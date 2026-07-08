@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import { itemDef } from "../systems/Items";
+import { stationDisplayName } from "../systems/StationUpgrades";
 
 export type TooltipPlacement = "right" | "above";
 
@@ -23,12 +24,16 @@ export class Tooltip {
     this.scene = scene;
   }
 
-  show(key: string, anchor: Anchor, placement: TooltipPlacement): void {
+  // `tier` is only meaningful for stations with a defined upgrade path
+  // (StationUpgrades.ts) — passing it for any other item is harmless, since
+  // stationDisplayName falls back to the plain item name.
+  show(key: string, anchor: Anchor, placement: TooltipPlacement, tier?: number): void {
     this.hide();
     const def = itemDef(key);
     if (!def) return;
 
-    const lines = [def.name, "", def.description];
+    const name = tier !== undefined ? stationDisplayName(key, tier) : def.name;
+    const lines = [name, "", def.description];
     if (def.stats?.length) {
       lines.push("");
       for (const s of def.stats) lines.push(`${s.label}: ${s.value}`);

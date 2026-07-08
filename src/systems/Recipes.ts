@@ -111,15 +111,6 @@ export const RECIPES: Recipe[] = [
     output: { kind: "item", itemId: "drying_rack", itemName: "Drying Rack" },
   },
   {
-    id: "workbench_upgrade",
-    name: "Workbench Upgrade",
-    description: "Reinforcement parts for a Workbench. Right-click a placed Workbench to apply.",
-    category: "crafting",
-    tier: 1,
-    costs: { wood: 10, stone: 8, twine: 3 },
-    output: { kind: "item", itemId: "workbench_upgrade", itemName: "Workbench Upgrade" },
-  },
-  {
     id: "gremlin_leather_armor",
     name: "Gremlin Leather Armor",
     description: "Light armor stitched from cured gremlin leather and twine.",

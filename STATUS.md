@@ -2,7 +2,136 @@
 
 Last updated: 2026-07-08
 
-### Just finished: Milestone J — Placement-mode robustness + re-placing owned stations
+### Just finished: Milestone K follow-up round 2 — discovery toast, hover-only label, panel layout, tooltip level
+
+Second same-day playtest pass on the Milestone K follow-up above: four small, independent fixes.
+
+- **Station upgrades now fire the "New Recipe Unlocked!"-style toast.** They live entirely
+  outside the `Recipe`/`Crafting` system (a separate `StationUpgradeDef` table), so they never
+  had their own "just became discoverable" tracking — `refreshDiscovery()` silently updated
+  `craftingMenu`/`inventoryMenu` but never announced anything for upgrades. New
+  `discoveredUpgradeIds` (`MainScene.ts`, mirrors `Crafting`'s internal `discoveredIds` for a
+  different table) + a loop in `refreshDiscovery()` that fires
+  `eventLog.add("recipe", "New Upgrade Unlocked! ${upg.name}", icon)` the first time an
+  upgrade's ingredients are all discovered — same `"recipe"` `LogKind`, so it rides the existing
+  toast queue in `EventLogUI.ts` for free.
+- **The floating "Workbench Lvl N" label is now hover-only.** `refreshStationLabel()` creates it
+  `setVisible(false)`; `updateHover()` gained a small loop over `placedLabels` toggling each
+  label's visibility by distance-to-pointer, independent of the existing hovered-node/enemy/rack
+  "winner" logic (a label and a chop/mine prompt can never conflict, since only upgradable
+  stations get a label at all).
+- **`UpgradeMenu.ts` row layout reworked to stop the description from overlapping the row
+  below.** The old layout used a fixed `ROW_H` with the description squeezed into a narrow
+  right-aligned column — a long description could wrap past the row's box into the next row's.
+  Rows are now stacked (name → cost → description, full-width wordWrap) and **each row's height
+  is derived from the description's actual rendered height** (`Math.max(42 + descText.height +
+  10, MIN_ROW_H)`), not a constant. Since the panel is screen-centered, this creates a
+  chicken-and-egg problem (panelY depends on total content height, which depends on text objects
+  that must already exist to measure) — solved by building every row at a y-baseline of 0 first,
+  measuring as it goes, then shifting every created object down by the final centered `panelY` in
+  one pass at the end.
+- **Station level now shows in inventory/hotbar tooltips, not just the panel/floating label.**
+  `stationDisplayName()` moved out of `MainScene.ts` into `StationUpgrades.ts` (no circular
+  import risk — `Items.ts` doesn't depend on `StationUpgrades.ts`) so it's reusable outside the
+  scene. `Tooltip.show()` gained an optional `tier` param and swaps in `stationDisplayName(key,
+  tier)` for the title line when provided; `HotbarUI.ts`/`InventoryMenu.ts`/`DryingRackMenu.ts`'s
+  three `tooltipUI.show(...)` call sites now all pass `stack.tier` through.
+
+Verified via `preview_eval` + `preview_screenshot`: discovering the Tool Sharpener's last
+missing ingredient (twine, after wood/stone) logs "New Upgrade Unlocked! Tool Sharpener" as a
+`"recipe"`-kind entry; a placed Workbench's label is hidden until the pointer is within its hover
+radius, hidden again once it leaves; the Tool Sharpener row's description now sits fully inside
+its own row's box (measured: box bottom 581.5px vs. description text bottom 577.5px, no
+overlap); both the backpack and hotbar tooltips for a tier-1 Workbench stack read "Workbench Lvl
+2". Type-check clean, no console errors.
+
+### Previously: Milestone K follow-up — full Upgrade panel + station level display
+
+Same-day playtest feedback on Milestone K's inline Upgrade popup: the user wanted a real,
+crafting-menu-sized panel instead of a two-line list stuffed into the right-click popup, plus
+the station's level surfaced beyond just a tint.
+
+- **`src/ui/UpgradeMenu.ts` (new)** — a full-page popup, same visual language as
+  `DryingRackMenu`/`CraftingMenu` (centered panel, `[ESC] Close` hint, row list). Opened by the
+  context menu's **"Upgrade" button, which is now always present and always opens this panel**
+  (previously the popup only listed upgrades inline and could show nothing at all). The panel
+  lists every `StationUpgradeDef` for the target's `itemKey` whose ingredients are discovered —
+  **undiscovered upgrades stay invisible** (unchanged locked decision), but **already-applied
+  tiers are now shown greyed with an "(Applied)" suffix instead of disappearing**, so the player
+  can see the whole upgrade path on one screen. A tier beyond `current + 1` renders
+  "(Requires previous tier)"; an affordable, not-yet-applied, in-order upgrade is clickable
+  (green stroke). An empty discovered list renders "No upgrades discovered yet." instead of a
+  blank/absent panel.
+- **`MainScene.ts`**: `openContextMenuForObject()` collapsed to two always-enabled rows
+  ("Upgrade"/"Destroy") — all the discovery/afford/cost logic moved into `UpgradeMenu`'s deps
+  (`upgradeIngredientsKnown`/`canAffordUpgrade`/`formatUpgradeCost` are reused, not duplicated).
+  New `openUpgradeMenu`/`closeUpgradeMenu`/`createUpgradeMenu`, wired into `anyMenuOpen()` and
+  the existing TAB/T/ESC close chains alongside the other big menus.
+- **Station level display, two places**: new `stationDisplayName(itemKey, tier)` returns
+  `"<Name> Lvl <tier+1>"` for any item with at least one defined upgrade (currently just
+  Workbench) and the plain name otherwise — used in the UpgradeMenu title and the
+  upgrade/destroy event-log lines. New `refreshStationLabel()` creates/updates a small floating
+  text label (`"Workbench Lvl 1"`, etc.) anchored above the placed sprite itself, called at both
+  placement points and after every upgrade; `destroyPlacedObject()` cleans the label up. Display
+  levels are 1-based (`tier` 0 → "Lvl 1") since "Lvl 0" reads as broken to a player even though
+  the underlying tier field still starts at 0.
+
+Verified via `preview_eval` + `preview_screenshot`: Upgrade button opens the full panel showing
+"Workbench Lvl 1" and the Tool Sharpener row; applying it deducts cost, bumps the title/label to
+"Workbench Lvl 2", and re-renders the row as greyed "(Applied)" without closing the panel;
+Destroy → magnet-collected pickup → re-Place carries tier 1 (tint + "Lvl 2" label) through
+correctly; an object with an undiscovered upgrade ingredient shows the "No upgrades discovered
+yet." empty state at a shrunk panel height. Type-check clean, no console errors.
+
+### Previously: Milestone K — Per-instance station tiers + named upgrade system
+
+Fourth milestone out of the I–O batch (`.claude/plans/this-is-a-plan-cached-pixel.md`),
+per the recommended `L → I → J → K → M → N → O` order. Replaces the single generic
+`workbench_upgrade` consumable with a **named, per-station upgrade system**, and makes a
+station's upgrade tier **survive Destroy → pickup → re-Place** with a visual tell — genuinely
+new plumbing, since no per-slot inventory metadata existed anywhere before this.
+
+- **New `ItemStack.tier?: number`** (`src/systems/ItemContainer.ts`), additive-only —
+  ordinary stackables (wood/stone/…) never set it. Placeable ItemDefs
+  (`workbench`/`campfire`/`drying_rack`) dropped to `maxStack: 1` so two different-tier
+  instances never merge into one count. New `ItemContainer.addStack()` drops a whole stack
+  (preserving `tier`) into the first empty slot — `add()`'s merge-by-key path would silently
+  discard the metadata.
+- **Tier threaded end-to-end**: `ResourceNodeConfig`/`ResourceNode` gained a `tier?` field;
+  `spawnLooseDrop()` takes an optional `tier` and tags the piece; `consolidateDrop()` refuses
+  to merge tiered pieces (they carry per-instance state). A new `collectNode()` routes both
+  the manual-click and magnet pickup paths through `addStack` when tiered (re-dropping the
+  same tier if the backpack is full). `destroyPlacedObject()` reads the placed Image's `tier`
+  into the drop; `attemptPlaceObject()`'s item-source branch consumes the exact slot (new
+  `findConsumableStack`, not `removeCount`, so it can read that slot's tier before removal) and
+  re-applies the tier + visual to the newly placed Image. This fixes the old latent bug where
+  an upgraded Workbench's tier was silently discarded on Destroy.
+- **Named upgrade table** (`src/systems/StationUpgrades.ts`): `StationUpgradeDef` +
+  `STATION_UPGRADES` + `upgradesForItem()`. First entry **Tool Sharpener** — `{ appliesTo:
+  workbench, resultTier: 1, costs: { twine: 3, wood: 5, stone: 2 } }`. The old
+  `workbench_upgrade` ItemDef, Recipe, and BootScene texture were removed entirely — no
+  intermediate craftable item, no separate consume-then-apply step.
+- **Right-click Upgrade popup reworked** (`openContextMenuForObject`, `ContextMenu.ts` unchanged):
+  lists each matching `StationUpgradeDef` whose next step is `tier + 1` and whose ingredients are
+  all discovered (invisible otherwise — not greyed, mirroring recipe discovery), showing name +
+  formatted cost. Clicking deducts resources directly from the backpack and calls the generalized
+  `applyStationUpgrade` → `applyTierVisual` (a shared gold-tint tell applied at both the
+  live-upgrade and re-placement render points, so they never diverge). Gremlin armor (Milestone M)
+  reuses this same `tier` field on worn items rather than a parallel mechanism.
+
+**Deviation (minor):** the visual tell is a shared gold tint (`applyTierVisual`), not distinct
+per-tier art — the plan allowed "texture/tint," and a tint is the minimal generic choice matching
+the old `upgradeWorkbench` behavior. A `textureForTier` lookup can slot into `applyTierVisual`
+later with no call-site changes.
+
+Verified via `preview_eval`: applying Tool Sharpener deducts twine 5→2 / wood 40→35 / stone 20→18
+and tags tier=1 + gold tint; Destroy → loose drop carries tier=1 → pickup → inventory stack tier=1
+→ re-place → tier=1 Workbench with tint (not tier=0); a tier-0 and tier-1 Workbench never share a
+slot; the popup shows the upgrade only when discovered+affordable (hidden when twine is
+undiscovered, absent on a maxed tier-1 bench). Type-check clean (`tsc --noEmit`), no console
+errors, `preview_screenshot` shows the world booting normally.
+
+### Previously: Milestone J — Placement-mode robustness + re-placing owned stations
 
 Third milestone out of the I–O batch (`.claude/plans/this-is-a-plan-cached-pixel.md`),
 per the recommended `L → I → J → K → M → N → O` order. Two related fixes to the

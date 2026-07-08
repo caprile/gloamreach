@@ -133,7 +133,9 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     name: "Campfire",
     description: "A placeable fire for light, warmth, and cooking.",
     texture: "icon_campfire",
-    maxStack: 99,
+    // Placeables stack to 1: each carries its own per-instance tier once
+    // upgrades exist, so two must never merge into a single count.
+    maxStack: 1,
     hotbarable: true,
     stats: [{ label: "Type", value: "Build" }],
     placeable: true,
@@ -144,7 +146,7 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     name: "Workbench",
     description: "A placeable bench required for more advanced recipes.",
     texture: "icon_workbench",
-    maxStack: 99,
+    maxStack: 1,
     hotbarable: true,
     stats: [{ label: "Type", value: "Build" }],
     placeable: true,
@@ -226,20 +228,10 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     name: "Drying Rack",
     description: "A placeable rack that dries raw goods into refined materials on demand. Requires a nearby Workbench to build.",
     texture: "icon_drying_rack",
-    maxStack: 99,
+    maxStack: 1,
     hotbarable: true,
     stats: [{ label: "Type", value: "Station" }],
     placeable: true,
-  },
-
-  // --- upgrades ---
-  workbench_upgrade: {
-    key: "workbench_upgrade",
-    name: "Workbench Upgrade",
-    description: "Consumed to upgrade a placed Workbench. Right-click a Workbench to apply it.",
-    texture: "icon_workbench_upgrade",
-    maxStack: 99,
-    hotbarable: false,
   },
 
   // --- armor ---

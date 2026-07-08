@@ -5,6 +5,12 @@ import { itemDef } from "./Items";
 export interface ItemStack {
   key: string;
   count: number;
+  // Per-instance upgrade tier, carried on placeable/upgradable items (a placed
+  // station's tier survives Destroy -> pickup -> re-Place through this field;
+  // Gremlin armor levels reuse it). Absent/0 for ordinary stackables. Tiered
+  // items force maxStack 1 (see maxStackOf) so two different-tier instances
+  // never merge into one count and silently lose a tier.
+  tier?: number;
 }
 
 function maxStackOf(key: string): number {
@@ -58,6 +64,19 @@ export class ItemContainer {
       }
     }
     return count;
+  }
+
+  // Place a whole stack (preserving per-instance metadata like `tier`) into
+  // the first empty slot. Used for tiered pickups where `add()`'s merge-by-key
+  // path would drop the tier. Returns true if it landed, false if full.
+  addStack(stack: ItemStack): boolean {
+    for (let i = 0; i < this.slots.length; i++) {
+      if (this.slots[i] === null) {
+        this.slots[i] = stack;
+        return true;
+      }
+    }
+    return false;
   }
 
   hasRoomFor(key: string, count: number): boolean {

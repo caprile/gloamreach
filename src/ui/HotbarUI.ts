@@ -93,7 +93,7 @@ export class HotbarUI {
         .setInteractive({ useHandCursor: true })
         .on("pointerover", () => {
           if (stack && !this.deps.isDragging())
-            this.tooltipUI.show(stack.key, { x, y, width: SLOT_SIZE, height: SLOT_SIZE }, "above");
+            this.tooltipUI.show(stack.key, { x, y, width: SLOT_SIZE, height: SLOT_SIZE }, "above", stack.tier);
         })
         .on("pointerout", () => this.tooltipUI.hide())
         .on("pointerdown", (pointer: Phaser.Input.Pointer) => {
