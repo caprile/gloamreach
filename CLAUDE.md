@@ -281,14 +281,34 @@ mouse-driven only. Don't reintroduce a keybind for this without being asked. Spa
    check. **Not yet wired:** any multi-skill recipe (the `requiredSkills[]` array supports
    it, e.g. a future "5 Slash + 5 Pierce" weapon).
 
+5a. **Minimap + fog of war** — shipped, first piece of roadmap item 6 (World &
+   discovery). Locked via `AskUserQuestion`: passive display only (no fast-travel/
+   waypoints), terrain + player position only (no entity blips), fixed reveal radius
+   (no skill/item scaling). `src/systems/Fog.ts` (`FogOfWar`) owns a `Uint8Array`
+   reveal grid sized 1:1 to the minimap's own pixel resolution (224x168, an exact
+   4:3/scale-16 match for the 3584x2688 world) — `reveal(playerX, playerY)` marks
+   every unrevealed cell within a 260px world radius as revealed, called each frame
+   from `MainScene.update()`; revealed cells never re-fog. `src/ui/MinimapUI.ts`
+   renders a top-right corner HUD panel — a `RenderTexture` terrain layer that draws
+   one pixel per newly-revealed cell (incremental, never a full redraw), sampling
+   `Biome.forestWeight()`/`creekWeight()` and blending the exact same colors
+   `MainScene.buildBiomeTexture()` uses for the real ground, plus a small marker dot
+   repainted every frame for the player's live position. **Same-day follow-up:** per
+   the user, the minimap moved from an initial bottom-left placement to top-right,
+   which meant clearing that corner first — the old always-visible **"[Tab] Menu"
+   icon was removed entirely** (Tab key / Escape already drove the combined
+   crafting+inventory menu independently, so the icon was a redundant click
+   affordance, not the only entry point; `CraftingMenuDeps.onIconClick` and
+   `CraftingMenu`'s icon GameObject were deleted, not just hidden) and both the
+   **stat-points badge and the `CraftingMenu` panel shifted down** to sit below the
+   minimap, computed from `MinimapUI`'s exported `MARGIN`/`PANEL_H` constants
+   rather than hardcoded offsets so the three stay stacked without overlap if the
+   minimap's size ever changes.
+
 **Not yet built — next up in rough order:**
 6. **World & discovery** — much bigger generated world, biomes, map. See **First biome —
-   content notes** below for the first biome's terrain-zone concept. Also includes a
-   **minimap with fog of war** (not yet started): a corner HUD map showing explored vs.
-   unexplored terrain — cells the player has physically been near get revealed and stay
-   revealed, everything else stays hidden/darkened. Exact reveal radius, map
-   scale/zoom, and whether it doubles as a fast-travel or waypoint UI are all
-   undecided.
+   content notes** below for the first biome's terrain-zone concept. (Minimap + fog of
+   war, formerly noted here as undecided/not-started, has shipped — see 5a above.)
 7. **Bosses.**
 8. **ARPG loot** — rarity, randomized drops/recipes, replayability.
 9. **Cross-cutting:** save/load (localStorage), real pixel-art tilesets.

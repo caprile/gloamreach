@@ -7,6 +7,7 @@ import { itemDef, type ItemStat } from "../systems/Items";
 import { weaponAttacksPerSecond, weaponDamage, weaponPrimaryDamageType, weaponStaminaCost } from "../systems/Weapons";
 import { weaponSkillDamageMultiplier, type Skills } from "../systems/Skills";
 import { weaponStaminaCostMultiplier, type PlayerProgression } from "../systems/Progression";
+import { MARGIN as MINIMAP_MARGIN, PANEL_H as MINIMAP_H } from "./MinimapUI";
 
 const CATEGORIES: { id: RecipeCategory; label: string }[] = [
   { id: "tools", label: "Tools" },
@@ -19,7 +20,10 @@ const CATEGORIES: { id: RecipeCategory; label: string }[] = [
 const PANEL_W = 340;
 const PANEL_H = 440;
 const MARGIN_RIGHT = 16;
-const MARGIN_TOP = 70; // leaves world visible above and below the panel
+// Stacks below the top-right MinimapUI panel (+ the stat-points badge that
+// now lives in the gap between them) instead of the old fixed 70px, which
+// assumed the "[Tab] Menu" icon was the only thing above it.
+const MARGIN_TOP = MINIMAP_MARGIN + MINIMAP_H + 40;
 
 export interface CraftingMenuDeps {
   backpack: ItemContainer;
@@ -29,9 +33,6 @@ export interface CraftingMenuDeps {
   isNearWorkbench: () => boolean;
   skills: Skills;
   progression: PlayerProgression;
-  // The top-right icon opens the combined Tab menu (crafting + inventory),
-  // not just this panel — there's no crafting-only entry point anymore.
-  onIconClick: () => void;
 }
 
 // A recipe is affordable to craft/place right now — resource cost AND
@@ -43,8 +44,9 @@ function isCraftable(deps: CraftingMenuDeps, recipe: Recipe): boolean {
 
 // Right-side crafting panel. Opens/closes together with InventoryMenu as one
 // combined Tab menu (see MainScene.toggleCombinedMenu) — there's no
-// crafting-only key anymore; the top-right icon and Escape both go through
-// the same combined toggle. Only ever lists DISCOVERED recipes (see
+// crafting-only key anymore, and no click-to-open icon either (removed once
+// the minimap took over the top-right corner); Tab and Escape are the only
+// entry points. Only ever lists DISCOVERED recipes (see
 // Crafting.ts) — locked
 // recipes are invisible, not greyed. Craftable-but-unaffordable ones are
 // greyed and sorted below craftable ones. Equipping happens in
@@ -61,7 +63,6 @@ export class CraftingMenu {
   private deps: CraftingMenuDeps;
   private panelX: number;
   private panelY: number;
-  private icon: Phaser.GameObjects.Text;
   private bg: Phaser.GameObjects.Rectangle;
   private open = false;
   private activeCategory: RecipeCategory = "tools";
@@ -73,20 +74,6 @@ export class CraftingMenu {
     this.deps = deps;
     this.panelX = scene.scale.width - PANEL_W - MARGIN_RIGHT;
     this.panelY = MARGIN_TOP;
-
-    this.icon = scene.add
-      .text(scene.scale.width - 16, 16, "[Tab] Menu", {
-        fontFamily: "monospace",
-        fontSize: "14px",
-        color: "#ffffff",
-        backgroundColor: "#000000aa",
-        padding: { x: 8, y: 4 },
-      })
-      .setOrigin(1, 0)
-      .setScrollFactor(0)
-      .setDepth(3000)
-      .setInteractive({ useHandCursor: true })
-      .on("pointerdown", () => this.deps.onIconClick());
 
     this.bg = scene.add
       .rectangle(this.panelX, this.panelY, PANEL_W, PANEL_H, 0x0a0a0a, 0.93)

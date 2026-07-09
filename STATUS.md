@@ -2,7 +2,80 @@
 
 Last updated: 2026-07-09
 
-### Just finished: Weapon stat display — stamina/hit and attack speed
+### Just finished: Minimap + fog of war
+
+First piece of roadmap item 6 (World & discovery), plan:
+`.claude/plans/parsed-cooking-beacon.md`. Locked via `AskUserQuestion` before building:
+**passive display only** (no fast-travel/waypoints — a future addition, not this pass),
+**terrain + player position only** (no enemy/station blips), **fixed reveal radius**
+(no skill/item scaling).
+
+- **New `src/systems/Fog.ts` (`FogOfWar`)** — a `Uint8Array` reveal grid sized 1:1 to
+  the minimap's own pixel resolution (224x168 — an exact 4:3 match for the 3584x2688
+  world at a clean scale-16), independent of `Biome.ts`'s own 40px gameplay grid.
+  `reveal(playerX, playerY)` marks every unrevealed cell within a 260px world radius
+  (rough parity with existing enemy aggro-radius scale) as revealed, bounded to a local
+  window around the player's current cell so it's cheap to call every frame regardless
+  of world size — revealed cells never re-fog once seen. Exposes a drained
+  `consumeNewlyRevealed()` queue so the UI layer only ever draws what changed, never a
+  full-grid redraw.
+- **New `src/ui/MinimapUI.ts`** — a top-right corner HUD panel, following the
+  `EventLogUI`/`KeybindsUI` pattern of raw scrollFactor(0) GameObjects, no Container
+  (per the standing Phaser Container+scrollFactor(0)+interactive-input bug — the
+  minimap has no interaction today, but staying consistent avoids the trap if it gains
+  one later). A `Phaser.GameObjects.RenderTexture` terrain layer starts fully black and
+  fills in one pixel per newly-revealed `FogOfWar` cell (incremental draws only),
+  sampling `Biome.forestWeight()`/`creekWeight()` and blending the *exact* same colors
+  `MainScene.buildBiomeTexture()`'s real-world terrain bake uses (base grass `0x4a7a3a`,
+  forest overlay `0x24421c`, creek overlay `0x3a6ea5`) so the minimap reads as a shrunk
+  version of the real ground, not a different palette. A small `Graphics` marker dot is
+  repainted every frame at the player's live position (the one piece that can't be
+  incremental, since it moves).
+- **Wired into `MainScene.update()`** — `this.fog.reveal(...)` +
+  `this.minimapUI.update(...)` added to the same ambient-loop batch as
+  `updateMagnet`/`updateEnemies`/`updateTreeOcclusion`, in both the normal and
+  frozen-on-death branches (matching how those other ambient systems already keep
+  running while dead).
+- **Same-day follow-up, per the user: moved to top-right, and the old "[Tab] Menu" icon
+  is gone entirely** — first shipped bottom-left; the user asked for top-right instead,
+  which meant clearing that corner of its previous occupant first. The always-visible
+  `"[Tab] Menu"` icon (`CraftingMenu.ts`) was deleted outright rather than just hidden or
+  relocated — Tab and Escape already drove the combined crafting+inventory menu
+  independently (`MainScene.toggleCombinedMenu()`), so the icon was a redundant
+  click-to-open affordance, not the only entry point; `CraftingMenuDeps.onIconClick` and
+  the icon `GameObject` are both gone, no dead code left behind. The stat-points badge
+  and the `CraftingMenu` panel both shifted down to sit below the minimap —
+  `MinimapUI` now exports `MARGIN`/`PANEL_W`/`PANEL_H` (was just `PANEL_W`/`PANEL_H`) so
+  `CraftingMenu`'s `MARGIN_TOP` and `MainScene.createStatPointsBadge()`'s Y both compute
+  off those constants instead of separate hardcoded offsets, so the three stay stacked
+  without overlap if the minimap's size ever changes.
+- **`CLAUDE.md` roadmap updated** — new "5a. Minimap + fog of war" entry (shipped);
+  item 6 (World & discovery) trimmed to note the minimap piece is done, the rest
+  (bigger generated world/biomes) still pending.
+- **Stale "Craft: T" keybind label removed** — spotted while auditing the top-right
+  corner for the icon removal above; `MainScene.createHud()`'s `KeybindsUI` list had
+  carried a "Craft: T" line since before crafting was folded into the combined Tab
+  menu. Grepped for any T-key handler first (`keydown-T`/`addKey("T")`/etc.) and found
+  none anywhere in `src/` — Tab is the only entry point, already covered by the
+  existing "Inventory: Tab" line — so the line was deleted rather than fixed to a real
+  binding.
+
+Verified via `preview_eval` + `preview_screenshot`: `FogOfWar` constructs at exactly
+`cols: 224, rows: 168, scale: 16`; teleporting the player to a distant point, calling
+`reveal()`/`minimapUI.update()`, then teleporting back and revealing again shows *two*
+separate revealed circles on the minimap screenshot (the original spawn-area circle and
+the new distant one) — confirming previously-revealed cells persist and don't re-fog once
+the player leaves; a real `keydown-TAB` emit opens the combined menu with the
+`CraftingMenu` panel rendering cleanly below the minimap with no overlap; forcing
+`unspentPoints = 3` shows the stat-points badge at `y ≈ 189`, directly under the
+minimap's bottom edge and well clear of the crafting panel (which starts at `y = 220`).
+`preview_screenshot` confirms the panel renders top-right with a
+correctly-colored (green/dark-green/blue) revealed patch around the player and solid
+black everywhere unexplored; the expanded `KeybindsUI` panel screenshot confirms
+"Craft: T" is gone and every remaining line still matches a real binding. Type-check
+clean (`tsc --noEmit`), no console errors.
+
+### Previously: Weapon stat display — stamina/hit and attack speed
 
 Small same-day follow-up, no new milestone letter. Weapon tooltips (`InventoryMenu`/
 `HotbarUI`, via `Tooltip.ts`) and the crafting-menu detail panel (`CraftingMenu.ts`) now

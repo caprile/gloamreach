@@ -77,6 +77,8 @@ import {
 import { HotbarUI } from "../ui/HotbarUI";
 import { EventLogUI } from "../ui/EventLogUI";
 import { KeybindsUI } from "../ui/KeybindsUI";
+import { MinimapUI, PANEL_W as MINIMAP_W, PANEL_H as MINIMAP_H, MARGIN as MINIMAP_MARGIN } from "../ui/MinimapUI";
+import { FogOfWar } from "../systems/Fog";
 
 const HOTBAR_KEYS = ["ONE", "TWO", "THREE", "FOUR", "FIVE", "SIX", "SEVEN", "EIGHT", "NINE"];
 
@@ -173,6 +175,8 @@ export class MainScene extends Phaser.Scene {
   private hotbarUI!: HotbarUI;
   private eventLogUI!: EventLogUI;
   private keybindsUI!: KeybindsUI;
+  private fog!: FogOfWar;
+  private minimapUI!: MinimapUI;
 
   // Active drag (from any container): the source slot + a floating ghost icon.
   private dragSource: { container: ItemContainer; index: number } | { armorSlot: EquipSlot } | null = null;
@@ -366,6 +370,12 @@ export class MainScene extends Phaser.Scene {
     // and used to cover the log whenever it was open.
     this.eventLogUI = new EventLogUI(this, this.eventLog, this.keybindsUI.right + 12, this.keybindsUI.top);
 
+    // Minimap + fog of war (World & discovery roadmap item 6) — FogOfWar owns
+    // the reveal grid, MinimapUI draws/repaints it. Sized 1:1 to the minimap's
+    // own pixel resolution so a revealed cell maps directly to one pixel.
+    this.fog = new FogOfWar(WORLD_W, WORLD_H, MINIMAP_W, MINIMAP_H);
+    this.minimapUI = new MinimapUI(this, this.biome, this.fog);
+
     // Scene-level drag: a slot starts it, the pointer drags a ghost icon, and
     // release resolves the move against whichever container is under the
     // pointer (backpack grid or hotbar). The Drying Rack's amount slider
@@ -450,6 +460,8 @@ export class MainScene extends Phaser.Scene {
       this.updateEnemies(delta);
       this.updateMagnet(delta);
       this.updateTreeOcclusion(delta);
+      this.fog.reveal(this.player.x, this.player.y);
+      this.minimapUI.update(this.player.x, this.player.y);
       return;
     }
 
@@ -481,6 +493,8 @@ export class MainScene extends Phaser.Scene {
     this.updateMagnet(delta);
     this.updateEnemies(delta);
     this.updateTreeOcclusion(delta);
+    this.fog.reveal(this.player.x, this.player.y);
+    this.minimapUI.update(this.player.x, this.player.y);
     this.updateCraftingMenuWorkbenchProximity();
   }
 
@@ -1830,7 +1844,6 @@ export class MainScene extends Phaser.Scene {
       isNearWorkbench: () => this.isNearWorkbench(this.player.x, this.player.y),
       skills: this.skills,
       progression: this.progression,
-      onIconClick: () => this.toggleCombinedMenu(),
     });
   }
 
@@ -2487,7 +2500,6 @@ export class MainScene extends Phaser.Scene {
         "Sprint: Hold Shift",
         "Dash: Space (while moving)",
         "Interact: Left Click",
-        "Craft: T",
         "Inventory: Tab",
         "Character: K",
         "Auto-pickup: V",
@@ -2641,12 +2653,15 @@ export class MainScene extends Phaser.Scene {
     this.xpBarText.setText(`Lvl ${this.progression.level}`);
   }
 
-  // Small bobbing nudge under the "[Tab] Menu" icon (top-right) whenever
-  // unspent stat points are sitting unused — click opens the Character menu,
-  // which itself defaults to the Stats tab whenever points are available.
+  // Small bobbing nudge whenever unspent stat points are sitting unused —
+  // click opens the Character menu, which itself defaults to the Stats tab
+  // whenever points are available. Sits directly below the top-right
+  // MinimapUI panel (was "under the [Tab] Menu icon" before that icon was
+  // removed and the minimap took over the top-right corner).
   private createStatPointsBadge(): void {
+    const badgeY = MINIMAP_MARGIN + MINIMAP_H + 8;
     this.statPointsBadge = this.add
-      .text(this.scale.width - 16, 42, "", {
+      .text(this.scale.width - 16, badgeY, "", {
         fontFamily: "monospace",
         fontSize: "13px",
         color: "#ffe08a",
@@ -2661,7 +2676,7 @@ export class MainScene extends Phaser.Scene {
       .on("pointerdown", () => this.characterMenu.openMenu());
     this.tweens.add({
       targets: this.statPointsBadge,
-      y: 48,
+      y: badgeY + 6,
       duration: 700,
       yoyo: true,
       repeat: -1,
