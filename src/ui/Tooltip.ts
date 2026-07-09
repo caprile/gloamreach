@@ -1,6 +1,8 @@
 import Phaser from "phaser";
-import { itemDef } from "../systems/Items";
+import { itemDef, type ItemDef, type ItemStat } from "../systems/Items";
 import { stationDisplayName } from "../systems/StationUpgrades";
+import { weaponDamage, weaponPrimaryDamageType } from "../systems/Weapons";
+import { weaponSkillDamageMultiplier, type Skills } from "../systems/Skills";
 
 export type TooltipPlacement = "right" | "above";
 
@@ -19,9 +21,11 @@ interface Anchor {
 export class Tooltip {
   private scene: Phaser.Scene;
   private parts: Phaser.GameObjects.GameObject[] = [];
+  private skills?: Skills;
 
-  constructor(scene: Phaser.Scene) {
+  constructor(scene: Phaser.Scene, skills?: Skills) {
     this.scene = scene;
+    this.skills = skills;
   }
 
   // `tier` is only meaningful for stations with a defined upgrade path
@@ -36,7 +40,7 @@ export class Tooltip {
     const lines = [name, "", def.description];
     if (def.stats?.length) {
       lines.push("");
-      for (const s of def.stats) lines.push(`${s.label}: ${s.value}`);
+      for (const s of def.stats) lines.push(`${s.label}: ${this.statValue(def, s)}`);
     }
 
     const text = this.scene.add
@@ -64,6 +68,20 @@ export class Tooltip {
     text.setPosition(tx + padX, ty + padY);
 
     this.parts.push(bgBox, text);
+  }
+
+  // The static "Damage" stat is overridden with a live "base (adjusted)"
+  // reading for weapons — the adjustment is the weapon SKILL's own damage
+  // bonus (Skills.ts weaponSkillDamageMultiplier), not a player stat. Every
+  // other stat line is shown as authored.
+  private statValue(def: ItemDef, stat: ItemStat): string {
+    if (stat.label === "Damage" && def.weapon && this.skills) {
+      const base = weaponDamage(def.weapon);
+      const dmgType = weaponPrimaryDamageType(def.weapon);
+      const adjusted = Math.round(base * weaponSkillDamageMultiplier(dmgType, this.skills));
+      return `${base} (${adjusted})`;
+    }
+    return stat.value;
   }
 
   hide(): void {

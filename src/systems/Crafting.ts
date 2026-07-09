@@ -5,9 +5,11 @@ import type { Skills } from "./Skills";
 
 // Tracks which recipes the player has unlocked. A recipe unlocks once its
 // ingredient item types have all been discovered (picked up at least once)
-// AND its required skill level is met. Undiscovered recipes are never shown
-// or hinted at, matching the "don't reveal locked info" rule used for
-// tool-gated resource nodes.
+// AND its required skill level(s) are met. Undiscovered recipes are never
+// shown or hinted at, matching the "don't reveal locked info" rule used for
+// tool-gated resource nodes — a skill-gated recipe (e.g. stone_club at
+// blunt lvl 3) stays fully invisible until the skill is actually there, same
+// treatment as an ingredient the player hasn't discovered yet.
 export class Crafting {
   private discoveredIds = new Set<string>();
 
@@ -23,7 +25,7 @@ export class Crafting {
     for (const recipe of RECIPES) {
       if (this.discoveredIds.has(recipe.id)) continue;
       if (recipe.tier > 0 && !workbenchPlaced) continue;
-      if (this.ingredientsKnown(recipe, discoveredItems) && this.skillMet(recipe, skills)) {
+      if (this.ingredientsKnown(recipe, discoveredItems) && this.skillsMet(recipe, skills)) {
         this.discoveredIds.add(recipe.id);
         newlyUnlocked.push(recipe);
       }
@@ -56,8 +58,7 @@ export class Crafting {
     return (Object.keys(recipe.costs) as ResourceType[]).every((r) => discovered.has(r));
   }
 
-  private skillMet(recipe: Recipe, skills: Skills): boolean {
-    if (!recipe.requiredSkill) return true;
-    return skills.get(recipe.requiredSkill.skill) >= recipe.requiredSkill.level;
+  private skillsMet(recipe: Recipe, skills: Skills): boolean {
+    return (recipe.requiredSkills ?? []).every((req) => skills.get(req.skill) >= req.level);
   }
 }

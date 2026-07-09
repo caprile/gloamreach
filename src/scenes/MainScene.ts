@@ -15,7 +15,18 @@ import { Snake } from "../entities/Snake";
 import { RangedGremlin, MeleeGremling } from "../entities/Gremlin";
 import { Projectile, type ProjectileConfig } from "../entities/Projectile";
 import type { ResourceType } from "../systems/Inventory";
-import { Skills, type SkillType } from "../systems/Skills";
+import {
+  Skills,
+  skillDisplayName,
+  weaponSkillDamageMultiplier,
+  runningSprintMultiplier,
+} from "../systems/Skills";
+import {
+  PlayerProgression,
+  weaponStaminaCostMultiplier,
+  xpToNextPlayerLevel,
+  type StatType,
+} from "../systems/Progression";
 import { Crafting } from "../systems/Crafting";
 import { Stamina } from "../systems/Stamina";
 import { Health } from "../systems/Health";
@@ -23,10 +34,11 @@ import {
   weaponDamage,
   weaponCooldownMs,
   weaponStaminaCost,
+  weaponPrimaryDamageType,
   type WeaponType,
 } from "../systems/Weapons";
 import { outputKey, RECIPES, type Recipe } from "../systems/Recipes";
-import { itemDef } from "../systems/Items";
+import { itemDef, armorTypesWorn } from "../systems/Items";
 import { ItemContainer, moveSlot, type ItemStack } from "../systems/ItemContainer";
 import {
   STATION_UPGRADES,
@@ -44,6 +56,7 @@ import { CraftingMenu } from "../ui/CraftingMenu";
 import { ContextMenu, type ContextMenuItem } from "../ui/ContextMenu";
 import { DryingRackMenu } from "../ui/DryingRackMenu";
 import { UpgradeMenu, type UpgradeDef } from "../ui/UpgradeMenu";
+import { CharacterMenu } from "../ui/CharacterMenu";
 import {
   InventoryMenu,
   BACKPACK_SIZE,
@@ -90,6 +103,7 @@ export class MainScene extends Phaser.Scene {
   // occludes, so it's excluded up front rather than filtered every frame.
   private obstacleNodes: ResourceNode[] = [];
   private skills = new Skills();
+  private progression = new PlayerProgression();
   private crafting = new Crafting();
   // The single unified item pool. Resources and crafted items alike live here
   // as stacks; the hotbar is a second container items move into. `discovered`
@@ -131,6 +145,7 @@ export class MainScene extends Phaser.Scene {
   // every discovered upgrade for whichever placed object is currently bound
   // to it (null when closed).
   private upgradeMenu!: UpgradeMenu;
+  private characterMenu!: CharacterMenu;
   // Either a placed object (Workbench/Campfire/Drying Rack) or an equipped
   // armor slot — the UpgradeMenu deps below branch on which one is set.
   private upgradeTarget: Phaser.GameObjects.Image | { armorSlot: EquipSlot } | null = null;
@@ -146,7 +161,21 @@ export class MainScene extends Phaser.Scene {
   private dragSource: { container: ItemContainer; index: number } | { armorSlot: EquipSlot } | null = null;
   private dragGhost: Phaser.GameObjects.Image | null = null;
 
+  // Double-left-click-in-place detection (backpack/hotbar quick-move — right-
+  // click is reserved for context-menu/upgrade actions now, see resolveItemDrag).
+  // `key` identifies a slot (e.g. "bag:5"/"hotbar:2"); a second click-in-place
+  // on the same key within DOUBLE_CLICK_MS counts as a double-click.
+  private lastClickKey: string | null = null;
+  private lastClickAt = -Infinity;
+  // A single click on a backpack placeable defers entering placement mode by
+  // this same window, so a following double-click quick-moves the item
+  // instead of arming placement mode first (which would then reference a
+  // stale backpack slot once the item's moved to the hotbar).
+  private pendingSingleClick: Phaser.Time.TimerEvent | null = null;
+  private static readonly DOUBLE_CLICK_MS = 350;
+
   private promptText!: Phaser.GameObjects.Text; // fixed bottom-right hover prompt
+  private statPointsBadge!: Phaser.GameObjects.Text; // top-right, bobbing "N Stat Points Available!" nudge
   private hoveredNode: ResourceNode | null = null;
   private hoveredEnemy: Enemy | null = null;
   private lastToolHitAt = 0; // this.time.now of the last successful chop/mine hit
@@ -169,6 +198,8 @@ export class MainScene extends Phaser.Scene {
   private health = new Health();
   private healthBarFill!: Phaser.GameObjects.Rectangle;
   private healthBarText!: Phaser.GameObjects.Text;
+  private xpBarFill!: Phaser.GameObjects.Rectangle; // player-level XP bar, above the HP bar
+  private xpBarText!: Phaser.GameObjects.Text; // "Lvl N" label inside the XP bar
   private isDead = false;
   private invulnerableUntil = 0; // this.time.now threshold; incoming damage skipped before this
   private readonly RESPAWN_DELAY_MS = 2000;
@@ -186,7 +217,7 @@ export class MainScene extends Phaser.Scene {
     | null = null;
   private placementGhost: Phaser.GameObjects.Image | null = null;
   private placedObjects: Phaser.GameObjects.Image[] = [];
-  private placementHintText!: Phaser.GameObjects.Text; // small hint under the top-left controls line
+  private placementHintText!: Phaser.GameObjects.Text; // bottom-right, stacked above promptText
   // The "Place" button click that enters placement mode fires through to the
   // scene's global pointerdown too (same underlying click) — swallow that one
   // event so it isn't also read as the first placement click.
@@ -297,13 +328,16 @@ export class MainScene extends Phaser.Scene {
     this.createInventoryMenu();
     this.createDryingRackMenu();
     this.createUpgradeMenu();
+    this.createCharacterMenu();
     this.hotbarUI = new HotbarUI(this, this.hotbar, {
+      skills: this.skills,
       beginDrag: (c, i, p) => this.beginItemDrag(c, i, p),
-      quickMove: (c, i) => this.quickMoveItem(c, i),
       isDragging: () => this.dragSource !== null,
     });
     this.createStaminaBar();
     this.createHealthBar();
+    this.createXpBar();
+    this.createStatPointsBadge();
     // Sits beside the Keybinds panel (same top row), not stacked underneath
     // it — an open InventoryMenu panel occupies that same top-left column
     // and used to cover the log whenever it was open.
@@ -341,6 +375,7 @@ export class MainScene extends Phaser.Scene {
       if (this.contextMenu.isOpen()) return this.contextMenu.close();
       if (this.placementMode) return this.cancelPlacement();
       if (this.upgradeMenu.isOpen()) return this.closeUpgradeMenu();
+      if (this.characterMenu.isOpen()) return this.characterMenu.close();
       this.closeDryingRackMenu();
       this.craftingMenu.close();
       this.inventoryMenu.close();
@@ -350,6 +385,30 @@ export class MainScene extends Phaser.Scene {
     });
     this.input.keyboard!.on("keydown-V", () => this.toggleMagnet());
     this.input.keyboard!.on("keydown-O", () => this.toggleRangeRing());
+    this.input.keyboard!.on("keydown-K", () => this.characterMenu.toggle());
+
+    // Skill level-ups: announce, feed the overall Player Level the same XP the
+    // skill level cost (Progression.ts), and re-run recipe discovery/crafting
+    // menu since a level-up may satisfy a skill-gated recipe's requirement.
+    this.skills.onLevelUp((skill, newLevel, xpCost) => {
+      this.eventLog.add("levelup", `${skillDisplayName(skill)} leveled up -> Lvl ${newLevel}`);
+      this.progression.addXp(xpCost);
+      this.craftingMenu?.refresh();
+      this.refreshXpBar();
+    });
+
+    // Player level-ups: announce the awarded points and refresh the character
+    // menu (unspent-point count/buttons) if it's open.
+    this.progression.onLevelUp((level, points) => {
+      this.eventLog.add("levelup", `Level Up! You are now Level ${level} (+${points} points)`);
+      this.characterMenu?.refresh();
+      this.refreshXpBar();
+      this.refreshStatPointsBadge();
+    });
+
+    // Apply any starting Endurance/Vitality bonus (0 at a fresh start; keeps
+    // the wiring in one place for when a save/load restores allocated points).
+    this.syncStatBonuses();
 
     // Seed recipe discovery (no-op at a fresh start, but keeps state correct
     // if the initial inventory ever changes).
@@ -377,10 +436,12 @@ export class MainScene extends Phaser.Scene {
     const sprintCost = SPRINT_DRAIN_PER_SEC * (delta / 1000);
     const canSprint = this.stamina.canAfford(sprintCost);
     const canDash = this.stamina.canAfford(DASH_STAMINA_COST);
-    const frame = this.player.update(delta, canSprint, canDash);
+    const sprintMultiplier = runningSprintMultiplier(this.skills);
+    const frame = this.player.update(delta, canSprint, canDash, sprintMultiplier);
 
     if (frame.sprinting) {
       this.stamina.spend(sprintCost);
+      this.skills.addXp("running", 10 * (delta / 1000)); // 10 XP/sec sprinting
     }
     if (frame.dashStarted) {
       this.stamina.spend(DASH_STAMINA_COST);
@@ -468,7 +529,8 @@ export class MainScene extends Phaser.Scene {
       this.inventoryMenu.isOpen() ||
       this.dryingRackMenu.isOpen() ||
       this.contextMenu.isOpen() ||
-      this.upgradeMenu.isOpen()
+      this.upgradeMenu.isOpen() ||
+      this.characterMenu.isOpen()
     );
   }
 
@@ -575,6 +637,37 @@ export class MainScene extends Phaser.Scene {
       .setAlpha(0.85);
   }
 
+  // Returns true if this click-in-place on `key` is the second half of a
+  // double-click (within DOUBLE_CLICK_MS of the previous one on the same
+  // key) — and cancels any deferred single-click action still pending for
+  // that key, since the double-click supersedes it.
+  private isDoubleClickInPlace(key: string): boolean {
+    const now = this.time.now;
+    const isDouble = this.lastClickKey === key && now - this.lastClickAt <= MainScene.DOUBLE_CLICK_MS;
+    if (isDouble) {
+      this.pendingSingleClick?.remove(false);
+      this.pendingSingleClick = null;
+      this.lastClickKey = null;
+    } else {
+      this.lastClickKey = key;
+      this.lastClickAt = now;
+    }
+    return isDouble;
+  }
+
+  // Defers a single-click action (currently only "enter placement mode" for
+  // a backpack placeable) until DOUBLE_CLICK_MS has passed with no follow-up
+  // click on the same slot — otherwise a double-click would arm placement
+  // mode on its first half, then quick-move the item away on its second,
+  // leaving placement mode referencing a backpack slot that's now empty.
+  private deferSingleClick(action: () => void): void {
+    this.pendingSingleClick?.remove(false);
+    this.pendingSingleClick = this.time.delayedCall(MainScene.DOUBLE_CLICK_MS, () => {
+      this.pendingSingleClick = null;
+      action();
+    });
+  }
+
   private resolveItemDrag(pointer: Phaser.Input.Pointer): void {
     if (!this.dragSource) return;
     const src = this.dragSource;
@@ -633,9 +726,14 @@ export class MainScene extends Phaser.Scene {
       // A click that never left the hotbar slot it started on isn't a
       // rearrange — it's a select, identical to a number-key/wheel select
       // (there's no other click-to-select). setHotbarSelection also drives
-      // placement mode for placeables.
+      // placement mode for placeables. Select fires immediately regardless
+      // (idempotent, no reason to delay it); a second click within the
+      // double-click window additionally quick-moves the stack back to the
+      // backpack (was right-click, now double-left-click — see
+      // isDoubleClickInPlace).
       if (src.container === this.hotbar.container && src.index === hotIndex) {
         this.setHotbarSelection(hotIndex);
+        if (this.isDoubleClickInPlace(`hotbar:${hotIndex}`)) this.quickMoveItem(this.hotbar.container, hotIndex);
         return;
       }
       if (!itemDef(stack.key)?.hotbarable) return; // reject; snaps back
@@ -645,16 +743,21 @@ export class MainScene extends Phaser.Scene {
     }
     const bagIndex = this.inventoryMenu.slotIndexAt(pointer.x, pointer.y);
     if (bagIndex !== null) {
-      // Left-click-in-place on a backpack placeable enters placement mode for
-      // it (e.g. a station recovered via Destroy) — the inventory analog of
-      // selecting a placeable in the hotbar. Right-click still quick-moves it
-      // to the hotbar like any other item.
-      if (
-        src.container === this.backpack &&
-        src.index === bagIndex &&
-        itemDef(stack.key)?.placeable
-      ) {
-        this.startItemPlacement(this.backpack, bagIndex);
+      // Click-in-place on a backpack slot: a DOUBLE left-click quick-moves
+      // the stack (to the hotbar, or equips it — see quickMoveItem), same
+      // action right-click used to trigger. A SINGLE click on a placeable
+      // enters placement mode instead (e.g. a station recovered via
+      // Destroy) — deferred behind the double-click window so a following
+      // second click quick-moves it instead of arming placement mode first
+      // (see deferSingleClick's own comment for why that ordering matters).
+      // A single click on a non-placeable is a no-op, same as before.
+      if (src.container === this.backpack && src.index === bagIndex) {
+        const key = `bag:${bagIndex}`;
+        if (this.isDoubleClickInPlace(key)) {
+          this.quickMoveItem(this.backpack, bagIndex);
+        } else if (itemDef(stack.key)?.placeable) {
+          this.deferSingleClick(() => this.startItemPlacement(this.backpack, bagIndex));
+        }
         return;
       }
       moveSlot(src.container, src.index, this.backpack, bagIndex);
@@ -720,11 +823,12 @@ export class MainScene extends Phaser.Scene {
     this.afterItemMove();
   }
 
-  // Right-click: move backpack->hotbar (if hotbar-able) or hotbar->backpack.
-  // Placeables are hotbar-able too, so right-clicking one in the backpack just
-  // quick-moves it to the hotbar like any other item (consistent behavior);
-  // entering placement mode from the inventory is the *left*-click gesture (see
-  // resolveItemDrag's backpack click-in-place branch).
+  // Double-left-click-in-place (was right-click — see resolveItemDrag):
+  // move backpack->hotbar (if hotbar-able), hotbar->backpack, or equip if
+  // it's an armor item. Placeables are hotbar-able too, so double-clicking
+  // one in the backpack just quick-moves it like any other item; a single
+  // click there is what enters placement mode instead (also in
+  // resolveItemDrag, deferred behind the double-click window).
   private quickMoveItem(container: ItemContainer, index: number): void {
     const stack = container.slot(index);
     if (!stack) return;
@@ -756,6 +860,7 @@ export class MainScene extends Phaser.Scene {
   private createDryingRackMenu(): void {
     this.dryingRackMenu = new DryingRackMenu(this, {
       backpack: this.backpack,
+      skills: this.skills,
       station: () => this.openRack,
       beginDrag: (c, i, p) => this.beginItemDrag(c, i, p),
       quickLoad: (i) => this.loadRackInput(this.backpack, i),
@@ -1133,18 +1238,19 @@ export class MainScene extends Phaser.Scene {
     // Gremlin/Gremling: grassy-preferred with occasional forest wandering-in
     // (per CLAUDE.md's first-biome content notes). The ranged "Gremlin" is
     // the sole gremlin_skin source feeding the Drying Rack -> gremlin_leather.
-    // Bumped 4->18 (Milestone O): Milestone C's original "rarer, stronger"
-    // tuning intent left too little gremlin_leather supply (~10 needed across
-    // the new Gremlin armor set + upgrades, only obtainable 1-per-kill here)
-    // — a deliberate departure from that original intent, not an oversight.
+    // Milestone O bumped this 4->18 by resource-supply math alone (~10
+    // gremlin_leather needed across the armor set + upgrades); playtesting
+    // that number found the map felt overrun with gremlins regardless of
+    // spacing. Trimmed back down (18->12, still ~20% margin over the ~10
+    // estimate) and tightened spacing (radius 140->220, max-per-cluster 2->1)
+    // — both the raw count AND the local density were too high. Gremling
+    // (melee-only, no unique resource) cut 6->4 for the same overrun feel.
     // Both variants share one spacing pool (`gremlinPoints`) so the combined
-    // roster reads as spread out rather than clumping into packs — playtest
-    // feedback after the O bump: no more than GREMLIN_CLUSTER_MAX gremlins
-    // (either variant) within GREMLIN_CLUSTER_RADIUS of each other.
-    const GREMLIN_CLUSTER_RADIUS = 140;
-    const GREMLIN_CLUSTER_MAX = 2;
+    // roster reads as spread out rather than clumping into packs.
+    const GREMLIN_CLUSTER_RADIUS = 220;
+    const GREMLIN_CLUSTER_MAX = 1;
     const gremlinPoints: { x: number; y: number }[] = [];
-    const RANGED_GREMLIN_COUNT = 18;
+    const RANGED_GREMLIN_COUNT = 12;
     for (let i = 0; i < RANGED_GREMLIN_COUNT; i++) {
       const { x, y } = this.pickSpreadSpawnPoint(
         rng,
@@ -1159,7 +1265,7 @@ export class MainScene extends Phaser.Scene {
       this.enemies.push(gremlin);
       this.enemyGroup.add(gremlin);
     }
-    const MELEE_GREMLING_COUNT = 6;
+    const MELEE_GREMLING_COUNT = 4;
     for (let i = 0; i < MELEE_GREMLING_COUNT; i++) {
       const { x, y } = this.pickSpreadSpawnPoint(
         rng,
@@ -1342,6 +1448,9 @@ export class MainScene extends Phaser.Scene {
 
       this.player.playSwing();
       const depleted = node.takeHit(toolDamage(this.equippedTool));
+      // Every swing grants gather-skill XP (not just the depleting one). `kind`
+      // is already resolved above from requiredKind(node.action).
+      this.skills.addXp(kind === "axe" ? "chopping" : "mining", 30);
       if (!depleted) return; // node survives the hit; stays interactable
 
       this.spawnLooseDrop(node.resource, node.amount, node.x, node.y);
@@ -1393,7 +1502,13 @@ export class MainScene extends Phaser.Scene {
     const cooldownMs = weaponCooldownMs(this.equippedWeapon);
     if (this.time.now - this.lastWeaponHitAt < cooldownMs) return;
 
-    const staminaCost = weaponStaminaCost(this.equippedWeapon);
+    // Damage type routes both the on-hit skill XP and the Strength/Agility
+    // stamina-cost discount. Weapon damage itself now scales with the
+    // weapon SKILL's own level (not player stat points) — see Skills.ts.
+    const dmgType = weaponPrimaryDamageType(this.equippedWeapon);
+    const staminaCost = Math.round(
+      weaponStaminaCost(this.equippedWeapon) * weaponStaminaCostMultiplier(dmgType, this.progression),
+    );
     if (!this.stamina.canAfford(staminaCost)) return; // exhausted — silent, same as tool guard
 
     this.lastWeaponHitAt = this.time.now;
@@ -1401,10 +1516,18 @@ export class MainScene extends Phaser.Scene {
     this.player.playSwing();
     this.player.playEquippedSwing();
 
-    const dmg = weaponDamage(this.equippedWeapon);
+    const dmg = Math.round(
+      weaponDamage(this.equippedWeapon) * weaponSkillDamageMultiplier(dmgType, this.skills),
+    );
     const depleted = enemy.takeHit(dmg);
+    this.skills.addXp(dmgType, 30); // weapon-hit XP to the primary damage type's skill
     this.spawnDamageNumber(enemy.x, enemy.y, dmg);
     if (!depleted) return;
+
+    // Kill: grant armor-skill XP once per distinct worn armor type.
+    for (const armorType of armorTypesWorn(EQUIP_SLOTS.map((s) => this.equipment.get(s.id)))) {
+      this.skills.addXp(armorType, 30);
+    }
 
     const dropX = enemy.x;
     const dropY = enemy.y;
@@ -1633,14 +1756,34 @@ export class MainScene extends Phaser.Scene {
     this.upgradeMenu?.refresh();
   }
 
-  // Level a skill and log it. No gameplay trigger yet (XP comes later) — this
-  // is the hook progression will call, and unlocking a skill level can reveal
-  // recipes gated on it.
-  gainSkillLevel(skill: SkillType): void {
-    this.skills.levelUp(skill);
-    const name = skill.charAt(0).toUpperCase() + skill.slice(1);
-    this.eventLog.add("levelup", `Leveled Up (${name}) -> Lvl ${this.skills.get(skill)}`);
-    this.refreshDiscovery();
+  private createCharacterMenu(): void {
+    this.characterMenu = new CharacterMenu(this, {
+      skills: this.skills,
+      progression: this.progression,
+      allocate: (stat) => this.allocateStat(stat),
+    });
+  }
+
+  // --- Progression (player stats) ---
+
+  // Push the current Endurance/Vitality bonuses into the Stamina/HP pools.
+  // Called on create and after either is spent, so the max bars grow live.
+  private syncStatBonuses(): void {
+    this.health.setBonusMax(this.progression.vitalityHealthBonus());
+    this.stamina.setBonusMax(this.progression.enduranceStaminaBonus());
+    this.refreshHealthBar();
+    this.refreshStaminaBar();
+  }
+
+  // Spend one unspent point on a stat (from the Character menu). Endurance/
+  // Vitality additionally re-sync the HP/Stamina max; the others take effect
+  // the next time their multiplier is read (weapon hit). Refreshes the menu
+  // in place.
+  private allocateStat(stat: StatType): void {
+    if (!this.progression.allocate(stat)) return;
+    if (stat === "endurance" || stat === "vitality") this.syncStatBonuses();
+    this.characterMenu?.refresh();
+    this.refreshStatPointsBadge();
   }
 
   // --- Crafting ---
@@ -1935,7 +2078,7 @@ export class MainScene extends Phaser.Scene {
       upgradesFor: (itemKey) => [...upgradesForItem(itemKey), ...armorUpgradesForItem(itemKey)],
       isDiscovered: (upg) => this.upgradeIngredientsKnown(upg),
       canAfford: (upg) => this.canAffordUpgrade(upg),
-      extraBlockReason: (upg) => this.armorUpgradeBlockReason(upg),
+      extraBlockReason: (upg) => this.upgradeBlockReason(upg),
       formatCost: (upg) => this.formatUpgradeCost(upg),
       displayName: (itemKey, tier) => stationDisplayName(itemKey, tier),
       apply: (upg) => {
@@ -2020,21 +2163,37 @@ export class MainScene extends Phaser.Scene {
       .join(", ");
   }
 
-  // Extra gate beyond raw materials — currently only armor upgrades that
-  // declare `requiresWorkbenchTier` (e.g. Gremlin Pants lvl 2 needing a
-  // Tool-Sharpener-upgraded Workbench nearby). Station upgrades never set
-  // this field, so they always pass through null.
-  private armorUpgradeBlockReason(upg: UpgradeDef): string | null {
-    if (!("requiresWorkbenchTier" in upg) || upg.requiresWorkbenchTier === undefined) return null;
-    if (this.isNearWorkbenchAtTier(upg.requiresWorkbenchTier, this.player.x, this.player.y)) return null;
-    return `Requires nearby ${stationDisplayName("workbench", upg.requiresWorkbenchTier)}`;
+  // Extra gate beyond raw materials, shared by both station and armor
+  // upgrades. Two layers:
+  // 1. General rule (per the user): whatever Workbench-proximity was needed
+  //    to CRAFT the base item (recipe.tier >= 1) is also needed to UPGRADE
+  //    it — e.g. gremlin_cap/shirt/pants are tier-1 recipes, so all three
+  //    now require a nearby Workbench to upgrade too (previously only
+  //    Pants had any workbench check at all). A tier-0 item (Workbench
+  //    itself, the only station with an upgrade today) needs no separate
+  //    check here — right-clicking it to open this panel already requires
+  //    standing at that very workbench.
+  // 2. Armor-specific extra gate: `requiresWorkbenchTier` (e.g. Gremlin
+  //    Pants lvl 2 needing a Tool-Sharpener-upgraded Workbench specifically,
+  //    not just any workbench) — checked second so a player with no nearby
+  //    workbench at all sees the more helpful generic message first.
+  private upgradeBlockReason(upg: UpgradeDef): string | null {
+    const recipe = RECIPES.find((r) => outputKey(r) === upg.appliesToItemKey);
+    if (recipe && recipe.tier > 0 && !this.isNearWorkbench(this.player.x, this.player.y)) {
+      return "Requires a nearby Workbench";
+    }
+    if ("requiresWorkbenchTier" in upg && upg.requiresWorkbenchTier !== undefined) {
+      if (this.isNearWorkbenchAtTier(upg.requiresWorkbenchTier, this.player.x, this.player.y)) return null;
+      return `Requires nearby ${stationDisplayName("workbench", upg.requiresWorkbenchTier)}`;
+    }
+    return null;
   }
 
   // Deducts a named upgrade's cost from the backpack and bumps this specific
   // placed station's tier (persisted on the Image's data, and carried into the
   // pickup on Destroy). Generic across stations — the visual tell is shared.
   private applyStationUpgrade(obj: Phaser.GameObjects.Image, upg: StationUpgradeDef): void {
-    if (!this.canAffordUpgrade(upg)) return;
+    if (!this.canAffordUpgrade(upg) || this.upgradeBlockReason(upg)) return;
     for (const [r, n] of Object.entries(upg.costs)) this.backpack.removeCount(r, n ?? 0);
     obj.setData("tier", upg.resultTier);
     this.applyTierVisual(obj, upg.resultTier);
@@ -2046,11 +2205,10 @@ export class MainScene extends Phaser.Scene {
   }
 
   // Armor's equivalent of applyStationUpgrade — deducts cost and bumps the
-  // EquippedItem's tier in place. Assumes the workbench-tier gate (if any)
-  // was already checked by the UpgradeMenu row being clickable.
+  // EquippedItem's tier in place.
   private applyArmorUpgrade(slot: EquipSlot, upg: ArmorUpgradeDef): void {
     const eq = this.equipment.get(slot);
-    if (!eq || !this.canAffordUpgrade(upg) || this.armorUpgradeBlockReason(upg)) return;
+    if (!eq || !this.canAffordUpgrade(upg) || this.upgradeBlockReason(upg)) return;
     for (const [r, n] of Object.entries(upg.costs)) this.backpack.removeCount(r, n ?? 0);
     this.equipment.set(slot, { key: eq.key, tier: upg.resultTier });
     this.eventLog.add("info", `${stationDisplayName(eq.key, upg.resultTier)} upgraded: ${upg.name}`);
@@ -2111,10 +2269,10 @@ export class MainScene extends Phaser.Scene {
   private createInventoryMenu(): void {
     this.inventoryMenu = new InventoryMenu(this, {
       backpack: this.backpack,
+      skills: this.skills,
       armorSlots: () => this.armorSlots(),
       beginDrag: (c, i, p) => this.beginItemDrag(c, i, p),
       beginArmorDrag: (slot, p) => this.beginArmorDrag(slot, p),
-      quickMove: (c, i) => this.quickMoveItem(c, i),
       openArmorContextMenu: (slot, x, y) => this.openArmorContextMenu(slot, x, y),
       isDragging: () => this.dragSource !== null,
     });
@@ -2160,6 +2318,11 @@ export class MainScene extends Phaser.Scene {
   private unequipArmorSlot(slot: EquipSlot, toIndex?: number): void {
     const eq = this.equipment.get(slot);
     if (!eq) return;
+    // The Upgrade panel's target no longer exists once unequipped — close it
+    // rather than leaving it open on a now-empty slot (mirrors
+    // destroyPlacedObject's identical check for a destroyed station).
+    const t = this.upgradeTarget;
+    if (t && "armorSlot" in t && t.armorSlot === slot) this.closeUpgradeMenu();
     this.equipment.set(slot, null);
     if (toIndex !== undefined && this.backpack.slot(toIndex) === null) {
       this.backpack.set(toIndex, { key: eq.key, count: 1, tier: eq.tier || undefined });
@@ -2215,21 +2378,27 @@ export class MainScene extends Phaser.Scene {
         "Interact: Left Click",
         "Craft: T",
         "Inventory: Tab",
+        "Character: K",
         "Auto-pickup: V",
         "Range ring: O",
       ],
     );
 
-    // Placement-mode hint, directly under the controls line above — small so
-    // it stays clear of the crafting/inventory tabs in the top-right.
+    // Placement-mode hint — bottom-right, stacked directly above the
+    // interact prompt (promptText), matching where every other contextual
+    // instruction/prompt in the HUD lives (was previously top-left, an odd
+    // spot disconnected from the rest of the interaction UI).
     this.placementHintText = this.add
-      .text(12, 30, "", {
+      .text(this.scale.width - 12, this.scale.height - 44, "", {
         fontFamily: "monospace",
-        fontSize: "12px",
+        fontSize: "14px",
         color: "#ffe08a",
+        backgroundColor: "#000000aa",
+        padding: { x: 8, y: 4 },
       })
+      .setOrigin(1, 1)
       .setScrollFactor(0)
-      .setDepth(1000)
+      .setDepth(2000)
       .setVisible(false);
 
     this.refreshHud();
@@ -2318,5 +2487,84 @@ export class MainScene extends Phaser.Scene {
     const frac = this.health.value() / this.health.max;
     this.healthBarFill.setScale(Math.max(0, frac), 1);
     this.healthBarText.setText(`${Math.round(this.health.value())}`);
+  }
+
+  // Player-level XP bar: stacks one more slot above the HP bar via the same
+  // hotbarUI.top anchor chain. Shows "Lvl N" inside; fills toward the next
+  // level. Purple to distinguish from HP (crimson) / stamina (goldenrod).
+  private createXpBar(): void {
+    const barW = 76;
+    const barH = 20;
+    const gap = 8;
+    const barX = this.scale.width / 2 - barW / 2;
+    const staminaBarY = this.hotbarUI.top - gap - barH;
+    const healthBarY = staminaBarY - gap - barH;
+    const barY = healthBarY - gap - barH;
+    this.add
+      .rectangle(barX, barY, barW, barH, 0x1a1f2a, 0.95)
+      .setOrigin(0, 0)
+      .setStrokeStyle(1, 0x3a4250)
+      .setScrollFactor(0)
+      .setDepth(2000);
+    this.xpBarFill = this.add
+      .rectangle(barX + 1, barY + 1, barW - 2, barH - 2, 0x8a5cd0, 1)
+      .setOrigin(0, 0)
+      .setScrollFactor(0)
+      .setDepth(2001);
+    this.xpBarText = this.add
+      .text(barX + barW / 2, barY + barH / 2, "", {
+        fontFamily: "monospace",
+        fontSize: "12px",
+        color: "#ffffff",
+      })
+      .setOrigin(0.5, 0.5)
+      .setScrollFactor(0)
+      .setDepth(2002);
+    this.refreshXpBar();
+  }
+
+  private refreshXpBar(): void {
+    const need = xpToNextPlayerLevel(this.progression.level);
+    const frac = need > 0 ? this.progression.xp / need : 0;
+    this.xpBarFill.setScale(Phaser.Math.Clamp(frac, 0, 1), 1);
+    this.xpBarText.setText(`Lvl ${this.progression.level}`);
+  }
+
+  // Small bobbing nudge under the "[Tab] Menu" icon (top-right) whenever
+  // unspent stat points are sitting unused — click opens the Character menu,
+  // which itself defaults to the Stats tab whenever points are available.
+  private createStatPointsBadge(): void {
+    this.statPointsBadge = this.add
+      .text(this.scale.width - 16, 42, "", {
+        fontFamily: "monospace",
+        fontSize: "13px",
+        color: "#ffe08a",
+        backgroundColor: "#3a2f10",
+        padding: { x: 8, y: 4 },
+      })
+      .setOrigin(1, 0)
+      .setScrollFactor(0)
+      .setDepth(3000)
+      .setVisible(false)
+      .setInteractive({ useHandCursor: true })
+      .on("pointerdown", () => this.characterMenu.openMenu());
+    this.tweens.add({
+      targets: this.statPointsBadge,
+      y: 48,
+      duration: 700,
+      yoyo: true,
+      repeat: -1,
+      ease: "Sine.easeInOut",
+    });
+    this.refreshStatPointsBadge();
+  }
+
+  private refreshStatPointsBadge(): void {
+    const n = this.progression.unspentPoints;
+    if (n <= 0) {
+      this.statPointsBadge.setVisible(false);
+      return;
+    }
+    this.statPointsBadge.setText(`${n} Stat Point${n === 1 ? "" : "s"} Available!`).setVisible(true);
   }
 }

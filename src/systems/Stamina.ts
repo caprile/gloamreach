@@ -14,13 +14,20 @@ export class Stamina {
   private current = MAX_STAMINA;
   private elapsed = 0; // running clock fed only by tick(delta)
   private regenAt = 0; // elapsed-time value regen may resume at
+  private bonusMax = 0; // additive max from Endurance points (Progression.ts)
 
   get max(): number {
-    return MAX_STAMINA;
+    return MAX_STAMINA + this.bonusMax;
   }
 
   value(): number {
     return this.current;
+  }
+
+  // Set the additive max bonus (from Endurance stat). Doesn't refill — the
+  // extra headroom fills via normal regen.
+  setBonusMax(bonus: number): void {
+    this.bonusMax = bonus;
   }
 
   canAfford(amount: number): boolean {
@@ -41,7 +48,7 @@ export class Stamina {
   tick(delta: number): void {
     this.elapsed += delta;
     if (this.elapsed < this.regenAt) return; // still in the post-spend delay window
-    if (this.current >= MAX_STAMINA) return;
-    this.current = Math.min(MAX_STAMINA, this.current + REGEN_PER_SEC * (delta / 1000));
+    if (this.current >= this.max) return;
+    this.current = Math.min(this.max, this.current + REGEN_PER_SEC * (delta / 1000));
   }
 }

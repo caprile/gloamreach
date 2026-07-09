@@ -2,10 +2,12 @@ import Phaser from "phaser";
 import type { ItemContainer } from "../systems/ItemContainer";
 import { itemDef } from "../systems/Items";
 import type { ProcessingStation } from "../systems/Processing";
+import type { Skills } from "../systems/Skills";
 import { Tooltip } from "./Tooltip";
 
 export interface DryingRackMenuDeps {
   backpack: ItemContainer;
+  skills: Skills;
   // The station of the rack currently open (null when the menu is closed).
   station: () => ProcessingStation | null;
   // Left-press on a backpack stack begins dragging it (reuses MainScene's
@@ -80,7 +82,7 @@ export class DryingRackMenu {
   constructor(scene: Phaser.Scene, deps: DryingRackMenuDeps) {
     this.scene = scene;
     this.deps = deps;
-    this.tooltipUI = new Tooltip(scene);
+    this.tooltipUI = new Tooltip(scene, deps.skills);
 
     this.panelW = 600;
     this.panelH = 400;

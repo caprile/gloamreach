@@ -2,6 +2,7 @@ import Phaser from "phaser";
 import type { EquipSlot } from "../systems/Equipment";
 import type { ItemContainer } from "../systems/ItemContainer";
 import { itemDef } from "../systems/Items";
+import type { Skills } from "../systems/Skills";
 import { Tooltip } from "./Tooltip";
 
 export interface ArmorSlotView {
@@ -13,15 +14,13 @@ export interface ArmorSlotView {
 
 export interface InventoryMenuDeps {
   backpack: ItemContainer;
+  skills: Skills;
   armorSlots: () => ArmorSlotView[];
   // Left-press on a filled slot begins dragging that stack.
   beginDrag: (container: ItemContainer, index: number, pointer: Phaser.Input.Pointer) => void;
   // Left-press on an occupied equipment slot begins dragging the equipped
   // item back out (e.g. to unequip it by dropping it in the backpack).
   beginArmorDrag: (slot: EquipSlot, pointer: Phaser.Input.Pointer) => void;
-  // Right-click quick-moves the stack to the hotbar (if hotbar-able), or
-  // equips it if it's an armor item.
-  quickMove: (container: ItemContainer, index: number) => void;
   // Right-click on an equipment slot opens a small Unequip/Upgrade (or
   // Equip/Upgrade if empty) context menu — mirrors a placed station's
   // right-click Upgrade/Destroy popup.
@@ -56,7 +55,7 @@ const ARMOR_ROWS_MAX = 3; // EQUIP_SLOTS is 9 slots / 3 cols = 3 rows
 const ARMOR_H = ARMOR_ROWS_MAX * SLOT + (ARMOR_ROWS_MAX - 1) * GAP; // 150
 
 export const PANEL_W = ARMOR_X + ARMOR_W - PANEL_X + 12; // 504
-const PANEL_H = BACKPACK_Y + BACKPACK_H - PANEL_Y + 20; // 382
+export const PANEL_H = BACKPACK_Y + BACKPACK_H - PANEL_Y + 20; // 382
 
 // Trash drop target: sits below the armor grid, in the panel's otherwise-
 // empty lower-right corner. Dragging a stack here permanently deletes it (see
@@ -85,7 +84,7 @@ export class InventoryMenu {
   constructor(scene: Phaser.Scene, deps: InventoryMenuDeps) {
     this.scene = scene;
     this.deps = deps;
-    this.tooltipUI = new Tooltip(scene);
+    this.tooltipUI = new Tooltip(scene, deps.skills);
 
     this.bg = scene.add
       .rectangle(PANEL_X, PANEL_Y, PANEL_W, PANEL_H, 0x0a0a0a, 0.93)
@@ -274,8 +273,12 @@ export class InventoryMenu {
         .on("pointerout", () => this.hideTooltip())
         .on("pointerdown", (pointer: Phaser.Input.Pointer) => {
           if (!stack) return;
-          if (pointer.rightButtonDown()) this.deps.quickMove(backpack, i);
-          else this.deps.beginDrag(backpack, i, pointer);
+          // Right-click is reserved for context-menu/upgrade actions now —
+          // quick-move-to-hotbar (or quick-equip) moved to double-left-click,
+          // detected by the scene via the click-in-place path (see
+          // MainScene.resolveItemDrag). A no-op here, not a drag start.
+          if (pointer.rightButtonDown()) return;
+          this.deps.beginDrag(backpack, i, pointer);
         });
       this.rows.push(box);
 

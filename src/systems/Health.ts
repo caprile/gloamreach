@@ -5,9 +5,19 @@ const MAX_HEALTH = 100;
 // regen; not implemented here.
 export class Health {
   private current = MAX_HEALTH;
+  private bonusMax = 0; // additive max from Endurance points (Progression.ts)
 
   get max(): number {
-    return MAX_HEALTH;
+    return MAX_HEALTH + this.bonusMax;
+  }
+
+  // Set the additive max bonus (from Endurance stat). Raising it grants the
+  // extra HP immediately (current tracks up); it is NOT reset by reset().
+  setBonusMax(bonus: number): void {
+    const delta = bonus - this.bonusMax;
+    this.bonusMax = bonus;
+    if (delta > 0) this.current += delta;
+    this.current = Math.min(this.current, this.max);
   }
 
   value(): number {
@@ -30,8 +40,9 @@ export class Health {
     this.current = Math.min(this.max, this.current + amount);
   }
 
-  // Called on respawn.
+  // Called on respawn. Refills to the current (Endurance-bonused) max; the
+  // bonus itself is progression-derived and persists across death.
   reset(): void {
-    this.current = MAX_HEALTH;
+    this.current = this.max;
   }
 }

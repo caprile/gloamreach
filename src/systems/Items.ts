@@ -1,6 +1,9 @@
 import type { ToolType } from "../entities/ResourceNode";
 import type { WeaponType } from "./Weapons";
-import type { EquipSlot } from "./Equipment";
+import type { EquipSlot, EquippedItem } from "./Equipment";
+
+// Armor material classes — double as the two armor Skill types (Skills.ts).
+export type ArmorType = "heavy_armor" | "light_armor";
 
 // Central display + behaviour metadata for every item that can live in the
 // inventory: raw resources AND crafted outputs. Keyed by the item's stable
@@ -21,6 +24,7 @@ export interface ItemDef {
   tool?: ToolType; // set for tool items — selecting it in the hotbar equips it
   weapon?: WeaponType; // set for weapon items — selecting it in the hotbar equips it
   armorSlot?: EquipSlot; // set for armor items — drag-onto-slot or right-click equips it
+  armorType?: ArmorType; // set for armor items — which armor skill a kill grants XP to
   stats?: ItemStat[];
   // World-placed items (campfires, building pieces) skip the backpack
   // entirely — crafting one enters placement mode instead. Per-item, not
@@ -104,6 +108,7 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     stats: [
       { label: "Type", value: "Weapon" },
       { label: "Damage", value: "3" },
+      { label: "Damage Type", value: "Blunt" },
     ],
   },
   stone_club: {
@@ -117,6 +122,7 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     stats: [
       { label: "Type", value: "Weapon" },
       { label: "Damage", value: "5" },
+      { label: "Damage Type", value: "Blunt" },
     ],
   },
 
@@ -245,7 +251,11 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     maxStack: 1,
     hotbarable: false,
     armorSlot: "helmet",
-    stats: [{ label: "Type", value: "Armor (Head)" }],
+    armorType: "light_armor",
+    stats: [
+      { label: "Type", value: "Armor (Head)" },
+      { label: "Armor Type", value: "Light" },
+    ],
   },
   gremlin_shirt: {
     key: "gremlin_shirt",
@@ -255,7 +265,11 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     maxStack: 1,
     hotbarable: false,
     armorSlot: "chest",
-    stats: [{ label: "Type", value: "Armor (Chest)" }],
+    armorType: "light_armor",
+    stats: [
+      { label: "Type", value: "Armor (Chest)" },
+      { label: "Armor Type", value: "Light" },
+    ],
   },
   gremlin_pants: {
     key: "gremlin_pants",
@@ -265,10 +279,27 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     maxStack: 1,
     hotbarable: false,
     armorSlot: "legs",
-    stats: [{ label: "Type", value: "Armor (Legs)" }],
+    armorType: "light_armor",
+    stats: [
+      { label: "Type", value: "Armor (Legs)" },
+      { label: "Armor Type", value: "Light" },
+    ],
   },
 };
 
 export function itemDef(key: string): ItemDef | undefined {
   return ITEM_DEFS[key];
+}
+
+// Distinct armor material types currently worn across the given equip slots
+// (deduped — two Light pieces count once). Used to grant per-armor-type skill
+// XP on a kill. Lives here since Items.ts owns armorType lookups.
+export function armorTypesWorn(slots: (EquippedItem | null)[]): ArmorType[] {
+  const out = new Set<ArmorType>();
+  for (const eq of slots) {
+    if (!eq) continue;
+    const t = ITEM_DEFS[eq.key]?.armorType;
+    if (t) out.add(t);
+  }
+  return [...out];
 }

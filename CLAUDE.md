@@ -203,7 +203,11 @@ mouse-driven only. Don't reintroduce a keybind for this without being asked. Spa
    placement like equipping a tool** (a selected placeable is in place mode; selecting anything
    else exits it — number key / scroll wheel / left-click all select identically), and
    **inventory gestures match every other item** — right-click a backpack placeable quick-moves
-   it to the hotbar, while **left-click** on a backpack placeable enters place mode. The single
+   it to the hotbar, while **left-click** on a backpack placeable enters place mode.
+   *(Superseded in the Progression milestone's playtest pass: quick-move is now
+   **double-left-click** for every backpack item, not right-click — right-click is reserved
+   for context-menu/upgrade actions. A single left-click on a placeable still enters place
+   mode, just deferred behind the double-click window — see `STATUS.md`.)* The single
    generic `workbench_upgrade` item is replaced by a **named
    per-station upgrade system** (e.g. "Tool Sharpener": 3 twine/5 wood/2 stone, applied
    directly via the right-click Upgrade popup — no intermediate craftable item), and a
@@ -232,9 +236,52 @@ mouse-driven only. Don't reintroduce a keybind for this without being asked. Spa
    (`MainScene.spawnEnemies()`) — a deliberate departure from Milestone C's original "rarer,
    stronger" ranged-Gremlin tuning intent. **With N and O shipped, the entire I–O batch
    (`.claude/plans/this-is-a-plan-cached-pixel.md`) is done.**
+5. **Progression** — shipped (plan: `.claude/plans/refactored-napping-metcalfe.md`, built
+   in sub-milestones A–D, then a same-day playtest rebalance pass — see `STATUS.md` for
+   both). Two *separate* systems: many small per-activity **Skills** (`Skills.ts`,
+   expanded from the old dormant `axes`/`pickaxes` seed) and one overall **Player Level**
+   (`Progression.ts`, new). Skills — 5 weapon-damage-type skills
+   (slash/blunt/pierce/ranged/magic) + heavy/light armor + running/blocking/chopping/mining;
+   XP curve `100*(level+1)` per level, soft-cap 100. **Skills only gate recipes** (via the
+   widened `Recipe.requiredSkills[]`), as a **discovery-time** gate — a skill-locked recipe
+   (e.g. `stone_club` before Blunt lvl 3) is fully invisible until met, same treatment as an
+   undiscovered ingredient (an initial ship of this as a craft-time visible-but-greyed gate
+   was reverted same-day per the user). XP sources today: weapon hit → primary damage-type
+   skill; tool hit → chopping/mining; sprint → running; kill → each distinct worn armor
+   type. `blocking` + the 4 non-blunt weapon skills + `heavy_armor` exist in the type system
+   with no XP source wired yet (future content — ranged/magic weapons, heavy armor, a
+   block/parry mechanic). **Weapon damage types** are new (`Weapons.ts` `DamageType`/
+   `WEAPON_DAMAGE_TYPES`); a weapon's primary type routes its skill XP and shows on the item
+   stats popup. **Weapon skill levels grant their own damage bonus** (+0.5% dmg/level,
+   `Skills.ts` `weaponSkillDamageMultiplier` — this replaced an initial ship where player
+   stat points affected weapon damage instead; see below). Player Level is fed by skill
+   level-ups (each grants Player XP = that skill level's cost), curve
+   `round(150*(level+1)^1.9)` (fast early, steep later — steepened significantly same-day
+   after a playtest reached level 8-9 too easily), and grants **N points at level N**
+   spendable on **Endurance/Vitality/Strength/Agility/Intelligence/Willpower** (no Luck —
+   deferred). Endurance → +1 max Stamina/point; **Vitality** → +1 max HP/point (split out
+   of Endurance same-day — was originally one combined stat at +2/+4); Strength/Agility →
+   -0.5% stamina cost for melee/ranged respectively (no longer affect damage — that moved
+   to the weapon skill above); Intelligence/Willpower are explicit **placeholders**
+   (spell-cast-time / mana-cost — neither system exists yet). No HP/stamina *regen* effect
+   (no regen system exists). **Running now has a mechanical effect too**: sprint speed
+   itself was slowed substantially (`Player.ts`'s hardcoded multiplier removed; base
+   ~1.15x, was 1.6x) and Running's level slowly claws it back (+0.5% of base speed per
+   level via `Skills.runningSprintMultiplier()`, passed into `Player.update()` each frame
+   by the scene — only reaching the old 1.6x around the level-100 soft cap). New
+   **Character menu** (key **K**, `CharacterMenu.ts`) with Skills tab (**hover a row for
+   its impact description, "if applicable"** — the 5 weapon skills and Running have one
+   today) and Stats tab, defaulting to Stats whenever points are unspent; a bobbing
+   "N Stat Points Available!" badge appears near the `[Tab] Menu` icon under the same
+   condition. A 3rd HUD bar (player XP + "Lvl N") stacks above HP/stamina. All numeric
+   constants are first-pass/tunable. In-memory only (no save/load yet). Armor/station
+   **upgrades are gated on Workbench proximity whenever their base recipe is tier ≥ 1**
+   (`MainScene.upgradeBlockReason()`, generalized from an initial ship that only gated
+   Gremlin Pants) — layered under Pants' own stricter "Workbench must itself be tier 1"
+   check. **Not yet wired:** any multi-skill recipe (the `requiredSkills[]` array supports
+   it, e.g. a future "5 Slash + 5 Pierce" weapon).
 
 **Not yet built — next up in rough order:**
-5. **Progression** — XP, levels, stats.
 6. **World & discovery** — much bigger generated world, biomes, map. See **First biome —
    content notes** below for the first biome's terrain-zone concept.
 7. **Bosses.**
@@ -345,7 +392,9 @@ intended to require a workbench once it exists.
   a nearby Workbench having reached tier 1 itself). First real use of `Equipment.ts`'s slot
   system (dormant since Milestone H) — `Equipment` now stores `{key, tier}` per slot instead
   of a bare item key, since a worn piece's upgrade level lives there. Equip via **drag onto
-  the paper-doll slot** or **right-click a backpack item** (both work, either auto-equips —
+  the paper-doll slot** or **right-click a backpack item** *(superseded in the Progression
+  milestone's playtest pass — quick-equip is now **double-left-click** on the backpack item,
+  not right-click; see `STATUS.md`)* (both work, either auto-equips —
   swapping any previously worn piece back to the backpack, or dropping it on the floor if
   full). **Right-clicking an already-equipped slot** opens that piece's lvl-2 Upgrade panel
   — reuses `UpgradeMenu.ts` verbatim (the same panel a placed station's Upgrade button

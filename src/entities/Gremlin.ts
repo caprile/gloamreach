@@ -11,7 +11,7 @@ import type { ProjectileConfig, ProjectileHost } from "./Projectile";
 // the melee-only variant genuinely has no kiting/throwing states to speak
 // of, consistent with the standing "own condition, not just a knob" rule.
 
-const RANGED_AGGRO_RADIUS = 160; // larger than melee — ranged notices earlier
+const RANGED_AGGRO_RADIUS = 136; // larger than melee — ranged notices earlier (~15% shorter, playtest feedback)
 // Wider than PROJECTILE_MAX_RANGE (see below) so there's real room for the
 // "pursue" band between "in range" and "gave up" — previously this equaled
 // PROJECTILE_MAX_RANGE exactly, which meant a player who kited past shot
@@ -20,13 +20,13 @@ const RANGED_DEAGGRO_RADIUS = 400;
 const KITE_SPEED = 55; // backs away while too close (below RANGED_MIN_KITE_DIST)
 const RANGED_MIN_KITE_DIST = 140; // closer than this -> flee; keeps some daylight before melee range
 const RANGED_PURSUE_SPEED = 70; // chases in while out of shot range (beyond PROJECTILE_MAX_RANGE)
-const RANGED_MELEE_RANGE = 24; // player closing to this -> switches to melee mode
-const RANGED_MELEE_EXIT_RANGE = 40; // must back out past this (not just RANGED_MELEE_RANGE) to leave melee mode — hysteresis gap, same reasoning as AGGRO/DEAGGRO_RADIUS elsewhere: without it, the player-enemy physics collider's constant separation jitter flips the mode every frame right at the boundary
+const RANGED_MELEE_RANGE = 20; // player closing to this -> switches to melee mode (~15% shorter, playtest feedback)
+const RANGED_MELEE_EXIT_RANGE = 34; // must back out past this (not just RANGED_MELEE_RANGE) to leave melee mode — hysteresis gap, same reasoning as AGGRO/DEAGGRO_RADIUS elsewhere: without it, the player-enemy physics collider's constant separation jitter flips the mode every frame right at the boundary
 const RANGED_MELEE_COOLDOWN_MS = 900;
 const RANGED_CLAW_DAMAGE = 10; // punishes closing the distance, higher than a single throw
 const PROJECTILE_SPEED = 220;
 const PROJECTILE_DAMAGE = 8;
-const PROJECTILE_MAX_RANGE = 260;
+const PROJECTILE_MAX_RANGE = 220; // ~15% shorter, playtest feedback
 const RANGED_MAX_HEALTH = 32; // doubled 2026-07-07 (was 16) — tanky enough to trade at range
 // Burst pattern (2026-07-07 spec): once the player is in range, fire a quick
 // 2-shot burst, then wait out a longer cooldown before the next burst — not a
@@ -230,11 +230,11 @@ export class RangedGremlin extends Enemy {
   }
 }
 
-const MELEE_AGGRO_RADIUS = 130;
+const MELEE_AGGRO_RADIUS = 110; // ~15% shorter, playtest feedback
 const MELEE_DEAGGRO_RADIUS = 220;
 const MELEE_CHASE_SPEED = 70;
 const MELEE_WANDER_SPEED = 20;
-const MELEE_RANGE = 24;
+const MELEE_RANGE = 20; // ~15% shorter, playtest feedback
 const MELEE_CLAW_COOLDOWN_MS = 800;
 const MELEE_CLAW_DAMAGE = 8; // weaker than the ranged variant's fallback claw (10) and Boar's bite (25)
 const MELEE_MAX_HEALTH = 12;

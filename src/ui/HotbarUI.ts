@@ -2,6 +2,7 @@ import Phaser from "phaser";
 import type { Hotbar } from "../systems/Hotbar";
 import type { ItemContainer } from "../systems/ItemContainer";
 import { itemDef } from "../systems/Items";
+import type { Skills } from "../systems/Skills";
 import { Tooltip } from "./Tooltip";
 
 const SLOT_SIZE = 40;
@@ -9,10 +10,9 @@ const SLOT_GAP = 6;
 const SLOT_COUNT = 9;
 
 export interface HotbarUIDeps {
+  skills: Skills;
   // Left-press on a slot begins dragging that slot's stack.
   beginDrag: (container: ItemContainer, index: number, pointer: Phaser.Input.Pointer) => void;
-  // Right-click quick-moves the slot's stack back to the backpack.
-  quickMove: (container: ItemContainer, index: number) => void;
   // Suppress tooltips while a drag is in progress.
   isDragging: () => boolean;
 }
@@ -35,7 +35,7 @@ export class HotbarUI {
     this.scene = scene;
     this.hotbar = hotbar;
     this.deps = deps;
-    this.tooltipUI = new Tooltip(scene);
+    this.tooltipUI = new Tooltip(scene, deps.skills);
     const totalW = SLOT_COUNT * SLOT_SIZE + (SLOT_COUNT - 1) * SLOT_GAP;
     this.originX = (scene.scale.width - totalW) / 2;
     this.originY = scene.scale.height - SLOT_SIZE - 14;
@@ -97,8 +97,11 @@ export class HotbarUI {
         })
         .on("pointerout", () => this.tooltipUI.hide())
         .on("pointerdown", (pointer: Phaser.Input.Pointer) => {
-          if (pointer.rightButtonDown()) this.deps.quickMove(this.hotbar.container, i);
-          else this.deps.beginDrag(this.hotbar.container, i, pointer);
+          // Right-click is a no-op now — quick-move-to-backpack moved to a
+          // double-left-click-in-place, detected scene-side (see
+          // MainScene.resolveItemDrag).
+          if (pointer.rightButtonDown()) return;
+          this.deps.beginDrag(this.hotbar.container, i, pointer);
         });
       this.rows.push(box);
 

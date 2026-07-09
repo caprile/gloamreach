@@ -1,7 +1,6 @@
 import Phaser from "phaser";
 
 const SPEED = 95; // pixels per second
-const SPRINT_MULTIPLIER = 1.6; // sprint speed = SPEED * this
 const DASH_SPEED = 450; // px/s during a dash burst — sharp snap, not a glide
 const DASH_DURATION_MS = 105; // how long the burst overrides normal movement
 const DASH_COOLDOWN_MS = 600; // minimum time between dashes, independent of stamina
@@ -66,8 +65,10 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   // Called every frame by MainScene. `canSprint`/`canDash` are the scene's
   // stamina veto (false when the pool can't cover the cost) — Player still
   // reads the raw keys, but the scene has final say over whether sprint/dash
-  // actually takes effect this frame.
-  update(delta: number, canSprint: boolean, canDash: boolean): PlayerFrameResult {
+  // actually takes effect this frame. `sprintMultiplier` is computed by the
+  // scene from the Running skill level (Skills.ts) — Player has no skill
+  // knowledge of its own, it just applies whatever multiplier it's handed.
+  update(delta: number, canSprint: boolean, canDash: boolean, sprintMultiplier: number): PlayerFrameResult {
     const now = this.scene.time.now;
     const body = this.body as Phaser.Physics.Arcade.Body;
 
@@ -118,7 +119,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       body.setVelocity(0, 0);
     } else {
       const len = Math.hypot(vx, vy);
-      const speed = sprinting ? SPEED * SPRINT_MULTIPLIER : SPEED;
+      const speed = sprinting ? SPEED * sprintMultiplier : SPEED;
       body.setVelocity((vx / len) * speed, (vy / len) * speed);
     }
     return { moving, sprinting, dashStarted: false, facing: this.facing };

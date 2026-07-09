@@ -1,8 +1,269 @@
 # Status
 
-Last updated: 2026-07-08
+Last updated: 2026-07-09
 
-### Just finished: Playtest fixes after O — Gremlin spawn spacing + kite/pursue AI loop
+### Just finished: Third Progression playtest batch — sprint rework, right-click reserved, workbench gate
+
+Third same-day playtest pass. Per the user's own request this round, four ambiguous
+items were clarified via `AskUserQuestion` before any code changed (sprint-speed
+numbers, workbench-gate scope, quick-move scope, right-click's remaining job) — answers
+below.
+
+- **Sprint slowed substantially; Running skill now claws it back slowly**
+  (`src/entities/Player.ts`, `src/systems/Skills.ts`). `Player`'s hardcoded
+  `SPRINT_MULTIPLIER` constant is gone — `Player.update()` now takes a `sprintMultiplier`
+  param computed by the scene each frame via new `Skills.runningSprintMultiplier()`:
+  `1.15 + runningLevel * 0.005`. Base sprint dropped from the old flat 1.6x (~152 px/s)
+  to ~1.15x (~109 px/s), climbing back up +0.5% of base speed per Running level,
+  reaching ~1.65x only at the level-100 soft cap — a long, deliberate grind. Running
+  also gained a hover-tooltip impact description ("+0.5% sprint speed per level") since
+  it's no longer a no-op skill.
+- **Weapon damage tooltip / recipe-toast fixes carried over from last batch, this batch adds:**
+  **Recipe-unlock toast moved from top-right to the left side**, anchored directly
+  under the `InventoryMenu` panel's box (`EventLogUI.ts` now imports `PANEL_X`/`PANEL_Y`/
+  the newly-exported `PANEL_H` from `InventoryMenu.ts`) — slides in from off-screen left
+  instead of the right.
+- **Upgrade menu now closes when its target armor slot is unequipped** — `unequipArmorSlot()`
+  checks `upgradeTarget` (mirrors the identical existing check in `destroyPlacedObject()`
+  for a destroyed station) and closes the panel if it was open for that slot.
+- **General workbench-proximity gate for ALL upgrades**, not just Gremlin Pants' existing
+  special case. Per the user: "whatever workbench is required to craft an item, you must
+  be near that item to upgrade it." `armorUpgradeBlockReason()` → renamed/generalized
+  `upgradeBlockReason()`: looks up the upgrade's base `Recipe` via `appliesToItemKey` and
+  requires `isNearWorkbench()` if that recipe's `tier > 0` — layered *underneath* Pants'
+  existing `requiresWorkbenchTier` check (the general one shows first/is more helpful when
+  the player has no workbench nearby at all). This was a real gap: Gremlin Cap/Shirt's
+  lvl2 upgrades previously had **no workbench check at all**; only Pants did (and only its
+  stricter tier-specific one). Workbench's own upgrade (Tool Sharpener) needs no separate
+  check — right-clicking it already requires standing at that very workbench (tier 0).
+  Both `applyStationUpgrade`/`applyArmorUpgrade` now defensively re-check this too, not
+  just the UI-level `extraBlockReason`.
+- **Quick-move is now double-left-click; right-click is reserved for context-menu/upgrade
+  actions.** Per the user (clarified: applies to every backpack item uniformly; right-click
+  becomes a no-op for plain items, no new context menu built for them yet): `InventoryMenu`'s
+  backpack slots and `HotbarUI`'s slots dropped their `rightButtonDown() → quickMove(...)`
+  branch (now just `return` on right-click) and the now-unused `quickMove` dep entirely.
+  Double-click detection lives in `MainScene.resolveItemDrag()` via two new small helpers:
+  `isDoubleClickInPlace(key)` (350ms window, keyed per-slot e.g. `"bag:5"`/`"hotbar:2"`) and
+  `deferSingleClick(action)`. Hotbar's click-in-place (slot **select**) still fires
+  immediately/undeferred (idempotent, no latency added) with double-click *additionally*
+  triggering `quickMoveItem` back to the backpack. Backpack's click-in-place is trickier: a
+  **single** click on a placeable enters placement mode — but that's now **deferred** behind
+  the same 350ms window, so a genuine double-click quick-moves the item instead of arming
+  placement mode first (which would otherwise reference a now-stale backpack slot once the
+  item moved to the hotbar — a real correctness bug the deferral avoids, not just a style
+  choice). A single click on a non-placeable stays a no-op, unchanged. Armor's own
+  right-click gestures (equipped-slot Unequip/Upgrade popup, placed-station Upgrade/Destroy)
+  are untouched — those were never the "quick-move" gesture.
+- **Character menu (`K`) defaults to the Stats tab whenever `unspentPoints > 0`** —
+  recomputed fresh on every `openMenu()` call (not remembered across opens).
+- **New animated stat-points badge** — a small bobbing "N Stat Points Available!" tag
+  under the `[Tab] Menu` icon (top-right), visible only while points are unspent,
+  clickable to open the Character menu. Refreshed alongside the XP bar wherever
+  `unspentPoints` changes (level-up, `allocateStat`).
+
+Verified via `preview_eval`: sprint speed at Running lvl 0 reads ~109.25 px/s and ~156.75
+px/s at the lvl-100 soft cap (matches the formula exactly); Gremlin Cap's lvl2 upgrade
+blocks with "Requires a nearby Workbench" far from one and clears once a workbench is
+placed nearby; Gremlin Pants' lvl2 still additionally blocks with "Requires nearby
+Workbench Lvl 2" when only a tier-0 workbench is nearby; opening the Upgrade panel for
+an equipped helmet then unequipping it closes the panel; a single click-in-place on a
+non-placeable backpack item is a no-op (item stays put), while two clicks in the same
+tick move it from backpack to hotbar; the `InventoryMenu`/`HotbarUI` deps objects no
+longer carry a `quickMove` field at all; the recipe-toast container spawns at
+`x:-240, y:442` — exactly off-screen-left and directly under the inventory panel's
+bottom edge. Type-check clean (`tsc --noEmit`), no console errors.
+
+### Previously: Second Progression playtest batch — UI polish + gremlin range tuning
+
+Second same-day playtest pass, five independent small fixes:
+
+- **Gremlin/Gremling attack + trigger ranges cut ~15%** (`src/entities/Gremlin.ts`):
+  `RANGED_AGGRO_RADIUS` 160→136, `MELEE_AGGRO_RADIUS` 130→110, `PROJECTILE_MAX_RANGE`
+  260→220, `RANGED_MELEE_RANGE`/`MELEE_RANGE` 24→20, `RANGED_MELEE_EXIT_RANGE` 40→34
+  (kept proportional to its paired range so the hysteresis gap ratio is unchanged).
+  Deaggro radii, speeds, and damage/cooldowns untouched — only the "notices you" /
+  "can hit you from here" ranges shrank.
+- **Weapon damage tooltip now shows "base (adjusted)"** — `Tooltip.ts`'s generic
+  `def.stats` rendering gained a `statValue()` override: a weapon's "Damage" line
+  computes the live skill-adjusted number (`weaponSkillDamageMultiplier` from
+  `Skills.ts`) alongside the static base, e.g. "Damage: 3 (4)" once Blunt is high
+  enough to round up. `Tooltip` now takes an optional `skills` param at construction;
+  `InventoryMenu`/`HotbarUI`/`DryingRackMenu` all gained a `skills: Skills` dep field
+  and pass it through to their own `new Tooltip(scene, deps.skills)` call.
+- **Recipe-unlock toast stacking fixed** (`EventLogUI.ts`) — the toast box was a fixed
+  40px tall but its wrapped message text wasn't, so a longer name (2-3 wrapped lines)
+  could visually spill into whatever toast was stacked below it, reading as "toasts
+  overlapping in the same place" when several unlocked close together. Toast height is
+  now measured from the real wrapped text (`Math.max(40, text.height + 16)`) and each
+  toast's Y offset is the actual cumulative height of every currently-active toast
+  above it (`activeRecipeToasts: {height}[]`, replacing a bare counter) — no more
+  fixed slot-height math. Also **hold/fade duration increased** (hold 2400→3200ms,
+  fade 600→900ms) per "should fade out slower."
+- **Placement-mode hint relocated to bottom-right** (`MainScene.ts`) — was anchored
+  top-left under the controls line, disconnected from every other contextual
+  prompt/instruction in the HUD (all of which live bottom-right, e.g. the interact
+  prompt). Now anchored bottom-right (origin 1,1) stacked directly above `promptText`,
+  matching its exact visual style (same font size/background/padding).
+
+Verified via `preview_eval`: a wood_club tooltip at Blunt lvl 62 (~31% bonus) reads
+"Damage: 3 (4)" (base 3, adjusted rounds up at that level; lower levels round back to
+the same "3 (3)" honestly, which is expected/by-design); queuing a long recipe-unlock
+message confirms toast height grows well past the 40px minimum (measured 68px) instead
+of a fixed box; the placement hint renders at (1908, 1036) on a 1920x1080 screen,
+origin (1,1), directly above the interact-prompt corner. `preview_screenshot` confirms
+the tooltip and placement hint both render cleanly bottom-right with no overlap.
+Type-check clean, no console errors.
+
+### Previously: Progression playtest fixes — recipe visibility, stat rebalance, gremlin density
+
+Same-day playtest pass on the Progression milestone below, requested directly by the
+user after a real session:
+
+- **Skill-gated recipes reverted to fully hidden (discovery-time gate), not
+  visible-but-greyed.** The Progression milestone's own craft-time-gating decision
+  (flagged for the user to override) was overridden: `Crafting.refresh()` checks
+  `skillsMet()` again for discovery, matching how ingredients already work — a
+  skill-locked recipe (e.g. `stone_club` before Blunt lvl 3) is invisible, not shown
+  amber-greyed. The now-dead amber "Requires <Skill> Lvl N" line was removed from
+  `CraftingMenu.ts` (unreachable once discovery already guarantees it's met), along
+  with the redundant `skillsMet` rechecks in `isCraftable`/`craftRecipe` — skill levels
+  never decrease, so the discovery-time check is sufficient forever, same reasoning
+  `Recipe.tier`'s "workbench ever placed" discovery gate already relies on (as opposed
+  to *proximity*, which does change and is correctly still rechecked at craft time).
+- **Stat system fully reworked** (`src/systems/Progression.ts`) — the original
+  Strength/Agility/Intelligence damage-bonus design is gone; damage now scales with the
+  **weapon skill's own level** instead (see below), and player stats are pool-size /
+  cost-reduction only:
+  - `endurance`: +1 max Stamina/point (was +2)
+  - `vitality` (**new stat**, split out of the old combined Endurance): +1 max HP/point
+    (was +4 bundled into Endurance)
+  - `strength`: -0.5% stamina cost, melee weapons only (was +2% dmg / -1.5% cost)
+  - `agility`: -0.5% stamina cost, ranged weapons only (same change)
+  - `intelligence`: -0.5% spell cast time/point (**placeholder** — no spell-casting
+    system exists; repurposed from its old melee-magic-damage role)
+  - `willpower` (**new stat**): -0.5% mana cost to magic attacks/point (**placeholder**
+    — no mana system exists). Per the user, Intelligence/Willpower are explicitly
+    placeholders for magic systems that don't exist yet.
+  - `weaponDamageMultiplier` deleted from `Progression.ts` entirely; `Health.ts`/
+    `Stamina.ts` wiring renamed `enduranceHealthBonus`→`vitalityHealthBonus` (now reads
+    the `vitality` stat) and `MainScene.syncEnduranceBonus`→`syncStatBonuses`
+    (`allocateStat` now re-syncs pools for either `endurance` or `vitality`).
+- **Weapon skill levels now grant their own damage bonus** (`Skills.ts`,
+  `weaponSkillDamageMultiplier`): +0.5% weapon damage per level, for the 5 weapon
+  skills only (armor/general skills have none). This is the mechanic that replaced the
+  old player-stat damage bonus — "getting better with a weapon type" now lives on the
+  skill, while player stats stay pool-size/cost-reduction only. Applied in
+  `tryAttackEnemy()` in place of the old `weaponDamageMultiplier` call.
+- **Skill hover tooltips** (`CharacterMenu.ts`) — hovering a Skills-tab row now shows a
+  small floating tooltip with its mechanical impact via a new `skillImpactDescription()`
+  (`Skills.ts`), e.g. "+0.5% weapon damage per level" for the 5 weapon skills; rows with
+  no mechanical effect (armor/general skills) get no hit-area/tooltip at all, per the
+  user's "if applicable" framing. A persistent `tooltip` Text object (not rebuilt every
+  `render()` like the row list) is shown/hidden via `pointerover`/`pointerout` on an
+  invisible per-row hit rectangle, positioned just below the row so it never overlaps
+  the row above it.
+- **Player-level XP curve steepened significantly**: `XP_BASE` 40→**150**, `XP_EXPONENT`
+  1.6→**1.9**. The user hit player level 8→9 from "only a few enemies" and asked if it
+  was bugged — audited every XP hook (`addXp` loop, weapon/chop/mine/sprint/kill grants)
+  and found no double-counting; the real cause was the curve being tuned too gently
+  against 11 concurrently-leveling skills (passive `running` XP especially, which
+  requires no combat at all) each feeding Player XP on every level-up. The new curve is
+  roughly 3.5x steeper by level 10 than the original.
+- **Gremlin/Gremling density cut** (`MainScene.spawnEnemies()`) — still felt overrun
+  despite Milestone O's spacing fix. `RANGED_GREMLIN_COUNT` 18→**12** (still ~20% margin
+  over the ~10 `gremlin_leather` estimate that justified 18 in the first place),
+  `MELEE_GREMLING_COUNT` 6→**4** (no unique resource, safe to cut further), and spacing
+  tightened: `GREMLIN_CLUSTER_RADIUS` 140→**220**, `GREMLIN_CLUSTER_MAX` 2→**1** (no more
+  than 1 gremlin-family enemy within 220px of another, down from 2 within 140px).
+
+Verified via `preview_eval`: `stone_club` stays absent from `discoveredRecipes()` at
+Blunt lvl 0 and appears once Blunt hits lvl 3 (both via the real `refreshDiscovery()`
+path); allocating 5 Vitality + 5 Endurance bumps HP 100→105 and Stamina 100→105 exactly
+(+1 each); the same 600 skill-XP dump that previously reached Player Level 3 (247/368
+xp) now reaches only **Level 2 (40/1210 xp)** — matching `round(150*2^1.9)=560`
+consumed exactly; a live `tryAttackEnemy()` call at Blunt lvl 3 applies the weapon-skill
+damage multiplier (1.015x on a 3-dmg club, rounds to 3 — expected, the bonus is subtle
+at low levels by design); live enemy roster confirms exactly 12 Gremlin + 4 Gremling.
+`preview_screenshot` confirms the Skills tab (with a working hover tooltip positioned
+cleanly below its row) and Stats tab (all 6 stats, correct descriptions, no panel
+overflow) both render correctly. Type-check clean, no console errors.
+
+### Previously: Progression — Skills, Player Level, damage types, stat points
+
+The roadmap's **Progression** milestone (plan:
+`.claude/plans/refactored-napping-metcalfe.md`), built in four ordered sub-milestones
+(A–D). Introduces two *separate* systems — many small per-activity **Skills** and one
+overall **Player Level** — plus **weapon damage types** as new content. Built on top of
+the previously-dormant `Skills.ts` seed (`axes`/`pickaxes`, never wired to any XP source;
+`MainScene.gainSkillLevel()` was dead code, now deleted).
+
+- **A — Skill/Weapon foundation.** `Weapons.ts` gained `DamageType`
+  (`slash|blunt|pierce|ranged|magic`) + `WEAPON_DAMAGE_TYPES` (`wood_club`/`stone_club`
+  → `["blunt"]`) + `weaponPrimaryDamageType()`. `Skills.ts` rewritten: expanded
+  `SkillType` (5 weapon damage-type skills + `heavy_armor`/`light_armor` +
+  `running`/`blocking`/`chopping`/`mining`), `WEAPON_SKILLS`/`ARMOR_SKILLS`/
+  `GENERAL_SKILLS` grouping arrays, `MAX_SKILL_LEVEL = 100`, `skillXpToNext(level) =
+  100*(level+1)`, `skillDisplayName()`, and an XP-based `Skills` class with fractional
+  `addXp()` (loops through multi-level dumps) + an `onLevelUp` subscriber (mirrors
+  `EventLog.onAdd`). `Recipe.requiredSkill` (singular) widened to `requiredSkills[]`;
+  `stone_axe`→chopping0, `stone_pickaxe`→mining0, `stone_club`→**blunt3** (new),
+  gremlin cap/shirt/pants→**light_armor0** (new). `Crafting.skillMet` → public
+  `skillsMet` (checks all entries). `Items.ts` gained `ArmorType`, `ItemDef.armorType`
+  (gremlin pieces = light_armor), hand-written "Damage Type"/"Armor Type" stat lines,
+  and an `armorTypesWorn(slots)` helper.
+- **B — Skill XP hooks + crafting-menu gating.** `MainScene` constructs `Skills` with an
+  `onLevelUp` that logs a `"levelup"` toast, feeds Player XP, and refreshes the crafting
+  menu. Four XP sources: weapon hit → 30 to the primary damage-type skill
+  (`tryAttackEnemy`); tool hit → 30 chopping/mining (`tryInteract`, reusing the in-scope
+  `kind`); sprint → 10/sec running (`update`); kill → 30 per distinct worn armor type
+  (`tryAttackEnemy` kill branch, via `armorTypesWorn`). **Skill requirements are a
+  CRAFT-TIME gate, not a discovery gate** (a resolved plan ambiguity — see decision note
+  below): `Crafting.refresh()` no longer calls `skillMet` for discovery, so a skill-locked
+  recipe shows once its ingredients+workbench are known but greys out with an amber
+  `"Requires Blunt Lvl 3 (currently Lvl 0)"` line (mirrors the existing Workbench-proximity
+  line) and `craftRecipe` guards on `skillsMet`.
+- **C — Player Progression.** New `src/systems/Progression.ts`: `PlayerProgression`
+  (level starts 1, `xp`, `unspentPoints`, per-stat counts), `StatType =
+  endurance|strength|agility|intelligence` (**no luck**), `xpToNextPlayerLevel(level) =
+  round(40*(level+1)^1.6)` (fast early, steep later), `addXp` (awards `level` points per
+  level gained), `allocate`, `onLevelUp`, plus `weaponDamageMultiplier`/
+  `weaponStaminaCostMultiplier` keyed generically off damage type (magic→INT, ranged→AGI,
+  else STR — so a future ranged/magic weapon needs no changes). Every **skill** level-up
+  feeds Player XP equal to that level's cost. `Health.ts`/`Stamina.ts` gained
+  `setBonusMax` (Endurance → +4 HP / +2 stamina per point; `Health.reset()` now refills
+  to the bonused max). Strength/Agility/Int scale weapon damage (+2%/pt) and stamina cost
+  (−1.5%/pt, floored) — Strength is live today (all weapons are melee); AGI/INT are
+  framework-only until ranged/magic weapons exist.
+- **D — UI.** A third stacked HUD bar (purple XP + "Lvl N", above HP/stamina via the same
+  `hotbarUI.top` anchor chain). New `src/ui/CharacterMenu.ts` (key **K**), full-page popup
+  in `UpgradeMenu`'s style: **Skills tab** (all 11 skills grouped Weapon/Armor/General,
+  each with level + XP bar) and **Stats tab** (player level/XP bar, unspent points, a
+  "+" per stat with its effect description, immediate-apply). Wired into `anyMenuOpen`,
+  the ESC chain, and the `KeybindsUI` list.
+
+**Decision note (craft-time vs discovery skill gating):** the plan requested an amber
+"Requires <Skill> Lvl N" line, which is only reachable if skill is a *craft-time* gate
+(recipe visible-but-greyed), not a *discovery* gate (recipe hidden until met). The
+existing `skillMet` sat in the discovery path, which would have made that line dead. Chose
+craft-time gating — it's the only interpretation where all three requested UI changes
+(skillsMet/amber line/isCraftable) function together, it surfaces "level this skill to
+unlock this recipe" as a visible goal (matching the user's wish for leveling to feel
+meaningful), and it's consistent with how recipes already reveal cost/Workbench
+requirements. Only `stone_club`'s behavior actually changes (visible-greyed before blunt3
+instead of hidden); the other current recipes are all level-0 gates. **Flag for the user:
+say so if you'd rather skill-locked recipes stay fully hidden until met.**
+
+Verified via `preview_eval`: 20 blunt hits (600 XP) level blunt 0→3 exactly (0 leftover)
+and feed the player to Level 3 with 247/368 XP and 5 points (2+3) — matching the curve
+math; allocating 3 Endurance bumps HP max 100→112 and stamina 100→106 (current HP tracks
+up too); a real `tryAttackEnemy` grants +30 blunt on hit and +30 light_armor on the kill
+(gremlin_cap worn); a 27-Strength boost visibly cut a Boar kill to 3 hits; `stone_club`
+becomes discovered-but-greyed at blunt 0 with the amber "Requires Blunt Lvl 3 (currently
+Lvl 0)" line and `skillsMet` false. `preview_screenshot` confirms the 3-bar HUD and both
+Character-menu tabs render cleanly. Type-check clean (`tsc --noEmit`), no console errors.
+
+### Previously: Playtest fixes after O — Gremlin spawn spacing + kite/pursue AI loop
 
 Immediate follow-up after Milestone O's spawn-count bump surfaced two issues: Gremlins/
 Gremlings could spawn in dense packs, and the ranged Gremlin's "kiting" AI always fled

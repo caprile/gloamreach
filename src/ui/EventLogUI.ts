@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import type { EventLog, LogEntry, LogKind } from "../systems/EventLog";
+import { PANEL_X as INVENTORY_PANEL_X, PANEL_Y as INVENTORY_PANEL_Y, PANEL_H as INVENTORY_PANEL_H } from "./InventoryMenu";
 
 const PANEL_W = 260;
 const HEADER_H = 22;
@@ -13,19 +14,20 @@ const KIND_COLORS: Record<LogKind, { text: string; border: number; fill: number 
   combat: { text: "#ff8a8a", border: 0xff8a8a, fill: 0x3a1414 },
 };
 
-// Recipe-unlock toast: a small right-anchored card (icon + text) that slides
-// in from the right edge, holds while stacked under earlier ones, then fades.
-// Kept off the center of the screen and clear of the bottom-right log panel,
-// per the user's request not to block the play area.
+// Recipe-unlock toast: a small card (icon + text) that slides in, holds while
+// stacked under earlier ones, then fades. Anchored on the LEFT, directly
+// under the InventoryMenu panel's box (moved off the top-right per the user —
+// it used to collide visually with nothing there, but the left side under the
+// inventory box is where they want contextual unlock feedback to live).
 const RECIPE_TOAST_W = 220;
-const RECIPE_TOAST_H = 40;
+const RECIPE_TOAST_H = 40; // minimum height — grows for a message that wraps past 1 line
 const RECIPE_TOAST_GAP = 6;
-const RECIPE_TOAST_TOP = 48;
-const RECIPE_TOAST_RIGHT_MARGIN = 12;
+const RECIPE_TOAST_LEFT = INVENTORY_PANEL_X;
+const RECIPE_TOAST_TOP = INVENTORY_PANEL_Y + INVENTORY_PANEL_H + 12;
 const RECIPE_TOAST_ICON_SIZE = 24;
 const RECIPE_TOAST_SLIDE_MS = 280;
-const RECIPE_TOAST_HOLD_MS = 2400;
-const RECIPE_TOAST_FADE_MS = 600;
+const RECIPE_TOAST_HOLD_MS = 3200; // playtest feedback: hold/fade noticeably longer
+const RECIPE_TOAST_FADE_MS = 900;
 const RECIPE_TOAST_STAGGER_MS = 200;
 
 // Persistent event feed, anchored top-left beside KeybindsUI (not stacked
@@ -46,7 +48,11 @@ export class EventLogUI {
   private topY: number;
   private recipeToastQueue: LogEntry[] = [];
   private recipeToastQueueBusy = false;
-  private activeRecipeToasts = 0;
+  // Ordered (oldest first) heights of currently-visible recipe toasts, so a
+  // new one's Y offset is the real cumulative height of the stack rather than
+  // a fixed slot*constant — a message that wraps past one line used to spill
+  // past its box into whatever toast came after it.
+  private activeRecipeToasts: { height: number }[] = [];
 
   // `x`/`topY` are this panel's fixed top-left anchor — the caller
   // (MainScene) computes `x` once from KeybindsUI's right edge so the two
@@ -240,36 +246,46 @@ export class EventLogUI {
 
   private spawnRecipeToast(entry: LogEntry): void {
     const colors = KIND_COLORS.recipe;
-    const slot = this.activeRecipeToasts++;
-    const y = RECIPE_TOAST_TOP + slot * (RECIPE_TOAST_H + RECIPE_TOAST_GAP);
-    const restX = this.scene.scale.width - RECIPE_TOAST_RIGHT_MARGIN - RECIPE_TOAST_W;
-    const startX = this.scene.scale.width + 20;
+    const hasIcon = !!entry.icon;
+    const textX = hasIcon ? 10 + RECIPE_TOAST_ICON_SIZE + 8 : 10;
+    const wrapWidth = RECIPE_TOAST_W - textX - 8;
+
+    // Measure the wrapped text height before placing anything, so a message
+    // long enough to wrap past one line grows its own box (and this toast's
+    // stack slot) instead of overflowing into whatever's below it.
+    const text = this.scene.add.text(0, 0, entry.message, {
+      fontFamily: "monospace",
+      fontSize: "12px",
+      color: colors.text,
+      wordWrap: { width: wrapWidth },
+    });
+    const toastH = Math.max(RECIPE_TOAST_H, text.height + 16);
+
+    const stackEntry = { height: toastH };
+    const y =
+      RECIPE_TOAST_TOP +
+      this.activeRecipeToasts.reduce((sum, t) => sum + t.height + RECIPE_TOAST_GAP, 0);
+    this.activeRecipeToasts.push(stackEntry);
+
+    const restX = RECIPE_TOAST_LEFT;
+    const startX = -RECIPE_TOAST_W - 20;
 
     const container = this.scene.add.container(startX, y).setScrollFactor(0).setDepth(6000);
 
     const box = this.scene.add
-      .rectangle(0, 0, RECIPE_TOAST_W, RECIPE_TOAST_H, colors.fill, 0.95)
+      .rectangle(0, 0, RECIPE_TOAST_W, toastH, colors.fill, 0.95)
       .setOrigin(0, 0)
       .setStrokeStyle(2, colors.border);
     container.add(box);
 
-    const hasIcon = !!entry.icon;
     if (entry.icon) {
       const icon = this.scene.add
-        .image(10 + RECIPE_TOAST_ICON_SIZE / 2, RECIPE_TOAST_H / 2, entry.icon)
+        .image(10 + RECIPE_TOAST_ICON_SIZE / 2, toastH / 2, entry.icon)
         .setDisplaySize(RECIPE_TOAST_ICON_SIZE, RECIPE_TOAST_ICON_SIZE);
       container.add(icon);
     }
 
-    const textX = hasIcon ? 10 + RECIPE_TOAST_ICON_SIZE + 8 : 10;
-    const text = this.scene.add
-      .text(textX, RECIPE_TOAST_H / 2, entry.message, {
-        fontFamily: "monospace",
-        fontSize: "12px",
-        color: colors.text,
-        wordWrap: { width: RECIPE_TOAST_W - textX - 8 },
-      })
-      .setOrigin(0, 0.5);
+    text.setPosition(textX, toastH / 2 - text.height / 2);
     container.add(text);
 
     this.scene.tweens.add({
@@ -285,7 +301,8 @@ export class EventLogUI {
           duration: RECIPE_TOAST_FADE_MS,
           onComplete: () => {
             container.destroy();
-            this.activeRecipeToasts = Math.max(0, this.activeRecipeToasts - 1);
+            const idx = this.activeRecipeToasts.indexOf(stackEntry);
+            if (idx !== -1) this.activeRecipeToasts.splice(idx, 1);
           },
         });
       },

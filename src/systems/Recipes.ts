@@ -22,7 +22,9 @@ export interface Recipe {
   // placed Workbench — see MainScene.isNearWorkbench / CraftingMenuDeps.
   tier: number;
   costs: Partial<Record<ResourceType, number>>;
-  requiredSkill?: { skill: SkillType; level: number };
+  // ALL entries must be met to craft. Multiple allowed for future weapons
+  // gated on more than one skill (e.g. "5 Slash + 5 Pierce").
+  requiredSkills?: { skill: SkillType; level: number }[];
   output: RecipeOutput;
 }
 
@@ -34,7 +36,7 @@ export const RECIPES: Recipe[] = [
     category: "tools",
     tier: 0,
     costs: { wood: 4, stone: 4 },
-    requiredSkill: { skill: "axes", level: 0 },
+    requiredSkills: [{ skill: "chopping", level: 0 }],
     output: { kind: "tool", tool: "stone_axe" },
   },
   {
@@ -44,7 +46,7 @@ export const RECIPES: Recipe[] = [
     category: "tools",
     tier: 1,
     costs: { wood: 3, stone: 4, leather: 1 },
-    requiredSkill: { skill: "pickaxes", level: 0 },
+    requiredSkills: [{ skill: "mining", level: 0 }],
     output: { kind: "tool", tool: "stone_pickaxe" },
   },
   {
@@ -72,6 +74,9 @@ export const RECIPES: Recipe[] = [
     category: "weapons",
     tier: 1,
     costs: { wood: 3, stone: 2, leather: 1 },
+    // Blunt 3 is reachable "for free" just from swinging the starting Wood
+    // Club (also blunt) — an early gate, not a grind wall.
+    requiredSkills: [{ skill: "blunt", level: 3 }],
     output: { kind: "item", itemId: "stone_club", itemName: "Stone Club" },
   },
   {
@@ -117,6 +122,7 @@ export const RECIPES: Recipe[] = [
     category: "armor",
     tier: 1,
     costs: { gremlin_leather: 1, blackberry: 5 },
+    requiredSkills: [{ skill: "light_armor", level: 0 }],
     output: { kind: "item", itemId: "gremlin_cap", itemName: "Gremlin Cap" },
   },
   {
@@ -126,6 +132,7 @@ export const RECIPES: Recipe[] = [
     category: "armor",
     tier: 1,
     costs: { gremlin_leather: 3, leather: 1, bones: 5 },
+    requiredSkills: [{ skill: "light_armor", level: 0 }],
     output: { kind: "item", itemId: "gremlin_shirt", itemName: "Gremlin Shirt" },
   },
   {
@@ -135,6 +142,7 @@ export const RECIPES: Recipe[] = [
     category: "armor",
     tier: 1,
     costs: { gremlin_leather: 2, leather: 2, blackberry: 1 },
+    requiredSkills: [{ skill: "light_armor", level: 0 }],
     output: { kind: "item", itemId: "gremlin_pants", itemName: "Gremlin Pants" },
   },
 ];
