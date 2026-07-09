@@ -307,6 +307,14 @@ export class BootScene extends Phaser.Scene {
     g.fillRect(9, 14, 5, 4);
     g.generateTexture("icon_gremlin_blood", ICON, ICON);
 
+    // Gremlin Guck: a thick, dark rendered-down blob (dried gremlin blood).
+    g.clear();
+    g.fillStyle(0x4a1018, 1);
+    g.fillCircle(12, 13, 9);
+    g.fillStyle(0x6e1a24, 1);
+    g.fillCircle(9, 10, 4);
+    g.generateTexture("icon_gremlin_guck", ICON, ICON);
+
     // Gremlin Skin: a mottled greenish hide square.
     g.clear();
     g.fillStyle(0x4a5a2e, 1);

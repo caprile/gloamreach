@@ -16,10 +16,12 @@ export interface ProcessRecipe {
   inputPerOutput: number; // input units consumed per one output unit produced
 }
 
-// Ratios locked in the plan: 2:1 cattail->twine, 1:1 skin->leather.
+// Ratios locked in the plan: 2:1 cattail->twine, 1:1 skin->leather,
+// 2:1 gremlin_blood->gremlin_guck.
 export const PROCESS_RECIPES: ProcessRecipe[] = [
   { input: "cattail", output: "twine", inputPerOutput: 2 },
   { input: "gremlin_skin", output: "gremlin_leather", inputPerOutput: 1 },
+  { input: "gremlin_blood", output: "gremlin_guck", inputPerOutput: 2 },
 ];
 
 export function processRecipeFor(inputKey: string): ProcessRecipe | undefined {

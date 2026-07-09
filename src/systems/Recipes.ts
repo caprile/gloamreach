@@ -84,8 +84,8 @@ export const RECIPES: Recipe[] = [
     name: "Bone Knife",
     description: "A quick blade honed from a sharpened bone.",
     category: "weapons",
-    tier: 0,
-    costs: { bones: 4 },
+    tier: 1,
+    costs: { leather: 1, bones: 4 },
     output: { kind: "item", itemId: "bone_knife", itemName: "Bone Knife" },
   },
   {

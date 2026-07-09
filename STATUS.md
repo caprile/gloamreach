@@ -2,7 +2,58 @@
 
 Last updated: 2026-07-09
 
-### Just finished: Combat depth pass — enemy AI polish, armor defense, weapon upgrades, playtest fixes
+### Just finished: Playtest fixes batch — Gremlin Guck processing, bigger map, crafting-menu stats, Place context menu, level-up banner
+
+Plan: `.claude/plans/bright-prancing-starlight-playtest-batch.md`. A same-day
+follow-up batch off a fresh playtest, no new milestone letter:
+
+- **Gremlin Guck** (new item/`ResourceType`, `icon_gremlin_guck` in `BootScene.ts`) is
+  a new Drying Rack output: raw `gremlin_blood` -> `gremlin_guck` at 2:1
+  (`Processing.ts` `PROCESS_RECIPES`), mirroring cattail->twine. Every recipe that
+  previously spent raw Gremlin Blood now spends Gremlin Guck instead — Bone Knife Lvl 3
+  and Primal Spear Lvl 3 (`WeaponUpgrades.ts`) — so raw blood is no longer a direct
+  crafting ingredient anywhere, only a processing input.
+- **Bone Knife now requires a Workbench.** Recipe changed from tier 0 (4 Bones) to tier
+  1 (1 Leather Scraps, 4 Bones) — `Recipes.ts`. Primal Spear was already tier 1
+  (workbench-gated); no change needed there, just confirmed.
+- **Map roughly doubled** (`MainScene.ts`): `WORLD_W`/`WORLD_H` 80x60 -> 112x84 tiles
+  (2560x1920 -> 3584x2688px, ~2x area) — per-playtest feedback that the old map ran dry
+  of enemies/resources before a player could craft everything on offer. Every fixed
+  spawn count scaled up to match (~1.8-2x each): Boar 12->24, Snake 15->28, RangedGremlin
+  12->22, Gremling 4->8, Cattail 22->42, Branch 40->76, Rock 30->56, Tree(forest)
+  70->132, Tree(grassy) 14->26, Boulder 18->34, Blackberry-bush total 16->30. Density-tuning
+  constants (cluster radius/max, aggro/deaggro numbers) were left alone — only raw counts
+  changed, since the map itself is proportionally bigger.
+- **Player Level-up is now a real "in your face" moment.** New
+  `MainScene.showLevelUpBanner()` — a big centered "LEVEL UP!" + "Level N • +N Stat
+  Points" callout that punch-scales in (`Back.easeOut`), holds ~1.7s, then fades and
+  destroys itself, plus a brief `cameras.main.flash()`. Non-blocking (scrollFactor(0)
+  text, no interactivity, doesn't intercept input) — stacks alongside the existing
+  quieter EventLog line and bobbing stat-points badge rather than replacing them.
+- **Crafting menu now shows the Damage/Armor number for weapon/armor recipes.**
+  `CraftingMenu.renderDetail()` gained a `statValue()` helper mirroring `Tooltip.ts`'s
+  (base weapon damage adjusted by the relevant skill's live multiplier; armor shows its
+  flat base defense) — rendered right under the description, above the cost lines.
+  `CraftingMenuDeps` gained a `skills: Skills` field (MainScene already had the instance,
+  just wasn't threading it through). Freshly-crafted output is always tier 0 ("Lvl 1"),
+  so no tier-upgrade math is needed here unlike the owned-item Tooltip case.
+- **Right-click a backpack placeable for an explicit "Place" option.** New
+  `InventoryMenuDeps.openPlaceContextMenu`, wired to `MainScene.openPlaceContextMenu()` —
+  a one-row `ContextMenu` popup (mirrors the armor-slot and placed-object popups) whose
+  "Place" click just calls the existing `startItemPlacement()` path. A single left-click
+  on a backpack placeable already entered placement mode (deferred behind the
+  double-click window) — this is a discoverable, explicit alternative for players who
+  don't know that, not a replacement for it. Right-click on a backpack slot still opens
+  the weapon-upgrade panel for weapons; placeables are the other branch.
+
+Verified live via `preview_eval`: world bounds report 3584x2688; the Bone Knife's
+crafting-menu detail panel shows "Damage: 4" with 1 Leather/4 Bones costs and requires a
+placed Workbench to discover; Gremlin Cap's panel shows "Armor: 2"; right-clicking a
+backpack Campfire stack opens a "Place" popup whose click engages `placementMode` with a
+ghost; the level-up banner's text objects are created at alpha 0/scale 0.3 and are fully
+destroyed ~3s later once their tweens finish.
+
+### Previously: Combat depth pass — enemy AI polish, armor defense, weapon upgrades, playtest fixes
 
 Plan: `.claude/plans/recursive-bubbling-spring.md`. A fresh-session batch spanning enemy
 AI bugs, new combat-depth content, and a grab-bag of playtest fixes + a documentation

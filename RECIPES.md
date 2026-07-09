@@ -17,7 +17,7 @@ requires standing near a placed Workbench (`MainScene.isNearWorkbench`).
 | Torch | Tools | 0 | No | 1 Wood | — | Item |
 | Wood Club | Weapons | 0 | No | 4 Wood | — | Item (weapon, blunt) |
 | Stone Club | Weapons | 1 | Yes | 3 Wood, 2 Stone, 1 Leather Scraps | Blunt 3 | Item (weapon, blunt) |
-| Bone Knife | Weapons | 0 | No | 4 Bones | — | Item (weapon, slash) |
+| Bone Knife | Weapons | 1 | Yes | 1 Leather Scraps, 4 Bones | — | Item (weapon, slash) |
 | Primal Spear | Weapons | 1 | Yes | 4 Wood, 2 Stone, 1 Leather Scraps | — | Item (weapon, pierce) |
 | Shishkabob | Misc | 0 | No | 1 Wood | — | Item |
 | Campfire | Crafting | 0 | No | 5 Wood, 5 Stone | — | Item (placeable) |
@@ -58,8 +58,8 @@ the weapon (backpack or hotbar).
 | Weapon | Base Dmg / Cooldown / Stamina | Damage Type | Lvl 2 (tier 1) | Lvl 3 (tier 2) |
 |---|---|---|---|---|
 | Stone Club | 5 / 550ms / 14 | Blunt | +2 Dmg — 3 Wood, 3 Stone | +2 Dmg — 5 Wood, 5 Stone, 3 Bones |
-| Bone Knife | 4 / 350ms / 8 | Slash | +1 Dmg — 5 Bones | +2 Dmg — 8 Bones, 2 Gremlin Blood |
-| Primal Spear | 8 / 650ms / 16 | Pierce | +2 Dmg — 3 Wood, 2 Stone, 3 Bones | +3 Dmg — 5 Wood, 4 Stone, 3 Gremlin Blood |
+| Bone Knife | 4 / 350ms / 8 | Slash | +1 Dmg — 5 Bones | +2 Dmg — 8 Bones, 2 Gremlin Guck |
+| Primal Spear | 8 / 650ms / 16 | Pierce | +2 Dmg — 3 Wood, 2 Stone, 3 Bones | +3 Dmg — 5 Wood, 4 Stone, 3 Gremlin Guck |
 
 Max damage at Lvl 3: Stone Club 9, Bone Knife 7, Primal Spear 12 (before the
 weapon-skill damage multiplier, `Skills.weaponSkillDamageMultiplier`).
@@ -70,6 +70,7 @@ weapon-skill damage multiplier, `Skills.weaponSkillDamageMultiplier`).
 |---|---|---|
 | Cattail | Twine | 2 : 1 |
 | Gremlin Skin | Gremlin Leather | 1 : 1 |
+| Gremlin Blood | Gremlin Guck | 2 : 1 |
 
 Conversion is instant, not over time — the player loads raw input and picks
 how much to run via a slider (output-amount based, see `DryingRackMenu.ts`).

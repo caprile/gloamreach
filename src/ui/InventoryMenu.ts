@@ -28,6 +28,12 @@ export interface InventoryMenuDeps {
   // Right-click on a backpack slot holding a weapon with a defined upgrade
   // path opens its Upgrade panel (see MainScene.openWeaponUpgradeMenu).
   openWeaponUpgrade: (container: ItemContainer, index: number) => void;
+  // Right-click on a backpack slot holding a placeable (Workbench, Campfire,
+  // ...) opens a tiny "Place" context menu — mirrors a placed station's own
+  // right-click popup. A single left-click already enters placement mode too
+  // (deferred behind the double-click window); this is an explicit,
+  // discoverable alternative that doesn't require knowing that.
+  openPlaceContextMenu: (container: ItemContainer, index: number, screenX: number, screenY: number) => void;
   // Suppress tooltips while a drag is in progress.
   isDragging: () => boolean;
 }
@@ -279,10 +285,12 @@ export class InventoryMenu {
           // Right-click is reserved for context-menu/upgrade actions now —
           // quick-move-to-hotbar (or quick-equip) moved to double-left-click,
           // detected by the scene via the click-in-place path (see
-          // MainScene.resolveItemDrag) — except on a weapon, which opens its
-          // Upgrade panel instead.
+          // MainScene.resolveItemDrag) — except on a weapon (opens its
+          // Upgrade panel) or a placeable (opens a "Place" popup).
           if (pointer.rightButtonDown()) {
-            if (itemDef(stack.key)?.weapon) this.deps.openWeaponUpgrade(backpack, i);
+            const def = itemDef(stack.key);
+            if (def?.weapon) this.deps.openWeaponUpgrade(backpack, i);
+            else if (def?.placeable) this.deps.openPlaceContextMenu(backpack, i, pointer.x, pointer.y);
             return;
           }
           this.deps.beginDrag(backpack, i, pointer);

@@ -3,7 +3,9 @@ import { isPlaceableRecipe, outputKey, type Recipe, type RecipeCategory } from "
 import type { Crafting } from "../systems/Crafting";
 import type { ResourceType } from "../systems/Inventory";
 import type { ItemContainer } from "../systems/ItemContainer";
-import { itemDef } from "../systems/Items";
+import { itemDef, type ItemStat } from "../systems/Items";
+import { weaponDamage, weaponPrimaryDamageType } from "../systems/Weapons";
+import { weaponSkillDamageMultiplier, type Skills } from "../systems/Skills";
 
 const CATEGORIES: { id: RecipeCategory; label: string }[] = [
   { id: "tools", label: "Tools" },
@@ -24,6 +26,7 @@ export interface CraftingMenuDeps {
   craft: (recipe: Recipe) => void;
   startPlacement: (recipe: Recipe) => void;
   isNearWorkbench: () => boolean;
+  skills: Skills;
   // The top-right icon opens the combined Tab menu (crafting + inventory),
   // not just this panel — there's no crafting-only entry point anymore.
   onIconClick: () => void;
@@ -223,6 +226,22 @@ export class CraftingMenu {
     }
   }
 
+  // Mirrors Tooltip.statValue — a freshly crafted item is always tier 0
+  // ("Lvl 1"), so only the base (skill-adjusted for weapons) numbers apply.
+  private statValue(def: ReturnType<typeof itemDef>, stat: ItemStat): string {
+    if (!def) return stat.value;
+    if (stat.label === "Damage" && def.weapon) {
+      const base = weaponDamage(def.weapon);
+      const dmgType = weaponPrimaryDamageType(def.weapon);
+      const adjusted = Math.round(base * weaponSkillDamageMultiplier(dmgType, this.deps.skills));
+      return adjusted === base ? `${base}` : `${base} (${adjusted})`;
+    }
+    if (stat.label === "Armor" && def.armorSlot) {
+      return `${def.armorDefense ?? 0}`;
+    }
+    return stat.value;
+  }
+
   private renderDetail(recipe: Recipe, x0: number, startY: number): void {
     let y = startY;
 
@@ -235,6 +254,24 @@ export class CraftingMenu {
     desc.setScrollFactor(0).setDepth(3001);
     this.rows.push(desc);
     y += desc.height + 8;
+
+    // Weapon/armor damage & armor numbers — the freshly-crafted item is
+    // always tier 0 (Lvl 1), so this shows base (adjusted-by-skill) exactly
+    // like the InventoryMenu/Hotbar Tooltip does for an owned tier-0 item.
+    const def = itemDef(outputKey(recipe));
+    if (def?.stats?.length) {
+      for (const stat of def.stats) {
+        const t = this.scene.add.text(x0, y, `${stat.label}: ${this.statValue(def, stat)}`, {
+          fontFamily: "monospace",
+          fontSize: "13px",
+          color: "#9adfff",
+        });
+        t.setScrollFactor(0).setDepth(3001);
+        this.rows.push(t);
+        y += 18;
+      }
+      y += 4;
+    }
 
     for (const [resource, amount] of Object.entries(recipe.costs) as [ResourceType, number][]) {
       const have = this.deps.backpack.count(resource);

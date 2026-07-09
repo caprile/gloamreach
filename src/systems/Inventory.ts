@@ -10,7 +10,10 @@
 // "cattail" (creek-edge harvestable) and "gremlin_skin" are the Drying Rack's
 // raw inputs; "twine" and "gremlin_leather" are its processed outputs.
 // "blackberry" is a forest-bush harvestable (a future food item — no eating
-// mechanic yet). "bones" drops from Boars alongside boar_meat.
+// mechanic yet). "bones" drops from Boars alongside boar_meat. "gremlin_guck"
+// is the Drying Rack's processed output for raw gremlin_blood (2:1) — recipes
+// that want a gremlin-blood ingredient now consume this instead of the raw
+// drop, mirroring cattail->twine/gremlin_skin->gremlin_leather.
 export type ResourceType =
   | "wood"
   | "stone"
@@ -18,6 +21,7 @@ export type ResourceType =
   | "boar_meat"
   | "bones"
   | "gremlin_blood"
+  | "gremlin_guck"
   | "gremlin_skin"
   | "cattail"
   | "blackberry"

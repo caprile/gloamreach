@@ -81,8 +81,11 @@ import { KeybindsUI } from "../ui/KeybindsUI";
 const HOTBAR_KEYS = ["ONE", "TWO", "THREE", "FOUR", "FIVE", "SIX", "SEVEN", "EIGHT", "NINE"];
 
 const TILE = 32;
-const WORLD_W = TILE * 80; // 2560px wide — a procedurally generated biome (see Biome.ts)
-const WORLD_H = TILE * 60; // 1920px tall
+// Bumped 80x60 -> 112x84 tiles (~2x area) per playtest feedback: the old map
+// ran out of enemies/resources before a player could craft everything on
+// offer. Enemy spawn counts below were scaled up to match (see spawnEnemies).
+const WORLD_W = TILE * 112; // 3584px wide — a procedurally generated biome (see Biome.ts)
+const WORLD_H = TILE * 84; // 2688px tall
 const REACH = 64; // how close (px) the player must be to interact
 const PLACEMENT_RADIUS = REACH * 1.25; // how far from the player a placed item may land
 const MAGNET_RADIUS = 100; // px — loose drop pieces within this of the player get pulled in
@@ -423,6 +426,7 @@ export class MainScene extends Phaser.Scene {
       this.characterMenu?.refresh();
       this.refreshXpBar();
       this.refreshStatPointsBadge();
+      this.showLevelUpBanner(level, points);
     });
 
     // Apply any starting Endurance/Vitality bonus (0 at a fresh start; keeps
@@ -1156,26 +1160,27 @@ export class MainScene extends Phaser.Scene {
     // pieces spawned from a depleted tree/boulder are "loose"/magnet-eligible
     // (see spawnLooseDrop). Counts scaled up for the larger world. Both stay
     // off the creek, same reasoning as trees/boulders below.
-    scatter(40, { texture: "branch", resource: "wood", amount: 1, action: "pickup", displayName: "Branch", loose: false, solid: false, health: 1, zone: "forest", avoidCreek: true });
-    scatter(30, { texture: "rock", resource: "stone", amount: 1, action: "pickup", displayName: "Rock", loose: false, solid: false, health: 1, zone: null, avoidCreek: true });
+    // Counts bumped again for the ~2x bigger map (was 40/30/70/14/18/16).
+    scatter(76, { texture: "branch", resource: "wood", amount: 1, action: "pickup", displayName: "Branch", loose: false, solid: false, health: 1, zone: "forest", avoidCreek: true });
+    scatter(56, { texture: "rock", resource: "stone", amount: 1, action: "pickup", displayName: "Rock", loose: false, solid: false, health: 1, zone: null, avoidCreek: true });
     // Tool-gated. Trees are dense in the forest and sparse in the grassy open;
     // both stay off the creek (a tree on water looks wrong). Boulders favor the
     // grassy open. Neither blocks movement (see updateTreeOcclusion for the
     // Y-sort + fade that replaces solid collision) — only the `solids` group
     // (currently empty) is reserved for future structures/walls/mountains.
-    scatter(70, { texture: "tree", resource: "wood", amount: 5, action: "chop", displayName: "Tree", loose: false, solid: false, health: 3, zone: "forest", avoidCreek: true });
-    scatter(14, { texture: "tree", resource: "wood", amount: 5, action: "chop", displayName: "Tree", loose: false, solid: false, health: 3, zone: "grassy", avoidCreek: true });
-    scatter(18, { texture: "boulder", resource: "stone", amount: 5, action: "mine", displayName: "Boulder", loose: false, solid: false, health: 3, zone: "grassy", avoidCreek: true });
+    scatter(132, { texture: "tree", resource: "wood", amount: 5, action: "chop", displayName: "Tree", loose: false, solid: false, health: 3, zone: "forest", avoidCreek: true });
+    scatter(26, { texture: "tree", resource: "wood", amount: 5, action: "chop", displayName: "Tree", loose: false, solid: false, health: 3, zone: "grassy", avoidCreek: true });
+    scatter(34, { texture: "boulder", resource: "stone", amount: 5, action: "mine", displayName: "Boulder", loose: false, solid: false, health: 3, zone: "grassy", avoidCreek: true });
     // Blackberry bushes — free forest pickup (Milestone H), grouped into
     // patches of 2-4 rather than spread individually across the forest.
     // Persistent (Milestone N): harvesting yields berries but keeps the bush
     // in the world (picked look) until it regrows.
-    scatterClustered(16, 2, 4, { texture: "blackberry_bush", resource: "blackberry", amount: 2, action: "pickup", displayName: "Blackberries", loose: false, solid: false, health: 1, zone: "forest", avoidCreek: true, persistent: true, pickedTexture: "blackberry_bush_picked", regrowMs: BLACKBERRY_REGROW_MS });
+    scatterClustered(30, 2, 4, { texture: "blackberry_bush", resource: "blackberry", amount: 2, action: "pickup", displayName: "Blackberries", loose: false, solid: false, health: 1, zone: "forest", avoidCreek: true, persistent: true, pickedTexture: "blackberry_bush_picked", regrowMs: BLACKBERRY_REGROW_MS });
 
     // Cattail — free pickup, but a bespoke spawn constraint (creek *edge*, not
     // just "not on the creek"), so it can't reuse scatter's zone/avoidCreek
     // sampling. Feeds the Drying Rack's twine output.
-    const CATTAIL_COUNT = 22;
+    const CATTAIL_COUNT = 42; // bumped for the ~2x bigger map (was 22)
     for (let i = 0; i < CATTAIL_COUNT; i++) {
       const { x, y } = this.pickCreekEdgePoint(rng, 100);
       const node = new ResourceNode(this, {
@@ -1219,7 +1224,7 @@ export class MainScene extends Phaser.Scene {
   private spawnEnemies(): void {
     const rng = this.sessionRng();
     const BOAR_CLEAR_RADIUS = 220;
-    const BOAR_COUNT = 12;
+    const BOAR_COUNT = 24; // bumped for the ~2x bigger map (was 12)
     const BOAR_FOREST_COUNT = Math.round(BOAR_COUNT * 0.8);
     const BOAR_GRASSY_COUNT = BOAR_COUNT - BOAR_FOREST_COUNT;
     const spawnBoar = (zone: "forest" | "grassy") => {
@@ -1248,7 +1253,7 @@ export class MainScene extends Phaser.Scene {
     // discoverable). Bumped 6->15 (Milestone O): the new Gremlin armor set's
     // leather demand (~9, on top of existing tool costs) exceeded what 6
     // snakes could ever supply in one session.
-    const SNAKE_COUNT = 15;
+    const SNAKE_COUNT = 28; // bumped for the ~2x bigger map (was 15)
     for (let i = 0; i < SNAKE_COUNT; i++) {
       const { x, y } = this.pickSpawnPoint(rng, "grassy", 200, true);
       const snake = new Snake(this, { x, y });
@@ -1271,7 +1276,7 @@ export class MainScene extends Phaser.Scene {
     const GREMLIN_CLUSTER_RADIUS = 220;
     const GREMLIN_CLUSTER_MAX = 1;
     const gremlinPoints: { x: number; y: number }[] = [];
-    const RANGED_GREMLIN_COUNT = 12;
+    const RANGED_GREMLIN_COUNT = 22; // bumped for the ~2x bigger map (was 12)
     for (let i = 0; i < RANGED_GREMLIN_COUNT; i++) {
       const { x, y } = this.pickSpreadSpawnPoint(
         rng,
@@ -1287,7 +1292,7 @@ export class MainScene extends Phaser.Scene {
       this.enemies.push(gremlin);
       this.enemyGroup.add(gremlin);
     }
-    const MELEE_GREMLING_COUNT = 4;
+    const MELEE_GREMLING_COUNT = 8; // bumped for the ~2x bigger map (was 4)
     for (let i = 0; i < MELEE_GREMLING_COUNT; i++) {
       const { x, y } = this.pickSpreadSpawnPoint(
         rng,
@@ -1822,6 +1827,7 @@ export class MainScene extends Phaser.Scene {
       craft: (recipe) => this.craftRecipe(recipe),
       startPlacement: (recipe) => this.startPlacement(recipe),
       isNearWorkbench: () => this.isNearWorkbench(this.player.x, this.player.y),
+      skills: this.skills,
       onIconClick: () => this.toggleCombinedMenu(),
     });
   }
@@ -2359,6 +2365,7 @@ export class MainScene extends Phaser.Scene {
       beginArmorDrag: (slot, p) => this.beginArmorDrag(slot, p),
       openArmorContextMenu: (slot, x, y) => this.openArmorContextMenu(slot, x, y),
       openWeaponUpgrade: (c, i) => this.openWeaponUpgradeMenu(c, i),
+      openPlaceContextMenu: (c, i, x, y) => this.openPlaceContextMenu(c, i, x, y),
       isDragging: () => this.dragSource !== null,
     });
   }
@@ -2421,6 +2428,22 @@ export class MainScene extends Phaser.Scene {
   // Right-click on a paper-doll slot: "Unequip"/"Upgrade" if occupied, or a
   // greyed informational "Equip"/"Upgrade" if empty (mirrors a placed
   // station's right-click Upgrade/Destroy popup).
+  // Right-click on a backpack placeable (Workbench, Campfire, ...): a
+  // single-row "Place" popup that just calls the same startItemPlacement
+  // path a left-click-in-place already reaches — an explicit, discoverable
+  // way in, mirroring a placed station's own right-click popup.
+  private openPlaceContextMenu(
+    container: ItemContainer,
+    index: number,
+    screenX: number,
+    screenY: number,
+  ): void {
+    const items: ContextMenuItem[] = [
+      { label: "Place", enabled: true, onClick: () => this.startItemPlacement(container, index) },
+    ];
+    this.contextMenu.show(screenX, screenY, items);
+  }
+
   private openArmorContextMenu(slot: EquipSlot, screenX: number, screenY: number): void {
     const eq = this.equipment.get(slot);
     const items: ContextMenuItem[] = eq
@@ -2651,5 +2674,69 @@ export class MainScene extends Phaser.Scene {
       return;
     }
     this.statPointsBadge.setText(`${n} Stat Point${n === 1 ? "" : "s"} Available!`).setVisible(true);
+  }
+
+  // Big, hard-to-miss (but non-blocking — no input capture, auto-dismisses)
+  // center-screen callout on Player Level-up. The existing EventLog line and
+  // bobbing statPointsBadge are both easy to miss mid-combat; this is the
+  // "catch your eye" version — punch-in scale tween plus a brief camera
+  // flash, then fades itself out after a couple seconds.
+  private showLevelUpBanner(level: number, points: number): void {
+    const cx = this.scale.width / 2;
+    const cy = this.scale.height * 0.3;
+
+    const title = this.add
+      .text(cx, cy, `LEVEL UP!`, {
+        fontFamily: "monospace",
+        fontSize: "48px",
+        fontStyle: "bold",
+        color: "#ffe08a",
+        stroke: "#000000",
+        strokeThickness: 7,
+      })
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(6000)
+      .setAlpha(0)
+      .setScale(0.3);
+
+    const sub = this.add
+      .text(cx, cy + 44, `Level ${level}  •  +${points} Stat Point${points === 1 ? "" : "s"}`, {
+        fontFamily: "monospace",
+        fontSize: "18px",
+        color: "#ffffff",
+        stroke: "#000000",
+        strokeThickness: 4,
+      })
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(6000)
+      .setAlpha(0);
+
+    this.cameras.main.flash(180, 90, 70, 20);
+
+    this.tweens.add({
+      targets: title,
+      alpha: 1,
+      scale: 1,
+      duration: 260,
+      ease: "Back.easeOut",
+    });
+    this.tweens.add({
+      targets: sub,
+      alpha: 1,
+      duration: 220,
+      delay: 120,
+    });
+    this.tweens.add({
+      targets: [title, sub],
+      alpha: 0,
+      delay: 1700,
+      duration: 450,
+      onComplete: () => {
+        title.destroy();
+        sub.destroy();
+      },
+    });
   }
 }
