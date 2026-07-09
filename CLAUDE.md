@@ -493,9 +493,12 @@ interaction, verify in the live preview rather than just type-checking:
    to assert against.
 4. **Known preview quirk:** if the preview tab is backgrounded, Phaser's render loop can
    pause (`requestAnimationFrame` throttling), which can make `preview_eval` report scene
-   state as not-yet-created and `preview_screenshot` hang/timeout. If that happens, stop
-   the server (`preview_stop`) and start fresh (`preview_start`) rather than fighting a
-   stuck tab.
+   state as not-yet-created (`MainScene`'s `sys.settings.status` stuck at `1`/INIT,
+   never reaching `5`/RUNNING) and `preview_screenshot` hang/timeout. A `preview_stop` +
+   fresh `preview_start` does NOT reliably fix this (confirmed 2026-07-09 — the new tab
+   can still boot backgrounded). What does work: a `preview_resize` call (even to the
+   same size) forces a repaint/foreground and un-pauses the loop — try that first before
+   restarting the server.
 5. Check `preview_console_logs` (level `error`) for runtime errors — Phaser boot banners
    and Vite HMR reconnect messages are normal noise, not errors.
 
@@ -508,6 +511,11 @@ interaction, verify in the live preview rather than just type-checking:
 - Comments should explain *why*, not *what* — keep them light, per general code style.
 - No new npm dependencies without a clear reason; the placeholder-art approach means we
   don't need an asset pipeline yet.
+- **Keep `RECIPES.md` in sync.** Whenever `Recipes.ts`, `ArmorUpgrades.ts`,
+  `StationUpgrades.ts`, `WeaponUpgrades.ts`, or `Processing.ts` change (new recipe,
+  changed costs, new upgrade tier), update the matching table in `RECIPES.md` in the
+  same pass — it's a hand-maintained reference dashboard, not generated, so it drifts
+  silently if skipped.
 - **Plans must be committed in-repo.** After `ExitPlanMode`, copy the finalized plan file
   from wherever it was written into this repo's `.claude/plans/` and commit it alongside
   the feature. The global `~/.claude/plans/` dir isn't part of this repo and isn't

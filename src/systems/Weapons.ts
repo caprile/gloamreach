@@ -1,4 +1,4 @@
-export type WeaponType = "wood_club" | "stone_club";
+export type WeaponType = "wood_club" | "stone_club" | "bone_knife" | "primal_spear";
 
 // Damage types double as the 5 weapon Skill types (Skills.ts) — a weapon's
 // primary (first) type routes its on-hit skill XP. Multiple types are
@@ -8,6 +8,8 @@ export type DamageType = "slash" | "blunt" | "pierce" | "ranged" | "magic";
 const WEAPON_DAMAGE_TYPES: Record<WeaponType, DamageType[]> = {
   wood_club: ["blunt"],
   stone_club: ["blunt"],
+  bone_knife: ["slash"],
+  primal_spear: ["pierce"],
 };
 export function weaponDamageTypes(weapon: WeaponType): DamageType[] {
   return WEAPON_DAMAGE_TYPES[weapon];
@@ -19,6 +21,8 @@ export function weaponPrimaryDamageType(weapon: WeaponType): DamageType {
 const WEAPON_DAMAGE: Record<WeaponType, number> = {
   wood_club: 3,
   stone_club: 5,
+  bone_knife: 4,
+  primal_spear: 8,
 };
 export function weaponDamage(weapon: WeaponType): number {
   return WEAPON_DAMAGE[weapon];
@@ -27,6 +31,8 @@ export function weaponDamage(weapon: WeaponType): number {
 const WEAPON_COOLDOWN_MS: Record<WeaponType, number> = {
   wood_club: 450,
   stone_club: 550,
+  bone_knife: 350,
+  primal_spear: 650,
 };
 export function weaponCooldownMs(weapon: WeaponType): number {
   return WEAPON_COOLDOWN_MS[weapon];
@@ -35,6 +41,8 @@ export function weaponCooldownMs(weapon: WeaponType): number {
 const WEAPON_STAMINA_COST: Record<WeaponType, number> = {
   wood_club: 10,
   stone_club: 14,
+  bone_knife: 8,
+  primal_spear: 16,
 };
 export function weaponStaminaCost(weapon: WeaponType): number {
   return WEAPON_STAMINA_COST[weapon];

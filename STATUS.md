@@ -2,7 +2,124 @@
 
 Last updated: 2026-07-09
 
-### Just finished: Third Progression playtest batch — sprint rework, right-click reserved, workbench gate
+### Just finished: Combat depth pass — enemy AI polish, armor defense, weapon upgrades, playtest fixes
+
+Plan: `.claude/plans/recursive-bubbling-spring.md`. A fresh-session batch spanning enemy
+AI bugs, new combat-depth content, and a grab-bag of playtest fixes + a documentation
+ask, built across 6 milestones in one session. Confirmed with the user via
+`AskUserQuestion`: the new Club upgrade path applies to **Stone Club only** (Wood Club
+stays a fixed starter weapon).
+
+- **Enemy AI: random initial facing, Gremlin wander, no-spawn-in-water.**
+  `Enemy.ts`'s constructor now sets a randomized initial rotation
+  (`setRotation(FloatBetween(0, 2π))`) — every enemy (including Snake, which extends
+  Enemy) used to default to one unrotated orientation and only ever rotated once it
+  moved, which read as "always facing the same direction" for anything that spends most
+  of its life stationary (Snake hidden, Gremlin idle). `RangedGremlin` (`Gremlin.ts`)
+  gained an idle wander state it never had before — confirmed via code read that its
+  `idle` branch did nothing but check aggro radius. Unlike Boar/Gremling's incremental
+  "drift from current position" wander, RangedGremlin's wander target is drawn fresh
+  from its stored spawn point every cycle (`RANGED_WANDER_RADIUS = 70`), so it can never
+  random-walk away — "a small area around their spawn" per the request.
+  `MainScene.spawnEnemies()` now passes `avoidCreek: true` to every enemy spawn point
+  pick (Boar/Snake/Gremlin/Gremling); `pickSpreadSpawnPoint()` widened to forward the
+  param. Verified live: wander target lands within the radius of spawn, rotation varies
+  across spawns, and the live enemy roster spawns with zero enemies on creek cells
+  (an enemy chasing a player near the creek can still walk onto it afterward — no
+  terrain-collision system exists, out of scope here, called out explicitly rather than
+  silently left unaddressed).
+- **Armor now has real defense numbers.** New `ItemDef.armorDefense` (base/tier-0):
+  Gremlin Cap 2, Shirt 4, Pants 3. New `ArmorUpgradeDef.defenseBonus` on each existing
+  lvl2 upgrade: Cap +2 (4 total), Shirt +3 (7 total), Pants +2 (5 total) — full tier-0 set
+  9 armor, full tier-1 set 16 armor. `ArmorUpgrades.ts` gained
+  `armorDefenseForTier()`/`totalPlayerDefense()`; `MainScene.applyDamageToPlayer()` now
+  applies a flat deduction (`Math.max(1, amount - totalPlayerDefense(...))`) — per the
+  user, everything dealt today is physical damage (no magic/elemental sources exist yet),
+  flagged inline as the spot to branch on damage type later. `Tooltip.ts`'s "Armor" stat
+  line mirrors the existing weapon "base (adjusted)" pattern. Verified live: a 25-damage
+  hit reduces to exactly 16 at the tier-0 set and 9 at the tier-1 set, matching the math.
+- **Weapon upgrade system — Stone Club gets Lvl 2/3, plus two brand-new weapons.** New
+  `src/systems/WeaponUpgrades.ts` (`WeaponUpgradeDef`, structurally identical to
+  `ArmorUpgradeDef`/`StationUpgradeDef`), reusing the existing generic `ItemStack.tier`
+  field — no new data model. **Bone Knife** (new, tier 0, 4 Bones, slash — first-ever
+  slash weapon) and **Primal Spear** (new, tier 1/workbench-gated, 4 Wood/2 Stone/1
+  Leather Scraps, pierce — first-ever pierce weapon) fill the two weapon-damage-type
+  skills that previously had zero XP sources. Stone Club/Bone Knife/Primal Spear each get
+  2 upgrade tiers (Lvl 2, Lvl 3 — the base crafted weapon already counts as Lvl 1), all
+  flat damage bonuses. Deliberate deviation from the Stone Club precedent: neither new
+  weapon has a skill-level gate on its recipe (Stone Club requires Blunt 3, reachable
+  "for free" from the pre-existing Wood Club — there's no pre-existing slash/pierce
+  weapon to grind on before Bone Knife/Primal Spear exist, so gating them the same way
+  would make them permanently uncraftable). `MainScene` gained `equippedWeaponTier`
+  (read from the selected hotbar slot's `stack.tier` in `recomputeEquipped()`) and
+  `tryAttackEnemy()` adds `weaponTierDamageBonus()` to base damage before the existing
+  skill multiplier. **Right-click a weapon (backpack or hotbar) to upgrade it** — new
+  branch in `InventoryMenu.ts`/`HotbarUI.ts` (right-click was otherwise a no-op per the
+  last playtest batch's "reserved for context menus" decision) opens the same
+  `UpgradeMenu` panel armor/station upgrades already use; `MainScene.upgradeTarget`
+  widened to a third variant (`{weaponSlot: {container, index}}`) alongside the existing
+  placed-object/armor-slot cases. Verified live: upgrading a hotbar Stone Club through
+  both tiers bumps `equippedWeaponTier` immediately (no re-select needed) and a live
+  `tryAttackEnemy()` call deals exactly 9 damage (5 base + 2 + 2), matching the table.
+- **UpgradeMenu shows what an upgrade actually grants.** New optional `deltaLabel` field
+  on `ArmorUpgradeDef`/`WeaponUpgradeDef`/`StationUpgradeDef` (authored directly per
+  entry, e.g. `"+2 Armor"`/`"+2 Damage"` — left unset for Tool Sharpener, which only
+  unlocks a gate rather than granting a direct numeric effect). `UpgradeMenu.ts` renders
+  it in green between the cost and description lines, extending the existing
+  measured-row-height pattern so longer rows still don't overlap. Verified live: both
+  Stone Club upgrade rows render their delta line at the right offset with no overlap
+  into the row below.
+- **Playtest fixes batch:**
+  - **Ghost placement bug fixed** — placing the last owned instance of a placeable
+    (Workbench, Drying Rack, ...) from an owned stack used to leave a faded ghost armed
+    on the cursor until the *next* click noticed the stack was empty. `attemptPlaceObject()`
+    now checks immediately after a successful item-source placement and calls
+    `cancelPlacement()` right away if the stack just hit zero. Verified live: placing a
+    single owned Workbench now exits placement mode (ghost destroyed) in the same call.
+  - **All three Gremlin armor lvl2 upgrades now require Workbench Lvl 2** (was Pants
+    only) — `requiresWorkbenchTier: 1` added to Cap/Shirt's `ArmorUpgradeDef` entries.
+    Investigated the user's separate "Pants lvl2 shows before Workbench Lvl 2 exists"
+    report by reading `UpgradeMenu`/`upgradeBlockReason` directly — found no code bug;
+    it's the existing, intentional "visible but blocked with a reason" design from
+    Milestone K (the whole upgrade path stays visible so the player can see what's
+    ahead), enforced at both click and apply time. No change made for that item beyond
+    the Cap/Shirt gate above.
+  - **Inventory stays open during placement.** `startItemPlacement()` no longer closes
+    the `InventoryMenu` (still closes the crafting menu and Drying Rack popup, which do
+    need to get out of the way). The global placement-mode click guard widened to also
+    bail out on a click inside the still-open inventory panel, so several items can now
+    be placed in a row without reopening it each time, and clicks on the panel itself
+    don't fall through and place something underneath it. Verified live.
+  - **Attack-range ring off by default** — `rangeRingEnabled` now starts `false` (was
+    `true`); the `O` toggle is unchanged.
+  - **Running rescaled**: sprint is now 1.75x walk speed at Running Lvl 0, climbing to
+    2.25x at the Lvl-100 soft cap (was 1.15x -> 1.65x) — only `BASE_SPRINT_MULTIPLIER`
+    changed (1.15 -> 1.75); the existing +0.5%-of-base-speed-per-level bonus already
+    landed exactly on the new target spread with no further change.
+- **New `RECIPES.md` dashboard** at the repo root — hand-authored markdown tables for
+  every `Recipes.ts` entry, plus Station/Armor/Weapon upgrade tables (with the new
+  defense/damage numbers) and the Drying Rack's processing ratios. Not generated — a new
+  line in `CLAUDE.md`'s "Working conventions" section asks future sessions to keep it in
+  sync whenever the underlying recipe/upgrade files change, mirroring the existing
+  "plans must be committed in-repo" convention entry.
+
+Verified via `preview_eval` (a stuck-on-BootScene preview tab needed a `preview_resize`
+call to un-pause `requestAnimationFrame` mid-session — noted here in case it recurs):
+live enemy roster spawns 12 Boar/15 Snake/12 RangedGremlin/4 MeleeGremling with no
+enemy spawning on a creek cell; a scripted idle `RangedGremlin.update()` sequence
+confirms its wander target lands within 70px of its spawn point and its rotation is
+non-default from construction; a full tier-0 and tier-1 Gremlin armor set reduces a
+25-damage hit to exactly 16 and 9 respectively; upgrading a hotbar Stone Club through
+both new tiers updates `equippedWeaponTier` live and a real `tryAttackEnemy()` call deals
+9 damage (5 base + 2 + 2); placing a single owned Workbench from the backpack now exits
+placement mode cleanly (no residual ghost); all three Gremlin armor lvl2 upgrades block
+with "Requires nearby Workbench Lvl 2" until a tier-1 Workbench is nearby, then clear;
+placing an item while the inventory is open leaves it open and a click on the panel
+doesn't place through it; `rangeRingEnabled` starts `false`. Type-check clean
+(`tsc --noEmit`), no console errors, `preview_screenshot` confirms the world boots
+normally and the UpgradeMenu's new delta line renders cleanly.
+
+### Previously: Third Progression playtest batch — sprint rework, right-click reserved, workbench gate
 
 Third same-day playtest pass. Per the user's own request this round, four ambiguous
 items were clarified via `AskUserQuestion` before any code changed (sprint-speed

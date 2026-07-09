@@ -86,6 +86,11 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     scene.physics.add.existing(this);
     this.setCollideWorldBounds(true); // matches Player — without this, chase/flee/kite AI can walk enemies off the map
     this.setDepth(cfg.y); // Y-sorted against the player/trees, see preUpdate
+    // Randomized initial facing — without this every enemy defaults to the
+    // same unrotated orientation and only ever rotates once it moves, which
+    // reads as "always facing the same direction" for anything that spends
+    // most of its life stationary (Snake hidden, Gremlin idle).
+    this.setRotation(Phaser.Math.FloatBetween(0, Math.PI * 2));
 
     const barX = cfg.x - Enemy.BAR_W / 2;
     const barY = cfg.y - Enemy.BAR_OFFSET_Y;

@@ -64,13 +64,11 @@ export function weaponSkillDamageMultiplier(skill: SkillType, skills: Skills): n
   return 1 + skills.get(skill) * WEAPON_SKILL_DAMAGE_PCT_PER_LEVEL;
 }
 
-// Sprint speed (multiplies Player's base walk speed while sprinting). Sprint
-// itself was slowed down substantially (playtest feedback: the old flat 1.6x
-// felt too fast) and Running now claws speed back SLOWLY as it levels —
-// +0.5% of base speed per level, so it takes real, sustained sprinting to
-// approach (and eventually, at the lvl-100 soft cap, slightly exceed) the old
-// 1.6x multiplier. First-pass numbers, tunable like everything else.
-const BASE_SPRINT_MULTIPLIER = 1.15;
+// Sprint speed (multiplies Player's base walk speed while sprinting). Rescaled
+// per the user: 1.75x at Running lvl 0, climbing to 2.25x at the lvl-100 soft
+// cap — still exactly +0.5% of base speed per level, only the base changed.
+// First-pass numbers, tunable like everything else.
+const BASE_SPRINT_MULTIPLIER = 1.75;
 const RUNNING_SPRINT_BONUS_PER_LEVEL = 0.005;
 export function runningSprintMultiplier(skills: Skills): number {
   return BASE_SPRINT_MULTIPLIER + skills.get("running") * RUNNING_SPRINT_BONUS_PER_LEVEL;

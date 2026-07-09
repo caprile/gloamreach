@@ -13,6 +13,9 @@ export interface HotbarUIDeps {
   skills: Skills;
   // Left-press on a slot begins dragging that slot's stack.
   beginDrag: (container: ItemContainer, index: number, pointer: Phaser.Input.Pointer) => void;
+  // Right-click on a slot holding a weapon with a defined upgrade path opens
+  // its Upgrade panel (see MainScene.openWeaponUpgradeMenu).
+  openWeaponUpgrade: (container: ItemContainer, index: number) => void;
   // Suppress tooltips while a drag is in progress.
   isDragging: () => boolean;
 }
@@ -99,8 +102,12 @@ export class HotbarUI {
         .on("pointerdown", (pointer: Phaser.Input.Pointer) => {
           // Right-click is a no-op now — quick-move-to-backpack moved to a
           // double-left-click-in-place, detected scene-side (see
-          // MainScene.resolveItemDrag).
-          if (pointer.rightButtonDown()) return;
+          // MainScene.resolveItemDrag) — except on a weapon, which opens its
+          // Upgrade panel instead.
+          if (pointer.rightButtonDown()) {
+            if (stack && itemDef(stack.key)?.weapon) this.deps.openWeaponUpgrade(this.hotbar.container, i);
+            return;
+          }
           this.deps.beginDrag(this.hotbar.container, i, pointer);
         });
       this.rows.push(box);

@@ -243,6 +243,22 @@ export class BootScene extends Phaser.Scene {
     g.fillRect(7, 4, 5, 4);
     g.generateTexture("icon_stone_club", ICON, ICON);
 
+    // Bone Knife: pale bone blade, small dark grip.
+    g.clear();
+    g.fillStyle(0x5a4632, 1);
+    g.fillRect(9, 14, 5, 7); // grip
+    g.fillStyle(0xe8e0cc, 1);
+    g.fillTriangle(11, 14, 15, 14, 20, 3);
+    g.generateTexture("icon_bone_knife", ICON, ICON);
+
+    // Primal Spear: long wood shaft, pale bone tip.
+    g.clear();
+    g.fillStyle(0x7a4a22, 1);
+    g.fillRect(10, 8, 3, 14);
+    g.fillStyle(0xe8e0cc, 1);
+    g.fillTriangle(8, 8, 14, 8, 11, 1);
+    g.generateTexture("icon_primal_spear", ICON, ICON);
+
     // Shishkabob: skewer stick with red + green chunks.
     g.clear();
     g.fillStyle(0xc0a060, 1);

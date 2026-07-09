@@ -1,11 +1,13 @@
 import Phaser from "phaser";
 import type { StationUpgradeDef } from "../systems/StationUpgrades";
 import type { ArmorUpgradeDef } from "../systems/ArmorUpgrades";
+import type { WeaponUpgradeDef } from "../systems/WeaponUpgrades";
 
-// Either a placed station's upgrade or a worn armor piece's upgrade — both
-// share the same shape the UI actually reads (name/description/resultTier/
-// costs), so one panel serves both without a generic type parameter.
-export type UpgradeDef = StationUpgradeDef | ArmorUpgradeDef;
+// A placed station's upgrade, a worn armor piece's upgrade, or an owned
+// weapon's upgrade — all three share the same shape the UI actually reads
+// (name/description/resultTier/costs), so one panel serves all of them
+// without a generic type parameter.
+export type UpgradeDef = StationUpgradeDef | ArmorUpgradeDef | WeaponUpgradeDef;
 
 export interface UpgradeTarget {
   itemKey: string;
@@ -179,9 +181,11 @@ export class UpgradeMenu {
 
     this.addText(contentX, rowY + 8, `${upg.name}${suffix}`, 13, nameColor);
     this.addText(contentX, rowY + 26, this.deps.formatCost(upg), 11, "#8a93a3");
-    const descText = this.addText(contentX, rowY + 42, upg.description, 10, "#5b6472", 0, 0, PANEL_W - 44);
+    if (upg.deltaLabel) this.addText(contentX, rowY + 42, upg.deltaLabel, 11, "#8fe38f");
+    const descY = upg.deltaLabel ? rowY + 58 : rowY + 42;
+    const descText = this.addText(contentX, descY, upg.description, 10, "#5b6472", 0, 0, PANEL_W - 44);
 
-    const rowH = Math.max(42 + descText.height + 10, MIN_ROW_H);
+    const rowH = Math.max(descY - rowY + descText.height + 10, MIN_ROW_H);
 
     const box = this.scene.add
       .rectangle(this.panelX + 12, rowY, PANEL_W - 24, rowH - 6, 0x14181f, 0.9)

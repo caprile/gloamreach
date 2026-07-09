@@ -25,6 +25,7 @@ export interface ItemDef {
   weapon?: WeaponType; // set for weapon items — selecting it in the hotbar equips it
   armorSlot?: EquipSlot; // set for armor items — drag-onto-slot or right-click equips it
   armorType?: ArmorType; // set for armor items — which armor skill a kill grants XP to
+  armorDefense?: number; // base (tier-0) flat damage reduction — see ArmorUpgrades.armorDefenseForTier
   stats?: ItemStat[];
   // World-placed items (campfires, building pieces) skip the backpack
   // entirely — crafting one enters placement mode instead. Per-item, not
@@ -123,6 +124,34 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
       { label: "Type", value: "Weapon" },
       { label: "Damage", value: "5" },
       { label: "Damage Type", value: "Blunt" },
+    ],
+  },
+  bone_knife: {
+    key: "bone_knife",
+    name: "Bone Knife",
+    description: "A quick blade honed from a sharpened bone.",
+    texture: "icon_bone_knife",
+    maxStack: 1,
+    hotbarable: true,
+    weapon: "bone_knife",
+    stats: [
+      { label: "Type", value: "Weapon" },
+      { label: "Damage", value: "4" },
+      { label: "Damage Type", value: "Slash" },
+    ],
+  },
+  primal_spear: {
+    key: "primal_spear",
+    name: "Primal Spear",
+    description: "A wood-and-bone spear built for a heavier, slower strike.",
+    texture: "icon_primal_spear",
+    maxStack: 1,
+    hotbarable: true,
+    weapon: "primal_spear",
+    stats: [
+      { label: "Type", value: "Weapon" },
+      { label: "Damage", value: "8" },
+      { label: "Damage Type", value: "Pierce" },
     ],
   },
 
@@ -252,9 +281,11 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     hotbarable: false,
     armorSlot: "helmet",
     armorType: "light_armor",
+    armorDefense: 2,
     stats: [
       { label: "Type", value: "Armor (Head)" },
       { label: "Armor Type", value: "Light" },
+      { label: "Armor", value: "2" },
     ],
   },
   gremlin_shirt: {
@@ -266,9 +297,11 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     hotbarable: false,
     armorSlot: "chest",
     armorType: "light_armor",
+    armorDefense: 4,
     stats: [
       { label: "Type", value: "Armor (Chest)" },
       { label: "Armor Type", value: "Light" },
+      { label: "Armor", value: "4" },
     ],
   },
   gremlin_pants: {
@@ -280,9 +313,11 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     hotbarable: false,
     armorSlot: "legs",
     armorType: "light_armor",
+    armorDefense: 3,
     stats: [
       { label: "Type", value: "Armor (Legs)" },
       { label: "Armor Type", value: "Light" },
+      { label: "Armor", value: "3" },
     ],
   },
 };

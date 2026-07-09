@@ -3,6 +3,8 @@ import { itemDef, type ItemDef, type ItemStat } from "../systems/Items";
 import { stationDisplayName } from "../systems/StationUpgrades";
 import { weaponDamage, weaponPrimaryDamageType } from "../systems/Weapons";
 import { weaponSkillDamageMultiplier, type Skills } from "../systems/Skills";
+import { armorDefenseForTier } from "../systems/ArmorUpgrades";
+import { weaponTierDamageBonus } from "../systems/WeaponUpgrades";
 
 export type TooltipPlacement = "right" | "above";
 
@@ -40,7 +42,7 @@ export class Tooltip {
     const lines = [name, "", def.description];
     if (def.stats?.length) {
       lines.push("");
-      for (const s of def.stats) lines.push(`${s.label}: ${this.statValue(def, s)}`);
+      for (const s of def.stats) lines.push(`${s.label}: ${this.statValue(def, s, tier ?? 0)}`);
     }
 
     const text = this.scene.add
@@ -74,12 +76,18 @@ export class Tooltip {
   // reading for weapons — the adjustment is the weapon SKILL's own damage
   // bonus (Skills.ts weaponSkillDamageMultiplier), not a player stat. Every
   // other stat line is shown as authored.
-  private statValue(def: ItemDef, stat: ItemStat): string {
+  private statValue(def: ItemDef, stat: ItemStat, tier: number): string {
     if (stat.label === "Damage" && def.weapon && this.skills) {
       const base = weaponDamage(def.weapon);
       const dmgType = weaponPrimaryDamageType(def.weapon);
-      const adjusted = Math.round(base * weaponSkillDamageMultiplier(dmgType, this.skills));
+      const tierBase = base + weaponTierDamageBonus(def.weapon, tier);
+      const adjusted = Math.round(tierBase * weaponSkillDamageMultiplier(dmgType, this.skills));
       return `${base} (${adjusted})`;
+    }
+    if (stat.label === "Armor" && def.armorSlot) {
+      const base = def.armorDefense ?? 0;
+      const adjusted = armorDefenseForTier(def.key, tier);
+      return adjusted === base ? `${base}` : `${base} (${adjusted})`;
     }
     return stat.value;
   }

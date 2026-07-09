@@ -25,6 +25,9 @@ export interface InventoryMenuDeps {
   // Equip/Upgrade if empty) context menu — mirrors a placed station's
   // right-click Upgrade/Destroy popup.
   openArmorContextMenu: (slot: EquipSlot, screenX: number, screenY: number) => void;
+  // Right-click on a backpack slot holding a weapon with a defined upgrade
+  // path opens its Upgrade panel (see MainScene.openWeaponUpgradeMenu).
+  openWeaponUpgrade: (container: ItemContainer, index: number) => void;
   // Suppress tooltips while a drag is in progress.
   isDragging: () => boolean;
 }
@@ -276,8 +279,12 @@ export class InventoryMenu {
           // Right-click is reserved for context-menu/upgrade actions now —
           // quick-move-to-hotbar (or quick-equip) moved to double-left-click,
           // detected by the scene via the click-in-place path (see
-          // MainScene.resolveItemDrag). A no-op here, not a drag start.
-          if (pointer.rightButtonDown()) return;
+          // MainScene.resolveItemDrag) — except on a weapon, which opens its
+          // Upgrade panel instead.
+          if (pointer.rightButtonDown()) {
+            if (itemDef(stack.key)?.weapon) this.deps.openWeaponUpgrade(backpack, i);
+            return;
+          }
           this.deps.beginDrag(backpack, i, pointer);
         });
       this.rows.push(box);

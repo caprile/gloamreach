@@ -1,6 +1,7 @@
 import type { ResourceType } from "./Inventory";
 import { itemDef } from "./Items";
 import { armorUpgradesForItem } from "./ArmorUpgrades";
+import { weaponUpgradesForItem } from "./WeaponUpgrades";
 
 // A named upgrade a placed station can receive via its right-click Upgrade
 // popup. Replaces the old generic `workbench_upgrade` consumable: costs are
@@ -15,6 +16,10 @@ export interface StationUpgradeDef {
   appliesToItemKey: string; // which placed object this upgrade targets
   resultTier: number; // the tier the station reaches after applying it
   costs: Partial<Record<ResourceType, number>>;
+  // Short player-facing summary shown in UpgradeMenu (e.g. "+2 Armor") — left
+  // unset for upgrades like Tool Sharpener that only unlock a gate rather
+  // than grant a direct numeric effect.
+  deltaLabel?: string;
 }
 
 export const STATION_UPGRADES: StationUpgradeDef[] = [
@@ -47,6 +52,12 @@ export function upgradesForItem(itemKey: string): StationUpgradeDef[] {
 // the underlying tier field starts at 0.
 export function stationDisplayName(itemKey: string, tier: number): string {
   const base = itemDef(itemKey)?.name ?? itemKey;
-  if (upgradesForItem(itemKey).length === 0 && armorUpgradesForItem(itemKey).length === 0) return base;
+  if (
+    upgradesForItem(itemKey).length === 0 &&
+    armorUpgradesForItem(itemKey).length === 0 &&
+    weaponUpgradesForItem(itemKey).length === 0
+  ) {
+    return base;
+  }
   return `${base} Lvl ${tier + 1}`;
 }

@@ -40,6 +40,12 @@ const BURST_COOLDOWN_MS = 2400;
 // instant the burst itself finished (~200ms), which read as barely pausing.
 // User feedback: at least 2x that.
 const RANGED_STAND_GROUND_MS = 450;
+// Idle wander, anchored to spawn (not an incremental drift like Boar/Gremling
+// — picking each target directly within RANGED_WANDER_RADIUS of the stored
+// spawn point guarantees it never wanders off, per the user's "small area
+// around their spawn" request).
+const RANGED_WANDER_SPEED = 20;
+const RANGED_WANDER_RADIUS = 70;
 
 type RangedMode = "idle" | "ranged" | "meleeing";
 
@@ -52,6 +58,10 @@ type RangedMode = "idle" | "ranged" | "meleeing";
 // farmable from the weak melee-only one.
 export class RangedGremlin extends Enemy {
   private mode: RangedMode = "idle";
+  private readonly spawnX: number;
+  private readonly spawnY: number;
+  private rangedWanderTarget: { x: number; y: number } | null = null;
+  private nextRangedWanderAt = 0;
   private lastMeleeAt = -Infinity;
   // Burst state: shotsFiredInBurst counts 0/1 mid-burst, resets to 0 once a
   // full burst completes and starts burstCooldownUntil.
@@ -78,6 +88,8 @@ export class RangedGremlin extends Enemy {
       maxHealth: RANGED_MAX_HEALTH,
       biteDamage: RANGED_CLAW_DAMAGE, // reuses Enemy's shared "melee hit" field name
     });
+    this.spawnX = cfg.x;
+    this.spawnY = cfg.y;
   }
 
   update(_delta: number, playerX: number, playerY: number, now: number): boolean {
@@ -90,6 +102,7 @@ export class RangedGremlin extends Enemy {
         this.mode = "ranged";
         this.startPursuit(now);
       } else {
+        this.updateWander(body, now);
         return false;
       }
     }
@@ -195,6 +208,29 @@ export class RangedGremlin extends Enemy {
       }
     }
     return false;
+  }
+
+  // Idle wander, confined to RANGED_WANDER_RADIUS of the spawn point — each
+  // new target is drawn fresh from spawn (not the current position), so it
+  // can never random-walk away like Boar/Gremling's incremental drift can.
+  private updateWander(body: Phaser.Physics.Arcade.Body, now: number): void {
+    if (now >= this.nextRangedWanderAt) {
+      const angle = Phaser.Math.FloatBetween(0, Math.PI * 2);
+      const r = Phaser.Math.FloatBetween(0, RANGED_WANDER_RADIUS);
+      this.rangedWanderTarget = { x: this.spawnX + Math.cos(angle) * r, y: this.spawnY + Math.sin(angle) * r };
+      this.nextRangedWanderAt = now + Phaser.Math.Between(2000, 4000);
+    }
+    if (!this.rangedWanderTarget) return;
+    const d = Phaser.Math.Distance.Between(this.x, this.y, this.rangedWanderTarget.x, this.rangedWanderTarget.y);
+    if (d < 4) {
+      body.setVelocity(0, 0);
+      return;
+    }
+    const angle = Phaser.Math.Angle.Between(this.x, this.y, this.rangedWanderTarget.x, this.rangedWanderTarget.y);
+    const vx = Math.cos(angle) * RANGED_WANDER_SPEED;
+    const vy = Math.sin(angle) * RANGED_WANDER_SPEED;
+    body.setVelocity(vx, vy);
+    this.applyFacing(vx, vy);
   }
 
   private fireShot(playerX: number, playerY: number, now: number): void {

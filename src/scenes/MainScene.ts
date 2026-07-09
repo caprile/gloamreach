@@ -46,7 +46,16 @@ import {
   stationDisplayName,
   type StationUpgradeDef,
 } from "../systems/StationUpgrades";
-import { armorUpgradesForItem, type ArmorUpgradeDef } from "../systems/ArmorUpgrades";
+import {
+  armorUpgradesForItem,
+  totalPlayerDefense,
+  type ArmorUpgradeDef,
+} from "../systems/ArmorUpgrades";
+import {
+  weaponUpgradesForItem,
+  weaponTierDamageBonus,
+  type WeaponUpgradeDef,
+} from "../systems/WeaponUpgrades";
 import { EventLog } from "../systems/EventLog";
 import { Biome, type ZoneType } from "../systems/Biome";
 import { Equipment, EQUIP_SLOTS, type EquipSlot, type EquippedItem } from "../systems/Equipment";
@@ -119,6 +128,7 @@ export class MainScene extends Phaser.Scene {
   // hotbar slot.
   private equippedTool: ToolType | null = null;
   private equippedWeapon: WeaponType | null = null;
+  private equippedWeaponTier = 0;
   private attackRangeRing!: Phaser.GameObjects.Graphics;
   private hotbar = new Hotbar();
   private equipment = new Equipment();
@@ -148,7 +158,11 @@ export class MainScene extends Phaser.Scene {
   private characterMenu!: CharacterMenu;
   // Either a placed object (Workbench/Campfire/Drying Rack) or an equipped
   // armor slot — the UpgradeMenu deps below branch on which one is set.
-  private upgradeTarget: Phaser.GameObjects.Image | { armorSlot: EquipSlot } | null = null;
+  private upgradeTarget:
+    | Phaser.GameObjects.Image
+    | { armorSlot: EquipSlot }
+    | { weaponSlot: { container: ItemContainer; index: number } }
+    | null = null;
   // The floating "<Name> Lvl N" label shown above any placed object that has
   // at least one defined upgrade (see StationUpgrades.ts) — keyed by the
   // placed Image so it can be moved/updated/destroyed alongside it.
@@ -186,7 +200,7 @@ export class MainScene extends Phaser.Scene {
   // Whether loose drop pieces auto-fly to the player when in range. Toggled
   // with V; doesn't affect pre-placed branches/rocks (always manual).
   private magnetEnabled = true;
-  private rangeRingEnabled = true;
+  private rangeRingEnabled = false;
 
   // --- Combat ---
   private enemies: Enemy[] = [];
@@ -306,6 +320,10 @@ export class MainScene extends Phaser.Scene {
       }
       if (this.placementMode) {
         if (this.pointerOverHud(pointer)) return;
+        // The inventory can stay open during placement (see
+        // startItemPlacement) — a click on its still-open panel must not
+        // fall through and place an object underneath it.
+        if (this.inventoryMenu.isOpen() && this.inventoryMenu.containsPoint(pointer.x, pointer.y)) return;
         if (pointer.leftButtonDown()) this.attemptPlaceObject();
         else if (pointer.rightButtonDown()) this.cancelPlacement();
         return;
@@ -332,6 +350,7 @@ export class MainScene extends Phaser.Scene {
     this.hotbarUI = new HotbarUI(this, this.hotbar, {
       skills: this.skills,
       beginDrag: (c, i, p) => this.beginItemDrag(c, i, p),
+      openWeaponUpgrade: (c, i) => this.openWeaponUpgradeMenu(c, i),
       isDragging: () => this.dragSource !== null,
     });
     this.createStaminaBar();
@@ -571,6 +590,7 @@ export class MainScene extends Phaser.Scene {
     const def = stack ? itemDef(stack.key) : undefined;
     this.equippedTool = def?.tool ?? null;
     this.equippedWeapon = def?.weapon ?? null;
+    this.equippedWeaponTier = def?.weapon ? stack?.tier ?? 0 : 0;
     const iconTexture = def && (def.tool || def.weapon) ? def.texture : null;
     this.player.setEquippedIcon(iconTexture);
     this.hotbarUI.refresh();
@@ -975,10 +995,11 @@ export class MainScene extends Phaser.Scene {
     existing: { x: number; y: number }[],
     minSpacing: number,
     maxNearby: number,
+    avoidCreek = false,
   ): { x: number; y: number } {
     let last = { x: WORLD_W / 2, y: WORLD_H / 2 };
     for (let attempt = 0; attempt < 200; attempt++) {
-      const { x, y } = this.pickSpawnPoint(rng, zone, clearRadius);
+      const { x, y } = this.pickSpawnPoint(rng, zone, clearRadius, avoidCreek);
       last = { x, y };
       const nearby = existing.filter(
         (p) => Phaser.Math.Distance.Between(p.x, p.y, x, y) <= minSpacing,
@@ -1202,7 +1223,7 @@ export class MainScene extends Phaser.Scene {
     const BOAR_FOREST_COUNT = Math.round(BOAR_COUNT * 0.8);
     const BOAR_GRASSY_COUNT = BOAR_COUNT - BOAR_FOREST_COUNT;
     const spawnBoar = (zone: "forest" | "grassy") => {
-      const { x, y } = this.pickSpawnPoint(rng, zone, BOAR_CLEAR_RADIUS);
+      const { x, y } = this.pickSpawnPoint(rng, zone, BOAR_CLEAR_RADIUS, true);
       const enemy = new Enemy(this, {
         x,
         y,
@@ -1229,7 +1250,7 @@ export class MainScene extends Phaser.Scene {
     // snakes could ever supply in one session.
     const SNAKE_COUNT = 15;
     for (let i = 0; i < SNAKE_COUNT; i++) {
-      const { x, y } = this.pickSpawnPoint(rng, "grassy", 200);
+      const { x, y } = this.pickSpawnPoint(rng, "grassy", 200, true);
       const snake = new Snake(this, { x, y });
       this.enemies.push(snake);
       this.enemyGroup.add(snake);
@@ -1259,6 +1280,7 @@ export class MainScene extends Phaser.Scene {
         gremlinPoints,
         GREMLIN_CLUSTER_RADIUS,
         GREMLIN_CLUSTER_MAX,
+        true,
       );
       gremlinPoints.push({ x, y });
       const gremlin = new RangedGremlin(this, { x, y });
@@ -1274,6 +1296,7 @@ export class MainScene extends Phaser.Scene {
         gremlinPoints,
         GREMLIN_CLUSTER_RADIUS,
         GREMLIN_CLUSTER_MAX,
+        true,
       );
       gremlinPoints.push({ x, y });
       const gremling = new MeleeGremling(this, { x, y });
@@ -1516,9 +1539,8 @@ export class MainScene extends Phaser.Scene {
     this.player.playSwing();
     this.player.playEquippedSwing();
 
-    const dmg = Math.round(
-      weaponDamage(this.equippedWeapon) * weaponSkillDamageMultiplier(dmgType, this.skills),
-    );
+    const baseDmg = weaponDamage(this.equippedWeapon) + weaponTierDamageBonus(this.equippedWeapon, this.equippedWeaponTier);
+    const dmg = Math.round(baseDmg * weaponSkillDamageMultiplier(dmgType, this.skills));
     const depleted = enemy.takeHit(dmg);
     this.skills.addXp(dmgType, 30); // weapon-hit XP to the primary damage type's skill
     this.spawnDamageNumber(enemy.x, enemy.y, dmg);
@@ -1613,7 +1635,12 @@ export class MainScene extends Phaser.Scene {
   private applyDamageToPlayer(amount: number): void {
     if (this.isDead) return;
     if (this.time.now < this.invulnerableUntil) return;
-    const died = this.health.takeDamage(amount);
+    // Flat armor deduction — everything dealt today is physical damage (no
+    // magic/elemental sources exist yet), so this applies uniformly; branch
+    // on a damage type here once one does. Floored at 1 so no armor
+    // combination grants full immunity.
+    const reduced = Math.max(1, Math.round(amount - totalPlayerDefense(this.equipment)));
+    const died = this.health.takeDamage(reduced);
     this.refreshHealthBar();
     if (died) this.onPlayerDeath();
   }
@@ -1860,10 +1887,13 @@ export class MainScene extends Phaser.Scene {
     if (!def?.placeable) return;
     const recipe = RECIPES.find((r) => outputKey(r) === stack.key);
     if (!recipe) return;
-    // Placement intercepts world clicks, so any open menu would sit in front of
-    // the ghost — close them first, mirroring the crafting menu's Place flow.
+    // Placement intercepts world clicks, so an open menu would otherwise sit
+    // in front of the ghost — close the crafting menu and Drying Rack popup
+    // (neither needs to stay open while placing), but deliberately leave the
+    // inventory open so several items can be placed in a row without
+    // reopening it each time (the global pointerdown handler guards against
+    // clicking through the still-open panel, see below).
     this.craftingMenu.close();
-    this.inventoryMenu.close();
     this.closeDryingRackMenu();
     this.placementMode = { recipe, itemSource: { container, key: stack.key } };
     const pos = this.clampedPlacementPoint();
@@ -1969,7 +1999,16 @@ export class MainScene extends Phaser.Scene {
     this.inventoryMenu.refresh();
     // Placing from an owned stack changed a count — keep the hotbar display in
     // sync too (refreshHud only touches the crafting/inventory menus).
-    if (itemSource) this.hotbarUI.refresh();
+    if (itemSource) {
+      this.hotbarUI.refresh();
+      // That was the last one owned — exit placement mode immediately rather
+      // than leaving a faded ghost armed on the cursor until the next click
+      // notices the stack is empty (the old "ghost workbench" bug).
+      if (itemSource.container.count(itemSource.key) < 1) {
+        this.cancelPlacement();
+        return;
+      }
+    }
   }
 
   // First slot holding `key` — the one an item-source placement consumes.
@@ -2054,12 +2093,16 @@ export class MainScene extends Phaser.Scene {
     this.contextMenu.show(screenX, screenY, items);
   }
 
-  // True when the current upgrade target is an equipped armor slot rather
-  // than a placed world object.
-  private isArmorUpgradeTarget(
-    t: Phaser.GameObjects.Image | { armorSlot: EquipSlot },
-  ): t is { armorSlot: EquipSlot } {
-    return !(t instanceof Phaser.GameObjects.Image);
+  // Discriminators for the three kinds of upgrade target — a placed world
+  // object (Image), an equipped armor slot, or a weapon sitting in a
+  // container (backpack or hotbar) slot.
+  private isArmorUpgradeTarget(t: NonNullable<MainScene["upgradeTarget"]>): t is { armorSlot: EquipSlot } {
+    return "armorSlot" in t;
+  }
+  private isWeaponUpgradeTarget(
+    t: NonNullable<MainScene["upgradeTarget"]>,
+  ): t is { weaponSlot: { container: ItemContainer; index: number } } {
+    return "weaponSlot" in t;
   }
 
   private createUpgradeMenu(): void {
@@ -2071,11 +2114,19 @@ export class MainScene extends Phaser.Scene {
           const eq = this.equipment.get(t.armorSlot);
           return eq ? { itemKey: eq.key, tier: eq.tier } : null;
         }
+        if (this.isWeaponUpgradeTarget(t)) {
+          const stack = t.weaponSlot.container.slot(t.weaponSlot.index);
+          return stack ? { itemKey: stack.key, tier: stack.tier ?? 0 } : null;
+        }
         return { itemKey: t.getData("itemKey") as string, tier: (t.getData("tier") as number | undefined) ?? 0 };
       },
-      // Station and armor upgrades are keyed by disjoint itemKeys, so
-      // concatenating both tables is safe — only one ever matches.
-      upgradesFor: (itemKey) => [...upgradesForItem(itemKey), ...armorUpgradesForItem(itemKey)],
+      // Station, armor, and weapon upgrades are keyed by disjoint itemKeys,
+      // so concatenating all three tables is safe — only one ever matches.
+      upgradesFor: (itemKey) => [
+        ...upgradesForItem(itemKey),
+        ...armorUpgradesForItem(itemKey),
+        ...weaponUpgradesForItem(itemKey),
+      ],
       isDiscovered: (upg) => this.upgradeIngredientsKnown(upg),
       canAfford: (upg) => this.canAffordUpgrade(upg),
       extraBlockReason: (upg) => this.upgradeBlockReason(upg),
@@ -2085,7 +2136,9 @@ export class MainScene extends Phaser.Scene {
         const t = this.upgradeTarget;
         if (!t) return;
         if (this.isArmorUpgradeTarget(t)) this.applyArmorUpgrade(t.armorSlot, upg as ArmorUpgradeDef);
-        else this.applyStationUpgrade(t, upg as StationUpgradeDef);
+        else if (this.isWeaponUpgradeTarget(t)) {
+          this.applyWeaponUpgrade(t.weaponSlot.container, t.weaponSlot.index, upg as WeaponUpgradeDef);
+        } else this.applyStationUpgrade(t, upg as StationUpgradeDef);
       },
     });
   }
@@ -2111,6 +2164,22 @@ export class MainScene extends Phaser.Scene {
     this.closeDryingRackMenu();
     this.upgradeTarget = { armorSlot: slot };
     this.upgradeMenu.openMenu({ x: INVENTORY_PANEL_X + INVENTORY_PANEL_W + 12, y: INVENTORY_PANEL_Y });
+  }
+
+  // Right-click on a weapon (backpack or hotbar) opens the same Upgrade
+  // panel, bound to that specific ItemStack — mirrors openArmorUpgradeMenu's
+  // "dock beside the inventory if it's open" behavior when it is, otherwise
+  // opens centered like a placed station's panel.
+  private openWeaponUpgradeMenu(container: ItemContainer, index: number): void {
+    if (!container.slot(index)) return;
+    this.craftingMenu.close();
+    this.closeDryingRackMenu();
+    this.upgradeTarget = { weaponSlot: { container, index } };
+    if (this.inventoryMenu.isOpen()) {
+      this.upgradeMenu.openMenu({ x: INVENTORY_PANEL_X + INVENTORY_PANEL_W + 12, y: INVENTORY_PANEL_Y });
+    } else {
+      this.upgradeMenu.openMenu();
+    }
   }
 
   private closeUpgradeMenu(): void {
@@ -2216,6 +2285,21 @@ export class MainScene extends Phaser.Scene {
     this.afterItemMove();
   }
 
+  // Weapon's equivalent — deducts cost and bumps the specific ItemStack's
+  // tier in place, wherever it sits (backpack or hotbar).
+  private applyWeaponUpgrade(container: ItemContainer, index: number, upg: WeaponUpgradeDef): void {
+    const stack = container.slot(index);
+    if (!stack || !this.canAffordUpgrade(upg) || this.upgradeBlockReason(upg)) return;
+    for (const [r, n] of Object.entries(upg.costs)) this.backpack.removeCount(r, n ?? 0);
+    container.set(index, { ...stack, tier: upg.resultTier });
+    this.eventLog.add("info", `${stationDisplayName(stack.key, upg.resultTier)} upgraded: ${upg.name}`);
+    // The upgraded weapon may be the currently-equipped hotbar item — refresh
+    // equippedWeaponTier so the damage bonus applies immediately.
+    this.recomputeEquipped();
+    this.upgradeMenu.refresh();
+    this.afterItemMove();
+  }
+
   // The visual tell for a placed station's upgrade tier — applied at every
   // render point (live upgrade AND re-placement from a tiered stack) so the two
   // paths never diverge. Tier 0 clears the tint; higher tiers get a gold cast.
@@ -2274,6 +2358,7 @@ export class MainScene extends Phaser.Scene {
       beginDrag: (c, i, p) => this.beginItemDrag(c, i, p),
       beginArmorDrag: (slot, p) => this.beginArmorDrag(slot, p),
       openArmorContextMenu: (slot, x, y) => this.openArmorContextMenu(slot, x, y),
+      openWeaponUpgrade: (c, i) => this.openWeaponUpgradeMenu(c, i),
       isDragging: () => this.dragSource !== null,
     });
   }
