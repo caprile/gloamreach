@@ -47,3 +47,7 @@ const WEAPON_STAMINA_COST: Record<WeaponType, number> = {
 export function weaponStaminaCost(weapon: WeaponType): number {
   return WEAPON_STAMINA_COST[weapon];
 }
+
+export function weaponAttacksPerSecond(weapon: WeaponType): number {
+  return 1000 / WEAPON_COOLDOWN_MS[weapon];
+}

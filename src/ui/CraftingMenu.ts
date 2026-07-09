@@ -4,8 +4,9 @@ import type { Crafting } from "../systems/Crafting";
 import type { ResourceType } from "../systems/Inventory";
 import type { ItemContainer } from "../systems/ItemContainer";
 import { itemDef, type ItemStat } from "../systems/Items";
-import { weaponDamage, weaponPrimaryDamageType } from "../systems/Weapons";
+import { weaponAttacksPerSecond, weaponDamage, weaponPrimaryDamageType, weaponStaminaCost } from "../systems/Weapons";
 import { weaponSkillDamageMultiplier, type Skills } from "../systems/Skills";
+import { weaponStaminaCostMultiplier, type PlayerProgression } from "../systems/Progression";
 
 const CATEGORIES: { id: RecipeCategory; label: string }[] = [
   { id: "tools", label: "Tools" },
@@ -27,6 +28,7 @@ export interface CraftingMenuDeps {
   startPlacement: (recipe: Recipe) => void;
   isNearWorkbench: () => boolean;
   skills: Skills;
+  progression: PlayerProgression;
   // The top-right icon opens the combined Tab menu (crafting + inventory),
   // not just this panel — there's no crafting-only entry point anymore.
   onIconClick: () => void;
@@ -238,6 +240,15 @@ export class CraftingMenu {
     }
     if (stat.label === "Armor" && def.armorSlot) {
       return `${def.armorDefense ?? 0}`;
+    }
+    if (stat.label === "Stamina" && def.weapon) {
+      const base = weaponStaminaCost(def.weapon);
+      const dmgType = weaponPrimaryDamageType(def.weapon);
+      const adjusted = Math.round(base * weaponStaminaCostMultiplier(dmgType, this.deps.progression));
+      return adjusted === base ? `${base}` : `${base} (${adjusted})`;
+    }
+    if (stat.label === "Attack Speed" && def.weapon) {
+      return `${weaponAttacksPerSecond(def.weapon).toFixed(1)}/s`;
     }
     return stat.value;
   }

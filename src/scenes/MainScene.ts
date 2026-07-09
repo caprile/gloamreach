@@ -352,6 +352,7 @@ export class MainScene extends Phaser.Scene {
     this.createCharacterMenu();
     this.hotbarUI = new HotbarUI(this, this.hotbar, {
       skills: this.skills,
+      progression: this.progression,
       beginDrag: (c, i, p) => this.beginItemDrag(c, i, p),
       openWeaponUpgrade: (c, i) => this.openWeaponUpgradeMenu(c, i),
       isDragging: () => this.dragSource !== null,
@@ -1828,6 +1829,7 @@ export class MainScene extends Phaser.Scene {
       startPlacement: (recipe) => this.startPlacement(recipe),
       isNearWorkbench: () => this.isNearWorkbench(this.player.x, this.player.y),
       skills: this.skills,
+      progression: this.progression,
       onIconClick: () => this.toggleCombinedMenu(),
     });
   }
@@ -2360,6 +2362,7 @@ export class MainScene extends Phaser.Scene {
     this.inventoryMenu = new InventoryMenu(this, {
       backpack: this.backpack,
       skills: this.skills,
+      progression: this.progression,
       armorSlots: () => this.armorSlots(),
       beginDrag: (c, i, p) => this.beginItemDrag(c, i, p),
       beginArmorDrag: (slot, p) => this.beginArmorDrag(slot, p),

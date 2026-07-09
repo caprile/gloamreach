@@ -2,7 +2,29 @@
 
 Last updated: 2026-07-09
 
-### Just finished: Playtest fixes batch — Gremlin Guck processing, bigger map, crafting-menu stats, Place context menu, level-up banner
+### Just finished: Weapon stat display — stamina/hit and attack speed
+
+Small same-day follow-up, no new milestone letter. Weapon tooltips (`InventoryMenu`/
+`HotbarUI`, via `Tooltip.ts`) and the crafting-menu detail panel (`CraftingMenu.ts`) now
+show two new stat lines for every weapon (Wood Club, Stone Club, Bone Knife, Primal
+Spear): **Stamina** (cost per hit, live-adjusted by the Strength/Agility stamina-cost
+multiplier exactly like the existing Damage line is skill-adjusted — reuses
+`Progression.ts`'s `weaponStaminaCostMultiplier`, which was already computed for actual
+combat but never surfaced in UI) and **Attack Speed** (`attacks/s`, new
+`Weapons.weaponAttacksPerSecond()` = `1000 / weaponCooldownMs`, static — nothing
+currently modifies attack speed). Both `Tooltip` and `CraftingMenu` needed a new
+`progression: PlayerProgression` dependency threaded in from `MainScene` (mirroring the
+existing `skills: Skills` dependency) since the Stamina line needs live player-stat data,
+not just skill data. Verified live via `preview_eval`: a Stone Club tooltip reads
+`Stamina: 14` / `Attack Speed: 1.8/s` at 0 Strength, and `Stamina: 14 (13)` after
+allocating 10 Strength points — matching the crafting-menu preview's own
+`statValue()` output for the same inputs.
+
+Also added to `CLAUDE.md`'s roadmap (World & discovery, item 6): a **minimap with fog of
+war** — idea-stage only, not started. Corner HUD map revealing explored terrain as the
+player physically visits it; reveal radius/map scale/fast-travel-or-not all undecided.
+
+### Previously: Playtest fixes batch — Gremlin Guck processing, bigger map, crafting-menu stats, Place context menu, level-up banner
 
 Plan: `.claude/plans/bright-prancing-starlight-playtest-batch.md`. A same-day
 follow-up batch off a fresh playtest, no new milestone letter:

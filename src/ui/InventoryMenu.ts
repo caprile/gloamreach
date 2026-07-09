@@ -3,6 +3,7 @@ import type { EquipSlot } from "../systems/Equipment";
 import type { ItemContainer } from "../systems/ItemContainer";
 import { itemDef } from "../systems/Items";
 import type { Skills } from "../systems/Skills";
+import type { PlayerProgression } from "../systems/Progression";
 import { Tooltip } from "./Tooltip";
 
 export interface ArmorSlotView {
@@ -15,6 +16,7 @@ export interface ArmorSlotView {
 export interface InventoryMenuDeps {
   backpack: ItemContainer;
   skills: Skills;
+  progression: PlayerProgression;
   armorSlots: () => ArmorSlotView[];
   // Left-press on a filled slot begins dragging that stack.
   beginDrag: (container: ItemContainer, index: number, pointer: Phaser.Input.Pointer) => void;
@@ -93,7 +95,7 @@ export class InventoryMenu {
   constructor(scene: Phaser.Scene, deps: InventoryMenuDeps) {
     this.scene = scene;
     this.deps = deps;
-    this.tooltipUI = new Tooltip(scene, deps.skills);
+    this.tooltipUI = new Tooltip(scene, deps.skills, deps.progression);
 
     this.bg = scene.add
       .rectangle(PANEL_X, PANEL_Y, PANEL_W, PANEL_H, 0x0a0a0a, 0.93)

@@ -110,6 +110,8 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
       { label: "Type", value: "Weapon" },
       { label: "Damage", value: "3" },
       { label: "Damage Type", value: "Blunt" },
+      { label: "Stamina", value: "10" },
+      { label: "Attack Speed", value: "2.2/s" },
     ],
   },
   stone_club: {
@@ -124,6 +126,8 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
       { label: "Type", value: "Weapon" },
       { label: "Damage", value: "5" },
       { label: "Damage Type", value: "Blunt" },
+      { label: "Stamina", value: "14" },
+      { label: "Attack Speed", value: "1.8/s" },
     ],
   },
   bone_knife: {
@@ -138,6 +142,8 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
       { label: "Type", value: "Weapon" },
       { label: "Damage", value: "4" },
       { label: "Damage Type", value: "Slash" },
+      { label: "Stamina", value: "8" },
+      { label: "Attack Speed", value: "2.9/s" },
     ],
   },
   primal_spear: {
@@ -152,6 +158,8 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
       { label: "Type", value: "Weapon" },
       { label: "Damage", value: "8" },
       { label: "Damage Type", value: "Pierce" },
+      { label: "Stamina", value: "16" },
+      { label: "Attack Speed", value: "1.5/s" },
     ],
   },
 

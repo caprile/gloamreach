@@ -283,7 +283,12 @@ mouse-driven only. Don't reintroduce a keybind for this without being asked. Spa
 
 **Not yet built — next up in rough order:**
 6. **World & discovery** — much bigger generated world, biomes, map. See **First biome —
-   content notes** below for the first biome's terrain-zone concept.
+   content notes** below for the first biome's terrain-zone concept. Also includes a
+   **minimap with fog of war** (not yet started): a corner HUD map showing explored vs.
+   unexplored terrain — cells the player has physically been near get revealed and stay
+   revealed, everything else stays hidden/darkened. Exact reveal radius, map
+   scale/zoom, and whether it doubles as a fast-travel or waypoint UI are all
+   undecided.
 7. **Bosses.**
 8. **ARPG loot** — rarity, randomized drops/recipes, replayability.
 9. **Cross-cutting:** save/load (localStorage), real pixel-art tilesets.

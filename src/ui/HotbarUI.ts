@@ -3,6 +3,7 @@ import type { Hotbar } from "../systems/Hotbar";
 import type { ItemContainer } from "../systems/ItemContainer";
 import { itemDef } from "../systems/Items";
 import type { Skills } from "../systems/Skills";
+import type { PlayerProgression } from "../systems/Progression";
 import { Tooltip } from "./Tooltip";
 
 const SLOT_SIZE = 40;
@@ -11,6 +12,7 @@ const SLOT_COUNT = 9;
 
 export interface HotbarUIDeps {
   skills: Skills;
+  progression: PlayerProgression;
   // Left-press on a slot begins dragging that slot's stack.
   beginDrag: (container: ItemContainer, index: number, pointer: Phaser.Input.Pointer) => void;
   // Right-click on a slot holding a weapon with a defined upgrade path opens
@@ -38,7 +40,7 @@ export class HotbarUI {
     this.scene = scene;
     this.hotbar = hotbar;
     this.deps = deps;
-    this.tooltipUI = new Tooltip(scene, deps.skills);
+    this.tooltipUI = new Tooltip(scene, deps.skills, deps.progression);
     const totalW = SLOT_COUNT * SLOT_SIZE + (SLOT_COUNT - 1) * SLOT_GAP;
     this.originX = (scene.scale.width - totalW) / 2;
     this.originY = scene.scale.height - SLOT_SIZE - 14;

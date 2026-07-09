@@ -1,10 +1,11 @@
 import Phaser from "phaser";
 import { itemDef, type ItemDef, type ItemStat } from "../systems/Items";
 import { stationDisplayName } from "../systems/StationUpgrades";
-import { weaponDamage, weaponPrimaryDamageType } from "../systems/Weapons";
+import { weaponAttacksPerSecond, weaponDamage, weaponPrimaryDamageType, weaponStaminaCost } from "../systems/Weapons";
 import { weaponSkillDamageMultiplier, type Skills } from "../systems/Skills";
 import { armorDefenseForTier } from "../systems/ArmorUpgrades";
 import { weaponTierDamageBonus } from "../systems/WeaponUpgrades";
+import { weaponStaminaCostMultiplier, type PlayerProgression } from "../systems/Progression";
 
 export type TooltipPlacement = "right" | "above";
 
@@ -24,10 +25,12 @@ export class Tooltip {
   private scene: Phaser.Scene;
   private parts: Phaser.GameObjects.GameObject[] = [];
   private skills?: Skills;
+  private progression?: PlayerProgression;
 
-  constructor(scene: Phaser.Scene, skills?: Skills) {
+  constructor(scene: Phaser.Scene, skills?: Skills, progression?: PlayerProgression) {
     this.scene = scene;
     this.skills = skills;
+    this.progression = progression;
   }
 
   // `tier` is only meaningful for stations with a defined upgrade path
@@ -88,6 +91,16 @@ export class Tooltip {
       const base = def.armorDefense ?? 0;
       const adjusted = armorDefenseForTier(def.key, tier);
       return adjusted === base ? `${base}` : `${base} (${adjusted})`;
+    }
+    if (stat.label === "Stamina" && def.weapon) {
+      const base = weaponStaminaCost(def.weapon);
+      if (!this.progression) return `${base}`;
+      const dmgType = weaponPrimaryDamageType(def.weapon);
+      const adjusted = Math.round(base * weaponStaminaCostMultiplier(dmgType, this.progression));
+      return adjusted === base ? `${base}` : `${base} (${adjusted})`;
+    }
+    if (stat.label === "Attack Speed" && def.weapon) {
+      return `${weaponAttacksPerSecond(def.weapon).toFixed(1)}/s`;
     }
     return stat.value;
   }
