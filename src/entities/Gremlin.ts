@@ -287,8 +287,18 @@ export class MeleeGremling extends Enemy {
   private lastClawAt = -Infinity;
   private meleeWanderTarget: { x: number; y: number } | null = null;
   private nextMeleeWanderAt = 0;
+  // Optional spawn anchor (Gremlin Shack guards) — when set, wander targets
+  // are drawn fresh from this point each cycle (mirrors RangedGremlin's
+  // spawn-anchored wander) instead of drifting from the current position, so
+  // a guard can never random-walk away from the shack it's posted at.
+  // Undefined for every free-roaming Gremling elsewhere, which keeps the
+  // original incremental-drift behavior unchanged.
+  private readonly wanderAnchor: { x: number; y: number; radius: number } | null;
 
-  constructor(scene: Phaser.Scene, cfg: { x: number; y: number }) {
+  constructor(
+    scene: Phaser.Scene,
+    cfg: { x: number; y: number; wanderAnchor?: { x: number; y: number; radius: number } },
+  ) {
     super(scene, {
       x: cfg.x,
       y: cfg.y,
@@ -298,6 +308,7 @@ export class MeleeGremling extends Enemy {
       maxHealth: MELEE_MAX_HEALTH,
       biteDamage: MELEE_CLAW_DAMAGE,
     });
+    this.wanderAnchor = cfg.wanderAnchor ?? null;
   }
 
   update(_delta: number, playerX: number, playerY: number, now: number): boolean {
@@ -338,8 +349,16 @@ export class MeleeGremling extends Enemy {
 
     if (now >= this.nextMeleeWanderAt) {
       const angle = Phaser.Math.FloatBetween(0, Math.PI * 2);
-      const d = Phaser.Math.Between(20, 50);
-      this.meleeWanderTarget = { x: this.x + Math.cos(angle) * d, y: this.y + Math.sin(angle) * d };
+      if (this.wanderAnchor) {
+        const r = Phaser.Math.FloatBetween(0, this.wanderAnchor.radius);
+        this.meleeWanderTarget = {
+          x: this.wanderAnchor.x + Math.cos(angle) * r,
+          y: this.wanderAnchor.y + Math.sin(angle) * r,
+        };
+      } else {
+        const d = Phaser.Math.Between(20, 50);
+        this.meleeWanderTarget = { x: this.x + Math.cos(angle) * d, y: this.y + Math.sin(angle) * d };
+      }
       this.nextMeleeWanderAt = now + Phaser.Math.Between(2000, 4000);
     }
     if (this.meleeWanderTarget) {

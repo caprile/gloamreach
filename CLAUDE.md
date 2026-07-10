@@ -304,12 +304,47 @@ mouse-driven only. Don't reintroduce a keybind for this without being asked. Spa
    minimap, computed from `MinimapUI`'s exported `MARGIN`/`PANEL_H` constants
    rather than hardcoded offsets so the three stay stacked without overlap if the
    minimap's size ever changes.
+5b. **Gremlin Shack (first POI)** — plan: `.claude/plans/lexical-sleeping-journal.md`
+   (Milestone P1 of a two-part plan; P2 is the Boss Altar/Gremlin King below). The
+   game's first world-gen-placed (not player-placed) structure: `src/entities/
+   GremlinShack.ts` pairs a non-interactive backdrop image with a small lootable
+   chest sprite near its doorway (the chest, not the shack, is the interactable —
+   matches "a shack that contains a barrel or chest," not "the shack itself is
+   clickable"). New `src/systems/LootContainer.ts` (`LootContainer`, wraps an
+   `ItemContainer` with an independently-per-entry-rolled loot table — rolls once
+   per "empty cycle," not every guard respawn, so an unclaimed chest doesn't top
+   itself back up for free) and `src/ui/ChestMenu.ts` (modeled on
+   `DryingRackMenu.ts`'s flat-GameObject structure, simplified to two side-by-side
+   grids with no slider/process step — items move purely via the existing
+   `moveSlot()` primitive). 5 shacks scatter through the forest zone
+   (`MainScene.spawnGremlinShacks()`, reusing `pickSpreadSpawnPoint()`), each
+   guarded by 1 `RangedGremlin` + 1 `MeleeGremling` anchored near the shack;
+   `MeleeGremling` gained an **optional** `wanderAnchor` constructor param (mirrors
+   `RangedGremlin`'s existing spawn-anchored wander) so a shack guard can't
+   random-walk away — every other free-roaming Gremling is unaffected (anchor
+   defaults to unset). Guards respawn as a pair (not per-guard) 6 minutes after
+   both are killed, and the chest re-arms to roll fresh loot on that same
+   cycle — but only if it was already fully emptied by the player first. Reuses
+   the hover/prompt/interact pattern verbatim (`promptForShack()` mirrors
+   `promptForRack()` — reach-gated only, no equip gating, prompt reads
+   `"[LMB] Open"`); `resolveItemDrag()` gained a new chest branch, a direct
+   extension of the existing drying-rack-menu if-chain (not a generalized
+   "container kind" system — deliberately not built until a 3rd/4th case
+   actually needs it).
 
 **Not yet built — next up in rough order:**
-6. **World & discovery** — much bigger generated world, biomes, map. See **First biome —
-   content notes** below for the first biome's terrain-zone concept. (Minimap + fog of
-   war, formerly noted here as undecided/not-started, has shipped — see 5a above.)
-7. **Bosses.**
+6. **World & discovery** — much bigger generated world, biomes, map, eventually a
+   single giant circular Valheim-style map (spawn at center, danger increases
+   outward — locked direction from the user, not yet built). See **First biome —
+   content notes** below for the first biome's terrain-zone concept. (Minimap + fog
+   of war, formerly noted here as undecided/not-started, has shipped — see 5a
+   above; the Gremlin Shack POI has shipped — see 5b above.)
+7. **Bosses** — Boss Altar + Gremlin King (Milestone P2 of
+   `.claude/plans/lexical-sleeping-journal.md`) is the next planned piece: an
+   Elden-Ring-style telegraphed/poise-punish fight, found via exploration +
+   escalating environmental hints (denser shacks/camp decor/enemies near the
+   altar), summoned by crafting a Gremlin Totem and placing it in the altar's own
+   fire. Not yet built as of the Gremlin Shack POI shipping.
 8. **ARPG loot** — rarity, randomized drops/recipes, replayability.
 9. **Cross-cutting:** save/load (localStorage), real pixel-art tilesets.
 

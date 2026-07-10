@@ -160,6 +160,32 @@ export class BootScene extends Phaser.Scene {
     g.fillRect(3, 26, 24, 3); // bottom rail
     g.generateTexture("drying_rack", 30, 34);
 
+    // Gremlin Shack — a crude lean-to POI structure, 48x40: dark plank walls,
+    // a lighter doorway gap, and a scrap-wood roof overhang. Biggest world
+    // object yet (prior largest was tree at 30x40) so it reads as a
+    // structure, not a prop. Non-interactive backdrop — see gremlin_shack_chest.
+    g.clear();
+    g.fillStyle(0x4a3a24, 1);
+    g.fillRect(2, 14, 44, 24); // wall
+    g.fillStyle(0x3a2c1a, 1);
+    g.fillRect(18, 20, 12, 18); // doorway gap (darker interior)
+    g.fillStyle(0x6b4a26, 1);
+    g.fillRect(0, 4, 48, 12); // roof overhang
+    g.fillStyle(0x855f31, 1);
+    g.fillRect(0, 4, 48, 3); // roof highlight ridge
+    g.generateTexture("gremlin_shack", 48, 40);
+
+    // Gremlin Shack's lootable chest — a small wooden barrel, 16x14. Sits
+    // near the shack's doorway; this (not the shack backdrop) is the
+    // interactable.
+    g.clear();
+    g.fillStyle(0x6b4a26, 1);
+    g.fillRect(1, 2, 14, 11);
+    g.fillStyle(0x4a3018, 1);
+    g.fillRect(1, 5, 14, 2); // band
+    g.fillRect(1, 9, 14, 2); // band
+    g.generateTexture("gremlin_shack_chest", 16, 14);
+
     this.makeItemIcons(g);
 
     g.destroy(); // we only needed it to bake textures

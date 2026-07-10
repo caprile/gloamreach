@@ -14,6 +14,8 @@ import { Enemy } from "../entities/Enemy";
 import { Snake } from "../entities/Snake";
 import { RangedGremlin, MeleeGremling } from "../entities/Gremlin";
 import { Projectile, type ProjectileConfig } from "../entities/Projectile";
+import { GremlinShack, SHACK_GUARD_RESPAWN_MS } from "../entities/GremlinShack";
+import type { LootRollEntry } from "../systems/LootContainer";
 import type { ResourceType } from "../systems/Inventory";
 import {
   Skills,
@@ -64,6 +66,7 @@ import { ProcessingStation } from "../systems/Processing";
 import { CraftingMenu } from "../ui/CraftingMenu";
 import { ContextMenu, type ContextMenuItem } from "../ui/ContextMenu";
 import { DryingRackMenu } from "../ui/DryingRackMenu";
+import { ChestMenu } from "../ui/ChestMenu";
 import { UpgradeMenu, type UpgradeDef } from "../ui/UpgradeMenu";
 import { CharacterMenu } from "../ui/CharacterMenu";
 import {
@@ -105,6 +108,17 @@ const BLACKBERRY_REGROW_MS = 3 * 60 * 1000; // a picked bush regrows berries aft
 // this long so it doesn't instantly fly back into the inventory/station that
 // just released it. Manual click-pickup is unaffected.
 const DROPPED_ITEM_MAGNET_COOLDOWN_MS = 1500;
+
+// Gremlin Shack chest loot — re-rolled per "empty cycle" (see
+// LootContainer.rollIfEmpty/rearmIfEmpty), not per guard-respawn. First-pass,
+// tunable.
+const GREMLIN_SHACK_LOOT_TABLE: LootRollEntry[] = [
+  { key: "gremlin_blood", min: 1, max: 3, chance: 0.9 },
+  { key: "gremlin_skin", min: 1, max: 2, chance: 0.5 },
+  { key: "bones", min: 1, max: 2, chance: 0.6 },
+  { key: "twine", min: 1, max: 2, chance: 0.35 },
+  { key: "leather", min: 1, max: 1, chance: 0.25 },
+];
 
 // The main gameplay scene: build the world, spawn the player and resources,
 // follow the camera, and run the mouse-driven interaction + HUD.
@@ -153,6 +167,12 @@ export class MainScene extends Phaser.Scene {
   private dryingRacks: { image: Phaser.GameObjects.Image; station: ProcessingStation }[] = [];
   private openRack: ProcessingStation | null = null; // the rack the menu is bound to
   private hoveredRack: Phaser.GameObjects.Image | null = null;
+  // Gremlin Shack POI (world-gen-placed, not player-placed) — parallel array
+  // to dryingRacks, same "image + live state" pairing shape.
+  private gremlinShacks: GremlinShack[] = [];
+  private chestMenu!: ChestMenu;
+  private openChest: ItemContainer | null = null; // the shack.loot.items currently bound to chestMenu
+  private hoveredShack: GremlinShack | null = null;
   // Right-click "Upgrade / Destroy" popup for any placed object (Workbench,
   // Campfire, Drying Rack, ...) — a single generic system, not per-type.
   private contextMenu!: ContextMenu;
@@ -287,6 +307,7 @@ export class MainScene extends Phaser.Scene {
     // (see STATUS.md), just hitting a boolean instead of a vector.
     this.enemyGroup = this.physics.add.group({ collideWorldBounds: true });
     this.spawnEnemies();
+    this.spawnGremlinShacks();
     this.physics.add.collider(this.enemyGroup, solids);
     this.physics.add.collider(this.player, this.enemyGroup);
 
@@ -352,6 +373,7 @@ export class MainScene extends Phaser.Scene {
     this.createCraftingMenu();
     this.createInventoryMenu();
     this.createDryingRackMenu();
+    this.createChestMenu();
     this.createUpgradeMenu();
     this.createCharacterMenu();
     this.hotbarUI = new HotbarUI(this, this.hotbar, {
@@ -410,6 +432,7 @@ export class MainScene extends Phaser.Scene {
       if (this.upgradeMenu.isOpen()) return this.closeUpgradeMenu();
       if (this.characterMenu.isOpen()) return this.characterMenu.close();
       this.closeDryingRackMenu();
+      this.closeChestMenu();
       this.craftingMenu.close();
       this.inventoryMenu.close();
     });
@@ -566,6 +589,7 @@ export class MainScene extends Phaser.Scene {
       this.craftingMenu.isOpen() ||
       this.inventoryMenu.isOpen() ||
       this.dryingRackMenu.isOpen() ||
+      this.chestMenu.isOpen() ||
       this.contextMenu.isOpen() ||
       this.upgradeMenu.isOpen() ||
       this.characterMenu.isOpen()
@@ -742,6 +766,31 @@ export class MainScene extends Phaser.Scene {
       return;
     }
 
+    // Chest menu open (Gremlin Shack): dropping on the chest grid moves the
+    // stack into it; the chest's own backpack grid is a rearrange target;
+    // dropped outside the whole panel is a world-drop, same as the Drying
+    // Rack. Not a "container kind" enum — a direct extension of the same
+    // if-chain shape, same as the Drying Rack block above.
+    if (this.chestMenu.isOpen()) {
+      const chestIndex = this.chestMenu.chestSlotIndexAt(pointer.x, pointer.y);
+      if (chestIndex !== null) {
+        const chestContainer = this.openChest;
+        if (chestContainer) moveSlot(src.container, src.index, chestContainer, chestIndex);
+        this.afterItemMove();
+        return;
+      }
+      const chestBagIndex = this.chestMenu.slotIndexAt(pointer.x, pointer.y);
+      if (chestBagIndex !== null) {
+        moveSlot(src.container, src.index, this.backpack, chestBagIndex);
+        this.afterItemMove();
+        return;
+      }
+      if (!this.chestMenu.containsPoint(pointer.x, pointer.y)) {
+        this.dropStackToWorld(src.container, src.index, stack);
+      }
+      return;
+    }
+
     // Inventory menu open: its trash box permanently destroys the stack.
     if (this.inventoryMenu.isOpen() && this.inventoryMenu.isOverTrash(pointer.x, pointer.y)) {
       this.destroyStack(src.container, src.index, stack);
@@ -892,6 +941,7 @@ export class MainScene extends Phaser.Scene {
     this.recomputeEquipped();
     this.inventoryMenu.refresh();
     this.dryingRackMenu.refresh();
+    this.chestMenu.refresh();
   }
 
   // --- Drying Rack (processing station) ---
@@ -922,6 +972,65 @@ export class MainScene extends Phaser.Scene {
   private closeDryingRackMenu(): void {
     this.dryingRackMenu.close();
     this.openRack = null;
+  }
+
+  // --- Gremlin Shack (POI) ---
+
+  private createChestMenu(): void {
+    this.chestMenu = new ChestMenu(this, {
+      backpack: this.backpack,
+      skills: this.skills,
+      chest: () => this.openChest,
+      beginDrag: (c, i, p) => this.beginItemDrag(c, i, p),
+      isDragging: () => this.dragSource !== null,
+    });
+  }
+
+  private openChestMenu(shack: GremlinShack): void {
+    this.craftingMenu.close();
+    this.inventoryMenu.close();
+    this.closeUpgradeMenu();
+    shack.loot.rollIfEmpty(GREMLIN_SHACK_LOOT_TABLE);
+    this.openChest = shack.loot.items;
+    this.chestMenu.openMenu();
+  }
+
+  private closeChestMenu(): void {
+    this.chestMenu.close();
+    this.openChest = null;
+  }
+
+  // Reused for both the initial spawn and every respawn-after-timer cycle —
+  // spawns a fresh RangedGremlin + MeleeGremling pair anchored to the shack.
+  private respawnShackGuards(shack: GremlinShack): void {
+    shack.respawnAt = null;
+    const ranged = new RangedGremlin(this, {
+      x: shack.x + Phaser.Math.Between(-40, 40),
+      y: shack.y + Phaser.Math.Between(-40, 40),
+    });
+    const melee = new MeleeGremling(this, {
+      x: shack.x + Phaser.Math.Between(-40, 40),
+      y: shack.y + Phaser.Math.Between(-40, 40),
+      wanderAnchor: { x: shack.x, y: shack.y, radius: 70 },
+    });
+    shack.guards = [ranged, melee];
+    this.enemies.push(ranged, melee);
+    this.enemyGroup.add(ranged);
+    this.enemyGroup.add(melee);
+  }
+
+  // Called from tryAttackEnemy()'s kill branch for every defeated enemy — a
+  // no-op unless `enemy` was one of a shack's guards. Schedules a respawn
+  // (and re-arms the chest to roll fresh loot next time it's empty) only once
+  // BOTH guards are dead, not per-guard.
+  private onShackGuardKilled(enemy: Enemy): void {
+    const shack = this.gremlinShacks.find((s) => s.guards.includes(enemy));
+    if (!shack) return;
+    shack.guards = shack.guards.filter((g) => g !== enemy);
+    if (shack.guards.length > 0) return;
+    shack.respawnAt = this.time.now + SHACK_GUARD_RESPAWN_MS;
+    shack.loot.rearmIfEmpty();
+    this.time.delayedCall(SHACK_GUARD_RESPAWN_MS, () => this.respawnShackGuards(shack));
   }
 
   // Move a whole stack from `container[index]` into the open rack's input slot,
@@ -1325,6 +1434,32 @@ export class MainScene extends Phaser.Scene {
     }
   }
 
+  // Scatter Gremlin Shacks (first POI) through the forest zone, spread apart
+  // via the same pickSpreadSpawnPoint pool the Gremlin-family enemies use.
+  // First-pass/tunable counts.
+  private spawnGremlinShacks(): void {
+    const rng = this.sessionRng();
+    const SHACK_COUNT = 5;
+    const SHACK_CLEAR_RADIUS = 260;
+    const SHACK_MIN_SPACING = 500;
+    const shackPoints: { x: number; y: number }[] = [];
+    for (let i = 0; i < SHACK_COUNT; i++) {
+      const { x, y } = this.pickSpreadSpawnPoint(
+        rng,
+        "forest",
+        SHACK_CLEAR_RADIUS,
+        shackPoints,
+        SHACK_MIN_SPACING,
+        1,
+        true,
+      );
+      shackPoints.push({ x, y });
+      const shack = new GremlinShack(this, { x, y });
+      this.gremlinShacks.push(shack);
+      this.respawnShackGuards(shack);
+    }
+  }
+
   // Spawns a projectile and tracks it in the right physics group by source —
   // currently only enemy-sourced projectiles exist (the ranged Gremlin's rock throw),
   // the Slingshot will need its own playerProjectiles group + overlap-vs-
@@ -1346,6 +1481,7 @@ export class MainScene extends Phaser.Scene {
     let hoveredNode: ResourceNode | null = null;
     let hoveredEnemy: Enemy | null = null;
     let hoveredRack: Phaser.GameObjects.Image | null = null;
+    let hoveredShack: GremlinShack | null = null;
     let best = Infinity;
 
     for (const node of this.nodes) {
@@ -1356,6 +1492,7 @@ export class MainScene extends Phaser.Scene {
         hoveredNode = node;
         hoveredEnemy = null;
         hoveredRack = null;
+        hoveredShack = null;
         best = d;
       }
     }
@@ -1367,6 +1504,7 @@ export class MainScene extends Phaser.Scene {
         hoveredEnemy = enemy;
         hoveredNode = null;
         hoveredRack = null;
+        hoveredShack = null;
         best = d;
       }
     }
@@ -1378,6 +1516,19 @@ export class MainScene extends Phaser.Scene {
         hoveredRack = image;
         hoveredNode = null;
         hoveredEnemy = null;
+        hoveredShack = null;
+        best = d;
+      }
+    }
+    for (const shack of this.gremlinShacks) {
+      const image = shack.chestImage;
+      const radius = Math.max(image.displayWidth, image.displayHeight) / 2 + 6;
+      const d = Phaser.Math.Distance.Between(world.x, world.y, image.x, image.y);
+      if (d <= radius && d < best) {
+        hoveredShack = shack;
+        hoveredNode = null;
+        hoveredEnemy = null;
+        hoveredRack = null;
         best = d;
       }
     }
@@ -1385,6 +1536,7 @@ export class MainScene extends Phaser.Scene {
     this.hoveredNode = hoveredNode;
     this.hoveredEnemy = hoveredEnemy;
     this.hoveredRack = hoveredRack;
+    this.hoveredShack = hoveredShack;
 
     // Station level labels are passive flavor, not part of the interact/
     // prompt system above — shown purely on hover, independent of the
@@ -1401,7 +1553,9 @@ export class MainScene extends Phaser.Scene {
         ? this.promptForEnemy(hoveredEnemy)
         : hoveredRack
           ? this.promptForRack(hoveredRack)
-          : null;
+          : hoveredShack
+            ? this.promptForShack(hoveredShack)
+            : null;
     if (prompt) {
       this.promptText.setText(prompt).setVisible(true);
       this.input.setDefaultCursor("pointer");
@@ -1449,6 +1603,13 @@ export class MainScene extends Phaser.Scene {
     return inReach ? "[LMB] Use Drying Rack" : null;
   }
 
+  // A Gremlin Shack's chest: prompt to open it when in reach — no gating
+  // (reach-only), same as the Drying Rack.
+  private promptForShack(shack: GremlinShack): string | null {
+    const inReach = Phaser.Math.Distance.Between(this.player.x, this.player.y, shack.x, shack.y) <= REACH;
+    return inReach ? "[LMB] Open" : null;
+  }
+
   // Left-click action on the currently hovered, in-reach node (or enemy/rack).
   private tryInteract(): void {
     if (this.hoveredEnemy) {
@@ -1464,6 +1625,13 @@ export class MainScene extends Phaser.Scene {
           this.hoveredRack.y,
         ) <= REACH;
       if (inReach) this.openDryingRackMenu(this.hoveredRack);
+      return;
+    }
+    if (this.hoveredShack) {
+      const inReach =
+        Phaser.Math.Distance.Between(this.player.x, this.player.y, this.hoveredShack.x, this.hoveredShack.y) <=
+        REACH;
+      if (inReach) this.openChestMenu(this.hoveredShack);
       return;
     }
     const node = this.hoveredNode;
@@ -1580,6 +1748,7 @@ export class MainScene extends Phaser.Scene {
       }
     });
     this.enemies = this.enemies.filter((e) => e !== enemy);
+    this.onShackGuardKilled(enemy);
     this.eventLog.add("combat", `Defeated ${enemy.displayName}`);
     this.hoveredEnemy = null;
     this.promptText.setVisible(false);
@@ -1852,6 +2021,7 @@ export class MainScene extends Phaser.Scene {
   // since both always move in lockstep.
   private toggleCombinedMenu(): void {
     this.closeDryingRackMenu();
+    this.closeChestMenu();
     this.closeUpgradeMenu();
     const opening = !this.inventoryMenu.isOpen();
     if (opening) {
@@ -1916,6 +2086,7 @@ export class MainScene extends Phaser.Scene {
     // clicking through the still-open panel, see below).
     this.craftingMenu.close();
     this.closeDryingRackMenu();
+    this.closeChestMenu();
     this.placementMode = { recipe, itemSource: { container, key: stack.key } };
     const pos = this.clampedPlacementPoint();
     this.placementGhost = this.add.image(pos.x, pos.y, def.texture).setAlpha(0.5).setDepth(500);
@@ -2168,6 +2339,7 @@ export class MainScene extends Phaser.Scene {
     this.craftingMenu.close();
     this.inventoryMenu.close();
     this.closeDryingRackMenu();
+    this.closeChestMenu();
     this.upgradeTarget = obj;
     this.upgradeMenu.openMenu();
   }
@@ -2183,6 +2355,7 @@ export class MainScene extends Phaser.Scene {
     if (!this.equipment.get(slot)) return;
     this.craftingMenu.close();
     this.closeDryingRackMenu();
+    this.closeChestMenu();
     this.upgradeTarget = { armorSlot: slot };
     this.upgradeMenu.openMenu({ x: INVENTORY_PANEL_X + INVENTORY_PANEL_W + 12, y: INVENTORY_PANEL_Y });
   }
@@ -2195,6 +2368,7 @@ export class MainScene extends Phaser.Scene {
     if (!container.slot(index)) return;
     this.craftingMenu.close();
     this.closeDryingRackMenu();
+    this.closeChestMenu();
     this.upgradeTarget = { weaponSlot: { container, index } };
     if (this.inventoryMenu.isOpen()) {
       this.upgradeMenu.openMenu({ x: INVENTORY_PANEL_X + INVENTORY_PANEL_W + 12, y: INVENTORY_PANEL_Y });
