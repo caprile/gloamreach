@@ -31,6 +31,10 @@ export interface ItemDef {
   // entirely — crafting one enters placement mode instead. Per-item, not
   // inferred from category.
   placeable?: boolean;
+  // Set for food/consumables — right-clicking the item eats one, applying a
+  // timed heal-over-time buff (Buffs.ts). The Tooltip derives its "Effect"/
+  // "Right-click to eat" lines from this, so the numbers live in one place.
+  edible?: { hpPerSec: number; durationMs: number };
 }
 
 export const ITEM_DEFS: Record<string, ItemDef> = {
@@ -201,7 +205,7 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
   boar_meat: {
     key: "boar_meat",
     name: "Boar Meat",
-    description: "Raw meat from a boar. Can be cooked.",
+    description: "Raw meat from a boar. Cook it on a Shishkabob at a campfire.",
     texture: "icon_boar_meat",
     maxStack: 99,
     hotbarable: false,
@@ -243,10 +247,30 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
   blackberry: {
     key: "blackberry",
     name: "Blackberries",
-    description: "Sweet wild berries from a forest bush.",
+    description: "Sweet wild berries from a forest bush. A cooking ingredient.",
     texture: "icon_blackberry",
     maxStack: 99,
     hotbarable: false,
+  },
+
+  // --- food (cooked at a campfire; right-click to eat) ---
+  cooked_boar_meat: {
+    key: "cooked_boar_meat",
+    name: "Cooked Boar Meat",
+    description: "A skewer of fire-roasted boar. Right-click to eat.",
+    texture: "icon_cooked_boar_meat",
+    maxStack: 99,
+    hotbarable: true,
+    edible: { hpPerSec: 2, durationMs: 20000 },
+  },
+  bramble_boar_skewer: {
+    key: "bramble_boar_skewer",
+    name: "Bramble-Glazed Boar Skewer",
+    description: "Roast boar glazed with wild blackberry jam. Right-click to eat.",
+    texture: "icon_bramble_boar_skewer",
+    maxStack: 99,
+    hotbarable: true,
+    edible: { hpPerSec: 3, durationMs: 30000 },
   },
 
   // --- processed goods (Drying Rack outputs) ---

@@ -20,6 +20,9 @@ export interface HotbarUIDeps {
   // Right-click on a slot holding a weapon with a defined upgrade path opens
   // its Upgrade panel (see MainScene.openWeaponUpgradeMenu).
   openWeaponUpgrade: (container: ItemContainer, index: number) => void;
+  // Right-click on a slot holding an `edible` item eats one (Buffs.ts) — food
+  // can sit in the hotbar for quick eating without opening the backpack.
+  eatItem: (container: ItemContainer, index: number) => void;
   // Suppress tooltips while a drag is in progress.
   isDragging: () => boolean;
 }
@@ -142,7 +145,8 @@ export class HotbarUI {
           // MainScene.resolveItemDrag) — except on a weapon, which opens its
           // Upgrade panel instead.
           if (pointer.rightButtonDown()) {
-            if (stack && itemDef(stack.key)?.weapon) this.deps.openWeaponUpgrade(this.hotbar.container, i);
+            if (stack && itemDef(stack.key)?.edible) this.deps.eatItem(this.hotbar.container, i);
+            else if (stack && itemDef(stack.key)?.weapon) this.deps.openWeaponUpgrade(this.hotbar.container, i);
             return;
           }
           this.deps.beginDrag(this.hotbar.container, i, pointer);

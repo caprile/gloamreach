@@ -31,6 +31,15 @@ export const STATION_UPGRADES: StationUpgradeDef[] = [
     resultTier: 1,
     costs: { twine: 3, wood: 5, stone: 2 },
   },
+  {
+    id: "stone_hearth",
+    name: "Stone Hearth",
+    description: "A ring of stones and a cooking grate. Unlocks tastier campfire dishes.",
+    appliesToItemKey: "campfire",
+    resultTier: 1,
+    costs: { twine: 4, stone: 20 },
+    deltaLabel: "Unlocks Lvl 2 dishes",
+  },
 ];
 
 // The upgrades that could apply to a given placed object, ordered by the tier

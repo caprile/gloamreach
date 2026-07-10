@@ -66,6 +66,9 @@ export interface InventoryMenuDeps {
   // (deferred behind the double-click window); this is an explicit,
   // discoverable alternative that doesn't require knowing that.
   openPlaceContextMenu: (container: ItemContainer, index: number, screenX: number, screenY: number) => void;
+  // Right-click on a backpack slot holding an `edible` item eats one, applying
+  // its heal-over-time buff (Buffs.ts). Food has no other right-click action.
+  eatItem: (container: ItemContainer, index: number) => void;
   // Suppress tooltips while a drag is in progress.
   isDragging: () => boolean;
 }
@@ -365,7 +368,8 @@ export class InventoryMenu {
           // Upgrade panel) or a placeable (opens a "Place" popup).
           if (pointer.rightButtonDown()) {
             const def = itemDef(stack.key);
-            if (def?.weapon) this.deps.openWeaponUpgrade(backpack, i);
+            if (def?.edible) this.deps.eatItem(backpack, i);
+            else if (def?.weapon) this.deps.openWeaponUpgrade(backpack, i);
             else if (def?.placeable) this.deps.openPlaceContextMenu(backpack, i, pointer.x, pointer.y);
             return;
           }

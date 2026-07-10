@@ -523,6 +523,28 @@ mouse-driven only. Don't reintroduce a keybind for this without being asked. Spa
      Gremlin King reach fix). Built on Opus per the model-switch convention (new
      mechanic).
    See `STATUS.md` for full detail and verification on all three.
+5f. **Cooking & Food Buffs** — plan: `.claude/plans/savory-simmering-hearth.md`. The
+   first food/consumable loop and the game's first **status-effect (buff)** system.
+   Locked design (from the user): **eating grants a timed HP-regen buff only** (no
+   instant heal — the user dislikes spam-insta-heal; each food has its own
+   `hpPerSec`/`durationMs`, overheal at full HP is wasted), **cooking is instant +
+   station-based** (interact with a placed campfire, no cook-over-time timer), and
+   **no hunger meter**. New `src/systems/Buffs.ts` (`BuffManager` — framework-free
+   like Health/Stamina; `apply()` refreshes-not-stacks the same food id, different
+   foods run concurrently; `tick(delta, health)` heals per active buff), a
+   `src/ui/BuffBarUI.ts` icon strip above the HP bar (depletion meter + hover
+   tooltip), `src/systems/Cooking.ts` (`COOK_RECIPES` — a small multi-ingredient
+   table, deliberately NOT a Recipes.ts category, so a dedicated cooking station can
+   grow later), and `src/ui/CookingMenu.ts` (a recipe LIST, not the Drying Rack's
+   single-input slider, since dishes are multi-ingredient; opened by clicking a
+   placed campfire). Foods: **Cooked Boar Meat** (boar_meat + shishkabob at any
+   campfire → +2 HP/s 20s) and **Bramble-Glazed Boar Skewer** (boar_meat + 2
+   blackberry + shishkabob at a Lvl 2 campfire → +3 HP/s 30s). The **Campfire is now
+   upgradable to Lvl 2** ("Stone Hearth", 20 Stone) which gates the tier-1 dish —
+   reuses `StationUpgrades.ts` + the generic right-click Upgrade/Destroy popup with
+   zero new upgrade wiring. Eating gesture: **right-click an `edible` item**
+   (new `ItemDef.edible` field) in the backpack/hotbar. Death clears active buffs.
+   Built on Opus per the model-switch convention (new mechanic).
 
 **Not yet built — next up in rough order:**
 6. **World & discovery** — much bigger generated world, biomes, map, eventually a
@@ -582,11 +604,12 @@ Blunt 5/Pierce 10/Light Armor 5/Running 3/Chopping 4, max-lvl Primal Spear):**
 
 - **Ranged starting weapon** — maybe Javelins (thrown, no ammo?) and/or the
   already-planned Slingshot, as an earlier/easier ranged option than whatever's next.
-- **Food system** — cooking, eating, and what it actually does to the player (buffs?
-  HP/stamina restore? timed effect?) — still fully TBD, first biome notes already flag
-  Shishkabob as the first cook-over-time item but the actual eating payoff was never
-  designed.
-- **HP regen system** — ties into the sustain-loop bullet above; still not designed.
+- ~~**Food system** — cooking, eating, and what it actually does to the player~~ —
+  **shipped** (roadmap 5f): eating grants a **timed HP-regen buff** (no instant heal, no
+  hunger meter), cooking is instant at a placed campfire. Still open: stamina-restore
+  food, non-HP buffs (damage/rested), a dedicated cooking station, more dishes.
+- **HP regen system** — the food-buff heal-over-time (5f) is the first piece; a *passive*
+  regen (rest/over-time without eating) still isn't designed.
 - **"Discovered" notification for new raw materials** — picking up a resource type for
   the first time should announce it, similar in spirit to the existing recipe-unlock
   toast (`EventLogUI`'s recipe toast) but for raw materials, not recipes.
@@ -674,9 +697,17 @@ intended to require a workbench once it exists.
 - Campfire — 5 stone, 5 wood, no workbench, placeable + destroyable (destroy-for-pieces
   still deferred, see STATUS.md's "known rough edges"). Used for heat, a new **rested**
   status (undesigned), and cooking.
-- Empty Shishkabob + Boar Meat → Uncooked Boar Meat Shishkabob → place over a campfire →
-  cooks over time → Cooked Boar Meat (consumable). First "combine two items," first
-  "cook over time," and first food/consumable mechanic — none of these systems exist yet.
+- ~~Empty Shishkabob + Boar Meat → Uncooked Boar Meat Shishkabob → place over a campfire →
+  cooks over time → Cooked Boar Meat (consumable).~~ **Shipped (roadmap 5f, Cooking & Food
+  Buffs)** — but the final design diverged from this note on the user's call: cooking is
+  **instant + station-based** (no cook-over-time timer; interact with a placed campfire →
+  a recipe-list cook menu), and the shishkabob is a straight *ingredient* consumed by the
+  recipe rather than a two-step "combine then cook." **Cooked Boar Meat** (shishkabob +
+  boar_meat, any campfire) and **Bramble-Glazed Boar Skewer** (+ 2 blackberries, Lvl 2
+  campfire) both grant a **timed HP-regen buff** on eating (right-click; no instant heal).
+  See `.claude/plans/savory-simmering-hearth.md` / `STATUS.md`. Cattail/blackberry/campfire
+  tiers can add more dishes later; a dedicated cooking station and the campfire "rested"
+  status remain undesigned.
 - **Crafting-menu tab reorg (shipped, Milestone 4f/I):** Workbench, Campfire, and Drying Rack
   all live in the **Crafting** tab (campfire is conceptually a processor too); Shishkabob
   moved to **Misc**. See `.claude/plans/this-is-a-plan-cached-pixel.md` Milestone I.

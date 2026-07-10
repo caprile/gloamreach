@@ -33,6 +33,7 @@ requires standing near a placed Workbench (`MainScene.isNearWorkbench`).
 | Applies To | Result Tier | Name | Costs | Delta |
 |---|---|---|---|---|
 | Workbench | 1 ("Lvl 2") | Tool Sharpener | 3 Twine, 5 Wood, 2 Stone | — (unlocks gates only) |
+| Campfire | 1 ("Lvl 2") | Stone Hearth | 4 Twine, 20 Stone | Unlocks Lvl 2 campfire dishes |
 
 ## Armor Upgrades (`src/systems/ArmorUpgrades.ts`)
 
@@ -75,3 +76,17 @@ weapon-skill damage multiplier, `Skills.weaponSkillDamageMultiplier`).
 
 Conversion is instant, not over time — the player loads raw input and picks
 how much to run via a slider (output-amount based, see `DryingRackMenu.ts`).
+
+## Cooking — Campfire (`src/systems/Cooking.ts`)
+
+Multi-ingredient dishes made by interacting with a placed Campfire
+(`CookingMenu.ts`). Cooking is instant. A dish's `requiredCampfireTier` gates it
+on the campfire's own upgrade tier (0 = any campfire; 1 = a "Stone Hearth"–
+upgraded Lvl 2 campfire). Foods are eaten by right-clicking them in the
+backpack/hotbar, applying a heal-over-time buff (`Buffs.ts`, shown in the buff
+strip above the HP bar).
+
+| Dish | Campfire Tier | Inputs | Output | Buff |
+|---|---|---|---|---|
+| Cooked Boar Meat | 0 (any) | 1 Shishkabob, 1 Boar Meat | Cooked Boar Meat | +2 HP/s for 20s |
+| Bramble-Glazed Boar Skewer | 1 (Lvl 2) | 1 Shishkabob, 1 Boar Meat, 2 Blackberries | Bramble-Glazed Boar Skewer | +3 HP/s for 30s |

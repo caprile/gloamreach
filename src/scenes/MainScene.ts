@@ -67,9 +67,13 @@ import { Biome, type ZoneType } from "../systems/Biome";
 import { Equipment, EQUIP_SLOTS, type EquipSlot, type EquippedItem } from "../systems/Equipment";
 import { Hotbar, ROW1_COUNT } from "../systems/Hotbar";
 import { ProcessingStation } from "../systems/Processing";
+import { BuffManager } from "../systems/Buffs";
+import { COOK_RECIPES, canAffordCook } from "../systems/Cooking";
 import { CraftingMenu } from "../ui/CraftingMenu";
 import { ContextMenu, type ContextMenuItem } from "../ui/ContextMenu";
 import { DryingRackMenu } from "../ui/DryingRackMenu";
+import { CookingMenu } from "../ui/CookingMenu";
+import { BuffBarUI } from "../ui/BuffBarUI";
 import { ChestMenu } from "../ui/ChestMenu";
 import { UpgradeMenu, type UpgradeDef } from "../ui/UpgradeMenu";
 import { CharacterMenu } from "../ui/CharacterMenu";
@@ -158,6 +162,10 @@ export class MainScene extends Phaser.Scene {
   // system, so they need their own one-shot discovery tracking (mirrors
   // Crafting's internal discoveredIds, just for a different data table).
   private discoveredUpgradeIds = new Set<string>();
+  // Cook recipes (Cooking.ts) discovered so far — one-shot "New Recipe
+  // Unlocked!" toast tracking, same as discoveredUpgradeIds but for the cook
+  // table. Tier-0 dishes unlock on first campfire placement; tier-1 on upgrade.
+  private discoveredCookRecipeIds = new Set<string>();
   // The single tool the player currently has "out". Driven by the selected
   // hotbar slot.
   private equippedTool: ToolType | null = null;
@@ -189,6 +197,12 @@ export class MainScene extends Phaser.Scene {
   // Workbench has no per-instance state beyond what placedObjects already
   // carries — sourced by filtering placedObjects by itemKey each hover pass.
   private hoveredWorkbench: Phaser.GameObjects.Image | null = null;
+  // A placed Campfire, hovered — clicking it opens the cooking menu. Same
+  // sourced-from-placedObjects-by-itemKey approach as hoveredWorkbench (no
+  // per-instance state beyond the tier placedObjects already carries).
+  private hoveredCampfire: Phaser.GameObjects.Image | null = null;
+  private cookingMenu!: CookingMenu;
+  private openCampfire: Phaser.GameObjects.Image | null = null; // the campfire the cooking menu is bound to
   // Gremlin Shack POI (world-gen-placed, not player-placed) — parallel array
   // to dryingRacks, same "image + live state" pairing shape.
   private gremlinShacks: GremlinShack[] = [];
@@ -271,6 +285,10 @@ export class MainScene extends Phaser.Scene {
   // exists, and it'd need its own overlap-vs-enemies wiring at that point.
   private enemyProjectiles!: Phaser.Physics.Arcade.Group;
   private health = new Health();
+  // Timed player buffs (heal-over-time from eating cooked food today) + their
+  // HUD strip above the HP bar. See Buffs.ts / BuffBarUI.ts.
+  private buffs = new BuffManager();
+  private buffBarUI!: BuffBarUI;
   private healthBarBg!: Phaser.GameObjects.Rectangle;
   private healthBarFill!: Phaser.GameObjects.Rectangle;
   private healthBarText!: Phaser.GameObjects.Text;
@@ -419,6 +437,7 @@ export class MainScene extends Phaser.Scene {
     this.createCraftingMenu();
     this.createInventoryMenu();
     this.createDryingRackMenu();
+    this.createCookingMenu();
     this.createChestMenu();
     this.createUpgradeMenu();
     this.createCharacterMenu();
@@ -427,10 +446,12 @@ export class MainScene extends Phaser.Scene {
       progression: this.progression,
       beginDrag: (c, i, p) => this.beginItemDrag(c, i, p),
       openWeaponUpgrade: (c, i) => this.openWeaponUpgradeMenu(c, i),
+      eatItem: (c, i) => this.eatItem(c, i),
       isDragging: () => this.dragSource !== null,
     });
     this.createStaminaBar();
     this.createHealthBar();
+    this.createBuffBar();
     this.createXpBar();
     this.createStatPointsBadge();
     // Sits beside the Keybinds panel (same top row), not stacked underneath
@@ -479,6 +500,7 @@ export class MainScene extends Phaser.Scene {
       if (this.upgradeMenu.isOpen()) return this.closeUpgradeMenu();
       if (this.characterMenu.isOpen()) return this.characterMenu.close();
       this.closeDryingRackMenu();
+      this.closeCookingMenu();
       this.closeChestMenu();
       this.craftingMenu.close();
       this.inventoryMenu.close();
@@ -564,6 +586,10 @@ export class MainScene extends Phaser.Scene {
     }
     this.stamina.tick(delta);
     this.refreshStaminaBar();
+    // Food buffs heal over time; refresh the HP bar only when they actually
+    // healed, and keep the buff HUD in sync each frame (countdown/expiry).
+    if (this.buffs.tick(delta, this.health).healed) this.refreshHealthBar();
+    this.buffBarUI.sync(this.buffs.active());
     this.player.syncEquippedIconPosition();
     this.updateAttackRangeRing();
 
@@ -655,6 +681,7 @@ export class MainScene extends Phaser.Scene {
       this.craftingMenu.isOpen() ||
       this.inventoryMenu.isOpen() ||
       this.dryingRackMenu.isOpen() ||
+      this.cookingMenu.isOpen() ||
       this.chestMenu.isOpen() ||
       this.contextMenu.isOpen() ||
       this.upgradeMenu.isOpen() ||
@@ -1089,6 +1116,7 @@ export class MainScene extends Phaser.Scene {
     this.recomputeEquipped();
     this.inventoryMenu.refresh();
     this.dryingRackMenu.refresh();
+    this.cookingMenu.refresh();
     this.chestMenu.refresh();
   }
 
@@ -1120,6 +1148,86 @@ export class MainScene extends Phaser.Scene {
   private closeDryingRackMenu(): void {
     this.dryingRackMenu.close();
     this.openRack = null;
+  }
+
+  // --- Campfire cooking + food buffs ---
+
+  private createCookingMenu(): void {
+    this.cookingMenu = new CookingMenu(this, {
+      backpack: this.backpack,
+      skills: this.skills,
+      campfireTier: () =>
+        this.openCampfire ? ((this.openCampfire.getData("tier") as number | undefined) ?? 0) : null,
+      cook: (recipeId) => this.cookAtCampfire(recipeId),
+    });
+  }
+
+  private openCookingMenu(image: Phaser.GameObjects.Image): void {
+    this.craftingMenu.close();
+    this.inventoryMenu.close();
+    this.closeUpgradeMenu();
+    this.closeDryingRackMenu();
+    this.closeCookingMenu();
+    this.closeChestMenu();
+    this.openCampfire = image;
+    this.cookingMenu.openMenu();
+  }
+
+  private closeCookingMenu(): void {
+    this.cookingMenu.close();
+    this.openCampfire = null;
+  }
+
+  // Announce (once each) the cook recipes a campfire of `maxTier` makes
+  // available — fired on first campfire placement (tier 0) and on upgrade
+  // (tier 1). Mirrors the recipe-unlock toast the crafting system uses.
+  private discoverCookRecipes(maxTier: number): void {
+    for (const r of COOK_RECIPES) {
+      if (r.requiredCampfireTier > maxTier) continue;
+      if (this.discoveredCookRecipeIds.has(r.id)) continue;
+      this.discoveredCookRecipeIds.add(r.id);
+      this.eventLog.add("recipe", `New Recipe Unlocked! ${r.name}`, itemDef(r.output)?.texture);
+    }
+  }
+
+  // Cook a dish at the open campfire: re-check tier + affordability (the menu
+  // gates its button, but re-guard defensively), consume inputs, and deposit
+  // the food. Overflow drops on the floor rather than being lost — same pattern
+  // as the Drying Rack's processed output.
+  private cookAtCampfire(recipeId: string): void {
+    const recipe = COOK_RECIPES.find((r) => r.id === recipeId);
+    if (!recipe || !this.openCampfire) return;
+    const tier = (this.openCampfire.getData("tier") as number | undefined) ?? 0;
+    if (tier < recipe.requiredCampfireTier || !canAffordCook(recipe, this.backpack)) return;
+    for (const [key, n] of Object.entries(recipe.inputs)) this.backpack.removeCount(key, n);
+    const leftover = this.addToBackpack(recipe.output, 1);
+    if (leftover > 0) {
+      this.spawnLooseDrop(recipe.output, leftover, this.player.x, this.player.y, DROPPED_ITEM_MAGNET_COOLDOWN_MS);
+      this.eventLog.add("info", "Backpack full — the dish landed on the floor");
+    }
+    this.eventLog.add("info", `Cooked ${recipe.name}`);
+    this.afterItemMove();
+  }
+
+  // Eat one `edible` item from `container[index]`, applying its heal-over-time
+  // buff (Buffs.ts). Right-click gesture on food in the backpack/hotbar. No
+  // instant heal — the buff does the healing over its duration, per design.
+  private eatItem(container: ItemContainer, index: number): void {
+    const stack = container.slot(index);
+    if (!stack) return;
+    const def = itemDef(stack.key);
+    if (!def?.edible) return;
+    container.removeCount(stack.key, 1);
+    this.buffs.apply({
+      id: def.key,
+      name: def.name,
+      icon: def.texture,
+      hpPerSec: def.edible.hpPerSec,
+      durationMs: def.edible.durationMs,
+    });
+    this.buffBarUI.sync(this.buffs.active());
+    this.eventLog.add("info", `Ate ${def.name}`);
+    this.afterItemMove();
   }
 
   // --- Gremlin Shack (POI) ---
@@ -1789,6 +1897,7 @@ export class MainScene extends Phaser.Scene {
     let hoveredShack: GremlinShack | null = null;
     let hoveredAltar: BossAltar | null = null;
     let hoveredWorkbench: Phaser.GameObjects.Image | null = null;
+    let hoveredCampfire: Phaser.GameObjects.Image | null = null;
     let best = Infinity;
 
     for (const node of this.nodes) {
@@ -1802,6 +1911,7 @@ export class MainScene extends Phaser.Scene {
         hoveredShack = null;
         hoveredAltar = null;
         hoveredWorkbench = null;
+        hoveredCampfire = null;
         best = d;
       }
     }
@@ -1816,6 +1926,7 @@ export class MainScene extends Phaser.Scene {
         hoveredShack = null;
         hoveredAltar = null;
         hoveredWorkbench = null;
+        hoveredCampfire = null;
         best = d;
       }
     }
@@ -1830,6 +1941,7 @@ export class MainScene extends Phaser.Scene {
         hoveredShack = null;
         hoveredAltar = null;
         hoveredWorkbench = null;
+        hoveredCampfire = null;
         best = d;
       }
     }
@@ -1844,6 +1956,7 @@ export class MainScene extends Phaser.Scene {
         hoveredRack = null;
         hoveredAltar = null;
         hoveredWorkbench = null;
+        hoveredCampfire = null;
         best = d;
       }
     }
@@ -1858,15 +1971,21 @@ export class MainScene extends Phaser.Scene {
         hoveredRack = null;
         hoveredShack = null;
         hoveredWorkbench = null;
+        hoveredCampfire = null;
         best = d;
       }
     }
+    // Workbench (opens the crafting menu) and Campfire (opens the cooking menu)
+    // are both plain placedObjects, distinguished by itemKey — handled in one
+    // loop since they share the same hover/reach/interact shape.
     for (const obj of this.placedObjects) {
-      if (obj.getData("itemKey") !== "workbench") continue;
+      const key = obj.getData("itemKey");
+      if (key !== "workbench" && key !== "campfire") continue;
       const radius = Math.max(obj.displayWidth, obj.displayHeight) / 2 + 6;
       const d = Phaser.Math.Distance.Between(world.x, world.y, obj.x, obj.y);
       if (d <= radius && d < best) {
-        hoveredWorkbench = obj;
+        hoveredWorkbench = key === "workbench" ? obj : null;
+        hoveredCampfire = key === "campfire" ? obj : null;
         hoveredNode = null;
         hoveredEnemy = null;
         hoveredRack = null;
@@ -1882,6 +2001,7 @@ export class MainScene extends Phaser.Scene {
     this.hoveredShack = hoveredShack;
     this.hoveredAltar = hoveredAltar;
     this.hoveredWorkbench = hoveredWorkbench;
+    this.hoveredCampfire = hoveredCampfire;
 
     // Station level labels are passive flavor, not part of the interact/
     // prompt system above — shown purely on hover, independent of the
@@ -1904,7 +2024,9 @@ export class MainScene extends Phaser.Scene {
               ? this.promptForAltar(hoveredAltar)
               : hoveredWorkbench
                 ? this.promptForWorkbench(hoveredWorkbench)
-                : null;
+                : hoveredCampfire
+                  ? this.promptForCampfire(hoveredCampfire)
+                  : null;
     if (prompt) {
       this.promptText.setText(prompt).setVisible(true);
       this.input.setDefaultCursor("pointer");
@@ -1979,6 +2101,13 @@ export class MainScene extends Phaser.Scene {
     return inReach ? "[LMB] Craft" : null;
   }
 
+  // A placed Campfire: prompt to open its cooking menu when in reach —
+  // reach-only gating, same as the Drying Rack/Workbench.
+  private promptForCampfire(image: Phaser.GameObjects.Image): string | null {
+    const inReach = Phaser.Math.Distance.Between(this.player.x, this.player.y, image.x, image.y) <= REACH;
+    return inReach ? "[LMB] Cook" : null;
+  }
+
   // Mirrors the tool-kind gating philosophy exactly: no Gremlin Totem
   // selected in the hotbar -> show nothing, never reveal what's required
   // (same "no tool of the right kind -> show nothing" rule as promptFor()).
@@ -2022,6 +2151,22 @@ export class MainScene extends Phaser.Scene {
     if (this.hoveredWorkbench) {
       if (this.promptForWorkbench(this.hoveredWorkbench)) this.toggleCombinedMenu();
       return;
+    }
+    if (this.hoveredCampfire) {
+      if (this.promptForCampfire(this.hoveredCampfire)) this.openCookingMenu(this.hoveredCampfire);
+      return;
+    }
+    // Holding (selected) a food item in the hotbar: a left-click on open ground
+    // eats one, so food can be consumed straight from the hotbar. Skipped when
+    // hovering a node (that click should still gather) — enemies/stations above
+    // already returned.
+    if (!this.hoveredNode) {
+      const selIdx = this.hotbar.selected();
+      const sel = this.hotbar.get(selIdx);
+      if (sel && itemDef(sel.key)?.edible) {
+        this.eatItem(this.hotbar.container, selIdx);
+        return;
+      }
     }
     const node = this.hoveredNode;
     if (!node || node.depleted || node.harvested) return;
@@ -2267,6 +2412,9 @@ export class MainScene extends Phaser.Scene {
   private onPlayerDeath(): void {
     this.isDead = true;
     this.player.setVelocity(0, 0);
+    // Active food buffs are lost on death (they don't carry into respawn).
+    this.buffs.clear();
+    this.buffBarUI.sync(this.buffs.active());
     this.eventLog.add("combat", "You died...");
     this.time.delayedCall(this.RESPAWN_DELAY_MS, () => this.respawnPlayer());
   }
@@ -2451,6 +2599,7 @@ export class MainScene extends Phaser.Scene {
   // since both always move in lockstep.
   private toggleCombinedMenu(): void {
     this.closeDryingRackMenu();
+    this.closeCookingMenu();
     this.closeChestMenu();
     this.closeUpgradeMenu();
     const opening = !this.inventoryMenu.isOpen();
@@ -2516,6 +2665,7 @@ export class MainScene extends Phaser.Scene {
     // clicking through the still-open panel, see below).
     this.craftingMenu.close();
     this.closeDryingRackMenu();
+    this.closeCookingMenu();
     this.closeChestMenu();
     this.placementMode = { recipe, itemSource: { container, key: stack.key } };
     const pos = this.clampedPlacementPoint();
@@ -2620,6 +2770,9 @@ export class MainScene extends Phaser.Scene {
     // A placed Drying Rack gets its own processing state, ticked in update()
     // and bound to the menu when the player interacts with this image.
     if (key === "drying_rack") this.dryingRacks.push({ image, station: new ProcessingStation() });
+    // Placing a Campfire discovers the cook recipes its tier can make (tier-0
+    // dishes for a fresh one; also tier-1 if this is a re-placed Lvl 2 campfire).
+    if (key === "campfire") this.discoverCookRecipes(placedTier);
     this.refreshHud();
     this.inventoryMenu.refresh();
     // Placing from an owned stack changed a count — keep the hotbar display in
@@ -2713,9 +2866,14 @@ export class MainScene extends Phaser.Scene {
   // always works. The actual upgrade list/costs/affordability live in the
   // bigger panel now, not here.
   private openContextMenuForObject(obj: Phaser.GameObjects.Image, screenX: number, screenY: number): void {
+    // The ContextMenu row closes the popup before running onClick, so this same
+    // click's scene-level pointerdown fires afterward with the menu already
+    // closed and would fall through to a world interact (e.g. reopening the
+    // Campfire/Workbench menu right after Destroy). Suppress that next
+    // pointerdown, same guard the "Place" button double-fire uses.
     const items: ContextMenuItem[] = [
-      { label: "Upgrade", enabled: true, onClick: () => this.openUpgradeMenu(obj) },
-      { label: "Destroy", enabled: true, onClick: () => this.destroyPlacedObject(obj) },
+      { label: "Upgrade", enabled: true, onClick: () => { this.suppressNextPointerdown = true; this.openUpgradeMenu(obj); } },
+      { label: "Destroy", enabled: true, onClick: () => { this.suppressNextPointerdown = true; this.destroyPlacedObject(obj); } },
     ];
     this.contextMenu.show(screenX, screenY, items);
   }
@@ -2774,6 +2932,7 @@ export class MainScene extends Phaser.Scene {
     this.craftingMenu.close();
     this.inventoryMenu.close();
     this.closeDryingRackMenu();
+    this.closeCookingMenu();
     this.closeChestMenu();
     this.upgradeTarget = obj;
     this.upgradeMenu.openMenu();
@@ -2790,6 +2949,7 @@ export class MainScene extends Phaser.Scene {
     if (!this.equipment.get(slot)) return;
     this.craftingMenu.close();
     this.closeDryingRackMenu();
+    this.closeCookingMenu();
     this.closeChestMenu();
     this.upgradeTarget = { armorSlot: slot };
     this.upgradeMenu.openMenu({ x: INVENTORY_PANEL_X + INVENTORY_PANEL_W + 12, y: INVENTORY_PANEL_Y });
@@ -2803,6 +2963,7 @@ export class MainScene extends Phaser.Scene {
     if (!container.slot(index)) return;
     this.craftingMenu.close();
     this.closeDryingRackMenu();
+    this.closeCookingMenu();
     this.closeChestMenu();
     this.upgradeTarget = { weaponSlot: { container, index } };
     if (this.inventoryMenu.isOpen()) {
@@ -2899,6 +3060,8 @@ export class MainScene extends Phaser.Scene {
     this.refreshStationLabel(obj);
     const itemKey = obj.getData("itemKey") as string;
     this.eventLog.add("info", `${stationDisplayName(itemKey, upg.resultTier)} upgraded: ${upg.name}`);
+    // Upgrading a Campfire to Lvl 2 unlocks (and announces) its tier-1 dishes.
+    if (itemKey === "campfire") this.discoverCookRecipes(upg.resultTier);
     this.upgradeMenu.refresh();
     this.afterItemMove();
   }
@@ -2969,6 +3132,9 @@ export class MainScene extends Phaser.Scene {
       this.dryingRacks.splice(rackIndex, 1);
     }
 
+    // Destroying the campfire whose cooking menu is open closes it too.
+    if (this.openCampfire === obj) this.closeCookingMenu();
+
     // Carry the placed instance's upgrade tier into the pickup so re-placing
     // it restores the same tier (fixes the old bug where Destroy silently
     // discarded an upgraded Workbench's tier).
@@ -2994,6 +3160,7 @@ export class MainScene extends Phaser.Scene {
       openArmorContextMenu: (slot, x, y) => this.openArmorContextMenu(slot, x, y),
       openWeaponUpgrade: (c, i) => this.openWeaponUpgradeMenu(c, i),
       openPlaceContextMenu: (c, i, x, y) => this.openPlaceContextMenu(c, i, x, y),
+      eatItem: (c, i) => this.eatItem(c, i),
       isDragging: () => this.dragSource !== null,
     });
   }
@@ -3306,6 +3473,21 @@ export class MainScene extends Phaser.Scene {
     const frac = this.health.value() / this.health.max;
     this.layoutBar(this.healthBarBg, this.healthBarFill, this.healthBarText, barW, barY, frac);
     this.healthBarText.setText(`${Math.round(this.health.value())}`);
+  }
+
+  // Buff-icon strip: sits just above the HP bar, centered. HP bar Y mirrors the
+  // math in createHealthBar/refreshHealthBar (anchored off hotbarUI.top); the
+  // strip's bottom edge is a small gap above it. HP/stamina bar Y is fixed
+  // (only their WIDTH grows with max pool), so this anchor never needs
+  // recomputing.
+  private createBuffBar(): void {
+    const gap = 8;
+    const barH = 20;
+    const staminaBarY = this.hotbarUI.top - gap - barH;
+    const healthBarY = staminaBarY - gap - barH;
+    this.buffBarUI = new BuffBarUI(this);
+    this.buffBarUI.layout(this.scale.width / 2, healthBarY - 6);
+    this.buffBarUI.sync(this.buffs.active());
   }
 
   // Player-level XP bar: sits directly under the hotbar, spanning its exact

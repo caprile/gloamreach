@@ -360,6 +360,33 @@ export class BootScene extends Phaser.Scene {
     g.fillRect(13, 8, 5, 5);
     g.generateTexture("icon_shishkabob", ICON, ICON);
 
+    // Cooked Boar Meat: a skewer with browned, roasted meat chunks (darker,
+    // charred tones vs. the raw boar_meat / uncooked shishkabob reds).
+    g.clear();
+    g.fillStyle(0xc0a060, 1);
+    g.fillRect(3, 11, 18, 2); // skewer
+    g.fillStyle(0x6e3b1f, 1);
+    g.fillRect(6, 7, 6, 6);
+    g.fillRect(13, 7, 5, 6);
+    g.fillStyle(0x8a4e2a, 1);
+    g.fillRect(7, 8, 3, 3);
+    g.fillRect(14, 8, 2, 3);
+    g.generateTexture("icon_cooked_boar_meat", ICON, ICON);
+
+    // Bramble-Glazed Boar Skewer: roasted meat skewer with a purple berry glaze.
+    g.clear();
+    g.fillStyle(0xc0a060, 1);
+    g.fillRect(3, 11, 18, 2); // skewer
+    g.fillStyle(0x6e3b1f, 1);
+    g.fillRect(6, 7, 6, 6);
+    g.fillRect(13, 7, 5, 6);
+    g.fillStyle(0x5a2f6a, 1); // blackberry-jam glaze
+    g.fillRect(6, 6, 12, 2);
+    g.fillStyle(0x7a3f8a, 1);
+    g.fillRect(8, 9, 2, 2);
+    g.fillRect(14, 10, 2, 2);
+    g.generateTexture("icon_bramble_boar_skewer", ICON, ICON);
+
     // Campfire: stacked logs + flame.
     g.clear();
     g.fillStyle(0x7a4a22, 1);

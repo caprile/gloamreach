@@ -47,6 +47,12 @@ export class Tooltip {
       lines.push("");
       for (const s of def.stats) lines.push(`${s.label}: ${this.statValue(def, s, tier ?? 0)}`);
     }
+    // Food: derive the effect line from `edible` so the numbers live in one
+    // place (Items.ts) rather than being re-authored as static stat strings.
+    if (def.edible) {
+      lines.push("");
+      lines.push(`Effect: +${def.edible.hpPerSec} HP/s for ${Math.round(def.edible.durationMs / 1000)}s`);
+    }
 
     const text = this.scene.add
       .text(0, 0, lines.join("\n"), {

@@ -2,7 +2,108 @@
 
 Last updated: 2026-07-10
 
-### Just finished: Second post-boss playtest batch, Group C — Elite Gremlins + Trophy-gated Totem
+### Just finished: Cooking & Food Buffs (first food/consumable loop + first status-effect system)
+
+The first food loop and the game's first **status-effect (buff)** system. Plan:
+`.claude/plans/savory-simmering-hearth.md`. Built on Opus per the model-switch
+convention (a new core mechanic — buff state machine + a new station interaction).
+Locked design decisions (from the user this session):
+
+- **Eating = a timed HP-regen buff only** — no instant heal (the user dislikes
+  spam-insta-heal). Each food defines its own `hpPerSec` + `durationMs`; the buff
+  heals over time and expires. Overheal at full HP is simply wasted (a natural
+  anti-spam property). No HP *regen system* beyond buffs, no hunger meter.
+- **Cooking is instant + station-based** — interact with a placed campfire → a
+  cook menu → produce the dish now. No cook-over-time timer.
+- **Foods this pass:** **Cooked Boar Meat** (`boar_meat` + `shishkabob` at any
+  campfire → +2 HP/s for 20s) and **Bramble-Glazed Boar Skewer** (`boar_meat` +
+  `blackberry` ×2 + `shishkabob`, at a **Lvl 2 campfire** → +3 HP/s for 30s).
+- **Campfire is now upgradable to Lvl 2** (the "Stone Hearth" upgrade, **4 Twine
+  + 20 Stone**) which unlocks the tier-1 dish.
+
+New systems/UI:
+
+- **`src/systems/Buffs.ts`** (`BuffManager`) — framework-free (no Phaser), like
+  Health/Stamina. `apply(spec)` (re-applying the same food id refreshes duration
+  rather than stacking; different foods run concurrently and their HP/s add up),
+  `tick(delta, health)` (heals per active buff, drops expired, returns
+  `{healed, changed}`), `active()`, `clear()`. `MainScene.update()` ticks it;
+  refreshes the HP bar only when it actually healed.
+- **`src/ui/BuffBarUI.ts`** — a centered row of food-buff icons just above the HP
+  bar (icon = the food's own texture), each with a thin green depletion meter and
+  a hover tooltip (name, HP/s, seconds remaining). Rebuilds the icon row only when
+  the active *set* changes; updates meters/tooltip every frame. Depth 2803-2806
+  (clears WORLD_H, below the 3000+ panels).
+- **`src/systems/Cooking.ts`** (`COOK_RECIPES` + `canAffordCook`) — a small,
+  self-contained multi-ingredient cook table (deliberately NOT a `RecipeCategory`
+  in Recipes.ts, since cooking is a station interaction and this leaves room for a
+  dedicated cooking station later). Each recipe gates on the campfire's own tier.
+- **`src/ui/CookingMenu.ts`** — opened by clicking a placed campfire; a recipe
+  LIST (unlike the Drying Rack's single-input slider, since dishes are
+  multi-ingredient) showing each dish's ingredients (have/need, colored), buff
+  summary, and a Cook button. Self-contained (no drag/drop) — a Cook click
+  consumes straight from the backpack. (Initial ship showed higher-tier dishes
+  dimmed with a "Requires Campfire Lvl N" note; superseded same-session — see
+  the follow-up below, dishes above the open campfire's tier aren't listed at
+  all.)
+
+Wiring (`MainScene.ts` + others):
+
+- **Eating gesture:** right-click an `edible` item (new `ItemDef.edible` field) in
+  the backpack or hotbar eats one — wired into `InventoryMenu`/`HotbarUI`'s
+  existing right-button branches (before the weapon/placeable checks). Foods are
+  `hotbarable` so they can sit in the hotbar for quick eating. `Tooltip.ts`
+  derives the "Effect: +X HP/s for Ns" line from `edible` (single source of truth).
+- **Campfire hover/interact:** folded into the same placedObjects hover loop as
+  the Workbench (distinguished by `itemKey`), a new `promptForCampfire()` →
+  `"[LMB] Cook"`, and a `tryInteract()` branch → `openCookingMenu()`. Added to
+  `anyMenuOpen()`, the Escape handler, every menu-open close-all site, and
+  `destroyPlacedObject()` (destroying the open campfire closes its menu).
+- **Campfire upgrade** reuses `StationUpgrades.ts` + the generic right-click
+  Upgrade/Destroy popup wholesale — "Campfire Lvl 2" label, tier-survives-Destroy,
+  and discovery-on-ingredients-known all work with **zero** new upgrade wiring
+  (just the one `stone_hearth` table entry). New food + campfire-dish tables added
+  to `RECIPES.md`.
+- **Death clears active buffs** (`onPlayerDeath`), and the buff HUD re-syncs.
+
+**Same-session playtest follow-up (6 tweaks):** (1) cook recipes are now
+**discovered** (recipe-unlock toast, `discoverCookRecipeIds`) — Cooked Boar Meat on
+first campfire placement, the Skewer on first upgrade to Lvl 2; (2) the cook menu
+now **lists only dishes at/below the open campfire's tier** (the Skewer isn't shown
+at all until Lvl 2, no more dimmed "Requires Lvl 2" row) and the panel resizes to
+the visible rows; (3) the Stone Hearth upgrade now costs **4 Twine + 20 Stone**;
+(4) **right-click → Destroy no longer falls through to reopen the station's menu**
+(Campfire *and* Workbench) — the generic `openContextMenuForObject` now sets
+`suppressNextPointerdown` in its Upgrade/Destroy handlers, since the ContextMenu row
+closes the popup before running onClick and the same click's scene pointerdown fired
+afterward with the menu already closed; (5) food in the hotbar can now be eaten by
+**selecting it + left-clicking** (open ground; skipped when hovering a node so
+gathering still works) in addition to right-click; (6) a **max of 2 concurrent food
+buffs** (`BuffManager.maxBuffs`, settable for future items) — a 3rd distinct buff
+evicts whichever active buff has the least time left.
+
+Verified via `preview_eval` + `preview_screenshot` (type-check clean, no console
+errors): cook menu opens on the campfire; Cooked Boar Meat cooks at tier 0
+(consuming 1 skewer + 1 meat); the Skewer is blocked at tier 0 and cooks only
+after the tier bumps to 1 (consuming 2 berries); eating a Cooked Boar Meat at 40
+HP applies a +2 HP/s buff, decrements the stack, and HP climbs +2 over ~1.2s;
+re-eating refreshes the timer to 20s without a second buff entry; the buff HUD
+icon + green meter render above the HP bar with a working "Cooked Boar Meat / +2
+HP/s · 20s left" hover tooltip; death clears all buffs;
+`promptForCampfire` reads "[LMB] Cook" in reach / null out of reach; the Stone
+Hearth upgrade is present in the shared table.
+
+Follow-up tweaks verified separately via `preview_eval` (no console errors):
+`discoverCookRecipes(0)` announces only Cooked Boar Meat, `(1)` adds the Skewer;
+the cook menu's `panelH` grows from a 1-row to a 2-row layout going tier 0 → 1
+(dish list length changes, not just visibility); triggering Destroy via the
+context-menu's row `pointerdown` sets `suppressNextPointerdown` and leaves both
+the placed object gone and the cook menu closed (no reopen); selecting a food
+slot and calling `tryInteract()` with nothing hovered eats it and applies the
+buff; applying 3 distinct buffs (5s/9s/9s remaining) leaves only the 2 with the
+most time left active, confirming the least-remaining-first eviction.
+
+### Previously: Second post-boss playtest batch, Group C — Elite Gremlins + Trophy-gated Totem
 
 Third and final batch of the second Gremlin King playtest feedback (locked order
 A → B → C — all three now shipped). Plan: `.claude/plans/witty-drifting-aurora.md`. The
