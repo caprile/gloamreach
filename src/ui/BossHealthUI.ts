@@ -1,0 +1,86 @@
+import Phaser from "phaser";
+import { GremlinKing, BOSS_MAX_POISE } from "../entities/GremlinKing";
+
+// Fixed top-of-screen boss encounter bar (Elden Ring/Valheim-style — big,
+// impossible to miss, not the small floating world-space bar every regular
+// enemy gets). Only ever shows the Gremlin King today, but takes the base
+// class so a future second boss doesn't need a new UI file. Visible only
+// while a boss is currently engaged (aggro'd) and not yet defeated — same
+// gating condition the floating bars already use, just surfaced somewhere
+// the player can't miss mid-fight.
+const BAR_W = 560;
+const HP_BAR_H = 28;
+const POISE_BAR_H = 12;
+const GAP = 5;
+const TOP_MARGIN = 16;
+const DEPTH = 2950; // clears WORLD_H/other fixed HUD (2800-2902), stays below CraftingMenu/InventoryMenu (3000+) and Tooltip (4500)
+
+export class BossHealthUI {
+  private nameText: Phaser.GameObjects.Text;
+  private hpBarBg: Phaser.GameObjects.Rectangle;
+  private hpBarFill: Phaser.GameObjects.Rectangle;
+  private poiseBarBg: Phaser.GameObjects.Rectangle;
+  private poiseBarFill: Phaser.GameObjects.Rectangle;
+
+  constructor(scene: Phaser.Scene) {
+    const barX = scene.scale.width / 2 - BAR_W / 2;
+    const nameY = TOP_MARGIN;
+    const barY = nameY + 26;
+    const poiseY = barY + HP_BAR_H + GAP;
+
+    this.nameText = scene.add
+      .text(scene.scale.width / 2, nameY, "", {
+        fontFamily: "monospace",
+        fontSize: "22px",
+        color: "#f0d080",
+        stroke: "#000000",
+        strokeThickness: 5,
+      })
+      .setOrigin(0.5, 0)
+      .setScrollFactor(0)
+      .setDepth(DEPTH)
+      .setVisible(false);
+
+    this.hpBarBg = scene.add
+      .rectangle(barX, barY, BAR_W, HP_BAR_H, 0x1a0808, 0.9)
+      .setOrigin(0, 0)
+      .setStrokeStyle(2, 0x000000, 0.9)
+      .setScrollFactor(0)
+      .setDepth(DEPTH)
+      .setVisible(false);
+    this.hpBarFill = scene.add
+      .rectangle(barX + 2, barY + 2, BAR_W - 4, HP_BAR_H - 4, 0xc41e1e, 1)
+      .setOrigin(0, 0)
+      .setScrollFactor(0)
+      .setDepth(DEPTH + 1)
+      .setVisible(false);
+
+    this.poiseBarBg = scene.add
+      .rectangle(barX, poiseY, BAR_W, POISE_BAR_H, 0x1a1608, 0.9)
+      .setOrigin(0, 0)
+      .setStrokeStyle(2, 0x000000, 0.9)
+      .setScrollFactor(0)
+      .setDepth(DEPTH)
+      .setVisible(false);
+    this.poiseBarFill = scene.add
+      .rectangle(barX + 2, poiseY + 2, BAR_W - 4, POISE_BAR_H - 4, 0xe8c040, 1)
+      .setOrigin(0, 0)
+      .setScrollFactor(0)
+      .setDepth(DEPTH + 1)
+      .setVisible(false);
+  }
+
+  update(boss: GremlinKing | null): void {
+    const visible = !!boss && !boss.depleted && boss.isEngaged();
+    this.nameText.setVisible(visible);
+    this.hpBarBg.setVisible(visible);
+    this.hpBarFill.setVisible(visible);
+    this.poiseBarBg.setVisible(visible);
+    this.poiseBarFill.setVisible(visible);
+    if (!boss || !visible) return;
+
+    this.nameText.setText(boss.displayName);
+    this.hpBarFill.setScale(Math.max(0, boss.health / boss.maxHealth), 1);
+    this.poiseBarFill.setScale(Math.max(0, boss.poise / BOSS_MAX_POISE), 1);
+  }
+}

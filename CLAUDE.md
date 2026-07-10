@@ -84,6 +84,24 @@ get their own file under `src/systems/` or `src/entities/`, not bolted onto `Mai
 - **Attack-range ring toggle:** **O** — hides/shows the reach-preview ring around the
   player (still equip-gated when shown; `O` only controls whether it's allowed to draw
   at all).
+- **Hotbar row 2 (stations/processors) select:** **Alt+1-9** — a second, dedicated row
+  of 9 slots (below row 1) for crafting stations/processors (Workbench, Campfire, Drying
+  Rack, ...). Mechanically one flat 18-slot `Hotbar` (`src/systems/Hotbar.ts`,
+  `ROW1_COUNT`/`ROW2_COUNT`) — row 2 is a UI/routing convention, not a separate
+  selection system; selecting a row-2 slot enters placement mode exactly like row 1.
+  Auto-pickup of a loose placeable (magnet or manual click) now prefers an empty row-2
+  slot first, falling back to the backpack only once row 2 is full
+  (`MainScene.findHotbarSlotFor`/`hotbarRow2Assignable`) — the goal is a
+  place → gather → pick-up-and-replace loop that doesn't require opening the inventory.
+- **Scroll-wheel-spans-both-rows toggle:** **H** — mouse wheel cycles hotbar selection
+  across both rows by default; toggling `H` restricts it to looping within whichever
+  row is currently selected.
+- **Take all (open chest only):** **R** — moves everything from an open chest into the
+  backpack in one go, auto-stacking onto matching backpack stacks first.
+- **Quick-move alias:** **Ctrl+Left-Click** on any inventory/hotbar/chest/drying-rack
+  slot is a one-press alias for that slot's double-click quick-move gesture (backpack
+  ↔ hotbar, chest ↔ backpack, drying rack input ↔ backpack) — no need to double-click
+  quickly if Ctrl is held.
 
 There is **no keyboard interact key** (no E, no Space for gathering) — interaction is
 mouse-driven only. Don't reintroduce a keybind for this without being asked. Spacebar is
@@ -399,6 +417,49 @@ mouse-driven only. Don't reintroduce a keybind for this without being asked. Spa
      one-shot-per-session summon (`BossAltar.summoned` stays `true`
      permanently after one kill) — the natural hook point for a future
      biome-transition system, not built now.
+5d. **Post-boss playtest fixes batch** — plan: `.claude/plans/post-boss-playtest-batch.md`.
+   A grab-bag pass off first-boss-fight feedback, no new milestone letter beyond this
+   one. **Boss HUD**: a big fixed
+   top-of-screen HP + poise/stagger bar (`src/ui/BossHealthUI.ts`, Elden-Ring/Valheim
+   style) alongside the existing small floating world-space bars — visible only while
+   the boss is engaged (`GremlinKing.isEngaged()`), hides on deaggro or death. **Boss
+   hitbox fix**: flat `REACH` was tuned around the ~20-26px regular roster and left the
+   Gremlin King's 2.4x-scaled sprite nearly unreachable at its own edge; attack/prompt
+   reach now scales with an enemy's visual radius past a baseline
+   (`MainScene.enemyReach()`), enemy-size-generic rather than a Gremlin-King-specific
+   special case. **Fixed-HUD depth bug**: the hotbar, minimap, HP/stamina/XP bars, and
+   hover/placement prompts all used `setDepth()` values below `WORLD_H` (2688), so a
+   tree/enemy near the bottom of the map (`setDepth(y)`) could render on top of them —
+   every one of those bumped into the 2800-2902 range (still below the crafting/
+   inventory panels' 3000+ and Tooltip's 4500). **Minimap altar landmark**: once the
+   player explores within the same radius fog-of-war uses to reveal terrain, a
+   discovered Boss Altar gets a one-time landmark marker burned into the minimap's
+   `RenderTexture` (`MinimapUI.revealLandmark()`) — a discovered fixed structure, not a
+   live entity blip, so the minimap's locked "no entity blips" rule stays intact.
+   **Workbench recipe-discovery persistence fix**: `hasWorkbenchPlaced()` used to check
+   *currently* placed workbenches, so destroying one re-locked every tier-1+ recipe's
+   *discovery* (visibility) — a new sticky `everPlacedWorkbench` flag (set once, never
+   reset) fixes it; proximity checks (`isNearWorkbench`/`isNearWorkbenchAtTier`) are
+   unaffected and still track live placement state. **Gremlin Totem description** no
+   longer names what it summons (was a spoiler) — describes the totem object itself
+   and points at the Boss Altar as where it's used, nothing more. **Equipment stats
+   panel**: the inventory menu (Tab) now has a third "Combat" column next to Backpack/
+   Equipment showing the live equipped-weapon name, damage, attack speed, and attack
+   stamina cost, plus total armor — `MainScene.combatStats()` mirrors the exact math
+   `Tooltip.ts`'s weapon "base (adjusted)" lines already use. **Chest Take All + Ctrl-
+   click quick-move**: an open chest supports **R** to move everything into the
+   backpack in one go (auto-stacking); **Ctrl+Left-Click** is now a one-press alias for
+   the existing double-click quick-move gesture everywhere it exists (backpack ↔
+   hotbar) and newly added to the chest menu (chest ↔ backpack) and the Drying Rack
+   menu (backpack → input, mirrors the existing right-click quickLoad). **Second
+   hotbar row for stations/processors**: `Hotbar` is now one flat 18-slot container
+   (`ROW1_COUNT`/`ROW2_COUNT` in `src/systems/Hotbar.ts`) — row 2 (Alt+1-9) is a
+   dedicated spot for placeables, and auto-pickup of a loose station now prefers an
+   empty row-2 slot before falling back to the backpack
+   (`MainScene.findHotbarSlotFor`/`hotbarRow2Assignable`), aimed at a
+   place → gather → pick-up-and-replace loop that doesn't require the inventory. Per
+   the user (locked via `AskUserQuestion`): Alt+1-9 selects row 2 directly; the scroll
+   wheel spans both rows by default, togglable back to current-row-only with **H**.
 
 **Not yet built — next up in rough order:**
 6. **World & discovery** — much bigger generated world, biomes, map, eventually a

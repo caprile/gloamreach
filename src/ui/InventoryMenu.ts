@@ -13,11 +13,23 @@ export interface ArmorSlotView {
   tier?: number;
 }
 
+// Live rollup of the player's current combat loadout — computed fresh by
+// MainScene.combatStats() every render() call (mirrors the exact math
+// Tooltip's weapon "base (adjusted)" lines already use), not derived here.
+export interface CombatStatsView {
+  weaponName: string | null; // null if no weapon equipped
+  damage: number;
+  attackSpeed: number; // attacks/sec, 0 if no weapon
+  staminaCost: number; // per hit, 0 if no weapon
+  armor: number; // total flat defense from all worn armor
+}
+
 export interface InventoryMenuDeps {
   backpack: ItemContainer;
   skills: Skills;
   progression: PlayerProgression;
   armorSlots: () => ArmorSlotView[];
+  combatStats: () => CombatStatsView;
   // Left-press on a filled slot begins dragging that stack.
   beginDrag: (container: ItemContainer, index: number, pointer: Phaser.Input.Pointer) => void;
   // Left-press on an occupied equipment slot begins dragging the equipped
@@ -65,7 +77,15 @@ const ARMOR_W = ARMOR_COLS * SLOT + (ARMOR_COLS - 1) * GAP; // 150
 const ARMOR_ROWS_MAX = 3; // EQUIP_SLOTS is 9 slots / 3 cols = 3 rows
 const ARMOR_H = ARMOR_ROWS_MAX * SLOT + (ARMOR_ROWS_MAX - 1) * GAP; // 150
 
-export const PANEL_W = ARMOR_X + ARMOR_W - PANEL_X + 12; // 504
+// Combat-stats column: a 3rd side-by-side section, right of Equipment —
+// live "what am I currently equipped with" summary (damage/attack speed/
+// attack stamina/armor), computed by MainScene.combatStats().
+const STATS_GAP = 24;
+const STATS_X = ARMOR_X + ARMOR_W + STATS_GAP;
+const STATS_Y = ARMOR_Y;
+const STATS_W = 176;
+
+export const PANEL_W = STATS_X + STATS_W - PANEL_X + 12;
 export const PANEL_H = BACKPACK_Y + BACKPACK_H - PANEL_Y + 20; // 382
 
 // Trash drop target: sits below the armor grid, in the panel's otherwise-
@@ -196,9 +216,29 @@ export class InventoryMenu {
     this.addText(x0, PANEL_Y + 10, "Inventory", 15, "#ffffff");
     this.addText(BACKPACK_X, PANEL_Y + 36, "Backpack", 12, "#8a93a3");
     this.addText(ARMOR_X, PANEL_Y + 36, "Equipment", 12, "#8a93a3");
+    this.addText(STATS_X, PANEL_Y + 36, "Combat", 12, "#8a93a3");
     this.renderBackpack();
     this.renderArmor(ARMOR_X, ARMOR_Y);
     this.renderTrash();
+    this.renderCombatStats(STATS_X, STATS_Y);
+  }
+
+  // Live equipped-loadout summary — damage/attack speed/attack stamina cost
+  // (all from the currently equipped hotbar weapon, blank if none) plus total
+  // armor (summed across every worn armor piece, 0 if none worn).
+  private renderCombatStats(x0: number, y0: number): void {
+    const stats = this.deps.combatStats();
+    let y = y0;
+    const lineGap = 20;
+    this.addText(x0, y, stats.weaponName ?? "No weapon equipped", 12, stats.weaponName ? "#e8ecf2" : "#5b6472");
+    y += lineGap + 4;
+    this.addText(x0, y, `Damage: ${stats.weaponName ? stats.damage : "-"}`, 12, "#c25a5a");
+    y += lineGap;
+    this.addText(x0, y, `Attack Speed: ${stats.weaponName ? `${stats.attackSpeed.toFixed(1)}/s` : "-"}`, 12, "#8ac2d0");
+    y += lineGap;
+    this.addText(x0, y, `Attack Stamina: ${stats.weaponName ? stats.staminaCost : "-"}`, 12, "#b8860b");
+    y += lineGap;
+    this.addText(x0, y, `Armor: ${stats.armor}`, 12, "#7ac27a");
   }
 
   // Drag a stack here to permanently delete it. Dragging a stack out of the

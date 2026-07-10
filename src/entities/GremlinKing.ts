@@ -19,7 +19,7 @@ const BOSS_AGGRO_RADIUS = 260;
 const BOSS_ARENA_LEASH_RADIUS = 500; // from spawn point — kiting this far fully deaggros
 const BOSS_MOVE_SPEED = 45; // slow deliberate approach outside of an attack
 
-const BOSS_MAX_POISE = 100;
+export const BOSS_MAX_POISE = 100; // exported for the fixed-HUD BossHealthUI's poise-bar fraction
 const STAGGER_DURATION_MS = 3000;
 export const STAGGER_DAMAGE_MULTIPLIER = 1.5; // exported for MainScene.tryAttackEnemy's bonus-damage check
 const POISE_REGEN_DELAY_MS = 4000; // only resumes this long after the last hit that chipped it
@@ -141,6 +141,13 @@ export class GremlinKing extends Enemy {
   }
 
   protected isAggro(): boolean {
+    return this.aggroed;
+  }
+
+  // Public mirror of isAggro() for the fixed top-of-screen BossHealthUI —
+  // "engaged in the fight," same underlying condition the floating world-space
+  // HP/poise bars already gate on.
+  isEngaged(): boolean {
     return this.aggroed;
   }
 

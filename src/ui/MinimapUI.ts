@@ -72,17 +72,17 @@ export class MinimapUI {
       .setOrigin(0, 0)
       .setStrokeStyle(1, BORDER_COLOR)
       .setScrollFactor(0)
-      .setDepth(2500);
+      .setDepth(2900); // must clear WORLD_H (2688) so trees/world objects (depth=y) never draw over the minimap
 
     this.terrain = scene.add
       .renderTexture(this.leftX, this.topY, PANEL_W, PANEL_H)
       .setOrigin(0, 0)
       .setScrollFactor(0)
-      .setDepth(2501);
+      .setDepth(2901);
     this.terrain.fill(0x000000, 1); // starts fully fogged
 
     this.pixel = scene.make.graphics({}, false);
-    this.marker = scene.add.graphics().setScrollFactor(0).setDepth(2502);
+    this.marker = scene.add.graphics().setScrollFactor(0).setDepth(2902);
   }
 
   update(playerX: number, playerY: number): void {
@@ -102,5 +102,20 @@ export class MinimapUI {
     this.marker.clear();
     this.marker.fillStyle(0xffe08a, 1);
     this.marker.fillCircle(mx, my, 2.5);
+  }
+
+  // One-time permanent landmark marker (e.g. a discovered Boss Altar) —
+  // burned into the terrain RenderTexture like a revealed fog cell, not the
+  // ephemeral per-frame `marker` layer, so it persists without being redrawn
+  // every frame. Callers are expected to only invoke this once per landmark
+  // (see BossAltar.discoveredOnMap) — still safe to call repeatedly since it
+  // just redraws the same pixels.
+  revealLandmark(worldX: number, worldY: number, color = 0xd6483a): void {
+    const cx = Math.round(worldX / this.fog.scale);
+    const cy = Math.round(worldY / this.fog.scale);
+    this.pixel.clear();
+    this.pixel.fillStyle(color, 1);
+    this.pixel.fillCircle(1.5, 1.5, 1.5);
+    this.terrain.draw(this.pixel, cx - 1, cy - 1);
   }
 }

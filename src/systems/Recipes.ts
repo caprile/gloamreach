@@ -166,7 +166,7 @@ export const RECIPES: Recipe[] = [
   {
     id: "gremlin_totem",
     name: "Gremlin Totem",
-    description: "A grim totem bound with gremlin remains. Summons the Gremlin King at the Boss Altar.",
+    description: "A grim totem bound with gremlin remains and dark bindings. Its purpose becomes clear at the Boss Altar's fire.",
     category: "misc",
     tier: 1,
     costs: { gremlin_leather: 4, gremlin_guck: 3, bones: 8, twine: 4 },

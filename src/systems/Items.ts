@@ -341,7 +341,7 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
   gremlin_totem: {
     key: "gremlin_totem",
     name: "Gremlin Totem",
-    description: "A grim totem bound with gremlin remains. Placed into the Boss Altar's fire to summon its guardian.",
+    description: "A grim totem bound with gremlin remains and dark bindings. Its purpose becomes clear at the Boss Altar's fire.",
     texture: "icon_gremlin_totem",
     maxStack: 99,
     hotbarable: true,

@@ -6,7 +6,9 @@
 
 // World px a reveal expands per call — rough parity with the aggro-radius
 // scale other enemies already use (Boar/Gremlin sit in the 130-260px range).
-const REVEAL_RADIUS = 260;
+// Exported so MainScene can use the exact same radius to decide when a fixed
+// landmark (e.g. the Boss Altar) counts as "discovered" for the minimap.
+export const REVEAL_RADIUS = 260;
 
 export class FogOfWar {
   readonly cols: number;

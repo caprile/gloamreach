@@ -163,6 +163,7 @@ export class ChestMenu {
     this.renderGrid(this.deps.backpack, this.backpackX, this.backpackY, COLS, ROWS);
 
     this.addText(this.chestX, this.chestY - 18, "Chest", 12, "#8a93a3");
+    this.addText(this.chestX + CHEST_COLS * (SLOT + GAP) - GAP, this.chestY - 18, "[R] Take All", 11, "#e8c040", 1, 0);
     this.renderGrid(chest, this.chestX, this.chestY, CHEST_COLS, CHEST_ROWS);
   }
 

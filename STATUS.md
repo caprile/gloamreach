@@ -1,8 +1,62 @@
 # Status
 
-Last updated: 2026-07-09
+Last updated: 2026-07-10
 
-### Just finished: Minimap + fog of war
+### Just finished: Post-boss-fight playtest batch — boss HUD/hitbox, chest take-all, 2nd hotbar row
+
+A same-day playtest batch off the first real Gremlin King fight — grab-bag of fixes
+plus one small feature (the 2nd hotbar row), plan:
+`.claude/plans/post-boss-playtest-batch.md`. See `CLAUDE.md`'s new "5d." roadmap entry
+for the full list; highlights:
+
+- **Boss HUD** (`src/ui/BossHealthUI.ts`) — a big fixed top-of-screen HP + poise bar,
+  Elden-Ring/Valheim style, visible only while `GremlinKing.isEngaged()`. The existing
+  small floating world-space bars are untouched (both now show).
+- **Boss hitbox/reach fix** — `MainScene.enemyReach()` scales attack/prompt reach with
+  an enemy's visual radius past a ~13px baseline (the roster's normal sprite size), so
+  the 2.4x-scaled Gremlin King is no longer nearly unreachable at its own edge. Generic
+  by sprite size, not a King-specific special case.
+- **Fixed-HUD depth bug fixed** — hotbar, minimap, HP/stamina/XP bars, and hover/
+  placement prompt text all used `setDepth()` values below `WORLD_H` (2688), so a tree
+  or enemy near the bottom of the map could render on top of them. Bumped into
+  2800-2902 (still below the crafting/inventory panels' 3000+ and Tooltip's 4500).
+- **Minimap Boss Altar landmark** — once the player explores within fog-of-war's own
+  reveal radius of a Boss Altar, `MinimapUI.revealLandmark()` burns a one-time marker
+  into the minimap's terrain `RenderTexture`. A discovered fixed structure, not a live
+  entity blip — keeps the minimap's locked "no entity blips" rule intact.
+- **Workbench recipe-discovery persistence bug fixed** — `hasWorkbenchPlaced()` used
+  to check *currently placed* workbenches, so destroying one re-locked every tier-1+
+  recipe's discovery/visibility even though the player had already unlocked it. New
+  sticky `everPlacedWorkbench` flag (set once, never reset) fixes it; proximity checks
+  are separate and still correctly track live placement state.
+- **Gremlin Totem description no longer spoils what it summons** — describes the
+  totem object itself; still points at the Boss Altar as where it's used.
+- **Equipment stats panel** — the inventory menu (Tab) gained a third "Combat" column
+  (next to Backpack/Equipment) showing live equipped-weapon damage/attack speed/attack
+  stamina cost plus total armor (`MainScene.combatStats()`, mirrors `Tooltip.ts`'s
+  existing weapon math).
+- **Chest Take All (R) + Ctrl-click quick-move** — an open chest supports **R** to
+  move everything into the backpack in one go (auto-stacking). **Ctrl+Left-Click** is
+  now a one-press alias for every double-click quick-move gesture, including two new
+  ones added this pass: the chest menu (chest ↔ backpack) and the Drying Rack menu
+  (backpack → input, mirroring its existing right-click quickLoad).
+- **Second hotbar row for stations/processors** — `Hotbar` (`src/systems/Hotbar.ts`)
+  is now one flat 18-slot container; row 2 (Alt+1-9, `ROW1_COUNT`/`ROW2_COUNT`) is a
+  dedicated spot for placeables. Auto-pickup of a loose station now prefers an empty
+  row-2 slot before falling back to the backpack. Locked via `AskUserQuestion`: Alt+1-9
+  selects row 2 directly (not a click-only fallback); scroll wheel spans both rows by
+  default, togglable back to current-row-only with **H**.
+
+Verified live via `preview_eval`/`preview_screenshot`: boss HUD bar shows/hides
+correctly on aggro/deaggro with accurate HP/poise fractions; `hasWorkbenchPlaced()`
+stays true after a scripted destroy; `takeAllFromChest()` empties a chest into the
+backpack; a scripted Ctrl-click (`fakePointer.event.ctrlKey = true`) quick-moves items
+backpack↔hotbar and both directions of the chest menu; the two-row hotbar renders with
+a distinct green-tinted row 2, Alt+3 selects row-2 slot index 2 and engages placement
+mode, and a simulated loose `drying_rack` pickup lands in row 2 first, falling back to
+the backpack once row 2 is full. Type-check clean (`tsc --noEmit`), no console errors.
+
+### Previously: Minimap + fog of war
 
 First piece of roadmap item 6 (World & discovery), plan:
 `.claude/plans/parsed-cooking-beacon.md`. Locked via `AskUserQuestion` before building:

@@ -39,6 +39,7 @@ import {
   weaponCooldownMs,
   weaponStaminaCost,
   weaponPrimaryDamageType,
+  weaponAttacksPerSecond,
   type WeaponType,
 } from "../systems/Weapons";
 import { outputKey, RECIPES, type Recipe } from "../systems/Recipes";
@@ -63,7 +64,7 @@ import {
 import { EventLog } from "../systems/EventLog";
 import { Biome, type ZoneType } from "../systems/Biome";
 import { Equipment, EQUIP_SLOTS, type EquipSlot, type EquippedItem } from "../systems/Equipment";
-import { Hotbar } from "../systems/Hotbar";
+import { Hotbar, ROW1_COUNT } from "../systems/Hotbar";
 import { ProcessingStation } from "../systems/Processing";
 import { CraftingMenu } from "../ui/CraftingMenu";
 import { ContextMenu, type ContextMenuItem } from "../ui/ContextMenu";
@@ -78,12 +79,14 @@ import {
   PANEL_Y as INVENTORY_PANEL_Y,
   PANEL_W as INVENTORY_PANEL_W,
   type ArmorSlotView,
+  type CombatStatsView,
 } from "../ui/InventoryMenu";
 import { HotbarUI } from "../ui/HotbarUI";
 import { EventLogUI } from "../ui/EventLogUI";
 import { KeybindsUI } from "../ui/KeybindsUI";
 import { MinimapUI, PANEL_W as MINIMAP_W, PANEL_H as MINIMAP_H, MARGIN as MINIMAP_MARGIN } from "../ui/MinimapUI";
-import { FogOfWar } from "../systems/Fog";
+import { BossHealthUI } from "../ui/BossHealthUI";
+import { FogOfWar, REVEAL_RADIUS } from "../systems/Fog";
 
 const HOTBAR_KEYS = ["ONE", "TWO", "THREE", "FOUR", "FIVE", "SIX", "SEVEN", "EIGHT", "NINE"];
 
@@ -149,6 +152,7 @@ export class MainScene extends Phaser.Scene {
   // hotbar slot.
   private equippedTool: ToolType | null = null;
   private equippedWeapon: WeaponType | null = null;
+  private equippedWeaponName: string | null = null;
   private equippedWeaponTier = 0;
   private attackRangeRing!: Phaser.GameObjects.Graphics;
   private hotbar = new Hotbar();
@@ -206,6 +210,7 @@ export class MainScene extends Phaser.Scene {
   private keybindsUI!: KeybindsUI;
   private fog!: FogOfWar;
   private minimapUI!: MinimapUI;
+  private bossHealthUI!: BossHealthUI;
 
   // Active drag (from any container): the source slot + a floating ghost icon.
   private dragSource: { container: ItemContainer; index: number } | { armorSlot: EquipSlot } | null = null;
@@ -237,6 +242,9 @@ export class MainScene extends Phaser.Scene {
   // with V; doesn't affect pre-placed branches/rocks (always manual).
   private magnetEnabled = true;
   private rangeRingEnabled = false;
+  // Whether the scroll wheel cycles across both hotbar rows (default, per the
+  // user) or loops within just the currently-selected row. Toggled with H.
+  private wheelSpansBothRows = true;
 
   // --- Combat ---
   private enemies: Enemy[] = [];
@@ -267,6 +275,11 @@ export class MainScene extends Phaser.Scene {
     | null = null;
   private placementGhost: Phaser.GameObjects.Image | null = null;
   private placedObjects: Phaser.GameObjects.Image[] = [];
+  // Sticky flag — true forever once the player has placed a Workbench at
+  // least once, even if it's later destroyed. Recipe *discovery* (visibility)
+  // should never re-lock on destroy, only current-proximity checks
+  // (isNearWorkbench/isNearWorkbenchAtTier) should track the live placedObjects state.
+  private everPlacedWorkbench = false;
   private placementHintText!: Phaser.GameObjects.Text; // bottom-right, stacked above promptText
   // The "Place" button click that enters placement mode fires through to the
   // scene's global pointerdown too (same underlying click) — swallow that one
@@ -411,6 +424,7 @@ export class MainScene extends Phaser.Scene {
     // own pixel resolution so a revealed cell maps directly to one pixel.
     this.fog = new FogOfWar(WORLD_W, WORLD_H, MINIMAP_W, MINIMAP_H);
     this.minimapUI = new MinimapUI(this, this.biome, this.fog);
+    this.bossHealthUI = new BossHealthUI(this);
 
     // Scene-level drag: a slot starts it, the pointer drags a ghost icon, and
     // release resolves the move against whichever container is under the
@@ -451,11 +465,18 @@ export class MainScene extends Phaser.Scene {
       this.inventoryMenu.close();
     });
     HOTBAR_KEYS.forEach((key, i) => {
-      this.input.keyboard!.on(`keydown-${key}`, () => this.selectHotbarSlot(i));
+      // Alt+1-9 selects the same column in row 2 (the dedicated
+      // stations/processors row, see Hotbar.ts) instead of row 1 — same
+      // single selectHotbarSlot entry point either way.
+      this.input.keyboard!.on(`keydown-${key}`, (event: KeyboardEvent) => {
+        this.selectHotbarSlot(event.altKey ? ROW1_COUNT + i : i);
+      });
     });
     this.input.keyboard!.on("keydown-V", () => this.toggleMagnet());
     this.input.keyboard!.on("keydown-O", () => this.toggleRangeRing());
     this.input.keyboard!.on("keydown-K", () => this.characterMenu.toggle());
+    this.input.keyboard!.on("keydown-R", () => this.takeAllFromChest());
+    this.input.keyboard!.on("keydown-H", () => this.toggleWheelSpansBothRows());
 
     // Skill level-ups: announce, feed the overall Player Level the same XP the
     // skill level cost (Progression.ts), and re-run recipe discovery/crafting
@@ -499,6 +520,8 @@ export class MainScene extends Phaser.Scene {
       this.updateTreeOcclusion(delta);
       this.fog.reveal(this.player.x, this.player.y);
       this.minimapUI.update(this.player.x, this.player.y);
+      this.updateAltarDiscovery();
+      this.bossHealthUI.update(this.gremlinKing);
       return;
     }
 
@@ -532,6 +555,8 @@ export class MainScene extends Phaser.Scene {
     this.updateTreeOcclusion(delta);
     this.fog.reveal(this.player.x, this.player.y);
     this.minimapUI.update(this.player.x, this.player.y);
+    this.updateAltarDiscovery();
+    this.bossHealthUI.update(this.gremlinKing);
     this.updateCraftingMenuWorkbenchProximity();
   }
 
@@ -559,6 +584,14 @@ export class MainScene extends Phaser.Scene {
     this.rangeRingEnabled = !this.rangeRingEnabled;
     this.eventLog.add("info", `Range ring: ${this.rangeRingEnabled ? "ON" : "OFF"}`);
     if (!this.rangeRingEnabled) this.attackRangeRing.clear();
+  }
+
+  private toggleWheelSpansBothRows(): void {
+    this.wheelSpansBothRows = !this.wheelSpansBothRows;
+    this.eventLog.add(
+      "info",
+      `Scroll wheel: ${this.wheelSpansBothRows ? "cycles both hotbar rows" : "cycles current row only"}`,
+    );
   }
 
   // Pulls loose drop pieces (not pre-placed branches/rocks) toward the
@@ -615,8 +648,15 @@ export class MainScene extends Phaser.Scene {
   }
 
   private cycleHotbar(dir: number): void {
-    const next = (this.hotbar.selected() + dir + this.hotbar.size) % this.hotbar.size;
-    this.setHotbarSelection(next);
+    if (this.wheelSpansBothRows) {
+      const next = (this.hotbar.selected() + dir + this.hotbar.size) % this.hotbar.size;
+      this.setHotbarSelection(next);
+      return;
+    }
+    // H toggled off: loop within whichever row is currently selected only.
+    const rowStart = this.hotbar.selected() < ROW1_COUNT ? 0 : ROW1_COUNT;
+    const within = (this.hotbar.selected() - rowStart + dir + ROW1_COUNT) % ROW1_COUNT;
+    this.setHotbarSelection(rowStart + within);
   }
 
   // Single entry point for changing the hotbar selection — number keys, the
@@ -647,6 +687,7 @@ export class MainScene extends Phaser.Scene {
     const def = stack ? itemDef(stack.key) : undefined;
     this.equippedTool = def?.tool ?? null;
     this.equippedWeapon = def?.weapon ?? null;
+    this.equippedWeaponName = def?.weapon ? def.name : null;
     this.equippedWeaponTier = def?.weapon ? stack?.tier ?? 0 : 0;
     const iconTexture = def && (def.tool || def.weapon) ? def.texture : null;
     this.player.setEquippedIcon(iconTexture);
@@ -714,6 +755,24 @@ export class MainScene extends Phaser.Scene {
       .setAlpha(0.85);
   }
 
+  // Ctrl+Left-Click is a one-press alias for every double-click-in-place
+  // quick-move gesture below (inventory/hotbar/chest/drying rack) — per the
+  // user, holding Ctrl should never require the double-click timing window.
+  private isCtrlClick(pointer: Phaser.Input.Pointer): boolean {
+    const e = pointer.event as (MouseEvent & { ctrlKey?: boolean }) | undefined;
+    return !!e?.ctrlKey;
+  }
+
+  // True if this click-in-place on `key` should trigger its quick-move
+  // action: either the second half of a genuine double-click (within
+  // DOUBLE_CLICK_MS of the previous one on the same key), or a Ctrl-held
+  // single click. Still runs the double-click bookkeeping either way so
+  // click timing stays consistent regardless of which path fired.
+  private isQuickMoveClick(pointer: Phaser.Input.Pointer, key: string): boolean {
+    const isDouble = this.isDoubleClickInPlace(key);
+    return isDouble || this.isCtrlClick(pointer);
+  }
+
   // Returns true if this click-in-place on `key` is the second half of a
   // double-click (within DOUBLE_CLICK_MS of the previous one on the same
   // key) — and cancels any deferred single-click action still pending for
@@ -770,6 +829,13 @@ export class MainScene extends Phaser.Scene {
       }
       const rackBagIndex = this.dryingRackMenu.slotIndexAt(pointer.x, pointer.y);
       if (rackBagIndex !== null) {
+        // Click-in-place on the rack's own backpack grid: double-click or
+        // Ctrl-click quick-loads the whole stack into the rack's input,
+        // mirroring the existing right-click quickLoad gesture.
+        if (src.container === this.backpack && src.index === rackBagIndex) {
+          if (this.isQuickMoveClick(pointer, `rack:${rackBagIndex}`)) this.loadRackInput(this.backpack, rackBagIndex);
+          return;
+        }
         moveSlot(src.container, src.index, this.backpack, rackBagIndex);
         this.afterItemMove();
         return;
@@ -786,15 +852,35 @@ export class MainScene extends Phaser.Scene {
     // Rack. Not a "container kind" enum — a direct extension of the same
     // if-chain shape, same as the Drying Rack block above.
     if (this.chestMenu.isOpen()) {
+      const chestContainer = this.openChest;
       const chestIndex = this.chestMenu.chestSlotIndexAt(pointer.x, pointer.y);
       if (chestIndex !== null) {
-        const chestContainer = this.openChest;
+        // Click-in-place on the chest's own grid: double-click or Ctrl-click
+        // quick-moves that stack back to the backpack (first assignable slot).
+        if (chestContainer && src.container === chestContainer && src.index === chestIndex) {
+          if (this.isQuickMoveClick(pointer, `chestout:${chestIndex}`)) {
+            const to = this.backpack.findAssignable(stack.key);
+            if (to !== null) moveSlot(chestContainer, chestIndex, this.backpack, to);
+            this.afterItemMove();
+          }
+          return;
+        }
         if (chestContainer) moveSlot(src.container, src.index, chestContainer, chestIndex);
         this.afterItemMove();
         return;
       }
       const chestBagIndex = this.chestMenu.slotIndexAt(pointer.x, pointer.y);
       if (chestBagIndex !== null) {
+        // Click-in-place on the chest menu's own backpack grid: double-click
+        // or Ctrl-click quick-moves that stack into the chest instead.
+        if (src.container === this.backpack && src.index === chestBagIndex) {
+          if (chestContainer && this.isQuickMoveClick(pointer, `chestin:${chestBagIndex}`)) {
+            const to = chestContainer.findAssignable(stack.key);
+            if (to !== null) moveSlot(this.backpack, chestBagIndex, chestContainer, to);
+            this.afterItemMove();
+          }
+          return;
+        }
         moveSlot(src.container, src.index, this.backpack, chestBagIndex);
         this.afterItemMove();
         return;
@@ -835,7 +921,7 @@ export class MainScene extends Phaser.Scene {
       // isDoubleClickInPlace).
       if (src.container === this.hotbar.container && src.index === hotIndex) {
         this.setHotbarSelection(hotIndex);
-        if (this.isDoubleClickInPlace(`hotbar:${hotIndex}`)) this.quickMoveItem(this.hotbar.container, hotIndex);
+        if (this.isQuickMoveClick(pointer, `hotbar:${hotIndex}`)) this.quickMoveItem(this.hotbar.container, hotIndex);
         return;
       }
       if (!itemDef(stack.key)?.hotbarable) return; // reject; snaps back
@@ -855,7 +941,7 @@ export class MainScene extends Phaser.Scene {
       // A single click on a non-placeable is a no-op, same as before.
       if (src.container === this.backpack && src.index === bagIndex) {
         const key = `bag:${bagIndex}`;
-        if (this.isDoubleClickInPlace(key)) {
+        if (this.isQuickMoveClick(pointer, key)) {
           this.quickMoveItem(this.backpack, bagIndex);
         } else if (itemDef(stack.key)?.placeable) {
           this.deferSingleClick(() => this.startItemPlacement(this.backpack, bagIndex));
@@ -945,10 +1031,37 @@ export class MainScene extends Phaser.Scene {
       if (to !== null) moveSlot(container, index, this.backpack, to);
     } else {
       if (!itemDef(stack.key)?.hotbarable) return;
-      const to = this.hotbar.container.findAssignable(stack.key);
+      const to = this.findHotbarSlotFor(stack.key);
       if (to !== null) moveSlot(container, index, this.hotbar.container, to);
     }
     this.afterItemMove();
+  }
+
+  // Slot within the hotbar's flat 18-slot ItemContainer to send `key` to on a
+  // quick-move/auto-pickup — placeables (crafting stations/processors)
+  // prefer the dedicated row 2 (indices ROW1_COUNT..) first, per the user's
+  // "auto-pickup of a loose station should place it there instead of your
+  // backpack by default" request, falling back to a normal row-1-first
+  // findAssignable() for everything else (and for a placeable when row 2 is
+  // full, so it doesn't get stuck unassignable while row 1 has room).
+  private findHotbarSlotFor(key: string): number | null {
+    if (itemDef(key)?.placeable) {
+      const row2Slot = this.hotbarRow2Assignable(key);
+      if (row2Slot !== null) return row2Slot;
+    }
+    return this.hotbar.container.findAssignable(key);
+  }
+
+  private hotbarRow2Assignable(key: string): number | null {
+    const max = itemDef(key)?.maxStack ?? 99;
+    for (let i = ROW1_COUNT; i < this.hotbar.size; i++) {
+      const s = this.hotbar.container.slot(i);
+      if (s && s.key === key && s.count < max) return i;
+    }
+    for (let i = ROW1_COUNT; i < this.hotbar.size; i++) {
+      if (this.hotbar.container.slot(i) === null) return i;
+    }
+    return null;
   }
 
   private afterItemMove(): void {
@@ -1012,6 +1125,29 @@ export class MainScene extends Phaser.Scene {
   private closeChestMenu(): void {
     this.chestMenu.close();
     this.openChest = null;
+  }
+
+  // "R" while a chest is open — move everything from it into the backpack in
+  // one go, auto-stacking onto matching backpack stacks first (ItemContainer.add
+  // already does this) before spilling into empty slots. Tiered stacks (none
+  // exist in the shack loot table today, but future containers may hold one)
+  // use addStack so a tier never gets silently dropped by add()'s by-key merge.
+  // Whatever doesn't fit (backpack full) is simply left behind in the chest.
+  private takeAllFromChest(): void {
+    if (!this.chestMenu.isOpen() || !this.openChest) return;
+    const chest = this.openChest;
+    for (let i = 0; i < chest.size; i++) {
+      const stack = chest.slot(i);
+      if (!stack) continue;
+      if (stack.tier !== undefined) {
+        if (this.backpack.addStack(stack)) chest.set(i, null);
+        continue;
+      }
+      const leftover = this.backpack.add(stack.key, stack.count);
+      chest.set(i, leftover > 0 ? { key: stack.key, count: leftover } : null);
+    }
+    this.afterItemMove();
+    this.eventLog.add("info", "Took everything from the chest");
   }
 
   // Reused for both the initial spawn and every respawn-after-timer cycle —
@@ -1548,6 +1684,21 @@ export class MainScene extends Phaser.Scene {
     this.bossAltars.push(altar);
   }
 
+  // A discovered (not summoned) Boss Altar gets a one-time landmark marker on
+  // the minimap once the player has actually explored close enough to reveal
+  // its fog cell — reuses fog's own REVEAL_RADIUS so "discovered" means the
+  // same thing here as it does for terrain. Deliberately per-altar/one-shot,
+  // not a live blip — keeps the minimap's locked "no entity blips" rule intact
+  // (a fixed landmark once found is conceptually more like revealed terrain).
+  private updateAltarDiscovery(): void {
+    for (const altar of this.bossAltars) {
+      if (altar.discoveredOnMap) continue;
+      if (Phaser.Math.Distance.Between(this.player.x, this.player.y, altar.x, altar.y) > REVEAL_RADIUS) continue;
+      altar.discoveredOnMap = true;
+      this.minimapUI.revealLandmark(altar.x, altar.y);
+    }
+  }
+
   // Escalating environmental hint near the altar: decorative gremlin-camp
   // clutter (purely visual) plus a small ADDITIVE batch of extra
   // gremlins/gremlings, layered on top of (not a multiplier on) spawnEnemies'
@@ -1737,11 +1888,24 @@ export class MainScene extends Phaser.Scene {
     return null; // no tool of the right kind out → show nothing
   }
 
+  // Flat REACH was tuned around the roster's normal ~20-26px sprites (Boar,
+  // Snake, Gremlin). A much larger enemy (the Gremlin King, scaled 2.4x) eats
+  // almost all of that budget just reaching its own edge from its center,
+  // leaving a razor-thin sliver of actual reach past the visible sprite —
+  // reported as "impossible to hit despite being close." Scale reach up by
+  // however much an enemy's visual radius exceeds that baseline, so bigger
+  // enemies keep roughly the same "reach past the edge" feel as small ones.
+  private static readonly BASELINE_ENEMY_RADIUS = 13;
+  private enemyReach(enemy: Enemy): number {
+    const radius = Math.max(enemy.displayWidth, enemy.displayHeight) / 2;
+    return REACH + Math.max(0, radius - MainScene.BASELINE_ENEMY_RADIUS);
+  }
+
   // Mirrors promptFor()'s gating rules: out of reach -> nothing; no weapon
   // equipped -> nothing (never reveal what's required); else the attack verb.
   private promptForEnemy(enemy: Enemy): string | null {
     const inReach =
-      Phaser.Math.Distance.Between(this.player.x, this.player.y, enemy.x, enemy.y) <= REACH;
+      Phaser.Math.Distance.Between(this.player.x, this.player.y, enemy.x, enemy.y) <= this.enemyReach(enemy);
     if (!inReach) return null;
     if (!this.equippedWeapon) return null;
     return `[LMB] Attack ${enemy.displayName}`;
@@ -1854,8 +2018,22 @@ export class MainScene extends Phaser.Scene {
 
   // Credit a picked-up loose node to the backpack, preserving a per-instance
   // tier (destroyed station) as stack metadata rather than merging by count.
-  // Overflow falls back to dropping the same tier back on the floor.
+  // Overflow falls back to dropping the same tier back on the floor. A
+  // placeable (crafting station/processor) prefers the hotbar's dedicated
+  // row 2 first — per the user, auto-pickup of a loose station should land
+  // there by default instead of the backpack, so placing it again doesn't
+  // require detouring through the inventory each time.
   private collectNode(node: ResourceNode): void {
+    if (itemDef(node.resource)?.placeable) {
+      const row2Slot = this.hotbarRow2Assignable(node.resource);
+      if (row2Slot !== null) {
+        this.hotbar.container.set(row2Slot, { key: node.resource, count: node.amount, tier: node.tier });
+        this.hotbarUI.refresh();
+        this.discovered.add(node.resource);
+        this.refreshDiscovery();
+        return;
+      }
+    }
     if (node.tier !== undefined) {
       const stack: ItemStack = { key: node.resource, count: node.amount, tier: node.tier };
       if (!this.backpack.addStack(stack)) {
@@ -1874,7 +2052,7 @@ export class MainScene extends Phaser.Scene {
   private tryAttackEnemy(enemy: Enemy): void {
     if (enemy.depleted || !this.equippedWeapon) return;
     const inReach =
-      Phaser.Math.Distance.Between(this.player.x, this.player.y, enemy.x, enemy.y) <= REACH;
+      Phaser.Math.Distance.Between(this.player.x, this.player.y, enemy.x, enemy.y) <= this.enemyReach(enemy);
     if (!inReach) return;
 
     const cooldownMs = weaponCooldownMs(this.equippedWeapon);
@@ -2377,7 +2555,10 @@ export class MainScene extends Phaser.Scene {
     // Placing a Workbench for the first time can newly unlock tier 1+
     // recipes' visibility (see Crafting.refresh's workbenchPlaced gate) —
     // re-run discovery so that happens immediately, not just on next pickup.
-    if (key === "workbench") this.refreshDiscovery();
+    if (key === "workbench") {
+      this.everPlacedWorkbench = true;
+      this.refreshDiscovery();
+    }
     // A placed Drying Rack gets its own processing state, ticked in update()
     // and bound to the menu when the player interacts with this image.
     if (key === "drying_rack") this.dryingRacks.push({ image, station: new ProcessingStation() });
@@ -2433,8 +2614,10 @@ export class MainScene extends Phaser.Scene {
   // Has the player ever placed a Workbench, anywhere — separate from (and
   // prior to) isNearWorkbench's "currently in range" check. Gates whether
   // tier 1+ recipes are discoverable/visible at all in the crafting menu.
+  // Sticky forever (everPlacedWorkbench) — destroying the Workbench later
+  // must NOT re-lock recipes the player already discovered/knows about.
   private hasWorkbenchPlaced(): boolean {
-    return this.placedObjects.some((obj) => obj.getData("itemKey") === "workbench");
+    return this.everPlacedWorkbench;
   }
 
   // --- Placed-object management (right-click Upgrade/Destroy) ---
@@ -2745,6 +2928,7 @@ export class MainScene extends Phaser.Scene {
       skills: this.skills,
       progression: this.progression,
       armorSlots: () => this.armorSlots(),
+      combatStats: () => this.combatStats(),
       beginDrag: (c, i, p) => this.beginItemDrag(c, i, p),
       beginArmorDrag: (slot, p) => this.beginArmorDrag(slot, p),
       openArmorContextMenu: (slot, x, y) => this.openArmorContextMenu(slot, x, y),
@@ -2759,6 +2943,28 @@ export class MainScene extends Phaser.Scene {
       const eq = this.equipment.get(s.id);
       return { id: s.id, label: s.label, itemKey: eq?.key ?? null, tier: eq?.tier };
     });
+  }
+
+  // Live "what am I currently equipped with" summary for the inventory panel —
+  // mirrors the exact same math Tooltip's weapon "base (adjusted)" lines and
+  // tryAttackEnemy/applyDamageToPlayer already use, just rolled up into one
+  // view instead of per-item tooltips.
+  private combatStats(): CombatStatsView {
+    const armor = totalPlayerDefense(this.equipment);
+    if (!this.equippedWeapon) return { weaponName: null, damage: 0, attackSpeed: 0, staminaCost: 0, armor };
+    const dmgType = weaponPrimaryDamageType(this.equippedWeapon);
+    const baseDmg = weaponDamage(this.equippedWeapon) + weaponTierDamageBonus(this.equippedWeapon, this.equippedWeaponTier);
+    const damage = Math.round(baseDmg * weaponSkillDamageMultiplier(dmgType, this.skills));
+    const staminaCost = Math.round(
+      weaponStaminaCost(this.equippedWeapon) * weaponStaminaCostMultiplier(dmgType, this.progression),
+    );
+    return {
+      weaponName: this.equippedWeaponName,
+      damage,
+      attackSpeed: weaponAttacksPerSecond(this.equippedWeapon),
+      staminaCost,
+      armor,
+    };
   }
 
   // Equip an armor item from `container[index]` into its matching slot,
@@ -2856,7 +3062,7 @@ export class MainScene extends Phaser.Scene {
       })
       .setOrigin(1, 1)
       .setScrollFactor(0)
-      .setDepth(2000)
+      .setDepth(2800) // must clear WORLD_H (2688) so trees/world objects never draw over fixed HUD
       .setVisible(false);
 
     // Top-left collapsible keybind reference (was a single always-on line;
@@ -2872,6 +3078,9 @@ export class MainScene extends Phaser.Scene {
         "Character: K",
         "Auto-pickup: V",
         "Range ring: O",
+        "Station row: Alt+1-9",
+        "Row2 scroll toggle: H",
+        "Take all (chest): R",
       ],
     );
 
@@ -2889,7 +3098,7 @@ export class MainScene extends Phaser.Scene {
       })
       .setOrigin(1, 1)
       .setScrollFactor(0)
-      .setDepth(2000)
+      .setDepth(2800)
       .setVisible(false);
 
     this.refreshHud();
@@ -2916,14 +3125,14 @@ export class MainScene extends Phaser.Scene {
       .setOrigin(0, 0)
       .setStrokeStyle(1, 0x3a4250)
       .setScrollFactor(0)
-      .setDepth(2000);
+      .setDepth(2800);
     // Dark/muted yellow rather than a bright/neon fill — a fixed color, no
     // depletion/regen color-shift.
     this.staminaBarFill = this.add
       .rectangle(barX + 1, barY + 1, barW - 2, barH - 2, 0xb8860b, 1)
       .setOrigin(0, 0)
       .setScrollFactor(0)
-      .setDepth(2001);
+      .setDepth(2801);
     this.staminaBarText = this.add
       .text(barX + barW / 2, barY + barH / 2, "", {
         fontFamily: "monospace",
@@ -2932,7 +3141,7 @@ export class MainScene extends Phaser.Scene {
       })
       .setOrigin(0.5, 0.5)
       .setScrollFactor(0)
-      .setDepth(2002);
+      .setDepth(2802);
     this.refreshStaminaBar();
   }
 
@@ -2956,12 +3165,12 @@ export class MainScene extends Phaser.Scene {
       .setOrigin(0, 0)
       .setStrokeStyle(1, 0x3a4250)
       .setScrollFactor(0)
-      .setDepth(2000);
+      .setDepth(2800);
     this.healthBarFill = this.add
       .rectangle(barX + 1, barY + 1, barW - 2, barH - 2, 0xb02020, 1)
       .setOrigin(0, 0)
       .setScrollFactor(0)
-      .setDepth(2001);
+      .setDepth(2801);
     this.healthBarText = this.add
       .text(barX + barW / 2, barY + barH / 2, "", {
         fontFamily: "monospace",
@@ -2970,7 +3179,7 @@ export class MainScene extends Phaser.Scene {
       })
       .setOrigin(0.5, 0.5)
       .setScrollFactor(0)
-      .setDepth(2002);
+      .setDepth(2802);
     this.refreshHealthBar();
   }
 
@@ -2996,12 +3205,12 @@ export class MainScene extends Phaser.Scene {
       .setOrigin(0, 0)
       .setStrokeStyle(1, 0x3a4250)
       .setScrollFactor(0)
-      .setDepth(2000);
+      .setDepth(2800);
     this.xpBarFill = this.add
       .rectangle(barX + 1, barY + 1, barW - 2, barH - 2, 0x8a5cd0, 1)
       .setOrigin(0, 0)
       .setScrollFactor(0)
-      .setDepth(2001);
+      .setDepth(2801);
     this.xpBarText = this.add
       .text(barX + barW / 2, barY + barH / 2, "", {
         fontFamily: "monospace",
@@ -3010,7 +3219,7 @@ export class MainScene extends Phaser.Scene {
       })
       .setOrigin(0.5, 0.5)
       .setScrollFactor(0)
-      .setDepth(2002);
+      .setDepth(2802);
     this.refreshXpBar();
   }
 

@@ -17,6 +17,11 @@ export class BossAltar {
   readonly y: number;
   summoned = false;
   bossDefeated = false;
+  // True once the player has explored close enough to reveal this altar's
+  // fog-of-war cell — used to add a one-time landmark marker to the minimap
+  // (a discovered fixed structure, not a live entity blip — keeps the
+  // minimap's locked "no entity blips" rule intact).
+  discoveredOnMap = false;
 
   constructor(scene: Phaser.Scene, cfg: BossAltarConfig) {
     this.x = cfg.x;
