@@ -331,6 +331,74 @@ mouse-driven only. Don't reintroduce a keybind for this without being asked. Spa
    extension of the existing drying-rack-menu if-chain (not a generalized
    "container kind" system — deliberately not built until a 3rd/4th case
    actually needs it).
+5c. **Boss Altar + Gremlin King (first boss)** — plan:
+   `.claude/plans/lexical-sleeping-journal.md` (Milestone P2, same plan as the
+   Gremlin Shack POI above). Roadmap item 7 (Bosses) — pulled forward and
+   shipped alongside World & discovery/POI work since the user asked for both
+   together in the same session. The user's locked direction: fully bespoke,
+   Elden-Ring-style per-boss AI (telegraphed attacks, dodge/i-frame relevant,
+   poise/stagger punish windows) — explicitly NOT a shared "boss framework,"
+   same "own condition/numbers, don't generalize" philosophy the per-enemy
+   combat stats note already establishes. This is the **tutorial biome boss**:
+   tough but built entirely around the player's EXISTING dash + 150ms i-frame
+   toolkit (`MainScene.ts`'s `DASH_IFRAME_MS`) — no new player ability was
+   added for it; a dedicated teleport/blink is explicitly deferred to a future,
+   tougher boss.
+   - **`src/entities/BossAltar.ts`** — a world-gen-placed (not player-placed)
+     fixed landmark (stone ring + fire pit), found via **exploration + escalating
+     environmental hints**, not a minimap marker (consistent with the minimap's
+     locked "terrain + player position only, no entity blips" rule). Its
+     position (`MainScene.pickAltarPosition()`) is chosen once per session,
+     **before** the Gremlin Shack scatter runs, so 2 of the 5 shacks bias
+     toward it (`MainScene.pickPointNearAltar()`), plus a new stepped-band
+     scatter of purely-decorative "gremlin camp" props and an **additive**
+     (not a multiplier on Milestone O's tuned base counts) batch of 6 extra
+     `RangedGremlin` + 4 `MeleeGremling` near it
+     (`MainScene.spawnAltarDensity()`) — exploring toward denser gremlin
+     content is the hint trail toward the boss.
+   - **Gremlin Totem** (new craftable item/recipe, tier 1, Light Armor skill
+     gate) is placed into the altar's own fire to summon the boss — reuses the
+     "no tool of the right kind -> show nothing" prompt-gating philosophy
+     (`MainScene.promptForAltar()`: no Totem selected in the hotbar -> no
+     prompt at all) and `ItemContainer.removeCount()` for consumption (the
+     same primitive `Crafting.craft()` uses for ingredients — NOT the
+     placement system's single-slot consumption, since a Totem is a
+     stackable consumable, not a `maxStack: 1` placeable). A short ritual
+     delay (2.5s) precedes the actual spawn.
+   - **`src/entities/GremlinKing.ts`** — extends `Enemy` (keeps the inherited
+     HP-bar/loot/death-feedback machinery) but **fully overrides `update()`**
+     without calling `super.update()` (same precedent `Snake.ts` already
+     established for a subclass with entirely custom AI). A from-scratch
+     `idle -> telegraphing(attack) -> executing(attack) -> recovering -> idle`
+     state machine, interruptible into a `staggered` state from any point once
+     a parallel **poise meter** (100, chipped 1:1 with damage dealt, second
+     bar drawn below the HP bar — required widening `Enemy.BAR_W/BAR_H/
+     BAR_OFFSET_Y` from `private` to `protected static readonly`) hits 0 —
+     staggered grants **1.5x damage** (`GremlinKing.STAGGER_DAMAGE_MULTIPLIER`,
+     applied in `MainScene.tryAttackEnemy()`) for a 3s punish window, then
+     resets. Three melee/AoE attacks (no projectiles): a wide **cleave** arc,
+     a **charge** whose target is locked at telegraph-start and never re-read
+     (so it's genuinely sidestep-dodgeable, not homing — the closest existing
+     precedent, `Snake`'s lunge, re-aims every frame and was deliberately NOT
+     copied), and a **ground slam** AoE with a growing-circle telegraph
+     (reusing the exact world-space `Graphics`-redrawn-per-frame idiom
+     `MainScene.updateAttackRangeRing()` already established). Below 50% HP,
+     an **enraged** phase shortens telegraph/recovery durations and speeds up
+     movement (not more damage — the ramp is about tighter timing, not a
+     numbers wall); multipliers are captured once per state-entry so crossing
+     the threshold mid-telegraph can't retroactively shrink an already-playing
+     animation. Area damage to the player is queried via a new
+     `GremlinKing.checkPlayerHit()` (richer than `Enemy.update()`'s plain
+     boolean bite contract, since the slam carries knockback) — still funnels
+     through the same `MainScene.applyDamageToPlayer()` choke point every
+     other damage source uses (now widened with an *optional* knockback
+     param, every other call site untouched), so dash i-frames/armor "just
+     work" against it with no special-casing. Guaranteed unique trophy drop:
+     **Gremlin King Fang** (no recipe yet — an explicit hook for future
+     content). No portal/next-biome scaffolding exists yet, so the altar is a
+     one-shot-per-session summon (`BossAltar.summoned` stays `true`
+     permanently after one kill) — the natural hook point for a future
+     biome-transition system, not built now.
 
 **Not yet built — next up in rough order:**
 6. **World & discovery** — much bigger generated world, biomes, map, eventually a
@@ -339,14 +407,13 @@ mouse-driven only. Don't reintroduce a keybind for this without being asked. Spa
    content notes** below for the first biome's terrain-zone concept. (Minimap + fog
    of war, formerly noted here as undecided/not-started, has shipped — see 5a
    above; the Gremlin Shack POI has shipped — see 5b above.)
-7. **Bosses** — Boss Altar + Gremlin King (Milestone P2 of
-   `.claude/plans/lexical-sleeping-journal.md`) is the next planned piece: an
-   Elden-Ring-style telegraphed/poise-punish fight, found via exploration +
-   escalating environmental hints (denser shacks/camp decor/enemies near the
-   altar), summoned by crafting a Gremlin Totem and placing it in the altar's own
-   fire. Not yet built as of the Gremlin Shack POI shipping.
-8. **ARPG loot** — rarity, randomized drops/recipes, replayability.
-9. **Cross-cutting:** save/load (localStorage), real pixel-art tilesets.
+7. **ARPG loot** — rarity, randomized drops/recipes, replayability.
+8. **Cross-cutting:** save/load (localStorage), real pixel-art tilesets.
+
+**Bosses (was item 7)** — shipped, see 5c above (Boss Altar + Gremlin King). Future
+bosses should each get their own bespoke AI (per the locked "no shared boss
+framework" decision), following `GremlinKing.ts`'s telegraph/poise pattern as a
+reference, not a base class to inherit from.
 
 ## Long-term design notes (idea stage, added 2026-07-07)
 

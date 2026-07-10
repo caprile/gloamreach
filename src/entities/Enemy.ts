@@ -71,9 +71,11 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   // preUpdate, matching ResourceNode's count-label tracking convention.
   private healthBarBg: Phaser.GameObjects.Rectangle;
   private healthBarFill: Phaser.GameObjects.Rectangle;
-  private static readonly BAR_W = 22;
-  private static readonly BAR_H = 3;
-  private static readonly BAR_OFFSET_Y = 16; // px above the sprite's center
+  // protected (not private) so a subclass can position a second bar (e.g.
+  // GremlinKing's poise bar) consistently against these same constants.
+  protected static readonly BAR_W = 22;
+  protected static readonly BAR_H = 3;
+  protected static readonly BAR_OFFSET_Y = 16; // px above the sprite's center
 
   constructor(scene: Phaser.Scene, cfg: EnemyConfig) {
     super(scene, cfg.x, cfg.y, cfg.texture);

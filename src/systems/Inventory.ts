@@ -26,4 +26,5 @@ export type ResourceType =
   | "cattail"
   | "blackberry"
   | "twine"
-  | "gremlin_leather";
+  | "gremlin_leather"
+  | "gremlin_king_fang"; // Gremlin King's guaranteed unique trophy drop

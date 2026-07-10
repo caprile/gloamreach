@@ -163,6 +163,16 @@ export const RECIPES: Recipe[] = [
     requiredSkills: [{ skill: "light_armor", level: 0 }],
     output: { kind: "item", itemId: "gremlin_pants", itemName: "Gremlin Pants" },
   },
+  {
+    id: "gremlin_totem",
+    name: "Gremlin Totem",
+    description: "A grim totem bound with gremlin remains. Summons the Gremlin King at the Boss Altar.",
+    category: "misc",
+    tier: 1,
+    costs: { gremlin_leather: 4, gremlin_guck: 3, bones: 8, twine: 4 },
+    requiredSkills: [{ skill: "light_armor", level: 3 }],
+    output: { kind: "item", itemId: "gremlin_totem", itemName: "Gremlin Totem" },
+  },
 ];
 
 export function itemNameFor(itemId: string): string | undefined {

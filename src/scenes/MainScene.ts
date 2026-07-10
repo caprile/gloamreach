@@ -15,6 +15,8 @@ import { Snake } from "../entities/Snake";
 import { RangedGremlin, MeleeGremling } from "../entities/Gremlin";
 import { Projectile, type ProjectileConfig } from "../entities/Projectile";
 import { GremlinShack, SHACK_GUARD_RESPAWN_MS } from "../entities/GremlinShack";
+import { BossAltar } from "../entities/BossAltar";
+import { GremlinKing, STAGGER_DAMAGE_MULTIPLIER } from "../entities/GremlinKing";
 import type { LootRollEntry } from "../systems/LootContainer";
 import type { ResourceType } from "../systems/Inventory";
 import {
@@ -173,6 +175,13 @@ export class MainScene extends Phaser.Scene {
   private chestMenu!: ChestMenu;
   private openChest: ItemContainer | null = null; // the shack.loot.items currently bound to chestMenu
   private hoveredShack: GremlinShack | null = null;
+  // Boss Altar + Gremlin King — altarPosition is chosen once in create(),
+  // before spawnGremlinShacks() runs, so the shack/decoration/enemy density
+  // gradient can bias toward it.
+  private altarPosition: { x: number; y: number } | null = null;
+  private bossAltars: BossAltar[] = [];
+  private hoveredAltar: BossAltar | null = null;
+  private gremlinKing: GremlinKing | null = null;
   // Right-click "Upgrade / Destroy" popup for any placed object (Workbench,
   // Campfire, Drying Rack, ...) — a single generic system, not per-type.
   private contextMenu!: ContextMenu;
@@ -307,7 +316,12 @@ export class MainScene extends Phaser.Scene {
     // (see STATUS.md), just hitting a boolean instead of a vector.
     this.enemyGroup = this.physics.add.group({ collideWorldBounds: true });
     this.spawnEnemies();
+    // Altar position is chosen once, before the shack/decoration/enemy
+    // density gradient around it — see spawnGremlinShacks/spawnAltarDensity.
+    this.altarPosition = this.pickAltarPosition(this.sessionRng());
     this.spawnGremlinShacks();
+    this.spawnAltarDensity();
+    this.spawnBossAltar();
     this.physics.add.collider(this.enemyGroup, solids);
     this.physics.add.collider(this.player, this.enemyGroup);
 
@@ -1033,6 +1047,37 @@ export class MainScene extends Phaser.Scene {
     this.time.delayedCall(SHACK_GUARD_RESPAWN_MS, () => this.respawnShackGuards(shack));
   }
 
+  // --- Boss Altar + Gremlin King ---
+
+  private static readonly BOSS_RITUAL_DELAY_MS = 2500;
+
+  // Consumes one Gremlin Totem (hotbar first — the player is holding it per
+  // the prompt gate — falling back to the backpack so a totem moved
+  // mid-interaction still consumes correctly), then a short ritual pause
+  // before the boss actually spawns.
+  private attemptSummonBoss(altar: BossAltar): void {
+    if (altar.summoned) return;
+    if (this.hotbar.container.count("gremlin_totem") >= 1) {
+      this.hotbar.container.removeCount("gremlin_totem", 1);
+    } else if (this.backpack.count("gremlin_totem") >= 1) {
+      this.backpack.removeCount("gremlin_totem", 1);
+    } else {
+      return;
+    }
+    this.afterItemMove();
+    altar.summoned = true;
+    this.eventLog.add("combat", "The altar's fire roars to life...");
+    this.time.delayedCall(MainScene.BOSS_RITUAL_DELAY_MS, () => this.spawnGremlinKing(altar));
+  }
+
+  private spawnGremlinKing(altar: BossAltar): void {
+    const boss = new GremlinKing(this, { x: altar.x, y: altar.y - 60 });
+    this.gremlinKing = boss;
+    this.enemies.push(boss);
+    this.enemyGroup.add(boss);
+    this.eventLog.add("combat", "The Gremlin King rises!");
+  }
+
   // Move a whole stack from `container[index]` into the open rack's input slot,
   // if it's a valid input for that station. Invalid drops just snap back.
   private loadRackInput(container: ItemContainer, index: number): void {
@@ -1436,27 +1481,112 @@ export class MainScene extends Phaser.Scene {
 
   // Scatter Gremlin Shacks (first POI) through the forest zone, spread apart
   // via the same pickSpreadSpawnPoint pool the Gremlin-family enemies use.
-  // First-pass/tunable counts.
+  // 2 of the 5 are deliberately biased near the altar (if one has been
+  // placed) as part of the "denser gremlin content = closer to the boss"
+  // environmental-hint gradient — sampled directly around altarPosition
+  // rather than a full pickSpreadSpawnPoint roll. First-pass/tunable counts.
   private spawnGremlinShacks(): void {
     const rng = this.sessionRng();
     const SHACK_COUNT = 5;
+    const SHACK_NEAR_ALTAR_COUNT = 2;
     const SHACK_CLEAR_RADIUS = 260;
     const SHACK_MIN_SPACING = 500;
+    const ALTAR_NEAR_RADIUS = 500;
     const shackPoints: { x: number; y: number }[] = [];
     for (let i = 0; i < SHACK_COUNT; i++) {
-      const { x, y } = this.pickSpreadSpawnPoint(
-        rng,
-        "forest",
-        SHACK_CLEAR_RADIUS,
-        shackPoints,
-        SHACK_MIN_SPACING,
-        1,
-        true,
-      );
-      shackPoints.push({ x, y });
-      const shack = new GremlinShack(this, { x, y });
+      let point: { x: number; y: number };
+      if (i < SHACK_NEAR_ALTAR_COUNT && this.altarPosition) {
+        point = this.pickPointNearAltar(rng, ALTAR_NEAR_RADIUS);
+      } else {
+        point = this.pickSpreadSpawnPoint(
+          rng,
+          "forest",
+          SHACK_CLEAR_RADIUS,
+          shackPoints,
+          SHACK_MIN_SPACING,
+          1,
+          true,
+        );
+      }
+      shackPoints.push(point);
+      const shack = new GremlinShack(this, point);
       this.gremlinShacks.push(shack);
       this.respawnShackGuards(shack);
+    }
+  }
+
+  // Far from the world-center safe zone, biased toward forest (gremlin
+  // habitat) — the boss altar's own placement. Chosen once per session.
+  private pickAltarPosition(rng: Phaser.Math.RandomDataGenerator): { x: number; y: number } {
+    const ALTAR_CLEAR_RADIUS = 900;
+    return this.pickSpawnPoint(rng, "forest", ALTAR_CLEAR_RADIUS, true);
+  }
+
+  // A point sampled around altarPosition within `radius`, rejecting non-
+  // forest/creek cells the same way pickSpawnPoint does — used to bias
+  // shack/prop/enemy placement toward the altar without a real per-cell
+  // density field.
+  private pickPointNearAltar(rng: Phaser.Math.RandomDataGenerator, radius: number): { x: number; y: number } {
+    const altar = this.altarPosition!;
+    let last = altar;
+    for (let attempt = 0; attempt < 200; attempt++) {
+      const angle = Phaser.Math.DegToRad(rng.angle());
+      const r = rng.between(0, radius);
+      const x = Phaser.Math.Clamp(altar.x + Math.cos(angle) * r, 60, WORLD_W - 60);
+      const y = Phaser.Math.Clamp(altar.y + Math.sin(angle) * r, 60, WORLD_H - 60);
+      last = { x, y };
+      if (this.biome.zoneAt(x, y) !== "forest") continue;
+      if (this.biome.isCreekAt(x, y)) continue;
+      return { x, y };
+    }
+    return last;
+  }
+
+  private spawnBossAltar(): void {
+    if (!this.altarPosition) return;
+    const altar = new BossAltar(this, this.altarPosition);
+    this.bossAltars.push(altar);
+  }
+
+  // Escalating environmental hint near the altar: decorative gremlin-camp
+  // clutter (purely visual) plus a small ADDITIVE batch of extra
+  // gremlins/gremlings, layered on top of (not a multiplier on) spawnEnemies'
+  // Milestone-O-tuned base counts, so the rest of the map's balance is
+  // untouched. First-pass/tunable.
+  private spawnAltarDensity(): void {
+    if (!this.altarPosition) return;
+    const rng = this.sessionRng();
+
+    // Camp props: 3 concentric bands, denser closer to the altar.
+    const PROP_BANDS: { min: number; max: number; count: number }[] = [
+      { min: 0, max: 150, count: 20 },
+      { min: 150, max: 300, count: 15 },
+      { min: 300, max: 500, count: 5 },
+    ];
+    for (const band of PROP_BANDS) {
+      for (let i = 0; i < band.count; i++) {
+        const angle = Phaser.Math.DegToRad(rng.angle());
+        const r = rng.between(band.min, band.max);
+        const x = Phaser.Math.Clamp(this.altarPosition.x + Math.cos(angle) * r, 20, WORLD_W - 20);
+        const y = Phaser.Math.Clamp(this.altarPosition.y + Math.sin(angle) * r, 20, WORLD_H - 20);
+        this.add.image(x, y, "gremlin_camp_prop").setDepth(y);
+      }
+    }
+
+    const ALTAR_NEAR_RADIUS = 500;
+    const ALTAR_EXTRA_GREMLINS = 6;
+    const ALTAR_EXTRA_GREMLINGS = 4;
+    for (let i = 0; i < ALTAR_EXTRA_GREMLINS; i++) {
+      const { x, y } = this.pickPointNearAltar(rng, ALTAR_NEAR_RADIUS);
+      const gremlin = new RangedGremlin(this, { x, y });
+      this.enemies.push(gremlin);
+      this.enemyGroup.add(gremlin);
+    }
+    for (let i = 0; i < ALTAR_EXTRA_GREMLINGS; i++) {
+      const { x, y } = this.pickPointNearAltar(rng, ALTAR_NEAR_RADIUS);
+      const gremling = new MeleeGremling(this, { x, y });
+      this.enemies.push(gremling);
+      this.enemyGroup.add(gremling);
     }
   }
 
@@ -1482,6 +1612,7 @@ export class MainScene extends Phaser.Scene {
     let hoveredEnemy: Enemy | null = null;
     let hoveredRack: Phaser.GameObjects.Image | null = null;
     let hoveredShack: GremlinShack | null = null;
+    let hoveredAltar: BossAltar | null = null;
     let best = Infinity;
 
     for (const node of this.nodes) {
@@ -1493,6 +1624,7 @@ export class MainScene extends Phaser.Scene {
         hoveredEnemy = null;
         hoveredRack = null;
         hoveredShack = null;
+        hoveredAltar = null;
         best = d;
       }
     }
@@ -1505,6 +1637,7 @@ export class MainScene extends Phaser.Scene {
         hoveredNode = null;
         hoveredRack = null;
         hoveredShack = null;
+        hoveredAltar = null;
         best = d;
       }
     }
@@ -1517,6 +1650,7 @@ export class MainScene extends Phaser.Scene {
         hoveredNode = null;
         hoveredEnemy = null;
         hoveredShack = null;
+        hoveredAltar = null;
         best = d;
       }
     }
@@ -1529,6 +1663,20 @@ export class MainScene extends Phaser.Scene {
         hoveredNode = null;
         hoveredEnemy = null;
         hoveredRack = null;
+        hoveredAltar = null;
+        best = d;
+      }
+    }
+    for (const altar of this.bossAltars) {
+      const image = altar.image;
+      const radius = Math.max(image.displayWidth, image.displayHeight) / 2 + 6;
+      const d = Phaser.Math.Distance.Between(world.x, world.y, image.x, image.y);
+      if (d <= radius && d < best) {
+        hoveredAltar = altar;
+        hoveredNode = null;
+        hoveredEnemy = null;
+        hoveredRack = null;
+        hoveredShack = null;
         best = d;
       }
     }
@@ -1537,6 +1685,7 @@ export class MainScene extends Phaser.Scene {
     this.hoveredEnemy = hoveredEnemy;
     this.hoveredRack = hoveredRack;
     this.hoveredShack = hoveredShack;
+    this.hoveredAltar = hoveredAltar;
 
     // Station level labels are passive flavor, not part of the interact/
     // prompt system above — shown purely on hover, independent of the
@@ -1555,7 +1704,9 @@ export class MainScene extends Phaser.Scene {
           ? this.promptForRack(hoveredRack)
           : hoveredShack
             ? this.promptForShack(hoveredShack)
-            : null;
+            : hoveredAltar
+              ? this.promptForAltar(hoveredAltar)
+              : null;
     if (prompt) {
       this.promptText.setText(prompt).setVisible(true);
       this.input.setDefaultCursor("pointer");
@@ -1610,6 +1761,18 @@ export class MainScene extends Phaser.Scene {
     return inReach ? "[LMB] Open" : null;
   }
 
+  // Mirrors the tool-kind gating philosophy exactly: no Gremlin Totem
+  // selected in the hotbar -> show nothing, never reveal what's required
+  // (same "no tool of the right kind -> show nothing" rule as promptFor()).
+  // Also hides once the boss has already been summoned this session.
+  private promptForAltar(altar: BossAltar): string | null {
+    const inReach = Phaser.Math.Distance.Between(this.player.x, this.player.y, altar.x, altar.y) <= REACH;
+    if (!inReach || altar.summoned) return null;
+    const selected = this.hotbar.get(this.hotbar.selected());
+    if (!selected || selected.key !== "gremlin_totem") return null;
+    return "[LMB] Place Totem";
+  }
+
   // Left-click action on the currently hovered, in-reach node (or enemy/rack).
   private tryInteract(): void {
     if (this.hoveredEnemy) {
@@ -1632,6 +1795,10 @@ export class MainScene extends Phaser.Scene {
         Phaser.Math.Distance.Between(this.player.x, this.player.y, this.hoveredShack.x, this.hoveredShack.y) <=
         REACH;
       if (inReach) this.openChestMenu(this.hoveredShack);
+      return;
+    }
+    if (this.hoveredAltar) {
+      if (this.promptForAltar(this.hoveredAltar)) this.attemptSummonBoss(this.hoveredAltar);
       return;
     }
     const node = this.hoveredNode;
@@ -1728,7 +1895,9 @@ export class MainScene extends Phaser.Scene {
     this.player.playEquippedSwing();
 
     const baseDmg = weaponDamage(this.equippedWeapon) + weaponTierDamageBonus(this.equippedWeapon, this.equippedWeaponTier);
-    const dmg = Math.round(baseDmg * weaponSkillDamageMultiplier(dmgType, this.skills));
+    let dmg = Math.round(baseDmg * weaponSkillDamageMultiplier(dmgType, this.skills));
+    // Gremlin King's poise-break punish window — bonus damage while staggered.
+    if (enemy instanceof GremlinKing && enemy.isStaggered()) dmg = Math.round(dmg * STAGGER_DAMAGE_MULTIPLIER);
     const depleted = enemy.takeHit(dmg);
     this.skills.addXp(dmgType, 30); // weapon-hit XP to the primary damage type's skill
     this.spawnDamageNumber(enemy.x, enemy.y, dmg);
@@ -1784,6 +1953,18 @@ export class MainScene extends Phaser.Scene {
     for (const enemy of this.enemies) {
       const bit = enemy.update(delta, this.player.x, this.player.y, now);
       if (bit) this.applyDamageToPlayer(enemy.biteDamage);
+      // Gremlin King's melee/AoE kit deals area damage, not a single-point
+      // bite — queried separately since it needs richer info (knockback)
+      // than Enemy.update()'s plain boolean contract.
+      if (enemy instanceof GremlinKing) {
+        const areaHit = enemy.checkPlayerHit(this.player.x, this.player.y);
+        if (areaHit) {
+          this.applyDamageToPlayer(
+            areaHit.damage,
+            areaHit.knockback ? { fromX: enemy.x, fromY: enemy.y, speed: areaHit.knockback } : undefined,
+          );
+        }
+      }
     }
   }
 
@@ -1821,7 +2002,13 @@ export class MainScene extends Phaser.Scene {
     }
   }
 
-  private applyDamageToPlayer(amount: number): void {
+  // `knockback` is optional so every existing call site (Boar bite, Snake
+  // bite, Gremlin claw/projectile) is untouched — only the Gremlin King's
+  // slam attack passes one.
+  private applyDamageToPlayer(
+    amount: number,
+    knockback?: { fromX: number; fromY: number; speed: number },
+  ): void {
     if (this.isDead) return;
     if (this.time.now < this.invulnerableUntil) return;
     // Flat armor deduction — everything dealt today is physical damage (no
@@ -1831,6 +2018,13 @@ export class MainScene extends Phaser.Scene {
     const reduced = Math.max(1, Math.round(amount - totalPlayerDefense(this.equipment)));
     const died = this.health.takeDamage(reduced);
     this.refreshHealthBar();
+    if (knockback) {
+      const angle = Phaser.Math.Angle.Between(knockback.fromX, knockback.fromY, this.player.x, this.player.y);
+      const body = this.player.body as Phaser.Physics.Arcade.Body;
+      body.setVelocity(Math.cos(angle) * knockback.speed, Math.sin(angle) * knockback.speed);
+      // Brief impulse, not a sustained shove — matches dash's own short-burst feel.
+      this.time.delayedCall(150, () => body.setVelocity(0, 0));
+    }
     if (died) this.onPlayerDeath();
   }
 

@@ -336,6 +336,25 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
       { label: "Armor", value: "3" },
     ],
   },
+
+  // --- boss altar ---
+  gremlin_totem: {
+    key: "gremlin_totem",
+    name: "Gremlin Totem",
+    description: "A grim totem bound with gremlin remains. Placed into the Boss Altar's fire to summon its guardian.",
+    texture: "icon_gremlin_totem",
+    maxStack: 99,
+    hotbarable: true,
+    stats: [{ label: "Type", value: "Ritual Item" }],
+  },
+  gremlin_king_fang: {
+    key: "gremlin_king_fang",
+    name: "Gremlin King Fang",
+    description: "A massive fang torn from the Gremlin King. Feels like it should be good for something.",
+    texture: "icon_gremlin_king_fang",
+    maxStack: 99,
+    hotbarable: false,
+  },
 };
 
 export function itemDef(key: string): ItemDef | undefined {

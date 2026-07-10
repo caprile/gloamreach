@@ -26,6 +26,7 @@ requires standing near a placed Workbench (`MainScene.isNearWorkbench`).
 | Gremlin Cap | Armor | 1 | Yes | 1 Gremlin Leather, 5 Blackberries | Light Armor 0 | Item (armor, helmet) |
 | Gremlin Shirt | Armor | 1 | Yes | 3 Gremlin Leather, 1 Leather Scraps, 5 Bones | Light Armor 0 | Item (armor, chest) |
 | Gremlin Pants | Armor | 1 | Yes | 2 Gremlin Leather, 2 Leather Scraps, 1 Blackberry | Light Armor 0 | Item (armor, legs) |
+| Gremlin Totem | Misc | 1 | Yes | 4 Gremlin Leather, 3 Gremlin Guck, 8 Bones, 4 Twine | Light Armor 3 | Item (ritual — summons the Gremlin King at the Boss Altar) |
 
 ## Station Upgrades (`src/systems/StationUpgrades.ts`)
 

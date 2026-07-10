@@ -186,6 +186,48 @@ export class BootScene extends Phaser.Scene {
     g.fillRect(1, 9, 14, 2); // band
     g.generateTexture("gremlin_shack_chest", 16, 14);
 
+    // Boss Altar — a stone ring with a central fire-pit brazier, 64x56. Not
+    // player-placeable; world-gen-placed like the shack. Visually distinct
+    // from every other structure so it reads as a landmark from a distance.
+    g.clear();
+    g.fillStyle(0x5a5a5a, 1);
+    g.fillRect(4, 30, 56, 20); // stone base ring
+    g.fillStyle(0x3a3a3a, 1);
+    g.fillRect(20, 24, 24, 20); // pit recess
+    g.fillStyle(0xe8862c, 1);
+    g.fillTriangle(26, 24, 38, 24, 32, 4); // flame
+    g.fillStyle(0xf0c040, 1);
+    g.fillTriangle(28, 24, 36, 24, 32, 10); // flame highlight
+    g.generateTexture("boss_altar", 64, 56);
+
+    // Gremlin camp clutter — small decorative prop scattered near the altar
+    // as an escalating environmental hint (purely visual, no physics/
+    // interaction). 16x16: a crude bone/rock cairn.
+    g.clear();
+    g.fillStyle(0x8a8a8a, 1);
+    g.fillRect(4, 8, 8, 6);
+    g.fillStyle(0xe8e0cc, 1);
+    g.fillRect(2, 10, 3, 3);
+    g.fillRect(11, 9, 3, 3);
+    g.generateTexture("gremlin_camp_prop", 16, 16);
+
+    // Gremlin King — boss reskin: a big Troll/Ogre-silhouette humanoid, 40x48
+    // (before the runtime BOSS_SCALE multiplier stacks further size on top).
+    // Same green-gremlin palette family as the rest of the roster (reads as
+    // "gremlin, but massive") with heavier proportions and visible tusks to
+    // read as a boss at a glance, not just a bigger regular enemy.
+    g.clear();
+    g.fillStyle(0x445a2e, 1);
+    g.fillRect(4, 10, 32, 34); // torso
+    g.fillStyle(0x2f3f1f, 1);
+    g.fillRect(8, 0, 24, 14); // head
+    g.fillStyle(0xe8e0cc, 1);
+    g.fillRect(9, 10, 4, 6); // left tusk
+    g.fillRect(27, 10, 4, 6); // right tusk
+    g.fillStyle(0x6a8a3e, 1);
+    g.fillRect(10, 20, 20, 14); // chest highlight
+    g.generateTexture("gremlin_king", 40, 48);
+
     this.makeItemIcons(g);
 
     g.destroy(); // we only needed it to bake textures
@@ -436,5 +478,24 @@ export class BootScene extends Phaser.Scene {
     g.fillRect(6, 9, 5, 11); // left leg
     g.fillRect(13, 9, 5, 11); // right leg
     g.generateTexture("icon_gremlin_pants", ICON, ICON);
+
+    // Gremlin Totem: a small carved bone totem with a dark binding wrap and a
+    // red inlay.
+    g.clear();
+    g.fillStyle(0xc9bfa0, 1);
+    g.fillRect(9, 3, 6, 18);
+    g.fillStyle(0x2a1a10, 1);
+    g.fillRect(7, 9, 10, 3);
+    g.fillStyle(0x8a1f2a, 1);
+    g.fillCircle(12, 6, 3);
+    g.generateTexture("icon_gremlin_totem", ICON, ICON);
+
+    // Gremlin King Fang: a large pale fang/tusk trophy.
+    g.clear();
+    g.fillStyle(0xe8e0cc, 1);
+    g.fillTriangle(8, 22, 16, 22, 12, 3);
+    g.fillStyle(0xcfc4a0, 1);
+    g.fillTriangle(10, 20, 14, 20, 12, 8);
+    g.generateTexture("icon_gremlin_king_fang", ICON, ICON);
   }
 }
