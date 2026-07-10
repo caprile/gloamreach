@@ -52,6 +52,16 @@ export class FogOfWar {
     }
   }
 
+  // Whether the cell containing a world point has been revealed yet. Used by
+  // M-DN's nightfall surge to prefer still-fogged (unexplored) spawn cells.
+  // Out-of-bounds reads as revealed (nothing to spawn beyond the world edge).
+  isRevealed(worldX: number, worldY: number): boolean {
+    const cx = Math.floor(worldX / this.scale);
+    const cy = Math.floor(worldY / this.scale);
+    if (cx < 0 || cy < 0 || cx >= this.cols || cy >= this.rows) return true;
+    return this.revealed[cy * this.cols + cx] === 1;
+  }
+
   // Drains and returns the newly-revealed queue.
   consumeNewlyRevealed(): { cx: number; cy: number }[] {
     if (this.newlyRevealed.length === 0) return this.newlyRevealed;

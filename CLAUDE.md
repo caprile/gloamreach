@@ -602,6 +602,36 @@ mouse-driven only. Don't reintroduce a keybind for this without being asked. Spa
    `GremlinKing` tuning (cleave/slam range+damage up, charge speed 340→480, cooldown
    1200→950ms) off early playtest feedback. See `.claude/plans/rustling-weaving-lovelace.md`'s
    "Playtest fix batch" addendum + `STATUS.md`.
+5i. **M-DN (Day/Night cycle)** — plan: `.claude/plans/clever-sparking-gem.md` (third
+   milestone of the roguelike meta-loop, built on Opus). A global day/night clock —
+   `src/systems/DayNight.ts` (framework-free like `Run`/`Health`): **10 min day + 5 min
+   night** (15-min cycle, run starts at dawn), ticked with `delta` so it freezes with the
+   run. Locked cycle length from the user (custom answer "10min day, 5min night"). Three
+   effects: (1) **night tint** — `nightIntensity01()` ramps 0→1 over a 20s dusk, holds 1
+   through deep night, 1→0 at dawn; (2) **enemies slightly faster at night** (×1.15, no
+   damage buff — locked) via a new public `Enemy.envSpeedMult` assigned each frame in
+   `updateEnemies()` and multiplied into every aggressive-movement velocity (base chase,
+   Gremlin kite/pursue/chase, Snake strike/flee — idle wander left at base speed);
+   **GremlinKing is exempt with zero special-casing** since its overridden `update()` never
+   reads the field; (3) **nightfall surge + dawn cleanup** — at each day→night edge
+   `spawnNightBatch()` drops ~6 normal enemies into still-fogged cells in a 500–850px ring
+   around the player (`pickNightSpawnPoint()`, new `Fog.isRevealed()`), tracked in
+   `nightSpawns`; at the night→day edge `cleanupNightSpawns()` destroys any that never
+   aggro'd and are off-screen (locked: **density returns to baseline each morning**, no creep
+   over a long run — engaged/on-screen ones stay). `Enemy.isAggro()` promoted to public for
+   the filter; the surge only fires while alive; both edges run from `updateDayNight()`,
+   called in the alive *and* dead branches of `update()`. **Torch lighting** (added this pass
+   per the user): the night visual is a light-**mask**, not a flat rect —
+   `src/ui/NightOverlayUI.ts` is a full-screen `RenderTexture` filled dark blue at
+   `intensity × 0.42` from which soft radial light circles are *erased* (new `light_soft`
+   canvas-gradient texture in `BootScene`). A held **Torch** lights the player
+   (`equippedLightRadius`, data-driven per item in `LIGHT_RADIUS_BY_ITEM` — a future
+   **Lantern** just adds a row; torch 180px), and **Gremlin Shacks + the Boss Altar** are lit
+   (150px). Torch is now **non-stackable** (`maxStack: 1`). Depth ~2700 sits above the world
+   but below the minimap/HUD so only the world dims. `RunHudUI` shows `[Day N]`/`[Night]`;
+   `MinimapUI.setNightIntensity()` dims the minimap. `create()` resets
+   `dayNight`/`wasNight`/`nightSpawns`/`equippedLightRadius` per the `scene.restart()` gotcha.
+   See `STATUS.md` for full verification.
 
 **A new umbrella plan for the long-requested roguelike run/score meta-loop** now exists:
 `.claude/plans/roguelike-metaloop-master-plan.md` (drafted 2026-07-10, locked build order
@@ -610,7 +640,8 @@ design notes** section below (portal concept dropped in favor of one giant circu
 hardcore one-life death instead of the tombstone-and-respawn model, for now) — see that
 plan file for the full locked-decision list before touching anything in items 6 (World &
 discovery) or 7 (ARPG loot). Locked build order: **M-FX (done) → M-R1 (Run/Score/
-Hardcore death, done — see 5h) → M-DN (Day/Night, next) → M-SB (Sleep/Bed) → M-FA (Fresh Assault discovery
+Hardcore death, done — see 5h) → M-DN (Day/Night, done — see 5i) → M-SB (Sleep/Bed, next) →
+M-FA (Fresh Assault discovery
 timer) → M-RL (trophy → RNG relics) → M-WC (Gremlin War Camp) + M-TE (trophy-gated gear)
 → M-W1 (circular multi-biome world, last).**
 

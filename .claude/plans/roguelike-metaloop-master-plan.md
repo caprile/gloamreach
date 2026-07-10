@@ -133,14 +133,22 @@ running score, and run state (active / ended).
 - Note: with one biome today, the Gremlin King is effectively *both* the first and (for
   now) the final boss — the system must work with 1 biome and scale as rings are added.
 
-### M-DN — Day/Night cycle (M, Opus) — new global state system
+### M-DN — Day/Night cycle (M, Opus) — new global state system — **SHIPPED** 2026-07-10
 
-A global day/night clock.
-- Full-cycle length TBD (proposal: ~10 min). Screen tint + minimap dimming at night.
-- **Night teeth (locked):** enemies **slightly faster**; **denser spawns in unexplored /
-  newly-entered areas and on respawn** — NOT a flat night-wide stat bump, NO damage buff.
-- Drives Sleep (M-SB) and interacts with the Fresh Assault timer (M-FA) and score (a run's
-  in-game time is what the speed payoff measures, so day/night is the clock the timer reads).
+A global day/night clock. Detailed plan: `.claude/plans/clever-sparking-gem.md`; full
+verification in `STATUS.md`'s M-DN entry.
+- **Cycle: 10 min day + 5 min night** (locked by the user), run starts at dawn. Blue-dusk
+  screen darkness + minimap dimming, smooth 20s dusk/dawn fade.
+- **Night teeth (as locked):** enemies **slightly faster** (×1.15, no damage buff); a
+  **nightfall surge** of ~6 normal enemies spawns in still-unexplored cells around the
+  player, **bounded by a dawn cleanup** (un-engaged, off-screen night-spawns are removed at
+  daybreak) so density never creeps up over a long run. "Denser on respawn" was out of scope
+  (no ambient respawn system exists).
+- **Torch lighting (added this pass):** the night is a light-mask — a held Torch (future
+  Lantern) lights the player, and Gremlin Shacks / the Boss Altar are lit. Torch is now
+  non-stackable.
+- Drives Sleep (M-SB, next) and interacts with the Fresh Assault timer (M-FA) and score (a
+  run's in-game time is what the speed payoff measures).
 
 ### M-SB — Sleep + Bed/Cot placeable (M, Opus)
 
@@ -207,7 +215,8 @@ incremental ethos), then expand the world under it:
    see `STATUS.md`). Seed is display-only for now (deterministic world-gen deferred to
    M-W1); score = flat kill points + completion-bonus × speed multiplier; hardcore
    permadeath ends the run; first `localStorage` high-score table.
-3. **M-DN** → **M-SB** (survival-time layer).
+3. **M-DN** (day/night — **shipped** 2026-07-10, see 5i/STATUS.md) → **M-SB** (Sleep/Bed,
+   next) — the survival-time layer.
 4. **M-FA** (speed payoff).
 5. **M-RL** (relics — the replayability hook).
 6. **M-WC** + **M-TE** (content depth).

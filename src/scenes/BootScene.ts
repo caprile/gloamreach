@@ -560,5 +560,28 @@ export class BootScene extends Phaser.Scene {
     g.fillStyle(0xf0c040, 1);
     g.fillRect(7, 16, 10, 2); // gold cord/binding
     g.generateTexture("icon_gremlin_trophy", ICON, ICON);
+
+    g.destroy();
+    this.makeLightTexture();
+  }
+
+  // Soft radial light gradient (white, opaque center -> transparent edge), used
+  // by NightOverlayUI as the "erase brush" that carves smooth light holes in
+  // the night darkness (M-DN). A true radial gradient needs the 2D canvas API —
+  // Graphics can't do smooth radial alpha — so this one texture is canvas-drawn
+  // rather than Graphics.generateTexture'd like the rest.
+  private makeLightTexture(): void {
+    const size = 256;
+    const canvas = this.textures.createCanvas("light_soft", size, size);
+    if (!canvas) return;
+    const ctx = canvas.getContext();
+    const r = size / 2;
+    const grad = ctx.createRadialGradient(r, r, 0, r, r, r);
+    grad.addColorStop(0, "rgba(255,255,255,1)");
+    grad.addColorStop(0.55, "rgba(255,255,255,0.7)");
+    grad.addColorStop(1, "rgba(255,255,255,0)");
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, size, size);
+    canvas.refresh();
   }
 }

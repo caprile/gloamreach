@@ -54,6 +54,9 @@ export class MinimapUI {
   // Scratch 1x1 Graphics reused for every incremental terrain-pixel draw —
   // never added to the display list itself, only used as a draw source.
   private pixel: Phaser.GameObjects.Graphics;
+  // Light dark-blue overlay that fades in at night (M-DN) — sits between the
+  // terrain and the player marker so the map dims but the marker stays visible.
+  private nightDim: Phaser.GameObjects.Rectangle;
 
   // Top-right corner. The old "[Tab] Menu" icon that lived here was removed
   // (Tab key / Escape still open/close the combined crafting+inventory menu),
@@ -82,7 +85,20 @@ export class MinimapUI {
     this.terrain.fill(0x000000, 1); // starts fully fogged
 
     this.pixel = scene.make.graphics({}, false);
+    this.nightDim = scene.add
+      .rectangle(this.leftX, this.topY, PANEL_W, PANEL_H, 0x0b1c3a, 1)
+      .setOrigin(0, 0)
+      .setScrollFactor(0)
+      .setDepth(2901.5)
+      .setAlpha(0);
     this.marker = scene.add.graphics().setScrollFactor(0).setDepth(2902);
+  }
+
+  // Fade the minimap's night dim with the same intensity driving the world
+  // darkness (M-DN). Kept lighter than the world tint — the minimap only needs
+  // to read as "dimmer at night," not go dark.
+  setNightIntensity(i01: number): void {
+    this.nightDim.setAlpha(Math.min(1, Math.max(0, i01)) * 0.35);
   }
 
   update(playerX: number, playerY: number): void {

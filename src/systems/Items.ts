@@ -94,9 +94,9 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
   torch: {
     key: "torch",
     name: "Torch",
-    description: "A handheld light source.",
+    description: "A handheld light source. Lights the way at night.",
     texture: "icon_torch",
-    maxStack: 99,
+    maxStack: 1, // torches can't stack (M-DN) — one held light source at a time
     hotbarable: true,
     stats: [{ label: "Type", value: "Light" }],
   },

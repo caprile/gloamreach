@@ -2,7 +2,63 @@
 
 Last updated: 2026-07-10
 
-### Just finished: M-R1 playtest fixes — New Run freeze, Clear Scores, boss tuning
+### Just finished: M-DN — Day/Night cycle (clock, night threat, torch lighting)
+
+Third milestone of the roguelike meta-loop
+(`.claude/plans/roguelike-metaloop-master-plan.md`), after M-FX and M-R1. Plan:
+`.claude/plans/clever-sparking-gem.md`. Built on Opus per the model-switch convention (a
+new core mechanic — a global clock + night state machine + a lighting layer). The
+survival-time layer later milestones hang off (M-SB sleep-to-dawn, M-FA reads in-game time).
+
+- **`src/systems/DayNight.ts`** (new, framework-free like `Run`/`Health`/`Buffs`) — the
+  clock. **10 min day + 5 min night** (15-min cycle, run starts at dawn), ticked with
+  `delta` from `MainScene.update()` so it freezes exactly when the run does. `phase()`/
+  `isNight()`/`dayNumber()`, `enemySpeedMultiplier()` (binary: 1 by day, **1.15** at night),
+  and `nightIntensity01()` (0 in full day, ramps 0→1 over a 20s dusk window, 1 through deep
+  night, 1→0 at dawn — drives the tint alpha only). Verified live: the four phase samples +
+  the dusk/dawn ramp all compute exactly (midday 0, dusk-mid 0.5, deep night 1, dawn 0.25).
+- **Night enemy speed (locked: slightly faster, no damage buff)** — new public
+  `Enemy.envSpeedMult` (default 1), assigned each frame in `updateEnemies()` from
+  `dayNight.enemySpeedMultiplier()` and multiplied into every aggressive-movement velocity
+  (base `Enemy` chase, `RangedGremlin` kite/pursue, `MeleeGremling` chase, `Snake`
+  strike/flee — idle *wander* deliberately left at base speed). **GremlinKing is exempt with
+  zero special-casing** — its overridden `update()` never reads the field. Verified live: a
+  chasing Boar's body speed went 60 (day) → 69 (night), exactly ×1.15.
+- **Nightfall surge + dawn cleanup (locked bound against density creep)** — at each
+  day→night edge `spawnNightBatch()` drops ~6 normal enemies (2 Boar / 2 Snake / 2 Gremlin)
+  into still-fogged cells in a 500–850px ring around the player (new
+  `pickNightSpawnPoint()`, biased to `!fog.isRevealed()` non-creek cells; new `Fog.isRevealed()`),
+  tracked in `nightSpawns`. At the night→day edge `cleanupNightSpawns()` destroys any tracked
+  spawn that **never aggro'd and is off-screen**, so density returns to baseline every
+  morning and can't creep upward over a long run; ones that engaged (or are on-screen) stay
+  and fold into the roster. `Enemy.isAggro()` promoted `protected`→`public` for the filter.
+  Surge only fires while alive; both edges run from a shared `updateDayNight()` called in the
+  alive *and* dead branches of `update()`. Verified live: forcing the edge grew the roster by
+  6 (all 6 in fogged cells, 560–850px out); forcing dawn with 5 idle+off-screen removed
+  exactly those 5 and kept the 1 chasing one.
+- **Torch lighting (added this pass, user request)** — the night visual is a light-**mask**,
+  not a flat tint. `src/ui/NightOverlayUI.ts` (new) is a full-screen `RenderTexture` filled
+  with dark blue at `nightIntensity01() × 0.42`, from which soft radial light circles are
+  *erased* (new `light_soft` canvas-gradient texture in `BootScene`). Lights: the player
+  when a **Torch** is the held hotbar item (`equippedLightRadius`, data-driven per item in
+  `LIGHT_RADIUS_BY_ITEM` so a future Lantern just adds a row — torch 180px), plus each
+  on-screen **Gremlin Shack / Boss Altar** (150px). Torch is now **non-stackable**
+  (`maxStack: 1`). `collectLights()` computes screen-space holes (camera zoom 1). Depth ~2700
+  sits above the world but below the minimap/HUD, so only the world dims. Verified live:
+  torch equipped → one player light at screen-center r180 (0 when deselected); camera on a
+  shack → 3 POI lights r150; screenshot shows a clean readable light pool on the player in a
+  dimmed world.
+- **HUD/minimap** — `RunHudUI` prefixes `[Day N]`/`[Night]`; `MinimapUI.setNightIntensity()`
+  fades a light dark-blue overlay over the minimap panel (below the player marker).
+- **Reset** — `create()` resets `dayNight`/`wasNight`/`nightSpawns`/`equippedLightRadius` per
+  the standing `scene.restart()`-doesn't-re-run-field-initializers gotcha (M-R1's freeze
+  bug). Verified: New Run → clock back to dawn, no carried-over night state.
+
+**Verified** — `tsc --noEmit` clean; live `preview_eval` for every bullet above;
+`preview_screenshot` of the torch-lit night; `preview_console_logs` clean. Next per the
+locked build order: **M-SB (Sleep/Bed)**.
+
+### Previously: M-R1 playtest fixes — New Run freeze, Clear Scores, boss tuning
 
 First real playtest of M-R1 (14:17 run, max spear + max Gremlin armor, 6 elite kills, 1
 boss kill at player level 5, score 3170) surfaced a real bug plus balance feedback. Built

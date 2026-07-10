@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import { formatDuration, type Run } from "../systems/Run";
+import type { DayNight } from "../systems/DayNight";
 
 // Live run readout (M-R1) — a compact clock + running score, anchored top-left.
 // Depth sits in the fixed-HUD band (must clear WORLD_H so world sprites near
@@ -26,10 +27,14 @@ export class RunHudUI {
       .setDepth(DEPTH);
   }
 
-  update(run: Run): void {
+  update(run: Run, dayNight?: DayNight): void {
     const clock = formatDuration(run.elapsedMs);
+    // Day/night phase prefix (M-DN) — "Day N" during daylight, "Night" once the
+    // sun's down. Minimized view keeps just the phase tag + clock.
+    const phase = dayNight ? (dayNight.isNight() ? "Night" : `Day ${dayNight.dayNumber()}`) : "";
+    const tag = phase ? `[${phase}] ` : "";
     this.text.setText(
-      this.minimized ? `T ${clock}` : `T ${clock}    Score ${run.score()}`,
+      this.minimized ? `${tag}T ${clock}` : `${tag}T ${clock}    Score ${run.score()}`,
     );
   }
 

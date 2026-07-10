@@ -185,14 +185,14 @@ export class RangedGremlin extends Enemy {
 
     if (!holdingStill && dist < RANGED_MIN_KITE_DIST) {
       const awayAngle = Phaser.Math.Angle.Between(playerX, playerY, this.x, this.y);
-      const vx = Math.cos(awayAngle) * KITE_SPEED * this.speedMult;
-      const vy = Math.sin(awayAngle) * KITE_SPEED * this.speedMult;
+      const vx = Math.cos(awayAngle) * KITE_SPEED * this.speedMult * this.envSpeedMult;
+      const vy = Math.sin(awayAngle) * KITE_SPEED * this.speedMult * this.envSpeedMult;
       body.setVelocity(vx, vy);
       this.applyFacing(vx, vy);
     } else if (!holdingStill && dist > PROJECTILE_MAX_RANGE) {
       const towardAngle = Phaser.Math.Angle.Between(this.x, this.y, playerX, playerY);
-      const vx = Math.cos(towardAngle) * RANGED_PURSUE_SPEED * this.speedMult;
-      const vy = Math.sin(towardAngle) * RANGED_PURSUE_SPEED * this.speedMult;
+      const vx = Math.cos(towardAngle) * RANGED_PURSUE_SPEED * this.speedMult * this.envSpeedMult;
+      const vy = Math.sin(towardAngle) * RANGED_PURSUE_SPEED * this.speedMult * this.envSpeedMult;
       body.setVelocity(vx, vy);
       this.applyFacing(vx, vy);
     } else {
@@ -273,7 +273,7 @@ export class RangedGremlin extends Enemy {
     return depleted;
   }
 
-  protected isAggro(): boolean {
+  isAggro(): boolean {
     return this.mode !== "idle";
   }
 }
@@ -367,8 +367,8 @@ export class MeleeGremling extends Enemy {
         return false;
       }
       const angle = Phaser.Math.Angle.Between(this.x, this.y, playerX, playerY);
-      const vx = Math.cos(angle) * MELEE_CHASE_SPEED * this.speedMult;
-      const vy = Math.sin(angle) * MELEE_CHASE_SPEED * this.speedMult;
+      const vx = Math.cos(angle) * MELEE_CHASE_SPEED * this.speedMult * this.envSpeedMult;
+      const vy = Math.sin(angle) * MELEE_CHASE_SPEED * this.speedMult * this.envSpeedMult;
       body.setVelocity(vx, vy);
       this.applyFacing(vx, vy);
       return false;
@@ -403,7 +403,7 @@ export class MeleeGremling extends Enemy {
     return false;
   }
 
-  protected isAggro(): boolean {
+  isAggro(): boolean {
     return this.mode === "chasing";
   }
 }

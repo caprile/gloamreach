@@ -146,7 +146,7 @@ export class GremlinKing extends Enemy {
     this.poiseBarFill.setScale(Math.max(0, this.poise / BOSS_MAX_POISE), 1);
   }
 
-  protected isAggro(): boolean {
+  isAggro(): boolean {
     return this.aggroed;
   }
 

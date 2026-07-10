@@ -72,6 +72,13 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   // multiply their chase/pursue/kite speeds by it in update(). Base value keeps
   // every ordinary enemy identical.
   protected speedMult = 1;
+  // Environmental movement multiplier, set each frame by MainScene (1 by day,
+  // NIGHT_ENEMY_SPEED_MULT at night — M-DN). Public so the scene can assign it
+  // without threading it through update()'s signature. Multiplied alongside
+  // speedMult into aggressive-movement velocities (chase/pursue/kite/strike);
+  // idle wander is deliberately left at base speed. GremlinKing's overridden
+  // update() ignores it, so the boss stays exempt from the night speed buff.
+  envSpeedMult = 1;
 
   // Thin world-space HP bar (no number, just a bar) — separate GameObjects
   // rather than a Container, gone glued to position every frame via
@@ -131,8 +138,9 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   // Whether the HP bar should be shown right now — only while actively
   // aggro'd on the player, not at rest. Base default matches Boar's own
   // state field; Snake overrides this since it tracks aggro via its own
-  // hidden/striking/fleeing mode instead of the shared `state` field.
-  protected isAggro(): boolean {
+  // hidden/striking/fleeing mode instead of the shared `state` field. Public
+  // so MainScene's M-DN dawn-cleanup can spare a night-spawn that engaged.
+  isAggro(): boolean {
     return this.state === "chasing";
   }
 
@@ -224,8 +232,9 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
       // ground-truth stuck-detection/escape-heading heuristic that used to
       // live here is gone, see STATUS.md history).
       const directAngle = Phaser.Math.Angle.Between(this.x, this.y, playerX, playerY);
-      const vx = Math.cos(directAngle) * CHASE_SPEED;
-      const vy = Math.sin(directAngle) * CHASE_SPEED;
+      const chaseSpeed = CHASE_SPEED * this.speedMult * this.envSpeedMult;
+      const vx = Math.cos(directAngle) * chaseSpeed;
+      const vy = Math.sin(directAngle) * chaseSpeed;
       body.setVelocity(vx, vy);
       this.applyFacing(vx, vy);
       return false;

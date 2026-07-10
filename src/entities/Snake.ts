@@ -91,8 +91,8 @@ export class Snake extends Enemy {
         return false;
       }
       const angle = Phaser.Math.Angle.Between(this.x, this.y, playerX, playerY);
-      const vx = Math.cos(angle) * STRIKE_SPEED;
-      const vy = Math.sin(angle) * STRIKE_SPEED;
+      const vx = Math.cos(angle) * STRIKE_SPEED * this.envSpeedMult;
+      const vy = Math.sin(angle) * STRIKE_SPEED * this.envSpeedMult;
       body.setVelocity(vx, vy);
       this.applyFacing(vx, vy);
       return false;
@@ -115,8 +115,8 @@ export class Snake extends Enemy {
       return false;
     }
     const awayAngle = Phaser.Math.Angle.Between(playerX, playerY, this.x, this.y);
-    const vx = Math.cos(awayAngle) * FLEE_SPEED;
-    const vy = Math.sin(awayAngle) * FLEE_SPEED;
+    const vx = Math.cos(awayAngle) * FLEE_SPEED * this.envSpeedMult;
+    const vy = Math.sin(awayAngle) * FLEE_SPEED * this.envSpeedMult;
     body.setVelocity(vx, vy);
     this.applyFacing(vx, vy);
     return false;
@@ -145,7 +145,7 @@ export class Snake extends Enemy {
   // HP bar only shows once it's actually engaged (striking/fleeing), not
   // while sitting hidden — mirrors the base "only show when aggro'd" rule
   // via Snake's own mode instead of the shared `state` field.
-  protected isAggro(): boolean {
+  isAggro(): boolean {
     return this.mode !== "hidden";
   }
 

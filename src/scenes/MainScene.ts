@@ -98,6 +98,8 @@ import { clearHighScores, recordHighScore } from "../systems/HighScores";
 import type { ScoreEntry } from "../systems/HighScores";
 import { RunHudUI } from "../ui/RunHudUI";
 import { RunEndUI } from "../ui/RunEndUI";
+import { DayNight } from "../systems/DayNight";
+import { NightOverlayUI, type ScreenLight } from "../ui/NightOverlayUI";
 
 const HOTBAR_KEYS = ["ONE", "TWO", "THREE", "FOUR", "FIVE", "SIX", "SEVEN", "EIGHT", "NINE"];
 
@@ -138,6 +140,20 @@ const BLACKBERRY_REGROW_MS = 3 * 60 * 1000; // a picked bush regrows berries aft
 // this long so it doesn't instantly fly back into the inventory/station that
 // just released it. Manual click-pickup is unaffected.
 const DROPPED_ITEM_MAGNET_COOLDOWN_MS = 1500;
+
+// Night light sources (M-DN). A held item emits light of the given world-px
+// radius while it's the selected hotbar item; a future Lantern just adds a row.
+const LIGHT_RADIUS_BY_ITEM: Record<string, number> = {
+  torch: 180,
+};
+// Fixed light radius for a lit POI (Gremlin Shack, Boss Altar) at night.
+const POI_LIGHT_RADIUS = 150;
+// Nightfall surge (M-DN): how many extra enemies spawn in unexplored cells
+// around the player at each dusk, and the ring (world px) they appear in —
+// beyond the ~half-screen view so they arrive out in the dark, not on top of
+// the player. Culled at dawn unless they engaged (see cleanupNightSpawns).
+const NIGHT_SPAWN_RING_MIN = 500;
+const NIGHT_SPAWN_RING_MAX = 850;
 
 // Gremlin Shack chest loot — re-rolled per "empty cycle" (see
 // LootContainer.rollIfEmpty/rearmIfEmpty), not per guard-respawn. First-pass,
@@ -318,6 +334,18 @@ export class MainScene extends Phaser.Scene {
   private runEndUI!: RunEndUI;
   private runOver = false;
 
+  // Day/night cycle (M-DN). dayNight is the clock; nightOverlay the darkness +
+  // torch-light layer. wasNight tracks the previous frame's phase so the scene
+  // can fire the day->night surge and night->day cleanup on the exact edge.
+  // nightSpawns holds enemies added by a nightfall surge so they can be culled
+  // at dawn (density returns to baseline each morning). equippedLightRadius is
+  // the current held-light-source radius (Torch, future Lantern) in world px.
+  private dayNight!: DayNight;
+  private nightOverlay!: NightOverlayUI;
+  private wasNight = false;
+  private nightSpawns: Enemy[] = [];
+  private equippedLightRadius = 0;
+
   // Placement mode: crafting a placeable recipe (e.g. campfire) enters this
   // instead of landing in the backpack. A ghost preview follows the cursor,
   // clamped to PLACEMENT_RADIUS of the player; LMB commits (deducts cost,
@@ -358,6 +386,13 @@ export class MainScene extends Phaser.Scene {
     this.runOver = false;
     this.isDead = false;
     this.run = new Run();
+    // Day/night resets to dawn each run (M-DN). NightOverlayUI is a GameObject,
+    // rebuilt in createHud() on every create(), so only the plain-object clock
+    // + edge tracker + surge list need resetting here (scene.restart() gotcha).
+    this.dayNight = new DayNight();
+    this.wasNight = false;
+    this.nightSpawns = [];
+    this.equippedLightRadius = 0;
 
     this.nodes = [];
     this.obstacleNodes = [];
@@ -548,6 +583,9 @@ export class MainScene extends Phaser.Scene {
     this.fog = new FogOfWar(WORLD_W, WORLD_H, MINIMAP_W, MINIMAP_H);
     this.minimapUI = new MinimapUI(this, this.biome, this.fog);
     this.bossHealthUI = new BossHealthUI(this);
+    // Night darkness + torch-light layer (M-DN). Depth ~2700 sits above the
+    // world but below the minimap/HUD created around it, so only the world dims.
+    this.nightOverlay = new NightOverlayUI(this);
     this.runHudUI = new RunHudUI(this);
     this.runEndUI = new RunEndUI(this);
 
@@ -643,7 +681,8 @@ export class MainScene extends Phaser.Scene {
       // Frozen: no Player.update() (no input/movement), but ambient systems
       // keep running so the world doesn't visually freeze too.
       this.run.tick(delta);
-      this.runHudUI.update(this.run);
+      this.updateDayNight(delta);
+      this.runHudUI.update(this.run, this.dayNight);
       this.stamina.tick(delta);
       this.refreshStaminaBar();
       this.player.syncEquippedIconPosition();
@@ -677,7 +716,8 @@ export class MainScene extends Phaser.Scene {
       this.invulnerableUntil = this.time.now + DASH_IFRAME_MS;
     }
     this.run.tick(delta);
-    this.runHudUI.update(this.run);
+    this.updateDayNight(delta);
+    this.runHudUI.update(this.run, this.dayNight);
     this.stamina.tick(delta);
     this.refreshStaminaBar();
     // Food buffs heal over time; refresh the HP bar only when they actually
@@ -697,6 +737,133 @@ export class MainScene extends Phaser.Scene {
     this.updateAltarDiscovery();
     this.bossHealthUI.update(this.gremlinKing);
     this.updateCraftingMenuWorkbenchProximity();
+  }
+
+  // Advance the day/night clock and drive its effects (M-DN): fade the world
+  // darkness + torch lights, dim the minimap, and fire the day<->night edge
+  // events (nightfall surge / dawn cleanup). Called from both the alive and
+  // dead branches of update(), so time keeps flowing while dead but a surge
+  // only spawns while alive.
+  private updateDayNight(delta: number): void {
+    this.dayNight.tick(delta);
+    this.nightOverlay.render(this.dayNight.nightIntensity01(), this.collectLights());
+    this.minimapUI.setNightIntensity(this.dayNight.nightIntensity01());
+
+    const isNight = this.dayNight.isNight();
+    if (isNight && !this.wasNight && !this.isDead) {
+      this.spawnNightBatch();
+    } else if (!isNight && this.wasNight) {
+      this.cleanupNightSpawns();
+    }
+    this.wasNight = isNight;
+  }
+
+  // Screen-space light holes for the night overlay: the player (only while a
+  // light item is held) plus any on-screen lit POI (Gremlin Shacks, Boss
+  // Altar). World -> screen is a plain scroll subtract since the camera zoom
+  // is 1. Off-screen POIs are skipped so the erase list stays short.
+  private collectLights(): ScreenLight[] {
+    const lights: ScreenLight[] = [];
+    const cam = this.cameras.main;
+    const toScreen = (wx: number, wy: number) => ({ x: wx - cam.scrollX, y: wy - cam.scrollY });
+    if (this.equippedLightRadius > 0) {
+      const p = toScreen(this.player.x, this.player.y);
+      lights.push({ x: p.x, y: p.y, radius: this.equippedLightRadius });
+    }
+    const margin = POI_LIGHT_RADIUS;
+    const onScreen = (wx: number, wy: number) =>
+      wx >= cam.scrollX - margin &&
+      wx <= cam.scrollX + cam.width + margin &&
+      wy >= cam.scrollY - margin &&
+      wy <= cam.scrollY + cam.height + margin;
+    for (const shack of this.gremlinShacks) {
+      if (!onScreen(shack.x, shack.y)) continue;
+      const s = toScreen(shack.x, shack.y);
+      lights.push({ x: s.x, y: s.y, radius: POI_LIGHT_RADIUS });
+    }
+    for (const altar of this.bossAltars) {
+      if (!onScreen(altar.x, altar.y)) continue;
+      const s = toScreen(altar.x, altar.y);
+      lights.push({ x: s.x, y: s.y, radius: POI_LIGHT_RADIUS });
+    }
+    return lights;
+  }
+
+  // Nightfall surge (M-DN): drop a small mix of normal enemies into still-
+  // unexplored cells around the player. Tracked in nightSpawns so dawn can cull
+  // any that never engaged — density returns to baseline each morning.
+  private spawnNightBatch(): void {
+    const rng = this.sessionRng();
+    const spawn = (make: (x: number, y: number) => Enemy) => {
+      const { x, y } = this.pickNightSpawnPoint(rng);
+      const enemy = make(x, y);
+      this.enemies.push(enemy);
+      this.enemyGroup.add(enemy);
+      this.nightSpawns.push(enemy);
+    };
+    // First-pass mix (~6): 2 Boar, 2 Snake, 2 Gremlin — all normal (non-elite).
+    for (let i = 0; i < 2; i++) {
+      spawn((x, y) =>
+        new Enemy(this, {
+          x,
+          y,
+          texture: "boar",
+          displayName: "Boar",
+          loot: [
+            { resource: "boar_meat", min: 1, max: 1 },
+            { resource: "bones", min: 1, max: 1 },
+          ],
+          maxHealth: 20,
+          biteDamage: 25,
+        }),
+      );
+    }
+    for (let i = 0; i < 2; i++) spawn((x, y) => new Snake(this, { x, y }));
+    for (let i = 0; i < 2; i++) spawn((x, y) => new RangedGremlin(this, { x, y }));
+    this.eventLog.add("info", "Night falls — the forest stirs...");
+  }
+
+  // At dawn, remove any night-spawn that never aggro'd and is off-screen. Ones
+  // that engaged the player (or are still near/visible) stay and simply drop
+  // out of nightSpawns tracking (now permanent roster). This is what keeps a
+  // long multi-night run from accumulating ever-denser enemies.
+  private cleanupNightSpawns(): void {
+    const cam = this.cameras.main;
+    const margin = 80;
+    const onScreen = (e: Enemy) =>
+      e.x >= cam.scrollX - margin &&
+      e.x <= cam.scrollX + cam.width + margin &&
+      e.y >= cam.scrollY - margin &&
+      e.y <= cam.scrollY + cam.height + margin;
+    for (const enemy of this.nightSpawns) {
+      if (enemy.depleted) continue; // already killed
+      if (enemy.isAggro() || onScreen(enemy)) continue; // engaged/visible — keep it
+      const idx = this.enemies.indexOf(enemy);
+      if (idx >= 0) this.enemies.splice(idx, 1);
+      this.enemyGroup.remove(enemy);
+      enemy.destroy();
+    }
+    this.nightSpawns = [];
+  }
+
+  // Ring around the player, biased to still-fogged (unexplored) non-creek
+  // cells so a surge appears out in the dark rather than in already-cleared
+  // ground. Falls back to any in-bounds ring point after the attempt cap.
+  private pickNightSpawnPoint(rng: Phaser.Math.RandomDataGenerator): { x: number; y: number } {
+    let last = { x: this.player.x, y: this.player.y };
+    for (let attempt = 0; attempt < 60; attempt++) {
+      const angle = rng.rotation();
+      const r = rng.between(NIGHT_SPAWN_RING_MIN, NIGHT_SPAWN_RING_MAX);
+      const x = Phaser.Math.Clamp(this.player.x + Math.cos(angle) * r, 60, WORLD_W - 60);
+      const y = Phaser.Math.Clamp(this.player.y + Math.sin(angle) * r, 60, WORLD_H - 60);
+      last = { x, y };
+      if (this.biome.isCreekAt(x, y)) continue;
+      // Prefer unexplored cells for the first two-thirds of attempts, then
+      // accept any valid ring point so a well-explored area still gets a surge.
+      if (attempt < 40 && this.fog.isRevealed(x, y)) continue;
+      return { x, y };
+    }
+    return last;
   }
 
   // While the crafting menu is open, re-render it the instant Workbench
@@ -833,6 +1000,10 @@ export class MainScene extends Phaser.Scene {
     this.equippedWeaponTier = def?.weapon ? stack?.tier ?? 0 : 0;
     const iconTexture = def && (def.tool || def.weapon) ? def.texture : null;
     this.player.setEquippedIcon(iconTexture);
+    // Held light source (M-DN) — a Torch (future Lantern) casts light around
+    // the player at night. Data-driven per item key so a bigger-radius upgrade
+    // just adds a row here. 0 = no light emitted.
+    this.equippedLightRadius = stack ? (LIGHT_RADIUS_BY_ITEM[stack.key] ?? 0) : 0;
     this.hotbarUI.refresh();
     this.refreshHud();
   }
@@ -2453,7 +2624,12 @@ export class MainScene extends Phaser.Scene {
   // that lands to the player's Health.
   private updateEnemies(delta: number): void {
     const now = this.time.now;
+    // Slight enemy speed bump at night (M-DN) — assigned each frame so
+    // night-spawned enemies pick it up too. The GremlinKing's overridden
+    // update() ignores envSpeedMult, so the boss is exempt with no branch here.
+    const envSpeedMult = this.dayNight.enemySpeedMultiplier();
     for (const enemy of this.enemies) {
+      enemy.envSpeedMult = envSpeedMult;
       const bit = enemy.update(delta, this.player.x, this.player.y, now);
       if (bit) this.applyDamageToPlayer(enemy.biteDamage);
       // Gremlin King's melee/AoE kit deals area damage, not a single-point
