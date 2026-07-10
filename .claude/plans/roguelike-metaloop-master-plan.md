@@ -112,7 +112,7 @@ around a safe center, with **danger scaling by radius**.
 - Feeds: M-R1 (depth = radius for scoring), M-FA (biome-discovery events), M-DN
   (unexplored-area density).
 
-### M-R1 — Run + Score + Hardcore death (L, Opus) — the run container
+### M-R1 — Run + Score + Hardcore death (L, Opus) — the run container — **SHIPPED** 2026-07-10
 
 The heart of the meta-loop. A **Run** object owns: seed, elapsed time, per-biome stats,
 running score, and run state (active / ended).
@@ -202,7 +202,11 @@ Promote the lone Boss Altar to a **larger POI** — a walled gremlin war camp.
 Get the roguelike loop *playable and fun* on the current single biome ASAP (project's
 incremental ethos), then expand the world under it:
 1. **M-FX** (quick warm-up, Sonnet) — **shipped**.
-2. **M-R1** on the current map, with Gremlin King as the temporary "final boss" (Opus).
+2. **M-R1** on the current map, with Gremlin King as the temporary "final boss" (Opus) —
+   **shipped** 2026-07-10 (detailed plan: `.claude/plans/rustling-weaving-lovelace.md`;
+   see `STATUS.md`). Seed is display-only for now (deterministic world-gen deferred to
+   M-W1); score = flat kill points + completion-bonus × speed multiplier; hardcore
+   permadeath ends the run; first `localStorage` high-score table.
 3. **M-DN** → **M-SB** (survival-time layer).
 4. **M-FA** (speed payoff).
 5. **M-RL** (relics — the replayability hook).

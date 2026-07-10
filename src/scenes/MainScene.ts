@@ -93,8 +93,18 @@ import { KeybindsUI } from "../ui/KeybindsUI";
 import { MinimapUI, PANEL_W as MINIMAP_W, PANEL_H as MINIMAP_H, MARGIN as MINIMAP_MARGIN } from "../ui/MinimapUI";
 import { BossHealthUI } from "../ui/BossHealthUI";
 import { FogOfWar, REVEAL_RADIUS } from "../systems/Fog";
+import { Run, type RunOutcome, type KillCategory } from "../systems/Run";
+import { recordHighScore } from "../systems/HighScores";
+import { RunHudUI } from "../ui/RunHudUI";
+import { RunEndUI } from "../ui/RunEndUI";
 
 const HOTBAR_KEYS = ["ONE", "TWO", "THREE", "FOUR", "FIVE", "SIX", "SEVEN", "EIGHT", "NINE"];
+
+// Hardcore: one life. Death ends the run and posts a score instead of
+// respawning (M-R1, roguelike meta-loop). Flipping this false restores the
+// legacy respawn-at-center path (respawnPlayer) — the documented future
+// "easy-mode" hook; nothing wires it to a toggle yet.
+const HARDCORE = true;
 
 const TILE = 32;
 // Bumped 80x60 -> 112x84 tiles (~2x area) per playtest feedback: the old map
@@ -300,6 +310,13 @@ export class MainScene extends Phaser.Scene {
   private readonly RESPAWN_DELAY_MS = 2000;
   private readonly POST_RESPAWN_INVULN_MS = 1500;
 
+  // Run/score meta-loop (M-R1). `run` tracks elapsed time + kills + score;
+  // `runOver` freezes the world once the run-end screen is up.
+  private run!: Run;
+  private runHudUI!: RunHudUI;
+  private runEndUI!: RunEndUI;
+  private runOver = false;
+
   // Placement mode: crafting a placeable recipe (e.g. campfire) enters this
   // instead of landing in the backpack. A ghost preview follows the cursor,
   // clamped to PLACEMENT_RADIUS of the player; LMB commits (deducts cost,
@@ -328,6 +345,13 @@ export class MainScene extends Phaser.Scene {
   }
 
   create(): void {
+    // Reset per-run state up front — scene.restart() (New Run) re-runs create()
+    // on the same instance, so boolean field initializers don't re-fire; reset
+    // them explicitly or a fresh run would start frozen/dead.
+    this.runOver = false;
+    this.isDead = false;
+    this.run = new Run();
+
     // Procedural biome layout — must exist before spawning so nodes/enemies
     // can query zone type for placement. Seeded randomly per session (not a
     // fixed string) so the world differs every run.
@@ -465,6 +489,8 @@ export class MainScene extends Phaser.Scene {
     this.fog = new FogOfWar(WORLD_W, WORLD_H, MINIMAP_W, MINIMAP_H);
     this.minimapUI = new MinimapUI(this, this.biome, this.fog);
     this.bossHealthUI = new BossHealthUI(this);
+    this.runHudUI = new RunHudUI(this);
+    this.runEndUI = new RunEndUI(this);
 
     // Scene-level drag: a slot starts it, the pointer drags a ghost icon, and
     // release resolves the move against whichever container is under the
@@ -518,6 +544,7 @@ export class MainScene extends Phaser.Scene {
     this.input.keyboard!.on("keydown-K", () => this.characterMenu.toggle());
     this.input.keyboard!.on("keydown-R", () => this.takeAllFromChest());
     this.input.keyboard!.on("keydown-H", () => this.toggleWheelSpansBothRows());
+    this.input.keyboard!.on("keydown-J", () => this.runHudUI.toggleMinimized());
 
     // Skill level-ups: announce, feed the overall Player Level the same XP the
     // skill level cost (Progression.ts), and re-run recipe discovery/crafting
@@ -549,9 +576,15 @@ export class MainScene extends Phaser.Scene {
   }
 
   update(_time: number, delta: number): void {
+    // Run ended (death/win screen up) — freeze the whole world sim + input. The
+    // RunEndUI is tween/pointer-driven, so it stays live regardless.
+    if (this.runOver) return;
+
     if (this.isDead) {
       // Frozen: no Player.update() (no input/movement), but ambient systems
       // keep running so the world doesn't visually freeze too.
+      this.run.tick(delta);
+      this.runHudUI.update(this.run);
       this.stamina.tick(delta);
       this.refreshStaminaBar();
       this.player.syncEquippedIconPosition();
@@ -584,6 +617,8 @@ export class MainScene extends Phaser.Scene {
       this.stamina.spend(DASH_STAMINA_COST);
       this.invulnerableUntil = this.time.now + DASH_IFRAME_MS;
     }
+    this.run.tick(delta);
+    this.runHudUI.update(this.run);
     this.stamina.tick(delta);
     this.refreshStaminaBar();
     // Food buffs heal over time; refresh the HP bar only when they actually
@@ -2315,6 +2350,21 @@ export class MainScene extends Phaser.Scene {
     this.eventLog.add("combat", `Defeated ${enemy.displayName}`);
     this.hoveredEnemy = null;
     this.promptText.setVisible(false);
+
+    // Run/score tracking. Killing the final boss (Gremlin King, for now) wins
+    // the run — end it after a short beat so the death feedback plays first.
+    this.run.recordKill(this.classifyKill(enemy));
+    if (enemy instanceof GremlinKing) {
+      this.time.delayedCall(1200, () => this.endRun("won"));
+    }
+  }
+
+  // Kill category for run scoring: the final boss, an elite variant, or a plain
+  // enemy. Kept here (not on Enemy) since it's a scoring concern, not behavior.
+  private classifyKill(enemy: Enemy): KillCategory {
+    if (enemy instanceof GremlinKing) return "boss";
+    if (enemy.elite) return "elite";
+    return "normal";
   }
 
   // Floating combat-text on a successful hit. Plain white for now — once dmg
@@ -2429,7 +2479,39 @@ export class MainScene extends Phaser.Scene {
     this.buffs.clear();
     this.buffBarUI.sync(this.buffs.active());
     this.eventLog.add("combat", "You died...");
-    this.time.delayedCall(this.RESPAWN_DELAY_MS, () => this.respawnPlayer());
+    // Hardcore: death is terminal — end the run and post the score after a
+    // beat. Non-hardcore keeps the legacy respawn (documented easy-mode hook).
+    if (HARDCORE) {
+      this.time.delayedCall(this.RESPAWN_DELAY_MS, () => this.endRun("died"));
+    } else {
+      this.time.delayedCall(this.RESPAWN_DELAY_MS, () => this.respawnPlayer());
+    }
+  }
+
+  // Finalize the run: freeze the world, post the score to the localStorage
+  // high-score table, and show the run-end screen. Guarded so a death during
+  // the post-win delay (or vice versa) can't double-post.
+  private endRun(outcome: RunOutcome): void {
+    if (this.runOver) return;
+    this.run.end(outcome);
+    this.runOver = true;
+    this.player.setVelocity(0, 0);
+    const { entries, rank } = recordHighScore({
+      score: this.run.score(),
+      outcome,
+      seed: this.run.seed,
+      elapsedMs: this.run.elapsedMs,
+      kills: this.run.kills,
+      level: this.progression.level,
+      dateISO: new Date().toISOString(),
+    });
+    this.runEndUI.show({
+      run: this.run,
+      level: this.progression.level,
+      entries,
+      rank,
+      onNewRun: () => this.scene.restart(),
+    });
   }
 
   private respawnPlayer(): void {
@@ -3342,6 +3424,7 @@ export class MainScene extends Phaser.Scene {
         "Station row: Alt+1-9",
         "Row2 scroll toggle: H",
         "Take all (chest): R",
+        "Run info toggle: J",
       ],
     );
 

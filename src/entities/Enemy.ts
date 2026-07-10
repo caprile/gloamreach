@@ -56,6 +56,9 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   readonly maxHealth: number;
   health: number;
   depleted = false;
+  // Elite variant flag (default false). Set by elite Gremlin/Gremling
+  // constructors; read for run-score kill classification (see Run.ts).
+  elite = false;
   state: EnemyState = "idle";
   private lastBiteAt = -Infinity;
   private wanderTarget: { x: number; y: number } | null = null;

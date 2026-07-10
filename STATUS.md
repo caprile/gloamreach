@@ -2,7 +2,65 @@
 
 Last updated: 2026-07-10
 
-### Just finished: M-FX — roguelike-batch warm-up fixes (fractional damage, chest re-arm, stat-panel recolor)
+### Just finished: M-R1 — Run + Score + Hardcore Death
+
+Second milestone of the roguelike run/score meta-loop
+(`.claude/plans/roguelike-metaloop-master-plan.md`; detailed plan:
+`.claude/plans/rustling-weaving-lovelace.md`), built on Opus per the model-switch
+convention (new core mechanic). The run container the whole meta-loop hangs off:
+a seed-stamped run with a live clock + score, hardcore permadeath, a boss-kill win
+condition, and the game's **first localStorage save** (high-score table only).
+
+- **`src/systems/Run.ts`** (new, framework-free like `Health`/`Buffs`) — owns a
+  display-only `seed`, ticked `elapsedMs`, a kill tally (`normal`/`elite`/`boss`), and a
+  pure `score()`. **Score formula (first-pass, all tunable):** flat kill points
+  (`normal 10 / elite 30 / boss 500`) + a **completion bonus** (`2000`, win only) scaled
+  by a **speed multiplier** (`clamp(10min / elapsedMs, 1, 3)`) applied to the bonus only.
+  So a fast final-boss kill (mult ×3) dominates a slow full-clear, and grinding kills
+  (flat) can't out-scale it — the master plan's core scoring constraint. Death score =
+  kill points only; win score = `round(2000 × speedMult + killPoints)`.
+- **Seed is display-only for now** (locked): generated + shown + recorded per run, but
+  "New Run" just `scene.restart()`s with fresh RNG. True deterministic world-gen from a
+  seed is deferred to M-W1 (which reworks world-gen anyway) — avoids refactoring every
+  existing `Phaser.Math.Between` spawn/loot call.
+- **`src/systems/HighScores.ts`** (new — first `localStorage` use anywhere) —
+  `loadHighScores()` / `recordHighScore()`, key `survivor-rpg:highscores:v1`, sorted desc,
+  capped at 20, tolerant of a missing/corrupt store (returns `[]` on any parse error).
+  Returns the just-posted entry's 1-based rank for highlighting.
+- **Hardcore death** (`HARDCORE = true` const, MainScene) — `onPlayerDeath()` now ends the
+  run instead of respawning (after the existing ~2s death beat). The legacy
+  `respawnPlayer()` path stays live behind the flag — the documented future "easy-mode"
+  hook (master plan decision 3); nothing toggles it yet.
+- **Win** — `tryAttackEnemy()`'s kill path classifies the kill (`GremlinKing` → boss, the
+  `Enemy.elite` flag → elite, else normal) into `run.recordKill()`; a `GremlinKing` kill
+  fires `endRun("won")` after a 1.2s beat so the death feedback plays first. (`elite` is
+  now a readable field on `Enemy`, set by the two elite Gremlin constructors.)
+- **`endRun(outcome)`** — freezes the world (a new `runOver` guard early-returns from
+  `update()`), posts the `ScoreEntry`, and shows the run-end screen. Guarded against
+  double-posting (e.g. dying during the post-win delay). `create()` now explicitly resets
+  `runOver`/`isDead` and builds a fresh `Run`, since `scene.restart()` re-runs `create()`
+  without re-firing boolean field initializers.
+- **`src/ui/RunEndUI.ts`** (new, modeled on `CharacterMenu`'s flat-GameObject /
+  `scrollFactor(0)` pattern, depth 3500-3502 above every in-game menu) — full-screen
+  scrim + panel: **VICTORY!** (green) / **YOU DIED** (red) title — the one sanctioned
+  red/green use per the reserve-red/green convention — final score, a breakdown block
+  (time, kills, elite/boss, level, kill points, and on a win the completion bonus + speed
+  mult), a top-5 high-score table (this run's row highlighted), and a **New Run** button
+  (`scene.restart()`).
+- **`src/ui/RunHudUI.ts`** (new, fixed-HUD depth 2820, top-left) — live run clock + score,
+  minimizable to just the clock via **J** (new keybind, added to the Keybinds panel).
+  KeybindsUI's panel nudged down (`PANEL_Y` 10→44) to clear it; EventLogUI follows
+  automatically (anchored to the panel's top).
+
+**Verified** — `tsc --noEmit` clean; live `preview_eval`: kill-point math exact
+(`2×10 + 30 = 50`), forced death → `runOver`, YOU DIED screen (screenshotted), score
+posted to `localStorage`; forced win → VICTORY! (only title in the display list),
+fast-win score `510 + 2000×3 = 6510` exact, slow-win speed mult clamps to 1; New Run →
+fresh run (kills 0, new seed, unfrozen) with scores persisted; HUD toggle collapses to
+clock-only. No console errors. (Screenshots of the win screen were blocked by the known
+paused-render-loop quirk — the live display list was authoritative instead.)
+
+### Previously: M-FX — roguelike-batch warm-up fixes (fractional damage, chest re-arm, stat-panel recolor)
 
 First milestone of the new roguelike run/score meta-loop plan
 (`.claude/plans/roguelike-metaloop-master-plan.md`) — three small, independent fixes

@@ -1,7 +1,9 @@
 import Phaser from "phaser";
 
 const PANEL_X = 12;
-const PANEL_Y = 10;
+// Nudged down from 10 to clear the top-left run HUD clock/score (RunHudUI,
+// M-R1). EventLogUI anchors to this panel's top, so it follows automatically.
+const PANEL_Y = 44;
 const PANEL_W = 260;
 const HEADER_H = 22;
 const LINE_H = 18;

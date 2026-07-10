@@ -96,6 +96,8 @@ get their own file under `src/systems/` or `src/entities/`, not bolted onto `Mai
 - **Scroll-wheel-spans-both-rows toggle:** **H** — mouse wheel cycles hotbar selection
   across both rows by default; toggling `H` restricts it to looping within whichever
   row is currently selected.
+- **Run info (clock + score) minimize toggle:** **J** — collapses the top-left run HUD
+  to just the clock (hiding the live score) and back.
 - **Take all (open chest only):** **R** — moves everything from an open chest into the
   backpack in one go, auto-stacking onto matching backpack stacks first.
 - **Quick-move alias:** **Ctrl+Left-Click** on any inventory/hotbar/chest/drying-rack
@@ -557,6 +559,35 @@ mouse-driven only. Don't reintroduce a keybind for this without being asked. Spa
    re-roll before the 6-min respawn timer, previously possible); the Character menu's
    Stats tab dropped its green "Unspent points"/`[+]`/"MAX" coloring for neutral amber
    — green/red are reserved for future buff/debuff markers, not plain UI state.
+5h. **M-R1 (Run + Score + Hardcore Death)** — plan:
+   `.claude/plans/rustling-weaving-lovelace.md` (second milestone of the roguelike
+   meta-loop umbrella, first *new mechanic* of it — built on Opus). The **run container**
+   the whole meta-loop hangs off. `src/systems/Run.ts` (framework-free like
+   `Health`/`Buffs`) owns a display-only `seed`, a ticked `elapsedMs`, a kill tally
+   (`normal`/`elite`/`boss`), and a pure `score()`: flat kill points (`10`/`30`/`500`) +
+   a `2000` **completion bonus** (win only) scaled by a **speed multiplier**
+   (`clamp(10min/elapsedMs, 1, 3)`, applied to the bonus only) — so a fast final-boss kill
+   (×3) beats a slow full-clear and grinding flat kills can't out-scale it (the master
+   plan's core scoring constraint). **Seed is display-only for now** (locked): shown +
+   recorded per run, but "New Run" just `scene.restart()`s with fresh RNG — true
+   deterministic world-gen from a seed is deferred to **M-W1**. `src/systems/HighScores.ts`
+   is the game's **first `localStorage` use** (key `survivor-rpg:highscores:v1`, sorted
+   desc, capped 20, tolerant of a missing/corrupt store). **Hardcore death** (a `HARDCORE`
+   const) — `MainScene.onPlayerDeath()` ends the run instead of respawning; the legacy
+   `respawnPlayer()` path survives behind the flag as the documented future "easy-mode"
+   hook (nothing toggles it yet). **Win** = a `GremlinKing` kill in `tryAttackEnemy()`'s
+   kill path fires `endRun("won")` after a 1.2s beat; kills are classified via a new
+   readable `Enemy.elite` field + `instanceof GremlinKing`. `endRun()` freezes the world
+   (a `runOver` early-return guard in `update()`), posts the score, and shows
+   `src/ui/RunEndUI.ts` (full-screen modal modeled on `CharacterMenu`, depth 3500-3502;
+   **VICTORY!** green / **YOU DIED** red title — the one sanctioned red/green use per the
+   reserve-red/green convention — score breakdown, top-5 high-score table with this run's
+   row highlighted, and a **New Run** button). `create()` now explicitly resets
+   `runOver`/`isDead` + rebuilds the `Run` since `scene.restart()` re-runs `create()`
+   without re-firing field initializers. `src/ui/RunHudUI.ts` is a live top-left
+   clock+score readout (fixed-HUD depth 2820), minimizable to just the clock via **J**
+   (KeybindsUI's panel nudged down from `PANEL_Y` 10→44 to clear it; EventLogUI follows).
+   See `STATUS.md` for full detail + verification.
 
 **A new umbrella plan for the long-requested roguelike run/score meta-loop** now exists:
 `.claude/plans/roguelike-metaloop-master-plan.md` (drafted 2026-07-10, locked build order
@@ -564,8 +595,8 @@ confirmed by the user). It supersedes/finalizes several open questions in the **
 design notes** section below (portal concept dropped in favor of one giant circular world;
 hardcore one-life death instead of the tombstone-and-respawn model, for now) — see that
 plan file for the full locked-decision list before touching anything in items 6 (World &
-discovery) or 7 (ARPG loot). Locked build order: **M-FX (done, above) → M-R1 (Run/Score/
-Hardcore death) → M-DN (Day/Night) → M-SB (Sleep/Bed) → M-FA (Fresh Assault discovery
+discovery) or 7 (ARPG loot). Locked build order: **M-FX (done) → M-R1 (Run/Score/
+Hardcore death, done — see 5h) → M-DN (Day/Night, next) → M-SB (Sleep/Bed) → M-FA (Fresh Assault discovery
 timer) → M-RL (trophy → RNG relics) → M-WC (Gremlin War Camp) + M-TE (trophy-gated gear)
 → M-W1 (circular multi-biome world, last).**
 

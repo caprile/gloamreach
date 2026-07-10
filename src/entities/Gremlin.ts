@@ -98,6 +98,7 @@ export class RangedGremlin extends Enemy {
     this.spawnX = cfg.x;
     this.spawnY = cfg.y;
     if (elite) {
+      this.elite = true;
       this.speedMult = 1.1;
       this.setScale(1.4);
     }
@@ -331,6 +332,7 @@ export class MeleeGremling extends Enemy {
     });
     this.wanderAnchor = cfg.wanderAnchor ?? null;
     if (elite) {
+      this.elite = true;
       this.speedMult = 1.1;
       this.setScale(1.4);
     }
