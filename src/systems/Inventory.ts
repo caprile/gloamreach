@@ -27,4 +27,5 @@ export type ResourceType =
   | "blackberry"
   | "twine"
   | "gremlin_leather"
+  | "gremlin_trophy" // dropped by Elite Gremlins (Gremlin Shack guards); Gremlin Totem ingredient
   | "gremlin_king_fang"; // Gremlin King's guaranteed unique trophy drop

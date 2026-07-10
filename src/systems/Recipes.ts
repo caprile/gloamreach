@@ -169,8 +169,8 @@ export const RECIPES: Recipe[] = [
     description: "A grim totem bound with gremlin remains and dark bindings. Its purpose becomes clear at the Boss Altar's fire.",
     category: "misc",
     tier: 1,
-    costs: { gremlin_leather: 4, gremlin_guck: 3, bones: 8, twine: 4 },
-    requiredSkills: [{ skill: "light_armor", level: 3 }],
+    costs: { gremlin_trophy: 3, wood: 1, gremlin_guck: 1 },
+    requiredSkills: [],
     output: { kind: "item", itemId: "gremlin_totem", itemName: "Gremlin Totem" },
   },
 ];

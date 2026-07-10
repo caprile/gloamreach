@@ -460,9 +460,9 @@ mouse-driven only. Don't reintroduce a keybind for this without being asked. Spa
    place → gather → pick-up-and-replace loop that doesn't require the inventory. Per
    the user (locked via `AskUserQuestion`): Alt+1-9 selects row 2 directly; the scroll
    wheel spans both rows by default, togglable back to current-row-only with **H**.
-5e. **Second post-boss playtest batch, Groups A & B** — user locked the order via
-   `AskUserQuestion`: **Group A (shipped) → Group B (shipped) → Group C (Elites +
-   Trophy-gated Totem, not started)**.
+5e. **Second post-boss playtest batch, Groups A, B & C** — user locked the order via
+   `AskUserQuestion`: **Group A (shipped) → Group B (shipped) → Group C (shipped)**. All
+   three now done.
    - **Group A — quick fixes** (plan: `.claude/plans/delightful-tinkering-book.md`). Six
      small independent fixes: Running's passive sprint-XP rate bumped 10→20/sec (levels
      faster early, curve itself untouched); **Ctrl+Click now unequips armor** (the last
@@ -500,7 +500,29 @@ mouse-driven only. Don't reintroduce a keybind for this without being asked. Spa
      light_armor/blocking) that previously had no tooltip at all. Pure UI/wiring on top
      of already-designed systems, no
      new state machine or data model.
-   See `STATUS.md` for full detail and verification on both.
+   - **Group C — Elite Gremlins + Trophy-gated Totem** (plan:
+     `.claude/plans/witty-drifting-aurora.md`). The game's first **Elite enemy variant**:
+     an opt-in `elite?: boolean` on both `RangedGremlin`/`MeleeGremling`
+     (`src/entities/Gremlin.ts`) that applies **+50% HP, +50% damage, +10% move speed
+     (new `Enemy.speedMult`, default 1), 1.4x scale, and a distinct crimson/gold texture**
+     — no AI/state-machine change, just a stat/visual/loot modifier on the existing AI
+     (consistent with the standing "own condition/numbers" rule being about behavior, not
+     uniform stat scaling). **Only the Gremlin Shack guards are elite** — hooked in via a
+     single `elite: true` on both guard constructors in `MainScene.respawnShackGuards()`
+     (the shared initial-spawn + 6-min-respawn path), so 5 shacks × 2 guards = 10 elites
+     in the world; every other gremlin (`spawnEnemies()`, `spawnAltarDensity()`) stays
+     normal. Since 2 of 5 shacks already bias near the Boss Altar, an altar-proximity
+     elite cluster falls out naturally. The **ranged Elite Gremlin drops a new
+     `gremlin_trophy`** (1 each; the melee Elite Gremling does NOT — user decision), and
+     both elite variants drop 2x their normal loot. The **Gremlin Totem** recipe was reworked from
+     `{ gremlin_leather: 4, gremlin_guck: 3, bones: 8, twine: 4 }` + Light-Armor-lvl-3
+     gate to **`{ gremlin_trophy: 3, wood: 1, gremlin_guck: 1 }`** with no skill gate
+     (stays tier 1 / Workbench-gated) — so killing elites is both the difficulty ramp
+     toward the boss and the means to summon it. `enemyReach()`'s existing sprite-radius
+     scaling covers the bigger elite hitbox with no special-casing (same principle as the
+     Gremlin King reach fix). Built on Opus per the model-switch convention (new
+     mechanic).
+   See `STATUS.md` for full detail and verification on all three.
 
 **Not yet built — next up in rough order:**
 6. **World & discovery** — much bigger generated world, biomes, map, eventually a

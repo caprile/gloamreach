@@ -2,7 +2,61 @@
 
 Last updated: 2026-07-10
 
-### Just finished: Second post-boss playtest batch, Group B — HUD & stats display
+### Just finished: Second post-boss playtest batch, Group C — Elite Gremlins + Trophy-gated Totem
+
+Third and final batch of the second Gremlin King playtest feedback (locked order
+A → B → C — all three now shipped). Plan: `.claude/plans/witty-drifting-aurora.md`. The
+biggest of the three: the game's first **Elite enemy variant** concept, plus a rework of
+the Gremlin Totem's craft gate from a skill level to a hard-won trophy currency. Built on
+Opus per the model-switch convention (a new mechanic, not just UI/tuning).
+
+- **Elite Gremlins are the Gremlin Shack guards** — and *only* the shack guards. Every
+  shack's 1 ranged + 1 melee guard is now elite (**+50% HP, +50% damage, +10% move speed,
+  1.4x scale, distinct crimson/gold texture**). Gremlins anywhere else — including
+  `spawnEnemies()`'s roster and `spawnAltarDensity()`'s altar-camp extras — stay normal.
+  Hooked in via a single `elite: true` on both `new RangedGremlin`/`new MeleeGremling`
+  calls in `MainScene.respawnShackGuards()`, the one shared spawn path for both the
+  initial spawn and every 6-minute respawn cycle. 5 shacks × 2 guards = 10 elites in the
+  world at once (respawning). Since 2 of the 5 shacks already bias near the Boss Altar,
+  an altar-proximity elite cluster still falls out naturally — the tougher content marks
+  the approach to the boss.
+- **Elite variant model** — an opt-in `elite?: boolean` on both `RangedGremlin` and
+  `MeleeGremling` constructors (`src/entities/Gremlin.ts`). No AI/state-machine change:
+  the flag only swaps texture/displayName, multiplies `maxHealth`/`biteDamage` by 1.5
+  (rounded), doubles each base loot entry, appends `{ gremlin_trophy: 1 }` **on the ranged
+  Elite Gremlin only** (the melee Elite Gremling drops no trophy — user decision), and sets a new
+  `protected speedMult` (`Enemy.ts`, default 1 → 1.1 for elites) that the two AIs multiply
+  into their chase/pursue/kite speeds. Bigger `setScale(1.4)` is the tint-proof visual
+  tell (hit-feedback `setTint` recolors the base texture during combat, same as every
+  enemy). `MainScene.enemyReach()` already scales attack/prompt reach with sprite radius
+  (post-boss batch), so the larger elite hitbox is covered with zero special-casing —
+  same principle as the earlier Gremlin King reach fix. The kill path
+  (`tryAttackEnemy` → `rollLoot` → `spawnLooseDrop`) and `onShackGuardKilled` (matches by
+  object identity) needed no changes.
+- **New resource `gremlin_trophy`** — `ResourceType` (`Inventory.ts`), `ITEM_DEFS`
+  (`Items.ts`, `maxStack: 99`, non-hotbarable), and generated textures in `BootScene.ts`
+  (`icon_gremlin_trophy` inventory/loose-drop icon + `gremlin_elite`/`gremling_elite`
+  enemy sprites, all palette-consistent crimson/gold).
+- **Gremlin Totem recipe reworked** (`Recipes.ts`) — cost changed from
+  `{ gremlin_leather: 4, gremlin_guck: 3, bones: 8, twine: 4 }` +
+  `light_armor` lvl-3 gate to **`{ gremlin_trophy: 3, wood: 1, gremlin_guck: 1 }`** with
+  the skill gate removed (`requiredSkills: []`). Stays tier 1 (Workbench-gated to craft);
+  discovery now keys off owning the ingredients — the trophy is the meaningful gate. So
+  the difficulty ramp toward the boss (killing elites) and the means to summon it are the
+  same content loop. `RECIPES.md` updated to match.
+
+Verified via `preview_eval`: elite `RangedGremlin` = HP 48/dmg 15/scale 1.4/speedMult
+1.1/texture `gremlin_elite`, loot = 2 skin + 2 blood + 1 trophy; elite `MeleeGremling` =
+HP 18/dmg 12, loot = 2 blood (no trophy); both normals unchanged (HP 32/12, scale 1, no
+trophy). All 5 shacks' guards read as elite (10 elites), 40 map gremlins stay normal —
+only the 5 ranged elites drop trophies (still ≥ the 3 a Totem needs). The
+Totem recipe unlocks once its 3 ingredients are discovered + a Workbench placed, exposes
+`{ gremlin_trophy: 3, wood: 1, gremlin_guck: 1 }` / `requiredSkills: []` / tier 1, and is
+affordable with 3 trophy + 1 wood + 1 guck. Type-check clean (`tsc --noEmit`), no console
+errors, `preview_screenshot` confirms crimson elite guards at the shack vs green gremlins
+elsewhere. **With Group C shipped, the entire second-playtest A → B → C batch is done.**
+
+### Previously: Second post-boss playtest batch, Group B — HUD & stats display
 
 Second of three grouped batches off the second Gremlin King playtest (locked order
 A → B → C). Plan: `.claude/plans/group-b-hud-stats-display.md`. Pure display/wiring

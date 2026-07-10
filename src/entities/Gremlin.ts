@@ -75,21 +75,32 @@ export class RangedGremlin extends Enemy {
   // just from when it started.
   private standGroundUntil = -Infinity;
 
-  constructor(scene: Phaser.Scene, cfg: { x: number; y: number }) {
+  constructor(scene: Phaser.Scene, cfg: { x: number; y: number; elite?: boolean }) {
+    const elite = cfg.elite ?? false;
     super(scene, {
       x: cfg.x,
       y: cfg.y,
-      texture: "gremlin",
-      displayName: "Gremlin",
-      loot: [
-        { resource: "gremlin_skin", min: 1, max: 1 },
-        { resource: "gremlin_blood", min: 1, max: 1 },
-      ],
-      maxHealth: RANGED_MAX_HEALTH,
-      biteDamage: RANGED_CLAW_DAMAGE, // reuses Enemy's shared "melee hit" field name
+      texture: elite ? "gremlin_elite" : "gremlin",
+      displayName: elite ? "Elite Gremlin" : "Gremlin",
+      loot: elite
+        ? [
+            { resource: "gremlin_skin", min: 2, max: 2 },
+            { resource: "gremlin_blood", min: 2, max: 2 },
+            { resource: "gremlin_trophy", min: 1, max: 1 },
+          ]
+        : [
+            { resource: "gremlin_skin", min: 1, max: 1 },
+            { resource: "gremlin_blood", min: 1, max: 1 },
+          ],
+      maxHealth: elite ? Math.round(RANGED_MAX_HEALTH * 1.5) : RANGED_MAX_HEALTH,
+      biteDamage: elite ? Math.round(RANGED_CLAW_DAMAGE * 1.5) : RANGED_CLAW_DAMAGE, // reuses Enemy's shared "melee hit" field name
     });
     this.spawnX = cfg.x;
     this.spawnY = cfg.y;
+    if (elite) {
+      this.speedMult = 1.1;
+      this.setScale(1.4);
+    }
   }
 
   update(_delta: number, playerX: number, playerY: number, now: number): boolean {
@@ -173,14 +184,14 @@ export class RangedGremlin extends Enemy {
 
     if (!holdingStill && dist < RANGED_MIN_KITE_DIST) {
       const awayAngle = Phaser.Math.Angle.Between(playerX, playerY, this.x, this.y);
-      const vx = Math.cos(awayAngle) * KITE_SPEED;
-      const vy = Math.sin(awayAngle) * KITE_SPEED;
+      const vx = Math.cos(awayAngle) * KITE_SPEED * this.speedMult;
+      const vy = Math.sin(awayAngle) * KITE_SPEED * this.speedMult;
       body.setVelocity(vx, vy);
       this.applyFacing(vx, vy);
     } else if (!holdingStill && dist > PROJECTILE_MAX_RANGE) {
       const towardAngle = Phaser.Math.Angle.Between(this.x, this.y, playerX, playerY);
-      const vx = Math.cos(towardAngle) * RANGED_PURSUE_SPEED;
-      const vy = Math.sin(towardAngle) * RANGED_PURSUE_SPEED;
+      const vx = Math.cos(towardAngle) * RANGED_PURSUE_SPEED * this.speedMult;
+      const vy = Math.sin(towardAngle) * RANGED_PURSUE_SPEED * this.speedMult;
       body.setVelocity(vx, vy);
       this.applyFacing(vx, vy);
     } else {
@@ -297,18 +308,32 @@ export class MeleeGremling extends Enemy {
 
   constructor(
     scene: Phaser.Scene,
-    cfg: { x: number; y: number; wanderAnchor?: { x: number; y: number; radius: number } },
+    cfg: {
+      x: number;
+      y: number;
+      wanderAnchor?: { x: number; y: number; radius: number };
+      elite?: boolean;
+    },
   ) {
+    const elite = cfg.elite ?? false;
     super(scene, {
       x: cfg.x,
       y: cfg.y,
-      texture: "gremling_weak",
-      displayName: "Gremling",
-      loot: [{ resource: "gremlin_blood", min: 1, max: 1 }],
-      maxHealth: MELEE_MAX_HEALTH,
-      biteDamage: MELEE_CLAW_DAMAGE,
+      texture: elite ? "gremling_elite" : "gremling_weak",
+      displayName: elite ? "Elite Gremling" : "Gremling",
+      // Elite Gremlings (melee) do NOT drop a trophy — only the ranged Elite
+      // Gremlin does (user decision). They still drop 2x blood.
+      loot: elite
+        ? [{ resource: "gremlin_blood", min: 2, max: 2 }]
+        : [{ resource: "gremlin_blood", min: 1, max: 1 }],
+      maxHealth: elite ? Math.round(MELEE_MAX_HEALTH * 1.5) : MELEE_MAX_HEALTH,
+      biteDamage: elite ? Math.round(MELEE_CLAW_DAMAGE * 1.5) : MELEE_CLAW_DAMAGE,
     });
     this.wanderAnchor = cfg.wanderAnchor ?? null;
+    if (elite) {
+      this.speedMult = 1.1;
+      this.setScale(1.4);
+    }
   }
 
   update(_delta: number, playerX: number, playerY: number, now: number): boolean {
@@ -340,8 +365,8 @@ export class MeleeGremling extends Enemy {
         return false;
       }
       const angle = Phaser.Math.Angle.Between(this.x, this.y, playerX, playerY);
-      const vx = Math.cos(angle) * MELEE_CHASE_SPEED;
-      const vy = Math.sin(angle) * MELEE_CHASE_SPEED;
+      const vx = Math.cos(angle) * MELEE_CHASE_SPEED * this.speedMult;
+      const vy = Math.sin(angle) * MELEE_CHASE_SPEED * this.speedMult;
       body.setVelocity(vx, vy);
       this.applyFacing(vx, vy);
       return false;

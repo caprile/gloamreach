@@ -110,6 +110,29 @@ export class BootScene extends Phaser.Scene {
     g.fillRect(3, 0, 8, 5); // head
     g.generateTexture("gremling_weak", 14, 16);
 
+    // Elite Gremlin variants (Gremlin Shack guards) — same silhouettes as the
+    // normal gremlin/gremling above, recolored to a menacing crimson/dark-purple
+    // palette with a gold accent so they read as "elite" at a glance. The runtime
+    // setScale(1.4) stacks further size on top (mirrors how gremlin_king is a
+    // base texture scaled by BOSS_SCALE). Base dims match their normal counterparts.
+    g.clear();
+    g.fillStyle(0x6a1f3a, 1); // crimson body
+    g.fillRect(2, 4, 14, 16);
+    g.fillStyle(0x3f1030, 1); // dark head
+    g.fillRect(4, 0, 10, 6);
+    g.fillStyle(0xf0c040, 1); // gold belly accent
+    g.fillRect(5, 10, 8, 6);
+    g.generateTexture("gremlin_elite", 18, 22);
+
+    g.clear();
+    g.fillStyle(0x5a1830, 1); // crimson body (duller than ranged)
+    g.fillRect(1, 3, 12, 12);
+    g.fillStyle(0x33101f, 1); // dark head
+    g.fillRect(3, 0, 8, 5);
+    g.fillStyle(0xf0c040, 1); // gold accent stripe
+    g.fillRect(3, 8, 8, 2);
+    g.generateTexture("gremling_elite", 14, 16);
+
     // Gremlin's thrown rock — tiny gray projectile.
     g.clear();
     g.fillStyle(0x8a8a8a, 1);
@@ -497,5 +520,18 @@ export class BootScene extends Phaser.Scene {
     g.fillStyle(0xcfc4a0, 1);
     g.fillTriangle(10, 20, 14, 20, 12, 8);
     g.generateTexture("icon_gremlin_king_fang", ICON, ICON);
+
+    // Gremlin Trophy: an Elite Gremlin drop — a severed clawed hand on a cord,
+    // crimson/gold to echo the elite palette.
+    g.clear();
+    g.fillStyle(0x6a1f3a, 1);
+    g.fillRect(8, 8, 8, 9); // palm
+    g.fillStyle(0x8a2f4a, 1);
+    g.fillRect(8, 4, 2, 5); // claws
+    g.fillRect(11, 3, 2, 6);
+    g.fillRect(14, 4, 2, 5);
+    g.fillStyle(0xf0c040, 1);
+    g.fillRect(7, 16, 10, 2); // gold cord/binding
+    g.generateTexture("icon_gremlin_trophy", ICON, ICON);
   }
 }

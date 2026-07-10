@@ -347,6 +347,14 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     hotbarable: true,
     stats: [{ label: "Type", value: "Ritual Item" }],
   },
+  gremlin_trophy: {
+    key: "gremlin_trophy",
+    name: "Gremlin Trophy",
+    description: "A gruesome trinket torn from an Elite Gremlin. Three of them can bind a Gremlin Totem.",
+    texture: "icon_gremlin_trophy",
+    maxStack: 99,
+    hotbarable: false,
+  },
   gremlin_king_fang: {
     key: "gremlin_king_fang",
     name: "Gremlin King Fang",

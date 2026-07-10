@@ -65,6 +65,10 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   // clock/helpers below rather than reimplementing the mechanism.
   protected pursuitClockStart = 0;
   protected aggroImmuneUntil = 0;
+  // Movement-speed multiplier (default 1). Elite variants set this >1 and
+  // multiply their chase/pursue/kite speeds by it in update(). Base value keeps
+  // every ordinary enemy identical.
+  protected speedMult = 1;
 
   // Thin world-space HP bar (no number, just a bar) — separate GameObjects
   // rather than a Container, gone glued to position every frame via

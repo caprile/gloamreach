@@ -1172,17 +1172,21 @@ export class MainScene extends Phaser.Scene {
   }
 
   // Reused for both the initial spawn and every respawn-after-timer cycle —
-  // spawns a fresh RangedGremlin + MeleeGremling pair anchored to the shack.
+  // spawns a fresh Elite RangedGremlin + Elite MeleeGremling pair anchored to
+  // the shack. Shack guards are the game's only Elite Gremlins (the sole
+  // gremlin_trophy source) — every other gremlin on the map stays normal.
   private respawnShackGuards(shack: GremlinShack): void {
     shack.respawnAt = null;
     const ranged = new RangedGremlin(this, {
       x: shack.x + Phaser.Math.Between(-40, 40),
       y: shack.y + Phaser.Math.Between(-40, 40),
+      elite: true,
     });
     const melee = new MeleeGremling(this, {
       x: shack.x + Phaser.Math.Between(-40, 40),
       y: shack.y + Phaser.Math.Between(-40, 40),
       wanderAnchor: { x: shack.x, y: shack.y, radius: 70 },
+      elite: true,
     });
     shack.guards = [ranged, melee];
     this.enemies.push(ranged, melee);
