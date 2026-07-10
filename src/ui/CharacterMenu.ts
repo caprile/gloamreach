@@ -75,6 +75,7 @@ export class CharacterMenu {
         color: "#ffe08a",
         backgroundColor: "#000000cc",
         padding: { x: 6, y: 4 },
+        wordWrap: { width: 300 },
       })
       .setScrollFactor(0)
       .setDepth(DEPTH_TEXT + 10)
@@ -210,22 +211,22 @@ export class CharacterMenu {
     const lvlLabel = maxed ? "MAX" : `Lvl ${this.deps.skills.get(skill)}`;
     this.text(barX + barW + 10, y, lvlLabel, 12, maxed ? "#8fe38f" : "#9aa4b5");
 
-    // Hover impact tooltip — only for skills with an actual mechanical
-    // effect (weapon skills today); rows with none get no hit-area at all.
-    const impact = skillImpactDescription(skill);
-    if (impact) {
-      const hit = this.scene.add
-        .rectangle(x, y - 2, barX + barW + 60 - x, 20, 0x000000, 0)
-        .setOrigin(0, 0)
-        .setScrollFactor(0)
-        .setDepth(DEPTH_TEXT)
-        .setInteractive({ useHandCursor: false })
-        .on("pointerover", () => {
-          this.tooltip.setText(impact).setPosition(x, y + 16).setVisible(true);
-        })
-        .on("pointerout", () => this.tooltip.setVisible(false));
-      this.rows.push(hit);
-    }
+    // Hover impact tooltip — every skill row is hoverable now, showing its
+    // live-computed current impact (including an explicit "no effect yet"
+    // message for skills that only gate recipes today) so leveling always
+    // shows what it's actually doing, not just a generic per-level rate.
+    const impact = skillImpactDescription(skill, this.deps.skills);
+    const hit = this.scene.add
+      .rectangle(x, y - 2, barX + barW + 60 - x, 20, 0x000000, 0)
+      .setOrigin(0, 0)
+      .setScrollFactor(0)
+      .setDepth(DEPTH_TEXT)
+      .setInteractive({ useHandCursor: false })
+      .on("pointerover", () => {
+        this.tooltip.setText(impact).setPosition(x, y + 16).setVisible(true);
+      })
+      .on("pointerout", () => this.tooltip.setVisible(false));
+    this.rows.push(hit);
   }
 
   private renderStatsTab(x0: number, startY: number): void {

@@ -51,3 +51,7 @@ export function weaponStaminaCost(weapon: WeaponType): number {
 export function weaponAttacksPerSecond(weapon: WeaponType): number {
   return 1000 / WEAPON_COOLDOWN_MS[weapon];
 }
+
+export function damageTypeDisplayName(type: DamageType): string {
+  return type.charAt(0).toUpperCase() + type.slice(1);
+}

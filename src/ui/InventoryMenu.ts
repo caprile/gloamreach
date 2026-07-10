@@ -19,9 +19,23 @@ export interface ArmorSlotView {
 export interface CombatStatsView {
   weaponName: string | null; // null if no weapon equipped
   damage: number;
+  damageTypeName: string | null; // e.g. "Pierce"; null if no weapon
   attackSpeed: number; // attacks/sec, 0 if no weapon
   staminaCost: number; // per hit, 0 if no weapon
   armor: number; // total flat defense from all worn armor
+  attackRange: number; // px, same reach used for interact/attack gating
+}
+
+// Live "what determines the player's move speed right now" breakdown,
+// computed by MainScene.runSpeedBreakdown() — shared by the Character menu's
+// full Stats-tab breakdown and this panel's compact Combat-column line.
+export interface RunSpeedView {
+  walk: number; // base walk speed, px/s
+  sprintMultiplier: number; // e.g. 1.775 at Running lvl 5
+  sprint: number; // px/s, round(walk * sprintMultiplier)
+  runningLevel: number;
+  runningBonus: number; // px/s the Running skill adds vs. the 1.75x base sprint
+  itemBonus: number; // px/s from speed items — always 0 today, no such items exist
 }
 
 export interface InventoryMenuDeps {
@@ -30,6 +44,7 @@ export interface InventoryMenuDeps {
   progression: PlayerProgression;
   armorSlots: () => ArmorSlotView[];
   combatStats: () => CombatStatsView;
+  runSpeedBreakdown: () => RunSpeedView;
   // Left-press on a filled slot begins dragging that stack.
   beginDrag: (container: ItemContainer, index: number, pointer: Phaser.Input.Pointer) => void;
   // Left-press on an occupied equipment slot begins dragging the equipped
@@ -235,13 +250,24 @@ export class InventoryMenu {
     const lineGap = 20;
     this.addText(x0, y, stats.weaponName ?? "No weapon equipped", 12, stats.weaponName ? "#e8ecf2" : "#5b6472");
     y += lineGap + 4;
-    this.addText(x0, y, `Damage: ${stats.weaponName ? stats.damage : "-"}`, 12, "#c25a5a");
+    this.addText(
+      x0,
+      y,
+      `Damage: ${stats.weaponName ? `${stats.damage} ${stats.damageTypeName}` : "-"}`,
+      12,
+      "#c25a5a",
+    );
     y += lineGap;
     this.addText(x0, y, `Attack Speed: ${stats.weaponName ? `${stats.attackSpeed.toFixed(1)}/s` : "-"}`, 12, "#8ac2d0");
     y += lineGap;
     this.addText(x0, y, `Attack Stamina: ${stats.weaponName ? stats.staminaCost : "-"}`, 12, "#b8860b");
     y += lineGap;
     this.addText(x0, y, `Armor: ${stats.armor}`, 12, "#7ac27a");
+    y += lineGap;
+    this.addText(x0, y, `Attack Range: ${stats.attackRange}`, 12, "#8a93a3");
+    y += lineGap;
+    const speed = this.deps.runSpeedBreakdown();
+    this.addText(x0, y, `Move Speed: ${speed.walk} / ${speed.sprint} spr`, 12, "#8a93a3");
   }
 
   // Drag a stack here to permanently delete it. Dragging a stack out of the

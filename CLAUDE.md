@@ -460,25 +460,47 @@ mouse-driven only. Don't reintroduce a keybind for this without being asked. Spa
    place → gather → pick-up-and-replace loop that doesn't require the inventory. Per
    the user (locked via `AskUserQuestion`): Alt+1-9 selects row 2 directly; the scroll
    wheel spans both rows by default, togglable back to current-row-only with **H**.
-5e. **Second post-boss playtest batch, Group A — quick fixes** — plan:
-   `.claude/plans/delightful-tinkering-book.md`. First of three grouped batches off a
-   second Gremlin King playtest; user locked the order via `AskUserQuestion`: **Group A
-   (shipped) → Group B (HUD/stats display, not started) → Group C (Elites +
-   Trophy-gated Totem, not started)**. Six small independent fixes: Running's passive
-   sprint-XP rate bumped 10→20/sec (levels faster early, curve itself untouched);
-   **Ctrl+Click now unequips armor** (the last gesture missing the standing
-   Ctrl+Click-aliases-quick-move pattern); **clicking a placed Workbench opens the
-   crafting menu** (previously it had zero hover/interact — new `hoveredWorkbench`
-   mirrors the Drying Rack/Shack hover pattern, sourced from `placedObjects` rather
-   than a new parallel array); **scroll-wheel hotbar cycling now skips empty slots**;
-   **Boss Altar spawns further from world center** (`ALTAR_CLEAR_RADIUS` promoted to a
-   named constant, 900→1400 — the "min distance from center" mechanism already existed
-   via `pickSpawnPoint`'s `clearRadius`, just tuned too small); **Boss charge attack
-   reliably damages on contact** (`GremlinKing.CHARGE_HIT_RADIUS` now scales by
-   `BOSS_SCALE`, was a flat unscaled 34px against a 2.4x-scaled sprite — same class of
-   fix as the earlier `MainScene.enemyReach()` attack/prompt-reach scaling, just not
-   previously applied to the boss's own charge math). See `STATUS.md` for full detail
-   and verification.
+5e. **Second post-boss playtest batch, Groups A & B** — user locked the order via
+   `AskUserQuestion`: **Group A (shipped) → Group B (shipped) → Group C (Elites +
+   Trophy-gated Totem, not started)**.
+   - **Group A — quick fixes** (plan: `.claude/plans/delightful-tinkering-book.md`). Six
+     small independent fixes: Running's passive sprint-XP rate bumped 10→20/sec (levels
+     faster early, curve itself untouched); **Ctrl+Click now unequips armor** (the last
+     gesture missing the standing Ctrl+Click-aliases-quick-move pattern); **clicking a
+     placed Workbench opens the crafting menu** (previously it had zero hover/interact —
+     new `hoveredWorkbench` mirrors the Drying Rack/Shack hover pattern, sourced from
+     `placedObjects` rather than a new parallel array); **scroll-wheel hotbar cycling now
+     skips empty slots**; **Boss Altar spawns further from world center**
+     (`ALTAR_CLEAR_RADIUS` promoted to a named constant, 900→1400 — the "min distance
+     from center" mechanism already existed via `pickSpawnPoint`'s `clearRadius`, just
+     tuned too small); **Boss charge attack reliably damages on contact**
+     (`GremlinKing.CHARGE_HIT_RADIUS` now scales by `BOSS_SCALE`, was a flat unscaled
+     34px against a 2.4x-scaled sprite — same class of fix as the earlier
+     `MainScene.enemyReach()` attack/prompt-reach scaling, just not previously applied to
+     the boss's own charge math).
+   - **Group B — HUD & stats display** (plan:
+     `.claude/plans/group-b-hud-stats-display.md`). **HP/Stamina bars now grow
+     proportionally with max pool**, capped at the hotbar's own on-screen width, via a
+     new `MainScene.layoutBar()` helper (the background rects were previously never
+     stored, so only the fill could rescale). **XP bar relocated to sit directly under
+     the hotbar** at hotbar width (`HotbarUI` gained `width`/`left`/`bottom` getters;
+     `BOTTOM_MARGIN` opened clearance beneath it) instead of stacking above HP/stamina.
+     New **Run Speed breakdown** (`MainScene.runSpeedBreakdown()`) feeds the inventory
+     Combat column's compact "Move Speed" line — `Player.ts`'s walk-speed constant is
+     now exported as `PLAYER_WALK_SPEED`. Combat column also gained **damage broken out
+     by type** (e.g. `Damage: 8 Pierce`, new `Weapons.damageTypeDisplayName()`) and an
+     **Attack Range** stat line. **Same-day follow-up per the user:** Run Speed's full
+     breakdown moved out of a standalone Stats-tab block and into the **Running skill's
+     own hover tooltip on the Skills tab** — and every skill row (not just weapon
+     skills + Running) is now hoverable, each showing its **live-computed current
+     impact** off the real `Skills` instance (`Skills.skillImpactDescription(skill,
+     skills)`, widened from a static per-skill-type string to take the live instance),
+     including an explicit "No combat/gather effect yet — recipe gate only" message for
+     the 6 skills with no wired mechanical effect (chopping/mining/heavy_armor/
+     light_armor/blocking) that previously had no tooltip at all. Pure UI/wiring on top
+     of already-designed systems, no
+     new state machine or data model.
+   See `STATUS.md` for full detail and verification on both.
 
 **Not yet built — next up in rough order:**
 6. **World & discovery** — much bigger generated world, biomes, map, eventually a
@@ -757,8 +779,14 @@ interaction, verify in the live preview rather than just type-checking:
 
 ## Working conventions
 
-- Default model: **Sonnet** for regular feature work; reserve Opus/Fable for genuinely
-  hard problems (see the model-choice guidance the user already has).
+- **Model-switch prompt (do this every session, don't just remember it silently):**
+  before starting work on any **new core mechanic or framework** (a new system with its
+  own state machine/data model — e.g. a new milestone like bosses, world-gen rework,
+  save/load, a new stat/combat system), tell the user to switch to **Opus 4.8** before
+  you proceed. If the work is **simple debugging/fixes/UI polish on top of an existing,
+  already-designed system** (playtest-batch fixes, tuning numbers, wiring an existing
+  value into a new UI line, bug fixes), tell the user to switch to **Sonnet**. Say this
+  up front, before diving into implementation, not after.
 - One milestone/feature per chat session — start a fresh session (this file auto-loads)
   rather than continuing a long thread, to keep context small and cheap.
 - Comments should explain *why*, not *what* — keep them light, per general code style.

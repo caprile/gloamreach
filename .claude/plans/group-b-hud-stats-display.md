@@ -1,5 +1,21 @@
 # Playtest Batch — Group B: HUD & Stats Display
 
+## Shipped — status + deviations from this plan
+
+Implemented and verified live (see `STATUS.md`'s "Group B" and its same-day follow-up
+entries for full detail). B1/B2/B4/B5 shipped exactly as planned below. **B3 (Run
+Speed) shipped differently than planned, per the user's post-ship feedback:**
+- Originally: a standalone "Run Speed" block in the Character menu **Stats tab**, plus
+  a compact line in the inventory **Combat column**.
+- **Actually shipped:** the Stats-tab block was removed. Run Speed's full breakdown now
+  lives as the **Running skill's own hover tooltip in the Skills tab** — and this was
+  generalized further: **every** skill row is hoverable now, each showing its
+  **live-computed current impact** (not a static per-level rate), including an explicit
+  "No combat/gather effect yet — recipe gate only" message for the 6 skills with no
+  wired mechanical effect. `Skills.skillImpactDescription()` widened from
+  `(skill) => string | null` to `(skill, skills) => string` accordingly. The Combat
+  column's compact "Move Speed" line is unchanged from the original plan.
+
 ## Context
 
 Second-playtest Group B, the middle of three batches (order locked earlier via

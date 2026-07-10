@@ -1,6 +1,6 @@
 import Phaser from "phaser";
 
-const SPEED = 95; // pixels per second
+export const PLAYER_WALK_SPEED = 95; // pixels per second
 const DASH_SPEED = 450; // px/s during a dash burst — sharp snap, not a glide
 const DASH_DURATION_MS = 105; // how long the burst overrides normal movement
 const DASH_COOLDOWN_MS = 600; // minimum time between dashes, independent of stamina
@@ -119,7 +119,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       body.setVelocity(0, 0);
     } else {
       const len = Math.hypot(vx, vy);
-      const speed = sprinting ? SPEED * sprintMultiplier : SPEED;
+      const speed = sprinting ? PLAYER_WALK_SPEED * sprintMultiplier : PLAYER_WALK_SPEED;
       body.setVelocity((vx / len) * speed, (vy / len) * speed);
     }
     return { moving, sprinting, dashStarted: false, facing: this.facing };

@@ -2,7 +2,65 @@
 
 Last updated: 2026-07-10
 
-### Just finished: Second post-boss playtest batch, Group A — quick fixes
+### Just finished: Second post-boss playtest batch, Group B — HUD & stats display
+
+Second of three grouped batches off the second Gremlin King playtest (locked order
+A → B → C). Plan: `.claude/plans/group-b-hud-stats-display.md`. Pure display/wiring
+work on top of already-designed systems (bar geometry, a new derived-stat readout) — no
+new state machine or data model, so this batch stayed on Sonnet per the new
+model-switch convention (see `CLAUDE.md`'s "Working conventions").
+
+- **HP/Stamina bars now grow proportionally with max pool, capped at hotbar width.**
+  Both bars used a hardcoded `barW = 76` and only rescaled the fill; the background
+  rect was never stored so it couldn't resize. New `MainScene.layoutBar()` helper
+  repositions/resizes both bg and fill (plus re-centers the label) from a computed
+  `statBarWidth(max)` = `round(76 * max/100)`, clamped to `[76, hotbarUI.width]` (408px).
+  `healthBarBg`/`staminaBarBg` are now stored fields. Verified: 20 Vitality + 20
+  Endurance points widen both bars to 91px, still centered; artificially pushing max to
+  720 clamps the bar at exactly 408px (the hotbar's own width).
+- **XP bar relocated from "stacked above HP/stamina" to directly under the hotbar**,
+  spanning its exact width. `HotbarUI` gained `width`/`left`/`bottom` getters and its
+  `BOTTOM_MARGIN` (was an inline `14`) bumped to `34` to open clearance beneath it.
+  HP/stamina bars, still anchored off `hotbarUI.top`, rose automatically since raising
+  the hotbar moved `top` too — no separate reflow needed. Verified: XP bar geometry is
+  `x === hotbarUI.left`, `width === hotbarUI.width`, `y === hotbarUI.bottom + 4`.
+- **Run Speed breakdown** — new `MainScene.runSpeedBreakdown()` (walk/sprint/
+  sprintMultiplier/runningLevel/runningBonus/itemBonus, the last always 0 today — no
+  speed items exist yet), read by the inventory Combat column's compact
+  "Move Speed: 95 / 166 spr" line (`RunSpeedView` interface, `InventoryMenu.ts`).
+  `Player.ts`'s private `SPEED` constant is now exported `PLAYER_WALK_SPEED`.
+- **Damage broken out by type** in the Combat column — new `Weapons.
+  damageTypeDisplayName()`; `CombatStatsView` gained `damageTypeName`, and the Damage
+  line now reads e.g. `Damage: 8 Pierce` instead of a bare number.
+- **New Attack Range stat line** in the Combat column — `CombatStatsView.attackRange`
+  reads the module-private `REACH` constant directly (64px today).
+- **Same-day follow-up, per the user:** Run Speed moved off a standalone Stats-tab
+  block and into the **Skills tab**, as the Running skill's own hover tooltip — and
+  **every** skill row is now hoverable (not just the 5 weapon skills + Running), each
+  showing its **live-computed current impact**, not a static per-level rate.
+  `Skills.skillImpactDescription(skill, skills)` now takes the live `Skills` instance
+  and returns e.g. `"+0.5% weapon damage per level — currently +4.5% at Lvl 9"` for a
+  weapon skill, `"+0.5% sprint speed per level — Walk 95 / Sprint 187 (x1.97) at Lvl
+  44"` for Running (reads `PLAYER_WALK_SPEED` directly, no more `CharacterMenuDeps`
+  plumbing needed for it), and `"No combat/gather effect yet — recipe gate only"` for
+  every skill with no wired mechanical effect (chopping/mining/heavy_armor/light_armor/
+  blocking) — previously those 6 skills had no hover tooltip at all. `CharacterMenu`'s
+  tooltip text object gained `wordWrap: { width: 300 }` since the live-computed strings
+  run longer than the old static ones.
+
+Verified via `preview_eval`: `import()`-ing `Skills.ts` directly and calling
+`skillImpactDescription` for all 11 `SKILL_TYPES` against a live `Skills` instance
+(Blunt lvl 9, Running lvl 44) returns correct per-skill strings, including the exact
+"Sprint 187 (x1.97)" figure the old Stats-tab breakdown used to show; emitting a real
+`pointerover` on the Running row's hit-rectangle sets the on-screen tooltip to that same
+text and makes it visible; same for a zero-effect skill (Chopping), confirming the "no
+effect yet" message renders correctly.
+
+Verified via `preview_eval` + `preview_screenshot`: all of the above, plus both the
+Inventory (Tab) Combat column and Character menu (K) Stats tab render cleanly with no
+overlap in a live screenshot. Type-check clean (`tsc --noEmit`), no console errors.
+
+### Previously: Second post-boss playtest batch, Group A — quick fixes
 
 First of three grouped batches off a second Gremlin King playtest (player beat it at
 lvl 5, Blunt 5/Pierce 10/Light Armor 5/Running 3/Chopping 4, max-lvl Primal Spear).
@@ -56,26 +114,10 @@ live `GremlinKing.checkPlayerHit()` call during a scripted charge confirms a hit
 still misses at 90px. Type-check clean (`tsc --noEmit`), no console errors,
 `preview_screenshot` confirms the world boots normally.
 
-### Next up: Group B — HUD & stats display (planned, not yet implemented)
+### Next up: Group C — Elites + Trophy-gated Totem (not started)
 
-Full implementation plan drafted and researched (2 parallel Explore agents + direct
-reads) this session, but deliberately **not coded yet** — the user asked to plan only
-and start implementation in a fresh session. Plan committed at
-`.claude/plans/group-b-hud-stats-display.md`. Three display/layout decisions were
-locked via `AskUserQuestion` before writing the plan:
-- **Run Speed** (base walk + Running-skill sprint multiplier breakdown) shown in
-  **both** the Character menu Stats tab (full breakdown) and the inventory Combat
-  column (compact line) — no item speed bonuses exist yet, so today's breakdown is just
-  those two inputs.
-- **HP/Stamina bars grow proportionally** with max pool (today a hardcoded 76px each),
-  **capped at the hotbar's own on-screen width**, staying centered.
-- **XP bar relocates to sit under the hotbar** at hotbar width (nudging the hotbar up
-  slightly to open room beneath it), rather than staying stacked above HP/stamina.
-Also queued for the same batch: damage broken out by type in the Combat column (e.g.
-"Damage: 8 Pierce") and a new "Attack Range" stat line. See the plan file for the exact
-file-by-file breakdown (`MainScene.ts`, `HotbarUI.ts`, `InventoryMenu.ts`,
-`CharacterMenu.ts`, `Weapons.ts`, `Player.ts`) and verification steps. Group C (Elites +
-Trophy-gated Totem) remains planned-only after this, per the locked A → B → C order.
+Group B (above) shipped this session. Group C remains planned-only, per the locked
+A → B → C order — no plan file drafted for it yet.
 
 ### Previously: Post-boss-fight playtest batch — boss HUD/hitbox, chest take-all, 2nd hotbar row
 

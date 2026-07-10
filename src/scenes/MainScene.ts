@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { Player } from "../entities/Player";
+import { Player, PLAYER_WALK_SPEED } from "../entities/Player";
 import {
   ResourceNode,
   requiredKind,
@@ -40,6 +40,7 @@ import {
   weaponStaminaCost,
   weaponPrimaryDamageType,
   weaponAttacksPerSecond,
+  damageTypeDisplayName,
   type WeaponType,
 } from "../systems/Weapons";
 import { outputKey, RECIPES, type Recipe } from "../systems/Recipes";
@@ -80,6 +81,7 @@ import {
   PANEL_W as INVENTORY_PANEL_W,
   type ArmorSlotView,
   type CombatStatsView,
+  type RunSpeedView,
 } from "../ui/InventoryMenu";
 import { HotbarUI } from "../ui/HotbarUI";
 import { EventLogUI } from "../ui/EventLogUI";
@@ -250,6 +252,7 @@ export class MainScene extends Phaser.Scene {
   private lastToolHitAt = 0; // this.time.now of the last successful chop/mine hit
   private lastWeaponHitAt = 0; // mirrors lastToolHitAt, separate clock for weapon swings
   private stamina = new Stamina();
+  private staminaBarBg!: Phaser.GameObjects.Rectangle;
   private staminaBarFill!: Phaser.GameObjects.Rectangle; // fixed HUD bar, centered above the hotbar
   private staminaBarText!: Phaser.GameObjects.Text; // numeric current-stamina label inside the bar
   // Whether loose drop pieces auto-fly to the player when in range. Toggled
@@ -268,9 +271,11 @@ export class MainScene extends Phaser.Scene {
   // exists, and it'd need its own overlap-vs-enemies wiring at that point.
   private enemyProjectiles!: Phaser.Physics.Arcade.Group;
   private health = new Health();
+  private healthBarBg!: Phaser.GameObjects.Rectangle;
   private healthBarFill!: Phaser.GameObjects.Rectangle;
   private healthBarText!: Phaser.GameObjects.Text;
-  private xpBarFill!: Phaser.GameObjects.Rectangle; // player-level XP bar, above the HP bar
+  private xpBarBg!: Phaser.GameObjects.Rectangle;
+  private xpBarFill!: Phaser.GameObjects.Rectangle; // player-level XP bar, under the hotbar
   private xpBarText!: Phaser.GameObjects.Text; // "Lvl N" label inside the XP bar
   private isDead = false;
   private invulnerableUntil = 0; // this.time.now threshold; incoming damage skipped before this
@@ -2978,6 +2983,7 @@ export class MainScene extends Phaser.Scene {
       progression: this.progression,
       armorSlots: () => this.armorSlots(),
       combatStats: () => this.combatStats(),
+      runSpeedBreakdown: () => this.runSpeedBreakdown(),
       beginDrag: (c, i, p) => this.beginItemDrag(c, i, p),
       beginArmorDrag: (slot, p) => this.beginArmorDrag(slot, p),
       unequipArmorSlot: (slot) => this.unequipArmorSlot(slot),
@@ -3001,7 +3007,9 @@ export class MainScene extends Phaser.Scene {
   // view instead of per-item tooltips.
   private combatStats(): CombatStatsView {
     const armor = totalPlayerDefense(this.equipment);
-    if (!this.equippedWeapon) return { weaponName: null, damage: 0, attackSpeed: 0, staminaCost: 0, armor };
+    const attackRange = REACH;
+    if (!this.equippedWeapon)
+      return { weaponName: null, damage: 0, damageTypeName: null, attackSpeed: 0, staminaCost: 0, armor, attackRange };
     const dmgType = weaponPrimaryDamageType(this.equippedWeapon);
     const baseDmg = weaponDamage(this.equippedWeapon) + weaponTierDamageBonus(this.equippedWeapon, this.equippedWeaponTier);
     const damage = Math.round(baseDmg * weaponSkillDamageMultiplier(dmgType, this.skills));
@@ -3011,9 +3019,28 @@ export class MainScene extends Phaser.Scene {
     return {
       weaponName: this.equippedWeaponName,
       damage,
+      damageTypeName: damageTypeDisplayName(dmgType),
       attackSpeed: weaponAttacksPerSecond(this.equippedWeapon),
       staminaCost,
       armor,
+      attackRange,
+    };
+  }
+
+  // Live "what determines the player's move speed right now" breakdown —
+  // base walk speed + the Running skill's sprint multiplier. No item speed
+  // bonuses exist yet (itemBonus is a framework line for that future case).
+  private runSpeedBreakdown(): RunSpeedView {
+    const walk = PLAYER_WALK_SPEED;
+    const sprintMultiplier = runningSprintMultiplier(this.skills);
+    const runningLevel = this.skills.get("running");
+    return {
+      walk,
+      sprintMultiplier,
+      sprint: Math.round(walk * sprintMultiplier),
+      runningLevel,
+      runningBonus: Math.round(runningLevel * 0.005 * walk),
+      itemBonus: 0,
     };
   }
 
@@ -3159,18 +3186,47 @@ export class MainScene extends Phaser.Scene {
     this.inventoryMenu?.refresh();
   }
 
+  // Shared layout for the fixed HUD bars (HP/stamina): repositions/resizes
+  // the bg + fill rects and re-centers the label text, keeping the bar
+  // horizontally centered on screen at whatever width is passed in. Called
+  // on every refresh (not just create) so allocating a Vitality/Endurance
+  // point re-lays-out the bar immediately, not just its fill fraction.
+  private layoutBar(
+    bg: Phaser.GameObjects.Rectangle,
+    fill: Phaser.GameObjects.Rectangle,
+    text: Phaser.GameObjects.Text,
+    barW: number,
+    barY: number,
+    frac: number,
+  ): void {
+    const barH = 20;
+    const barX = Math.round(this.scale.width / 2 - barW / 2);
+    bg.setPosition(barX, barY).setSize(barW, barH);
+    fill.setPosition(barX + 1, barY + 1).setSize(barW - 2, barH - 2).setScale(Math.max(0, frac), 1);
+    text.setPosition(barX + barW / 2, barY + barH / 2);
+  }
+
+  // Bars grow proportionally with their max pool (base 76px at pool 100),
+  // capped at the hotbar's own on-screen width so a large pool can't outgrow
+  // the HUD it sits above.
+  private statBarWidth(max: number): number {
+    const BASE_BAR_W = 76;
+    const BASE_MAX = 100;
+    return Phaser.Math.Clamp(Math.round((BASE_BAR_W * max) / BASE_MAX), BASE_BAR_W, this.hotbarUI.width);
+  }
+
   // Stamina bar: centered directly above the hotbar, sized close to a single
   // hotbar slot (not a full-width bar) since it's meant to start small — this
   // is the first player stat bar in the game, and future HP/mana bars should
   // stack above this one the same way, using hotbarUI.top as the shared
   // anchor.
   private createStaminaBar(): void {
-    const barW = 76;
+    const barW = this.statBarWidth(this.stamina.max);
     const barH = 20;
     const gap = 8;
     const barX = this.scale.width / 2 - barW / 2;
     const barY = this.hotbarUI.top - gap - barH;
-    this.add
+    this.staminaBarBg = this.add
       .rectangle(barX, barY, barW, barH, 0x1a1f2a, 0.95)
       .setOrigin(0, 0)
       .setStrokeStyle(1, 0x3a4250)
@@ -3196,21 +3252,25 @@ export class MainScene extends Phaser.Scene {
   }
 
   private refreshStaminaBar(): void {
+    const gap = 8;
+    const barH = 20;
+    const barW = this.statBarWidth(this.stamina.max);
+    const barY = this.hotbarUI.top - gap - barH;
     const frac = this.stamina.value() / this.stamina.max;
-    this.staminaBarFill.setScale(Math.max(0, frac), 1);
+    this.layoutBar(this.staminaBarBg, this.staminaBarFill, this.staminaBarText, barW, barY, frac);
     this.staminaBarText.setText(`${Math.round(this.stamina.value())}`);
   }
 
   // HP bar: stacks directly above the stamina bar via the same hotbarUI.top
   // anchor, one more slot up. Crimson fill vs. the stamina bar's goldenrod.
   private createHealthBar(): void {
-    const barW = 76;
+    const barW = this.statBarWidth(this.health.max);
     const barH = 20;
     const gap = 8;
     const barX = this.scale.width / 2 - barW / 2;
     const staminaBarY = this.hotbarUI.top - gap - barH;
     const barY = staminaBarY - gap - barH;
-    this.add
+    this.healthBarBg = this.add
       .rectangle(barX, barY, barW, barH, 0x1a1f2a, 0.95)
       .setOrigin(0, 0)
       .setStrokeStyle(1, 0x3a4250)
@@ -3234,23 +3294,26 @@ export class MainScene extends Phaser.Scene {
   }
 
   private refreshHealthBar(): void {
+    const gap = 8;
+    const barH = 20;
+    const staminaBarY = this.hotbarUI.top - gap - barH;
+    const barY = staminaBarY - gap - barH;
+    const barW = this.statBarWidth(this.health.max);
     const frac = this.health.value() / this.health.max;
-    this.healthBarFill.setScale(Math.max(0, frac), 1);
+    this.layoutBar(this.healthBarBg, this.healthBarFill, this.healthBarText, barW, barY, frac);
     this.healthBarText.setText(`${Math.round(this.health.value())}`);
   }
 
-  // Player-level XP bar: stacks one more slot above the HP bar via the same
-  // hotbarUI.top anchor chain. Shows "Lvl N" inside; fills toward the next
-  // level. Purple to distinguish from HP (crimson) / stamina (goldenrod).
+  // Player-level XP bar: sits directly under the hotbar, spanning its exact
+  // width, rather than stacking with HP/stamina above it. Shows "Lvl N"
+  // inside; fills toward the next level. Purple to distinguish from HP
+  // (crimson) / stamina (goldenrod).
   private createXpBar(): void {
-    const barW = 76;
-    const barH = 20;
-    const gap = 8;
-    const barX = this.scale.width / 2 - barW / 2;
-    const staminaBarY = this.hotbarUI.top - gap - barH;
-    const healthBarY = staminaBarY - gap - barH;
-    const barY = healthBarY - gap - barH;
-    this.add
+    const barW = this.hotbarUI.width;
+    const barH = 12;
+    const barX = this.hotbarUI.left;
+    const barY = this.hotbarUI.bottom + 4;
+    this.xpBarBg = this.add
       .rectangle(barX, barY, barW, barH, 0x1a1f2a, 0.95)
       .setOrigin(0, 0)
       .setStrokeStyle(1, 0x3a4250)
@@ -3264,7 +3327,7 @@ export class MainScene extends Phaser.Scene {
     this.xpBarText = this.add
       .text(barX + barW / 2, barY + barH / 2, "", {
         fontFamily: "monospace",
-        fontSize: "12px",
+        fontSize: "10px",
         color: "#ffffff",
       })
       .setOrigin(0.5, 0.5)

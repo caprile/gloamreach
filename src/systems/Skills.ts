@@ -1,4 +1,5 @@
 import type { DamageType } from "./Weapons";
+import { PLAYER_WALK_SPEED } from "../entities/Player";
 
 // Skills are per-activity levels. For now they ONLY gate recipes (via
 // Recipe.requiredSkills) — a skill level has no stat/damage effect itself.
@@ -74,12 +75,24 @@ export function runningSprintMultiplier(skills: Skills): number {
   return BASE_SPRINT_MULTIPLIER + skills.get("running") * RUNNING_SPRINT_BONUS_PER_LEVEL;
 }
 
-// Short hover-tooltip text for a skill's mechanical impact, or null if it has
-// none (most skills today only gate recipes — "if applicable" per the user).
-export function skillImpactDescription(skill: SkillType): string | null {
-  if (WEAPON_SKILLS.includes(skill)) return "+0.5% weapon damage per level";
-  if (skill === "running") return "+0.5% sprint speed per level";
-  return null;
+// Hover-tooltip text for a skill's mechanical impact — always returns
+// something so every skill's row is hoverable, even ones with no live effect
+// yet (per the user: they want visibility into what a level is *actually*
+// doing today, not just a generic rate). Live-computed off the real current
+// level/skills instance, not a static per-level rate string.
+export function skillImpactDescription(skill: SkillType, skills: Skills): string {
+  if (WEAPON_SKILLS.includes(skill)) {
+    const level = skills.get(skill);
+    const pct = level * WEAPON_SKILL_DAMAGE_PCT_PER_LEVEL * 100;
+    return `+0.5% weapon damage per level — currently +${pct.toFixed(1)}% at Lvl ${level}`;
+  }
+  if (skill === "running") {
+    const level = skills.get("running");
+    const mult = runningSprintMultiplier(skills);
+    const sprint = Math.round(PLAYER_WALK_SPEED * mult);
+    return `+0.5% sprint speed per level — Walk ${PLAYER_WALK_SPEED} / Sprint ${sprint} (x${mult.toFixed(2)}) at Lvl ${level}`;
+  }
+  return "No combat/gather effect yet — recipe gate only";
 }
 
 type LevelUpListener = (skill: SkillType, newLevel: number, xpCost: number) => void;

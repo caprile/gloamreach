@@ -9,6 +9,7 @@ import { Tooltip } from "./Tooltip";
 const SLOT_SIZE = 40;
 const SLOT_GAP = 6;
 const ROW_GAP = 6;
+const BOTTOM_MARGIN = 34;
 const TOTAL_SLOTS = ROW1_COUNT + ROW2_COUNT;
 
 export interface HotbarUIDeps {
@@ -50,7 +51,7 @@ export class HotbarUI {
     this.tooltipUI = new Tooltip(scene, deps.skills, deps.progression);
     const totalW = ROW1_COUNT * SLOT_SIZE + (ROW1_COUNT - 1) * SLOT_GAP;
     this.originX = (scene.scale.width - totalW) / 2;
-    this.row2Y = scene.scale.height - SLOT_SIZE - 14;
+    this.row2Y = scene.scale.height - SLOT_SIZE - BOTTOM_MARGIN;
     this.row1Y = this.row2Y - ROW_GAP - SLOT_SIZE;
     this.render();
   }
@@ -60,6 +61,21 @@ export class HotbarUI {
   // duplicating the centering math.
   get top(): number {
     return this.row1Y;
+  }
+
+  // Left edge / total width / bottom edge of the (row-1-width) hotbar block,
+  // in screen space — lets other fixed HUD elements (the XP bar) match the
+  // hotbar's horizontal span exactly instead of duplicating the centering math.
+  get left(): number {
+    return this.originX;
+  }
+
+  get width(): number {
+    return ROW1_COUNT * SLOT_SIZE + (ROW1_COUNT - 1) * SLOT_GAP;
+  }
+
+  get bottom(): number {
+    return this.row2Y + SLOT_SIZE;
   }
 
   refresh(): void {
