@@ -62,6 +62,8 @@ Everything requested this session is a spoke on that hub:
 - Whether **new-run reseed** is a menu/keypress/death-screen button (M-R1).
 - Concrete **circular biome layout** (how many rings, which biome types, where the final
   boss sits) — only biome 1 (forest/gremlin) exists today; outer rings are stubs (M-W1).
+- ~~Base elite spawn % + night multiplier + whether shack guards stay forced-elite~~ —
+  **resolved, M-EL2 shipped 2026-07-10** (8% base, 3x at night, shack guards stay forced).
 
 ---
 
@@ -176,9 +178,39 @@ Promote the lone Boss Altar to a **larger POI** — a walled gremlin war camp.
   the altar at the center.
 - **Escalating hints** toward it: in-world density ramp (already partial), breadcrumb
   props, and a **discovered-landmark minimap ping** (reuse `MinimapUI.revealLandmark()`,
-  same as the altar landmark already does) once explored near.
+  same as the altar landmark already does) once explored near. Note: the 5 individual
+  Gremlin Shacks scattered through the forest should get this same landmark treatment
+  too, independent of the War Camp — see `CLAUDE.md`'s 2026-07-10 second-round backlog
+  note; small enough to do ahead of this milestone rather than waiting for it.
 - Builds directly on the existing altar/shack/elite systems (5c/5b) — mostly content +
   layout, one hinting pass.
+
+### M-EL2 — Generalized elite spawning (M, Sonnet) — **SHIPPED** 2026-07-10
+
+Built directly after Comfort/before M-FA — the user picked this order via
+`AskUserQuestion` when this milestone was reviewed, since M-FA's premise (a decaying
+bonus on entering a *new* biome) has no real biome-discovery event to hook until M-W1
+ships, while this one is fully self-contained. Full detail in `STATUS.md`'s M-EL2 entry.
+
+- **Boar and Snake elite variants — done.** New `src/entities/Boar.ts` (Boar previously
+  had no dedicated class — MainScene built a bare `Enemy` inline at two call sites) and an
+  `elite?: boolean` param added to `Snake`'s existing constructor. Both follow the
+  Gremlin/Gremling precedent exactly: +50% HP/dmg, +10% move speed, 1.3x scale, 2x loot,
+  crimson/gold recolor (`boar_elite`/`snake_elite`). Fixed a latent bug found along the
+  way: Snake's strike/flee velocity only ever multiplied by `envSpeedMult` (the night
+  buff), never `speedMult` — an elite Snake's own speed bonus would have been silently
+  inert without this fix.
+- **Chance-based elite rolls — done.** `MainScene.rollElite(rng, chanceMult)`, base
+  `ELITE_SPAWN_CHANCE = 0.08` (8%), called at every normal spawn site: `spawnEnemies()`,
+  `spawnAltarDensity()`'s extra gremlin-family spawns, and the M-DN nightfall surge.
+- **Higher elite chance at night — done.** `NIGHT_ELITE_CHANCE_MULT = 3` (→ ~24%),
+  applied only in `spawnNightBatch()`. Verified via a 30x/180-spawn sample: observed
+  23.9% against the expected 24%.
+- **Resolved sub-decision:** Gremlin Shack guards stay hard-guaranteed-elite, unchanged —
+  not folded into the rolled system, per the "deliberate fixed difficulty spike" reasoning
+  above.
+- Kill-scoring needed zero changes — the existing classifier already reads `enemy.elite`
+  generically, so Boar/Snake elite kills automatically score as `"elite"`.
 
 ### M-RL — Relics (trophies → RNG run-length passives) (L, Opus) — the ARPG spine
 
@@ -216,10 +248,13 @@ incremental ethos), then expand the world under it:
 3. **M-DN** (day/night — **shipped** 2026-07-10, see 5i/STATUS.md) → **Comfort item**
    (was M-SB/Sleep-Bed — **shipped** 2026-07-10, see 5j/STATUS.md) — the survival-time
    layer, minus the sleep mechanic (dropped, see M-SB entry above).
-4. **M-FA** (speed payoff).
-5. **M-RL** (relics — the replayability hook).
-6. **M-WC** + **M-TE** (content depth).
-7. **M-W1** (circular multi-biome world) — expand the world beneath a proven loop.
+4. **M-EL2** (generalized elite spawning — **shipped** 2026-07-10, reordered ahead of
+   M-FA per the user — see M-EL2 entry above for why).
+5. **M-FA** (speed payoff) — note: its single-biome-scope question is still open, see
+   the M-FA section above.
+6. **M-RL** (relics — the replayability hook).
+7. **M-WC** + **M-TE** (content depth).
+8. **M-W1** (circular multi-biome world) — expand the world beneath a proven loop.
 
 ## Convention reminders for whoever picks these up
 

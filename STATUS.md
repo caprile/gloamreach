@@ -2,7 +2,57 @@
 
 Last updated: 2026-07-10
 
-### Just finished: Comfort item (Bedroll) — replaces M-SB Sleep/Bed
+### Just finished: M-EL2 — Generalized elite spawning
+
+New milestone stub inserted into the roguelike meta-loop plan
+(`.claude/plans/roguelike-metaloop-master-plan.md`) between M-FA and M-RL, per a
+plan-review discussion with the user (locked via `AskUserQuestion`: do this before M-FA,
+since M-FA's premise — "decaying bonus on entering a new biome" — has no real biome to
+discover until M-W1 ships, while this milestone is self-contained). Built on Sonnet:
+extends an already-established pattern (Group C's Gremlin/Gremling elites) to two more
+enemy types and a probabilistic roll, rather than introducing new architecture.
+
+- **Boar and Snake now have elite variants**, following the Gremlin/Gremling precedent
+  exactly: +50% HP/damage, +10% move speed (`speedMult`), 1.3x scale, 2x loot, and a
+  distinct crimson/gold recolor (`boar_elite`/`snake_elite` in `BootScene.ts`). Boar
+  previously had no dedicated class — MainScene constructed a bare `Enemy` inline at two
+  call sites — so it got a new `src/entities/Boar.ts` (mirrors `Gremlin.ts`'s shape) to
+  hold the elite-scaling logic in one place instead of duplicating it. Snake's existing
+  class gained an `elite?: boolean` constructor param; its `STRIKE_SPEED`/`FLEE_SPEED`
+  velocity calculations previously multiplied only by `envSpeedMult` (the night buff) and
+  not `speedMult` at all, so elite Snake's own speed bonus would have been silently
+  inert — fixed alongside the elite work.
+- **Chance-based elite rolls** replace the old all-or-nothing-per-site model: a new
+  `MainScene.rollElite(rng, chanceMult)` helper (base `ELITE_SPAWN_CHANCE = 0.08`) is now
+  called at every normal spawn site — `spawnEnemies()` (Boar/Snake/Gremlin/Gremling),
+  `spawnAltarDensity()`'s extra gremlin-family spawns, and the M-DN nightfall surge
+  (`spawnNightBatch()`, now also spawning Boar/Snake via the new `Boar` class instead of
+  its own inline `Enemy` literal).
+- **Higher elite chance at night**: `NIGHT_ELITE_CHANCE_MULT = 3` (→ ~24%) applied only in
+  `spawnNightBatch()` — a third night effect alongside M-DN's existing speed buff and
+  nightfall surge, still no damage buff.
+- **Gremlin Shack guards are unchanged** (still hardcoded `elite: true`, not rolled) — per
+  the open sub-decision noted in the master plan, they stay a deliberate fixed difficulty
+  spike guarding a chest rather than folding into the probabilistic system.
+- Kill-scoring needed **zero changes** — `MainScene`'s kill-category classifier already
+  reads the generic `enemy.elite` field (`Run.ts` scoring), so Boar/Snake elite kills
+  automatically count as `"elite"` kills same as Gremlin/Gremling always did.
+
+Verified via `preview_eval`: spawned the world and confirmed elite Boar/Snake instances
+carry correct stats (Elite Boar: 30 HP / 38 bite dmg / scale 1.3 / texture `boar_elite`;
+Elite Snake: 17 HP / 30 bite dmg / scale 1.3 / texture `snake_elite`) and doubled loot
+rolls (`rollLoot()` → 2/2 instead of 1/1). Ran `spawnNightBatch()` 30x (180 spawns) and
+measured an observed 23.9% elite rate against the expected 24% (8% × 3). `tsc --noEmit`
+clean, no console errors.
+
+Two smaller backlog items flagged in the same review pass (not yet built, see
+`CLAUDE.md`'s 2026-07-10 "second round" note): Gremlin Shacks should get the same minimap
+landmark the Boss Altar already has, and interactables should show a hover highlight
+border. Next per the locked build order: **M-FA (Fresh Assault discovery timer)** — a new
+core mechanic, needs Opus, though its single-biome scope should be revisited before
+starting (see the master plan's M-FA note).
+
+### Previously: Comfort item (Bedroll) — replaces M-SB Sleep/Bed
 
 Fourth milestone slot of the roguelike meta-loop (`.claude/plans/roguelike-metaloop-master-plan.md`),
 after M-FX/M-R1/M-DN. Plan: `.claude/plans/imperative-riding-island.md`. Built on Sonnet

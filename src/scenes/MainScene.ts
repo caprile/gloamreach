@@ -11,6 +11,7 @@ import {
   type ToolType,
 } from "../entities/ResourceNode";
 import { Enemy } from "../entities/Enemy";
+import { Boar } from "../entities/Boar";
 import { Snake } from "../entities/Snake";
 import { RangedGremlin, MeleeGremling } from "../entities/Gremlin";
 import { Projectile, type ProjectileConfig } from "../entities/Projectile";
@@ -160,6 +161,15 @@ const POI_LIGHT_RADIUS = 150;
 // the player. Culled at dawn unless they engaged (see cleanupNightSpawns).
 const NIGHT_SPAWN_RING_MIN = 500;
 const NIGHT_SPAWN_RING_MAX = 850;
+
+// Generalized elite spawning (M-EL2, added 2026-07-10) — a base % chance for
+// any normal enemy spawn (Boar/Snake/Gremlin/Gremling) to roll as its elite
+// variant instead, replacing the old all-or-nothing-per-site model (only the
+// Gremlin Shack guards, still hardcoded elite:true below, force it). Night
+// spawns (the M-DN nightfall surge) roll at a multiplied chance — first-pass
+// numbers, tune from playtesting.
+const ELITE_SPAWN_CHANCE = 0.08;
+const NIGHT_ELITE_CHANCE_MULT = 3;
 
 // Gremlin Shack chest loot — re-rolled per "empty cycle" (see
 // LootContainer.rollIfEmpty/rearmIfEmpty), not per guard-respawn. First-pass,
@@ -811,25 +821,19 @@ export class MainScene extends Phaser.Scene {
       this.enemyGroup.add(enemy);
       this.nightSpawns.push(enemy);
     };
-    // First-pass mix (~6): 2 Boar, 2 Snake, 2 Gremlin — all normal (non-elite).
+    // First-pass mix (~6): 2 Boar, 2 Snake, 2 Gremlin. Each rolls elite at the
+    // night-multiplied chance (M-EL2) — the nightfall surge is also where
+    // the user wanted a higher elite rate, on top of already being denser/
+    // faster (M-DN).
     for (let i = 0; i < 2; i++) {
-      spawn((x, y) =>
-        new Enemy(this, {
-          x,
-          y,
-          texture: "boar",
-          displayName: "Boar",
-          loot: [
-            { resource: "boar_meat", min: 1, max: 1 },
-            { resource: "bones", min: 1, max: 1 },
-          ],
-          maxHealth: 20,
-          biteDamage: 25,
-        }),
-      );
+      spawn((x, y) => new Boar(this, { x, y, elite: this.rollElite(rng, NIGHT_ELITE_CHANCE_MULT) }));
     }
-    for (let i = 0; i < 2; i++) spawn((x, y) => new Snake(this, { x, y }));
-    for (let i = 0; i < 2; i++) spawn((x, y) => new RangedGremlin(this, { x, y }));
+    for (let i = 0; i < 2; i++) {
+      spawn((x, y) => new Snake(this, { x, y, elite: this.rollElite(rng, NIGHT_ELITE_CHANCE_MULT) }));
+    }
+    for (let i = 0; i < 2; i++) {
+      spawn((x, y) => new RangedGremlin(this, { x, y, elite: this.rollElite(rng, NIGHT_ELITE_CHANCE_MULT) }));
+    }
     this.eventLog.add("info", "Night falls — the forest stirs...");
   }
 
@@ -1681,6 +1685,13 @@ export class MainScene extends Phaser.Scene {
     return new Phaser.Math.RandomDataGenerator([String(Date.now()), String(Math.random())]);
   }
 
+  // Elite-chance roll shared by every normal spawn path (M-EL2). `chanceMult`
+  // lets the nightfall surge roll at a higher rate than daytime scatter
+  // without duplicating the base percentage in two places.
+  private rollElite(rng: Phaser.Math.RandomDataGenerator, chanceMult = 1): boolean {
+    return rng.frac() < Math.min(1, ELITE_SPAWN_CHANCE * chanceMult);
+  }
+
   // Draw x/y within world margins, biased to a preferred zone via rejection
   // sampling and kept out of the player's spawn clearing. Falls back to the
   // last draw after a cap so a tiny/absent zone can't hang the loop.
@@ -1948,18 +1959,7 @@ export class MainScene extends Phaser.Scene {
     const BOAR_GRASSY_COUNT = BOAR_COUNT - BOAR_FOREST_COUNT;
     const spawnBoar = (zone: "forest" | "grassy") => {
       const { x, y } = this.pickSpawnPoint(rng, zone, BOAR_CLEAR_RADIUS, true);
-      const enemy = new Enemy(this, {
-        x,
-        y,
-        texture: "boar",
-        displayName: "Boar",
-        loot: [
-          { resource: "boar_meat", min: 1, max: 1 },
-          { resource: "bones", min: 1, max: 1 },
-        ],
-        maxHealth: 20,
-        biteDamage: 25,
-      });
+      const enemy = new Boar(this, { x, y, elite: this.rollElite(rng) });
       this.enemies.push(enemy);
       this.enemyGroup.add(enemy);
     };
@@ -1975,7 +1975,7 @@ export class MainScene extends Phaser.Scene {
     const SNAKE_COUNT = 28; // bumped for the ~2x bigger map (was 15)
     for (let i = 0; i < SNAKE_COUNT; i++) {
       const { x, y } = this.pickSpawnPoint(rng, "grassy", 200, true);
-      const snake = new Snake(this, { x, y });
+      const snake = new Snake(this, { x, y, elite: this.rollElite(rng) });
       this.enemies.push(snake);
       this.enemyGroup.add(snake);
     }
@@ -2007,7 +2007,7 @@ export class MainScene extends Phaser.Scene {
         true,
       );
       gremlinPoints.push({ x, y });
-      const gremlin = new RangedGremlin(this, { x, y });
+      const gremlin = new RangedGremlin(this, { x, y, elite: this.rollElite(rng) });
       this.enemies.push(gremlin);
       this.enemyGroup.add(gremlin);
     }
@@ -2023,7 +2023,7 @@ export class MainScene extends Phaser.Scene {
         true,
       );
       gremlinPoints.push({ x, y });
-      const gremling = new MeleeGremling(this, { x, y });
+      const gremling = new MeleeGremling(this, { x, y, elite: this.rollElite(rng) });
       this.enemies.push(gremling);
       this.enemyGroup.add(gremling);
     }
@@ -2142,13 +2142,13 @@ export class MainScene extends Phaser.Scene {
     const ALTAR_EXTRA_GREMLINGS = 4;
     for (let i = 0; i < ALTAR_EXTRA_GREMLINS; i++) {
       const { x, y } = this.pickPointNearAltar(rng, ALTAR_NEAR_RADIUS);
-      const gremlin = new RangedGremlin(this, { x, y });
+      const gremlin = new RangedGremlin(this, { x, y, elite: this.rollElite(rng) });
       this.enemies.push(gremlin);
       this.enemyGroup.add(gremlin);
     }
     for (let i = 0; i < ALTAR_EXTRA_GREMLINGS; i++) {
       const { x, y } = this.pickPointNearAltar(rng, ALTAR_NEAR_RADIUS);
-      const gremling = new MeleeGremling(this, { x, y });
+      const gremling = new MeleeGremling(this, { x, y, elite: this.rollElite(rng) });
       this.enemies.push(gremling);
       this.enemyGroup.add(gremling);
     }

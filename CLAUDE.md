@@ -653,6 +653,26 @@ mouse-driven only. Don't reintroduce a keybind for this without being asked. Spa
    the fully generic placed-object Destroy path (`destroyPlacedObject`) verbatim — no new
    wiring needed since it isn't itemKey-specific. Built on Sonnet (small, self-contained
    addition on top of already-designed systems, not a new core mechanic).
+5k. **M-EL2 (generalized elite spawning)** — plan/detail: the roguelike master plan's
+   M-EL2 section + `STATUS.md`. Reordered ahead of M-FA per the user (M-FA's "decaying
+   bonus on entering a new biome" has no real biome-discovery event to hook until M-W1
+   ships; this milestone is self-contained). Built on Sonnet — extends the already-shipped
+   Gremlin/Gremling elite pattern rather than introducing new architecture. **Boar and
+   Snake now have elite variants** (new `src/entities/Boar.ts` — Boar previously had no
+   dedicated class, just a bare `Enemy` MainScene built inline at two call sites — plus an
+   `elite?: boolean` param added to `Snake`'s constructor): +50% HP/dmg, +10% move speed,
+   1.3x scale, 2x loot, crimson/gold recolor, mirroring Gremlin/Gremling's precedent
+   exactly. Fixed a latent bug along the way: Snake's strike/flee velocity only ever
+   multiplied by `envSpeedMult` (the night speed buff), never `speedMult` — an elite
+   Snake's own speed bonus would have silently done nothing without this fix. **Elites are
+   now chance-based everywhere** instead of all-or-nothing-per-site: a new
+   `MainScene.rollElite(rng, chanceMult)` (base 8%) rolls at every normal spawn site
+   (`spawnEnemies()`, `spawnAltarDensity()`, the M-DN nightfall surge), with a **3x chance
+   multiplier at night** (~24%) applied only in the nightfall surge — a third night effect
+   alongside M-DN's existing speed buff and enemy-density surge. **Gremlin Shack guards
+   stay hardcoded `elite: true`**, unchanged — a deliberate fixed difficulty spike, not
+   folded into the rolled system. Kill-scoring needed zero changes since it already reads
+   `enemy.elite` generically.
 
 **A new umbrella plan for the long-requested roguelike run/score meta-loop** now exists:
 `.claude/plans/roguelike-metaloop-master-plan.md` (drafted 2026-07-10, locked build order
@@ -662,7 +682,7 @@ hardcore one-life death instead of the tombstone-and-respawn model, for now) —
 plan file for the full locked-decision list before touching anything in items 6 (World &
 discovery) or 7 (ARPG loot). Locked build order: **M-FX (done) → M-R1 (Run/Score/
 Hardcore death, done — see 5h) → M-DN (Day/Night, done — see 5i) → Comfort item (was
-M-SB/Sleep-Bed, done — see 5j) →
+M-SB/Sleep-Bed, done — see 5j) → M-EL2 (generalized elite spawning, done — see 5k) →
 M-FA (Fresh Assault discovery
 timer) → M-RL (trophy → RNG relics) → M-WC (Gremlin War Camp) + M-TE (trophy-gated gear)
 → M-W1 (circular multi-biome world, last).**
@@ -776,6 +796,42 @@ Blunt 5/Pierce 10/Light Armor 5/Running 3/Chopping 4, max-lvl Primal Spear):**
   of any rebalance, to confirm whether it's a genuine imbalance or just an early-game
   perception (points are cheap relative to levels-to-next-skill-tier early on, so the
   comparison may shift a lot by mid/late game).
+
+**Added 2026-07-10, second round (playtest/backlog items, idea-stage, not locked):**
+
+- **Gremlin Shacks should also get a minimap landmark.** Today only a discovered Boss
+  Altar gets a one-time landmark burned into `MinimapUI` via `revealLandmark()`
+  (roadmap 5d). The 5 Gremlin Shacks (5b) don't — they should follow the exact same
+  "discovered fixed structure gets a marker" treatment once the player explores within
+  fog-reveal radius of one. Small, mechanically identical extension of the existing
+  pattern (`MainScene.ts`'s altar-reveal check, generalized to also loop
+  `gremlinShacks`) — not blocked on the bigger minimap-radius/full-map rework noted
+  below.
+- **Hover highlight border on interactables.** Nothing currently gives a hovered
+  tree/rock/enemy/chest/station a visual outline — the only hover feedback today is the
+  bottom-right text prompt (and cursor, where applicable). Add a highlight (outline/glow)
+  on whatever `MainScene.updateHover()` currently resolves as hovered (node/enemy/rack/
+  shack/altar/workbench/campfire/etc.), gated the same way the prompt already is (reach +
+  equip rules) so it doesn't reveal anything the prompt-gating design intentionally
+  hides. Pure UI polish on top of the existing hover system, no new state.
+- **Generalize Elites to a % chance across all enemy types, with a higher chance at
+  night.** Elites currently only exist on `RangedGremlin`/`MeleeGremling` (Group C,
+  `witty-drifting-aurora.md`), and only ever spawn via the Gremlin Shack guards being
+  hardcoded `elite: true` — no Boar/Snake elite variant exists, and no *chance-based*
+  elite roll exists anywhere (every non-guard spawn is always normal). Requested:
+  (1) Boar and Snake need their own elite variant (stat multiplier + distinct texture +
+  loot bump, following the Gremlin/Gremling precedent — own numbers per enemy, per the
+  standing "don't generalize per-enemy combat stats" rule), and (2) every normal spawn
+  path (`spawnEnemies()`, `spawnAltarDensity()`, the M-DN nightfall surge) should roll a
+  **base % chance** for any given spawn to come in elite instead of it being all-or-
+  nothing per spawn *site*. (3) That chance should go up specifically for night-time
+  spawns (ties into M-DN's existing "enemies slightly faster at night" + nightfall-surge
+  mechanism — an elite-chance bump is a natural third night effect alongside those two).
+  Exact base %, night multiplier, and whether Gremlin Shack guards stay hard-guaranteed-
+  elite (rather than rolled) are open sub-decisions. See the roguelike master plan
+  (`.claude/plans/roguelike-metaloop-master-plan.md`) — this slots in as a prerequisite
+  content pass for M-RL (more elite variety and more trophy sources feed the relic
+  system), noted there as a new milestone stub.
 
 ## First biome — content notes (idea stage, not locked)
 

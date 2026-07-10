@@ -43,17 +43,23 @@ export class Snake extends Enemy {
   // rather than fully re-hiding — see takeHit()'s retaliation-flee case.
   private reengageAfterFlee = false;
 
-  constructor(scene: Phaser.Scene, cfg: { x: number; y: number }) {
+  constructor(scene: Phaser.Scene, cfg: { x: number; y: number; elite?: boolean }) {
+    const elite = cfg.elite ?? false;
     super(scene, {
       x: cfg.x,
       y: cfg.y,
-      texture: "snake",
-      displayName: "Snake",
-      loot: [{ resource: "leather", min: 1, max: 1 }],
-      maxHealth: MAX_HEALTH,
-      biteDamage: BITE_DAMAGE,
+      texture: elite ? "snake_elite" : "snake",
+      displayName: elite ? "Elite Snake" : "Snake",
+      loot: elite ? [{ resource: "leather", min: 2, max: 2 }] : [{ resource: "leather", min: 1, max: 1 }],
+      maxHealth: elite ? Math.round(MAX_HEALTH * 1.5) : MAX_HEALTH,
+      biteDamage: elite ? Math.round(BITE_DAMAGE * 1.5) : BITE_DAMAGE,
     });
     this.setAlpha(HIDDEN_ALPHA);
+    if (elite) {
+      this.elite = true;
+      this.speedMult = 1.1;
+      this.setScale(1.3);
+    }
   }
 
   // Fully own implementation — deliberately does not call super.update()
@@ -91,8 +97,8 @@ export class Snake extends Enemy {
         return false;
       }
       const angle = Phaser.Math.Angle.Between(this.x, this.y, playerX, playerY);
-      const vx = Math.cos(angle) * STRIKE_SPEED * this.envSpeedMult;
-      const vy = Math.sin(angle) * STRIKE_SPEED * this.envSpeedMult;
+      const vx = Math.cos(angle) * STRIKE_SPEED * this.speedMult * this.envSpeedMult;
+      const vy = Math.sin(angle) * STRIKE_SPEED * this.speedMult * this.envSpeedMult;
       body.setVelocity(vx, vy);
       this.applyFacing(vx, vy);
       return false;
@@ -115,8 +121,8 @@ export class Snake extends Enemy {
       return false;
     }
     const awayAngle = Phaser.Math.Angle.Between(playerX, playerY, this.x, this.y);
-    const vx = Math.cos(awayAngle) * FLEE_SPEED * this.envSpeedMult;
-    const vy = Math.sin(awayAngle) * FLEE_SPEED * this.envSpeedMult;
+    const vx = Math.cos(awayAngle) * FLEE_SPEED * this.speedMult * this.envSpeedMult;
+    const vy = Math.sin(awayAngle) * FLEE_SPEED * this.speedMult * this.envSpeedMult;
     body.setVelocity(vx, vy);
     this.applyFacing(vx, vy);
     return false;

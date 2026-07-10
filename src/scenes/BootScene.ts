@@ -79,6 +79,16 @@ export class BootScene extends Phaser.Scene {
     g.fillRect(0, 8, 6, 6); // snout
     g.generateTexture("boar", 26, 20);
 
+    // Elite Boar (M-EL2) — same silhouette, crimson/gold recolor matching the
+    // gremlin_elite palette so "elite" reads consistently across every enemy
+    // type. The runtime setScale(1.3) stacks size on top, same pattern.
+    g.clear();
+    g.fillStyle(0x6a1f2a, 1); // crimson body
+    g.fillRect(2, 4, 22, 14);
+    g.fillStyle(0xf0c040, 1); // gold snout accent
+    g.fillRect(0, 8, 6, 6);
+    g.generateTexture("boar_elite", 26, 20);
+
     // Snake — hidden/ambush enemy. 20x8: long green body + darker head patch.
     // Low profile reads as "in the grass" even before the hidden-alpha fade
     // (Snake.ts) is applied.
@@ -88,6 +98,14 @@ export class BootScene extends Phaser.Scene {
     g.fillStyle(0x274a1c, 1);
     g.fillRect(0, 1, 6, 6); // head
     g.generateTexture("snake", 20, 8);
+
+    // Elite Snake (M-EL2) — same crimson/gold elite palette.
+    g.clear();
+    g.fillStyle(0x6a1f2a, 1);
+    g.fillRect(1, 2, 18, 4);
+    g.fillStyle(0xf0c040, 1);
+    g.fillRect(0, 1, 6, 6);
+    g.generateTexture("snake_elite", 20, 8);
 
     // Ranged Gremlin — stronger variant. 18x22: a squat purple-green
     // humanoid with a lighter belly patch, reads as "bigger/tougher" than the
