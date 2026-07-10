@@ -161,3 +161,42 @@ Implemented as designed above, with these concrete details:
   `localStorage` → YOU DIED screenshot, forced win → VICTORY at exact fast/slow score
   math, New Run reset while scores persisted, HUD minimize toggle) — see `STATUS.md`'s
   M-R1 entry for the full verification log. `tsc --noEmit` clean, no console errors.
+
+## Playtest fix batch 2026-07-10 — "New Run" freeze, Clear Scores, boss tuning
+
+First real playthrough (14:17 run, max spear + max Gremlin armor, 6 elite kills, 1 boss
+kill at player level 5, score 3170) found the shipped verification above was incomplete:
+it only spot-checked `elapsedMs`/`kills`/seed right after `scene.restart()`, never let a
+real gameplay tick actually run afterward against a populated world.
+
+- **"New Run" was actually broken** — the `create()` reset gotcha above was only applied
+  to `runOver`/`isDead`/`run`. Every other stateful field on `MainScene` — `this.enemies`,
+  `this.nodes`, `this.obstacleNodes`, `this.placedObjects`, `this.gremlinShacks`,
+  `this.bossAltars`, `this.dryingRacks`, `this.placedLabels`, the `discovered*` Sets, and
+  every per-run **system** (`Skills`, `PlayerProgression`, `Crafting`, the backpack
+  `ItemContainer`, `Hotbar`, `Equipment`, `EventLog`, `Stamina`, `Health`, `BuffManager`) —
+  is field-initialized once at construction and silently carried over into the "new" run.
+  The entity arrays specifically kept references to GameObjects the scene shutdown had
+  already destroyed; the first `update()` tick of the new run threw iterating them and
+  froze the entire game loop (confirmed via a static `window.__game.loop.frame` across two
+  separate eval calls — a real stuck rAF, not the documented backgrounded-tab preview
+  quirk, which looked identical at first and cost significant debugging time before ruling
+  it out). Fix: `create()` now explicitly resets every one of those fields at the top, so
+  "New Run" really is the "clean full reset" this doc always said it would be (fresh
+  character too, not just a fresh world — only the localStorage high-score table
+  survives). Verified: killed a run with 102 live enemies present, clicked New Run,
+  confirmed `window.__game.loop.frame` kept advancing on a follow-up check and the world
+  was fully playable (screenshotted).
+- **New "Clear Scores" button** — not in the original design. `HighScores.clearHighScores()`
+  wipes the `localStorage` key; wired to a `[ Clear ]` link on `RunEndUI`'s high-score
+  table header. `MainScene.endRun()` was split into a reusable `showRunEndUI(entries, rank)`
+  so the Clear button can re-show the same screen with an emptied table without a full run
+  restart.
+- **Boss tuning** (`GremlinKing.ts`, playtest feedback, first-pass numbers — no numeric
+  "boss damage taken" baseline was captured, so retest before trusting these as final):
+  cleave range 70→90 / arc 120°→140° / damage 22→30; charge ("line attack") speed
+  340→480 (telegraph duration untouched — the dodge window stays readable, only the
+  punish for not dodging got harsher); slam radius 110→150 / damage 35→45; attack
+  cooldown 1200→950ms.
+
+See `STATUS.md`'s "M-R1 playtest fixes" entry for the full verification log.

@@ -8,6 +8,7 @@ export interface RunEndDeps {
   entries: ScoreEntry[];
   rank: number; // 1-based rank of this run in the table (0 if off-table)
   onNewRun: () => void;
+  onClearScores: () => void;
 }
 
 // Terminal run-end / score screen (M-R1). Full-screen scrim + centered panel,
@@ -95,6 +96,20 @@ export class RunEndUI {
 
     // High-score table (top 5), highlighting this run's row by rank.
     this.text(bx, y, "High Scores", 14, "#e3b25a");
+    const clearBtn = this.scene.add
+      .text(this.panelX + PANEL_W - 28, y, "[ Clear ]", {
+        fontFamily: "monospace",
+        fontSize: "12px",
+        color: "#7c8494",
+      })
+      .setOrigin(1, 0)
+      .setScrollFactor(0)
+      .setDepth(DEPTH_TEXT)
+      .setInteractive({ useHandCursor: true })
+      .on("pointerover", () => clearBtn.setColor("#c25a5a"))
+      .on("pointerout", () => clearBtn.setColor("#7c8494"))
+      .on("pointerdown", () => deps.onClearScores());
+    this.objects.push(clearBtn);
     y += 22;
     const top = deps.entries.slice(0, 5);
     if (top.length === 0) {

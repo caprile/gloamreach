@@ -588,6 +588,20 @@ mouse-driven only. Don't reintroduce a keybind for this without being asked. Spa
    clock+score readout (fixed-HUD depth 2820), minimizable to just the clock via **J**
    (KeybindsUI's panel nudged down from `PANEL_Y` 10→44 to clear it; EventLogUI follows).
    See `STATUS.md` for full detail + verification.
+   **Playtest fix batch (same-day):** the first real playthrough found "New Run" was
+   actually broken — `create()`'s reset only covered `runOver`/`isDead`/`run`, so every
+   other per-run field (`this.enemies`/`this.nodes`/`this.placedObjects`/etc., plus every
+   system instance — `Skills`, `PlayerProgression`, `Crafting`, backpack `ItemContainer`,
+   `Hotbar`, `Equipment`, `EventLog`, `Stamina`, `Health`, `BuffManager`) silently carried
+   over from the prior run (same field-initializer gotcha, just incompletely applied); the
+   stale destroyed-entity arrays crashed the very first post-restart `update()` tick and
+   froze the game. `create()` now resets **every** per-run field, so New Run is a true
+   fresh-character reset (only the localStorage high-score table survives). Also added: a
+   **`[ Clear ]`** link on `RunEndUI`'s high-score header (`HighScores.clearHighScores()`,
+   `MainScene.showRunEndUI()` factored out of `endRun()` to support it), and first-pass
+   `GremlinKing` tuning (cleave/slam range+damage up, charge speed 340→480, cooldown
+   1200→950ms) off early playtest feedback. See `.claude/plans/rustling-weaving-lovelace.md`'s
+   "Playtest fix batch" addendum + `STATUS.md`.
 
 **A new umbrella plan for the long-requested roguelike run/score meta-loop** now exists:
 `.claude/plans/roguelike-metaloop-master-plan.md` (drafted 2026-07-10, locked build order

@@ -45,3 +45,12 @@ export function recordHighScore(entry: ScoreEntry): { entries: ScoreEntry[]; ran
   }
   return { entries: trimmed, rank: rankIndex >= 0 && rankIndex < MAX_ENTRIES ? rankIndex + 1 : 0 };
 }
+
+// Wipe the persisted table. Best-effort, same tolerance as recordHighScore.
+export function clearHighScores(): void {
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+  } catch {
+    // Best-effort — nothing to clean up if the store is blocked/unavailable.
+  }
+}

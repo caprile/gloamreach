@@ -94,7 +94,8 @@ import { MinimapUI, PANEL_W as MINIMAP_W, PANEL_H as MINIMAP_H, MARGIN as MINIMA
 import { BossHealthUI } from "../ui/BossHealthUI";
 import { FogOfWar, REVEAL_RADIUS } from "../systems/Fog";
 import { Run, type RunOutcome, type KillCategory } from "../systems/Run";
-import { recordHighScore } from "../systems/HighScores";
+import { clearHighScores, recordHighScore } from "../systems/HighScores";
+import type { ScoreEntry } from "../systems/HighScores";
 import { RunHudUI } from "../ui/RunHudUI";
 import { RunEndUI } from "../ui/RunEndUI";
 
@@ -346,11 +347,69 @@ export class MainScene extends Phaser.Scene {
 
   create(): void {
     // Reset per-run state up front — scene.restart() (New Run) re-runs create()
-    // on the same instance, so boolean field initializers don't re-fire; reset
-    // them explicitly or a fresh run would start frozen/dead.
+    // on the same instance, so field initializers (booleans, `= []`/`new Map()`
+    // collections, and system objects like Skills/Inventory) don't re-fire and
+    // would otherwise carry stale values/destroyed-object references into the
+    // new run. This was previously only done for runOver/isDead/run, which left
+    // this.enemies/this.nodes/etc. full of references to GameObjects destroyed
+    // by the scene shutdown — iterating them in update() threw and froze the
+    // game the instant "New Run" was clicked. Reset every per-run field here so
+    // "New Run" is the clean full reset the design always intended.
     this.runOver = false;
     this.isDead = false;
     this.run = new Run();
+
+    this.nodes = [];
+    this.obstacleNodes = [];
+    this.skills = new Skills();
+    this.progression = new PlayerProgression();
+    this.crafting = new Crafting();
+    this.backpack = new ItemContainer(BACKPACK_SIZE);
+    this.discovered = new Set<string>();
+    this.discoveredUpgradeIds = new Set<string>();
+    this.discoveredCookRecipeIds = new Set<string>();
+    this.equippedTool = null;
+    this.equippedWeapon = null;
+    this.equippedWeaponName = null;
+    this.equippedWeaponTier = 0;
+    this.hotbar = new Hotbar();
+    this.equipment = new Equipment();
+    this.eventLog = new EventLog();
+    this.craftingMenuLastNearWorkbench = null;
+    this.dryingRacks = [];
+    this.openRack = null;
+    this.hoveredRack = null;
+    this.hoveredWorkbench = null;
+    this.hoveredCampfire = null;
+    this.openCampfire = null;
+    this.gremlinShacks = [];
+    this.openChest = null;
+    this.hoveredShack = null;
+    this.altarPosition = null;
+    this.bossAltars = [];
+    this.hoveredAltar = null;
+    this.gremlinKing = null;
+    this.upgradeTarget = null;
+    this.placedLabels = new Map();
+    this.dragSource = null;
+    this.dragGhost = null;
+    this.lastClickKey = null;
+    this.lastClickAt = -Infinity;
+    this.pendingSingleClick = null;
+    this.hoveredNode = null;
+    this.hoveredEnemy = null;
+    this.lastToolHitAt = 0;
+    this.lastWeaponHitAt = 0;
+    this.stamina = new Stamina();
+    this.enemies = [];
+    this.health = new Health();
+    this.buffs = new BuffManager();
+    this.invulnerableUntil = 0;
+    this.placementMode = null;
+    this.placementGhost = null;
+    this.placedObjects = [];
+    this.everPlacedWorkbench = false;
+    this.suppressNextPointerdown = false;
 
     // Procedural biome layout — must exist before spawning so nodes/enemies
     // can query zone type for placement. Seeded randomly per session (not a
@@ -2505,12 +2564,23 @@ export class MainScene extends Phaser.Scene {
       level: this.progression.level,
       dateISO: new Date().toISOString(),
     });
+    this.showRunEndUI(entries, rank);
+  }
+
+  // Shared by endRun() and the run-end screen's own "Clear" button (which
+  // needs to re-show itself with an emptied table, not just wipe storage).
+  private showRunEndUI(entries: ScoreEntry[], rank: number): void {
     this.runEndUI.show({
       run: this.run,
       level: this.progression.level,
       entries,
       rank,
       onNewRun: () => this.scene.restart(),
+      onClearScores: () => {
+        clearHighScores();
+        this.runEndUI.hide();
+        this.showRunEndUI([], 0);
+      },
     });
   }
 

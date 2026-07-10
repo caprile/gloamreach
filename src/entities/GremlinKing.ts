@@ -28,12 +28,12 @@ const POISE_REGEN_PER_SEC = 15;
 const CLEAVE_TELEGRAPH_MS = 550;
 const CLEAVE_EXECUTE_MS = 200;
 const CLEAVE_RECOVER_MS = 700;
-const CLEAVE_RANGE = 70;
-const CLEAVE_ARC_DEG = 120;
-const CLEAVE_DAMAGE = 22;
+const CLEAVE_RANGE = 90; // was 70 — playtest (M-R1 first clear) found the AoE read as too small
+const CLEAVE_ARC_DEG = 140; // was 120
+const CLEAVE_DAMAGE = 30; // was 22 — playtest damage bump
 
-const CHARGE_TELEGRAPH_MS = 850;
-const CHARGE_SPEED = 340;
+const CHARGE_TELEGRAPH_MS = 850; // dodge window stays readable — only the dash itself sped up
+const CHARGE_SPEED = 480; // was 340 — playtest: "line attack should be faster"
 const CHARGE_MAX_DISTANCE = 420;
 const CHARGE_RECOVER_MS = 900;
 // Point+radius approximation, not a true capsule/segment check. Scaled by
@@ -43,13 +43,13 @@ const CHARGE_RECOVER_MS = 900;
 // MainScene.enemyReach()'s attack/prompt-reach scaling for normal enemies,
 // just not previously applied to the boss's own charge math.
 const CHARGE_HIT_RADIUS = 34 * BOSS_SCALE;
-const CHARGE_DAMAGE = 30;
+const CHARGE_DAMAGE = 40; // was 30 — playtest damage bump
 
 const SLAM_TELEGRAPH_MS = 950;
 const SLAM_EXECUTE_MS = 150;
 const SLAM_RECOVER_MS = 800;
-const SLAM_RADIUS = 110;
-const SLAM_DAMAGE = 35;
+const SLAM_RADIUS = 150; // was 110 — playtest: "aoes should be bigger"
+const SLAM_DAMAGE = 45; // was 35 — playtest damage bump
 const SLAM_KNOCKBACK = 260;
 
 // Phase 2 (<50% HP): shorter telegraphs/recovery + faster approach — NOT more
@@ -62,7 +62,7 @@ const ENRAGE_TELEGRAPH_MULTIPLIER = 0.65;
 const ENRAGE_RECOVER_MULTIPLIER = 0.75;
 const ENRAGE_MOVE_MULTIPLIER = 1.3;
 
-const ATTACK_COOLDOWN_MS = 1200;
+const ATTACK_COOLDOWN_MS = 950; // was 1200 — playtest: boss was too passive between attacks
 const POISE_BAR_OFFSET_Y = 10; // px below the inherited HP bar's own line
 
 function telegraphMsFor(attack: BossAttackType): number {

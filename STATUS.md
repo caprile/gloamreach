@@ -2,7 +2,48 @@
 
 Last updated: 2026-07-10
 
-### Just finished: M-R1 — Run + Score + Hardcore Death
+### Just finished: M-R1 playtest fixes — New Run freeze, Clear Scores, boss tuning
+
+First real playtest of M-R1 (14:17 run, max spear + max Gremlin armor, 6 elite kills, 1
+boss kill at player level 5, score 3170) surfaced a real bug plus balance feedback. Built
+on Sonnet (fixes on an existing system, no new mechanic).
+
+- **"New Run" froze the game — real bug, not a preview quirk.** `MainScene.create()`'s
+  M-R1 reset only covered `runOver`/`isDead`/`run` (see below), but `this.enemies`,
+  `this.nodes`, `this.obstacleNodes`, `this.placedObjects`, `this.gremlinShacks`,
+  `this.bossAltars`, `this.dryingRacks`, `this.placedLabels`, `this.discovered*` Sets, and
+  every per-run **system** (`Skills`, `PlayerProgression`, `Crafting`, `backpack`
+  `ItemContainer`, `Hotbar`, `Equipment`, `EventLog`, `Stamina`, `Health`, `BuffManager`)
+  are all field-initialized **once at construction** and — per the standing
+  `scene.restart()`-doesn't-re-run-field-initializers gotcha — silently carried over into
+  the "new" run. `this.enemies` etc. specifically still held references to GameObjects the
+  scene shutdown had already destroyed; the first `update()` tick of the new run iterated
+  them and threw, freezing the game loop entirely (confirmed via `window.__game.loop.frame`
+  staying static across ticks — a genuinely stuck rAF, not the documented backgrounded-tab
+  preview quirk, which was a red herring encountered while first investigating this). Fix:
+  `create()` now explicitly resets every one of those fields at the top, so "New Run" is
+  the clean full reset (fresh character too — Skills/Progression/inventory/equipment all
+  reset, only the localStorage high-score table survives) the original M-R1 plan doc always
+  said it should be. Verified live: killed a run with 102 live enemies, clicked New Run,
+  confirmed `window.__game.loop.frame` kept advancing afterward and the world was fully
+  playable (screenshotted).
+- **"Clear Scores" button** — `HighScores.clearHighScores()` (new, wipes the
+  `localStorage` key) wired to a `[ Clear ]` link on `RunEndUI`'s high-score table header;
+  `MainScene.showRunEndUI()` factored out of `endRun()` so the button can re-show the same
+  screen with an emptied table without a full run restart.
+- **Boss tuning** (`GremlinKing.ts`, all playtest-driven, first-pass numbers): cleave
+  range 70→90 / arc 120°→140° / damage 22→30; **charge (the "line attack") speed
+  340→480** (telegraph duration left alone — the dodge window stays readable, only the
+  punish for not dodging got harsher); slam radius 110→150 / damage 35→45; attack
+  cooldown 1200→950ms (less passive between attacks). The player's playtest was with
+  max-tier gear (max spear, full Gremlin armor set) and no numeric baseline for "boss
+  damage taken" was captured, so these are directional bumps to retest, not a tuned-to-a-
+  target-DPS pass.
+
+**Verified** — `tsc --noEmit` clean; live `preview_eval` (see New Run section above);
+`preview_console_logs` clean.
+
+### Previously: M-R1 — Run + Score + Hardcore Death
 
 Second milestone of the roguelike run/score meta-loop
 (`.claude/plans/roguelike-metaloop-master-plan.md`; detailed plan:
