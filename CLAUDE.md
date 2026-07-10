@@ -632,6 +632,27 @@ mouse-driven only. Don't reintroduce a keybind for this without being asked. Spa
    `MinimapUI.setNightIntensity()` dims the minimap. `create()` resets
    `dayNight`/`wasNight`/`nightSpawns`/`equippedLightRadius` per the `scene.restart()` gotcha.
    See `STATUS.md` for full verification.
+5j. **Comfort item (Bedroll)** — plan: `.claude/plans/imperative-riding-island.md`. Replaces
+   the master plan's original **M-SB (Sleep/Bed)** milestone — the user decided against a
+   sleep/skip-to-dawn mechanic since it would let players opt out of M-DN's night-time
+   pressure (faster enemies, nightfall surge) for free every night. Instead: a new
+   **`comfort`** placeable ("Bedroll" — "stuffed with reeds for cushioning," tier 0, `{
+   wood: 3, cattail: 5 }`) grants **live/conditional +1 HP/s regen**, weaker than the
+   weakest food buff (Cooked Boar Meat is +2 HP/s) so cooking still matters. Three
+   conditions checked every frame, no stillness required: player within `COMFORT_RANGE`
+   (80px) of a placed Bedroll, that Bedroll within `COMFORT_CAMPFIRE_RANGE` (120px) of a
+   placed Campfire (a **hard requirement** — Comfort does nothing without a lit fire
+   nearby, independent of its own tier-0 craft-gating), and no live enemy (aggro'd or not)
+   within `COMFORT_SAFE_RADIUS` (350px) of the player. Rather than a new heal call + new
+   HUD element, this **reuses `BuffManager`/`BuffBarUI` directly**: every qualifying frame
+   re-applies a short-lived (`durationMs: 400`) `comfort_rest` buff via the existing
+   `apply()` refresh-by-id path, so it renders with the same icon/tooltip/depletion-meter
+   look as a food buff and expires on its own the instant conditions stop holding — no new
+   UI code. `BuffManager`'s concurrent-buff cap raised 2→3 (`setMaxBuffs(3)` in `create()`)
+   so Comfort doesn't get evicted by two simultaneous food buffs. Destroy/recover reuses
+   the fully generic placed-object Destroy path (`destroyPlacedObject`) verbatim — no new
+   wiring needed since it isn't itemKey-specific. Built on Sonnet (small, self-contained
+   addition on top of already-designed systems, not a new core mechanic).
 
 **A new umbrella plan for the long-requested roguelike run/score meta-loop** now exists:
 `.claude/plans/roguelike-metaloop-master-plan.md` (drafted 2026-07-10, locked build order
@@ -640,7 +661,8 @@ design notes** section below (portal concept dropped in favor of one giant circu
 hardcore one-life death instead of the tombstone-and-respawn model, for now) — see that
 plan file for the full locked-decision list before touching anything in items 6 (World &
 discovery) or 7 (ARPG loot). Locked build order: **M-FX (done) → M-R1 (Run/Score/
-Hardcore death, done — see 5h) → M-DN (Day/Night, done — see 5i) → M-SB (Sleep/Bed, next) →
+Hardcore death, done — see 5h) → M-DN (Day/Night, done — see 5i) → Comfort item (was
+M-SB/Sleep-Bed, done — see 5j) →
 M-FA (Fresh Assault discovery
 timer) → M-RL (trophy → RNG relics) → M-WC (Gremlin War Camp) + M-TE (trophy-gated gear)
 → M-W1 (circular multi-biome world, last).**

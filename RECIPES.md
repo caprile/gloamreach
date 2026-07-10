@@ -22,6 +22,7 @@ requires standing near a placed Workbench (`MainScene.isNearWorkbench`).
 | Shishkabob | Misc | 0 | No | 1 Wood | — | Item |
 | Campfire | Crafting | 0 | No | 5 Wood, 5 Stone | — | Item (placeable) |
 | Workbench | Crafting | 0 | No | 10 Wood | — | Item (placeable) |
+| Bedroll | Crafting | 0 | No | 3 Wood, 5 Cattail | — | Item (placeable — near a lit Campfire + no enemies nearby grants +1 HP/s "Resting") |
 | Drying Rack | Crafting | 1 | Yes | 5 Wood, 4 Leather Scraps, 2 Bones | — | Item (placeable, station) |
 | Gremlin Cap | Armor | 1 | Yes | 1 Gremlin Leather, 5 Blackberries | Light Armor 0 | Item (armor, helmet) |
 | Gremlin Shirt | Armor | 1 | Yes | 3 Gremlin Leather, 1 Leather Scraps, 5 Bones | Light Armor 0 | Item (armor, chest) |

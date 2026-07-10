@@ -150,17 +150,15 @@ verification in `STATUS.md`'s M-DN entry.
 - Drives Sleep (M-SB, next) and interacts with the Fresh Assault timer (M-FA) and score (a
   run's in-game time is what the speed payoff measures).
 
-### M-SB — Sleep + Bed/Cot placeable (M, Opus)
+### M-SB — SUPERSEDED by the Comfort item (S, Sonnet) — **SHIPPED** 2026-07-10
 
-A placeable `cot`/`bed` (tier 0–1).
-- **Sleep** at it → fast-forward to dawn, **only when no enemies are nearby** (Valheim
-  rule). Optional "Rested" buff (open sub-decision).
-- **Moveable spawn point** wiring is **built but dormant under hardcore** — hardcore has no
-  respawn, so the bed's "set as respawn point" hook is stubbed and only goes live when an
-  easy-mode lives/respawn variant ships. Its live value now is sleep + a forward base to
-  skip nights deeper out.
-- Reconcile with M-R1: sleeping advances in-game time, which the score's speed factor
-  reads — sleeping is a real tradeoff (safety now vs. run-time spent), not free.
+Originally a placeable `cot`/`bed` with a sleep/fast-forward-to-dawn mechanic. The user
+decided against making night skippable at all — M-DN's night teeth (faster enemies,
+nightfall surge) are one of the run's few real sources of time pressure, and a free
+skip-to-dawn would let players opt out of it every night. Rebuilt instead as a **Comfort
+item** ("Bedroll"): a tier-0 placeable that grants live/conditional +1 HP/s regen when
+near a lit Campfire and away from enemies — no clock interaction at all. Full detail:
+`.claude/plans/imperative-riding-island.md`, `CLAUDE.md` roadmap entry 5j.
 
 ### M-FA — Biome-discovery "Fresh Assault" timer (M, Opus) — the go-fast payoff
 
@@ -215,8 +213,9 @@ incremental ethos), then expand the world under it:
    see `STATUS.md`). Seed is display-only for now (deterministic world-gen deferred to
    M-W1); score = flat kill points + completion-bonus × speed multiplier; hardcore
    permadeath ends the run; first `localStorage` high-score table.
-3. **M-DN** (day/night — **shipped** 2026-07-10, see 5i/STATUS.md) → **M-SB** (Sleep/Bed,
-   next) — the survival-time layer.
+3. **M-DN** (day/night — **shipped** 2026-07-10, see 5i/STATUS.md) → **Comfort item**
+   (was M-SB/Sleep-Bed — **shipped** 2026-07-10, see 5j/STATUS.md) — the survival-time
+   layer, minus the sleep mechanic (dropped, see M-SB entry above).
 4. **M-FA** (speed payoff).
 5. **M-RL** (relics — the replayability hook).
 6. **M-WC** + **M-TE** (content depth).

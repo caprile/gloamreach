@@ -201,6 +201,17 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     placeable: true,
   },
 
+  comfort: {
+    key: "comfort",
+    name: "Bedroll",
+    description: "A bedroll stuffed with reeds for cushioning. Rest near a lit campfire, away from danger, to slowly recover HP.",
+    texture: "icon_comfort",
+    maxStack: 1,
+    hotbarable: true,
+    stats: [{ label: "Type", value: "Build" }],
+    placeable: true,
+  },
+
   // --- loot ---
   boar_meat: {
     key: "boar_meat",

@@ -136,6 +136,12 @@ const DASH_STAMINA_COST = 25; // flat cost per dash — 4 dashes per full bar
 const DASH_IFRAME_MS = 150; // outlasts the dash burst itself (Milestone E)
 const WORKBENCH_RANGE = 100; // px — looser than REACH; "am I near it," not a precise click
 const BLACKBERRY_REGROW_MS = 3 * 60 * 1000; // a picked bush regrows berries after 3 in-game minutes
+// Comfort (Bedroll) HP regen: player must be near a placed Bedroll, that
+// Bedroll must be near a placed Campfire (hard requirement, not optional),
+// and no live enemy may be within COMFORT_SAFE_RADIUS of the player.
+const COMFORT_RANGE = 80; // px, player <-> Bedroll
+const COMFORT_CAMPFIRE_RANGE = 120; // px, Bedroll <-> Campfire
+const COMFORT_SAFE_RADIUS = 350; // px, nearest live enemy <-> player
 // A player-dropped or destroyed-station item pickup ignores the magnet for
 // this long so it doesn't instantly fly back into the inventory/station that
 // just released it. Manual click-pickup is unaffected.
@@ -439,6 +445,9 @@ export class MainScene extends Phaser.Scene {
     this.enemies = [];
     this.health = new Health();
     this.buffs = new BuffManager();
+    // 2 -> 3: Comfort's "Resting" buff shouldn't have to fight two
+    // simultaneous food buffs for one of only 2 slots.
+    this.buffs.setMaxBuffs(3);
     this.invulnerableUntil = 0;
     this.placementMode = null;
     this.placementGhost = null;
@@ -720,6 +729,7 @@ export class MainScene extends Phaser.Scene {
     this.runHudUI.update(this.run, this.dayNight);
     this.stamina.tick(delta);
     this.refreshStaminaBar();
+    this.updateComfortRegen();
     // Food buffs heal over time; refresh the HP bar only when they actually
     // healed, and keep the buff HUD in sync each frame (countdown/expiry).
     if (this.buffs.tick(delta, this.health).healed) this.refreshHealthBar();
@@ -3161,6 +3171,44 @@ export class MainScene extends Phaser.Scene {
         ((obj.getData("tier") as number | undefined) ?? 0) >= minTier &&
         Phaser.Math.Distance.Between(x, y, obj.x, obj.y) <= radius,
     );
+  }
+
+  // "Is there a placed Campfire within `radius` of (x, y)" — mirrors
+  // isNearWorkbench exactly, just filtered on a different itemKey. Used by
+  // Comfort's HP regen, which has no function at all without a nearby fire.
+  private isNearCampfire(x: number, y: number, radius: number): boolean {
+    return this.placedObjects.some(
+      (obj) => obj.getData("itemKey") === "campfire" && Phaser.Math.Distance.Between(x, y, obj.x, obj.y) <= radius,
+    );
+  }
+
+  // "Is any live (non-depleted) enemy within `radius` of (x, y)" — any enemy
+  // counts, aggro'd or not (Comfort's "safe area" check is deliberately the
+  // simplest possible read, not per-enemy aggro-state aware).
+  private isEnemyNearby(x: number, y: number, radius: number): boolean {
+    for (const enemy of this.enemies) {
+      if (enemy.depleted) continue;
+      if (Phaser.Math.Distance.Between(x, y, enemy.x, enemy.y) <= radius) return true;
+    }
+    return false;
+  }
+
+  // Comfort (Bedroll): live/conditional HP regen, not a stored buff — every
+  // frame all three conditions hold (near a Bedroll, that Bedroll near a
+  // Campfire, no enemy nearby), refresh a short-lived "Resting" buff via the
+  // existing BuffManager/BuffBarUI so it renders exactly like a food buff.
+  // The instant a condition breaks, we simply stop refreshing it and it
+  // expires on its own within its own short durationMs.
+  private updateComfortRegen(): void {
+    const resting = this.placedObjects.some(
+      (obj) =>
+        obj.getData("itemKey") === "comfort" &&
+        Phaser.Math.Distance.Between(this.player.x, this.player.y, obj.x, obj.y) <= COMFORT_RANGE &&
+        this.isNearCampfire(obj.x, obj.y, COMFORT_CAMPFIRE_RANGE),
+    );
+    if (resting && !this.isEnemyNearby(this.player.x, this.player.y, COMFORT_SAFE_RADIUS)) {
+      this.buffs.apply({ id: "comfort_rest", name: "Resting", icon: "icon_comfort", hpPerSec: 1, durationMs: 400 });
+    }
   }
 
   // Has the player ever placed a Workbench, anywhere — separate from (and

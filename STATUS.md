@@ -2,7 +2,62 @@
 
 Last updated: 2026-07-10
 
-### Just finished: M-DN — Day/Night cycle (clock, night threat, torch lighting)
+### Just finished: Comfort item (Bedroll) — replaces M-SB Sleep/Bed
+
+Fourth milestone slot of the roguelike meta-loop (`.claude/plans/roguelike-metaloop-master-plan.md`),
+after M-FX/M-R1/M-DN. Plan: `.claude/plans/imperative-riding-island.md`. Built on Sonnet
+per the model-switch convention (a small, self-contained addition on top of already-designed
+systems — placement, `Health`, `BuffManager` — not a new core mechanic).
+
+The master plan's original M-SB was "Sleep + Bed, fast-forward to dawn." Discussed with the
+user first: night is one of the run's few real sources of time pressure (M-DN's faster
+enemies + nightfall surge), and a free skip-to-dawn would let players opt out of it every
+night, so **the sleep/skip mechanic was dropped entirely**. Replaced with:
+
+- **New placeable `comfort`** ("Bedroll" — "stuffed with reeds for cushioning"), tier 0
+  (`src/systems/Items.ts`, `src/systems/Recipes.ts`), costing `{ wood: 3, cattail: 5 }` —
+  reuses the existing `cattail` harvestable as the "reeds," no new raw resource. New
+  placeholder texture in `BootScene.ts` (`icon_comfort`), doubles as the buff icon.
+- **Live/conditional HP regen, +1 HP/s** (weaker than the weakest food buff, Cooked Boar
+  Meat's +2 HP/s, so cooking still matters) — checked every frame in the new
+  `MainScene.updateComfortRegen()`, no stillness required:
+  1. Player within `COMFORT_RANGE` (80px) of a placed Bedroll.
+  2. That Bedroll within `COMFORT_CAMPFIRE_RANGE` (120px) of a placed Campfire — **a hard
+     requirement**, independent of Bedroll's own tier-0 craft-gating (tier 0 only means "no
+     Workbench needed"; Comfort still does nothing without a lit fire nearby). New
+     `isNearCampfire()` helper, copied from the existing `isNearWorkbench` pattern.
+  3. No live enemy (aggro'd or not — simplest "safe area" read) within
+     `COMFORT_SAFE_RADIUS` (350px) of the player. New `isEnemyNearby()` helper.
+- **Reuses `BuffManager`/`BuffBarUI` directly instead of a new heal call + new HUD
+  element** — every qualifying frame re-applies a short-lived (`durationMs: 400`)
+  `comfort_rest` buff via the existing refresh-by-id `apply()` path; the instant a
+  condition breaks, the scene stops calling `apply()` and the buff expires on its own
+  within that same short window. This gets the "Resting" icon + `+1 HP/s` tooltip +
+  depletion-meter look **for free**, identical to a food buff, with zero new UI code.
+  `BuffManager`'s concurrent-buff cap raised 2→3 (`this.buffs.setMaxBuffs(3)` in
+  `create()`) so Comfort doesn't get evicted by two simultaneous food buffs.
+- **Destroy/recover needed zero new wiring** — the existing right-click context menu
+  (`findPlacedObjectNear`/`destroyPlacedObject`) is already itemKey-agnostic, and
+  `stationDisplayName()` already falls back to the plain item name when an itemKey has no
+  upgrade table, so Comfort "just works" as a destroyable/recoverable placed object.
+
+Verified live via `preview_eval`: placed a Campfire + Bedroll, confirmed the
+`comfort_rest` buff (id/hpPerSec/refreshing `remainingMs`) appears while all three
+conditions hold; independently broke each condition (player far from Bedroll, Bedroll far
+from Campfire, a live enemy within `COMFORT_SAFE_RADIUS`) and confirmed the buff clears
+each time, then confirmed it resumes when the condition is restored. `preview_screenshot`
+confirmed the "Resting" icon renders in the existing buff bar above the HP bar, same visual
+treatment as a food buff. One test-methodology note for future sessions: teleporting an
+enemy far outside world bounds to "remove" it for a test gets silently undone by Arcade
+Physics' `collideWorldBounds` clamp (it snaps back near the map corner, which can land
+close to the player) — use `enemy.depleted = true` instead, which `isEnemyNearby()`
+already skips regardless of position. `tsc --noEmit` clean, no console errors.
+
+`RECIPES.md`, `CLAUDE.md` (roadmap 5j), and the master plan's M-SB entry updated to reflect
+the supersede. Next per the locked build order: **M-FA (Fresh Assault discovery timer)** —
+a new core mechanic, needs Opus.
+
+### Previously: M-DN — Day/Night cycle (clock, night threat, torch lighting)
 
 Third milestone of the roguelike meta-loop
 (`.claude/plans/roguelike-metaloop-master-plan.md`), after M-FX and M-R1. Plan:

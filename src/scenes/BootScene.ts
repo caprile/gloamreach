@@ -450,6 +450,16 @@ export class BootScene extends Phaser.Scene {
     g.fillRect(18, 10, 3, 10);
     g.generateTexture("icon_workbench", ICON, ICON);
 
+    // Bedroll: a rolled blue-grey cushion with a tan reed-stuffing stripe.
+    g.clear();
+    g.fillStyle(0x3d5a78, 1);
+    g.fillRoundedRect(2, 8, 20, 10, 3);
+    g.fillStyle(0xc9a05a, 1);
+    g.fillRect(3, 11, 18, 3);
+    g.fillStyle(0x2b415a, 1);
+    g.fillCircle(4, 13, 3);
+    g.generateTexture("icon_comfort", ICON, ICON);
+
     // Cattail: a slim reed with a brown seed head.
     g.clear();
     g.fillStyle(0x4f8a3a, 1);

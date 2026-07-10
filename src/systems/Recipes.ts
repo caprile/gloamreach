@@ -125,6 +125,15 @@ export const RECIPES: Recipe[] = [
     output: { kind: "item", itemId: "workbench", itemName: "Workbench" },
   },
   {
+    id: "comfort",
+    name: "Bedroll",
+    description: "A bedroll stuffed with reeds for cushioning. Rest near a lit campfire, away from danger, to slowly recover HP.",
+    category: "crafting",
+    tier: 0,
+    costs: { wood: 3, cattail: 5 },
+    output: { kind: "item", itemId: "comfort", itemName: "Bedroll" },
+  },
+  {
     id: "drying_rack",
     name: "Drying Rack",
     description: "A placeable rack that dries raw goods into refined materials on demand.",
