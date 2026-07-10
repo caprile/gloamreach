@@ -1285,6 +1285,13 @@ export class MainScene extends Phaser.Scene {
   // gremlin_trophy source) — every other gremlin on the map stays normal.
   private respawnShackGuards(shack: GremlinShack): void {
     shack.respawnAt = null;
+    // Re-arms the chest to roll fresh loot next open — but only if it's
+    // already empty (a player who never looted it keeps what's there; loot
+    // doesn't top itself back up for free). Deliberately fired here, on
+    // respawn, not at guard-death time: doing it at death let a player loot
+    // the chest, then kill the (still-un-respawned) guards and get an
+    // immediate re-roll before any respawn timer elapsed.
+    shack.loot.rearmIfEmpty();
     const ranged = new RangedGremlin(this, {
       x: shack.x + Phaser.Math.Between(-40, 40),
       y: shack.y + Phaser.Math.Between(-40, 40),
@@ -1304,15 +1311,14 @@ export class MainScene extends Phaser.Scene {
 
   // Called from tryAttackEnemy()'s kill branch for every defeated enemy — a
   // no-op unless `enemy` was one of a shack's guards. Schedules a respawn
-  // (and re-arms the chest to roll fresh loot next time it's empty) only once
-  // BOTH guards are dead, not per-guard.
+  // only once BOTH guards are dead, not per-guard (chest re-arm itself
+  // happens in respawnShackGuards, not here — see that comment).
   private onShackGuardKilled(enemy: Enemy): void {
     const shack = this.gremlinShacks.find((s) => s.guards.includes(enemy));
     if (!shack) return;
     shack.guards = shack.guards.filter((g) => g !== enemy);
     if (shack.guards.length > 0) return;
     shack.respawnAt = this.time.now + SHACK_GUARD_RESPAWN_MS;
-    shack.loot.rearmIfEmpty();
     this.time.delayedCall(SHACK_GUARD_RESPAWN_MS, () => this.respawnShackGuards(shack));
   }
 
@@ -2276,12 +2282,19 @@ export class MainScene extends Phaser.Scene {
     this.player.playEquippedSwing();
 
     const baseDmg = weaponDamage(this.equippedWeapon) + weaponTierDamageBonus(this.equippedWeapon, this.equippedWeaponTier);
-    let dmg = Math.round(baseDmg * weaponSkillDamageMultiplier(dmgType, this.skills));
+    // Kept fractional all the way to takeHit — a skill's +0.5%/level bonus
+    // used to get thrown away by an early Math.round (e.g. Blunt 10 on a
+    // base-5 weapon rounds right back to 5, so the bonus was invisible AND
+    // had zero real effect). Only the floating combat-text number rounds for
+    // display; the true float is what actually damages the enemy, so small
+    // skill increments always matter even when the displayed number doesn't
+    // visibly change hit-to-hit.
+    let dmg = baseDmg * weaponSkillDamageMultiplier(dmgType, this.skills);
     // Gremlin King's poise-break punish window — bonus damage while staggered.
-    if (enemy instanceof GremlinKing && enemy.isStaggered()) dmg = Math.round(dmg * STAGGER_DAMAGE_MULTIPLIER);
+    if (enemy instanceof GremlinKing && enemy.isStaggered()) dmg *= STAGGER_DAMAGE_MULTIPLIER;
     const depleted = enemy.takeHit(dmg);
     this.skills.addXp(dmgType, 30); // weapon-hit XP to the primary damage type's skill
-    this.spawnDamageNumber(enemy.x, enemy.y, dmg);
+    this.spawnDamageNumber(enemy.x, enemy.y, Math.round(dmg));
     if (!depleted) return;
 
     // Kill: grant armor-skill XP once per distinct worn armor type.

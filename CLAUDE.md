@@ -545,6 +545,29 @@ mouse-driven only. Don't reintroduce a keybind for this without being asked. Spa
    zero new upgrade wiring. Eating gesture: **right-click an `edible` item**
    (new `ItemDef.edible` field) in the backpack/hotbar. Death clears active buffs.
    Built on Opus per the model-switch convention (new mechanic).
+5g. **M-FX (roguelike-batch warm-up fixes)** — plan:
+   `.claude/plans/roguelike-metaloop-master-plan.md` (first milestone of a larger
+   umbrella plan, see below). Three small independent fixes, built on Sonnet (fixes on
+   existing systems, not a new mechanic): weapon damage is now kept **fractional** all
+   the way to `Enemy.takeHit()` instead of being `Math.round()`ed before applying (a
+   weapon skill's +0.5%/level bonus used to have **zero real effect** whenever it
+   didn't cross a whole number — only the floating damage-number popup rounds for
+   display now); the Gremlin Shack chest's loot re-arm moved from guard-*death* time to
+   guard-*respawn* time (closes a double-loot exploit: loot → kill guards → immediate
+   re-roll before the 6-min respawn timer, previously possible); the Character menu's
+   Stats tab dropped its green "Unspent points"/`[+]`/"MAX" coloring for neutral amber
+   — green/red are reserved for future buff/debuff markers, not plain UI state.
+
+**A new umbrella plan for the long-requested roguelike run/score meta-loop** now exists:
+`.claude/plans/roguelike-metaloop-master-plan.md` (drafted 2026-07-10, locked build order
+confirmed by the user). It supersedes/finalizes several open questions in the **Long-term
+design notes** section below (portal concept dropped in favor of one giant circular world;
+hardcore one-life death instead of the tombstone-and-respawn model, for now) — see that
+plan file for the full locked-decision list before touching anything in items 6 (World &
+discovery) or 7 (ARPG loot). Locked build order: **M-FX (done, above) → M-R1 (Run/Score/
+Hardcore death) → M-DN (Day/Night) → M-SB (Sleep/Bed) → M-FA (Fresh Assault discovery
+timer) → M-RL (trophy → RNG relics) → M-WC (Gremlin War Camp) + M-TE (trophy-gated gear)
+→ M-W1 (circular multi-biome world, last).**
 
 **Not yet built — next up in rough order:**
 6. **World & discovery** — much bigger generated world, biomes, map, eventually a
@@ -566,6 +589,16 @@ reference, not a base class to inherit from.
 Directional notes on the overall game-loop shape, from the user, not yet implemented.
 These inform how later roadmap items (World & discovery, Bosses, ARPG loot) should be
 built, so a future session picking up any of those should read this first.
+
+**Superseded 2026-07-10 by `.claude/plans/roguelike-metaloop-master-plan.md`** (see
+roadmap item 5g above): the **portal-between-biomes** concept below is dropped in favor of
+**one giant circular open world** (danger scales with radius from a safe center — the
+bullet below already pointed this direction, now it's locked as the load-bearing spine,
+not an alternative). The **tombstone/respawn death model** below is also superseded **for
+now** — the locked default is **hardcore: one life, death ends the run and posts a score**;
+tombstone-and-respawn is documented there as a *future easy-mode option*, not the current
+target. Read the master plan first; treat the bullets below as historical context for
+*why* those ideas existed, not the current design.
 
 - **Core meta-loop:** the game is a series of **biomes**, each gated by a **boss**. Loop
   per biome: **Enter Biome → Craft/Gather/Fight → Fight Biome Boss → Portal to Next

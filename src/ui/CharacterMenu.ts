@@ -209,7 +209,9 @@ export class CharacterMenu {
     );
 
     const lvlLabel = maxed ? "MAX" : `Lvl ${this.deps.skills.get(skill)}`;
-    this.text(barX + barW + 10, y, lvlLabel, 12, maxed ? "#8fe38f" : "#9aa4b5");
+    // Neutral amber (not green) — green/red are reserved for buff/debuff
+    // deltas (e.g. "boosted by an item"), not plain milestone status.
+    this.text(barX + barW + 10, y, lvlLabel, 12, maxed ? "#e3b25a" : "#9aa4b5");
 
     // Hover impact tooltip — every skill row is hoverable now, showing its
     // live-computed current impact (including an explicit "no effect yet"
@@ -259,7 +261,9 @@ export class CharacterMenu {
     this.text(x0 + barW / 2, y + barH / 2, `${Math.floor(p.xp)} / ${need} XP`, 10, "#ffffff", 0.5, 0.5);
     y += 26;
 
-    this.text(x0, y, `Unspent points: ${p.unspentPoints}`, 13, p.unspentPoints > 0 ? "#8fe38f" : "#9aa4b5");
+    // Neutral amber (not green) as the call-to-action color — green/red are
+    // reserved for buff/debuff deltas, not "you have something to do" state.
+    this.text(x0, y, `Unspent points: ${p.unspentPoints}`, 13, p.unspentPoints > 0 ? "#e3b25a" : "#9aa4b5");
     y += 28;
 
     for (const stat of STAT_TYPES) {
@@ -281,7 +285,7 @@ export class CharacterMenu {
         fontFamily: "monospace",
         fontSize: "16px",
         color: canSpend ? "#0a0a0a" : "#4a4a4a",
-        backgroundColor: canSpend ? "#8fe38f" : "#2a2a2a",
+        backgroundColor: canSpend ? "#e3b25a" : "#2a2a2a",
         padding: { x: 8, y: 4 },
       })
       .setOrigin(1, 0)

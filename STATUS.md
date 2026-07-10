@@ -2,7 +2,57 @@
 
 Last updated: 2026-07-10
 
-### Just finished: Cooking & Food Buffs (first food/consumable loop + first status-effect system)
+### Just finished: M-FX — roguelike-batch warm-up fixes (fractional damage, chest re-arm, stat-panel recolor)
+
+First milestone of the new roguelike run/score meta-loop plan
+(`.claude/plans/roguelike-metaloop-master-plan.md`) — three small, independent fixes
+surfaced while designing that plan, built on Sonnet per the model-switch convention
+(fixes on existing systems, no new mechanic).
+
+- **Weapon damage is now kept fractional all the way to `Enemy.takeHit()`.**
+  `MainScene.tryAttackEnemy()` used to `Math.round()` damage before applying it, which
+  silently discarded a weapon skill's +0.5%/level bonus whenever it didn't cross a whole
+  number (e.g. Blunt lvl 10 on a base-5 weapon rounds right back to 5 — the bonus existed
+  in the multiplier but had **zero actual effect** on the hit). Now the float is applied
+  directly to `enemy.health` (a plain `number`, no type change needed) and only the
+  floating damage-number popup rounds for display (`Math.round(dmg)` in
+  `spawnDamageNumber`'s call site) — every skill level now has a real, cumulative effect
+  even when two consecutive hits show the same displayed number. Verified live: a Stone
+  Club hit at Blunt lvl 4 (mult ×1.02) dealt exactly 5.1 real damage (20 → 14.9 HP) while
+  still displaying "5".
+- **Gremlin Shack chest re-arm timing fixed** — `LootContainer.rearmIfEmpty()` was called
+  from `MainScene.onShackGuardKilled()` at guard-*death* time, which let a player loot an
+  emptied chest, kill the guards, and get an **immediate** fresh roll before the 6-minute
+  respawn timer ever elapsed (the doc comment claimed it fired "once both guards respawn,"
+  which was never true). The call moved into `respawnShackGuards()` itself, firing only
+  when the guards actually come back. Verified live: killing both guards leaves
+  `loot['rolled'] === true` (chest stays claimed-empty, no early re-roll); calling
+  `respawnShackGuards()` is what flips it back to `false`.
+- **Character menu Stats tab recolored off green** — green (`#8fe38f`) was used for
+  "Unspent points" and the `[ + ]` allocate button (plus the Skills tab's "MAX" label);
+  per the user, green/red should be reserved exclusively for buff/debuff markers (e.g.
+  "boosted by an item") added later, so these are now neutral amber (`#e3b25a`) — same
+  color already used for skill-group headers, so it reads as "info/action," not "buffed."
+  Verified via `preview_screenshot`: the Stats tab with 3 unspent points shows amber
+  throughout, no green.
+- **Inventory (Tab) Combat column also recolored off its red/green rainbow** — the
+  actual panel the user meant (the live equipped-stats readout next to Equipment in the
+  Inventory menu, not the Character menu's Stats tab above — both got fixed). `Damage`
+  was red (`#c25a5a`), `Armor` was green (`#7ac27a`), `Attack Speed`/`Attack Stamina` had
+  their own cyan/gold — a decorative per-line rainbow with no actual meaning. All five
+  stat lines (`InventoryMenu.renderCombatStats`) are now one neutral grey (`#8a93a3`,
+  matching the already-bland Attack Range/Move Speed lines), freeing red/green for real
+  buff/debuff deltas later. Verified via `preview_screenshot`: a Stone Club equipped
+  shows "Damage: 5 Blunt" / "Attack Speed: 1.8/s" / "Attack Stamina: 14" / "Armor: 0"
+  all in matching grey.
+
+Type-check clean (`tsc --noEmit`), no console errors, `preview_screenshot` confirms the
+recolored Stats tab. See the master plan doc for the full roguelike milestone list (M-R1
+Run/Score/Hardcore death next, then Day/Night → Sleep/Bed → Fresh Assault timer → Relics →
+Gremlin War Camp/trophy gear → circular world last — locked build order, confirmed by
+the user).
+
+### Previously: Cooking & Food Buffs (first food/consumable loop + first status-effect system)
 
 The first food loop and the game's first **status-effect (buff)** system. Plan:
 `.claude/plans/savory-simmering-hearth.md`. Built on Opus per the model-switch

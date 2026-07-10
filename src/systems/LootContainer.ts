@@ -35,8 +35,10 @@ export class LootContainer {
     }
   }
 
-  // Called once both guards respawn — re-arms the chest to roll fresh loot
-  // next time it's opened, but ONLY if it's already fully empty (a player who
+  // Called once both guards actually respawn (not at guard-death time — that
+  // used to allow looting, then killing the guards, then re-looting before
+  // any respawn timer elapsed) — re-arms the chest to roll fresh loot next
+  // time it's opened, but ONLY if it's already fully empty (a player who
   // never opened it keeps what's there; loot doesn't top itself back up for
   // free while unclaimed).
   rearmIfEmpty(): void {

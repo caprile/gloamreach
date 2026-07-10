@@ -253,19 +253,22 @@ export class InventoryMenu {
     const lineGap = 20;
     this.addText(x0, y, stats.weaponName ?? "No weapon equipped", 12, stats.weaponName ? "#e8ecf2" : "#5b6472");
     y += lineGap + 4;
+    // Neutral grey throughout (matches Attack Range/Move Speed below) — per
+    // the user, red/green should be reserved for actual buff/debuff markers
+    // (e.g. "boosted by an item"), not decorative per-stat coloring.
     this.addText(
       x0,
       y,
       `Damage: ${stats.weaponName ? `${stats.damage} ${stats.damageTypeName}` : "-"}`,
       12,
-      "#c25a5a",
+      "#8a93a3",
     );
     y += lineGap;
-    this.addText(x0, y, `Attack Speed: ${stats.weaponName ? `${stats.attackSpeed.toFixed(1)}/s` : "-"}`, 12, "#8ac2d0");
+    this.addText(x0, y, `Attack Speed: ${stats.weaponName ? `${stats.attackSpeed.toFixed(1)}/s` : "-"}`, 12, "#8a93a3");
     y += lineGap;
-    this.addText(x0, y, `Attack Stamina: ${stats.weaponName ? stats.staminaCost : "-"}`, 12, "#b8860b");
+    this.addText(x0, y, `Attack Stamina: ${stats.weaponName ? stats.staminaCost : "-"}`, 12, "#8a93a3");
     y += lineGap;
-    this.addText(x0, y, `Armor: ${stats.armor}`, 12, "#7ac27a");
+    this.addText(x0, y, `Armor: ${stats.armor}`, 12, "#8a93a3");
     y += lineGap;
     this.addText(x0, y, `Attack Range: ${stats.attackRange}`, 12, "#8a93a3");
     y += lineGap;
