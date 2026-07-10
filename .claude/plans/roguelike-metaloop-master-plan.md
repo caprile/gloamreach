@@ -1,9 +1,10 @@
 # Master Plan: Roguelike Run / Score Meta-Loop + Supporting Systems
 
 Status: **design locked at the spine level, sub-decisions open per milestone.** Drafted
-2026-07-10 with the user. **M-FX (below) is shipped; M-R1 is next, planned for its own
-session** (per the project's "one milestone per chat session" convention — see
-`STATUS.md` for M-FX's ship details). This is the umbrella plan for a batch of requested
+2026-07-10 with the user. **M-FX/M-R1/M-DN/Comfort(M-SB)/M-EL2 all shipped 2026-07-10;
+M-FA cut the same day (see its section below); M-RL is next**, planned for its own
+session (per the project's "one milestone per chat session" convention — see
+`STATUS.md` for ship details on each). This is the umbrella plan for a batch of requested
 systems; each milestone below should get its own detailed plan file when it's picked up
 (per the "plans committed in-repo" convention), but this doc is the shared vision +
 ordering + locked decisions they all hang off.
@@ -162,14 +163,21 @@ item** ("Bedroll"): a tier-0 placeable that grants live/conditional +1 HP/s rege
 near a lit Campfire and away from enemies — no clock interaction at all. Full detail:
 `.claude/plans/imperative-riding-island.md`, `CLAUDE.md` roadmap entry 5j.
 
-### M-FA — Biome-discovery "Fresh Assault" timer (M, Opus) — the go-fast payoff
+### M-FA — Biome-discovery "Fresh Assault" timer — **CUT** 2026-07-10
 
-First entry into a new biome starts a **decaying multiplier** on kill XP **and** run score.
-- Full bonus for the first N in-game minutes after discovery, decaying to 1×.
-- HUD readout (a timer/multiplier badge) so the player feels the window.
-- Depends on: M-W1 (biome-discovery events), M-R1 (score), reads the M-DN clock for
-  in-game time. This is the mechanical form of "beat stuff quickly once you discover a new
-  biome."
+Originally: first entry into a new biome starts a decaying multiplier on kill XP **and**
+run score, full bonus for the first N in-game minutes after discovery, decaying to 1×.
+
+**Cut, not just reordered.** Reviewed with the user after M-EL2 shipped: M-R1's score
+formula (shipped) already applies the "go fast" reward exactly at the whole-run/final-boss
+level — the speed multiplier only ever hits the **completion bonus**, not per-kill or
+per-biome points, and that's already the mechanism that makes a fast final-boss kill beat a
+slow full-clear (locked decision 4). A second, per-biome decaying-bonus layer would be
+redundant on top of that, and it's only meaningful once there's more than one biome to pace
+across — which needs M-W1 anyway. Rather than reframe it around "run start" as a workaround,
+it's dropped from the build order entirely. **Revisit only if/when M-W1 ships a real
+multi-biome world and per-biome pacing turns out to still be missing** something the
+end-of-run speed multiplier doesn't already cover.
 
 ### M-WC — Gremlin War Camp (altar POI upgrade + hints) (M, Opus/Sonnet)
 
@@ -250,9 +258,10 @@ incremental ethos), then expand the world under it:
    layer, minus the sleep mechanic (dropped, see M-SB entry above).
 4. **M-EL2** (generalized elite spawning — **shipped** 2026-07-10, reordered ahead of
    M-FA per the user — see M-EL2 entry above for why).
-5. **M-FA** (speed payoff) — note: its single-biome-scope question is still open, see
-   the M-FA section above.
-6. **M-RL** (relics — the replayability hook).
+5. ~~M-FA (speed payoff)~~ — **cut** 2026-07-10, see the M-FA section above (redundant
+   with M-R1's already-shipped end-of-run speed multiplier; revisit only if M-W1 later
+   shows a real gap).
+6. **M-RL** (relics — the replayability hook) — **next up**.
 7. **M-WC** + **M-TE** (content depth).
 8. **M-W1** (circular multi-biome world) — expand the world beneath a proven loop.
 

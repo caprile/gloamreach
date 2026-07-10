@@ -674,6 +674,17 @@ mouse-driven only. Don't reintroduce a keybind for this without being asked. Spa
    folded into the rolled system. Kill-scoring needed zero changes since it already reads
    `enemy.elite` generically.
 
+5l. **M-FA cut** — the next milestone in the locked build order was M-FA (a per-biome
+   "Fresh Assault" decaying kill-bonus timer on entering a new biome), but reviewing it
+   after M-EL2 shipped surfaced that its premise has no real trigger yet (only one biome
+   exists) and, more importantly, is likely **redundant with what M-R1 already ships**:
+   M-R1's score formula already applies the speed multiplier only to the final-boss
+   completion bonus, which is already the mechanism that rewards going fast end-to-end
+   (locked decision 4). Rather than build a workaround (e.g. starting the timer at run
+   start instead of biome-entry), **M-FA is cut from the build order entirely** — see the
+   master plan's M-FA section for the full reasoning. Revisit only if M-W1's multi-biome
+   world later shows a real gap the end-of-run speed multiplier doesn't cover.
+
 **A new umbrella plan for the long-requested roguelike run/score meta-loop** now exists:
 `.claude/plans/roguelike-metaloop-master-plan.md` (drafted 2026-07-10, locked build order
 confirmed by the user). It supersedes/finalizes several open questions in the **Long-term
@@ -683,9 +694,8 @@ plan file for the full locked-decision list before touching anything in items 6 
 discovery) or 7 (ARPG loot). Locked build order: **M-FX (done) → M-R1 (Run/Score/
 Hardcore death, done — see 5h) → M-DN (Day/Night, done — see 5i) → Comfort item (was
 M-SB/Sleep-Bed, done — see 5j) → M-EL2 (generalized elite spawning, done — see 5k) →
-M-FA (Fresh Assault discovery
-timer) → M-RL (trophy → RNG relics) → M-WC (Gremlin War Camp) + M-TE (trophy-gated gear)
-→ M-W1 (circular multi-biome world, last).**
+~~M-FA~~ (cut, see 5l) → **M-RL (trophy → RNG relics, next)** → M-WC (Gremlin War Camp) +
+M-TE (trophy-gated gear) → M-W1 (circular multi-biome world, last).**
 
 **Not yet built — next up in rough order:**
 6. **World & discovery** — much bigger generated world, biomes, map, eventually a

@@ -2,7 +2,26 @@
 
 Last updated: 2026-07-10
 
-### Just finished: M-EL2 — Generalized elite spawning
+### Just finished: M-FA cut (design discussion, no code change)
+
+The locked build order's next milestone was M-FA (Fresh Assault: a per-biome decaying
+kill-bonus timer starting on entering a new biome). Reviewed with the user before starting
+implementation: M-FA's premise already has no real trigger (only one biome exists until
+M-W1 ships), and more fundamentally it would be **redundant with M-R1's already-shipped
+score formula** — the speed multiplier there already applies only to the final-boss
+completion bonus, which is already the "go fast, end-to-end" reward the game wants (locked
+decision 4 in the master plan). Rather than build a workaround version (e.g. anchoring the
+timer to run-start instead of biome-entry), the user opted to **cut M-FA from the build
+order entirely**, revisiting only if M-W1's eventual multi-biome world exposes a real gap
+the end-of-run multiplier doesn't cover.
+
+Docs updated to reflect the cut: `.claude/plans/roguelike-metaloop-master-plan.md` (M-FA
+section rewritten as "CUT", build-order list updated, header status line), `CLAUDE.md`
+(new "5l. M-FA cut" roadmap entry + the umbrella-plan summary paragraph), and this file.
+No code changed. Next up: **M-RL (trophy → RNG relics)** — self-contained, builds directly
+on the trophy system M-EL2/Group C already shipped.
+
+### Previously: M-EL2 — Generalized elite spawning
 
 New milestone stub inserted into the roguelike meta-loop plan
 (`.claude/plans/roguelike-metaloop-master-plan.md`) between M-FA and M-RL, per a
