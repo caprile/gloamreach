@@ -36,7 +36,13 @@ const CHARGE_TELEGRAPH_MS = 850;
 const CHARGE_SPEED = 340;
 const CHARGE_MAX_DISTANCE = 420;
 const CHARGE_RECOVER_MS = 900;
-const CHARGE_HIT_RADIUS = 34; // point+radius approximation, not a true capsule/segment check — see plan's flagged follow-up
+// Point+radius approximation, not a true capsule/segment check. Scaled by
+// BOSS_SCALE (was a flat 34, matching the roster's unscaled size) — the boss's
+// visual footprint is 2.4x bigger than its base sprite, so a flat radius let
+// "contact" whiff on hits that visually landed. Same class of fix as
+// MainScene.enemyReach()'s attack/prompt-reach scaling for normal enemies,
+// just not previously applied to the boss's own charge math.
+const CHARGE_HIT_RADIUS = 34 * BOSS_SCALE;
 const CHARGE_DAMAGE = 30;
 
 const SLAM_TELEGRAPH_MS = 950;

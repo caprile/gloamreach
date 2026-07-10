@@ -96,6 +96,11 @@ const TILE = 32;
 // offer. Enemy spawn counts below were scaled up to match (see spawnEnemies).
 const WORLD_W = TILE * 112; // 3584px wide — a procedurally generated biome (see Biome.ts)
 const WORLD_H = TILE * 84; // 2688px tall
+// Minimum distance from world center the Boss Altar can spawn — bumped
+// 900->1400 per playtest feedback ("boss shouldn't spawn close to center").
+// Half-diagonal of the world is ~2240px, so this still leaves the 200-attempt
+// fallback loop in pickSpawnPoint plenty of forest-zone area to land in.
+const ALTAR_CLEAR_RADIUS = 1400;
 const REACH = 64; // how close (px) the player must be to interact
 const PLACEMENT_RADIUS = REACH * 1.25; // how far from the player a placed item may land
 const MAGNET_RADIUS = 100; // px — loose drop pieces within this of the player get pulled in
@@ -105,6 +110,9 @@ const DROP_SCATTER_MIN = 20; // px — min distance a drop piece explodes out to
 const DROP_SCATTER_MAX = 45; // px — max distance a drop piece explodes out to
 const DROP_CONSOLIDATE_RADIUS = 28; // px — merge a landed piece into another this close
 const SPRINT_DRAIN_PER_SEC = 33; // stamina/sec while sprinting — full bar in ~3s
+// Bumped 10->20 per playtest feedback ("running needs to level a little faster early
+// game") — pure rate tune, skillXpToNext's curve is untouched.
+const RUNNING_XP_PER_SEC = 20;
 const DASH_STAMINA_COST = 25; // flat cost per dash — 4 dashes per full bar
 const DASH_IFRAME_MS = 150; // outlasts the dash burst itself (Milestone E)
 const WORKBENCH_RANGE = 100; // px — looser than REACH; "am I near it," not a precise click
@@ -173,6 +181,12 @@ export class MainScene extends Phaser.Scene {
   private dryingRacks: { image: Phaser.GameObjects.Image; station: ProcessingStation }[] = [];
   private openRack: ProcessingStation | null = null; // the rack the menu is bound to
   private hoveredRack: Phaser.GameObjects.Image | null = null;
+  // A placed Workbench, hovered — clicking it opens the combined crafting
+  // menu directly (mirrors the Drying Rack's click-to-open, per playtest
+  // feedback). No dedicated array like dryingRacks/gremlinShacks since a
+  // Workbench has no per-instance state beyond what placedObjects already
+  // carries — sourced by filtering placedObjects by itemKey each hover pass.
+  private hoveredWorkbench: Phaser.GameObjects.Image | null = null;
   // Gremlin Shack POI (world-gen-placed, not player-placed) — parallel array
   // to dryingRacks, same "image + live state" pairing shape.
   private gremlinShacks: GremlinShack[] = [];
@@ -537,7 +551,7 @@ export class MainScene extends Phaser.Scene {
 
     if (frame.sprinting) {
       this.stamina.spend(sprintCost);
-      this.skills.addXp("running", 10 * (delta / 1000)); // 10 XP/sec sprinting
+      this.skills.addXp("running", RUNNING_XP_PER_SEC * (delta / 1000));
     }
     if (frame.dashStarted) {
       this.stamina.spend(DASH_STAMINA_COST);
@@ -647,16 +661,18 @@ export class MainScene extends Phaser.Scene {
     this.setHotbarSelection(slot);
   }
 
+  // Skips empty slots — steps up to a full lap looking for the next occupied
+  // one, per playtest feedback. If every slot in range is empty, the loop
+  // completes a full lap and lands back on the starting slot (harmless no-op).
   private cycleHotbar(dir: number): void {
-    if (this.wheelSpansBothRows) {
-      const next = (this.hotbar.selected() + dir + this.hotbar.size) % this.hotbar.size;
-      this.setHotbarSelection(next);
-      return;
+    const rowStart = this.wheelSpansBothRows ? 0 : this.hotbar.selected() < ROW1_COUNT ? 0 : ROW1_COUNT;
+    const size = this.wheelSpansBothRows ? this.hotbar.size : ROW1_COUNT;
+    let next = this.hotbar.selected();
+    for (let i = 0; i < size; i++) {
+      next = rowStart + (((next - rowStart + dir) % size) + size) % size;
+      if (this.hotbar.get(next) !== null) break;
     }
-    // H toggled off: loop within whichever row is currently selected only.
-    const rowStart = this.hotbar.selected() < ROW1_COUNT ? 0 : ROW1_COUNT;
-    const within = (this.hotbar.selected() - rowStart + dir + ROW1_COUNT) % ROW1_COUNT;
-    this.setHotbarSelection(rowStart + within);
+    this.setHotbarSelection(next);
   }
 
   // Single entry point for changing the hotbar selection — number keys, the
@@ -1654,7 +1670,6 @@ export class MainScene extends Phaser.Scene {
   // Far from the world-center safe zone, biased toward forest (gremlin
   // habitat) — the boss altar's own placement. Chosen once per session.
   private pickAltarPosition(rng: Phaser.Math.RandomDataGenerator): { x: number; y: number } {
-    const ALTAR_CLEAR_RADIUS = 900;
     return this.pickSpawnPoint(rng, "forest", ALTAR_CLEAR_RADIUS, true);
   }
 
@@ -1764,6 +1779,7 @@ export class MainScene extends Phaser.Scene {
     let hoveredRack: Phaser.GameObjects.Image | null = null;
     let hoveredShack: GremlinShack | null = null;
     let hoveredAltar: BossAltar | null = null;
+    let hoveredWorkbench: Phaser.GameObjects.Image | null = null;
     let best = Infinity;
 
     for (const node of this.nodes) {
@@ -1776,6 +1792,7 @@ export class MainScene extends Phaser.Scene {
         hoveredRack = null;
         hoveredShack = null;
         hoveredAltar = null;
+        hoveredWorkbench = null;
         best = d;
       }
     }
@@ -1789,6 +1806,7 @@ export class MainScene extends Phaser.Scene {
         hoveredRack = null;
         hoveredShack = null;
         hoveredAltar = null;
+        hoveredWorkbench = null;
         best = d;
       }
     }
@@ -1802,6 +1820,7 @@ export class MainScene extends Phaser.Scene {
         hoveredEnemy = null;
         hoveredShack = null;
         hoveredAltar = null;
+        hoveredWorkbench = null;
         best = d;
       }
     }
@@ -1815,6 +1834,7 @@ export class MainScene extends Phaser.Scene {
         hoveredEnemy = null;
         hoveredRack = null;
         hoveredAltar = null;
+        hoveredWorkbench = null;
         best = d;
       }
     }
@@ -1828,6 +1848,21 @@ export class MainScene extends Phaser.Scene {
         hoveredEnemy = null;
         hoveredRack = null;
         hoveredShack = null;
+        hoveredWorkbench = null;
+        best = d;
+      }
+    }
+    for (const obj of this.placedObjects) {
+      if (obj.getData("itemKey") !== "workbench") continue;
+      const radius = Math.max(obj.displayWidth, obj.displayHeight) / 2 + 6;
+      const d = Phaser.Math.Distance.Between(world.x, world.y, obj.x, obj.y);
+      if (d <= radius && d < best) {
+        hoveredWorkbench = obj;
+        hoveredNode = null;
+        hoveredEnemy = null;
+        hoveredRack = null;
+        hoveredShack = null;
+        hoveredAltar = null;
         best = d;
       }
     }
@@ -1837,6 +1872,7 @@ export class MainScene extends Phaser.Scene {
     this.hoveredRack = hoveredRack;
     this.hoveredShack = hoveredShack;
     this.hoveredAltar = hoveredAltar;
+    this.hoveredWorkbench = hoveredWorkbench;
 
     // Station level labels are passive flavor, not part of the interact/
     // prompt system above — shown purely on hover, independent of the
@@ -1857,7 +1893,9 @@ export class MainScene extends Phaser.Scene {
             ? this.promptForShack(hoveredShack)
             : hoveredAltar
               ? this.promptForAltar(hoveredAltar)
-              : null;
+              : hoveredWorkbench
+                ? this.promptForWorkbench(hoveredWorkbench)
+                : null;
     if (prompt) {
       this.promptText.setText(prompt).setVisible(true);
       this.input.setDefaultCursor("pointer");
@@ -1925,6 +1963,13 @@ export class MainScene extends Phaser.Scene {
     return inReach ? "[LMB] Open" : null;
   }
 
+  // A placed Workbench: prompt to open the combined crafting menu when in
+  // reach — no gating (reach-only), same as the Drying Rack/Shack.
+  private promptForWorkbench(image: Phaser.GameObjects.Image): string | null {
+    const inReach = Phaser.Math.Distance.Between(this.player.x, this.player.y, image.x, image.y) <= REACH;
+    return inReach ? "[LMB] Craft" : null;
+  }
+
   // Mirrors the tool-kind gating philosophy exactly: no Gremlin Totem
   // selected in the hotbar -> show nothing, never reveal what's required
   // (same "no tool of the right kind -> show nothing" rule as promptFor()).
@@ -1963,6 +2008,10 @@ export class MainScene extends Phaser.Scene {
     }
     if (this.hoveredAltar) {
       if (this.promptForAltar(this.hoveredAltar)) this.attemptSummonBoss(this.hoveredAltar);
+      return;
+    }
+    if (this.hoveredWorkbench) {
+      if (this.promptForWorkbench(this.hoveredWorkbench)) this.toggleCombinedMenu();
       return;
     }
     const node = this.hoveredNode;
@@ -2931,6 +2980,7 @@ export class MainScene extends Phaser.Scene {
       combatStats: () => this.combatStats(),
       beginDrag: (c, i, p) => this.beginItemDrag(c, i, p),
       beginArmorDrag: (slot, p) => this.beginArmorDrag(slot, p),
+      unequipArmorSlot: (slot) => this.unequipArmorSlot(slot),
       openArmorContextMenu: (slot, x, y) => this.openArmorContextMenu(slot, x, y),
       openWeaponUpgrade: (c, i) => this.openWeaponUpgradeMenu(c, i),
       openPlaceContextMenu: (c, i, x, y) => this.openPlaceContextMenu(c, i, x, y),

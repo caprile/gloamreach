@@ -460,6 +460,25 @@ mouse-driven only. Don't reintroduce a keybind for this without being asked. Spa
    place → gather → pick-up-and-replace loop that doesn't require the inventory. Per
    the user (locked via `AskUserQuestion`): Alt+1-9 selects row 2 directly; the scroll
    wheel spans both rows by default, togglable back to current-row-only with **H**.
+5e. **Second post-boss playtest batch, Group A — quick fixes** — plan:
+   `.claude/plans/delightful-tinkering-book.md`. First of three grouped batches off a
+   second Gremlin King playtest; user locked the order via `AskUserQuestion`: **Group A
+   (shipped) → Group B (HUD/stats display, not started) → Group C (Elites +
+   Trophy-gated Totem, not started)**. Six small independent fixes: Running's passive
+   sprint-XP rate bumped 10→20/sec (levels faster early, curve itself untouched);
+   **Ctrl+Click now unequips armor** (the last gesture missing the standing
+   Ctrl+Click-aliases-quick-move pattern); **clicking a placed Workbench opens the
+   crafting menu** (previously it had zero hover/interact — new `hoveredWorkbench`
+   mirrors the Drying Rack/Shack hover pattern, sourced from `placedObjects` rather
+   than a new parallel array); **scroll-wheel hotbar cycling now skips empty slots**;
+   **Boss Altar spawns further from world center** (`ALTAR_CLEAR_RADIUS` promoted to a
+   named constant, 900→1400 — the "min distance from center" mechanism already existed
+   via `pickSpawnPoint`'s `clearRadius`, just tuned too small); **Boss charge attack
+   reliably damages on contact** (`GremlinKing.CHARGE_HIT_RADIUS` now scales by
+   `BOSS_SCALE`, was a flat unscaled 34px against a 2.4x-scaled sprite — same class of
+   fix as the earlier `MainScene.enemyReach()` attack/prompt-reach scaling, just not
+   previously applied to the boss's own charge math). See `STATUS.md` for full detail
+   and verification.
 
 **Not yet built — next up in rough order:**
 6. **World & discovery** — much bigger generated world, biomes, map, eventually a
@@ -513,6 +532,52 @@ built, so a future session picking up any of those should read this first.
 - **Camera/world scale:** the user wants the game to feel more **zoomed in** — try
   scaling the view ~**10-15% larger** (camera zoom, or a global sprite/world scale bump)
   as a quick experiment before committing to a specific number.
+
+**Added 2026-07-10, from a post-boss-fight playtest (Gremlin King beaten at player lvl 5,
+Blunt 5/Pierce 10/Light Armor 5/Running 3/Chopping 4, max-lvl Primal Spear):**
+
+- **Ranged starting weapon** — maybe Javelins (thrown, no ammo?) and/or the
+  already-planned Slingshot, as an earlier/easier ranged option than whatever's next.
+- **Food system** — cooking, eating, and what it actually does to the player (buffs?
+  HP/stamina restore? timed effect?) — still fully TBD, first biome notes already flag
+  Shishkabob as the first cook-over-time item but the actual eating payoff was never
+  designed.
+- **HP regen system** — ties into the sustain-loop bullet above; still not designed.
+- **"Discovered" notification for new raw materials** — picking up a resource type for
+  the first time should announce it, similar in spirit to the existing recipe-unlock
+  toast (`EventLogUI`'s recipe toast) but for raw materials, not recipes.
+- **Inventory auto-sort** — a keypress while the inventory is open that sorts/auto-stacks
+  shared materials together.
+- **Pause system** — doesn't exist yet at all.
+- **Fast-boss-kill bonus** — a concept for rewarding beating a biome boss quickly from
+  the start of a run (exact bonus TBD).
+- **Roguelike/Ascension-style meta concepts** — e.g. a biome's boss could be 1-of-N
+  possible bosses depending on the run's seed; a Slay-the-Spire-style "Ascension"
+  difficulty-tiering system. Both idea-stage only.
+- **Minimap should NOT show the full map.** Current `MinimapUI` (shipped, see roadmap
+  5a) reveals the *entire* explored world shrunk down — the user now wants the corner
+  minimap to only show a **small nearby section** (viewport-relative, scrolls with the
+  player), plus a separate **full-map overlay** (a larger centered screen panel, opened
+  on demand) that shows everything explored so far. Opening the full map should **not**
+  block movement — the player can keep walking around while it's open. This is a
+  meaningful rework of `MinimapUI`/`FogOfWar`'s current "one panel shows everything"
+  model, not a tweak.
+- **Trophy slot + elite-drop equipment concept** — beyond the Gremlin Trophy currency
+  described in the Elites milestone below, the user wants an actual **equipment slot**
+  for trophies (maybe repurposing one of the placeholder "misc" slots already in
+  `Equipment.ts`). An equipped trophy would first need to be **processed somehow**
+  ("dried/cured") — a new use for the Drying Rack pattern, or a new station — before it
+  grants **passive bonuses and possibly an activated ability**. Undesigned past this
+  concept; a natural extension of Elites once that milestone ships.
+- **Stat-point vs. skill-level cost/benefit analysis requested** — the user wants an
+  actual comparison of stamina-cost reduction (Strength/Agility, -0.5%/point) vs.
+  weapon-skill damage bonus (+0.5% dmg/level) to figure out which is more valuable for a
+  melee/ranged weapon build, suspecting Strength "feels weird" to invest in next to
+  Vitality/Endurance. This is an **analysis task**, not a code change — worth doing as a
+  quick number-crunch (using `Progression.ts`/`Skills.ts`'s real formulas) before/instead
+  of any rebalance, to confirm whether it's a genuine imbalance or just an early-game
+  perception (points are cheap relative to levels-to-next-skill-tier early on, so the
+  comparison may shift a lot by mid/late game).
 
 ## First biome — content notes (idea stage, not locked)
 

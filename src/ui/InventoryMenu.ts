@@ -35,6 +35,9 @@ export interface InventoryMenuDeps {
   // Left-press on an occupied equipment slot begins dragging the equipped
   // item back out (e.g. to unequip it by dropping it in the backpack).
   beginArmorDrag: (slot: EquipSlot, pointer: Phaser.Input.Pointer) => void;
+  // Ctrl+Click alias for unequipping — mirrors the standing pattern where
+  // every double-click quick-move gesture also gets a Ctrl+Click alias.
+  unequipArmorSlot: (slot: EquipSlot) => void;
   // Right-click on an equipment slot opens a small Unequip/Upgrade (or
   // Equip/Upgrade if empty) context menu — mirrors a placed station's
   // right-click Upgrade/Destroy popup.
@@ -279,6 +282,11 @@ export class InventoryMenu {
         .on("pointerdown", (pointer: Phaser.Input.Pointer) => {
           if (pointer.rightButtonDown()) {
             this.deps.openArmorContextMenu(slot.id, pointer.x, pointer.y);
+            return;
+          }
+          const e = pointer.event as (MouseEvent & { ctrlKey?: boolean }) | undefined;
+          if (e?.ctrlKey && slot.itemKey) {
+            this.deps.unequipArmorSlot(slot.id);
             return;
           }
           if (slot.itemKey) this.deps.beginArmorDrag(slot.id, pointer);

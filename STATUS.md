@@ -2,7 +2,82 @@
 
 Last updated: 2026-07-10
 
-### Just finished: Post-boss-fight playtest batch — boss HUD/hitbox, chest take-all, 2nd hotbar row
+### Just finished: Second post-boss playtest batch, Group A — quick fixes
+
+First of three grouped batches off a second Gremlin King playtest (player beat it at
+lvl 5, Blunt 5/Pierce 10/Light Armor 5/Running 3/Chopping 4, max-lvl Primal Spear).
+User locked the order via `AskUserQuestion`: **Group A (this batch) → Group B
+(HUD/stats display) → Group C (Elites + Trophy-gated Totem)**. Plan:
+`.claude/plans/delightful-tinkering-book.md`. A "notes for later" list (food system, HP
+regen, roguelike ideas, minimap small-section + full-map-overlay rework, trophy
+equipment slot, etc.) was appended to `CLAUDE.md`'s Long-term design notes section as
+pure documentation, no code yet.
+
+- **Running levels faster early** (`MainScene.ts`) — sprint's flat running-XP rate
+  extracted to `RUNNING_XP_PER_SEC` and bumped 10→20 XP/sec; `skillXpToNext`'s curve
+  itself is unchanged.
+- **Ctrl+Click unequips armor** (`InventoryMenu.ts`/`MainScene.ts`) — the one remaining
+  gesture without the standing Ctrl+Click-aliases-double-click-quick-move pattern. New
+  `InventoryMenuDeps.unequipArmorSlot`, checked before the existing right-click
+  (context menu) and left-click (drag) branches on an armor slot's `pointerdown`.
+- **Clicking a placed Workbench opens the crafting menu** — previously a Workbench had
+  zero hover/interact behavior at all (proximity-gating only). New `hoveredWorkbench`
+  tracking (sourced by filtering `placedObjects` by `itemKey`, no new parallel array
+  needed) mirrors the Drying Rack/Shack hover-and-prompt pattern; `tryInteract()`'s new
+  branch calls the existing `toggleCombinedMenu()` (same one Tab already calls), so
+  clicking the workbench a second time while the menu's open closes it.
+- **Smart scroll-wheel hotbar cycling** — `cycleHotbar()` now steps up to a full lap
+  looking for the next occupied slot instead of moving exactly one slot per tick,
+  respecting the existing `wheelSpansBothRows` toggle's range.
+- **Boss Altar now spawns further from world center** — the "minimum distance from
+  center" mechanism the user asked for already existed (`pickSpawnPoint`'s
+  `clearRadius` param, shared by every spawn-point picker); it was just tuned too
+  small. Promoted the inline local `900` to a named `ALTAR_CLEAR_RADIUS` module
+  constant and raised it to `1400` (world's half-diagonal is ~2240px).
+- **Boss charge attack now reliably damages on contact** — `checkPlayerHit()` was
+  already called every frame during the charge's travel (this was never a missing
+  per-frame check), but `CHARGE_HIT_RADIUS` was a flat `34` that never accounted for
+  `BOSS_SCALE = 2.4` — the boss's scaled-up visual footprint could visually overlap the
+  player without the hit registering. Same class of bug the earlier
+  `MainScene.enemyReach()` fix addressed for normal attack/prompt reach, just not
+  previously applied to the boss's own charge math. Fixed: `CHARGE_HIT_RADIUS = 34 *
+  BOSS_SCALE` (≈82px).
+
+Verified via `preview_eval`: 5s of simulated sprint XP at the new rate lands exactly on
+Running lvl 1 (was ~10s before); a scripted `unequipArmorSlot` call (the same path
+Ctrl+Click now triggers) confirms the item returns to the backpack and the dep is wired
+as a real function on `InventoryMenu`'s deps; placing a workbench at the pointer's
+world position and calling the real hover/interact path shows the `"[LMB] Craft"`
+prompt and opens both `inventoryMenu`/`craftingMenu`; a hotbar with only slots 0/3/7
+filled cycles `0→3→7→0→3`, never landing on an empty slot; `pickAltarPosition()`
+returns a point 1505px from world center (comfortably past the new 1400 threshold); a
+live `GremlinKing.checkPlayerHit()` call during a scripted charge confirms a hit at
+60px (previously would have missed under the old 34px radius) and 30px, and correctly
+still misses at 90px. Type-check clean (`tsc --noEmit`), no console errors,
+`preview_screenshot` confirms the world boots normally.
+
+### Next up: Group B — HUD & stats display (planned, not yet implemented)
+
+Full implementation plan drafted and researched (2 parallel Explore agents + direct
+reads) this session, but deliberately **not coded yet** — the user asked to plan only
+and start implementation in a fresh session. Plan committed at
+`.claude/plans/group-b-hud-stats-display.md`. Three display/layout decisions were
+locked via `AskUserQuestion` before writing the plan:
+- **Run Speed** (base walk + Running-skill sprint multiplier breakdown) shown in
+  **both** the Character menu Stats tab (full breakdown) and the inventory Combat
+  column (compact line) — no item speed bonuses exist yet, so today's breakdown is just
+  those two inputs.
+- **HP/Stamina bars grow proportionally** with max pool (today a hardcoded 76px each),
+  **capped at the hotbar's own on-screen width**, staying centered.
+- **XP bar relocates to sit under the hotbar** at hotbar width (nudging the hotbar up
+  slightly to open room beneath it), rather than staying stacked above HP/stamina.
+Also queued for the same batch: damage broken out by type in the Combat column (e.g.
+"Damage: 8 Pierce") and a new "Attack Range" stat line. See the plan file for the exact
+file-by-file breakdown (`MainScene.ts`, `HotbarUI.ts`, `InventoryMenu.ts`,
+`CharacterMenu.ts`, `Weapons.ts`, `Player.ts`) and verification steps. Group C (Elites +
+Trophy-gated Totem) remains planned-only after this, per the locked A → B → C order.
+
+### Previously: Post-boss-fight playtest batch — boss HUD/hitbox, chest take-all, 2nd hotbar row
 
 A same-day playtest batch off the first real Gremlin King fight — grab-bag of fixes
 plus one small feature (the 2nd hotbar row), plan:
