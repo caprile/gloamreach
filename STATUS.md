@@ -2,7 +2,57 @@
 
 Last updated: 2026-07-11
 
-### Just finished: Contextual hints + pause menu (playtest-readiness pass)
+### Just finished: Balancing dashboard + 25-min playtest triage
+
+Off the master-plan build order (like 5q). the user's 25-min run (player lvl 7, ~lvl 16
+Slash on a Bone Knife, 18 kills + 1 boss, 2 relics) produced a 12-item feedback dump.
+Triaged and locked the order/scope via `AskUserQuestion`; **tackled the dashboard first**
+this session (a tooling deliverable, not a game mechanic). Combat + balance work is queued
+for later sessions.
+
+- **Live HTML balancing dashboard** — `dashboard.html` (repo root) + `src/dashboard/main.ts`,
+  wired as a **second Vite entry** (`vite.config.ts` `build.rollupOptions.input`). Open at
+  **`/dashboard.html`** while `npm run dev` runs (served on whatever port Vite prints).
+  Framework-free plain DOM (no new npm dep); no item icons (BootScene-generated at runtime,
+  unavailable to a static page). **Drift-free by construction:** it imports the SAME
+  source-of-truth data modules the game does (`Recipes`, `Items`, `Weapons`,
+  `WeaponUpgrades`, `ArmorUpgrades`, `StationUpgrades`, `Processing`, `Cooking`, `Relics`) —
+  all Phaser-free, so the page stays lean and updates automatically on any recipe/cost/stat/
+  relic change. 8 searchable tabs: Recipes, Weapons (w/ DPS + upgrade costs), Armor (base +
+  Lvl2 defense, set totals), Stations & Food, Relics (trophy→roll odds/pity + every relic's
+  effect text — answers "Tireless Charm −12% to *what*" → **stamina cost**, and is the
+  see-all-relics list), Enemies, **Balance Overview**, All Items.
+- **Balance Overview tab** — the analysis payload. Computes incoming-damage-vs-armor
+  (flat-deduction, floored at 1) at three armor breakpoints, flagging red where a hit floors
+  to ≤2. Directly **quantifies the "1 damage per hit in Lvl 2 armor" complaint**: Gremling
+  claw (8) and Gremlin claw (10) both floor to **1 dmg = 100 hits to kill you** in armor.
+  Plus weapon time-to-kill per enemy. This is the reference for the queued rebalance.
+- **The one drift risk** (documented in-UI + `RECIPES.md`): the **Enemies tab's `ENEMIES`
+  array is manually mirrored** from the Phaser entity subclasses (Boar/Snake/Gremlin/
+  GremlinKing) — enemy stats live in constructors, not exported tables. Keep in sync when
+  tuning enemies. Everything else is live-imported.
+- `RECIPES.md` got a pointer to the dashboard at the top (kept as the quick static reference).
+
+**Locked decisions from the triage (for the queued follow-up sessions):**
+- **Souls-like combat — ALL enemies, next combat session (Opus, new mechanic):** every enemy
+  (Boar/Snake/Gremlin/Gremling) gets a telegraphed attack + a clear attack/dodge window, like
+  the Gremlin King already has. Goal: kill the "kite forever by spam-left-click + walk away"
+  feel. Boring common enemies are fine, but all need a readable tell + punish window.
+- **Balance — "both, lightly" (Sonnet):** small armor-mitigation nerf + small enemy-damage
+  buff so armor is a bonus, not near-immunity (see the Balance tab).
+- **Boss (Sonnet):** bump Gremlin King damage MORE — should ~2-shot a full-armor player
+  (damage already felt good vs max armor). **Replace the cleave/cone attack** — it reads as a
+  strictly worse 360° slam; design a genuinely different attack.
+- **Bug fixes (Sonnet):** (1) twine picked up from a chest didn't unlock recipes (container
+  pickups skip discovery refresh); (2) Cooked Boar Meat recipe shown before ever making a
+  shishkabob (cook-recipe discovery gating); (3) relic appears in "Your Relics" grid *before*
+  the roll notification (5p deferred-announce missed the grid repaint); (4) "Roll Gremlin
+  Trophy" button stuck in the Relic Forge at 0 count while other trophies vanish; (5) level-up
+  full-screen flash is a jumpscare — keep it a big deal, dial intensity down.
+- **Small features:** contextual hint to place a Workbench (Hints.ts); in-game relic
+  compendium (see-all-relics view — the dashboard covers the dev side, he wants it in-game too).
+
+### Previously: Contextual hints + pause menu (playtest-readiness pass)
 
 Off the master-plan build order: the user paused M-TE (trophy gear) to instead polish the
 first biome enough for outside playtesters. The first item of that pass tackles the

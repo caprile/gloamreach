@@ -1,9 +1,17 @@
 # Recipes & Upgrades Dashboard
 
+> **Live HTML dashboard:** run `npm run dev` and open
+> [`/dashboard.html`](dashboard.html) for an interactive, always-current version
+> of everything below — plus weapon DPS, armor-vs-damage math, relic odds, and a
+> Balance Overview tab. It imports the real data modules (`src/dashboard/main.ts`),
+> so it never drifts. This markdown file remains a quick static reference.
+>
 > **Maintenance note:** this file is a hand-maintained snapshot, not generated.
 > Update it whenever `src/systems/Recipes.ts`, `ArmorUpgrades.ts`,
 > `StationUpgrades.ts`, `WeaponUpgrades.ts`, or `Processing.ts` change. See
-> `CLAUDE.md`'s "Working conventions" section.
+> `CLAUDE.md`'s "Working conventions" section. (The dashboard's Enemies tab is the
+> one manually-mirrored piece — enemy stats live in Phaser entity subclasses, not
+> data tables — so keep that in sync too when tuning enemies.)
 
 "Tier" below means `Recipe.tier` — tier 0 is craftable anywhere, tier 1+
 requires standing near a placed Workbench (`MainScene.isNearWorkbench`).

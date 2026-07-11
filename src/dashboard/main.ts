@@ -1,0 +1,582 @@
+// Balancing Dashboard — a standalone reference/analysis page for recipes,
+// items, weapons, armor, relics, and enemy combat math. Served as a second
+// Vite entry (dashboard.html), it imports the SAME source-of-truth data
+// modules the game does, so it never drifts the way the hand-maintained
+// RECIPES.md does. Open it at /dashboard.html while `npm run dev` is running.
+//
+// Deliberately framework-free plain DOM — this is a dev tool, not shipped game
+// UI, and pulling in a UI framework would be the only npm dependency in the
+// project. No item icons: those are Phaser-generated at runtime (BootScene),
+// unavailable to a static page, so tables are text-only.
+
+import { RECIPES, type Recipe, isPlaceableRecipe } from "../systems/Recipes";
+import { ITEM_DEFS, itemDef, type ItemDef } from "../systems/Items";
+import {
+  weaponDamage,
+  weaponCooldownMs,
+  weaponStaminaCost,
+  weaponAttacksPerSecond,
+  weaponPrimaryDamageType,
+  damageTypeDisplayName,
+  type WeaponType,
+} from "../systems/Weapons";
+import { WEAPON_UPGRADES, weaponTierDamageBonus } from "../systems/WeaponUpgrades";
+import { ARMOR_UPGRADES, armorDefenseForTier } from "../systems/ArmorUpgrades";
+import { STATION_UPGRADES } from "../systems/StationUpgrades";
+import { PROCESS_RECIPES } from "../systems/Processing";
+import { COOK_RECIPES } from "../systems/Cooking";
+import {
+  RELIC_DEFS,
+  RELIC_RARITIES,
+  RELIC_POOLS,
+  rarityName,
+  rarityHex,
+  RARITY_SUCCESS_CHANCE,
+  PITY_THRESHOLD,
+  relicEffectText,
+  TROPHY_ROLL,
+  type RelicRarity,
+} from "../systems/Relics";
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+const PLAYER_BASE_HP = 100; // Health.ts MAX_HEALTH
+const PLAYER_BASE_STAMINA = 100; // Stamina.ts MAX_STAMINA
+
+function esc(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+// Pretty display name for any item/resource key, falling back to a title-cased
+// version of the raw key when no ItemDef exists.
+function name(key: string): string {
+  const def = itemDef(key);
+  if (def) return def.name;
+  return key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function prettify(key: string): string {
+  return key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+// "4× Wood, 4× Stone" from a costs record.
+function costsText(costs: Record<string, number | undefined>): string {
+  const parts = Object.entries(costs)
+    .filter(([, n]) => n)
+    .map(([k, n]) => `${n}× ${name(k)}`);
+  return parts.length ? parts.join(", ") : "—";
+}
+
+function tierTag(tier: number): string {
+  return tier >= 1
+    ? `<span class="tag tier1">Tier ${tier} · Workbench</span>`
+    : `<span class="tag">Tier 0 · anywhere</span>`;
+}
+
+function round1(n: number): string {
+  return (Math.round(n * 10) / 10).toString();
+}
+
+// ---------------------------------------------------------------------------
+// Enemy combat stats — MANUALLY MIRRORED from the entity files (Boar.ts,
+// Snake.ts, Gremlin.ts, GremlinKing.ts). These live inside Phaser sprite
+// subclasses, not exported data tables, so unlike everything else on this page
+// they are not imported live. Keep in sync when tuning an enemy. Elite variants
+// apply +50% HP/dmg, +10% speed, ~1.3-1.4x scale, 2x loot, + a species trophy.
+// ---------------------------------------------------------------------------
+
+interface EnemyAttack {
+  label: string;
+  damage: number;
+  telegraphMs?: number; // souls-like readable window (boss only today)
+}
+interface EnemyStat {
+  name: string;
+  hp: number;
+  speed: number; // px/s primary aggressive movement
+  aggro: number; // px
+  attacks: EnemyAttack[];
+  loot: string;
+  trophy?: string;
+  notes?: string;
+}
+
+const ELITE_MULT = 1.5;
+
+const ENEMIES: EnemyStat[] = [
+  {
+    name: "Boar",
+    hp: 20,
+    speed: 60,
+    aggro: 105,
+    attacks: [{ label: "Bite", damage: 25 }],
+    loot: "1 Boar Meat, 1 Bones",
+    trophy: "Boar Trophy (elite)",
+    notes: "Plain chase + bite. No telegraph/dodge window yet.",
+  },
+  {
+    name: "Snake",
+    hp: 11,
+    speed: 90,
+    aggro: 45,
+    attacks: [{ label: "Ambush bite", damage: 20 }],
+    loot: "1 Leather Scraps",
+    trophy: "Snake Trophy (elite)",
+    notes: "Hidden ambusher: strike → flee → re-hide. Tight 45px trigger.",
+  },
+  {
+    name: "Gremling (melee)",
+    hp: 12,
+    speed: 70,
+    aggro: 110,
+    attacks: [{ label: "Claw", damage: 8 }],
+    loot: "1 Gremlin Blood",
+    trophy: "Gremlin Trophy (elite)",
+    notes: "Plain chase + claw.",
+  },
+  {
+    name: "Gremlin (ranged)",
+    hp: 32,
+    speed: 70,
+    aggro: 136,
+    attacks: [
+      { label: "Rock (projectile, 220px)", damage: 8 },
+      { label: "Claw (melee)", damage: 10 },
+    ],
+    loot: "1 Gremlin Skin, 1 Gremlin Blood",
+    trophy: "Gremlin Trophy (elite)",
+    notes: "Kites + 2-shot bursts; commits to melee when cornered.",
+  },
+  {
+    name: "Gremlin King (BOSS)",
+    hp: 600,
+    speed: 45,
+    aggro: 260,
+    attacks: [
+      { label: "Cleave (140° arc, 90px)", damage: 30, telegraphMs: 550 },
+      { label: "Charge (line, dodgeable)", damage: 40, telegraphMs: 850 },
+      { label: "Ground Slam (AoE 150px + knockback)", damage: 45, telegraphMs: 950 },
+    ],
+    loot: "Gremlin King Fang (unique)",
+    notes:
+      "Poise 100 (stagger → 1.5× dmg for 3s). Enrages <50% HP: shorter telegraphs, faster — not more damage. The only enemy with real telegraph/dodge windows today.",
+  },
+];
+
+// ---------------------------------------------------------------------------
+// Section renderers — each returns HTML for one tab.
+// ---------------------------------------------------------------------------
+
+const CATEGORY_ORDER = ["tools", "weapons", "armor", "crafting", "misc"] as const;
+
+function renderRecipes(): string {
+  let html = `<h2>Recipes</h2>
+    <p class="note">Every craftable recipe from <code>src/systems/Recipes.ts</code>.
+    Tier 1+ recipes are invisible in-game until a Workbench has been placed, and require
+    proximity to one to craft. Skill gates are <b>discovery-time</b> — a locked recipe is
+    fully hidden until met.</p>
+    <div class="searchwrap"><input type="search" data-filter="recipes" placeholder="Filter recipes…" /></div>`;
+
+  for (const cat of CATEGORY_ORDER) {
+    const rows = RECIPES.filter((r) => r.category === cat);
+    if (!rows.length) continue;
+    html += `<h3>${prettify(cat)}</h3><table data-table="recipes"><thead><tr>
+      <th>Name</th><th>Tier</th><th>Cost</th><th>Skill gate</th><th>Output</th><th>Description</th>
+      </tr></thead><tbody>`;
+    for (const r of rows) html += recipeRow(r);
+    html += `</tbody></table>`;
+  }
+  return html;
+}
+
+function recipeRow(r: Recipe): string {
+  const skills = r.requiredSkills?.length
+    ? r.requiredSkills.map((s) => `${prettify(s.skill)} ${s.level}`).join(", ")
+    : `<span class="muted">—</span>`;
+  let output = r.output.kind === "tool" ? "Tool" : "Item";
+  if (isPlaceableRecipe(r)) output = "Placeable";
+  else if (r.category === "weapons") output = "Weapon";
+  else if (r.category === "armor") output = "Armor";
+  return `<tr data-search="${esc((r.name + " " + Object.keys(r.costs).join(" ")).toLowerCase())}">
+    <td><b>${esc(r.name)}</b></td>
+    <td>${tierTag(r.tier)}</td>
+    <td class="cost">${esc(costsText(r.costs))}</td>
+    <td>${skills}</td>
+    <td><span class="tag">${output}</span></td>
+    <td class="muted">${esc(r.description)}</td>
+  </tr>`;
+}
+
+function renderWeapons(): string {
+  const weapons: WeaponType[] = ["wood_club", "stone_club", "bone_knife", "primal_spear"];
+  let html = `<h2>Weapons</h2>
+    <p class="note">Base stats from <code>Weapons.ts</code>; upgrade tiers from
+    <code>WeaponUpgrades.ts</code>. <b>DPS</b> = damage × attacks/sec (before the
+    weapon-skill damage multiplier of +0.5%/level). <b>Stamina/hit</b> gates sustained
+    swinging against the 100 base stamina pool.</p>
+    <table><thead><tr>
+      <th>Weapon</th><th>Type</th><th class="num">Lvl 1 dmg</th><th class="num">Lvl 2</th>
+      <th class="num">Lvl 3</th><th class="num">Atk/s</th><th class="num">Lvl 1 DPS</th>
+      <th class="num">Lvl 3 DPS</th><th class="num">Stam/hit</th>
+      </tr></thead><tbody>`;
+  for (const w of weapons) {
+    const base = weaponDamage(w);
+    const aps = weaponAttacksPerSecond(w);
+    const hasUpg = WEAPON_UPGRADES.some((u) => u.appliesToItemKey === w);
+    const lvl2 = hasUpg ? base + weaponTierDamageBonus(w, 1) : null;
+    const lvl3 = hasUpg ? base + weaponTierDamageBonus(w, 2) : null;
+    const dtype = damageTypeDisplayName(weaponPrimaryDamageType(w));
+    html += `<tr>
+      <td><b>${esc(name(w))}</b></td>
+      <td><span class="tag">${dtype}</span></td>
+      <td class="num">${base}</td>
+      <td class="num">${lvl2 ?? "—"}</td>
+      <td class="num">${lvl3 ?? "—"}</td>
+      <td class="num">${round1(aps)}</td>
+      <td class="num">${round1(base * aps)}</td>
+      <td class="num">${lvl3 != null ? round1(lvl3 * aps) : round1(base * aps)}</td>
+      <td class="num">${weaponStaminaCost(w)}</td>
+    </tr>`;
+  }
+  html += `</tbody></table>`;
+
+  html += `<h3>Weapon upgrade costs</h3><table><thead><tr>
+    <th>Weapon</th><th>Upgrade</th><th>Result</th><th class="num">+Dmg</th><th>Cost</th>
+    </tr></thead><tbody>`;
+  for (const u of WEAPON_UPGRADES) {
+    html += `<tr>
+      <td>${esc(name(u.appliesToItemKey))}</td>
+      <td>${esc(u.name)}</td>
+      <td><span class="tag tier1">Lvl ${u.resultTier + 1}</span></td>
+      <td class="num pos">+${u.damageBonus}</td>
+      <td class="cost">${esc(costsText(u.costs))}</td>
+    </tr>`;
+  }
+  html += `</tbody></table>`;
+  return html;
+}
+
+function renderArmor(): string {
+  const armorItems = Object.values(ITEM_DEFS).filter((d) => d.armorSlot);
+  let html = `<h2>Armor</h2>
+    <p class="note">Defense is a <b>flat deduction</b> from incoming physical damage,
+    floored at 1 per hit (<code>MainScene.applyDamageToPlayer</code>). Base from
+    <code>Items.ts</code>; Lvl 2 bonus from <code>ArmorUpgrades.ts</code> (all require a
+    Workbench that has itself reached Lvl 2).</p>
+    <table><thead><tr>
+      <th>Piece</th><th>Slot</th><th class="num">Base armor</th><th class="num">Lvl 2 armor</th>
+      <th>Craft cost</th><th>Lvl 2 upgrade cost</th>
+      </tr></thead><tbody>`;
+  let baseTotal = 0;
+  let upgTotal = 0;
+  for (const d of armorItems) {
+    const base = armorDefenseForTier(d.key, 0);
+    const upg = ARMOR_UPGRADES.find((u) => u.appliesToItemKey === d.key);
+    const lvl2 = upg ? armorDefenseForTier(d.key, upg.resultTier) : base;
+    baseTotal += base;
+    upgTotal += lvl2;
+    const recipe = RECIPES.find((r) => r.output.kind === "item" && r.output.itemId === d.key);
+    html += `<tr>
+      <td><b>${esc(d.name)}</b></td>
+      <td>${esc(prettify(d.armorSlot!))}</td>
+      <td class="num">${base}</td>
+      <td class="num pos">${lvl2}</td>
+      <td class="cost">${recipe ? esc(costsText(recipe.costs)) : "—"}</td>
+      <td class="cost">${upg ? esc(costsText(upg.costs)) : "—"}</td>
+    </tr>`;
+  }
+  html += `<tr><td colspan="2"><b>Full set</b></td>
+    <td class="num"><b>${baseTotal}</b></td>
+    <td class="num pos"><b>${upgTotal}</b></td>
+    <td colspan="2" class="muted">flat damage reduction, all pieces worn</td></tr>`;
+  html += `</tbody></table>`;
+  return html;
+}
+
+function renderStations(): string {
+  let html = `<h2>Stations & Processing</h2>
+    <p class="note">Station upgrades from <code>StationUpgrades.ts</code>; Drying Rack
+    conversions from <code>Processing.ts</code>; campfire cooking from
+    <code>Cooking.ts</code>.</p>`;
+
+  html += `<h3>Station upgrades</h3><table><thead><tr>
+    <th>Station</th><th>Upgrade</th><th>Result</th><th>Effect</th><th>Cost</th>
+    </tr></thead><tbody>`;
+  for (const u of STATION_UPGRADES) {
+    html += `<tr>
+      <td>${esc(name(u.appliesToItemKey))}</td>
+      <td>${esc(u.name)}</td>
+      <td><span class="tag tier1">Lvl ${u.resultTier + 1}</span></td>
+      <td class="muted">${esc(u.deltaLabel ?? u.description)}</td>
+      <td class="cost">${esc(costsText(u.costs))}</td>
+    </tr>`;
+  }
+  html += `</tbody></table>`;
+
+  html += `<h3>Drying Rack (instant processing)</h3><table><thead><tr>
+    <th>Input</th><th>Output</th><th class="num">Ratio (in:out)</th>
+    </tr></thead><tbody>`;
+  for (const p of PROCESS_RECIPES) {
+    html += `<tr>
+      <td>${esc(name(p.input))}</td>
+      <td>${esc(name(p.output))}</td>
+      <td class="num">${p.inputPerOutput} : 1</td>
+    </tr>`;
+  }
+  html += `</tbody></table>`;
+
+  html += `<h3>Campfire cooking</h3><table><thead><tr>
+    <th>Dish</th><th>Campfire</th><th>Ingredients</th><th>Buff</th>
+    </tr></thead><tbody>`;
+  for (const c of COOK_RECIPES) {
+    const out = itemDef(c.output);
+    const buff = out?.edible
+      ? `+${out.edible.hpPerSec} HP/s for ${out.edible.durationMs / 1000}s`
+      : "—";
+    html += `<tr>
+      <td><b>${esc(c.name)}</b></td>
+      <td>${c.requiredCampfireTier >= 1 ? '<span class="tag tier1">Lvl 2</span>' : '<span class="tag">any</span>'}</td>
+      <td class="cost">${esc(costsText(c.inputs))}</td>
+      <td class="pos">${esc(buff)}</td>
+    </tr>`;
+  }
+  html += `</tbody></table>`;
+  return html;
+}
+
+function renderRelics(): string {
+  let html = `<h2>Relics</h2>
+    <p class="note">Run-length passives rolled at a Relic Forge from monster trophies
+    (<code>Relics.ts</code>). Rolling is <b>probabilistic</b>: each attempt consumes one
+    trophy whether it succeeds or fails, with a per-rarity pity counter guaranteeing a
+    success after N misses. Effect numbers shown at Power Tier 1 (×1.0, the only tier this
+    milestone). Only the Common pool has a live trophy source today.</p>`;
+
+  html += `<h3>Trophy → roll odds</h3><table><thead><tr>
+    <th>Trophy</th><th>Rarity</th><th class="num">Success</th><th class="num">Pity (miss cap)</th><th class="muted">Source</th>
+    </tr></thead><tbody>`;
+  const trophySource: Record<string, string> = {
+    gremlin_trophy: "Elite Gremlin / Gremling",
+    boar_trophy: "Elite Boar",
+    snake_trophy: "Elite Snake",
+    gremlin_king_fang: "Gremlin King (dormant — boss = win)",
+  };
+  for (const [key, roll] of Object.entries(TROPHY_ROLL)) {
+    html += `<tr>
+      <td>${esc(name(key))}</td>
+      <td><span class="dot" style="background:${rarityHex(roll.rarity)}"></span>${rarityName(roll.rarity)}</td>
+      <td class="num">${Math.round(roll.successChance * 100)}%</td>
+      <td class="num">${PITY_THRESHOLD[roll.rarity]}</td>
+      <td class="muted">${esc(trophySource[key] ?? "—")}</td>
+    </tr>`;
+  }
+  html += `</tbody></table>`;
+
+  html += `<div class="searchwrap"><input type="search" data-filter="relics" placeholder="Filter relics…" /></div>`;
+  for (const rarity of RELIC_RARITIES) {
+    const ids = RELIC_POOLS[rarity];
+    if (!ids.length) continue;
+    const live = TROPHY_ROLL && Object.values(TROPHY_ROLL).some((t) => t.rarity === rarity);
+    html += `<h3 style="color:${rarityHex(rarity)}">${rarityName(rarity)}
+      <span class="muted" style="font-size:12px;font-weight:400">
+      · ${Math.round(RARITY_SUCCESS_CHANCE[rarity] * 100)}% roll · pity ${PITY_THRESHOLD[rarity]}
+      ${live ? "" : "· <i>no trophy source yet (M-W1 scaffolding)</i>"}</span></h3>`;
+    html += `<table data-table="relics"><thead><tr><th>Relic</th><th>Effect</th></tr></thead><tbody>`;
+    for (const id of ids) {
+      const def = RELIC_DEFS[id];
+      html += `<tr data-search="${esc((def.name + " " + relicEffectText(def)).toLowerCase())}">
+        <td><span class="dot" style="background:${rarityHex(rarity)}"></span><b>${esc(def.name)}</b></td>
+        <td class="pos">${esc(relicEffectText(def))}</td>
+      </tr>`;
+    }
+    html += `</tbody></table>`;
+  }
+  return html;
+}
+
+function renderEnemies(): string {
+  let html = `<h2>Enemies</h2>
+    <p class="note"><b>⚠ Manually mirrored</b> from the entity files (Boar/Snake/Gremlin/
+    GremlinKing) — unlike every other tab, these aren't imported live, since enemy stats
+    live inside Phaser sprite subclasses. Keep in sync when tuning. Elite variants:
+    +50% HP/dmg, +10% speed, larger scale, 2× loot, + a species trophy.</p>
+    <table><thead><tr>
+      <th>Enemy</th><th class="num">HP</th><th class="num">Elite HP</th><th>Attacks (dmg)</th>
+      <th class="num">Speed</th><th class="num">Aggro</th><th>Loot</th>
+      </tr></thead><tbody>`;
+  for (const e of ENEMIES) {
+    const atk = e.attacks
+      .map((a) => {
+        const tel = a.telegraphMs ? ` <span class="muted">[${a.telegraphMs}ms tell]</span>` : "";
+        return `${a.label} <b class="neg">${a.damage}</b>${tel}`;
+      })
+      .join("<br>");
+    html += `<tr>
+      <td><b>${esc(e.name)}</b>${e.notes ? `<br><span class="muted" style="font-size:11.5px">${esc(e.notes)}</span>` : ""}</td>
+      <td class="num">${e.hp}</td>
+      <td class="num">${e.name.includes("BOSS") ? "—" : Math.round(e.hp * ELITE_MULT)}</td>
+      <td>${atk}</td>
+      <td class="num">${e.speed}</td>
+      <td class="num">${e.aggro}</td>
+      <td class="muted">${esc(e.loot)}${e.trophy ? `<br>+ ${esc(e.trophy)}` : ""}</td>
+    </tr>`;
+  }
+  html += `</tbody></table>`;
+  return html;
+}
+
+function renderBalance(): string {
+  // Effective incoming damage after flat armor (floored at 1), at three armor
+  // breakpoints: none, full base set, full upgraded set. Directly visualizes
+  // the "trivial damage in Lvl 2 armor" playtest complaint.
+  const armorItems = Object.values(ITEM_DEFS).filter((d) => d.armorSlot);
+  const baseSet = armorItems.reduce((s, d) => s + armorDefenseForTier(d.key, 0), 0);
+  const upgSet = armorItems.reduce((s, d) => {
+    const u = ARMOR_UPGRADES.find((x) => x.appliesToItemKey === d.key);
+    return s + armorDefenseForTier(d.key, u?.resultTier ?? 0);
+  }, 0);
+
+  const dealt = (raw: number, armor: number) => Math.max(1, raw - armor);
+  const hits = (raw: number, armor: number) => Math.ceil(PLAYER_BASE_HP / dealt(raw, armor));
+  const cell = (raw: number, armor: number) => {
+    const d = dealt(raw, armor);
+    const cls = d <= 2 ? "neg" : "";
+    return `<td class="num ${cls}">${d} <span class="muted">(${hits(raw, armor)} hits)</span></td>`;
+  };
+
+  let html = `<h2>Balance Overview</h2>
+    <p class="note">Derived from live data. Player base pool is
+    <b>${PLAYER_BASE_HP} HP</b> / ${PLAYER_BASE_STAMINA} stamina (before Vitality/Endurance
+    points and relics). "Hits to kill you" assumes no regen/dodge.</p>
+    <div class="cardrow">
+      <div class="card"><div class="big">${PLAYER_BASE_HP}</div><div class="lbl">Base HP</div></div>
+      <div class="card"><div class="big">${baseSet}</div><div class="lbl">Full armor (base)</div></div>
+      <div class="card"><div class="big">${upgSet}</div><div class="lbl">Full armor (Lvl 2)</div></div>
+    </div>`;
+
+  html += `<h3>Incoming damage vs armor — <span class="muted" style="font-weight:400">damage per hit (hits to kill you)</span></h3>
+    <p class="legend">Armor is subtracted flat then floored at 1. <span class="neg">Red</span> = floored to ≤2,
+    i.e. the "1 damage per hit" trivial feel. This is the exact spot the light rebalance targets.</p>
+    <table><thead><tr>
+      <th>Attack</th><th class="num">Raw</th><th class="num">No armor</th>
+      <th class="num">Base set (${baseSet})</th><th class="num">Lvl 2 set (${upgSet})</th>
+      </tr></thead><tbody>`;
+  const attackList: { label: string; raw: number }[] = [];
+  for (const e of ENEMIES) for (const a of e.attacks) attackList.push({ label: `${e.name}: ${a.label}`, raw: a.damage });
+  attackList.sort((a, b) => a.raw - b.raw);
+  for (const a of attackList) {
+    html += `<tr><td>${esc(a.label)}</td><td class="num">${a.raw}</td>
+      ${cell(a.raw, 0)}${cell(a.raw, baseSet)}${cell(a.raw, upgSet)}</tr>`;
+  }
+  html += `</tbody></table>`;
+
+  // Weapon TTK vs each enemy.
+  const weapons: WeaponType[] = ["wood_club", "stone_club", "bone_knife", "primal_spear"];
+  html += `<h3>Time to kill — <span class="muted" style="font-weight:400">Lvl 1 weapon DPS vs enemy HP (seconds)</span></h3>
+    <p class="legend">= HP ÷ (dmg × atk/s). Ignores the weapon-skill damage bonus, relics, and misses.</p>
+    <table><thead><tr><th>Enemy</th><th class="num">HP</th>`;
+  for (const w of weapons) html += `<th class="num">${esc(name(w))}</th>`;
+  html += `</tr></thead><tbody>`;
+  for (const e of ENEMIES) {
+    html += `<tr><td>${esc(e.name)}</td><td class="num">${e.hp}</td>`;
+    for (const w of weapons) {
+      const dps = weaponDamage(w) * weaponAttacksPerSecond(w);
+      html += `<td class="num">${round1(e.hp / dps)}s</td>`;
+    }
+    html += `</tr>`;
+  }
+  html += `</tbody></table>`;
+  return html;
+}
+
+function renderItems(): string {
+  const typeOf = (d: ItemDef): string => {
+    if (d.tool) return "Tool";
+    if (d.weapon) return "Weapon";
+    if (d.armorSlot) return "Armor";
+    if (d.edible) return "Food";
+    if (d.placeable) return "Placeable";
+    if (d.stats?.some((s) => s.value === "Ritual Item")) return "Ritual";
+    return "Resource";
+  };
+  let html = `<h2>All Items</h2>
+    <p class="note">Every <code>ItemDef</code> from <code>Items.ts</code> — raw resources
+    and crafted outputs. "Stack" is the max stack size (1 = unique/durability item).</p>
+    <div class="searchwrap"><input type="search" data-filter="items" placeholder="Filter items…" /></div>
+    <table data-table="items"><thead><tr>
+      <th>Name</th><th>Key</th><th>Type</th><th class="num">Stack</th><th>Description</th>
+      </tr></thead><tbody>`;
+  for (const d of Object.values(ITEM_DEFS)) {
+    html += `<tr data-search="${esc((d.name + " " + d.key + " " + typeOf(d)).toLowerCase())}">
+      <td><b>${esc(d.name)}</b></td>
+      <td class="muted">${esc(d.key)}</td>
+      <td><span class="tag">${typeOf(d)}</span></td>
+      <td class="num">${d.maxStack}</td>
+      <td class="muted">${esc(d.description)}</td>
+    </tr>`;
+  }
+  html += `</tbody></table>`;
+  return html;
+}
+
+// ---------------------------------------------------------------------------
+// Shell: tabbed nav + live search filtering
+// ---------------------------------------------------------------------------
+
+const TABS: { id: string; label: string; render: () => string }[] = [
+  { id: "recipes", label: "Recipes", render: renderRecipes },
+  { id: "weapons", label: "Weapons", render: renderWeapons },
+  { id: "armor", label: "Armor", render: renderArmor },
+  { id: "stations", label: "Stations & Food", render: renderStations },
+  { id: "relics", label: "Relics", render: renderRelics },
+  { id: "enemies", label: "Enemies", render: renderEnemies },
+  { id: "balance", label: "Balance Overview", render: renderBalance },
+  { id: "items", label: "All Items", render: renderItems },
+];
+
+function mount(): void {
+  const nav = document.getElementById("nav")!;
+  const app = document.getElementById("app")!;
+
+  for (const tab of TABS) {
+    const btn = document.createElement("button");
+    btn.textContent = tab.label;
+    btn.dataset.tab = tab.id;
+    nav.appendChild(btn);
+
+    const sec = document.createElement("section");
+    sec.id = `sec-${tab.id}`;
+    sec.innerHTML = tab.render();
+    app.appendChild(sec);
+  }
+
+  const activate = (id: string) => {
+    for (const b of nav.querySelectorAll("button")) b.classList.toggle("active", (b as HTMLElement).dataset.tab === id);
+    for (const s of app.querySelectorAll("section")) s.classList.toggle("active", s.id === `sec-${id}`);
+    location.hash = id;
+  };
+
+  nav.addEventListener("click", (e) => {
+    const id = (e.target as HTMLElement).dataset?.tab;
+    if (id) activate(id);
+  });
+
+  // Live per-table search on any [data-filter] input, filtering rows by their
+  // data-search attribute within the same section.
+  app.addEventListener("input", (e) => {
+    const inp = e.target as HTMLInputElement;
+    if (inp.dataset?.filter == null) return;
+    const q = inp.value.trim().toLowerCase();
+    const section = inp.closest("section")!;
+    for (const row of section.querySelectorAll<HTMLTableRowElement>("tbody tr[data-search]")) {
+      row.style.display = !q || row.dataset.search!.includes(q) ? "" : "none";
+    }
+  });
+
+  const initial = TABS.some((t) => t.id === location.hash.slice(1)) ? location.hash.slice(1) : TABS[0].id;
+  activate(initial);
+}
+
+mount();

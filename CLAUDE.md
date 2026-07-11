@@ -868,6 +868,31 @@ mouse-driven only. Don't reintroduce a keybind for this without being asked. Spa
    rework, a ranged starter weapon, passive HP regen, and a balance pass. **M-TE stays
    queued** behind this polish pass.
 
+5r. **Balancing dashboard + 25-min playtest triage** — off the master-plan build order,
+   built on Opus (a new tooling deliverable, though not a game mechanic). the user's 25-min
+   playtest produced a 12-item feedback dump; triaged and locked the order/scope via
+   `AskUserQuestion`, and shipped **the dashboard first** this session. **`dashboard.html`**
+   (repo root) + **`src/dashboard/main.ts`** are a **second Vite entry** (added to
+   `vite.config.ts`'s `build.rollupOptions.input`) — a live, searchable HTML reference at
+   **`/dashboard.html`** (while `npm run dev` runs). It **imports the same source-of-truth
+   data modules the game does** (`Recipes`/`Items`/`Weapons`/`WeaponUpgrades`/`ArmorUpgrades`/
+   `StationUpgrades`/`Processing`/`Cooking`/`Relics` — all Phaser-free), so it **never drifts**
+   the way the hand-maintained `RECIPES.md` does: any recipe/cost/stat/relic change is
+   reflected on reload with zero maintenance. Framework-free plain DOM, no new npm dep, no item
+   icons (BootScene-generated at runtime). 8 tabs incl. a **Balance Overview** that computes
+   incoming-damage-vs-armor (flat, floored at 1) and quantifies the "1 dmg/hit in Lvl 2 armor"
+   complaint. **The one drift risk:** the **Enemies tab is manually mirrored** from the Phaser
+   entity subclasses (enemy stats live in constructors, not tables) — keep it in sync when
+   tuning enemies, same as `RECIPES.md`. `RECIPES.md` got a pointer to it. **Locked decisions
+   from the triage, queued for follow-up sessions** (full detail in `STATUS.md`): **souls-like
+   combat for ALL enemies** (telegraph + dodge window on every enemy — Opus, next combat
+   session), a **light "both" rebalance** (small armor nerf + small enemy-dmg buff), a **boss
+   damage bump** (~2-shot in full armor) + **replace the Gremlin King cleave** with a
+   genuinely-different attack, five bug fixes (chest-pickup discovery, cook-recipe gating,
+   relic grid-before-notification, stuck 0-count trophy roll button, level-up flash intensity),
+   and two small features (Workbench-placement hint, in-game relic compendium). Not a game
+   milestone — the dashboard is a dev/balancing tool.
+
 **A new umbrella plan for the long-requested roguelike run/score meta-loop** now exists:
 `.claude/plans/roguelike-metaloop-master-plan.md` (drafted 2026-07-10, locked build order
 confirmed by the user). It supersedes/finalizes several open questions in the **Long-term
