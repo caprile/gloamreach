@@ -2,8 +2,9 @@
 
 ## Current State
 
-_Living snapshot — edit in place, never append. Last shipped: **Playtest-readiness Tier 1
-(discovered-material toast + hover highlight + first-damage hint)**, **2026-07-11**._
+_Living snapshot — edit in place, never append. Last shipped: **Inventory auto-sort +
+Shift-Click split-stack, ranged starter weapons (Slingshot + Javelin) with a new Ammo
+equipment slot, and a minimal procedural SFX layer**, **2026-07-11**._
 
 **The game.** Top-down 2D pixel survival-ARPG (Phaser 3 + TypeScript + Vite; all
 textures are placeholders generated in `BootScene`). One forest biome sitting in the
@@ -32,16 +33,13 @@ death ends a run and posts a `localStorage` high score; killing the Gremlin King
 win. The world is now circular + much larger (M-W1 geometry prep, above); deterministic
 seeded world-gen and actual multi-biome content are still deferred to M-W1 proper.
 
-**In progress / next.** the user is prepping for the first outside playtesters; audio and
-real pixel art/animations are deliberately deferred until content/balance settle further
-(the whole texture pipeline is built to swap late — see `CLAUDE.md` roadmap item 8).
-Playtest-readiness Tier 1 (3 small comprehension fixes) shipped this session — see below.
-Passive HP regen was explicitly cut from the backlog: Comfort (Bedroll) + cooked-food
-buffs already cover HP sustain, so a passive trickle on top would undercut both. Remaining
-playtest-polish backlog: inventory auto-sort, a ranged starter weapon, then a minimal
-code-generated SFX layer before a second/wider playtest round. Locked build order
-otherwise unchanged: **M-TE** (trophy-gated special gear) next, then **M-W1**
-(multi-biome content in the now-circular world) last.
+**In progress / next.** the user is prepping for the first outside playtesters. This
+session's batch (inventory sort/split + ranged weapons + SFX, see below) closes out the
+playtest-polish backlog started in 5x. Real pixel art/animations stay deliberately
+deferred until content/balance settle further (the whole texture pipeline is built to
+swap late — see `CLAUDE.md` roadmap item 8). Next: a wider playtest round, then locked
+build order resumes — **M-TE** (trophy-gated special gear), then **M-W1** (multi-biome
+content in the now-circular world) last.
 
 **Known issues / open.**
 - Boss may be slightly overtuned after the 5s damage bump (the user's "TBD" — left as-is
@@ -61,7 +59,81 @@ otherwise unchanged: **M-TE** (trophy-gated special gear) next, then **M-W1**
 
 > Older entries in STATUS-archive.md.
 
-### Just finished: Playtest-readiness Tier 1 (discovered-material toast + hover highlight + first-damage hint)
+### 5y — Inventory sort/split + ranged starter weapons (Slingshot + Javelin) + minimal SFX
+
+Closes out the rest of the playtest-polish backlog from 5x/5q/5r. Plan:
+`.claude/plans/twinkly-orbiting-backus.md`. Two Sonnet-class quick fixes plus one new
+mechanic (ranged weapons + a new Equipment slot) built on Opus per the model-switch
+convention, plus a small standalone SFX addition.
+
+**Inventory auto-sort + Shift-Click split-stack.** `ItemContainer.sortAndStack()` (new)
+re-flows a container into merged, sorted, re-packed stacks — a "Sort" text button next to
+the Backpack header in `InventoryMenu.ts` calls it. Shift+Left-Click on any stack of >1
+(backpack/hotbar/chest/drying-rack — anywhere `beginItemDrag` is the entry point) now
+splits it roughly in half into another empty slot in the same container, then drags the
+split-off half — reuses 100% of the existing drag/drop/merge machinery
+(`MainScene.trySplitStack` + `beginItemDrag`), no new resolve-time logic needed. Falls back
+to a normal whole-stack drag if the container has no empty slot to split into.
+
+**Ranged weapons (Slingshot + Javelin) + Ammo equipment slot.** Locked via
+`AskUserQuestion` + a side-chat balance discussion: ranged aiming reuses the existing
+click-a-hovered-enemy-in-reach model (NOT free-aim); Slingshot uses a new **`"ammo"`**
+`EquipSlot` (paper-doll grid, now 10 slots — `ARMOR_ROWS_MAX` is computed, not a literal);
+Javelin is a self-contained disposable hotbar weapon (no ammo slot — throwing depletes its
+own stack). **`EquippedItem` gained a `count?: number`** field so the ammo slot could reuse
+the *existing* armor-equip machinery (`equipArmorFromContainer`/`unequipArmorSlot`/
+`armorSlotAt`/right-click context menu) almost verbatim — it branches on `slot === "ammo"`
+for merge-not-swap semantics (topping up a matching key vs. swapping a different one out),
+rather than building a parallel ammo system. `slingshot_pellets`'s `ItemDef.armorSlot` is
+literally `"ammo"`, so `quickMoveItem`'s existing `armorSlot` branch covered double-click
+equip for free with zero new code there.
+`tryAttackEnemy` is now a thin dispatcher (`isRangedWeapon` check) over `tryMeleeAttack`
+(the old body, unchanged) and new `tryRangedAttack`; both funnel into a new shared
+`resolveWeaponHit(enemy, dmg, dmgType)` extracted from the old kill-resolution tail (skill
+XP/loot/armor-XP/run-scoring), so melee and ranged can't drift out of sync on kill logic.
+Ranged damage (incl. any stagger multiplier) is computed once at fire time and carried by
+the `Projectile` — reused verbatim, it was already built anticipating this (`sourceIsPlayer`
+was defined but unused). New `playerProjectiles` group + overlap-vs-`enemyGroup` (mirrors
+the enemy-projectile-vs-player overlap exactly, including the arg-order gotcha). A new
+`RANGED_WEAPONS` config in `Weapons.ts` (`maxRangePx` replaces melee `enemyReach()` for both
+the attack gate and the hover prompt/reach-ring). **Balance is deliberately weak per
+the user's locked side-chat direction — an opener/softener, not a solo tool:** Slingshot 2
+dmg/650ms/6 stam (below even Wood Club's 3 dmg), Javelin 5 dmg/900ms/16 stam, both slow
+projectiles (420/300 px/s) and bounded range (260/220px) — stamina cost + slow travel +
+bounded range are the anti-kite governor this batch; **no enemy-AI changes**. Both use
+`"ranged"` as their primary damage type, finally giving the long-dormant Ranged weapon skill
+a real XP source (`weaponSkillDamageMultiplier` already generic over `DamageType` — zero
+`Skills.ts` changes needed). `Recipe.output` gained an optional `count` field (defaults 1)
+so Slingshot Pellets (5 Stone → 25) and Javelin (3 Wood + 1 Stone → 2) can batch-output —
+`craftRecipe` now grants `output.count ?? 1` instead of a hardcoded 1.
+
+**Minimal SFX layer.** `src/systems/Sfx.ts` (`SfxPlayer`) — raw Web Audio
+`OscillatorNode`/`GainNode` envelopes synthesized at call time, no asset files, same
+"generate in code, swap for real assets later" ethos `BootScene` established for textures.
+Six cues (`hit`/`pickup`/`craft`/`levelUp`/`nightfall`/`death`) wired into existing hook
+points (`resolveWeaponHit`, `applyDamageToPlayer`, `collectNode`, `craftRecipe`/
+`processRackAmount`/`cookAtCampfire`/`refineTrophies`, `showLevelUpBanner`, the day→night
+edge in `updateDayNight`, `onPlayerDeath`). A persisted on/off toggle
+(`survivor-rpg:sfx-enabled:v1`, same pattern as Hints') lives in `PauseMenuUI` next to the
+Hints toggle. `sfx` is deliberately **not** re-created in `create()` (unlike `hints`) so the
+`AudioContext` + preference survive a "New Run" restart instead of resetting with the rest
+of per-run state.
+
+**Verification:** `tsc --noEmit` clean; full `npm run build` succeeds. **Live-verified via
+`preview_eval`** (after clearing 5 orphaned Vite processes from closed chats that were
+holding the per-folder server cap): Slingshot fires a player projectile at a 150px enemy
+(out of melee reach) → 2 dmg on impact, projectile despawns, ammo 30→29, stamina −6,
+cooldown stamped; firing at 0 ammo is a clean silent no-op (no projectile/stamina/
+cooldown); out-of-range (400 > 260) doesn't fire or consume ammo; the hover prompt +
+`attackRangeFor` correctly report the 260px ranged radius. Javelin self-consumes 1/throw
+and auto-unequips (weapon→null, slot→null) at 0. Melee is unaffected (Wood Club still hits
+at 50px for 3 dmg, reach stays 64, does NOT inherit the ranged radius; no-ops at 200px).
+Auto-sort merges+front-packs (wood 5+10→15, alphabetical); Shift-split 11→6+5 into the
+next slot, null fallback when the container is full. All 6 SFX cues fire with no console
+errors. The inventory panel renders the Sort button, the Ammo equipment slot (with count
+badge), and the "Ammo: N …" Combat-column line.
+
+### 5x — Playtest-readiness Tier 1 (discovered-material toast + hover highlight + first-damage hint)
 
 Off the playtest-polish backlog (see the previous "Balancing dashboard" entry's triage
 notes), the three cheapest comprehension-gap fixes ahead of handing the build to outside
@@ -472,55 +544,3 @@ match (now lists Lvl 2 + Lvl 3 rows and the 7/10/13 set totals).
 bump + GremlinKing cleave replacement, and 2 small features (Workbench-placement hint, in-game
 relic compendium). Then the master-plan tail: **M-TE** (trophy gear), **M-W1** (multi-biome world).
 
-### Previously: Playtest bug-fix batch (5 fixes)
-
-The first chunk of the 25-min-playtest triage backlog after the souls-like combat pass —
-five independent bug fixes ([[survivor-rpg-playtest-feedback-2026-07-11]]). Fixes/UI on
-already-designed systems (Sonnet-class work, though built this session on Opus). No
-`RECIPES.md` change (no recipe/cost changes).
-
-1. **Chest-looted materials never unlocked recipes.** Picking a material up off the ground
-   goes through `MainScene.addToBackpack()` → `discovered.add()` + `refreshDiscovery()`, but
-   moving one out of a chest (or drying rack) uses `moveSlot()` directly + `afterItemMove()`,
-   which never recorded discovery — so e.g. twine looted from a Gremlin Shack chest never
-   unlocked its recipes. New `MainScene.reconcileBackpackDiscovery()` (called from
-   `afterItemMove()`) scans the backpack, marks any not-yet-discovered key discovered, and
-   runs `refreshDiscovery()` only when something new actually appears. General across every
-   container→backpack path, not chest-specific. *Verified: twine placed into the backpack via
-   the move hook went undiscovered→discovered.*
-2. **Cook recipes shown before their ingredients were discovered.** `CookingMenu` filtered
-   dishes only by campfire tier, so "Cooked Boar Meat" advertised itself before the player had
-   ever obtained a shishkabob. Added a `discovered: () => ReadonlySet<string>` dep (wired to
-   `MainScene.discovered`); a dish now also stays hidden until ALL its ingredients are
-   discovered — the same "don't reveal locked info" rule `Crafting.ts` uses. Empty-state note
-   when nothing's known yet. *Verified: 0 dishes at fresh state → 1 (Cooked Boar Meat) after
-   discovering boar_meat + shishkabob.*
-3. **New relic appeared in the "Your Relics" grid before the reveal landed.** The forge's
-   `roll()` mutates `RelicManager` immediately (so an interrupted spin can't change the
-   outcome — 5p), but `render()` then repainted the grid live, popping the new relic in before
-   the slot-machine spin resolved. `RelicForgeMenu` now snapshots `groupedForDisplay()` into
-   `preRollGroups` BEFORE the roll and renders that (via `displayGroups()`) while `busy`,
-   clearing it when the reveal's `onComplete` fires. *Verified via forced-pity roll: mid-spin
-   the manager holds the relic (live len 1) but the grid renders the frozen snapshot (len 0).*
-4. **"Roll Gremlin Trophy" button stuck at 0 while other trophy buttons vanished.**
-   `visibleTrophyKeys()` special-cased `gremlin_trophy` to always show (for at-0
-   discoverability), which read as a broken button next to Boar/Snake buttons disappearing at
-   0. Now every trophy button shows only when owned (count > 0), with a "No trophies — defeat
-   elite enemies to earn them." empty-state note (and the grid's empty message reworded off the
-   Gremlin-Trophy-specific text). The forge recipe itself costs a Gremlin Trophy, so a placed
-   forge already implies the player has met them. *Verified: 0 trophies → note only; +1 gremlin
-   trophy → "Roll Gremlin Trophy" button.*
-5. **Level-up flash was a jumpscare.** `cameras.main.flash()` peak amber dialed well down
-   (90,70,20 → 48,36,12) and the fade lengthened (180→300ms) so it reads as a soft warm pulse,
-   not a hard full-screen pop; the punch-in "LEVEL UP!" banner stays the "big deal" part. No
-   camera shake.
-
-**Verification:** `tsc --noEmit` clean; preview boots console-error-free; the four logic fixes
-asserted live via `preview_eval`. (The "YOU DIED" screen seen during testing was just the idle
-player killed by an enemy over the eval minute — confirms the hardcore run-end flow still works,
-unrelated to these changes.)
-
-**Still queued from the triage** (see [[survivor-rpg-playtest-feedback-2026-07-11]]): the light
-"both" rebalance (armor nerf + enemy-dmg buff), the boss damage bump + GremlinKing cleave
-replacement, and 2 small features (Workbench-placement hint, in-game relic compendium). Then the
-master-plan tail: **M-TE** (trophy gear), **M-W1** (multi-biome world).

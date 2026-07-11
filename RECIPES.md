@@ -27,6 +27,9 @@ requires standing near a placed Workbench (`MainScene.isNearWorkbench`).
 | Stone Club | Weapons | 1 | Yes | 3 Wood, 2 Stone, 1 Leather Scraps | Blunt 3 | Item (weapon, blunt) |
 | Bone Knife | Weapons | 1 | Yes | 1 Leather Scraps, 4 Bones | — | Item (weapon, slash) |
 | Primal Spear | Weapons | 1 | Yes | 4 Wood, 2 Stone, 1 Leather Scraps | — | Item (weapon, pierce) |
+| Slingshot | Weapons | 1 | Yes | 2 Wood, 2 Leather Scraps | — | Item (weapon, ranged — uses the Ammo slot) |
+| Slingshot Pellets | Weapons | 0 | No | 5 Stone | — | Item x25 (ammo) |
+| Javelin | Weapons | 0 | No | 3 Wood, 1 Stone | — | Item x2 (weapon, ranged, disposable — self-consuming stack) |
 | Shishkabob | Misc | 0 | No | 1 Wood | — | Item |
 | Campfire | Crafting | 0 | No | 5 Wood, 5 Stone | — | Item (placeable) |
 | Workbench | Crafting | 0 | No | 10 Wood | — | Item (placeable) |
@@ -82,6 +85,22 @@ the weapon (backpack or hotbar).
 
 Max damage at Lvl 3: Stone Club 9, Bone Knife 7, Primal Spear 12 (before the
 weapon-skill damage multiplier, `Skills.weaponSkillDamageMultiplier`).
+
+## Ranged weapons (`src/systems/Weapons.ts` `RANGED_WEAPONS`)
+
+Deliberately weak to start — an opener/softener, not a solo tool. No weapon-tier
+upgrade path yet (not in `WeaponUpgrades.ts`). Both feed the `ranged` weapon
+skill (dormant until this pass) via the same `weaponSkillDamageMultiplier`
+every melee weapon uses, so leveling it is what turns chip damage into real
+damage over a run.
+
+| Weapon | Dmg / Cooldown / Stamina | Projectile Speed | Range | Ammo |
+|---|---|---|---|---|
+| Slingshot | 2 / 650ms / 6 | 420 px/s | 260px | Slingshot Pellets, loaded into the new **Ammo** equipment slot |
+| Javelin | 5 / 900ms / 16 | 300 px/s | 220px | None — the equipped hotbar stack is the ammo (1 consumed per throw) |
+
+Aiming reuses the existing click-a-hovered-enemy-in-reach model (not free-aim),
+just with `maxRangePx` above replacing melee's reach.
 
 ## Processing — Drying Rack (`src/systems/Processing.ts`)
 

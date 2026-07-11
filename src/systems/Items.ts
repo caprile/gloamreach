@@ -166,6 +166,47 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
       { label: "Attack Speed", value: "1.5/s" },
     ],
   },
+  slingshot: {
+    key: "slingshot",
+    name: "Slingshot",
+    description: "A simple ranged launcher. Chip damage from a safe distance — load it with pellets from the backpack.",
+    texture: "icon_slingshot",
+    maxStack: 1,
+    hotbarable: true,
+    weapon: "slingshot",
+    stats: [
+      { label: "Type", value: "Weapon (Ranged)" },
+      { label: "Damage", value: "2" },
+      { label: "Damage Type", value: "Ranged" },
+      { label: "Stamina", value: "6" },
+      { label: "Attack Speed", value: "1.5/s" },
+    ],
+  },
+  javelin: {
+    key: "javelin",
+    name: "Javelin",
+    description: "A disposable thrown spear. Hits harder than a pellet, but each throw burns one.",
+    texture: "icon_javelin",
+    maxStack: 20,
+    hotbarable: true,
+    weapon: "javelin",
+    stats: [
+      { label: "Type", value: "Weapon (Ranged, disposable)" },
+      { label: "Damage", value: "5" },
+      { label: "Damage Type", value: "Ranged" },
+      { label: "Stamina", value: "16" },
+      { label: "Attack Speed", value: "1.1/s" },
+    ],
+  },
+  slingshot_pellets: {
+    key: "slingshot_pellets",
+    name: "Slingshot Pellets",
+    description: "Rounded stones sized for a Slingshot. Load them into the Ammo slot.",
+    texture: "icon_slingshot_pellets",
+    maxStack: 50,
+    hotbarable: false,
+    armorSlot: "ammo",
+  },
 
   // --- crafting / build (not hotbar-able) ---
   shishkabob: {

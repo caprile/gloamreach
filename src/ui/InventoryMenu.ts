@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import type { EquipSlot } from "../systems/Equipment";
+import { EQUIP_SLOTS, type EquipSlot } from "../systems/Equipment";
 import type { ItemContainer } from "../systems/ItemContainer";
 import { itemDef } from "../systems/Items";
 import type { Skills } from "../systems/Skills";
@@ -11,6 +11,8 @@ export interface ArmorSlotView {
   label: string;
   itemKey: string | null;
   tier?: number;
+  // Set only for the "ammo" slot — every other slot holds a single item.
+  count?: number;
 }
 
 // Live rollup of the player's current combat loadout — computed fresh by
@@ -24,6 +26,7 @@ export interface CombatStatsView {
   staminaCost: number; // per hit, 0 if no weapon
   armor: number; // total flat defense from all worn armor
   attackRange: number; // px, same reach used for interact/attack gating
+  ammo: { name: string; count: number } | null; // loaded ranged ammo, if any
 }
 
 // Live "what determines the player's move speed right now" breakdown,
@@ -71,6 +74,9 @@ export interface InventoryMenuDeps {
   eatItem: (container: ItemContainer, index: number) => void;
   // Suppress tooltips while a drag is in progress.
   isDragging: () => boolean;
+  // "Sort" button next to the Backpack label — re-flows the backpack into
+  // fewer, merged, sorted stacks (ItemContainer.sortAndStack).
+  sortBackpack: () => void;
 }
 
 export const PANEL_X = 16;
@@ -95,8 +101,10 @@ const GRID_GAP = 24;
 const ARMOR_X = BACKPACK_X + BACKPACK_W + GRID_GAP; // 358
 const ARMOR_Y = GRID_Y;
 const ARMOR_W = ARMOR_COLS * SLOT + (ARMOR_COLS - 1) * GAP; // 150
-const ARMOR_ROWS_MAX = 3; // EQUIP_SLOTS is 9 slots / 3 cols = 3 rows
-const ARMOR_H = ARMOR_ROWS_MAX * SLOT + (ARMOR_ROWS_MAX - 1) * GAP; // 150
+// Computed (not a literal) so the grid grows a row automatically if
+// EQUIP_SLOTS ever gains another entry (e.g. the "ammo" slot did).
+const ARMOR_ROWS_MAX = Math.ceil(EQUIP_SLOTS.length / ARMOR_COLS);
+const ARMOR_H = ARMOR_ROWS_MAX * SLOT + (ARMOR_ROWS_MAX - 1) * GAP;
 
 // Combat-stats column: a 3rd side-by-side section, right of Equipment —
 // live "what am I currently equipped with" summary (damage/attack speed/
@@ -236,6 +244,7 @@ export class InventoryMenu {
 
     this.addText(x0, PANEL_Y + 10, "Inventory", 15, "#ffffff");
     this.addText(BACKPACK_X, PANEL_Y + 36, "Backpack", 12, "#8a93a3");
+    this.renderSortButton();
     this.addText(ARMOR_X, PANEL_Y + 36, "Equipment", 12, "#8a93a3");
     this.addText(STATS_X, PANEL_Y + 36, "Combat", 12, "#8a93a3");
     this.renderBackpack();
@@ -272,6 +281,8 @@ export class InventoryMenu {
     y += lineGap;
     this.addText(x0, y, `Attack Range: ${stats.attackRange}`, 12, "#8a93a3");
     y += lineGap;
+    this.addText(x0, y, `Ammo: ${stats.ammo ? `${stats.ammo.count} ${stats.ammo.name}` : "-"}`, 12, "#8a93a3");
+    y += lineGap;
     const speed = this.deps.runSpeedBreakdown();
     this.addText(x0, y, `Move Speed: ${speed.walk} / ${speed.sprint} spr`, 12, "#8a93a3");
   }
@@ -289,6 +300,23 @@ export class InventoryMenu {
     this.rows.push(box);
     this.addText(TRASH_X + TRASH_SIZE / 2, TRASH_Y + TRASH_SIZE / 2, "✕", 20, "#c25a5a", 0.5, 0.5);
     this.addText(TRASH_X + TRASH_SIZE / 2, TRASH_Y + TRASH_SIZE + 6, "Destroy", 10, "#8a6060", 0.5, 0);
+  }
+
+  // Small clickable "Sort" label at the right edge of the Backpack header —
+  // re-flows the backpack into fewer, merged, sorted stacks on click.
+  private renderSortButton(): void {
+    const x = BACKPACK_X + BACKPACK_W;
+    const y = PANEL_Y + 36;
+    const t = this.scene.add
+      .text(x, y, "Sort", { fontFamily: "monospace", fontSize: "12px", color: "#8a93a3" })
+      .setOrigin(1, 0)
+      .setScrollFactor(0)
+      .setDepth(3002)
+      .setInteractive({ useHandCursor: true })
+      .on("pointerover", () => t.setColor("#e8ecf2"))
+      .on("pointerout", () => t.setColor("#8a93a3"))
+      .on("pointerdown", () => this.deps.sortBackpack());
+    this.rows.push(t);
   }
 
   private renderArmor(x0: number, y0: number): void {
@@ -333,6 +361,9 @@ export class InventoryMenu {
             .setScrollFactor(0)
             .setDepth(3002);
           this.rows.push(icon);
+        }
+        if (slot.count && slot.count > 1) {
+          this.addText(x + SLOT - 4, y + SLOT - 3, `${slot.count}`, 11, "#ffffff", 1, 1);
         }
       } else {
         this.addText(x + SLOT / 2, y + SLOT / 2, slot.label, 10, "#5b6472", 0.5, 0.5);

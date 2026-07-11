@@ -11,7 +11,9 @@ export type RecipeCategory = "tools" | "weapons" | "armor" | "crafting" | "misc"
 // until building/cooking/combat systems exist to use them.
 export type RecipeOutput =
   | { kind: "tool"; tool: ToolType }
-  | { kind: "item"; itemId: string; itemName: string };
+  // count defaults to 1 when absent — set for batch crafts (e.g. a handful
+  // of pellets per craft) so a stackable's per-click output isn't always 1.
+  | { kind: "item"; itemId: string; itemName: string; count?: number };
 
 export interface Recipe {
   id: string;
@@ -96,6 +98,33 @@ export const RECIPES: Recipe[] = [
     tier: 1,
     costs: { wood: 4, stone: 2, leather: 1 },
     output: { kind: "item", itemId: "primal_spear", itemName: "Primal Spear" },
+  },
+  {
+    id: "slingshot",
+    name: "Slingshot",
+    description: "A simple ranged launcher. Weak on its own — load it with pellets and lean on practice.",
+    category: "weapons",
+    tier: 1,
+    costs: { wood: 2, leather: 2 },
+    output: { kind: "item", itemId: "slingshot", itemName: "Slingshot" },
+  },
+  {
+    id: "slingshot_pellets",
+    name: "Slingshot Pellets",
+    description: "A handful of rounded stones sized for a Slingshot.",
+    category: "weapons",
+    tier: 0,
+    costs: { stone: 5 },
+    output: { kind: "item", itemId: "slingshot_pellets", itemName: "Slingshot Pellets", count: 25 },
+  },
+  {
+    id: "javelin",
+    name: "Javelin",
+    description: "A disposable thrown spear. Hits harder than a pellet, but each throw burns one.",
+    category: "weapons",
+    tier: 0,
+    costs: { wood: 3, stone: 1 },
+    output: { kind: "item", itemId: "javelin", itemName: "Javelin", count: 2 },
   },
   {
     id: "shishkabob",

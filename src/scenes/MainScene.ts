@@ -44,11 +44,14 @@ import {
   weaponPrimaryDamageType,
   weaponAttacksPerSecond,
   damageTypeDisplayName,
+  rangedWeaponConfig,
+  isRangedWeapon,
   type WeaponType,
+  type DamageType,
 } from "../systems/Weapons";
 import { outputKey, RECIPES, type Recipe } from "../systems/Recipes";
 import { itemDef, armorTypesWorn } from "../systems/Items";
-import { ItemContainer, moveSlot, type ItemStack } from "../systems/ItemContainer";
+import { ItemContainer, moveSlot, sortAndStack, type ItemStack } from "../systems/ItemContainer";
 import {
   STATION_UPGRADES,
   upgradesForItem,
@@ -105,6 +108,7 @@ import type { ScoreEntry } from "../systems/HighScores";
 import { RunHudUI } from "../ui/RunHudUI";
 import { RunEndUI } from "../ui/RunEndUI";
 import { HintManager } from "../systems/Hints";
+import { SfxPlayer } from "../systems/Sfx";
 import { HintUI } from "../ui/HintUI";
 import { PauseMenuUI } from "../ui/PauseMenuUI";
 import { DayNight } from "../systems/DayNight";
@@ -426,10 +430,11 @@ export class MainScene extends Phaser.Scene {
   // --- Combat ---
   private enemies: Enemy[] = [];
   private enemyGroup!: Phaser.Physics.Arcade.Group;
-  // Enemy-fired projectiles (currently just the ranged Gremlin's rock throw).
-  // No playerProjectiles group yet — nothing fires one until the Slingshot
-  // exists, and it'd need its own overlap-vs-enemies wiring at that point.
+  // Enemy-fired projectiles (the ranged Gremlin's rock throw) vs. player-fired
+  // ones (Slingshot/Javelin) — separate groups since each overlaps a
+  // different target (player vs. enemyGroup).
   private enemyProjectiles!: Phaser.Physics.Arcade.Group;
+  private playerProjectiles!: Phaser.Physics.Arcade.Group;
   private health = new Health();
   // Timed player buffs (heal-over-time from eating cooked food today) + their
   // HUD strip above the HP bar. See Buffs.ts / BuffBarUI.ts.
@@ -459,6 +464,10 @@ export class MainScene extends Phaser.Scene {
   private hints = new HintManager();
   private hintUI!: HintUI;
   private pauseMenu!: PauseMenuUI;
+  // Procedural SFX layer — deliberately NOT re-created in create() (unlike
+  // `hints` above): the AudioContext + on/off preference should survive a
+  // "New Run" restart, not reset with the rest of per-run state.
+  private sfx = new SfxPlayer();
   private isPaused = false;
 
   // Day/night cycle (M-DN). dayNight is the clock; nightOverlay the darkness +
@@ -668,6 +677,18 @@ export class MainScene extends Phaser.Scene {
       // argument actually is a Projectile instead of assuming a slot.
       const projectile = (a instanceof Projectile ? a : b) as Projectile;
       this.applyDamageToPlayer(projectile.damage);
+      projectile.destroy();
+    });
+
+    // Player-fired projectiles (Slingshot/Javelin) vs. enemies — mirrors the
+    // enemy-projectile-vs-player overlap above, including the same
+    // "don't trust Phaser's arg order" pattern
+    // (see feedback_phaser_group_overlap_arg_order).
+    this.playerProjectiles = this.physics.add.group();
+    this.physics.add.overlap(this.playerProjectiles, this.enemyGroup, (a, b) => {
+      const projectile = (a instanceof Projectile ? a : b) as Projectile;
+      const enemy = (a instanceof Enemy ? a : b) as Enemy;
+      if (!enemy.depleted) this.resolveWeaponHit(enemy, projectile.damage, "ranged");
       projectile.destroy();
     });
 
@@ -962,6 +983,7 @@ export class MainScene extends Phaser.Scene {
 
     const isNight = this.dayNight.isNight();
     if (isNight && !this.wasNight && !this.isDead) {
+      this.sfx.nightfall();
       this.spawnNightBatch();
     } else if (!isNight && this.wasNight) {
       this.cleanupNightSpawns();
@@ -1236,9 +1258,10 @@ export class MainScene extends Phaser.Scene {
     this.attackRangeRing.clear();
     if (!this.rangeRingEnabled) return;
     if (!this.equippedTool && !this.equippedWeapon) return;
+    const radius = (this.equippedWeapon && rangedWeaponConfig(this.equippedWeapon)?.maxRangePx) || REACH;
     this.attackRangeRing
       .lineStyle(1.5, 0xffffff, 0.25)
-      .strokeCircle(this.player.x, this.player.y, REACH);
+      .strokeCircle(this.player.x, this.player.y, radius);
   }
 
   // True when a screen point lands on a fixed HUD element that should swallow
@@ -1258,8 +1281,14 @@ export class MainScene extends Phaser.Scene {
     index: number,
     pointer: Phaser.Input.Pointer,
   ): void {
-    const stack = container.slot(index);
+    let stack = container.slot(index);
     if (!stack) return;
+    if (this.isShiftClick(pointer) && stack.count > 1) {
+      const splitIndex = this.trySplitStack(container, index);
+      if (splitIndex !== null) index = splitIndex;
+      stack = container.slot(index);
+      if (!stack) return;
+    }
     const def = itemDef(stack.key);
     if (!def) return;
     this.dragSource = { container, index };
@@ -1295,6 +1324,39 @@ export class MainScene extends Phaser.Scene {
   private isCtrlClick(pointer: Phaser.Input.Pointer): boolean {
     const e = pointer.event as (MouseEvent & { ctrlKey?: boolean }) | undefined;
     return !!e?.ctrlKey;
+  }
+
+  // Shift+Left-Click on a stack begins a split-drag instead of a whole-stack
+  // drag — see trySplitStack.
+  private isShiftClick(pointer: Phaser.Input.Pointer): boolean {
+    const e = pointer.event as (MouseEvent & { shiftKey?: boolean }) | undefined;
+    return !!e?.shiftKey;
+  }
+
+  // Splits the stack at container[index] roughly in half into another empty
+  // slot in the same container, returning that slot's index (or null if the
+  // container has no empty slot to split into, e.g. it's full — falls back to
+  // a normal whole-stack drag in that case). Reuses the existing drag/drop
+  // machinery unchanged: the split-off half is just what gets dragged, so
+  // dropping it back in place re-merges via moveSlot like any other drag.
+  // Mainly useful for loading a partial stack into a processor (Drying Rack)
+  // input without committing the whole stack.
+  private trySplitStack(container: ItemContainer, index: number): number | null {
+    const stack = container.slot(index);
+    if (!stack || stack.count < 2) return null;
+    let emptyIndex: number | null = null;
+    for (let i = 0; i < container.size; i++) {
+      if (i !== index && container.slot(i) === null) {
+        emptyIndex = i;
+        break;
+      }
+    }
+    if (emptyIndex === null) return null;
+    const take = Math.floor(stack.count / 2);
+    const remain = stack.count - take;
+    container.set(index, { key: stack.key, count: remain, tier: stack.tier });
+    container.set(emptyIndex, { key: stack.key, count: take, tier: stack.tier });
+    return emptyIndex;
   }
 
   // True if this click-in-place on `key` should trigger its quick-move
@@ -1789,6 +1851,7 @@ export class MainScene extends Phaser.Scene {
     }
     const def = itemDef(recipe.output);
     this.eventLog.add("recipe", `Refined into ${def?.name ?? recipe.output}`, def?.texture);
+    this.sfx.craft();
     this.afterRelicChange();
   }
 
@@ -1820,6 +1883,7 @@ export class MainScene extends Phaser.Scene {
       this.eventLog.add("info", "Backpack full — the dish landed on the floor");
     }
     this.eventLog.add("info", `Cooked ${recipe.name}`);
+    this.sfx.craft();
     this.afterItemMove();
   }
 
@@ -1995,6 +2059,7 @@ export class MainScene extends Phaser.Scene {
       this.spawnLooseDrop(result.key, leftover, this.player.x, this.player.y, DROPPED_ITEM_MAGNET_COOLDOWN_MS);
       this.eventLog.add("info", "Backpack full — some output landed on the floor");
     }
+    this.sfx.craft();
     this.afterItemMove();
   }
 
@@ -2848,12 +2913,11 @@ export class MainScene extends Phaser.Scene {
   }
 
   // Spawns a projectile and tracks it in the right physics group by source —
-  // currently only enemy-sourced projectiles exist (the ranged Gremlin's rock throw),
-  // the Slingshot will need its own playerProjectiles group + overlap-vs-
-  // enemies wiring once it lands.
+  // enemy-sourced (the ranged Gremlin's rock throw) vs. player-sourced
+  // (Slingshot/Javelin).
   private spawnProjectile(cfg: ProjectileConfig): Projectile {
     const projectile = new Projectile(this, cfg);
-    this.enemyProjectiles.add(projectile);
+    (cfg.sourceIsPlayer ? this.playerProjectiles : this.enemyProjectiles).add(projectile);
     projectile.launch(); // see Projectile.launch()'s comment — group.add() zeroes velocity
     return projectile;
   }
@@ -3080,11 +3144,22 @@ export class MainScene extends Phaser.Scene {
     return REACH + Math.max(0, radius - MainScene.BASELINE_ENEMY_RADIUS);
   }
 
+  // A ranged weapon's fixed maxRangePx replaces melee's size-scaled
+  // enemyReach() — ranged range is generous enough that an elite's bigger
+  // hitbox doesn't need the same per-enemy scaling melee does.
+  private attackRangeFor(enemy: Enemy): number {
+    if (this.equippedWeapon) {
+      const ranged = rangedWeaponConfig(this.equippedWeapon);
+      if (ranged) return ranged.maxRangePx;
+    }
+    return this.enemyReach(enemy);
+  }
+
   // Mirrors promptFor()'s gating rules: out of reach -> nothing; no weapon
   // equipped -> nothing (never reveal what's required); else the attack verb.
   private promptForEnemy(enemy: Enemy): string | null {
     const inReach =
-      Phaser.Math.Distance.Between(this.player.x, this.player.y, enemy.x, enemy.y) <= this.enemyReach(enemy);
+      Phaser.Math.Distance.Between(this.player.x, this.player.y, enemy.x, enemy.y) <= this.attackRangeFor(enemy);
     if (!inReach) return null;
     if (!this.equippedWeapon) return null;
     return `[LMB] Attack ${enemy.displayName}`;
@@ -3252,6 +3327,7 @@ export class MainScene extends Phaser.Scene {
   // there by default instead of the backpack, so placing it again doesn't
   // require detouring through the inventory each time.
   private collectNode(node: ResourceNode): void {
+    this.sfx.pickup();
     if (itemDef(node.resource)?.placeable) {
       const row2Slot = this.hotbarRow2Assignable(node.resource);
       if (row2Slot !== null) {
@@ -3275,10 +3351,19 @@ export class MainScene extends Phaser.Scene {
     this.addToBackpack(node.resource, node.amount);
   }
 
-  // Left-click action on the currently hovered, in-reach enemy. Mirrors
-  // tryInteract()'s tool-swing guards (cooldown, stamina afford, silent fail).
+  // Left-click action on the currently hovered, in-reach enemy. Dispatches to
+  // melee (instant, reach-gated) or ranged (fire-and-forget projectile,
+  // range-gated) depending on the equipped weapon.
   private tryAttackEnemy(enemy: Enemy): void {
     if (enemy.depleted || !this.equippedWeapon) return;
+    if (isRangedWeapon(this.equippedWeapon)) this.tryRangedAttack(enemy);
+    else this.tryMeleeAttack(enemy);
+  }
+
+  // Melee: mirrors tryInteract()'s tool-swing guards (cooldown, stamina
+  // afford, silent fail) and applies damage instantly at reach.
+  private tryMeleeAttack(enemy: Enemy): void {
+    if (!this.equippedWeapon) return;
     const inReach =
       Phaser.Math.Distance.Between(this.player.x, this.player.y, enemy.x, enemy.y) <= this.enemyReach(enemy);
     if (!inReach) return;
@@ -3317,6 +3402,82 @@ export class MainScene extends Phaser.Scene {
     // is staggered.
     if (enemy instanceof GremlinKing && enemy.isStaggered()) dmg *= STAGGER_DAMAGE_MULTIPLIER;
     if (enemy instanceof Gloamwarden && enemy.isStaggered()) dmg *= WARDEN_STAGGER_DAMAGE_MULTIPLIER;
+    this.resolveWeaponHit(enemy, dmg, dmgType);
+  }
+
+  // Ranged: cooldown/stamina/ammo-gated fire-and-forget. Damage (including
+  // any stagger multiplier) is computed once now — same "captured at
+  // commit time" precedent GremlinKing's enrage math already uses — and
+  // carried by the projectile, applied on impact via resolveWeaponHit rather
+  // than re-checked mid-flight.
+  private tryRangedAttack(enemy: Enemy): void {
+    if (!this.equippedWeapon) return;
+    const cfg = rangedWeaponConfig(this.equippedWeapon);
+    if (!cfg) return;
+    const inReach = Phaser.Math.Distance.Between(this.player.x, this.player.y, enemy.x, enemy.y) <= cfg.maxRangePx;
+    if (!inReach) return;
+
+    const cooldownMs = weaponCooldownMs(this.equippedWeapon);
+    if (this.time.now - this.lastWeaponHitAt < cooldownMs) return;
+
+    const dmgType = weaponPrimaryDamageType(this.equippedWeapon);
+    const staminaCost = Math.round(
+      weaponStaminaCost(this.equippedWeapon) *
+        weaponStaminaCostMultiplier(dmgType, this.progression) *
+        this.relics.staminaCostMult(),
+    );
+    if (!this.stamina.canAfford(staminaCost)) return; // exhausted — silent, same as melee's guard
+
+    // Ammo gate — silent no-op if unavailable, same "never reveal what's
+    // missing" convention the stamina guard above already follows.
+    if (cfg.ammoItemKey) {
+      const eq = this.equipment.get("ammo");
+      if (!eq || eq.key !== cfg.ammoItemKey || (eq.count ?? 0) < 1) return;
+      const remaining = (eq.count ?? 0) - 1;
+      this.equipment.set("ammo", remaining > 0 ? { key: eq.key, tier: 0, count: remaining } : null);
+    } else {
+      // Self-consuming (Javelin): burn 1 from the equipped hotbar stack itself.
+      const selectedIndex = this.hotbar.selected();
+      const selStack = this.hotbar.container.slot(selectedIndex);
+      if (!selStack || itemDef(selStack.key)?.weapon !== this.equippedWeapon) return;
+      this.hotbar.container.removeCount(selStack.key, 1);
+    }
+
+    this.lastWeaponHitAt = this.time.now;
+    this.stamina.spend(staminaCost);
+    this.player.playSwing();
+    this.player.playEquippedSwing();
+
+    const baseDmg = weaponDamage(this.equippedWeapon) + weaponTierDamageBonus(this.equippedWeapon, this.equippedWeaponTier);
+    let dmg = baseDmg * weaponSkillDamageMultiplier(dmgType, this.skills) * this.relics.damageMult();
+    if (enemy instanceof GremlinKing && enemy.isStaggered()) dmg *= STAGGER_DAMAGE_MULTIPLIER;
+    if (enemy instanceof Gloamwarden && enemy.isStaggered()) dmg *= WARDEN_STAGGER_DAMAGE_MULTIPLIER;
+
+    const angle = Phaser.Math.Angle.Between(this.player.x, this.player.y, enemy.x, enemy.y);
+    this.spawnProjectile({
+      x: this.player.x,
+      y: this.player.y,
+      angle,
+      speed: cfg.projectileSpeed,
+      damage: dmg,
+      texture: cfg.projectileTexture,
+      maxRangePx: cfg.maxRangePx,
+      sourceIsPlayer: true,
+    });
+
+    // Refreshes hotbar/ammo-slot UI counts and — critically for Javelin —
+    // recomputes equippedWeapon, clearing it the instant a depleted javelin
+    // stack's slot goes empty (nothing else does that on a bare
+    // removeCount() call outside moveSlot).
+    this.afterItemMove();
+  }
+
+  // Applies weapon damage to `enemy` and runs the shared kill-resolution tail
+  // (skill XP, floating damage number, kill loot/armor-XP/run-scoring) —
+  // shared by melee (applied instantly) and ranged (applied on projectile
+  // impact), so the two firing paths can't drift out of sync on kill logic.
+  private resolveWeaponHit(enemy: Enemy, dmg: number, dmgType: DamageType): void {
+    this.sfx.hit();
     const depleted = enemy.takeHit(dmg);
     this.awardSkillXp(dmgType, 30); // weapon-hit XP to the primary damage type's skill
     this.spawnDamageNumber(enemy.x, enemy.y, Math.round(dmg));
@@ -3474,6 +3635,7 @@ export class MainScene extends Phaser.Scene {
   ): void {
     if (this.isDead) return;
     if (this.time.now < this.invulnerableUntil) return;
+    this.sfx.hit();
     // Relic damage-taken reduction (M-RL) applies first (a percentage), then
     // flat armor deduction — everything dealt today is physical damage (no
     // magic/elemental sources exist yet), so this applies uniformly; branch
@@ -3495,6 +3657,7 @@ export class MainScene extends Phaser.Scene {
   }
 
   private onPlayerDeath(): void {
+    this.sfx.death();
     this.isDead = true;
     this.player.setVelocity(0, 0);
     // Active food buffs are lost on death (they don't carry into respawn).
@@ -3523,6 +3686,8 @@ export class MainScene extends Phaser.Scene {
     this.pauseMenu.show({
       hintsEnabled: () => this.hints.isEnabled(),
       onToggleHints: () => this.hints.setEnabled(!this.hints.isEnabled()),
+      sfxEnabled: () => this.sfx.isEnabled(),
+      onToggleSfx: () => this.sfx.setEnabled(!this.sfx.isEnabled()),
       onResume: () => this.resumeGame(),
       onNewRun: () => this.scene.restart(),
     });
@@ -3792,17 +3957,19 @@ export class MainScene extends Phaser.Scene {
 
   private craftRecipe(recipe: Recipe): void {
     const key = outputKey(recipe);
+    const outCount = recipe.output.kind === "item" ? recipe.output.count ?? 1 : 1;
     // Check affordability AND room before deducting, so a full backpack can't
     // eat the resources (the bug this replaces). Then create the item — a 2nd
     // tool now makes a new stack instead of a silent no-op.
     if (!this.crafting.canAfford(recipe, this.backpack)) return;
     if (recipe.tier > 0 && !this.isNearWorkbench(this.player.x, this.player.y)) return;
-    if (!this.backpack.hasRoomFor(key, 1)) {
+    if (!this.backpack.hasRoomFor(key, outCount)) {
       this.eventLog.add("info", "Inventory full");
       return;
     }
     this.crafting.craft(recipe, this.backpack);
-    this.addToBackpack(key, 1);
+    this.addToBackpack(key, outCount);
+    this.sfx.craft();
     this.recomputeEquipped();
     this.refreshHud();
     this.inventoryMenu.refresh();
@@ -4391,13 +4558,17 @@ export class MainScene extends Phaser.Scene {
       openPlaceContextMenu: (c, i, x, y) => this.openPlaceContextMenu(c, i, x, y),
       eatItem: (c, i) => this.eatItem(c, i),
       isDragging: () => this.dragSource !== null,
+      sortBackpack: () => {
+        sortAndStack(this.backpack);
+        this.inventoryMenu.refresh();
+      },
     });
   }
 
   private armorSlots(): ArmorSlotView[] {
     return EQUIP_SLOTS.map((s) => {
       const eq = this.equipment.get(s.id);
-      return { id: s.id, label: s.label, itemKey: eq?.key ?? null, tier: eq?.tier };
+      return { id: s.id, label: s.label, itemKey: eq?.key ?? null, tier: eq?.tier, count: eq?.count };
     });
   }
 
@@ -4405,11 +4576,20 @@ export class MainScene extends Phaser.Scene {
   // mirrors the exact same math Tooltip's weapon "base (adjusted)" lines and
   // tryAttackEnemy/applyDamageToPlayer already use, just rolled up into one
   // view instead of per-item tooltips.
+  // Loaded ranged ammo for display — the Ammo equipment slot's count/name, or
+  // null if empty. Independent of which weapon (if any) is equipped, same as
+  // armor showing regardless of weapon choice.
+  private ammoView(): { name: string; count: number } | null {
+    const eq = this.equipment.get("ammo");
+    if (!eq || !eq.count) return null;
+    return { name: itemDef(eq.key)?.name ?? eq.key, count: eq.count };
+  }
+
   private combatStats(): CombatStatsView {
     const armor = totalPlayerDefense(this.equipment);
-    const attackRange = REACH;
+    const ammo = this.ammoView();
     if (!this.equippedWeapon)
-      return { weaponName: null, damage: 0, damageTypeName: null, attackSpeed: 0, staminaCost: 0, armor, attackRange };
+      return { weaponName: null, damage: 0, damageTypeName: null, attackSpeed: 0, staminaCost: 0, armor, attackRange: REACH, ammo };
     const dmgType = weaponPrimaryDamageType(this.equippedWeapon);
     const baseDmg = weaponDamage(this.equippedWeapon) + weaponTierDamageBonus(this.equippedWeapon, this.equippedWeaponTier);
     // Include relic bonuses (M-RL) so the panel matches tryAttackEnemy's real math.
@@ -4419,6 +4599,7 @@ export class MainScene extends Phaser.Scene {
         weaponStaminaCostMultiplier(dmgType, this.progression) *
         this.relics.staminaCostMult(),
     );
+    const attackRange = rangedWeaponConfig(this.equippedWeapon)?.maxRangePx ?? REACH;
     return {
       weaponName: this.equippedWeaponName,
       damage,
@@ -4427,6 +4608,7 @@ export class MainScene extends Phaser.Scene {
       staminaCost,
       armor,
       attackRange,
+      ammo,
     };
   }
 
@@ -4460,6 +4642,31 @@ export class MainScene extends Phaser.Scene {
     const def = itemDef(stack.key);
     const slot = def?.armorSlot;
     if (!slot) return;
+
+    // The ammo slot holds a *stack* (count), not a single item — merge into a
+    // matching key (topped up to maxStack) instead of an unconditional swap.
+    // A different key already loaded is returned to the backpack first, same
+    // as armor's swap-out below.
+    if (slot === "ammo") {
+      const existing = this.equipment.get(slot);
+      const max = def.maxStack;
+      if (existing && existing.key === stack.key) {
+        const room = Math.max(0, max - (existing.count ?? 0));
+        const take = Math.min(room, stack.count);
+        if (take <= 0) return; // full — no-op, snaps back
+        this.equipment.set(slot, { key: stack.key, tier: 0, count: (existing.count ?? 0) + take });
+        container.removeCount(stack.key, take);
+      } else {
+        if (existing) this.returnArmorToBackpack(existing);
+        const take = Math.min(max, stack.count);
+        this.equipment.set(slot, { key: stack.key, tier: 0, count: take });
+        container.removeCount(stack.key, take);
+      }
+      this.eventLog.add("info", `Loaded ${def.name}`);
+      this.afterItemMove();
+      return;
+    }
+
     const previous = this.equipment.get(slot);
     this.equipment.set(slot, { key: stack.key, tier: stack.tier ?? 0 });
     container.set(index, null);
@@ -4469,9 +4676,9 @@ export class MainScene extends Phaser.Scene {
   }
 
   private returnArmorToBackpack(item: EquippedItem): void {
-    const stack: ItemStack = { key: item.key, count: 1, tier: item.tier || undefined };
+    const stack: ItemStack = { key: item.key, count: item.count ?? 1, tier: item.tier || undefined };
     if (!this.backpack.addStack(stack)) {
-      this.spawnLooseDrop(item.key, 1, this.player.x, this.player.y, DROPPED_ITEM_MAGNET_COOLDOWN_MS, item.tier || undefined);
+      this.spawnLooseDrop(item.key, stack.count, this.player.x, this.player.y, DROPPED_ITEM_MAGNET_COOLDOWN_MS, item.tier || undefined);
     }
   }
 
@@ -4490,7 +4697,7 @@ export class MainScene extends Phaser.Scene {
     if (t && "armorSlot" in t && t.armorSlot === slot) this.closeUpgradeMenu();
     this.equipment.set(slot, null);
     if (toIndex !== undefined && this.backpack.slot(toIndex) === null) {
-      this.backpack.set(toIndex, { key: eq.key, count: 1, tier: eq.tier || undefined });
+      this.backpack.set(toIndex, { key: eq.key, count: eq.count ?? 1, tier: eq.tier || undefined });
     } else {
       this.returnArmorToBackpack(eq);
     }
@@ -4519,6 +4726,15 @@ export class MainScene extends Phaser.Scene {
 
   private openArmorContextMenu(slot: EquipSlot, screenX: number, screenY: number): void {
     const eq = this.equipment.get(slot);
+    // The ammo slot has no upgrade path (it holds a plain ammo stack, not an
+    // upgradable armor piece) — just a bare Unequip.
+    if (slot === "ammo") {
+      if (!eq) return;
+      this.contextMenu.show(screenX, screenY, [
+        { label: "Unequip", enabled: true, onClick: () => this.unequipArmorSlot(slot) },
+      ]);
+      return;
+    }
     const items: ContextMenuItem[] = eq
       ? [
           { label: "Unequip", enabled: true, onClick: () => this.unequipArmorSlot(slot) },
@@ -4853,6 +5069,7 @@ export class MainScene extends Phaser.Scene {
   // "catch your eye" version — punch-in scale tween plus a brief camera
   // flash, then fades itself out after a couple seconds.
   private showLevelUpBanner(level: number, points: number): void {
+    this.sfx.levelUp();
     const cx = this.scale.width / 2;
     const cy = this.scale.height * 0.3;
 

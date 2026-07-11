@@ -1075,11 +1075,39 @@ mouse-driven only. Don't reintroduce a keybind for this without being asked. Spa
    one. **Passive HP regen was explicitly cut** from the backlog (the user's call): Comfort
    (Bedroll, 5j) + cooked-food buffs (5f) already own HP sustain, and a passive trickle on
    top would undercut the reason to use either. Full verification in `STATUS.md`.
-   **Remaining playtest-polish backlog: inventory auto-sort and a ranged starter weapon**,
-   then a minimal code-generated SFX layer (same placeholder ethos as the generated
-   textures — hit/pickup/craft/level-up/nightfall/death, swappable later) before a
-   second/wider playtest round. Real pixel art + animations stay last, after content/
-   balance settle further — see roadmap item 8.
+   Real pixel art + animations stay last, after content/balance settle further — see
+   roadmap item 8.
+5y. **Inventory sort/split + ranged starter weapons (Slingshot + Javelin) + minimal SFX**
+   — closes out the rest of the playtest-polish backlog from 5x/5q/5r. Plan:
+   `.claude/plans/twinkly-orbiting-backus.md`. **Inventory auto-sort** (a "Sort" button by
+   the Backpack header, `ItemContainer.sortAndStack()`) and **Shift+Left-Click split-stack**
+   (splits a stack of >1 into an empty slot in the same container, then drags the split-off
+   half — works everywhere `beginItemDrag` is the entry point: backpack/hotbar/chest/drying
+   rack) are both Sonnet-class fixes reusing existing drag/drop machinery, no new resolve
+   logic. **Ranged weapons** are the session's new mechanic (built on Opus): **Slingshot**
+   (2 dmg/650ms/6 stam, uses a new **`"ammo"`** `EquipSlot` loaded with Slingshot Pellets)
+   and **Javelin** (5 dmg/900ms/16 stam, self-contained disposable hotbar stack — no ammo
+   slot, throwing depletes itself). Locked via `AskUserQuestion` + a side-chat balance
+   discussion: aiming reuses the existing click-a-hovered-enemy-in-reach model (not
+   free-aim); ranged starts **deliberately weak** — an opener/softener, not a solo tool —
+   with slow projectiles (420/300 px/s) and bounded range (260/220px) as the anti-kite
+   governor alongside stamina cost; **no enemy-AI changes** this batch. `EquippedItem`
+   gained a `count?: number` field so the ammo slot reuses the *existing* armor-equip
+   machinery (branching on `slot === "ammo"` for merge-not-swap semantics) instead of a
+   parallel system. `tryAttackEnemy` is now a thin dispatcher over `tryMeleeAttack`/
+   `tryRangedAttack`, both funneling into a shared `resolveWeaponHit()` extracted from the
+   old kill-resolution tail. Both weapons use `"ranged"` as their damage type, finally
+   giving the long-dormant Ranged weapon skill a real XP source. `Recipe.output` gained an
+   optional `count` (defaults 1) so Slingshot Pellets (5 Stone → 25) and Javelin (3 Wood +
+   1 Stone → 2) can batch-output. **Minimal SFX**: `src/systems/Sfx.ts` (`SfxPlayer`) — raw
+   Web Audio oscillator/gain envelopes synthesized at call time (no asset files, same
+   generate-in-code ethos as `BootScene`'s textures), 6 cues (hit/pickup/craft/levelUp/
+   nightfall/death) wired into existing hook points, plus a persisted on/off toggle in
+   `PauseMenuUI` next to the Hints toggle. **Live-verified via `preview_eval`** (after
+   clearing 5 orphaned Vite processes from closed chats that were holding the per-folder
+   server cap): slingshot fire/impact/ammo-decrement, 0-ammo + out-of-range silent no-ops,
+   javelin self-consume + auto-unequip at 0, melee unaffected, auto-sort, shift-split, and
+   all 6 SFX cues (no console errors). Full detail in `STATUS.md`.
 
 **A new umbrella plan for the long-requested roguelike run/score meta-loop** now exists:
 `.claude/plans/roguelike-metaloop-master-plan.md` (drafted 2026-07-10, locked build order
@@ -1165,8 +1193,9 @@ target. Read the master plan first; treat the bullets below as historical contex
 **Added 2026-07-10, from a post-boss-fight playtest (Gremlin King beaten at player lvl 5,
 Blunt 5/Pierce 10/Light Armor 5/Running 3/Chopping 4, max-lvl Primal Spear):**
 
-- **Ranged starting weapon** — maybe Javelins (thrown, no ammo?) and/or the
-  already-planned Slingshot, as an earlier/easier ranged option than whatever's next.
+- ~~**Ranged starting weapon**~~ — **shipped (5y)**: Slingshot (uses a new Ammo equipment
+  slot) + Javelin (self-contained disposable hotbar stack), both deliberately weak
+  (opener/softener) per a locked side-chat balance direction.
 - ~~**Food system** — cooking, eating, and what it actually does to the player~~ —
   **shipped** (roadmap 5f): eating grants a **timed HP-regen buff** (no instant heal, no
   hunger meter), cooking is instant at a placed campfire. Still open: stamina-restore
@@ -1179,8 +1208,8 @@ Blunt 5/Pierce 10/Light Armor 5/Running 3/Chopping 4, max-lvl Primal Spear):**
   `LogKind: "material"` toast, reusing the recipe-unlock toast's slide-in/stack/fade
   machinery in a distinct blue accent, fires once per raw material (excludes crafted/
   cooked/processed outputs, which already get their own unlock toast).
-- **Inventory auto-sort** — a keypress while the inventory is open that sorts/auto-stacks
-  shared materials together.
+- ~~**Inventory auto-sort**~~ — **shipped (5y)**: a "Sort" button re-flows the backpack
+  into merged, sorted stacks (`ItemContainer.sortAndStack()`).
 - **Pause system** — doesn't exist yet at all.
 - **Fast-boss-kill bonus** — a concept for rewarding beating a biome boss quickly from
   the start of a run (exact bonus TBD).

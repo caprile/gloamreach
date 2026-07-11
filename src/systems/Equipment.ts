@@ -12,11 +12,17 @@ export type EquipSlot =
   | "ring1"
   | "ring2"
   | "special1"
-  | "special2";
+  | "special2"
+  | "ammo";
 
 export interface EquippedItem {
   key: string;
   tier: number;
+  // Set only for the "ammo" slot (a stack of ranged ammo), which needs a
+  // quantity — every other slot holds a single qty-1 item and leaves this
+  // undefined. Armor-equip logic swaps whole items; ammo-equip logic merges
+  // counts of the same key instead (see MainScene.equipArmorFromContainer).
+  count?: number;
 }
 
 export const EQUIP_SLOTS: { id: EquipSlot; label: string }[] = [
@@ -29,6 +35,7 @@ export const EQUIP_SLOTS: { id: EquipSlot; label: string }[] = [
   { id: "legs", label: "Legs" },
   { id: "special1", label: "Spec1" },
   { id: "special2", label: "Spec2" },
+  { id: "ammo", label: "Ammo" },
 ];
 
 export class Equipment {
@@ -42,6 +49,7 @@ export class Equipment {
     ring2: null,
     special1: null,
     special2: null,
+    ammo: null,
   };
 
   get(slot: EquipSlot): EquippedItem | null {

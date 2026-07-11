@@ -480,6 +480,47 @@ export class BootScene extends Phaser.Scene {
     g.fillTriangle(8, 8, 14, 8, 11, 1);
     g.generateTexture("icon_primal_spear", ICON, ICON);
 
+    // Slingshot: Y-shaped wood fork with a taut band.
+    g.clear();
+    g.fillStyle(0x7a4a22, 1);
+    g.fillRect(10, 12, 4, 10); // handle
+    g.fillRect(6, 4, 3, 10); // left fork
+    g.fillRect(15, 4, 3, 10); // right fork
+    g.fillStyle(0xc9c2a8, 1);
+    g.fillRect(8, 8, 8, 2); // band
+    g.generateTexture("icon_slingshot", ICON, ICON);
+
+    // Javelin: long thin shaft with a pale bone tip, slimmer than the spear.
+    g.clear();
+    g.fillStyle(0x7a4a22, 1);
+    g.fillRect(11, 6, 2, 16);
+    g.fillStyle(0xe8e0cc, 1);
+    g.fillTriangle(9, 6, 15, 6, 12, 0);
+    g.generateTexture("icon_javelin", ICON, ICON);
+
+    // Slingshot Pellets: a small pile of round gray stones.
+    g.clear();
+    g.fillStyle(0x8a8a8a, 1);
+    g.fillCircle(8, 15, 4);
+    g.fillCircle(15, 15, 4);
+    g.fillCircle(11, 9, 4);
+    g.generateTexture("icon_slingshot_pellets", ICON, ICON);
+
+    // In-flight pellet projectile — tiny gray dot.
+    g.clear();
+    g.fillStyle(0x8a8a8a, 1);
+    g.fillCircle(3, 3, 3);
+    g.generateTexture("pellet_projectile", 6, 6);
+
+    // In-flight javelin projectile — a short brown-and-bone streak (rotation
+    // applied per-shot via setRotation, same as every other Projectile).
+    g.clear();
+    g.fillStyle(0x7a4a22, 1);
+    g.fillRect(3, 4, 2, 12);
+    g.fillStyle(0xe8e0cc, 1);
+    g.fillTriangle(1, 4, 7, 4, 4, 0);
+    g.generateTexture("javelin_projectile", 8, 16);
+
     // Shishkabob: skewer stick with red + green chunks.
     g.clear();
     g.fillStyle(0xc0a060, 1);

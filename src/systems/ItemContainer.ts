@@ -125,6 +125,40 @@ export class ItemContainer {
   }
 }
 
+// Re-flow every stack in `container` into as few slots as possible, sorted by
+// key (then tier). Merges same-key/same-tier stacks up to their max stack
+// size, splitting overflow into additional stacks, and repacks front-to-back
+// — the rest of the container's now-empty tail slots are just left null.
+export function sortAndStack(container: ItemContainer): void {
+  const totals = new Map<string, { key: string; tier?: number; count: number }>();
+  for (const s of container.all()) {
+    if (!s) continue;
+    const groupKey = `${s.key}#${s.tier ?? ""}`;
+    const existing = totals.get(groupKey);
+    if (existing) existing.count += s.count;
+    else totals.set(groupKey, { key: s.key, tier: s.tier, count: s.count });
+  }
+
+  const packed: ItemStack[] = [];
+  const sorted = [...totals.values()].sort((a, b) => {
+    if (a.key !== b.key) return a.key < b.key ? -1 : 1;
+    return (a.tier ?? 0) - (b.tier ?? 0);
+  });
+  for (const group of sorted) {
+    const max = maxStackOf(group.key);
+    let remaining = group.count;
+    while (remaining > 0) {
+      const take = Math.min(max, remaining);
+      packed.push({ key: group.key, count: take, tier: group.tier });
+      remaining -= take;
+    }
+  }
+
+  for (let i = 0; i < container.size; i++) {
+    container.set(i, packed[i] ?? null);
+  }
+}
+
 // Move the stack at src[si] onto dst[di]: merge if same stackable key (leaving
 // any overflow in the source), otherwise swap. The one primitive behind every
 // drag/rearrange (works within a container and across backpack<->hotbar).

@@ -3,6 +3,8 @@ import Phaser from "phaser";
 export interface PauseMenuDeps {
   hintsEnabled: () => boolean;
   onToggleHints: () => void;
+  sfxEnabled: () => boolean;
+  onToggleSfx: () => void;
   onResume: () => void;
   onNewRun: () => void;
 }
@@ -17,7 +19,7 @@ const DEPTH_SCRIM = 3500;
 const DEPTH_PANEL = 3501;
 const DEPTH_TEXT = 3502;
 const PANEL_W = 360;
-const PANEL_H = 280;
+const PANEL_H = 332;
 
 export class PauseMenuUI {
   private scene: Phaser.Scene;
@@ -27,6 +29,7 @@ export class PauseMenuUI {
   private panelY: number;
   private deps?: PauseMenuDeps;
   private hintsToggle?: Phaser.GameObjects.Text;
+  private sfxToggle?: Phaser.GameObjects.Text;
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
@@ -69,10 +72,16 @@ export class PauseMenuUI {
     this.button(cx, y, "Resume", () => deps.onResume());
     y += 52;
 
-    // Hints toggle — reflects and flips the persisted preference live.
+    // Hints/SFX toggles — reflect and flip their persisted preferences live.
     this.hintsToggle = this.button(cx, y, this.hintsLabel(), () => {
       deps.onToggleHints();
       this.hintsToggle?.setText(this.hintsLabel());
+    });
+    y += 52;
+
+    this.sfxToggle = this.button(cx, y, this.sfxLabel(), () => {
+      deps.onToggleSfx();
+      this.sfxToggle?.setText(this.sfxLabel());
     });
     y += 52;
 
@@ -84,12 +93,17 @@ export class PauseMenuUI {
     this.open = false;
     this.deps = undefined;
     this.hintsToggle = undefined;
+    this.sfxToggle = undefined;
     for (const o of this.objects) o.destroy();
     this.objects = [];
   }
 
   private hintsLabel(): string {
     return `Hints: ${this.deps?.hintsEnabled() ? "ON" : "OFF"}`;
+  }
+
+  private sfxLabel(): string {
+    return `Sound: ${this.deps?.sfxEnabled() ? "ON" : "OFF"}`;
   }
 
   private button(
