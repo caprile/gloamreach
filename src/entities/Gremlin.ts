@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import { Enemy } from "./Enemy";
+import type { SwingConfig } from "./Enemy";
 import type { ProjectileConfig, ProjectileHost } from "./Projectile";
 
 // Two variants (per the first-biome content plan's Milestone C note, added
@@ -22,8 +23,20 @@ const RANGED_MIN_KITE_DIST = 140; // closer than this -> flee; keeps some daylig
 const RANGED_PURSUE_SPEED = 70; // chases in while out of shot range (beyond PROJECTILE_MAX_RANGE)
 const RANGED_MELEE_RANGE = 20; // player closing to this -> switches to melee mode (~15% shorter, playtest feedback)
 const RANGED_MELEE_EXIT_RANGE = 34; // must back out past this (not just RANGED_MELEE_RANGE) to leave melee mode — hysteresis gap, same reasoning as AGGRO/DEAGGRO_RADIUS elsewhere: without it, the player-enemy physics collider's constant separation jitter flips the mode every frame right at the boundary
-const RANGED_MELEE_COOLDOWN_MS = 900;
 const RANGED_CLAW_DAMAGE = 10; // punishes closing the distance, higher than a single throw
+// Telegraphed close-range claw — a rare "back off!" swipe the kiter only does
+// when the player is right on top of it (the user: it should rarely fire). The
+// shove knockback reinforces its kiter identity: it hits, pushes you away, and
+// resumes kiting. reach (28) is a touch past RANGED_MELEE_RANGE so a stationary
+// player at melee distance still gets caught at strike time.
+const RANGED_CLAW_SWING: SwingConfig = {
+  reach: 28,
+  windupMs: 300,
+  strikeMs: 80,
+  recoverMs: 350,
+  cooldownMs: 600,
+  knockback: 210,
+};
 const PROJECTILE_SPEED = 220;
 const PROJECTILE_DAMAGE = 8;
 const PROJECTILE_MAX_RANGE = 220; // ~15% shorter, playtest feedback
@@ -62,7 +75,6 @@ export class RangedGremlin extends Enemy {
   private readonly spawnY: number;
   private rangedWanderTarget: { x: number; y: number } | null = null;
   private nextRangedWanderAt = 0;
-  private lastMeleeAt = -Infinity;
   // Burst state: shotsFiredInBurst counts 0/1 mid-burst, resets to 0 once a
   // full burst completes and starts burstCooldownUntil.
   private shotsFiredInBurst = 0;
@@ -102,6 +114,7 @@ export class RangedGremlin extends Enemy {
     if (elite) {
       this.speedMult = 1.1;
       this.setScale(1.4);
+      this.baseScale = 1.4; // so the wind-up pulse throbs around the elite's size
     }
   }
 
@@ -138,19 +151,22 @@ export class RangedGremlin extends Enemy {
     // separation jitter flip the mode every frame while hovering right at the
     // boundary. Not a one-way fallback: still toggles both directions, just
     // with a buffer zone instead of a knife-edge.
-    if (this.mode === "meleeing") {
-      if (dist > RANGED_MELEE_EXIT_RANGE) this.mode = "ranged";
-    } else if (dist <= RANGED_MELEE_RANGE) {
-      this.mode = "meleeing";
+    // Don't flip modes mid-swing — once the claw's wind-up commits, a player
+    // backpedaling past the exit range shouldn't yank it back into kiting; it
+    // stays planted and either connects or whiffs, then re-evaluates.
+    if (!this.isAttacking()) {
+      if (this.mode === "meleeing") {
+        if (dist > RANGED_MELEE_EXIT_RANGE) this.mode = "ranged";
+      } else if (dist <= RANGED_MELEE_RANGE) {
+        this.mode = "meleeing";
+      }
     }
 
     if (this.mode === "meleeing") {
-      body.setVelocity(0, 0);
-      this.applyFacing(playerX - this.x, playerY - this.y);
-      if (now - this.lastMeleeAt >= RANGED_MELEE_COOLDOWN_MS) {
-        this.lastMeleeAt = now;
+      const hit = this.tickMeleeSwing(body, playerX, playerY, now, RANGED_CLAW_SWING);
+      if (hit) {
         this.markAttackLanded(now);
-        return true; // claw lands
+        return true; // telegraphed claw connects (with a shove, see RANGED_CLAW_SWING)
       }
       return false;
     }
@@ -284,9 +300,18 @@ const MELEE_DEAGGRO_RADIUS = 220;
 const MELEE_CHASE_SPEED = 70;
 const MELEE_WANDER_SPEED = 20;
 const MELEE_RANGE = 20; // ~15% shorter, playtest feedback
-const MELEE_CLAW_COOLDOWN_MS = 800;
 const MELEE_CLAW_DAMAGE = 8; // weaker than the ranged variant's fallback claw (10) and Boar's bite (25)
 const MELEE_MAX_HEALTH = 12;
+// Snappy telegraphed claw for the weak trash Gremling — the intentionally
+// simple, still-kiteable baseline: a quick wind-up + short recovery, just
+// enough of a tell/punish window that it can't be pure-facetanked.
+const GREMLING_SWING: SwingConfig = {
+  reach: MELEE_RANGE,
+  windupMs: 320,
+  strikeMs: 80,
+  recoverMs: 380,
+  cooldownMs: 200,
+};
 
 type MeleeMode = "idle" | "chasing";
 
@@ -297,7 +322,6 @@ type MeleeMode = "idle" | "chasing";
 // regardless of which variant drops them.
 export class MeleeGremling extends Enemy {
   private mode: MeleeMode = "idle";
-  private lastClawAt = -Infinity;
   private meleeWanderTarget: { x: number; y: number } | null = null;
   private nextMeleeWanderAt = 0;
   // Optional spawn anchor (Gremlin Shack guards) — when set, wander targets
@@ -337,6 +361,7 @@ export class MeleeGremling extends Enemy {
     if (elite) {
       this.speedMult = 1.1;
       this.setScale(1.4);
+      this.baseScale = 1.4; // wind-up pulse throbs around the elite's size
     }
   }
 
@@ -348,7 +373,8 @@ export class MeleeGremling extends Enemy {
     if (this.mode === "idle" && dist <= MELEE_AGGRO_RADIUS && this.canAggro(dist, now)) {
       this.mode = "chasing";
       this.startPursuit(now);
-    } else if (this.mode === "chasing") {
+    } else if (this.mode === "chasing" && !this.isAttacking()) {
+      // Don't deaggro mid-swing — a committed attack always plays out.
       if (dist > MELEE_DEAGGRO_RADIUS) {
         this.mode = "idle";
       } else if (this.hasGivenUpPursuit(now)) {
@@ -358,15 +384,13 @@ export class MeleeGremling extends Enemy {
     }
 
     if (this.mode === "chasing") {
-      if (dist <= MELEE_RANGE) {
-        body.setVelocity(0, 0);
-        this.applyFacing(playerX - this.x, playerY - this.y);
-        if (now - this.lastClawAt >= MELEE_CLAW_COOLDOWN_MS) {
-          this.lastClawAt = now;
+      if (this.isAttacking() || dist <= MELEE_RANGE) {
+        const hit = this.tickMeleeSwing(body, playerX, playerY, now, GREMLING_SWING);
+        if (hit) {
           this.markAttackLanded(now);
-          return true; // claw lands
+          return true; // telegraphed claw connects
         }
-        return false;
+        return false; // committed to the swing, or in range on cooldown → hold
       }
       const angle = Phaser.Math.Angle.Between(this.x, this.y, playerX, playerY);
       const vx = Math.cos(angle) * MELEE_CHASE_SPEED * this.speedMult * this.envSpeedMult;

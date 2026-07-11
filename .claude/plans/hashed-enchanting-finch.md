@@ -1,0 +1,119 @@
+# Souls-like Common-Enemy Combat — telegraphed attacks + dodge/punish windows
+
+## Context
+
+the user's 25-min playtest flagged combat as "kite forever by spam-left-click + walk
+away" — common enemies have no risk: they bite instantly the frame they're adjacent and
+off cooldown, so you can facetank or kite with zero counterplay. Triage locked (see
+`memory/survivor-rpg-playtest-feedback-2026-07-11.md`): give **every** common enemy
+(Boar / Snake / Gremlin / Gremling) a readable **telegraphed attack** with a **dodge
+window** and a **recovery/punish window**, the way `GremlinKing` already works.
+
+**This pass is the mechanic only.** Balance *numbers* (armor nerf, enemy-damage buff, boss
+damage bump, cleave replacement) are a separate, later Sonnet pass — deliberately deferred
+per the user's "get core mechanics playtest-ready first, defer balance numbers." New
+mechanic → **Opus**.
+
+Direction locked with the user this session:
+- **Per-enemy bespoke attacks, not one uniform system.** Harder enemies (Boar, ranged
+  Gremlin) should feel mechanically distinct; common trash (Gremling) can stay simple and
+  kiteable ("some you can kite and that's ok"). Not every enemy needs a complex moveset.
+- **Tells are animation/motion/tint** (rear-back, wind-up, lunge) — **NOT** world-space red
+  arcs/lines (the user: "too goofy"). Hit areas stay implicit; players learn hitboxes over
+  time. (No audio system exists in the project — confirmed — so sound tells are a *future*
+  add; visual/motion only now. Textures are `generateTexture` placeholders with no frames,
+  so "animation" = tween-driven scale/tint/motion, not sprite sheets.)
+- **Ranged Gremlin:** telegraph its **melee claw only** (leave the 2-shot projectile burst
+  as-is — projectiles already travel and are dodgeable). Also make the melee trigger only
+  when the player is right on top of it (the user's never even seen it claw).
+
+## The shared mechanic (commit → wind-up → strike → recover)
+
+Today a melee enemy's `update()` returns `true` the instant it's within `MELEE_RANGE` and
+off cooldown, and `MainScene.updateEnemies()` (`src/scenes/MainScene.ts:2991`) applies
+`enemy.biteDamage` — damage on *contact during approach*, no window.
+
+New per-attack skeleton every telegraphed attack follows:
+- **wind-up** (`windupMs`): on entering attack range & off cooldown, plant (or rear), play
+  the visual tell, and **lock** facing/target. **No damage yet.** ← this is the dodge window.
+- **strike**: after `windupMs`, hit-check the player's **current** position against the
+  attack's reach in the **locked** facing. Still in reach → `return true` (existing damage
+  contract fires). Out of reach → whiff. Re-checking at strike time (instead of damage on
+  contact) is precisely what makes wind-up dodging real.
+- **recover** (`recoverMs`): enemy planted/slowed and **vulnerable** → punish window. Then
+  the normal attack cooldown.
+- While `isAttacking()` (wind-up/strike/recover) the enemy's movement code holds, so it
+  genuinely commits.
+
+The melee damage path stays the existing boolean contract — `update()` returns `true` →
+`applyDamageToPlayer(enemy.biteDamage)` — the `true` just now fires at the strike tick after
+a wind-up and only on a passing re-check. **No `MainScene` change needed** for the base
+melee case. Dash i-frames already gate damage via `invulnerableUntil` in
+`applyDamageToPlayer` (`MainScene.ts:3058`), so dashing through a strike already negates it
+for free — spatial sidestep during wind-up is the *primary* dodge, i-frames the secondary.
+
+### Reusable helper on base `Enemy` (`src/entities/Enemy.ts`)
+
+Add an **opt-in** attack-phase mechanism to the base class — a shared *mechanism* with
+per-subclass *numbers*, exactly like the existing `startPursuit`/`hasGivenUpPursuit`/
+`canAggro` give-up helpers (which are shared machinery each enemy tunes radii for). Not a
+shared config table — durations/reach/damage stay per-subclass constants, per the standing
+"don't generalize per-enemy combat stats" rule.
+
+- Protected state: `attackPhase: "none" | "windup" | "strike" | "recover"`, `attackStartedAt`.
+- Helpers: `beginWindup(now)`, phase-elapsed checks, `isAttacking()`.
+- `playWindupTell()` — tween-based **scale-punch + brief tint flash** (restored to the
+  HP-based tint afterward). Uses `tweens.killTweensOf(this)` care like `playHitFeedback()`
+  already does, and scale/tint only (no x/y tween) so it never fights the arcade body.
+- Boss (`GremlinKing`) stays untouched — it already has its own richer machine.
+
+## Per-enemy attack identities (creative, differentiated)
+
+1. **Gremling** — weak melee trash, stays simple & kiteable (`MeleeGremling`, `Gremlin.ts`).
+   Telegraphed **claw swipe in place** via the shared `tickMeleeSwing`.
+
+2. **Snake** — ambusher (`Snake.ts`). **Coil → locked lunge-bite**: a coil wind-up locks
+   the strike direction (no more per-frame homing), then a straight locked lunge; the
+   existing flee doubles as the recover/punish window.
+
+3. **Boar** — bruiser / the standout beast (`Boar.ts`; own `update()` override now).
+   Signature **charge/gore** (locked direction, overshoots, long recovery) + a quick
+   point-blank **gore-bite**. Reuses `GremlinKing`'s locked-charge pattern.
+
+4. **RangedGremlin** — kiter (`RangedGremlin`, `Gremlin.ts`). Kiting/burst untouched;
+   telegraph on the **melee claw only** with an optional **shove knockback**.
+
+## Files touched
+
+- `src/entities/Enemy.ts` — attack-phase helper + `tickMeleeSwing` + `playWindupTell` + `applyHpTint` refactor + optional `pendingAttackKnockback`.
+- `src/entities/Gremlin.ts` — `MeleeGremling` swipe; `RangedGremlin` telegraphed shove-claw.
+- `src/entities/Snake.ts` — coil→locked-lunge strike.
+- `src/entities/Boar.ts` — new `update()` override: charge + point-blank gore.
+- `src/scenes/MainScene.ts` — reads `enemy.pendingAttackKnockback` in `updateEnemies()`.
+
+## Non-goals / deferred
+
+- **No number rebalance** (armor / enemy damage / boss damage / cleave replacement) — separate Sonnet pass.
+- **No audio** — no sound system exists; tells are visual/motion. Sound is a future add.
+- **GremlinKing untouched** — already has telegraph/poise.
+- **No new player ability** — built entirely on the existing dash/i-frames + spatial sidestep.
+
+## Verification
+
+1. `tsc --noEmit` clean.
+2. `preview_start "dev"` → boots; screenshot the boar mid-wind-up (orange tint + scale).
+3. `preview_eval`: park player next to each enemy, drive frames, assert
+   `windup → strike → recover` with **no damage during wind-up**, damage only at strike,
+   and a **whiff** when the player sidesteps during the wind-up. Confirm dash i-frames negate.
+
+### Verification result (shipped)
+
+`tsc --noEmit` clean; console error-free. Live `preview_eval` (isolated enemy, banished the
+rest) confirmed for all four: Boar charge (windup→strike→recover→none, 25 dmg at strike,
+sidestep whiffs → 0 dmg, scale 1.18 + orange tint tell); Gremling swipe (cyclic, 8 dmg at
+strike); Snake coil→lunge (striking→fleeing→hidden, 20 dmg on the lunge); Ranged Gremlin
+claw (windup→strike→recover, 10 dmg, kb=210 plumbed). **Known limitation:** the shove
+knockback is currently near-cosmetic because `Player.update()` zeroes idle velocity every
+frame (overwriting the impulse the frame after) — a *pre-existing* trait of the exact path
+`GremlinKing`'s slam already uses; fixing it is a feel change to the boss too, so it's left
+for the deferred combat-feel/balance pass.

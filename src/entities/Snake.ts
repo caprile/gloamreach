@@ -9,10 +9,14 @@ import { Enemy } from "./Enemy";
 type SnakeMode = "hidden" | "striking" | "fleeing";
 
 const AMBUSH_RADIUS = 45; // px — much tighter than Boar's 140; a trigger, not a chase range
-const STRIKE_SPEED = 90; // px/s — quick lunge once triggered
+const STRIKE_SPEED = 150; // px/s — a fast committed lunge along the locked direction (was a slower homing chase)
 const FLEE_SPEED = 70; // px/s — retreat after striking
 const MELEE_RANGE = 22; // px
-const BITE_COOLDOWN_MS = 900;
+// Coil wind-up (the tell + dodge window) then a short locked-direction lunge.
+// The lunge does NOT re-home, so a sidestep during the coil makes it whiff —
+// and the existing post-strike flee doubles as the recovery/punish window.
+const COIL_MS = 340; // rear-back/coil telegraph before the lunge
+const LUNGE_MS = 260; // max lunge travel time before a miss becomes a flee
 const FLEE_DURATION_MS = 1200; // post-bite retreat before fully re-hiding
 const RETALIATION_FLEE_MS = 2500; // "a few seconds" retreat after being hit post-bite, before wanting to strike again
 const REHIDE_COOLDOWN_MS = 3500; // can't ambush again until this long after fully re-hiding
@@ -21,19 +25,21 @@ const MAX_HEALTH = 11;
 const BITE_DAMAGE = 20; // a landed ambush bite should hurt — low HP is the tradeoff, not low damage
 
 // Own deaggro condition (per CLAUDE.md's "different condition, not just
-// different number" standing decision) — Snake is a hit-and-run ambusher,
-// not a sustained hunter like Boar, so it gives up much faster: either the
-// player breaks line of sight/distance, or enough time passes chasing
-// without landing a bite.
-const CHASE_GIVEUP_MS = 4000;
-const CHASE_GIVEUP_RADIUS = 150; // px — player this far away while striking ends the chase immediately
+// different number" standing decision) — Snake is a hit-and-run ambusher, so
+// it gives up fast: fleeing far enough during the coil cancels the strike, and
+// the whole lunge always resolves (bite or whiff→flee) within COIL_MS+LUNGE_MS,
+// so it can never chase forever.
+const CHASE_GIVEUP_RADIUS = 150; // px — player this far away during the coil cancels the strike
 
 export class Snake extends Enemy {
   private mode: SnakeMode = "hidden";
-  private lastStrikeBiteAt = -Infinity;
   private fleeUntil = 0;
   private ambushReadyAt = 0;
-  private pursuitStart = 0;
+  // Locked lunge direction, captured on the first coil frame and never
+  // re-aimed (that's what makes the lunge sidesteppable). strikeLocked guards
+  // capturing it exactly once per strike.
+  private lockedStrikeAngle = 0;
+  private strikeLocked = false;
   // Whether it has already landed a bite on the player during the current
   // engagement (reset whenever it fully disengages back to hidden). Drives
   // the takeHit() branch below: hasn't bitten yet -> fight back; already
@@ -60,6 +66,7 @@ export class Snake extends Enemy {
     if (elite) {
       this.speedMult = 1.1;
       this.setScale(1.3);
+      this.baseScale = 1.3; // wind-up pulse throbs around the elite's size
     }
   }
 
@@ -79,29 +86,44 @@ export class Snake extends Enemy {
     }
 
     if (this.mode === "striking") {
-      // Deaggro: chasing too long without landing a bite, or the player got
-      // too far away — give up and re-hide, regardless of whether it's ever
-      // been hit. Fixes "chases forever if it never lands a hit."
-      if (now - this.pursuitStart >= CHASE_GIVEUP_MS || dist > CHASE_GIVEUP_RADIUS) {
-        this.giveUp(now);
-        return false;
-      }
-      if (dist <= MELEE_RANGE) {
+      // Coil wind-up: plant, lock the lunge direction toward the player on the
+      // first frame, and play the tell. The player dodges here by sidestepping
+      // or backing out of ambush range before the lunge fires.
+      if (this.attackPhase === "windup") {
         body.setVelocity(0, 0);
-        this.applyFacing(playerX - this.x, playerY - this.y);
-        if (now - this.lastStrikeBiteAt >= BITE_COOLDOWN_MS) {
-          this.lastStrikeBiteAt = now;
-          this.hasBitten = true;
-          this.beginFlee(now, FLEE_DURATION_MS, false); // bite landed -> flee, then fully re-hide
-          return true; // bite lands
+        if (!this.strikeLocked) {
+          this.lockedStrikeAngle = Phaser.Math.Angle.Between(this.x, this.y, playerX, playerY);
+          this.applyFacing(Math.cos(this.lockedStrikeAngle), Math.sin(this.lockedStrikeAngle));
+          this.playWindupTell(COIL_MS, 0x9be89b); // greenish coil tell
+          this.strikeLocked = true;
+        }
+        // Fled far enough during the coil — the ambush is dodged, re-hide.
+        if (dist > CHASE_GIVEUP_RADIUS) {
+          this.giveUp(now);
+          return false;
+        }
+        if (this.attackElapsed(now) >= COIL_MS) {
+          this.attackPhase = "strike";
+          this.attackStartedAt = now;
+          this.endWindupTell();
         }
         return false;
       }
-      const angle = Phaser.Math.Angle.Between(this.x, this.y, playerX, playerY);
-      const vx = Math.cos(angle) * STRIKE_SPEED * this.speedMult * this.envSpeedMult;
-      const vy = Math.sin(angle) * STRIKE_SPEED * this.speedMult * this.envSpeedMult;
-      body.setVelocity(vx, vy);
-      this.applyFacing(vx, vy);
+
+      // Lunge: travel along the LOCKED direction (no re-homing) for the bite.
+      const lungeVx = Math.cos(this.lockedStrikeAngle) * STRIKE_SPEED * this.speedMult * this.envSpeedMult;
+      const lungeVy = Math.sin(this.lockedStrikeAngle) * STRIKE_SPEED * this.speedMult * this.envSpeedMult;
+      body.setVelocity(lungeVx, lungeVy);
+      this.applyFacing(lungeVx, lungeVy);
+      if (dist <= MELEE_RANGE) {
+        this.hasBitten = true;
+        this.beginFlee(now, FLEE_DURATION_MS, false); // bite landed -> flee, then fully re-hide
+        return true; // bite lands
+      }
+      // Whiffed the lunge (player dodged) — retreat; the flee IS the punish window.
+      if (this.attackElapsed(now) >= LUNGE_MS) {
+        this.beginFlee(now, FLEE_DURATION_MS, false);
+      }
       return false;
     }
 
@@ -131,14 +153,21 @@ export class Snake extends Enemy {
 
   private enterStriking(now: number): void {
     this.mode = "striking";
-    this.pursuitStart = now;
     this.setAlpha(1);
+    // Begin the coil wind-up; the lunge direction is locked on the first
+    // windup frame in update() (strikeLocked), regardless of what triggered
+    // the strike (ambush, retaliation, or flee-reengage).
+    this.attackPhase = "windup";
+    this.attackStartedAt = now;
+    this.strikeLocked = false;
   }
 
   private giveUp(now: number): void {
     this.mode = "hidden";
     this.ambushReadyAt = now + REHIDE_COOLDOWN_MS;
     this.hasBitten = false;
+    this.attackPhase = "none";
+    this.endWindupTell();
     (this.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0);
     this.setAlpha(HIDDEN_ALPHA);
   }
@@ -147,6 +176,9 @@ export class Snake extends Enemy {
     this.mode = "fleeing";
     this.fleeUntil = now + durationMs;
     this.reengageAfterFlee = reengage;
+    // Leaving the strike — drop any active wind-up tell so scale/tint reset.
+    this.attackPhase = "none";
+    this.endWindupTell();
   }
 
   // HP bar only shows once it's actually engaged (striking/fleeing), not

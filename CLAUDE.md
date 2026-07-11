@@ -893,6 +893,36 @@ mouse-driven only. Don't reintroduce a keybind for this without being asked. Spa
    and two small features (Workbench-placement hint, in-game relic compendium). Not a game
    milestone — the dashboard is a dev/balancing tool.
 
+5s. **Souls-like common-enemy combat** — plan: `.claude/plans/hashed-enchanting-finch.md`;
+   built on Opus (new mechanic). The next item in the 25-min-playtest triage after the
+   dashboard: kill the "kite forever by spam-left-click + walk away" feel by giving **every**
+   common enemy (Boar/Snake/Gremlin/Gremling) a telegraphed attack + dodge window +
+   recovery/punish window, like `GremlinKing` already has. **Mechanic only — the
+   balance-number rebalance (armor/enemy-dmg/boss) stays deferred to a separate Sonnet pass.**
+   Locked with the user: per-enemy **bespoke** attacks (NOT one uniform system — harder enemies
+   feel distinct, common trash stays simple/kiteable); tells are **animation/motion/tint**
+   (rear-back, wind-up scale-pulse, lunge), **NOT world-space red arcs/lines** ("too goofy" —
+   players learn hitboxes over time); no audio system exists so sound tells are deferred; the
+   ranged Gremlin telegraphs its **melee claw only** (projectile burst untouched). Shared
+   *mechanism* on base `Enemy` (`AttackPhase`, `SwingConfig`, `tickMeleeSwing()`,
+   `playWindupTell()`, public `pendingAttackKnockback`) with per-subclass *numbers* — same
+   pattern as the give-up helpers, NOT a shared stat table. The core change: damage is
+   re-checked against the player's CURRENT position at the **strike** frame (after a `windup`
+   the player can react to), not on contact during approach — that's what makes wind-up
+   dodging real; the `recover` window is the punish. Per-enemy identities: **Boar** got its
+   own `update()` override — a signature locked-direction **CHARGE** that overshoots + long
+   recovery, plus a point-blank gore-bite; **Snake** = coil wind-up that **locks** the strike
+   direction (stopped its per-frame homing) → straight lunge, existing flee = punish window;
+   **Gremling** = simple `tickMeleeSwing` claw (kiteable baseline); **RangedGremlin** = kiting
+   untouched, telegraphed melee claw + shove knockback. Damage path unchanged
+   (`update()`→true→`applyDamageToPlayer`); dash i-frames already negate strikes via
+   `invulnerableUntil`. `GremlinKing` untouched (already had this). **Known limitation:** the
+   shove knockback is near-cosmetic because `Player.update()` zeroes idle velocity every frame
+   — a *pre-existing* trait of the same path GremlinKing's slam uses; left for the deferred
+   combat-feel pass. No `RECIPES.md` change. See `STATUS.md` for full verification. **Remaining
+   playtest-polish backlog** (from the same triage): light "both" rebalance, boss dmg bump +
+   GremlinKing cleave replacement, 5 bug fixes, 2 small features — then master-plan tail M-TE, M-W1.
+
 **A new umbrella plan for the long-requested roguelike run/score meta-loop** now exists:
 `.claude/plans/roguelike-metaloop-master-plan.md` (drafted 2026-07-10, locked build order
 confirmed by the user). It supersedes/finalizes several open questions in the **Long-term

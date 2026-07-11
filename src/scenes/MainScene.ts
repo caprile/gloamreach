@@ -2997,7 +2997,16 @@ export class MainScene extends Phaser.Scene {
     for (const enemy of this.enemies) {
       enemy.envSpeedMult = envSpeedMult;
       const bit = enemy.update(delta, this.player.x, this.player.y, now);
-      if (bit) this.applyDamageToPlayer(enemy.biteDamage);
+      if (bit) {
+        // Most melee hits carry no knockback; a telegraphed attack that opts
+        // into one (ranged Gremlin shove, Boar charge gore) sets it on the
+        // frame it connects. Reuses applyDamageToPlayer's existing knockback path.
+        const kb = enemy.pendingAttackKnockback;
+        this.applyDamageToPlayer(
+          enemy.biteDamage,
+          kb > 0 ? { fromX: enemy.x, fromY: enemy.y, speed: kb } : undefined,
+        );
+      }
       // Gremlin King's melee/AoE kit deals area damage, not a single-point
       // bite — queried separately since it needs richer info (knockback)
       // than Enemy.update()'s plain boolean contract.

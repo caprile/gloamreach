@@ -3,12 +3,41 @@ import type { ResourceType } from "../systems/Inventory";
 
 export type EnemyState = "idle" | "chasing";
 
+// Souls-like attack phases shared by every telegraphed melee attack (see the
+// per-attack skeleton in the plan): a wind-up the player can react to, a brief
+// strike window where the hit is checked against the player's CURRENT position
+// (so leaving reach during the wind-up dodges it), and a recovery window where
+// the enemy is planted and vulnerable — the punish window. This is a shared
+// MECHANISM; each enemy tunes its own durations/reach/damage (per the standing
+// "don't fold per-enemy combat stats into one config table" rule).
+export type AttackPhase = "none" | "windup" | "strike" | "recover";
+
+// Config for the base in-place telegraphed swing (Enemy.tickMeleeSwing). Each
+// caller passes its own numbers; nothing here is a shared constant.
+export interface SwingConfig {
+  reach: number; // px — strike hit-check distance (player must still be within this at strike time)
+  windupMs: number; // telegraph/dodge window before the hit lands
+  strikeMs: number; // brief active window after the hit resolves
+  recoverMs: number; // planted/vulnerable punish window after the strike
+  cooldownMs: number; // gap after recovery before another swing can start
+  knockback?: number; // optional px/s shove applied to the player on connect
+}
+
+// Base "default melee enemy" swing timings — used by Enemy.update() (the
+// canonical telegraphed-swing reference) and mirrored by the weak Gremling.
+const BASE_SWING: SwingConfig = {
+  reach: 28, // matches the old MELEE_RANGE
+  windupMs: 400,
+  strikeMs: 90,
+  recoverMs: 450,
+  cooldownMs: 250,
+};
+
 const AGGRO_RADIUS = 105; // px — player enters this range, Boar starts chasing (Milestone B: tuned down from 140, "too aggressive" playtest flag)
 const DEAGGRO_RADIUS = 190; // wider gap than AGGRO_RADIUS to avoid boundary flicker (kept ~2x aggro, same ratio as before)
 const CHASE_SPEED = 60; // px/s — slower than player base (95), so it's escapable
 const WANDER_SPEED = 20; // px/s idle wander
-const MELEE_RANGE = 28; // px — how close the Boar must be to bite
-const BITE_COOLDOWN_MS = 1000;
+const MELEE_RANGE = 28; // px — how close the default melee enemy must be to start a swing
 
 // Default "give up eventually" behavior for any non-boss enemy (user
 // decision, see STATUS.md/memory): if 30s of continuous pursuit passes
@@ -77,7 +106,6 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   // append the shared trophy drop.
   elite = false;
   state: EnemyState = "idle";
-  private lastBiteAt = -Infinity;
   private wanderTarget: { x: number; y: number } | null = null;
   private nextWanderAt = 0;
   // Give-up/immunity state (see CHASE_GIVEUP_MS etc. above) — protected so a
@@ -96,6 +124,26 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   // idle wander is deliberately left at base speed. GremlinKing's overridden
   // update() ignores it, so the boss stays exempt from the night speed buff.
   envSpeedMult = 1;
+
+  // --- souls-like attack telegraph state (see AttackPhase above) ---
+  // protected so subclasses driving their own attack (Boar charge, Snake
+  // lunge, Gremlin claw) can read/advance the same phase clock and reuse the
+  // wind-up tell rather than each re-inventing it.
+  protected attackPhase: AttackPhase = "none";
+  protected attackStartedAt = 0;
+  protected lastAttackEndAt = -Infinity;
+  // Knockback (px/s) to apply to the player when the current attack connects,
+  // read by MainScene.updateEnemies() on the frame the bite lands (0 = none).
+  // Set by tickMeleeSwing (from SwingConfig.knockback) or directly by a
+  // subclass's own attack (e.g. Boar's charge gore).
+  pendingAttackKnockback = 0;
+  // The unscaled/base display scale to restore after a wind-up scale-pulse.
+  // Elites bump this to their own scale so the pulse throbs around the right
+  // size (see each subclass's elite branch).
+  protected baseScale = 1;
+  // Handle to the current wind-up pulse tween so it can be stopped/reset
+  // cleanly without killTweensOf() clobbering the HP-bar hit-feedback shake.
+  private windupTween?: Phaser.Tweens.Tween;
 
   // Thin world-space HP bar (no number, just a bar) — separate GameObjects
   // rather than a Container, gone glued to position every frame via
@@ -225,9 +273,10 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     if (this.state === "idle" && dist <= AGGRO_RADIUS && this.canAggro(dist, now)) {
       this.state = "chasing";
       this.startPursuit(now);
-    } else if (this.state === "chasing") {
+    } else if (this.state === "chasing" && !this.isAttacking()) {
       // Ordinary "target left" case — no re-aggro immunity, resumes instantly
-      // if the player comes back within range.
+      // if the player comes back within range. Never deaggro mid-swing: a
+      // committed telegraphed attack always plays out (dodge = leave its reach).
       if (dist > DEAGGRO_RADIUS) {
         this.state = "idle";
       } else if (this.hasGivenUpPursuit(now)) {
@@ -239,15 +288,17 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     }
 
     if (this.state === "chasing") {
-      if (dist <= MELEE_RANGE) {
-        body.setVelocity(0, 0);
-        this.applyFacing(playerX - this.x, playerY - this.y);
-        if (now - this.lastBiteAt >= BITE_COOLDOWN_MS) {
-          this.lastBiteAt = now;
+      // Telegraphed melee: once in reach (or already mid-swing), drive the
+      // wind-up → strike → recover cycle instead of biting on contact. The
+      // strike re-checks the player's position, so backpedaling/dashing out
+      // during the wind-up dodges it, and the recovery is a punish window.
+      if (this.isAttacking() || dist <= MELEE_RANGE) {
+        const hit = this.tickMeleeSwing(body, playerX, playerY, now, BASE_SWING);
+        if (hit) {
           this.markAttackLanded(now);
-          return true; // bite lands
+          return true; // strike connects
         }
-        return false;
+        return false; // committed to the swing, or in range on cooldown → hold
       }
       // Trees/boulders no longer block movement, so there's nothing left to
       // get stuck on — chase straight at the player every frame (the old
@@ -326,6 +377,13 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
         this.x = baseX;
       },
     });
+    this.applyHpTint();
+  }
+
+  // The health-based body tint (white → dark red as HP drops). Extracted from
+  // playHitFeedback so the wind-up tell can flash a warning color and then
+  // restore the correct HP tint afterward.
+  protected applyHpTint(): void {
     const frac = this.health / this.maxHealth;
     const shade = Phaser.Display.Color.Interpolate.ColorWithColor(
       new Phaser.Display.Color(255, 255, 255),
@@ -334,6 +392,104 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
       Math.round((1 - frac) * 100),
     );
     this.setTint(Phaser.Display.Color.GetColor(shade.r, shade.g, shade.b));
+  }
+
+  // --- souls-like telegraph helpers (shared mechanism, per-enemy numbers) ---
+
+  // True while committed to any attack phase — callers should stop moving the
+  // enemy (it's planted) while this holds, so the wind-up/recovery reads as a
+  // real commitment the player can punish.
+  isAttacking(): boolean {
+    return this.attackPhase !== "none";
+  }
+
+  protected attackElapsed(now: number): number {
+    return now - this.attackStartedAt;
+  }
+
+  // Wind-up "tell" for a telegraphed attack — a scale "load up" plus a warning
+  // tint held through the wind-up (deliberately NOT a world-space red arc, per
+  // the locked direction: players learn hitboxes from the animation, not an
+  // explicit danger zone). Finite tween (no repeat:-1 leak), snapped back to
+  // baseScale by endWindupTell at the strike.
+  protected playWindupTell(windupMs: number, color = 0xffd24a): void {
+    this.windupTween?.stop();
+    this.setScale(this.baseScale);
+    const punch = this.baseScale * 1.18;
+    this.windupTween = this.scene.tweens.add({
+      targets: this,
+      scaleX: punch,
+      scaleY: punch,
+      duration: windupMs,
+      ease: "Quad.easeIn",
+    });
+    this.setTint(color);
+  }
+
+  // Release the wind-up: snap scale back and restore the HP-based tint. Called
+  // at the strike moment (the snap-back reads as the swing releasing).
+  protected endWindupTell(): void {
+    this.windupTween?.stop();
+    this.windupTween = undefined;
+    this.setScale(this.baseScale);
+    this.applyHpTint();
+  }
+
+  // Drives a full in-place telegraphed swing (wind-up → strike → recover →
+  // cooldown) for a simple melee enemy. Holds the enemy planted the whole
+  // time. Returns true on the single frame the strike connects — i.e. the
+  // player is still within cfg.reach at strike time, which is what makes
+  // dodging out during the wind-up actually work. The caller applies the
+  // damage (via Enemy.update()'s existing boolean contract).
+  //
+  // Call this every frame while the enemy wants to melee: the caller starts a
+  // swing by calling it once the player is in reach, and MUST keep calling it
+  // while isAttacking() even if the player leaves reach (that's the dodge).
+  protected tickMeleeSwing(
+    body: Phaser.Physics.Arcade.Body,
+    playerX: number,
+    playerY: number,
+    now: number,
+    cfg: SwingConfig,
+  ): boolean {
+    body.setVelocity(0, 0); // planted for the whole interaction
+    const dist = Phaser.Math.Distance.Between(this.x, this.y, playerX, playerY);
+
+    switch (this.attackPhase) {
+      case "windup":
+        if (this.attackElapsed(now) >= cfg.windupMs) {
+          this.attackPhase = "strike";
+          this.attackStartedAt = now;
+          this.endWindupTell();
+          const hit = dist <= cfg.reach; // hit-check against CURRENT position
+          this.pendingAttackKnockback = hit ? cfg.knockback ?? 0 : 0;
+          return hit;
+        }
+        return false;
+      case "strike":
+        if (this.attackElapsed(now) >= cfg.strikeMs) {
+          this.attackPhase = "recover";
+          this.attackStartedAt = now;
+        }
+        return false;
+      case "recover":
+        if (this.attackElapsed(now) >= cfg.recoverMs) {
+          this.attackPhase = "none";
+          this.lastAttackEndAt = now;
+        }
+        return false;
+      default:
+        // Not attacking: start a fresh swing if off cooldown. Facing is locked
+        // here (not re-tracked through the wind-up), so a player who steps
+        // around during the tell can dodge.
+        if (now - this.lastAttackEndAt >= cfg.cooldownMs) {
+          this.attackPhase = "windup";
+          this.attackStartedAt = now;
+          this.applyFacing(playerX - this.x, playerY - this.y);
+          this.playWindupTell(cfg.windupMs);
+        }
+        return false;
+    }
   }
 
   // Death feedback (fade), then the caller destroys/removes from tracking
