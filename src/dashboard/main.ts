@@ -91,6 +91,10 @@ interface EnemyAttack {
   label: string;
   damage: number;
   telegraphMs?: number; // souls-like readable window (boss only today)
+  // Elite variants deal +50% on most attacks, but a few use a fixed constant
+  // that isn't elite-scaled in code (the Gremlin's rock projectile uses a flat
+  // PROJECTILE_DAMAGE). Default true; set false for those.
+  eliteScales?: boolean;
 }
 interface EnemyStat {
   name: string;
@@ -142,7 +146,7 @@ const ENEMIES: EnemyStat[] = [
     speed: 70,
     aggro: 136,
     attacks: [
-      { label: "Rock (projectile, 220px)", damage: 8 },
+      { label: "Rock (projectile, 220px)", damage: 8, eliteScales: false },
       { label: "Claw (melee)", damage: 10 },
     ],
     loot: "1 Gremlin Skin, 1 Gremlin Blood",
@@ -430,7 +434,14 @@ function renderEnemies(): string {
 function renderBalance(): string {
   // Effective incoming damage after flat armor (floored at 1), at three armor
   // breakpoints: none, full base set, full upgraded set. Directly visualizes
-  // the "trivial damage in Lvl 2 armor" playtest complaint.
+  // the "trivial damage in Lvl 2 armor" playtest complaint. Both normal and
+  // elite (+50% dmg) attacks are listed.
+  //
+  // ASSUMPTION / FUTURE REWORK: "the full set" is just the sum over EVERY armor
+  // ItemDef — correct today only because exactly one armor set (Gremlin) exists,
+  // one piece per slot. Once multiple options per slot exist, summing all of them
+  // is wrong (you can't wear two chests). This tab will then need best-per-slot
+  // or a set picker, and likely more than one set column.
   const armorItems = Object.values(ITEM_DEFS).filter((d) => d.armorSlot);
   const baseSet = armorItems.reduce((s, d) => s + armorDefenseForTier(d.key, 0), 0);
   const upgSet = armorItems.reduce((s, d) => {
@@ -456,36 +467,58 @@ function renderBalance(): string {
       <div class="card"><div class="big">${upgSet}</div><div class="lbl">Full armor (Lvl 2)</div></div>
     </div>`;
 
+  const isBoss = (e: EnemyStat) => e.name.includes("BOSS");
+
   html += `<h3>Incoming damage vs armor — <span class="muted" style="font-weight:400">damage per hit (hits to kill you)</span></h3>
     <p class="legend">Armor is subtracted flat then floored at 1. <span class="neg">Red</span> = floored to ≤2,
-    i.e. the "1 damage per hit" trivial feel. This is the exact spot the light rebalance targets.</p>
+    i.e. the "1 damage per hit" trivial feel. <span class="tag" style="border-color:var(--bad);color:var(--bad)">Elite</span>
+    rows are the +50% variant — this is where you check whether armor still holds up. This is the exact spot the light rebalance targets.</p>
     <table><thead><tr>
       <th>Attack</th><th class="num">Raw</th><th class="num">No armor</th>
       <th class="num">Base set (${baseSet})</th><th class="num">Lvl 2 set (${upgSet})</th>
       </tr></thead><tbody>`;
-  const attackList: { label: string; raw: number }[] = [];
-  for (const e of ENEMIES) for (const a of e.attacks) attackList.push({ label: `${e.name}: ${a.label}`, raw: a.damage });
-  attackList.sort((a, b) => a.raw - b.raw);
+  // Both normal and elite entries; the elite row is skipped when it wouldn't
+  // differ (e.g. the Gremlin's non-scaled rock projectile) to avoid a dup.
+  const attackList: { label: string; raw: number; elite: boolean }[] = [];
+  for (const e of ENEMIES) {
+    for (const a of e.attacks) {
+      attackList.push({ label: `${e.name}: ${a.label}`, raw: a.damage, elite: false });
+      if (isBoss(e)) continue;
+      const eliteRaw = a.eliteScales === false ? a.damage : Math.round(a.damage * ELITE_MULT);
+      if (eliteRaw !== a.damage) attackList.push({ label: `${e.name}: ${a.label}`, raw: eliteRaw, elite: true });
+    }
+  }
+  attackList.sort((a, b) => a.raw - b.raw || Number(a.elite) - Number(b.elite));
   for (const a of attackList) {
-    html += `<tr><td>${esc(a.label)}</td><td class="num">${a.raw}</td>
+    const tag = a.elite
+      ? ` <span class="tag" style="border-color:var(--bad);color:var(--bad)">Elite</span>`
+      : "";
+    html += `<tr><td>${esc(a.label)}${tag}</td><td class="num">${a.raw}</td>
       ${cell(a.raw, 0)}${cell(a.raw, baseSet)}${cell(a.raw, upgSet)}</tr>`;
   }
-  html += `</tbody></table>`;
+  html += `</tbody></table>
+    <p class="legend">Note: the Elite Gremlin's <b>rock projectile stays 8</b> (fixed
+    <code>PROJECTILE_DAMAGE</code>, not elite-scaled in code) — only its melee claw gets +50%.</p>`;
 
-  // Weapon TTK vs each enemy.
+  // Weapon TTK vs each enemy, normal + elite HP (offense side — armor irrelevant).
   const weapons: WeaponType[] = ["wood_club", "stone_club", "bone_knife", "primal_spear"];
+  const ttkRow = (label: string, hp: number, elite: boolean) => {
+    const tag = elite ? ` <span class="tag" style="border-color:var(--bad);color:var(--bad)">Elite</span>` : "";
+    let row = `<tr><td>${esc(label)}${tag}</td><td class="num">${hp}</td>`;
+    for (const w of weapons) {
+      const dps = weaponDamage(w) * weaponAttacksPerSecond(w);
+      row += `<td class="num">${round1(hp / dps)}s</td>`;
+    }
+    return row + `</tr>`;
+  };
   html += `<h3>Time to kill — <span class="muted" style="font-weight:400">Lvl 1 weapon DPS vs enemy HP (seconds)</span></h3>
     <p class="legend">= HP ÷ (dmg × atk/s). Ignores the weapon-skill damage bonus, relics, and misses.</p>
     <table><thead><tr><th>Enemy</th><th class="num">HP</th>`;
   for (const w of weapons) html += `<th class="num">${esc(name(w))}</th>`;
   html += `</tr></thead><tbody>`;
   for (const e of ENEMIES) {
-    html += `<tr><td>${esc(e.name)}</td><td class="num">${e.hp}</td>`;
-    for (const w of weapons) {
-      const dps = weaponDamage(w) * weaponAttacksPerSecond(w);
-      html += `<td class="num">${round1(e.hp / dps)}s</td>`;
-    }
-    html += `</tr>`;
+    html += ttkRow(e.name, e.hp, false);
+    if (!isBoss(e)) html += ttkRow(e.name, Math.round(e.hp * ELITE_MULT), true);
   }
   html += `</tbody></table>`;
   return html;
