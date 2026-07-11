@@ -1,8 +1,55 @@
 # Status
 
-Last updated: 2026-07-10
+Last updated: 2026-07-11
 
-### Just finished: Timed action bars + slot-machine relic rolls
+### Just finished: Contextual hints + pause menu (playtest-readiness pass)
+
+Off the master-plan build order: the user paused M-TE (trophy gear) to instead polish the
+first biome enough for outside playtesters. The first item of that pass tackles the
+biggest cold-start problem — a fresh player has no idea what the goal is or how the
+controls work. Built on Opus (two new systems). Plan:
+`.claude/plans/contextual-hints-and-pause-menu.md`.
+
+- **`src/systems/Hints.ts`** (`HintManager`, framework-free like Run/Buffs) — a
+  Valheim-Hugin-style contextual tip system (explicitly **not** a mascot; the "raven" was
+  only a behavioral reference). `trigger(id)` shows a tip **once per run** if enabled
+  (idempotent — safe from a per-frame hover path). Locked with the user: **keep it a
+  challenge** — 8 tips teach controls + nudge toward mechanics but **never** spell out the
+  totem→altar→boss win condition. "Already shown" state **resets each run** (fresh instance
+  in `create()`); the **on/off preference persists** in localStorage
+  (`survivor-rpg:hints-enabled:v1`, tolerant of a blocked/corrupt store). Disabled is a
+  **true no-op that doesn't mark the hint shown**, so flipping hints back on mid-run still
+  surfaces future first-occurrences.
+- **`src/ui/HintUI.ts`** — corner popup card: right-edge, mid-height (~42%), clear of the
+  minimap/hotbar/prompt/left-column. Slides in from the right, holds 5.2s, fades, click to
+  dismiss; only one at a time (a new hint replaces the current). Flat scrollFactor(0)
+  objects (no Container), depth 2860/2861 (clears WORLD_H, below menus). The slide tween is
+  killed on replace so a stale `onComplete` can't fade the next card early.
+- **8 triggers** wired at existing hook points: `awaken` (spawn +1.5s: WASD + explore),
+  `pickup_reach` (first reachable free pickup: left-click to interact), `tool_locked`
+  (clicked a chop/mine node without the right tool KIND — nudges toward tools, **never
+  names which**, preserving the prompt-gating design), `open_menu` (first recipe unlock:
+  press Tab), `stamina_empty`, `low_hp` (≤30%: cooked food heals), `nightfall` (torch +
+  danger), `elite_trophy` (gremlin/boar/snake trophy in hand → Relic Forge; NOT the boss
+  fang, which is a win-state drop).
+- **`src/ui/PauseMenuUI.ts`** + MainScene wiring — a pause overlay (**Esc**), modeled on
+  RunEndUI. Chosen over a standalone settings panel because it delivers three playtest
+  needs at once: the pause players expect, a Resume/New Run escape hatch, and the home for
+  the Hints ON/OFF toggle (settings didn't exist). **Freeze:** `openPauseMenu()` sets
+  `isPaused`, zeroes player velocity, `physics.world.pause()`, `time.paused = true`;
+  `update()` early-returns on `isPaused` so `run.tick`/day-night never advance — **pausing
+  doesn't burn the speedrun clock**. Blocked once `runOver`/`isDead` (RunEndUI owns the
+  frozen world then). World pointerdown guarded with `isPaused`; **Esc** opens pause only
+  when no other menu is open (else it just closes that menu). All new fields reset in
+  `create()` per the `scene.restart()` field-init gotcha (with a defensive
+  `physics.world.resume()` + `time.paused = false` in case New Run was clicked from the
+  pause menu). Keybinds panel gained a `"Pause / close: Esc"` line for discoverability.
+- `tsc --noEmit` clean; preview console clean. Verified live: card renders + idempotent +
+  one-at-a-time; disabled no-op doesn't burn the hint (re-enable re-shows); pause freezes
+  physics + scene clock + `isPaused` and resumes clean; toggle persists. Screenshots of the
+  PAUSED overlay + the right-edge TIP card. No `RECIPES.md` change (no recipes touched).
+
+### Previously: Timed action bars + slot-machine relic rolls
 
 A playtest feel request from the user (off the standing roguelike loop, not a master-plan
 milestone): crafting/processing/cooking/relic-rolls all completed **instantly** — he wanted

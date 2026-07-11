@@ -100,6 +100,9 @@ import { clearHighScores, recordHighScore } from "../systems/HighScores";
 import type { ScoreEntry } from "../systems/HighScores";
 import { RunHudUI } from "../ui/RunHudUI";
 import { RunEndUI } from "../ui/RunEndUI";
+import { HintManager } from "../systems/Hints";
+import { HintUI } from "../ui/HintUI";
+import { PauseMenuUI } from "../ui/PauseMenuUI";
 import { DayNight } from "../systems/DayNight";
 import { NightOverlayUI, type ScreenLight } from "../ui/NightOverlayUI";
 import { RelicManager, TROPHY_ROLL, RELIC_DEFS, rarityName, type RollResult } from "../systems/Relics";
@@ -374,6 +377,14 @@ export class MainScene extends Phaser.Scene {
   private runEndUI!: RunEndUI;
   private runOver = false;
 
+  // Contextual hint system (tip popups) + pause overlay. `hints` resets each
+  // run (fresh instance in create()); its on/off preference persists. `isPaused`
+  // freezes the sim + input while the pause menu is up (Esc).
+  private hints = new HintManager();
+  private hintUI!: HintUI;
+  private pauseMenu!: PauseMenuUI;
+  private isPaused = false;
+
   // Day/night cycle (M-DN). dayNight is the clock; nightOverlay the darkness +
   // torch-light layer. wasNight tracks the previous frame's phase so the scene
   // can fire the day->night surge and night->day cleanup on the exact edge.
@@ -425,6 +436,13 @@ export class MainScene extends Phaser.Scene {
     // "New Run" is the clean full reset the design always intended.
     this.runOver = false;
     this.isDead = false;
+    // Hints: fresh per-run "already shown" state (the on/off pref persists in
+    // localStorage inside HintManager). Pause: clear the flag + defensively
+    // un-freeze physics/clock in case New Run was clicked from the pause menu.
+    this.hints = new HintManager();
+    this.isPaused = false;
+    this.physics.world.resume();
+    this.time.paused = false;
     this.run = new Run();
     // Day/night resets to dawn each run (M-DN). NightOverlayUI is a GameObject,
     // rebuilt in createHud() on every create(), so only the plain-object clock
@@ -590,7 +608,7 @@ export class MainScene extends Phaser.Scene {
         else if (pointer.rightButtonDown()) this.cancelPlacement();
         return;
       }
-      if (this.anyMenuOpen() || this.pointerOverHud(pointer)) return;
+      if (this.isPaused || this.anyMenuOpen() || this.pointerOverHud(pointer)) return;
       if (pointer.leftButtonDown()) {
         this.tryInteract();
       } else if (pointer.rightButtonDown()) {
@@ -643,6 +661,14 @@ export class MainScene extends Phaser.Scene {
     this.runHudUI = new RunHudUI(this);
     this.runEndUI = new RunEndUI(this);
 
+    // Contextual hints (tip popups) + pause menu (Esc). The hint UI just
+    // renders whatever HintManager decides to surface.
+    this.hintUI = new HintUI(this);
+    this.hints.onShow((text) => this.hintUI.show(text));
+    this.pauseMenu = new PauseMenuUI(this);
+    // Opening nudge: movement + goal, a beat after the world loads.
+    this.time.delayedCall(1500, () => this.hints.trigger("awaken"));
+
     // Scene-level drag: a slot starts it, the pointer drags a ghost icon, and
     // release resolves the move against whichever container is under the
     // pointer (backpack grid or hotbar). The Drying Rack's amount slider
@@ -672,16 +698,22 @@ export class MainScene extends Phaser.Scene {
       this.toggleCombinedMenu();
     });
     this.input.keyboard!.on("keydown-ESC", () => {
+      if (this.pauseMenu.isOpen()) return this.resumeGame();
       if (this.contextMenu.isOpen()) return this.contextMenu.close();
       if (this.placementMode) return this.cancelPlacement();
       if (this.upgradeMenu.isOpen()) return this.closeUpgradeMenu();
       if (this.characterMenu.isOpen()) return this.characterMenu.close();
-      this.closeDryingRackMenu();
-      this.closeCookingMenu();
-      this.closeChestMenu();
-      this.closeRelicForgeMenu();
-      this.craftingMenu.close();
-      this.inventoryMenu.close();
+      // If any in-game menu is open, Esc just closes it; otherwise Esc pauses.
+      if (this.anyMenuOpen()) {
+        this.closeDryingRackMenu();
+        this.closeCookingMenu();
+        this.closeChestMenu();
+        this.closeRelicForgeMenu();
+        this.craftingMenu.close();
+        this.inventoryMenu.close();
+        return;
+      }
+      this.openPauseMenu();
     });
     HOTBAR_KEYS.forEach((key, i) => {
       // Alt+1-9 selects the same column in row 2 (the dedicated
@@ -731,6 +763,10 @@ export class MainScene extends Phaser.Scene {
     // Run ended (death/win screen up) — freeze the whole world sim + input. The
     // RunEndUI is tween/pointer-driven, so it stays live regardless.
     if (this.runOver) return;
+    // Paused (Esc menu up) — same freeze, but resumable. Skipping the tick here
+    // is what keeps in-run time (the speedrun clock) from advancing while
+    // paused; physics + the scene clock are frozen alongside in openPauseMenu.
+    if (this.isPaused) return;
 
     if (this.isDead) {
       // Frozen: no Player.update() (no input/movement), but ambient systems
@@ -776,6 +812,9 @@ export class MainScene extends Phaser.Scene {
     this.runHudUI.update(this.run, this.dayNight);
     this.stamina.tick(delta);
     this.refreshStaminaBar();
+    // Contextual hints: nearly-empty stamina, and low HP (first time each run).
+    if (this.stamina.value() < 5) this.hints.trigger("stamina_empty");
+    if (this.health.value() / this.health.max <= 0.3) this.hints.trigger("low_hp");
     this.updateComfortRegen();
     // Food buffs heal over time; refresh the HP bar only when they actually
     // healed, and keep the buff HUD in sync each frame (countdown/expiry).
@@ -878,6 +917,7 @@ export class MainScene extends Phaser.Scene {
       spawn((x, y) => new RangedGremlin(this, { x, y, elite: this.rollElite(rng, NIGHT_ELITE_CHANCE_MULT) }));
     }
     this.eventLog.add("info", "Night falls — the forest stirs...");
+    this.hints.trigger("nightfall"); // first nightfall -> torch/danger nudge
   }
 
   // At dawn, remove any night-spawn that never aggro'd and is off-screen. Ones
@@ -2612,6 +2652,7 @@ export class MainScene extends Phaser.Scene {
     if (!inReach) return null;
 
     if (node.action === "pickup") {
+      this.hints.trigger("pickup_reach"); // first reachable free pickup
       return `[LMB] Pick up ${node.displayName}`;
     }
 
@@ -2751,7 +2792,12 @@ export class MainScene extends Phaser.Scene {
     if (node.action !== "pickup") {
       // Must have the matching tool KIND equipped to chop/mine.
       const kind = requiredKind(node.action);
-      if (!this.equippedTool || toolKind(this.equippedTool) !== kind) return;
+      if (!this.equippedTool || toolKind(this.equippedTool) !== kind) {
+        // Clicked a chop/mine node without the right tool KIND — nudge toward
+        // tools (never reveals which tool, preserving the prompt-gating design).
+        this.hints.trigger("tool_locked");
+        return;
+      }
       // (Future: also gate success on tool TIER here — a stone axe may be too
       // weak for a hardwood tree, which would show "[LMB] Chop" but fail.)
 
@@ -3045,6 +3091,32 @@ export class MainScene extends Phaser.Scene {
     }
   }
 
+  // Pause (Esc): freeze the sim so time-in-run doesn't advance while away.
+  // update() early-returns on isPaused; pausing physics + the scene clock
+  // stops body drift and timer/cooldown desync. Blocked once the run is over
+  // (the run-end screen owns the frozen world then).
+  private openPauseMenu(): void {
+    if (this.isPaused || this.runOver || this.isDead) return;
+    this.isPaused = true;
+    this.player.setVelocity(0, 0);
+    this.physics.world.pause();
+    this.time.paused = true;
+    this.pauseMenu.show({
+      hintsEnabled: () => this.hints.isEnabled(),
+      onToggleHints: () => this.hints.setEnabled(!this.hints.isEnabled()),
+      onResume: () => this.resumeGame(),
+      onNewRun: () => this.scene.restart(),
+    });
+  }
+
+  private resumeGame(): void {
+    if (!this.isPaused) return;
+    this.pauseMenu.hide();
+    this.time.paused = false;
+    this.physics.world.resume();
+    this.isPaused = false;
+  }
+
   // Finalize the run: freeze the world, post the score to the localStorage
   // high-score table, and show the run-end screen. Guarded so a death during
   // the post-win delay (or vice versa) can't double-post.
@@ -3186,6 +3258,11 @@ export class MainScene extends Phaser.Scene {
   private addToBackpack(key: string, amount: number): number {
     const leftover = this.backpack.add(key, amount);
     this.discovered.add(key);
+    // First elite trophy in hand -> nudge toward the Relic Forge (not the boss
+    // fang, which is a win-state drop, not a forge input the player farms).
+    if (key === "gremlin_trophy" || key === "boar_trophy" || key === "snake_trophy") {
+      this.hints.trigger("elite_trophy");
+    }
     this.refreshDiscovery();
     return leftover;
   }
@@ -3194,6 +3271,8 @@ export class MainScene extends Phaser.Scene {
   // any resource pickup, skill level-up, or workbench placement.
   private refreshDiscovery(): void {
     const unlocked = this.crafting.refresh(this.discovered, this.skills, this.hasWorkbenchPlaced());
+    // First recipe of the run becomes craftable -> point at the Tab menu.
+    if (unlocked.length > 0) this.hints.trigger("open_menu");
     for (const recipe of unlocked) {
       const icon = itemDef(outputKey(recipe))?.texture;
       this.eventLog.add("recipe", `New Recipe Unlocked! ${recipe.name}`, icon);
@@ -4046,6 +4125,7 @@ export class MainScene extends Phaser.Scene {
         "Row2 scroll toggle: H",
         "Take all (chest): R",
         "Run info toggle: J",
+        "Pause / close: Esc",
       ],
     );
 

@@ -826,6 +826,48 @@ mouse-driven only. Don't reintroduce a keybind for this without being asked. Spa
      `announceRoll` dep, not at click, so the payoff is the satisfying moment.
    - No `RECIPES.md` change (no recipe/cost changes). See `STATUS.md` for full verification.
 
+5q. **Contextual hints + pause menu (playtest-readiness pass)** — plan:
+   `.claude/plans/contextual-hints-and-pause-menu.md`; built on Opus (two new systems).
+   **Off the master-plan build order:** the user paused **M-TE (trophy gear)** to first polish
+   the first biome enough for outside playtesters — the biggest gap being a cold-start
+   problem (a fresh player has no idea what the goal is or how the mouse-only controls +
+   ~10 keybinds work, and the Keybinds panel defaults collapsed). This is the first item of
+   that polish pass. **`src/systems/Hints.ts`** (`HintManager`, framework-free like
+   `Run`/`Buffs`) is a Valheim-Hugin-style contextual tip system — explicitly **NOT a
+   mascot** (the "raven" was only the user's behavioral reference). `trigger(id)` shows a tip
+   **once per run** if enabled (idempotent — safe from a per-frame hover path). Locked
+   design (the user): **keep it a challenge, no hand-holding** — the 8 tips teach controls +
+   nudge toward mechanics but **never** spell out the totem→altar→boss win condition. The
+   "already shown" set **resets each run** (fresh instance in `create()`), while the
+   **on/off preference persists** in `localStorage` (`survivor-rpg:hints-enabled:v1`); a
+   disabled hint is a **true no-op that doesn't mark itself shown**, so re-enabling mid-run
+   still surfaces future first-occurrences. **`src/ui/HintUI.ts`** is a corner popup card
+   (right-edge, mid-height, clear of minimap/hotbar/prompt/left-column) that slides in,
+   holds 5.2s, fades, click-to-dismiss; one at a time (a new hint replaces the current);
+   flat scrollFactor(0) objects, depth 2860/2861 (clears WORLD_H per the fixed-HUD-depth
+   rule). The 8 triggers wire into existing hook points: `awaken` (spawn), `pickup_reach`,
+   `tool_locked` (clicked a chop/mine node without the right tool KIND — nudges toward tools
+   but **never names which**, preserving the prompt-gating design), `open_menu` (first
+   recipe unlock → Tab), `stamina_empty`, `low_hp` (≤30%), `nightfall`, `elite_trophy`
+   (gremlin/boar/snake trophy picked up → Relic Forge; NOT `gremlin_king_fang`, a win-state
+   drop). **`src/ui/PauseMenuUI.ts`** is a pause overlay (**Esc**), modeled on `RunEndUI` —
+   chosen over a standalone settings panel because it covers three playtest needs at once:
+   the pause players expect, a Resume/New Run escape hatch, and the home for the Hints
+   ON/OFF toggle (settings/menu didn't exist). **Freeze:** `openPauseMenu()` sets
+   `isPaused`, zeroes player velocity, `physics.world.pause()`, `time.paused = true`;
+   `update()` early-returns on `isPaused` so `run.tick`/day-night never advance —
+   **pausing doesn't burn the speedrun clock**. Blocked once `runOver`/`isDead` (RunEndUI
+   owns the frozen world then); world pointerdown guarded with `isPaused`; **Esc** opens
+   pause only when no other menu is open (else it just closes that menu). All new fields
+   reset in `create()` per the `scene.restart()` field-init gotcha (with a defensive
+   `physics.world.resume()` + `time.paused = false` in case New Run was clicked from the
+   pause menu). The Keybinds panel gained a `"Pause / close: Esc"` line for discoverability.
+   No `RECIPES.md` change. **Remaining playtest-polish backlog** (from the same cold-start
+   analysis, best partly driven by playtester feedback): discovered-material toast, hover
+   highlight on interactables, inventory auto-sort, the minimap nearby-view + full-map
+   rework, a ranged starter weapon, passive HP regen, and a balance pass. **M-TE stays
+   queued** behind this polish pass.
+
 **A new umbrella plan for the long-requested roguelike run/score meta-loop** now exists:
 `.claude/plans/roguelike-metaloop-master-plan.md` (drafted 2026-07-10, locked build order
 confirmed by the user). It supersedes/finalizes several open questions in the **Long-term
