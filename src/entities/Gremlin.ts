@@ -23,7 +23,7 @@ const RANGED_MIN_KITE_DIST = 140; // closer than this -> flee; keeps some daylig
 const RANGED_PURSUE_SPEED = 70; // chases in while out of shot range (beyond PROJECTILE_MAX_RANGE)
 const RANGED_MELEE_RANGE = 20; // player closing to this -> switches to melee mode (~15% shorter, playtest feedback)
 const RANGED_MELEE_EXIT_RANGE = 34; // must back out past this (not just RANGED_MELEE_RANGE) to leave melee mode — hysteresis gap, same reasoning as AGGRO/DEAGGRO_RADIUS elsewhere: without it, the player-enemy physics collider's constant separation jitter flips the mode every frame right at the boundary
-const RANGED_CLAW_DAMAGE = 10; // punishes closing the distance, higher than a single throw
+const RANGED_CLAW_DAMAGE = 15; // was 10 — light enemy-dmg buff (2026-07-11 rebalance): gremlins were floored to 1 dmg vs Lvl2+ armor
 // Telegraphed close-range claw — a rare "back off!" swipe the kiter only does
 // when the player is right on top of it (the user: it should rarely fire). The
 // shove knockback reinforces its kiter identity: it hits, pushes you away, and
@@ -38,7 +38,7 @@ const RANGED_CLAW_SWING: SwingConfig = {
   knockback: 210,
 };
 const PROJECTILE_SPEED = 220;
-const PROJECTILE_DAMAGE = 8;
+const PROJECTILE_DAMAGE = 11; // was 8 — light enemy-dmg buff (2026-07-11 rebalance)
 const PROJECTILE_MAX_RANGE = 220; // ~15% shorter, playtest feedback
 const RANGED_MAX_HEALTH = 32; // doubled 2026-07-07 (was 16) — tanky enough to trade at range
 // Burst pattern (2026-07-07 spec): once the player is in range, fire a quick
@@ -300,7 +300,7 @@ const MELEE_DEAGGRO_RADIUS = 220;
 const MELEE_CHASE_SPEED = 70;
 const MELEE_WANDER_SPEED = 20;
 const MELEE_RANGE = 20; // ~15% shorter, playtest feedback
-const MELEE_CLAW_DAMAGE = 8; // weaker than the ranged variant's fallback claw (10) and Boar's bite (25)
+const MELEE_CLAW_DAMAGE = 12; // was 8 — light enemy-dmg buff (2026-07-11); still weaker than the ranged variant's claw (15) and Boar's bite (25)
 const MELEE_MAX_HEALTH = 12;
 // Snappy telegraphed claw for the weak trash Gremling — the intentionally
 // simple, still-kiteable baseline: a quick wind-up + short recovery, just

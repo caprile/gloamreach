@@ -178,3 +178,65 @@ end); applied rows vanished; mid-bar close consumed nothing; max tier showed "Fu
 **Still queued from the triage:** the enemy-damage-buff half of the rebalance, boss damage bump +
 GremlinKing cleave replacement, 2 small features (Workbench-placement hint, in-game relic
 compendium). Then master-plan tail M-TE → M-W1.
+
+## Follow-up: enemy-dmg buff + boss dmg bump + GremlinKing "leaping smash" (shipped 2026-07-11)
+
+The remaining balance half of the triage's "light both rebalance," plus the boss damage bump and
+the cleave-replacement design. Number tuning + swapping one attack inside the existing GremlinKing
+state machine (Sonnet-class; built on Opus). the user locked the two open forks via `AskUserQuestion`:
+cleave replacement = **leaping smash** (over spinning-sweep / ground-fissure / summon-adds); scope =
+**full balance pass this session**.
+
+**Enemy-dmg buff — gremlin-only (the actual "1 dmg/hit" culprit).** The dashboard Balance tab showed
+flat mitigation (`max(1, round(dmg − def))`) floored the gremlins' 8-10 dmg to **1** vs Lvl-2 (10) /
+Lvl-3 (13) armor, while Boar (25) / Snake (20) still hurt. So the buff is targeted, not
+across-the-board (keeps it "light") — `src/entities/Gremlin.ts`:
+
+- `RANGED_CLAW_DAMAGE` **10→15**, `PROJECTILE_DAMAGE` **8→11**, `MELEE_CLAW_DAMAGE` **8→12**.
+- Ordering preserved (projectile 11 < gremling claw 12 < ranged claw 15 < Snake 20 < Boar 25);
+  elite ×1.5 scales automatically (claw → 23/18). Boar/Snake untouched — already threatening;
+  buffing them would be "heavy," not "light."
+- Net: vs Lvl-2 armor gremlins now chip ~2-5 (was 1); vs Lvl-3 they trickle to 1-2.
+
+**Boss dmg bump — ~2-shot a full-armor player (the user's spec).** `GremlinKing.ts`: `CHARGE_DAMAGE`
+**40→55**, `SLAM_DAMAGE` **45→55**, new `SMASH_DAMAGE` **60**. Sized so two hits through full armor
+(Lvl-3 = 13) roughly kill a base 100-HP player (`(60−13)×2 = 94`). All three stay fully
+telegraphed/dodgeable — the threat is "respect the tells," not an undodgeable wall.
+
+**Leaping smash replaces the cleave.** The old 140° forward cleave read as "just a worse 360° slam"
+(the user). Replaced with a **gap-closer** in the same telegraph/execute/recover machine:
+
+- At telegraph-start the boss **locks the player's position** (clamped to `SMASH_MAX_LEAP` = 380px,
+  same non-homing pattern as the charge target — new `smashTargetX/Y`), draws a **growing
+  landing-zone marker circle at that locked point** (distinct from the boss's own position, so the
+  danger zone reads separately), then leaps to it over `SMASH_LEAP_MS` (300ms) and impacts a 120px
+  AoE + 220 knockback on landing.
+- It **punishes running away** (the zone chases where you *were*) — the dodge is to step laterally
+  out of the marked circle during the 780ms telegraph. Genuinely different read from charge (fixed
+  line, sidestep) and slam (fires where the boss stands).
+- New plumbing: `smashTargetX/Y`, `smashLanded`, `smashElapsed`; `checkPlayerHit` gates the AoE on
+  `smashLanded` so it only connects *after* the leap arrives (null mid-air — verified). Landing is
+  driven by arrival-within-`SMASH_LAND_EPS` OR `smashElapsed >= SMASH_LEAP_MS`, then a brief
+  `SMASH_IMPACT_MS` (130ms) planted strike window before recover. `MELEE_STOP_RANGE` replaces
+  `CLEAVE_RANGE` as the approach-stop distance. `BossAttackType` `cleave`→`smash` throughout;
+  `telegraphMsFor` / `recoverMsFor` / `pickAttack` / `drawTelegraph` / `beginExecute` /
+  `updateExecuting` all updated.
+
+**Dashboard Enemies tab** (`src/dashboard/main.ts` — the one hand-mirrored data source, per the
+dashboard's known drift caveat) updated: gremlin damages, the boss attack list (Leaping Smash 60 /
+Charge 55 / Slam 55), and two now-stale "no telegraph" notes corrected. No `RECIPES.md` change.
+
+**Files touched:** `src/entities/Gremlin.ts`, `src/entities/GremlinKing.ts`, `src/dashboard/main.ts`
+(+ STATUS.md, CLAUDE.md boss note).
+
+**Verification:** `tsc --noEmit` clean; preview boots error-free. Drove a live-spawned boss via
+`preview_eval`: a synchronous state-machine walk asserted `checkPlayerHit` returns null mid-leap and
+`{60, kb 220}` only after `smashLanded`, plus charge `{55}` / slam `{55, kb 260}`; a second **async**
+eval under the real physics loop confirmed the leap actually moves the boss — it landed exactly on
+the locked point (`distToTarget: 0`, `movedFromStart: 380` = clamped max toward a far player).
+`preview_screenshot` confirmed the landing-zone marker renders as a distinct offset circle. Live
+enemies read the new claw damages (Gremlin 15 / Gremling 12, elites 23/18; Boar 25 / Snake 20
+unchanged). Zero console errors.
+
+**Still queued from the triage:** 2 small features (Workbench-placement contextual hint, in-game
+relic compendium). Then master-plan tail M-TE → M-W1.

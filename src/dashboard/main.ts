@@ -135,10 +135,10 @@ const ENEMIES: EnemyStat[] = [
     hp: 12,
     speed: 70,
     aggro: 110,
-    attacks: [{ label: "Claw", damage: 8 }],
+    attacks: [{ label: "Claw", damage: 12 }],
     loot: "1 Gremlin Blood",
     trophy: "Gremlin Trophy (elite)",
-    notes: "Plain chase + claw.",
+    notes: "Telegraphed claw (wind-up → strike → recover).",
   },
   {
     name: "Gremlin (ranged)",
@@ -146,8 +146,8 @@ const ENEMIES: EnemyStat[] = [
     speed: 70,
     aggro: 136,
     attacks: [
-      { label: "Rock (projectile, 220px)", damage: 8, eliteScales: false },
-      { label: "Claw (melee)", damage: 10 },
+      { label: "Rock (projectile, 220px)", damage: 11, eliteScales: false },
+      { label: "Claw (melee, telegraphed)", damage: 15 },
     ],
     loot: "1 Gremlin Skin, 1 Gremlin Blood",
     trophy: "Gremlin Trophy (elite)",
@@ -159,9 +159,9 @@ const ENEMIES: EnemyStat[] = [
     speed: 45,
     aggro: 260,
     attacks: [
-      { label: "Cleave (140° arc, 90px)", damage: 30, telegraphMs: 550 },
-      { label: "Charge (line, dodgeable)", damage: 40, telegraphMs: 850 },
-      { label: "Ground Slam (AoE 150px + knockback)", damage: 45, telegraphMs: 950 },
+      { label: "Leaping Smash (leap to locked spot, AoE 120px + knockback)", damage: 60, telegraphMs: 780 },
+      { label: "Charge (line, dodgeable)", damage: 55, telegraphMs: 850 },
+      { label: "Ground Slam (AoE 150px + knockback)", damage: 55, telegraphMs: 950 },
     ],
     loot: "Gremlin King Fang (unique)",
     notes:

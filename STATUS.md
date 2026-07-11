@@ -2,7 +2,62 @@
 
 Last updated: 2026-07-11
 
-### Just finished: Armor rebalance (3-tier set) + upgrade-menu polish
+### Just finished: Enemy-dmg buff + boss dmg bump + GremlinKing "leaping smash"
+
+The remaining balance half of the 25-min-playtest triage's "light both rebalance"
+([[survivor-rpg-playtest-feedback-2026-07-11]]), plus the boss damage bump and the
+cleave-replacement design. Number tuning + swapping one attack inside the *existing*
+GremlinKing state machine — Sonnet-class work, built on Opus. the user locked the two open
+forks via `AskUserQuestion`: cleave replacement = **leaping smash**; scope = **full balance
+pass this session**.
+
+**Enemy-dmg buff (gremlin-focused).** The dashboard Balance tab confirmed the "1 dmg/hit in
+Lvl 2 armor" complaint was *specifically the gremlins* — flat mitigation
+(`max(1, round(dmg − def))`) floored their 8-10 dmg to 1 against Lvl-2 (10) / Lvl-3 (13)
+armor, while Boar (25) / Snake (20) still hurt. So the buff is a targeted gremlin bump, not
+across-the-board (keeps it "light"): `RangedGremlin` claw **10→15**, projectile **8→11**,
+`Gremling` claw **8→12** (`src/entities/Gremlin.ts`). Ordering preserved
+(projectile < gremling claw < ranged claw < Snake < Boar); elite ×1.5 scales automatically
+(claw→23/18). vs Lvl-2 armor gremlins now chip ~2-5 instead of 1; vs Lvl-3 they trickle to
+1-2. Boar/Snake untouched (already threatening; buffing them would be "heavy").
+
+**Boss dmg bump (~2-shot a full-armor player).** `GremlinKing.ts` charge **40→55**, slam
+**45→55**, new smash **60** — sized so two hits through full armor (Lvl-3 = 13) roughly kill
+a base 100-HP player (e.g. `(60−13)×2 = 94`). All three stay fully telegraphed/dodgeable, so
+the threat is "respect the tells," not an undodgeable wall.
+
+**Leaping smash replaces the cleave.** The old 140° forward cleave read as "just a worse
+360° slam" (the user). Replaced with a **gap-closer**: at telegraph-start the boss locks the
+player's position (clamped to `SMASH_MAX_LEAP` = 380px, like the charge target), draws a
+growing **landing-zone marker circle at that locked point** (distinct from the boss's own
+position), then leaps to it over `SMASH_LEAP_MS` (300ms) and impacts a 120px AoE + knockback
+on landing. It *punishes running away* (the zone chases where you were) — dodge is to step
+laterally out of the marked circle during the 780ms telegraph, a genuinely different read
+from charge (fixed line, sidestep) and slam (fires where the boss stands). New state plumbing:
+`smashTargetX/Y` + `smashLanded`/`smashElapsed`; `checkPlayerHit` gates the AoE on
+`smashLanded` so it only connects after the leap arrives (null mid-air). `MELEE_STOP_RANGE`
+(was `CLEAVE_RANGE`) is the new approach-stop distance. `BossAttackType` `cleave`→`smash`
+throughout; `telegraphMsFor`/`recoverMsFor`/`pickAttack`/`drawTelegraph`/`beginExecute`/
+`updateExecuting` all updated.
+
+**Dashboard Enemies tab** (the one hand-mirrored data source) updated: gremlin damages, boss
+attack list (Leaping Smash 60 / Charge 55 / Slam 55), and two now-stale "no telegraph" notes
+corrected. No `RECIPES.md` change (no recipe/cost changes).
+
+**Verification:** `tsc --noEmit` clean; preview boots error-free. Drove a live-spawned boss
+via `preview_eval`: synchronous state-machine walk asserted `checkPlayerHit` returns null
+mid-leap and `{60, kb 220}` only after `smashLanded`, plus charge `{55}` / slam `{55, kb 260}`;
+a second **async** eval under the real physics loop confirmed the leap actually moves the boss
+— it landed exactly on the locked point (`distToTarget: 0`, `movedFromStart: 380` = clamped
+max toward a far player). `preview_screenshot` confirmed the landing-zone marker renders as a
+distinct offset circle. Live enemies read the new claw damages (Gremlin 15 / Gremling 12,
+elites 23/18; Boar 25 / Snake 20 unchanged). Zero console errors.
+
+**Still queued from the triage:** 2 small features — Workbench-placement contextual hint
+(`Hints.ts`) and an in-game relic compendium. Then the master-plan tail: **M-TE** (trophy
+gear), **M-W1** (multi-biome world).
+
+### Previously: Armor rebalance (3-tier set) + upgrade-menu polish
 
 The armor half of the 25-min-playtest triage's "light both rebalance"
 ([[survivor-rpg-playtest-feedback-2026-07-11]]). Number tuning + extending the existing

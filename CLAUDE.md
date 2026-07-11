@@ -396,7 +396,11 @@ mouse-driven only. Don't reintroduce a keybind for this without being asked. Spa
      BAR_OFFSET_Y` from `private` to `protected static readonly`) hits 0 —
      staggered grants **1.5x damage** (`GremlinKing.STAGGER_DAMAGE_MULTIPLIER`,
      applied in `MainScene.tryAttackEnemy()`) for a 3s punish window, then
-     resets. Three melee/AoE attacks (no projectiles): a wide **cleave** arc,
+     resets. Three melee/AoE attacks (no projectiles): a wide **cleave** arc
+     (*superseded 2026-07-11 by a **leaping smash** — see `STATUS.md`; the
+     cleave read as "just a worse 360° slam" and was replaced with a gap-closer
+     that leaps to a locked landing point and impacts an AoE, alongside a boss
+     damage bump*),
      a **charge** whose target is locked at telegraph-start and never re-read
      (so it's genuinely sidestep-dodgeable, not homing — the closest existing
      precedent, `Snake`'s lunge, re-aims every frame and was deliberately NOT

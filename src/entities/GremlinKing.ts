@@ -11,7 +11,7 @@ import { Enemy } from "./Enemy";
 // substitute). Designed entirely around the player's EXISTING dash/i-frame
 // toolkit; no new player ability was added for this fight.
 export type BossState = "idle" | "telegraphing" | "executing" | "recovering" | "staggered";
-export type BossAttackType = "cleave" | "charge" | "slam";
+export type BossAttackType = "smash" | "charge" | "slam";
 
 const BOSS_MAX_HEALTH = 600;
 const BOSS_SCALE = 2.4;
@@ -25,12 +25,23 @@ export const STAGGER_DAMAGE_MULTIPLIER = 1.5; // exported for MainScene.tryAttac
 const POISE_REGEN_DELAY_MS = 4000; // only resumes this long after the last hit that chipped it
 const POISE_REGEN_PER_SEC = 15;
 
-const CLEAVE_TELEGRAPH_MS = 550;
-const CLEAVE_EXECUTE_MS = 200;
-const CLEAVE_RECOVER_MS = 700;
-const CLEAVE_RANGE = 90; // was 70 — playtest (M-R1 first clear) found the AoE read as too small
-const CLEAVE_ARC_DEG = 140; // was 120
-const CLEAVE_DAMAGE = 30; // was 22 — playtest damage bump
+// Leaping smash — REPLACED the old forward cleave (2026-07-11), which read as
+// "just a worse 360° slam." A gap-closer instead: the boss locks the player's
+// position at telegraph start, leaps to it, and impacts an AoE on landing —
+// distinct from charge (rushes a fixed line, dodged by sidestepping) and slam
+// (fires where the boss already stands). This one punishes RUNNING AWAY: the
+// landing zone chases where you were, so the dodge is to move laterally out of
+// the marked circle during the telegraph, not to sprint straight back.
+const SMASH_TELEGRAPH_MS = 780; // read the locked landing marker, then move off it
+const SMASH_LEAP_MS = 300; // airtime traveling to the locked landing point
+const SMASH_IMPACT_MS = 130; // planted beat on landing — the strike window checkPlayerHit fires in
+const SMASH_RECOVER_MS = 750; // punish window after the impact
+const SMASH_MAX_LEAP = 380; // cap leap distance — closes gaps, but no cross-arena teleport
+const MELEE_STOP_RANGE = 90; // boss stops approaching (and may attack) inside this — was CLEAVE_RANGE
+const SMASH_RADIUS = 120; // AoE radius at the landing point
+const SMASH_DAMAGE = 60; // ~2-shots a full-armor (Lvl3 = 13) 100-HP player: (60-13)*2 = 94
+const SMASH_KNOCKBACK = 220;
+const SMASH_LAND_EPS = 10; // px — treat as "arrived" within this of the locked point
 
 const CHARGE_TELEGRAPH_MS = 850; // dodge window stays readable — only the dash itself sped up
 const CHARGE_SPEED = 480; // was 340 — playtest: "line attack should be faster"
@@ -43,13 +54,13 @@ const CHARGE_RECOVER_MS = 900;
 // MainScene.enemyReach()'s attack/prompt-reach scaling for normal enemies,
 // just not previously applied to the boss's own charge math.
 const CHARGE_HIT_RADIUS = 34 * BOSS_SCALE;
-const CHARGE_DAMAGE = 40; // was 30 — playtest damage bump
+const CHARGE_DAMAGE = 55; // was 40 — 2026-07-11 boss dmg bump (~2-shot a full-armor player)
 
 const SLAM_TELEGRAPH_MS = 950;
 const SLAM_EXECUTE_MS = 150;
 const SLAM_RECOVER_MS = 800;
 const SLAM_RADIUS = 150; // was 110 — playtest: "aoes should be bigger"
-const SLAM_DAMAGE = 45; // was 35 — playtest damage bump
+const SLAM_DAMAGE = 55; // was 45 — 2026-07-11 boss dmg bump (~2-shot a full-armor player)
 const SLAM_KNOCKBACK = 260;
 
 // Phase 2 (<50% HP): shorter telegraphs/recovery + faster approach — NOT more
@@ -66,13 +77,13 @@ const ATTACK_COOLDOWN_MS = 950; // was 1200 — playtest: boss was too passive b
 const POISE_BAR_OFFSET_Y = 10; // px below the inherited HP bar's own line
 
 function telegraphMsFor(attack: BossAttackType): number {
-  if (attack === "cleave") return CLEAVE_TELEGRAPH_MS;
+  if (attack === "smash") return SMASH_TELEGRAPH_MS;
   if (attack === "charge") return CHARGE_TELEGRAPH_MS;
   return SLAM_TELEGRAPH_MS;
 }
 
 function recoverMsFor(attack: BossAttackType): number {
-  if (attack === "cleave") return CLEAVE_RECOVER_MS;
+  if (attack === "smash") return SMASH_RECOVER_MS;
   if (attack === "charge") return CHARGE_RECOVER_MS;
   return SLAM_RECOVER_MS;
 }
@@ -99,6 +110,13 @@ export class GremlinKing extends Enemy {
   private chargeLineEndX = 0;
   private chargeLineEndY = 0;
   private chargeTraveled = 0;
+
+  // Leaping smash: landing point locked at telegraph-start (like the charge
+  // target), then a timed leap to it, then a brief planted impact window.
+  private smashTargetX = 0;
+  private smashTargetY = 0;
+  private smashLanded = false;
+  private smashElapsed = 0;
 
   // One attack instance can only land once, not once per overlapping frame.
   private hasHitThisAttack = false;
@@ -219,7 +237,7 @@ export class GremlinKing extends Enemy {
     }
 
     const moveSpeed = BOSS_MOVE_SPEED * (this.enraged ? ENRAGE_MOVE_MULTIPLIER : 1);
-    if (dist > CLEAVE_RANGE) {
+    if (dist > MELEE_STOP_RANGE) {
       const angle = Phaser.Math.Angle.Between(this.x, this.y, playerX, playerY);
       const vx = Math.cos(angle) * moveSpeed;
       const vy = Math.sin(angle) * moveSpeed;
@@ -232,7 +250,7 @@ export class GremlinKing extends Enemy {
   }
 
   private pickAttack(): BossAttackType {
-    const options: BossAttackType[] = ["cleave", "charge", "slam"];
+    const options: BossAttackType[] = ["smash", "charge", "slam"];
     const pool = this.lastAttack ? options.filter((a) => a !== this.lastAttack) : options;
     const choice = pool[Phaser.Math.Between(0, pool.length - 1)];
     this.lastAttack = choice;
@@ -251,6 +269,15 @@ export class GremlinKing extends Enemy {
       const angle = Phaser.Math.Angle.Between(this.x, this.y, playerX, playerY);
       this.chargeLineEndX = this.x + Math.cos(angle) * CHARGE_MAX_DISTANCE;
       this.chargeLineEndY = this.y + Math.sin(angle) * CHARGE_MAX_DISTANCE;
+    } else if (attack === "smash") {
+      // Lock the landing point at the player's CURRENT spot, clamped to a max
+      // leap so it can't cross the arena. Never re-read after this — the dodge
+      // is to leave the marked circle during the telegraph.
+      const dist = Phaser.Math.Distance.Between(this.x, this.y, playerX, playerY);
+      const angle = Phaser.Math.Angle.Between(this.x, this.y, playerX, playerY);
+      const leapDist = Math.min(dist, SMASH_MAX_LEAP);
+      this.smashTargetX = this.x + Math.cos(angle) * leapDist;
+      this.smashTargetY = this.y + Math.sin(angle) * leapDist;
     }
   }
 
@@ -271,9 +298,19 @@ export class GremlinKing extends Enemy {
       const angle = Phaser.Math.Angle.Between(this.x, this.y, this.chargeTargetX, this.chargeTargetY);
       body.setVelocity(Math.cos(angle) * CHARGE_SPEED, Math.sin(angle) * CHARGE_SPEED);
       this.applyFacing(Math.cos(angle) * CHARGE_SPEED, Math.sin(angle) * CHARGE_SPEED);
+    } else if (this.currentAttack === "smash") {
+      // Leap to the locked landing point over SMASH_LEAP_MS — speed sized so it
+      // arrives right on time. Impact/hit only after it lands (see updateExecuting).
+      this.smashLanded = false;
+      this.smashElapsed = 0;
+      const dist = Phaser.Math.Distance.Between(this.x, this.y, this.smashTargetX, this.smashTargetY);
+      const angle = Phaser.Math.Angle.Between(this.x, this.y, this.smashTargetX, this.smashTargetY);
+      const speed = dist > 0 ? dist / (SMASH_LEAP_MS / 1000) : 0;
+      body.setVelocity(Math.cos(angle) * speed, Math.sin(angle) * speed);
+      this.applyFacing(Math.cos(angle), Math.sin(angle));
     } else {
       body.setVelocity(0, 0);
-      this.currentStateDurationMs = this.currentAttack === "cleave" ? CLEAVE_EXECUTE_MS : SLAM_EXECUTE_MS;
+      this.currentStateDurationMs = SLAM_EXECUTE_MS;
     }
   }
 
@@ -285,6 +322,24 @@ export class GremlinKing extends Enemy {
         body.setVelocity(0, 0);
         this.beginRecover(now);
       }
+      return;
+    }
+    if (this.currentAttack === "smash") {
+      if (!this.smashLanded) {
+        // Airborne: leap toward the locked point until we arrive (or airtime elapses).
+        this.smashElapsed += delta;
+        const dist = Phaser.Math.Distance.Between(this.x, this.y, this.smashTargetX, this.smashTargetY);
+        if (dist <= SMASH_LAND_EPS || this.smashElapsed >= SMASH_LEAP_MS) {
+          body.setVelocity(0, 0);
+          this.smashLanded = true;
+          // The impact/strike window: hold planted briefly so checkPlayerHit
+          // (called the same frame from MainScene) can register the AoE.
+          this.stateEnteredAt = now;
+          this.currentStateDurationMs = SMASH_IMPACT_MS;
+        }
+        return;
+      }
+      if (now >= this.stateEnteredAt + this.currentStateDurationMs) this.beginRecover(now);
       return;
     }
     if (now >= this.stateEnteredAt + this.currentStateDurationMs) this.beginRecover(now);
@@ -321,13 +376,14 @@ export class GremlinKing extends Enemy {
       1,
     );
 
-    if (this.currentAttack === "cleave") {
-      const facing = this.rotation - Math.PI; // Enemy sprites drawn nose-left, see applyFacing's +PI convention
-      const half = Phaser.Math.DegToRad(CLEAVE_ARC_DEG / 2);
-      g.fillStyle(0xff3030, 0.1 + 0.3 * frac);
-      g.beginPath();
-      g.slice(this.x, this.y, CLEAVE_RANGE, facing - half, facing + half, false);
-      g.fillPath();
+    if (this.currentAttack === "smash") {
+      // Landing-zone marker at the LOCKED point (not the boss) — grows toward
+      // the true AoE size as the leap nears, telling the player where NOT to be.
+      const r = SMASH_RADIUS * (0.55 + 0.45 * frac);
+      g.fillStyle(0xff3030, 0.12 + 0.28 * frac);
+      g.fillCircle(this.smashTargetX, this.smashTargetY, r);
+      g.lineStyle(2, 0xff3030, 0.6);
+      g.strokeCircle(this.smashTargetX, this.smashTargetY, SMASH_RADIUS);
     } else if (this.currentAttack === "charge") {
       g.lineStyle(4, 0xff3030, 0.5);
       g.beginPath();
@@ -356,17 +412,13 @@ export class GremlinKing extends Enemy {
       this.hasHitThisAttack = true;
       return { damage: SLAM_DAMAGE, knockback: SLAM_KNOCKBACK };
     }
-    if (this.currentAttack === "cleave") {
-      if (dist > CLEAVE_RANGE) return null;
-      const toPlayer = Phaser.Math.Angle.Between(this.x, this.y, playerX, playerY);
-      const facing = this.rotation - Math.PI;
-      const diff = Phaser.Math.Angle.ShortestBetween(
-        Phaser.Math.RadToDeg(facing),
-        Phaser.Math.RadToDeg(toPlayer),
-      );
-      if (Math.abs(diff) > CLEAVE_ARC_DEG / 2) return null;
+    if (this.currentAttack === "smash") {
+      // Only lands after the leap connects — a radial AoE around the boss's
+      // landing spot (which is the locked target it just arrived at).
+      if (!this.smashLanded) return null;
+      if (dist > SMASH_RADIUS) return null;
       this.hasHitThisAttack = true;
-      return { damage: CLEAVE_DAMAGE };
+      return { damage: SMASH_DAMAGE, knockback: SMASH_KNOCKBACK };
     }
     if (this.currentAttack === "charge") {
       if (dist > CHARGE_HIT_RADIUS) return null;
