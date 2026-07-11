@@ -292,7 +292,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
       // wind-up → strike → recover cycle instead of biting on contact. The
       // strike re-checks the player's position, so backpedaling/dashing out
       // during the wind-up dodges it, and the recovery is a punish window.
-      if (this.isAttacking() || dist <= MELEE_RANGE) {
+      if (this.isAttacking() || dist <= MELEE_RANGE + this.reachBonus()) {
         const hit = this.tickMeleeSwing(body, playerX, playerY, now, BASE_SWING);
         if (hit) {
           this.markAttackLanded(now);
@@ -458,6 +458,21 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     this.applyHpTint();
   }
 
+  // Extra melee reach to offset the collider separation added by a larger
+  // (elite) body. The player↔enemy physics collider keeps their centers apart
+  // by roughly the sum of their body half-widths, so a sprite scaled up past 1
+  // can never get its center as close to the player's as a normal-sized one —
+  // a flat reach/strike threshold tuned for scale 1 then becomes unreachable
+  // (elite Gremling: 19.8px settle vs a 20px reach = whiffs the swing start on
+  // most approach angles). This returns exactly the half-width the scaling
+  // added, so an elite keeps the same effective reach-past-its-edge as a normal
+  // enemy. Uses baseScale (the resting size), not the live wind-up-pulsed scale,
+  // and is 0 for any unscaled enemy — mirrors MainScene.enemyReach()'s
+  // size-scaling, but for the enemy's OWN attack rather than the player's.
+  protected reachBonus(): number {
+    return Math.max(0, (this.baseScale - 1) * (Math.max(this.width, this.height) / 2));
+  }
+
   // Drives a full in-place telegraphed swing (wind-up → strike → recover →
   // cooldown) for a simple melee enemy. Holds the enemy planted the whole
   // time. Returns true on the single frame the strike connects — i.e. the
@@ -484,7 +499,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
           this.attackPhase = "strike";
           this.attackStartedAt = now;
           this.endWindupTell();
-          const hit = dist <= cfg.reach; // hit-check against CURRENT position
+          const hit = dist <= cfg.reach + this.reachBonus(); // hit-check against CURRENT position
           this.pendingAttackKnockback = hit ? cfg.knockback ?? 0 : 0;
           return hit;
         }

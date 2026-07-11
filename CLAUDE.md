@@ -960,6 +960,32 @@ mouse-driven only. Don't reintroduce a keybind for this without being asked. Spa
    it + a guard skips placement clicks over the crafting panel); **placed-object "Destroy" →
    "Pick up"** (it returns a recoverable item; backpack-stack "Destroy" — a real delete — kept);
    Relic Forge description dropped the stale "or combine relics". See `STATUS.md`.
+5u. **Elite melee reach fix** — off the build order, a live combat bug fix (Sonnet-class,
+   done on Opus alongside a brainstorm). An **elite** enemy's `setScale` also grows its
+   Arcade physics **body**, so the player↔enemy collider held their centers further apart
+   than the enemy's flat melee-start threshold — a scaled-up elite "ran up but never
+   attacked" (worst on diagonal approaches, hence "sometimes"). Fixed with a principled
+   `Enemy.reachBonus()` (`(baseScale-1) * max(width,height)/2` — the exact body-half the
+   scaling added; 0 for non-elites) applied to **every** melee reach check across the roster
+   (`tickMeleeSwing` strike, base/Gremling `MELEE_RANGE`, RangedGremlin enter/exit-melee,
+   Boar gore+charge, Snake lunge). It's the **mirror** of `MainScene.enemyReach()`: that
+   scales the *player's* reach vs big enemies, this scales the *enemy's own* reach vs its own
+   scaled body — any future scaled/elite enemy gets it for free. See `STATUS.md`.
+
+**Gloaming Vein (mineable rarity-ore POI + gated trophy refinement) — designed + locked,
+plan committed, NOT yet built.** Plan: `.claude/plans/amethyst-warding-vein.md` (locked with
+the user 2026-07-11 via brainstorm + `AskUserQuestion`; new mechanic → Opus). A rare, finite,
+purple ore POI (glows purple at night) hard-gated behind a mini-boss ("Gloamwarden");
+mining it yields a magical resource ("Gloam Shard") spent at the **Relic Forge's new "Refine"
+tab** to climb trophy rarity — turning crumble-prone raw Common trophies into
+guaranteed-roll Refined Uncommons. Locked rules: **species-agnostic** refined trophies;
+**single-step + terminal** refinement (raw→one-up only; refined trophies are roll-only, no
+refined→refined — so biome 1 caps at Refined Uncommon while the system already supports
+raw-Uncommon→Refined-Rare for deeper biomes); **biome-tiered** (Tier-1 shard refines Tier-1
+trophies; future biomes get a higher-tier, differently-themed ore needing a better pickaxe).
+This **deliberately overrides M-RL's "rarity not climbable / no manual combine" lock**, but
+as a *gated* climb (rare resource + mini-boss), consistent with "nothing free." Slots in
+ahead of M-TE as a content+economy pass on the M-RL relic loop.
 
 **A new umbrella plan for the long-requested roguelike run/score meta-loop** now exists:
 `.claude/plans/roguelike-metaloop-master-plan.md` (drafted 2026-07-10, locked build order
@@ -971,7 +997,9 @@ discovery) or 7 (ARPG loot). Locked build order: **M-FX (done) → M-R1 (Run/Sco
 Hardcore death, done — see 5h) → M-DN (Day/Night, done — see 5i) → Comfort item (was
 M-SB/Sleep-Bed, done — see 5j) → M-EL2 (generalized elite spawning, done — see 5k) →
 ~~M-FA~~ (cut, see 5l) → M-RL (trophy → RNG relics, done — see 5m; playtest follow-up 5n) →
-M-WC (Gremlin War Camp, done — see 5o) → **M-TE (trophy-gated gear), next** → M-W1 (circular
+M-WC (Gremlin War Camp, done — see 5o) → **Gloaming Vein (rarity-ore POI + trophy
+refinement — designed/locked, plan committed, NOT yet built; see 5u block above and
+`.claude/plans/amethyst-warding-vein.md`), next** → M-TE (trophy-gated gear) → M-W1 (circular
 multi-biome world, last).**
 
 **Not yet built — next up in rough order:**

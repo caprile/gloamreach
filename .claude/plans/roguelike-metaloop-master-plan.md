@@ -272,6 +272,27 @@ manual 2→1 combine ladder, then reworked the same day to the probabilistic eco
   line + read-only owned grid with T# power-tier badges — no combine bar) and `RelicBarUI`
   (bottom-left grouped-gem HUD strip with a T# badge, mirrors `BuffBarUI`).
 
+### M-GV — Gloaming Vein: rarity-ore POI + trophy refinement (M/L, Opus) — designed/locked, NOT built
+
+Added 2026-07-11 (brainstorm + `AskUserQuestion` with the user). Detailed plan:
+`.claude/plans/amethyst-warding-vein.md`. A content+economy pass on the shipped M-RL relic
+loop — adds a *gated* way to climb trophy rarity, which the forge already rewards heavily
+(Refined Uncommon trophies never fail a roll). Slots in **ahead of M-TE**.
+- A rare, finite, **mineable purple ore POI** (the "Gloaming Vein"; glows purple at night)
+  **hard-gated behind a mini-boss** ("Gloamwarden", bespoke AI à la GremlinKing but lighter).
+- Mining yields a magical resource ("Gloam Shard") spent at the **Relic Forge's new "Refine"
+  tab** to refine raw trophies one rarity up.
+- **Locked rules:** species-agnostic refined trophies; **single-step + terminal** refinement
+  (raw→one-up only, refined trophies are roll-only — biome 1 caps at Refined Uncommon, the
+  system already supports raw-Uncommon→Refined-Rare for deeper biomes); biome-tiered (needs a
+  better pickaxe deeper in). **Deliberately overrides the M-RL "rarity not climbable / no
+  manual combine" lock** — but as a *gated* climb (rare resource + mini-boss), consistent with
+  "nothing free."
+- Reuses: existing placement/hover/prompt-gating, the POI no-spawn exclusion zone,
+  `MinimapUI.revealLandmark()`, the M-DN night-light `collectLights()` pattern, the timed
+  `ProgressBar`, and the `RelicForgeMenu` (new tab). New: `Gloamwarden` entity, an ore
+  `ResourceNode` type, `gloam_shard`/`refined_trophy_*` items, and a `REFINE_RECIPES` table.
+
 ### M-TE — Trophy-crafted special equipment (M, Opus/Sonnet)
 
 - New **recipes gated on trophies** producing special items equippable in the **existing**
@@ -303,7 +324,9 @@ incremental ethos), then expand the world under it:
 6. **M-RL** (relics — the replayability hook) — **shipped** 2026-07-10 (detailed plan:
    `.claude/plans/radiant-binding-relic.md`; see `STATUS.md`).
 7. **M-WC** (Gremlin War Camp — **shipped** 2026-07-10, see the M-WC entry above /
-   `STATUS.md`) + **M-TE** (trophy-gated gear — **next up**) — content depth.
+   `STATUS.md`) → **M-GV** (Gloaming Vein rarity-ore POI + trophy refinement —
+   **designed/locked, plan committed, NEXT to build**, see the M-GV entry above /
+   `.claude/plans/amethyst-warding-vein.md`) → **M-TE** (trophy-gated gear) — content depth.
 8. **M-W1** (circular multi-biome world) — expand the world beneath a proven loop.
 
 ## Convention reminders for whoever picks these up

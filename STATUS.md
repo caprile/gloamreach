@@ -2,8 +2,8 @@
 
 ## Current State
 
-_Living snapshot — edit in place, never append. Last shipped: **5t** — 40-min
-playtest fix batch + relic rarity/tier rework, **2026-07-11**._
+_Living snapshot — edit in place, never append. Last shipped: **elite melee reach
+fix** (+ Gloaming Vein plan drafted), **2026-07-11**._
 
 **The game.** Top-down 2D pixel survival-ARPG (Phaser 3 + TypeScript + Vite; all
 textures are placeholders generated in `BootScene`). One forest biome on a ~2x world
@@ -24,11 +24,14 @@ M-DN / Comfort(M-SB) / M-EL2 / M-RL / M-WC all shipped; M-FA cut. Hardcore one-l
 death ends a run and posts a `localStorage` high score; killing the Gremlin King =
 win. Deterministic seeded world-gen is still deferred to M-W1.
 
-**In progress / next.** **M-TE** (trophy-gated special gear equippable in existing
-slots) is next in the locked build order, then **M-W1** (circular multi-biome world)
-last. A separate playtest-polish backlog also remains: discovered-material toast,
-hover highlight on interactables, inventory auto-sort, minimap nearby-view + full-map
-rework, a ranged starter weapon, and passive HP regen.
+**In progress / next.** **Gloaming Vein** (mineable rarity-ore POI + gated trophy
+refinement) is designed + locked with a committed plan
+(`.claude/plans/amethyst-warding-vein.md`) but **not yet built** — a content+economy
+pass on the M-RL relic loop, slotting in ahead of M-TE. Then **M-TE** (trophy-gated
+special gear) and **M-W1** (circular multi-biome world) last. A separate playtest-polish
+backlog also remains: discovered-material toast, hover highlight on interactables,
+inventory auto-sort, minimap nearby-view + full-map rework, a ranged starter weapon, and
+passive HP regen.
 
 **Known issues / open.**
 - Boss may be slightly overtuned after the 5s damage bump (the user's "TBD" — left as-is
@@ -44,7 +47,46 @@ rework, a ranged starter weapon, and passive HP regen.
 
 > Older entries in STATUS-archive.md.
 
-### Just finished: 40-min playtest fix batch (12 items) + relic rarity/tier rework
+### Just finished: Elite melee reach fix + Gloaming Vein design
+
+Two things this session: a live combat bug fix, and the locked design + committed plan for
+the next feature (the Gloaming Vein — not built yet). The bug fix is Sonnet-class (a fix on
+an existing system); it was done on Opus alongside the new-mechanic brainstorm.
+
+**Elite Gremling "runs up but never attacks" — fixed.** Root cause: an elite's
+`setScale(1.4)` also grows its **Arcade physics body** (verified live: a Gremling's 14px
+body → 19.6px), and the player↔enemy collider then holds their centers ~19.8px apart —
+right at the flat 20px swing-*start* threshold. On any diagonal approach the Euclidean
+center distance exceeds 20, so `dist <= MELEE_RANGE` never fires and it never winds up
+(hence "sometimes"). This is the **mirror** of the earlier `MainScene.enemyReach()` fix
+(which scales the *player's* reach vs big enemies) — nobody had scaled the *enemy's own*
+reach vs its own scaled body. Fix: a principled `Enemy.reachBonus()` =
+`(baseScale-1) * max(width,height)/2` (the exact body-half the scaling added; **0 for
+non-elites**, uses `baseScale` not the live wind-up-pulsed scale), added to **every** melee
+reach check across the roster: `tickMeleeSwing`'s strike + the base/Gremling `MELEE_RANGE`
+starts, RangedGremlin's enter/exit-melee thresholds, Boar's gore-start + gore-strike +
+charge-hit, and Snake's lunge bite. Any future scaled/elite enemy gets it for free.
+*Verified live against a real elite Gremling: a 22px swing that whiffed at the flat 20px
+reach now walks windup→strike and lands (`observedHit: true`); `reachBonus` = 3.2px
+(gremling texture is 14×16, so it uses the 16px dimension), restoring the same ~3px reach
+margin a normal Gremling has. `tsc --noEmit` clean; console clean.*
+
+**Gloaming Vein — designed + locked, plan committed, NOT yet built.** Brainstormed with
+the user and locked via `AskUserQuestion`; full plan at
+`.claude/plans/amethyst-warding-vein.md`. A mineable, rare, finite **purple ore POI** (glows
+at night) guarded by a **mini-boss** (the "Gloamwarden"); mining it yields a magical
+resource ("Gloam Shard") used at the **Relic Forge (new "Refine" tab)** to **climb trophy
+rarity** — turning crumble-prone raw Common trophies into guaranteed-roll Refined Uncommons.
+Locked rules: refine happens on the existing forge (not a new station); refined trophies are
+**species-agnostic**; the vein is **hard-gated** (un-mineable until the guardian dies);
+refinement is **single-step + terminal** (raw→one-up, refined trophies are roll-only, no
+refined→refined) — so biome 1 naturally caps at Refined Uncommon while the system already
+supports raw-Uncommon→Refined-Rare for deeper biomes. This **deliberately overrides M-RL's
+"rarity not climbable / no manual combine" lock** — but as a *gated* climb (rare resource +
+mini-boss), consistent with "nothing free." First-pass numbers in the plan; relic-strength
+retune is a separate later pass. New-mechanic build is Opus territory.
+
+### Previously: 40-min playtest fix batch (12 items) + relic rarity/tier rework
 
 A grab-bag off the user's 40-min "almost died a lot, feels harder — good" session. Built on
 Opus (the relic change is a new data model). No new milestone letter. All 12 items done +
@@ -103,7 +145,7 @@ spec + pity), first roll guaranteed. `RelicForgeMenu` readout + the dashboard Re
   returns a recoverable item, not a delete). Backpack-stack "Destroy" (a real delete) kept.
 - **Relic Forge description** dropped the stale "or combine relics" (combine was removed).
 
-### Just finished: Enemy-dmg buff + boss dmg bump + GremlinKing "leaping smash"
+### Previously: Enemy-dmg buff + boss dmg bump + GremlinKing "leaping smash"
 
 The remaining balance half of the 25-min-playtest triage's "light both rebalance"
 ([[survivor-rpg-playtest-feedback-2026-07-11]]), plus the boss damage bump and the
@@ -466,146 +508,3 @@ a short **loading bar before the result lands**, with two distinct feels. Built 
   `busy`/`fxActive` both clear afterward.
 - No `RECIPES.md` change (no recipe/cost changes). `tsc --noEmit` clean; `preview_console_logs`
   (error) clean across all tests.
-
-### Previously: M-WC — Gremlin War Camp (altar POI upgrade + hints)
-
-Next milestone in the locked roguelike meta-loop build order
-(`.claude/plans/roguelike-metaloop-master-plan.md`; detailed plan:
-`.claude/plans/snug-leaping-mochi.md`). Built on Sonnet — content + layout on the existing
-altar/shack/camp-spawn, `MinimapUI.revealLandmark`, and M-DN night-light systems, no new
-mechanic. Promotes the lone Boss Altar into a **walled Gremlin War Camp** so it reads as a
-*place*. Two locked decisions this session (the user): shacks stay scattered but cluster denser
-near the camp (2→3), and the camp glows at night as a navigation hint.
-
-- **`MainScene.spawnWarCamp()`** (new; called after `spawnAltarDensity()` in `create()`,
-  guard-returns if `altarPosition` is null, deterministic via `sessionRng`) lays out
-  decoration around the altar. All props are plain `scene.add.image(...).setDepth(y)` —
-  non-solid + Y-sorted like every other world structure, and untracked (auto-destroyed on
-  `scene.restart`) except braziers:
-  - **Palisade ring** — stakes every ~14° at ~230px radius (±8px jitter), **skipping a ~55°
-    entrance-gate arc** whose facing points toward world center (`Phaser.Math.Angle.Between` +
-    `Angle.Wrap` shortest-angular-distance test), so the player walks in the gate. Verified:
-    22 stakes placed out of 26 candidate positions (the ~4 in the gate arc correctly skipped).
-  - **Banners ×4 / totems ×2** scattered inside the camp; **braziers ×3** (two flanking the
-    gate, one deep in) whose world positions are pushed to a new `campLightPoints` field.
-  - **Breadcrumb trail** — 2 sparse outer `gremlin_camp_prop` bands (500–750px ×6, 750–1050px
-    ×4) extending the existing 3 inner bands, so clutter increases toward the camp. Enemy
-    counts unchanged (locked decision 7 — prefer a bigger world over more enemies).
-- **Four new placeholder textures** in `BootScene.ts` (`palisade_stake` 12×26, `gremlin_banner`
-  16×30, `war_totem` 18×38, `camp_brazier` 14×22), same crude-pixel style / gremlin palette;
-  the brazier's flame matches the altar's orange (`0xe8862c`).
-- **Braziers glow at night** — `collectLights()` gained a loop over `campLightPoints` pushing a
-  `POI_LIGHT_RADIUS` light per on-screen brazier (reuses the existing `onScreen`/`toScreen`
-  helpers, no new lighting code). The M-DN light-mask does the rest. Verified: with the camera
-  on the camp and the clock forced to deep night, `collectLights()` returned 7 lights (altar +
-  3 braziers + nearby shacks) and a screenshot shows a warm light pool over the camp against
-  the dark forest.
-- **Shacks cluster denser** — `SHACK_NEAR_ALTAR_COUNT` 2→3 in `spawnGremlinShacks()`; the other
-  2 stay wild standalone POIs. Verified against a live seed: 3 shacks within ~500px of the
-  altar, 2 far away.
-- **Minimap landmarks** — `GremlinShack.discoveredOnMap` added; `updateAltarDiscovery()`
-  generalized to also reveal each shack once the player explores within `REVEAL_RADIUS`, in a
-  distinct **wood-brown** (`0x8a6a3a`, r1.5), while the altar/war-camp landmark is now a
-  **larger red** dot (`0xd6483a`, r2.5) so the camp stands out. `MinimapUI.revealLandmark()`
-  gained an optional `radius` param (default 1.5) for this. Folds in the standing "shacks
-  should get the altar's landmark treatment" backlog item. Verified: driving the discovery
-  pass over all 5 shacks + the altar flips every `discoveredOnMap` flag true and draws the
-  dots.
-- **Reset** — `campLightPoints` resets to `[]` at the top of `create()` per the
-  `scene.restart()`-doesn't-re-run-field-initializers gotcha. Verified: New Run → exactly 3
-  brazier light points again (not leaked/doubled), 5 fresh shacks, no stale discovery flags.
-
-**Verified** — `tsc --noEmit` clean; live `preview_eval` for every bullet above;
-`preview_screenshot` of the camp layout (palisade ring + props), the night glow, and the
-minimap; `preview_console_logs` (error) clean.
-
-**Same-day playtest follow-up (the user: "the camp just looks so busy"):** the first ship
-above layered its new dressing on top of `spawnAltarDensity()`'s pre-existing (pre-M-WC)
-40-prop clutter band and let ordinary trees/rocks/bushes/wild enemies scatter right through
-the camp — the actual busy/messy look wasn't placeholder art, it was two independent
-systems drawing over each other with no exclusion zone. Fixed with a real design pass, not
-a tweak:
-
-- **Nothing can spawn inside the camp anymore.** New shared module constants
-  `WAR_CAMP_RADIUS` (230, the palisade wall — one source of truth now used by the wall
-  itself, the floor stamp, and the exclusion check) and `WAR_CAMP_CLEAR_RADIUS` (300, padded
-  past the wall to absorb cluster jitter). `pickSpawnPoint()` (used by every tree/rock/
-  boulder/bush/enemy scatter call) and `pickCreekEdgePoint()` (Cattail's own bespoke
-  sampler, which doesn't go through `pickSpawnPoint`) both reject any candidate within
-  `WAR_CAMP_CLEAR_RADIUS` once `altarPosition` is set; `scatterClustered()`'s per-node jitter
-  (bushes) gets an extra fallback-to-cluster-center check since jitter can push an
-  already-valid center point back inside the wall. `altarPosition` is now picked *before*
-  ground/node/enemy spawning in `create()` (previously chosen only after nodes+enemies were
-  already scattered) so all of this can actually see it. Verified across multiple fresh
-  seeds: 0 of ~396 world nodes ever land within 300px of the altar (a stray Cattail at 260px
-  surfaced the `pickCreekEdgePoint` gap on the first check — fixed and reverified at 0).
-- **Distinct camp floor** — `buildBiomeTexture()` stamps a packed-dirt color
-  (`0x5a4a30`, 230px radius, 40px soft edge, same falloff idea as the forest/creek blend)
-  over the ground bake once `altarPosition` is known, so the camp reads as a cleared
-  campground instead of the same grass/forest texture as everywhere else.
-- **Removed the old redundant clutter** — `spawnAltarDensity()`'s original 3-band
-  `gremlin_camp_prop` scatter (0–500px, 40 props) predated the real camp structures and is
-  gone entirely; `spawnWarCamp()` is now the single source of all camp dressing, both inside
-  the wall and the breadcrumb trail leading to it (rebased to start at 300px, just outside
-  the clear zone, instead of 500px).
-- **Huts are evenly spaced, not randomly clumped** — the 3 near-altar Gremlin Shacks no
-  longer roll a random `pickPointNearAltar` point; `spawnGremlinShacks()` now fans them at a
-  fixed ~170px radius, 100° apart (± small jitter), centered on the side of the camp
-  *opposite* the entrance gate (new `campGateFacing()` helper, shared with the palisade
-  gate/brazier placement so they all agree on the same facing). Banner/totem scatter radii
-  were also tightened (140px / 110px, down from 200px / 130px) so they stay in the courtyard
-  instead of competing with the hut ring.
-
-Verified live across several reloads/reseeds: 0 nodes inside `WAR_CAMP_CLEAR_RADIUS`; the 3
-huts land at ~161–177px from the altar (target 170±10); screenshots (both a wide shot and a
-close zoom) show a clean dirt clearing, palisade ring, altar + banners/totems centered, and
-the 3 huts fanned evenly opposite the gate, with zero stray trees/rocks/bushes inside the
-wall and only the breadcrumb trail visible approaching from outside. `tsc --noEmit` clean,
-no console errors.
-
-Next per the locked build order: **M-TE (trophy-gated gear)**, then **M-W1** (circular
-multi-biome world) last.
-
-### Previously: M-RL playtest follow-up — per-species elite trophies + night-number HUD fix
-
-Small follow-up batch off the first M-RL relic playtest (the user, 20-min run: got 1
-Common relic before the boss — "okay, hoping it scales" with more enemies/biomes; no
-scaling change made this pass, just noted the design already supports it). Built on
-Sonnet (extends the already-designed loot + relic systems + a one-line HUD fix, no new
-mechanic).
-
-- **Every elite now drops a UNIQUE trophy by species** (was: all elites dropped
-  `gremlin_trophy`). Boar → **Boar Trophy**, Snake → **Snake Trophy**, Gremlin/Gremling →
-  **Gremlin Trophy** (unchanged). The trophy type is data-driven, not another centralized
-  constant: `EnemyConfig` gained an optional `eliteTrophy?: ResourceType` (defaults to
-  `gremlin_trophy`); the base `Enemy` constructor appends `{ resource: cfg.eliteTrophy ??
-  DEFAULT_ELITE_TROPHY, min: 1, max: 1 }` to `loot` when elite (the old `ELITE_TROPHY_DROP`
-  const was replaced by `DEFAULT_ELITE_TROPHY`). `Boar`/`Snake` pass their own
-  `eliteTrophy`; Gremlin/Gremling ride the default. **New resources** `boar_trophy` /
-  `snake_trophy` (`Inventory.ts` `ResourceType`, `Items.ts` `ITEM_DEFS`, `BootScene.ts`
-  `icon_boar_trophy`/`icon_snake_trophy` — crossed-tusks / coiled-fanged-head icons in the
-  same crimson/gold elite palette as the gremlin trophy; the item texture doubles as the
-  loose-drop sprite).
-- **All three trophies roll the same Common pool + shared pity counter** — new
-  `TROPHY_ROLL` entries `boar_trophy`/`snake_trophy` → `{ common, tier 1, 5% }`. Because
-  pity is per-*rarity* (not per-trophy), more elite variety just funnels more attempts into
-  Common without fragmenting the odds. Deeper biomes (M-W1) can remap a species' trophy to a
-  higher rarity/tier per source — the plumbing already supports it.
-- **Relic Forge menu wraps its roll buttons** — the layout hardcoded 2 buttons on one row
-  (fit the 560px panel); with up to 3 Common trophies it now wraps into rows of `BTN_COLS`
-  (2) and the result line + owned-relic grid stack below the measured button block, so
-  nothing overlaps as trophy variety grows. Each button is now labelled by its **trophy
-  name** ("Roll Boar Trophy"), not just its rarity, so same-rarity buttons are
-  distinguishable.
-- **HUD night number fix** — `RunHudUI` showed `[Day N]` by day but a bare `[Night]` at
-  night. New `DayNight.nightNumber()` (a night shares the number of the day it follows) →
-  the HUD now reads `[Night N]`, symmetric with `[Day N]`.
-
-**Verified** — `tsc --noEmit` clean; live `preview_eval`: elite Boar/Snake/Gremlin/Gremling
-each `rollLoot()` → their own unique trophy ×1 (normal Boar → none); `TROPHY_ROLL` has all
-4 keys; both new trophies roll into the Common pool (forced-success → Warrior's Charm,
-forced-miss → streak++); the HUD reads `[Night 1]`/`[Night 2]`/`[Day 1]` across cycles;
-`preview_screenshot` of the forge menu shows the 3 roll buttons wrapping cleanly (Gremlin +
-Boar on row 1, Snake on row 2) over the owned-relics grid. No console errors. Next per the
-locked build order: **M-WC (Gremlin War Camp) + M-TE (trophy-gated gear)**, then **M-W1**.
-

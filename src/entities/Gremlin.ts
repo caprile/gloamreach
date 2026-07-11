@@ -155,9 +155,13 @@ export class RangedGremlin extends Enemy {
     // backpedaling past the exit range shouldn't yank it back into kiting; it
     // stays planted and either connects or whiffs, then re-evaluates.
     if (!this.isAttacking()) {
+      // + reachBonus() so a scaled-up elite's larger body (which the player↔enemy
+      // collider holds further from the player's center) doesn't leave it stuck
+      // just outside its own flat melee range — see Enemy.reachBonus().
+      const bonus = this.reachBonus();
       if (this.mode === "meleeing") {
-        if (dist > RANGED_MELEE_EXIT_RANGE) this.mode = "ranged";
-      } else if (dist <= RANGED_MELEE_RANGE) {
+        if (dist > RANGED_MELEE_EXIT_RANGE + bonus) this.mode = "ranged";
+      } else if (dist <= RANGED_MELEE_RANGE + bonus) {
         this.mode = "meleeing";
       }
     }
@@ -384,7 +388,7 @@ export class MeleeGremling extends Enemy {
     }
 
     if (this.mode === "chasing") {
-      if (this.isAttacking() || dist <= MELEE_RANGE) {
+      if (this.isAttacking() || dist <= MELEE_RANGE + this.reachBonus()) {
         const hit = this.tickMeleeSwing(body, playerX, playerY, now, GREMLING_SWING);
         if (hit) {
           this.markAttackLanded(now);

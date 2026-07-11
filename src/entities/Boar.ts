@@ -114,7 +114,7 @@ export class Boar extends Enemy {
     // Pick an attack when chasing, in range, and off cooldown: gore up close,
     // charge at mid-range.
     if (this.mode === "chasing" && !this.isAttacking() && now >= this.nextAttackReadyAt) {
-      if (dist <= GORE_RANGE) this.startGore(now, playerX, playerY);
+      if (dist <= GORE_RANGE + this.reachBonus()) this.startGore(now, playerX, playerY);
       else if (dist <= CHARGE_TRIGGER_MAX) this.startCharge(now, playerX, playerY);
     }
 
@@ -175,7 +175,7 @@ export class Boar extends Enemy {
         this.attackPhase = "strike";
         this.attackStartedAt = now;
         this.endWindupTell();
-        const hit = dist <= GORE_RANGE;
+        const hit = dist <= GORE_RANGE + this.reachBonus();
         this.pendingAttackKnockback = hit ? GORE_KNOCKBACK : 0;
         if (hit) this.markAttackLanded(now);
         return hit; // re-checked against current position → dodgeable
@@ -231,7 +231,7 @@ export class Boar extends Enemy {
     if (this.attackPhase === "strike") {
       this.chargeTraveled += (CHARGE_SPEED * delta) / 1000;
       const dist = Phaser.Math.Distance.Between(this.x, this.y, playerX, playerY);
-      if (!this.chargeHit && dist <= CHARGE_HIT_RADIUS) {
+      if (!this.chargeHit && dist <= CHARGE_HIT_RADIUS + this.reachBonus()) {
         this.chargeHit = true;
         this.pendingAttackKnockback = CHARGE_KNOCKBACK;
         this.markAttackLanded(now);

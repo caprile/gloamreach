@@ -125,7 +125,7 @@ export class Snake extends Enemy {
       const lungeVy = Math.sin(this.lockedStrikeAngle) * STRIKE_SPEED * this.speedMult * this.envSpeedMult;
       body.setVelocity(lungeVx, lungeVy);
       this.applyFacing(lungeVx, lungeVy);
-      if (dist <= MELEE_RANGE) {
+      if (dist <= MELEE_RANGE + this.reachBonus()) {
         this.hasBitten = true;
         this.beginFlee(now, FLEE_DURATION_MS, false); // bite landed -> flee, then fully re-hide
         return true; // bite lands
