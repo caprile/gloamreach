@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import type { Enemy } from "./Enemy";
 import { LootContainer } from "../systems/LootContainer";
+import { ysortDepth } from "../systems/depth";
 
 export interface GremlinShackConfig {
   x: number;
@@ -31,10 +32,10 @@ export class GremlinShack {
   constructor(scene: Phaser.Scene, cfg: GremlinShackConfig) {
     this.x = cfg.x;
     this.y = cfg.y;
-    this.image = scene.add.image(cfg.x, cfg.y, "gremlin_shack").setDepth(cfg.y);
+    this.image = scene.add.image(cfg.x, cfg.y, "gremlin_shack").setDepth(ysortDepth(cfg.y));
     this.chestImage = scene.add
       .image(cfg.x + 18, cfg.y + 12, "gremlin_shack_chest")
-      .setDepth(cfg.y + 1);
+      .setDepth(ysortDepth(cfg.y) + 1);
     this.loot = new LootContainer(SHACK_CHEST_SIZE);
   }
 }

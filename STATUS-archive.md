@@ -3598,3 +3598,92 @@ forced-miss → streak++); the HUD reads `[Night 1]`/`[Night 2]`/`[Day 1]` acros
 Boar on row 1, Snake on row 2) over the owned-relics grid. No console errors. Next per the
 locked build order: **M-WC (Gremlin War Camp) + M-TE (trophy-gated gear)**, then **M-W1**.
 
+
+### Previously: Contextual hints + pause menu (playtest-readiness pass)
+
+Off the master-plan build order: the user paused M-TE (trophy gear) to instead polish the
+first biome enough for outside playtesters. The first item of that pass tackles the
+biggest cold-start problem — a fresh player has no idea what the goal is or how the
+controls work. Built on Opus (two new systems). Plan:
+`.claude/plans/contextual-hints-and-pause-menu.md`.
+
+- **`src/systems/Hints.ts`** (`HintManager`, framework-free like Run/Buffs) — a
+  Valheim-Hugin-style contextual tip system (explicitly **not** a mascot; the "raven" was
+  only a behavioral reference). `trigger(id)` shows a tip **once per run** if enabled
+  (idempotent — safe from a per-frame hover path). Locked with the user: **keep it a
+  challenge** — 8 tips teach controls + nudge toward mechanics but **never** spell out the
+  totem→altar→boss win condition. "Already shown" state **resets each run** (fresh instance
+  in `create()`); the **on/off preference persists** in localStorage
+  (`survivor-rpg:hints-enabled:v1`, tolerant of a blocked/corrupt store). Disabled is a
+  **true no-op that doesn't mark the hint shown**, so flipping hints back on mid-run still
+  surfaces future first-occurrences.
+- **`src/ui/HintUI.ts`** — corner popup card: right-edge, mid-height (~42%), clear of the
+  minimap/hotbar/prompt/left-column. Slides in from the right, holds 5.2s, fades, click to
+  dismiss; only one at a time (a new hint replaces the current). Flat scrollFactor(0)
+  objects (no Container), depth 2860/2861 (clears WORLD_H, below menus). The slide tween is
+  killed on replace so a stale `onComplete` can't fade the next card early.
+- **8 triggers** wired at existing hook points: `awaken` (spawn +1.5s: WASD + explore),
+  `pickup_reach` (first reachable free pickup: left-click to interact), `tool_locked`
+  (clicked a chop/mine node without the right tool KIND — nudges toward tools, **never
+  names which**, preserving the prompt-gating design), `open_menu` (first recipe unlock:
+  press Tab), `stamina_empty`, `low_hp` (≤30%: cooked food heals), `nightfall` (torch +
+  danger), `elite_trophy` (gremlin/boar/snake trophy in hand → Relic Forge; NOT the boss
+  fang, which is a win-state drop).
+- **`src/ui/PauseMenuUI.ts`** + MainScene wiring — a pause overlay (**Esc**), modeled on
+  RunEndUI. Chosen over a standalone settings panel because it delivers three playtest
+  needs at once: the pause players expect, a Resume/New Run escape hatch, and the home for
+  the Hints ON/OFF toggle (settings didn't exist). **Freeze:** `openPauseMenu()` sets
+  `isPaused`, zeroes player velocity, `physics.world.pause()`, `time.paused = true`;
+  `update()` early-returns on `isPaused` so `run.tick`/day-night never advance — **pausing
+  doesn't burn the speedrun clock**. Blocked once `runOver`/`isDead` (RunEndUI owns the
+  frozen world then). World pointerdown guarded with `isPaused`; **Esc** opens pause only
+  when no other menu is open (else it just closes that menu). All new fields reset in
+  `create()` per the `scene.restart()` field-init gotcha (with a defensive
+  `physics.world.resume()` + `time.paused = false` in case New Run was clicked from the
+  pause menu). Keybinds panel gained a `"Pause / close: Esc"` line for discoverability.
+- `tsc --noEmit` clean; preview console clean. Verified live: card renders + idempotent +
+  one-at-a-time; disabled no-op doesn't burn the hint (re-enable re-shows); pause freezes
+  physics + scene clock + `isPaused` and resumes clean; toggle persists. Screenshots of the
+  PAUSED overlay + the right-edge TIP card. No `RECIPES.md` change (no recipes touched).
+
+### Previously: Timed action bars + slot-machine relic rolls
+
+A playtest feel request from the user (off the standing roguelike loop, not a master-plan
+milestone): crafting/processing/cooking/relic-rolls all completed **instantly** — he wanted
+a short **loading bar before the result lands**, with two distinct feels. Built on Opus
+(new UI-animation mechanic + a per-station "busy" concept that didn't exist). Detailed plan:
+`.claude/plans/generic-meandering-puffin.md`.
+
+- **`src/ui/ProgressBar.ts`** (new) — a small reusable fill bar (flat scrollFactor(0) rects,
+  no Container per the CraftingMenu note). Tweens a `{v}` proxy 0→1 (not the Rectangle
+  itself) so the visuals can hide/cancel without killing the tween. One instance is owned
+  per menu, positioned over the action button, **not** part of the per-frame-cleared `rows`.
+  Used by the three "quick" menus: **craft ~450ms, cook ~500ms, process ~600ms**
+  (`Sine.easeInOut`). A **single bar for a whole batch** (an 8→4 dry is one bar, verified).
+- **Commit-at-end:** inputs are consumed + output granted only when the bar fills (the
+  existing synchronous `craft`/`processAmount`/`cook` methods are unchanged, just invoked
+  from `onComplete`). A `busy` flag greys the button + blocks re-clicks meanwhile.
+  **Closing a menu mid-bar cancels cleanly** (nothing consumed until it fills, so a no-op —
+  chosen over "complete after close" because the station menus lose their station ref on
+  close; uniform + predictable). Verified: normal craft 0→1, cancel-on-close 1→1 (no
+  double-craft, no lost resources), and item lands **after** the bar, not at click.
+- **`src/ui/RelicRevealFx.ts`** (new) — the Relic Forge's **slot-machine** spin (not the
+  generic bar; the feel is different). The roll RESULT is resolved by the caller *before*
+  the spin (trophy consumed + `RelicManager` mutated immediately — verified 5→4 trophies /
+  0→1 relic at click), so an interrupted spin never changes what was won — it's pure theater
+  over a known outcome. A ~1400ms `Quart.easeOut` bar decelerates while a **reel gem**
+  rapid-swaps rarity icons and slows down, then a **rarity-scaled reveal** (data-driven
+  `REVEAL_CFG`, not branching): **Common** = a modest gem punch + faint glow;
+  **Uncommon** adds a panel flash + light shards; **Rare/Mythic** pile on a big additive
+  glow burst (reuses the M-DN `light_soft` texture, tinted per rarity), panel flash, a
+  radial shard burst, a scaled-in `★ RARITY! ★` banner, and a subtle camera shake. A
+  full-panel scrim dims the busy grid + eats clicks during the spin. **Fail** = a grey
+  crumble fizzle. Verified: mid-spin frame (scrim + reel + bar) and the frozen **mythic**
+  payoff (glow blowing past the panel + banner) via a tween-pause trick.
+- **Deferred announce:** `MainScene.rollRelic(trophyKey, announce=false)` for the menu path
+  — the event-log line + `afterRelicChange()` (relic-bar sync, stat bonuses) fire at the
+  **reveal landing** via a new `announceRelicResult()` + the menu's `announceRoll` dep, not
+  at click, so the payoff is the satisfying moment. Verified: log/bar update on reveal, and
+  `busy`/`fxActive` both clear afterward.
+- No `RECIPES.md` change (no recipe/cost changes). `tsc --noEmit` clean; `preview_console_logs`
+  (error) clean across all tests.

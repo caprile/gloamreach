@@ -739,6 +739,22 @@ export class BootScene extends Phaser.Scene {
     g.fillTriangle(12, 3, 9, 9, 12, 9); // gem highlight
     g.generateTexture("icon_relic_forge", ICON, ICON);
 
+    // World-map POI markers (WorldMapUI): a dark-ringed colored badge so a
+    // discovered landmark reads at a glance on the full map. Small (18x18) so
+    // it doesn't swamp the shrunk map. One per POI type.
+    const mapMarker = (key: string, ring: number, fill: number) => {
+      g.clear();
+      g.fillStyle(0x11141a, 1);
+      g.fillCircle(9, 9, 9); // dark border
+      g.fillStyle(ring, 1);
+      g.fillCircle(9, 9, 8);
+      g.fillStyle(fill, 1);
+      g.fillCircle(9, 9, 5);
+      g.generateTexture(key, 18, 18);
+    };
+    mapMarker("map_altar", 0xf0c040, 0xd6483a); // Gremlin War Camp — the standout red/gold marker
+    mapMarker("map_shack", 0xd8c090, 0x8a6a3a); // Gremlin Shack — wood-brown
+
     g.destroy();
     this.makeLightTexture();
   }

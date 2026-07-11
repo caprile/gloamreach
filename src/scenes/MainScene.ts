@@ -93,8 +93,11 @@ import { HotbarUI } from "../ui/HotbarUI";
 import { EventLogUI } from "../ui/EventLogUI";
 import { KeybindsUI } from "../ui/KeybindsUI";
 import { MinimapUI, PANEL_W as MINIMAP_W, PANEL_H as MINIMAP_H, MARGIN as MINIMAP_MARGIN } from "../ui/MinimapUI";
+import { WorldMapUI } from "../ui/WorldMapUI";
 import { BossHealthUI } from "../ui/BossHealthUI";
 import { FogOfWar, REVEAL_RADIUS } from "../systems/Fog";
+import { ExploredMap } from "../systems/ExploredMap";
+import { ysortDepth } from "../systems/depth";
 import { Run, type RunOutcome, type KillCategory } from "../systems/Run";
 import { clearHighScores, recordHighScore } from "../systems/HighScores";
 import type { ScoreEntry } from "../systems/HighScores";
@@ -118,11 +121,35 @@ const HOTBAR_KEYS = ["ONE", "TWO", "THREE", "FOUR", "FIVE", "SIX", "SEVEN", "EIG
 const HARDCORE = true;
 
 const TILE = 32;
-// Bumped 80x60 -> 112x84 tiles (~2x area) per playtest feedback: the old map
-// ran out of enemies/resources before a player could craft everything on
-// offer. Enemy spawn counts below were scaled up to match (see spawnEnemies).
-const WORLD_W = TILE * 112; // 3584px wide — a procedurally generated biome (see Biome.ts)
-const WORLD_H = TILE * 84; // 2688px tall
+// --- World geometry (circular, M-W1 prep) ---
+// The playable world is now a large CIRCLE centered on WORLD_CX/CY. The current
+// first-biome content fills a central circle of BIOME_RADIUS; everything from
+// there out to WORLD_RADIUS is (for now) empty grass — headroom for future
+// biomes, with danger meant to scale outward from the safe center (the locked
+// M-W1 direction). Physics/camera bounds stay a square that bounds the world
+// circle; the player is clamped to the circle each frame (clampPlayerToWorld),
+// and a dark "void" ring is drawn beyond WORLD_RADIUS (drawWorldBoundary).
+const BIOME_RADIUS = 2000; // central content circle (~the old 3584x2688 biome, slightly larger)
+const WORLD_RADIUS = 4000; // full circular world edge — big empty ring for future biomes
+const WORLD_SIZE = WORLD_RADIUS * 2; // 8000px square that bounds the world circle
+const WORLD_CX = WORLD_RADIUS; // world center
+const WORLD_CY = WORLD_RADIUS;
+// Back-compat: existing spawn/camera code references WORLD_W/WORLD_H and treats
+// WORLD_W/2, WORLD_H/2 as "the center" — both still hold now that the world is
+// a centered square.
+const WORLD_W = WORLD_SIZE;
+const WORLD_H = WORLD_SIZE;
+// The terrain-baked biome region: a centered square inscribing the biome
+// circle. Kept well under the GPU max-texture-size so the one-shot bake stays a
+// single RenderTexture (BIOME_SIZE x BIOME_SIZE).
+const BIOME_SIZE = BIOME_RADIUS * 2; // 4000
+const BIOME_ORIGIN_X = WORLD_CX - BIOME_RADIUS;
+const BIOME_ORIGIN_Y = WORLD_CY - BIOME_RADIUS;
+// Fog / explored-map grid: world-space, one cell per 40px (200x200 for the
+// 8000px world). Independent of any HUD panel resolution now — both the corner
+// minimap and the full map render from it at their own scales.
+const FOG_CELL = 40;
+const FOG_COLS = Math.ceil(WORLD_SIZE / FOG_CELL);
 // Minimum distance from world center the Boss Altar can spawn — bumped
 // 900->1400 per playtest feedback ("boss shouldn't spawn close to center").
 // Half-diagonal of the world is ~2240px, so this still leaves the 200-attempt
@@ -309,7 +336,9 @@ export class MainScene extends Phaser.Scene {
   private eventLogUI!: EventLogUI;
   private keybindsUI!: KeybindsUI;
   private fog!: FogOfWar;
+  private exploredMap!: ExploredMap;
   private minimapUI!: MinimapUI;
+  private worldMapUI!: WorldMapUI;
   private bossHealthUI!: BossHealthUI;
 
   // Active drag (from any container): the source slot + a floating ghost icon.
@@ -514,7 +543,7 @@ export class MainScene extends Phaser.Scene {
     // Procedural biome layout — must exist before spawning so nodes/enemies
     // can query zone type for placement. Seeded randomly per session (not a
     // fixed string) so the world differs every run.
-    this.biome = new Biome(WORLD_W, WORLD_H, this.sessionRng());
+    this.biome = new Biome(BIOME_ORIGIN_X, BIOME_ORIGIN_Y, BIOME_SIZE, BIOME_SIZE, this.sessionRng());
 
     // War Camp position (M-WC) is chosen here, before ground/node/enemy
     // spawning, so pickSpawnPoint can keep trees/rocks/wild enemies out of the
@@ -527,8 +556,12 @@ export class MainScene extends Phaser.Scene {
     // overlay baked on top of it — both kept below every entity.
     this.add.tileSprite(0, 0, WORLD_W, WORLD_H, "grass").setOrigin(0, 0).setDepth(-10);
     this.buildBiomeTexture();
+    // Circular world edge: a dark "void" ring beyond WORLD_RADIUS so the
+    // playable area reads as a round island, not an invisible wall in open grass.
+    this.drawWorldBoundary();
 
-    // Keep the player and camera inside the world.
+    // Physics/camera bounds are the bounding square; the player is additionally
+    // clamped to the world CIRCLE each frame (clampPlayerToWorld).
     this.physics.world.setBounds(0, 0, WORLD_W, WORLD_H);
     this.cameras.main.setBounds(0, 0, WORLD_W, WORLD_H);
 
@@ -610,7 +643,8 @@ export class MainScene extends Phaser.Scene {
         else if (pointer.rightButtonDown()) this.cancelPlacement();
         return;
       }
-      if (this.isPaused || this.anyMenuOpen() || this.pointerOverHud(pointer)) return;
+      if (this.isPaused || this.worldMapUI.isOpen() || this.anyMenuOpen() || this.pointerOverHud(pointer))
+        return;
       if (pointer.leftButtonDown()) {
         this.tryInteract();
       } else if (pointer.rightButtonDown()) {
@@ -654,8 +688,11 @@ export class MainScene extends Phaser.Scene {
     // Minimap + fog of war (World & discovery roadmap item 6) — FogOfWar owns
     // the reveal grid, MinimapUI draws/repaints it. Sized 1:1 to the minimap's
     // own pixel resolution so a revealed cell maps directly to one pixel.
-    this.fog = new FogOfWar(WORLD_W, WORLD_H, MINIMAP_W, MINIMAP_H);
-    this.minimapUI = new MinimapUI(this, this.biome, this.fog);
+    this.fog = new FogOfWar(WORLD_SIZE, WORLD_SIZE, FOG_COLS, FOG_COLS);
+    this.exploredMap = new ExploredMap(this.biome, this.fog, WORLD_CX, WORLD_CY, WORLD_RADIUS);
+    this.minimapUI = new MinimapUI(this, this.exploredMap);
+    this.worldMapUI = new WorldMapUI(this, this.exploredMap);
+    this.createMapButton();
     this.bossHealthUI = new BossHealthUI(this);
     // Night darkness + torch-light layer (M-DN). Depth ~2700 sits above the
     // world but below the minimap/HUD created around it, so only the world dims.
@@ -689,6 +726,11 @@ export class MainScene extends Phaser.Scene {
     // Mouse wheel cycles the hotbar selection (looping), unless the pointer is
     // over the event log (which scrolls its own history).
     this.input.on("wheel", (p: Phaser.Input.Pointer, _o: unknown, _dx: number, dy: number) => {
+      // Full map open: the wheel zooms it instead of cycling the hotbar.
+      if (this.worldMapUI.isOpen()) {
+        this.worldMapUI.handleWheel(dy);
+        return;
+      }
       if (this.eventLogUI.isPointerOver(p) || this.keybindsUI.isPointerOver(p)) return;
       this.cycleHotbar(dy > 0 ? 1 : -1);
     });
@@ -701,6 +743,7 @@ export class MainScene extends Phaser.Scene {
     });
     this.input.keyboard!.on("keydown-ESC", () => {
       if (this.pauseMenu.isOpen()) return this.resumeGame();
+      if (this.worldMapUI.isOpen()) return this.worldMapUI.close();
       if (this.contextMenu.isOpen()) return this.contextMenu.close();
       if (this.placementMode) return this.cancelPlacement();
       if (this.upgradeMenu.isOpen()) return this.closeUpgradeMenu();
@@ -731,6 +774,7 @@ export class MainScene extends Phaser.Scene {
     this.input.keyboard!.on("keydown-R", () => this.takeAllFromChest());
     this.input.keyboard!.on("keydown-H", () => this.toggleWheelSpansBothRows());
     this.input.keyboard!.on("keydown-J", () => this.runHudUI.toggleMinimized());
+    this.input.keyboard!.on("keydown-M", () => this.toggleWorldMap());
 
     // Skill level-ups: announce, feed the overall Player Level the same XP the
     // skill level cost (Progression.ts), and re-run recipe discovery/crafting
@@ -783,9 +827,7 @@ export class MainScene extends Phaser.Scene {
       this.updateEnemies(delta);
       this.updateMagnet(delta);
       this.updateTreeOcclusion(delta);
-      this.fog.reveal(this.player.x, this.player.y);
-      this.minimapUI.update(this.player.x, this.player.y);
-      this.updateAltarDiscovery();
+      this.updateMapReveal();
       this.bossHealthUI.update(this.gremlinKing);
       return;
     }
@@ -800,6 +842,7 @@ export class MainScene extends Phaser.Scene {
     const sprintMultiplier = runningSprintMultiplier(this.skills);
     // Relic move-speed bonus (M-RL) multiplies walk & sprint alike.
     const frame = this.player.update(delta, canSprint, canDash, sprintMultiplier, this.relics.moveSpeedMult());
+    this.clampPlayerToWorld();
 
     if (frame.sprinting) {
       this.stamina.spend(sprintCost);
@@ -826,15 +869,26 @@ export class MainScene extends Phaser.Scene {
     this.updateAttackRangeRing();
 
     if (this.placementMode) this.updatePlacementGhost();
-    else if (!this.anyMenuOpen()) this.updateHover();
+    else if (!this.anyMenuOpen() && !this.worldMapUI.isOpen()) this.updateHover();
     this.updateMagnet(delta);
     this.updateEnemies(delta);
     this.updateTreeOcclusion(delta);
-    this.fog.reveal(this.player.x, this.player.y);
-    this.minimapUI.update(this.player.x, this.player.y);
-    this.updateAltarDiscovery();
+    this.updateMapReveal();
     this.bossHealthUI.update(this.gremlinKing);
     this.updateCraftingMenuWorkbenchProximity();
+  }
+
+  // Advance fog-of-war + both map views. ExploredMap is the single consumer of
+  // the fog reveal queue (drainRevealed updates the shared color cache both the
+  // corner minimap and the full map read); a fresh reveal while the full map is
+  // open marks its terrain dirty so it repaints.
+  private updateMapReveal(): void {
+    this.exploredMap.reveal(this.player.x, this.player.y);
+    const changed = this.exploredMap.drainRevealed();
+    if (changed.length > 0) this.worldMapUI.markDirty();
+    this.minimapUI.update(this.player.x, this.player.y);
+    this.updateAltarDiscovery();
+    if (this.worldMapUI.isOpen()) this.worldMapUI.update(this.player.x, this.player.y);
   }
 
   // Advance the day/night clock and drive its effects (M-DN): fade the world
@@ -1880,12 +1934,16 @@ export class MainScene extends Phaser.Scene {
     clearRadius: number,
     avoidCreek = false,
   ): { x: number; y: number } {
-    let last = { x: WORLD_W / 2, y: WORLD_H / 2 };
+    let last = { x: WORLD_CX, y: WORLD_CY };
     for (let attempt = 0; attempt < 200; attempt++) {
-      const x = rng.between(60, WORLD_W - 60);
-      const y = rng.between(60, WORLD_H - 60);
+      // Sample within the biome REGION and keep the point inside the biome
+      // CIRCLE — all first-biome content stays in the central area; the empty
+      // outer ring is reserved for future biomes.
+      const x = rng.between(BIOME_ORIGIN_X, BIOME_ORIGIN_X + BIOME_SIZE);
+      const y = rng.between(BIOME_ORIGIN_Y, BIOME_ORIGIN_Y + BIOME_SIZE);
       last = { x, y };
-      if (Phaser.Math.Distance.Between(x, y, WORLD_W / 2, WORLD_H / 2) < clearRadius) continue;
+      const dc = Phaser.Math.Distance.Between(x, y, WORLD_CX, WORLD_CY);
+      if (dc < clearRadius || dc > BIOME_RADIUS) continue;
       // War Camp (M-WC): keep every plain scatter/enemy spawn out of the camp
       // interior — the camp is world-gen-placed content with its own dressing
       // (spawnWarCamp), not a spot for random trees/rocks/wild enemies too.
@@ -1946,42 +2004,48 @@ export class MainScene extends Phaser.Scene {
   private buildBiomeTexture(): void {
     const step = MainScene.BIOME_SUPERSAMPLE;
     const g = this.make.graphics({}, false); // offscreen; not on the display list
-    for (let py = 0; py < WORLD_H; py += step) {
-      for (let px = 0; px < WORLD_W; px += step) {
-        const cx = px + step / 2;
-        const cy = py + step / 2;
-        const forestW = this.biome.forestWeight(cx, cy);
+    // Only bake the biome REGION (a centered BIOME_SIZE square), not the whole
+    // (much larger, mostly-empty) world — the surrounding grass needs no
+    // overlay, and a full-world RenderTexture would exceed the GPU texture-size
+    // limit. Graphics coords are LOCAL to the region (0..BIOME_SIZE); the
+    // RenderTexture is placed at the region's world origin below.
+    for (let ly = 0; ly < BIOME_SIZE; ly += step) {
+      for (let lx = 0; lx < BIOME_SIZE; lx += step) {
+        const wx = BIOME_ORIGIN_X + lx + step / 2;
+        const wy = BIOME_ORIGIN_Y + ly + step / 2;
+        const forestW = this.biome.forestWeight(wx, wy);
         if (forestW > 0.02) {
           g.fillStyle(0x24421c, 0.55 * forestW);
-          g.fillRect(px, py, step, step);
+          g.fillRect(lx, ly, step, step);
         }
-        const creekW = this.biome.creekWeight(cx, cy);
+        const creekW = this.biome.creekWeight(wx, wy);
         if (creekW > 0.02) {
           g.fillStyle(0x3a6ea5, 0.6 * creekW);
-          g.fillRect(px, py, step, step);
+          g.fillRect(lx, ly, step, step);
         }
       }
     }
     // War Camp (M-WC): a distinct packed-dirt floor stamped over whatever
     // biome color sits under the camp, so it reads as a cleared campground
     // rather than the same grass/forest everywhere else. Only loops the
-    // camp's own small bounding box (not the whole world) since it's the same
-    // supersample stride but a tiny fraction of the area.
+    // camp's own small bounding box (local region coords).
     if (this.altarPosition) {
       const altar = this.altarPosition;
+      const alx = altar.x - BIOME_ORIGIN_X; // altar in local region coords
+      const aly = altar.y - BIOME_ORIGIN_Y;
       const CAMP_FLOOR_SOFT = 40; // soft-edge falloff width, same idea as the forest/creek blend
       const CAMP_FLOOR_COLOR = 0x5a4a30;
       const CAMP_FLOOR_ALPHA = 0.8;
       const outer = WAR_CAMP_RADIUS;
-      const minPx = Math.max(0, Math.floor((altar.x - outer) / step) * step);
-      const maxPx = Math.min(WORLD_W, Math.ceil((altar.x + outer) / step) * step);
-      const minPy = Math.max(0, Math.floor((altar.y - outer) / step) * step);
-      const maxPy = Math.min(WORLD_H, Math.ceil((altar.y + outer) / step) * step);
+      const minPx = Math.max(0, Math.floor((alx - outer) / step) * step);
+      const maxPx = Math.min(BIOME_SIZE, Math.ceil((alx + outer) / step) * step);
+      const minPy = Math.max(0, Math.floor((aly - outer) / step) * step);
+      const maxPy = Math.min(BIOME_SIZE, Math.ceil((aly + outer) / step) * step);
       for (let py = minPy; py < maxPy; py += step) {
         for (let px = minPx; px < maxPx; px += step) {
           const cx = px + step / 2;
           const cy = py + step / 2;
-          const d = Phaser.Math.Distance.Between(cx, cy, altar.x, altar.y);
+          const d = Phaser.Math.Distance.Between(cx, cy, alx, aly);
           if (d >= outer) continue;
           const alpha =
             d < outer - CAMP_FLOOR_SOFT
@@ -1992,9 +2056,44 @@ export class MainScene extends Phaser.Scene {
         }
       }
     }
-    const rt = this.add.renderTexture(0, 0, WORLD_W, WORLD_H).setOrigin(0, 0).setDepth(-9);
+    const rt = this.add
+      .renderTexture(BIOME_ORIGIN_X, BIOME_ORIGIN_Y, BIOME_SIZE, BIOME_SIZE)
+      .setOrigin(0, 0)
+      .setDepth(-9);
     rt.draw(g);
     g.destroy();
+  }
+
+  // The circular world edge: fill everything beyond WORLD_RADIUS with a dark
+  // "void" (concentric thick strokes out to the bounding square's corners —
+  // cheap retained-mode vector geometry, no huge texture), plus a subtle
+  // shoreline accent just inside the edge. Depth -8 sits above the biome bake
+  // (-9)/grass (-10) and below every entity; nothing spawns out here anyway.
+  private drawWorldBoundary(): void {
+    const g = this.add.graphics().setDepth(-8);
+    const corner = Math.hypot(WORLD_SIZE, WORLD_SIZE) / 2; // center -> square corner
+    const band = 90;
+    for (let r = WORLD_RADIUS + band / 2; r < corner + band; r += band) {
+      g.lineStyle(band + 2, 0x0a0e14, 1);
+      g.strokeCircle(WORLD_CX, WORLD_CY, r);
+    }
+    g.lineStyle(12, 0x213247, 0.9);
+    g.strokeCircle(WORLD_CX, WORLD_CY, WORLD_RADIUS - 6);
+    g.lineStyle(4, 0x3a6ea5, 0.5);
+    g.strokeCircle(WORLD_CX, WORLD_CY, WORLD_RADIUS - 16);
+  }
+
+  // Keep the player inside the circular world (physics bounds are only the
+  // bounding square). Re-pinned every frame — a soft wall at the water's edge.
+  private clampPlayerToWorld(): void {
+    const dx = this.player.x - WORLD_CX;
+    const dy = this.player.y - WORLD_CY;
+    const d = Math.hypot(dx, dy);
+    const maxR = WORLD_RADIUS - 20;
+    if (d > maxR) {
+      const s = maxR / d;
+      this.player.setPosition(WORLD_CX + dx * s, WORLD_CY + dy * s);
+    }
   }
 
   // Scatter resources around the world, biased by biome zone (trees + branches
@@ -2163,12 +2262,13 @@ export class MainScene extends Phaser.Scene {
     rng: Phaser.Math.RandomDataGenerator,
     clearRadius: number,
   ): { x: number; y: number } {
-    let last = { x: WORLD_W / 2, y: WORLD_H / 2 };
+    let last = { x: WORLD_CX, y: WORLD_CY };
     for (let attempt = 0; attempt < 300; attempt++) {
-      const x = rng.between(60, WORLD_W - 60);
-      const y = rng.between(60, WORLD_H - 60);
+      const x = rng.between(BIOME_ORIGIN_X, BIOME_ORIGIN_X + BIOME_SIZE);
+      const y = rng.between(BIOME_ORIGIN_Y, BIOME_ORIGIN_Y + BIOME_SIZE);
       last = { x, y };
-      if (Phaser.Math.Distance.Between(x, y, WORLD_W / 2, WORLD_H / 2) < clearRadius) continue;
+      const dc = Phaser.Math.Distance.Between(x, y, WORLD_CX, WORLD_CY);
+      if (dc < clearRadius || dc > BIOME_RADIUS) continue;
       // War Camp (M-WC): same no-clutter exclusion pickSpawnPoint applies —
       // this sampler has its own rejection loop so it needs its own check.
       if (
@@ -2337,6 +2437,9 @@ export class MainScene extends Phaser.Scene {
       const x = Phaser.Math.Clamp(altar.x + Math.cos(angle) * r, 60, WORLD_W - 60);
       const y = Phaser.Math.Clamp(altar.y + Math.sin(angle) * r, 60, WORLD_H - 60);
       last = { x, y };
+      // Stay inside the biome circle (the altar sits near its edge, so an
+      // outward push could otherwise land on the empty outer ring).
+      if (Phaser.Math.Distance.Between(x, y, WORLD_CX, WORLD_CY) > BIOME_RADIUS) continue;
       if (this.biome.zoneAt(x, y) !== "forest") continue;
       if (this.biome.isCreekAt(x, y)) continue;
       return { x, y };
@@ -2365,7 +2468,13 @@ export class MainScene extends Phaser.Scene {
       if (altar.discoveredOnMap) continue;
       if (!inReveal(altar.x, altar.y)) continue;
       altar.discoveredOnMap = true;
-      this.minimapUI.revealLandmark(altar.x, altar.y, 0xd6483a, 2.5);
+      this.exploredMap.addLandmark({
+        worldX: altar.x,
+        worldY: altar.y,
+        iconKey: "map_altar",
+        label: "Gremlin War Camp",
+        tint: 0xd6483a,
+      });
     }
     // Gremlin Shacks (M-WC backlog item) — same discovered-landmark treatment,
     // in a distinct wood-brown so they read differently from the war camp.
@@ -2373,7 +2482,13 @@ export class MainScene extends Phaser.Scene {
       if (shack.discoveredOnMap) continue;
       if (!inReveal(shack.x, shack.y)) continue;
       shack.discoveredOnMap = true;
-      this.minimapUI.revealLandmark(shack.x, shack.y, 0x8a6a3a, 1.5);
+      this.exploredMap.addLandmark({
+        worldX: shack.x,
+        worldY: shack.y,
+        iconKey: "map_shack",
+        label: "Gremlin Shack",
+        tint: 0x8a6a3a,
+      });
     }
   }
 
@@ -2423,7 +2538,7 @@ export class MainScene extends Phaser.Scene {
     const rng = this.sessionRng();
     const altar = this.altarPosition;
     const prop = (x: number, y: number, key: string) =>
-      this.add.image(x, y, key).setDepth(y);
+      this.add.image(x, y, key).setDepth(ysortDepth(y));
 
     // Palisade wall: a ring of stakes at the camp radius, one every ~14deg,
     // leaving a ~55deg entrance gap facing world center so the player walks
@@ -4157,6 +4272,7 @@ export class MainScene extends Phaser.Scene {
         "Interact: Left Click",
         "Inventory: Tab",
         "Character: K",
+        "World map: M",
         "Auto-pickup: V",
         "Range ring: O",
         "Station row: Alt+1-9",
@@ -4378,6 +4494,36 @@ export class MainScene extends Phaser.Scene {
   // whenever points are available. Sits directly below the top-right
   // MinimapUI panel (was "under the [Tab] Menu icon" before that icon was
   // removed and the minimap took over the top-right corner).
+  // Small "Map (M)" button tucked into the minimap's bottom-left corner — the
+  // clickable affordance for the full-map overlay (also opened with M). Pinned
+  // to the minimap (not the row below it) so it can't collide with the
+  // stat-points badge that lives under the panel.
+  private createMapButton(): void {
+    const x = this.scale.width - MINIMAP_MARGIN - MINIMAP_W + 3;
+    const y = MINIMAP_MARGIN + MINIMAP_H - 22;
+    this.add
+      .text(x, y, "🗺 Map (M)", {
+        fontFamily: "monospace",
+        fontSize: "12px",
+        color: "#ffe08a",
+        backgroundColor: "#1a1f2acc",
+        padding: { x: 6, y: 3 },
+      })
+      .setOrigin(0, 0)
+      .setScrollFactor(0)
+      .setDepth(3000)
+      .setInteractive({ useHandCursor: true })
+      .on("pointerdown", () => this.toggleWorldMap());
+  }
+
+  // Toggle the full-map overlay. Guarded so it doesn't stack on top of a
+  // blocking menu / the run-end or pause screens.
+  private toggleWorldMap(): void {
+    if (this.runOver || this.isPaused) return;
+    if (!this.worldMapUI.isOpen() && this.anyMenuOpen()) return;
+    this.worldMapUI.toggle();
+  }
+
   private createStatPointsBadge(): void {
     const badgeY = MINIMAP_MARGIN + MINIMAP_H + 8;
     this.statPointsBadge = this.add

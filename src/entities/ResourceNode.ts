@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { ysortDepth } from "../systems/depth";
 
 // A specific craftable tool (tiers can grow later, e.g. iron_axe).
 export type ToolType = "stone_axe" | "stone_pickaxe";
@@ -142,7 +143,7 @@ export class ResourceNode extends Phaser.GameObjects.Sprite {
     // MainScene.updateTreeOcclusion for the fade-when-occluding companion
     // behavior). Ground clutter (pickups, loose drop pieces) stays at the
     // default depth (0) — always below player/enemies, same as before.
-    if (this.action !== "pickup") this.setDepth(cfg.y);
+    if (this.action !== "pickup") this.setDepth(ysortDepth(cfg.y));
   }
 
   // Updates the stack amount and keeps the count label (shown only when

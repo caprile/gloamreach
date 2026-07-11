@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import type { ResourceType } from "../systems/Inventory";
+import { ysortDepth } from "../systems/depth";
 
 export type EnemyState = "idle" | "chasing";
 
@@ -171,7 +172,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     scene.add.existing(this);
     scene.physics.add.existing(this);
     this.setCollideWorldBounds(true); // matches Player — without this, chase/flee/kite AI can walk enemies off the map
-    this.setDepth(cfg.y); // Y-sorted against the player/trees, see preUpdate
+    this.setDepth(ysortDepth(cfg.y)); // Y-sorted against the player/trees, see preUpdate
     // Randomized initial facing — without this every enemy defaults to the
     // same unrotated orientation and only ever rotates once it moves, which
     // reads as "always facing the same direction" for anything that spends
@@ -196,7 +197,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   // whatever is "behind" them, see MainScene.updateTreeOcclusion).
   preUpdate(time: number, delta: number): void {
     super.preUpdate(time, delta);
-    this.setDepth(this.y);
+    this.setDepth(ysortDepth(this.y));
     const barX = this.x - Enemy.BAR_W / 2;
     const barY = this.y - Enemy.BAR_OFFSET_Y;
     const aggro = this.isAggro();

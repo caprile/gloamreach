@@ -972,6 +972,45 @@ mouse-driven only. Don't reintroduce a keybind for this without being asked. Spa
    scales the *player's* reach vs big enemies, this scales the *enemy's own* reach vs its own
    scaled body — any future scaled/elite enemy gets it for free. See `STATUS.md`.
 
+5v. **Circular bigger world + minimap nearby-view + full-map overlay (M-W1 geometry
+   prep)** — off the build order, built on Opus (new world-gen geometry + two new map
+   systems). The world is now a large **circle**: `MainScene` constants `WORLD_RADIUS`
+   4000 (→ `WORLD_SIZE` 8000px square bounding it), `BIOME_RADIUS` 2000 (central content
+   circle, ~the old 3584×2688 biome slightly larger), centered at `WORLD_CX/CY` = 4000;
+   `WORLD_W`/`WORLD_H` kept as back-compat aliases = `WORLD_SIZE` (all the existing
+   `WORLD_W/2`-is-center math still holds). Everything from `BIOME_RADIUS` out to
+   `WORLD_RADIUS` is **empty grass for now** — headroom for future biomes (danger scales
+   outward, the locked M-W1 direction). **`Biome` is origin-aware** now
+   (`new Biome(originX, originY, regionW, regionH, rng)`): it generates only a centered
+   `BIOME_SIZE` region, `forestWeight`/`creekWeight` return 0 outside it, and
+   `buildBiomeTexture()` bakes only that region (a `BIOME_SIZE`² RenderTexture at the
+   region origin — kept under the GPU texture-size limit, not a full-world 8000px bake).
+   All spawn samplers (`pickSpawnPoint`/`pickCreekEdgePoint`/`pickPointNearAltar`) sample
+   the region and reject points outside `BIOME_RADIUS`, so content stays central;
+   `clampPlayerToWorld()` pins the player to the world circle each frame and
+   `drawWorldBoundary()` draws a dark **void ring** + shoreline beyond `WORLD_RADIUS`
+   (cheap concentric strokes, no huge texture). **Depth regression fix (important):**
+   enlarging the world pushed world-object Y-sort depth (`= y`) up to ~8000, drawing low
+   trees/enemies over the fixed HUD (2600–6000); new **`src/systems/depth.ts`
+   `ysortDepth(y) = y * 0.3`** compresses the world Y range into a bounded band (max
+   ~2400, below the HUD), applied at every world Y-sort site
+   (Player/Enemy/ResourceNode/GremlinShack/BossAltar + war-camp props) — **any new
+   Y-sorting world object must use `ysortDepth`, not raw `y`.** **Map rework, three
+   pieces:** (1) **`src/systems/ExploredMap.ts`** (new, framework-light) — the shared
+   explored-world model: a world-space fog color cache (0xRRGGBB per 40px cell, −1 =
+   unrevealed) + discovered-POI landmark list, the **single consumer** of `FogOfWar`'s
+   reveal queue (fog grid is now world-space 200²@40px, decoupled from any HUD panel).
+   (2) **`MinimapUI` rewritten** — the corner panel is now a **player-centered nearby
+   window** (~2240×1680 world px, repainted each frame as clipped Graphics rects), with
+   landmark dots + a small "🗺 Map (M)" button. (3) **`src/ui/WorldMapUI.ts`** (new) — a
+   full-screen overlay (M / Map button / ✕ / Esc): the whole explored fog cache drawn as
+   clipped zoom/pan-transformed Graphics rects (dirty-flag terrain rebuild), **scroll =
+   zoom, drag = pan**, discovered POIs get **icon + label** (`map_altar`/`map_shack`
+   BootScene markers). **Non-modal** — the game keeps running and the player can walk
+   while it's open (world clicks/hover suppressed over it; no pause). Keybinds panel
+   gained a "World map: M" line. No `RECIPES.md` change. See `STATUS.md` +
+   [[survivor-rpg-minimap-fog-of-war]].
+
 **Gloaming Vein (mineable rarity-ore POI + gated trophy refinement) — designed + locked,
 plan committed, NOT yet built.** Plan: `.claude/plans/amethyst-warding-vein.md` (locked with
 the user 2026-07-11 via brainstorm + `AskUserQuestion`; new mechanic → Opus). A rare, finite,
@@ -1005,10 +1044,14 @@ multi-biome world, last).**
 **Not yet built — next up in rough order:**
 6. **World & discovery** — much bigger generated world, biomes, map, eventually a
    single giant circular Valheim-style map (spawn at center, danger increases
-   outward — locked direction from the user, not yet built). See **First biome —
-   content notes** below for the first biome's terrain-zone concept. (Minimap + fog
-   of war, formerly noted here as undecided/not-started, has shipped — see 5a
-   above; the Gremlin Shack POI has shipped — see 5b above.)
+   outward — locked direction from the user). **The circular bigger-world GEOMETRY
+   has now shipped (roadmap 5v):** the world is a large circle (`WORLD_RADIUS` 4000)
+   with the first biome in a central `BIOME_RADIUS` 2000 circle and empty grass out
+   to the edge; still-needed for M-W1 proper: actual multi-biome CONTENT out in the
+   ring + deterministic seeded world-gen. See **First biome — content notes** below
+   for the first biome's terrain-zone concept. (Minimap + fog of war has shipped —
+   see 5a, reworked into a nearby-view + full-map overlay in 5v; the Gremlin Shack
+   POI has shipped — see 5b above.)
 7. **ARPG loot** — rarity, randomized drops/recipes, replayability.
 8. **Cross-cutting:** save/load (localStorage), real pixel-art tilesets.
 
@@ -1087,14 +1130,12 @@ Blunt 5/Pierce 10/Light Armor 5/Running 3/Chopping 4, max-lvl Primal Spear):**
 - **Roguelike/Ascension-style meta concepts** — e.g. a biome's boss could be 1-of-N
   possible bosses depending on the run's seed; a Slay-the-Spire-style "Ascension"
   difficulty-tiering system. Both idea-stage only.
-- **Minimap should NOT show the full map.** Current `MinimapUI` (shipped, see roadmap
-  5a) reveals the *entire* explored world shrunk down — the user now wants the corner
-  minimap to only show a **small nearby section** (viewport-relative, scrolls with the
-  player), plus a separate **full-map overlay** (a larger centered screen panel, opened
-  on demand) that shows everything explored so far. Opening the full map should **not**
-  block movement — the player can keep walking around while it's open. This is a
-  meaningful rework of `MinimapUI`/`FogOfWar`'s current "one panel shows everything"
-  model, not a tweak.
+- ~~**Minimap should NOT show the full map.**~~ **SHIPPED (roadmap 5v).** The corner
+  `MinimapUI` is now a player-centered **nearby view** (scrolls with the player), and a
+  separate **full-map overlay** (`src/ui/WorldMapUI.ts`, opened with M or the Map button)
+  shows everything explored, **zoomable (scroll) + pannable (drag)**, with discovered-POI
+  icons, and is **non-modal** (movement continues while it's open). Both read from the new
+  shared `src/systems/ExploredMap.ts` model.
 - **Trophy slot + elite-drop equipment concept** — beyond the Gremlin Trophy currency
   described in the Elites milestone below, the user wants an actual **equipment slot**
   for trophies (maybe repurposing one of the placeholder "misc" slots already in

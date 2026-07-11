@@ -7,9 +7,9 @@ import Phaser from "phaser";
 // Shacks, Boss Altar). Raw scrollFactor(0) GameObjects, no Container (house
 // style — see the Phaser Container+scrollFactor(0)+input bug note).
 //
-// Depth sits above every world sprite (world uses setDepth(y) up to WORLD_H
-// 2688) but below the fixed-HUD band (2800+), so HUD/minimap/menus stay bright
-// while only the world dims.
+// Depth sits above every world sprite (world Y-sort is compressed into a band
+// that tops out ~2400 — see systems/depth.ts ysortDepth) but below the fixed-
+// HUD band (2800+), so HUD/minimap/menus stay bright while only the world dims.
 const DEPTH = 2700;
 const NIGHT_COLOR = 0x0b1c3a;
 const MAX_NIGHT_ALPHA = 0.42; // "moderate" — clearly night, world stays playable

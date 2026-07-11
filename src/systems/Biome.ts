@@ -30,8 +30,14 @@ const CREEK_WIDTH_MAX = 2;
 const CREEK_TURN_CHANCE = 0.3; // per step, chance to wobble laterally by 1 cell
 
 export class Biome {
-  readonly worldW: number;
-  readonly worldH: number;
+  // The biome occupies a CENTERED sub-region of the (larger, circular) world —
+  // these are its world-space origin + size. Everything outside this box reads
+  // as plain grass (see forestWeight/creekWeight), leaving the rest of the map
+  // empty for future biomes.
+  readonly originX: number;
+  readonly originY: number;
+  readonly regionW: number;
+  readonly regionH: number;
   readonly cols: number;
   readonly rows: number;
   private zones: ZoneType[] = []; // length cols*rows
@@ -42,12 +48,31 @@ export class Biome {
   private zoneNum: Float32Array = new Float32Array(0);
   private creekNum: Float32Array = new Float32Array(0);
 
-  constructor(worldW: number, worldH: number, rng: Phaser.Math.RandomDataGenerator) {
-    this.worldW = worldW;
-    this.worldH = worldH;
-    this.cols = Math.ceil(worldW / CELL);
-    this.rows = Math.ceil(worldH / CELL);
+  constructor(
+    originX: number,
+    originY: number,
+    regionW: number,
+    regionH: number,
+    rng: Phaser.Math.RandomDataGenerator,
+  ) {
+    this.originX = originX;
+    this.originY = originY;
+    this.regionW = regionW;
+    this.regionH = regionH;
+    this.cols = Math.ceil(regionW / CELL);
+    this.rows = Math.ceil(regionH / CELL);
     this.generate(rng);
+  }
+
+  // Whether a world point falls inside the generated biome region. Points
+  // outside it are plain grass with no forest/creek overlay.
+  private inRegion(worldX: number, worldY: number): boolean {
+    return (
+      worldX >= this.originX &&
+      worldX < this.originX + this.regionW &&
+      worldY >= this.originY &&
+      worldY < this.originY + this.regionH
+    );
   }
 
   get cellSize(): number {
@@ -173,8 +198,8 @@ export class Biome {
   // --- queries ---
 
   private cellIndex(worldX: number, worldY: number): number {
-    const cx = Phaser.Math.Clamp(Math.floor(worldX / CELL), 0, this.cols - 1);
-    const cy = Phaser.Math.Clamp(Math.floor(worldY / CELL), 0, this.rows - 1);
+    const cx = Phaser.Math.Clamp(Math.floor((worldX - this.originX) / CELL), 0, this.cols - 1);
+    const cy = Phaser.Math.Clamp(Math.floor((worldY - this.originY) / CELL), 0, this.rows - 1);
     return cy * this.cols + cx;
   }
 
@@ -194,8 +219,8 @@ export class Biome {
   // edge, not out on dry land next to the creek. 4-neighborhood is enough —
   // a diagonal-only touch still counts as "at the bank."
   isCreekEdge(worldX: number, worldY: number): boolean {
-    const cx = Phaser.Math.Clamp(Math.floor(worldX / CELL), 0, this.cols - 1);
-    const cy = Phaser.Math.Clamp(Math.floor(worldY / CELL), 0, this.rows - 1);
+    const cx = Phaser.Math.Clamp(Math.floor((worldX - this.originX) / CELL), 0, this.cols - 1);
+    const cy = Phaser.Math.Clamp(Math.floor((worldY - this.originY) / CELL), 0, this.rows - 1);
     if (!this.creek[cy * this.cols + cx]) return false; // dry land, not water at all
     const neighbors = [
       [cx - 1, cy],
@@ -216,8 +241,8 @@ export class Biome {
   // snapping hard at the cell boundary). Used only for rendering — gameplay
   // queries (zoneAt/isCreekAt) stay hard-edged per-cell lookups.
   private bilinear(grid: Float32Array, worldX: number, worldY: number): number {
-    const gx = worldX / CELL - 0.5;
-    const gy = worldY / CELL - 0.5;
+    const gx = (worldX - this.originX) / CELL - 0.5;
+    const gy = (worldY - this.originY) / CELL - 0.5;
     const x0 = Math.floor(gx);
     const y0 = Math.floor(gy);
     const tx = gx - x0;
@@ -241,12 +266,14 @@ export class Biome {
   // turning the old blocky 40px-stepped zone boundary into a soft gradient
   // band a couple of cells wide.
   forestWeight(worldX: number, worldY: number): number {
+    if (!this.inRegion(worldX, worldY)) return 0; // outside the biome: plain grass
     return this.bilinear(this.zoneNum, worldX, worldY);
   }
 
   // Same idea for the creek overlay, so its banks fade in/out instead of
   // stair-stepping too.
   creekWeight(worldX: number, worldY: number): number {
+    if (!this.inRegion(worldX, worldY)) return 0; // outside the biome: no creek
     return this.bilinear(this.creekNum, worldX, worldY);
   }
 

@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { ysortDepth } from "../systems/depth";
 
 export interface BossAltarConfig {
   x: number;
@@ -26,6 +27,6 @@ export class BossAltar {
   constructor(scene: Phaser.Scene, cfg: BossAltarConfig) {
     this.x = cfg.x;
     this.y = cfg.y;
-    this.image = scene.add.image(cfg.x, cfg.y, "boss_altar").setDepth(cfg.y);
+    this.image = scene.add.image(cfg.x, cfg.y, "boss_altar").setDepth(ysortDepth(cfg.y));
   }
 }

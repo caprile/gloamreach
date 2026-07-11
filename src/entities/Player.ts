@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { ysortDepth } from "../systems/depth";
 
 export const PLAYER_WALK_SPEED = 95; // pixels per second
 const DASH_SPEED = 450; // px/s during a dash burst — sharp snap, not a glide
@@ -41,7 +42,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     scene.add.existing(this);
     scene.physics.add.existing(this);
     this.setCollideWorldBounds(true);
-    this.setDepth(y); // Y-sorted against enemies/trees, kept live in preUpdate
+    this.setDepth(ysortDepth(y)); // Y-sorted against enemies/trees, kept live in preUpdate
 
     const kb = scene.input.keyboard!;
     this.cursors = kb.createCursorKeys();
@@ -59,7 +60,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   // of MainScene's update() cadence (e.g. still runs while frozen on death).
   preUpdate(time: number, delta: number): void {
     super.preUpdate(time, delta);
-    this.setDepth(this.y);
+    this.setDepth(ysortDepth(this.y));
   }
 
   // Called every frame by MainScene. `canSprint`/`canDash` are the scene's

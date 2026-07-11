@@ -2,36 +2,42 @@
 
 ## Current State
 
-_Living snapshot — edit in place, never append. Last shipped: **elite melee reach
-fix** (+ Gloaming Vein plan drafted), **2026-07-11**._
+_Living snapshot — edit in place, never append. Last shipped: **circular bigger world
++ minimap nearby-view + full-map overlay (M-W1 prep)**, **2026-07-11**._
 
 **The game.** Top-down 2D pixel survival-ARPG (Phaser 3 + TypeScript + Vite; all
-textures are placeholders generated in `BootScene`). One forest biome on a ~2x world
-with a day/night cycle and a hardcore run/score meta-loop (seed is display-only for
-now). Shipped systems: gather/craft with tool-KIND gating + a Workbench tier gate;
+textures are placeholders generated in `BootScene`). One forest biome sitting in the
+center of a large **circular** world (8000px, `WORLD_RADIUS` 4000; the biome fills a
+central `BIOME_RADIUS` 2000 circle, the rest empty grass reserved for future biomes —
+danger scales outward, the locked M-W1 direction). Day/night cycle and a hardcore
+run/score meta-loop (seed is display-only for now). Shipped systems: gather/craft with
+tool-KIND gating + a Workbench tier gate;
 souls-like telegraphed combat on **every** enemy (Boar charge, Snake coil-lunge,
 Gremlin/Gremling claws) plus the first boss (Gremlin King — poise/stagger + leaping
 smash / charge / ground slam, enrage <50% HP); stamina/sprint/dash with dash i-frames;
 Skills + Player Level progression; placeable stations (Campfire, Drying Rack, Relic
 Forge, Bedroll); cooking → timed HP-regen food buffs; wearable 3-tier Gremlin armor +
 weapon/station upgrades; elites (chance-based rolls + forced-elite shack guards)
-dropping per-species trophies; a probabilistic trophy→Relic economy; minimap + fog of
-war; the Gremlin War Camp POI; contextual hints + a pause menu; and a drift-free
-balancing dashboard at `/dashboard.html` (second Vite entry, imports live data modules).
+dropping per-species trophies; a probabilistic trophy→Relic economy; a **nearby-view
+minimap + full-screen zoomable/pannable world map** (M / Map button) with fog of war and
+discovered-POI icons; the Gremlin War Camp POI; contextual hints + a pause menu; and a
+drift-free balancing dashboard at `/dashboard.html` (second Vite entry, imports live data
+modules).
 
 **Meta-loop** (`.claude/plans/roguelike-metaloop-master-plan.md`): M-FX / M-R1 /
 M-DN / Comfort(M-SB) / M-EL2 / M-RL / M-WC all shipped; M-FA cut. Hardcore one-life
 death ends a run and posts a `localStorage` high score; killing the Gremlin King =
-win. Deterministic seeded world-gen is still deferred to M-W1.
+win. The world is now circular + much larger (M-W1 geometry prep, above); deterministic
+seeded world-gen and actual multi-biome content are still deferred to M-W1 proper.
 
 **In progress / next.** **Gloaming Vein** (mineable rarity-ore POI + gated trophy
 refinement) is designed + locked with a committed plan
 (`.claude/plans/amethyst-warding-vein.md`) but **not yet built** — a content+economy
 pass on the M-RL relic loop, slotting in ahead of M-TE. Then **M-TE** (trophy-gated
-special gear) and **M-W1** (circular multi-biome world) last. A separate playtest-polish
-backlog also remains: discovered-material toast, hover highlight on interactables,
-inventory auto-sort, minimap nearby-view + full-map rework, a ranged starter weapon, and
-passive HP regen.
+special gear) and **M-W1** (multi-biome content in the now-circular world) last. A
+separate playtest-polish backlog also remains: discovered-material toast, hover highlight
+on interactables, inventory auto-sort, a ranged starter weapon, and passive HP regen.
+(The minimap nearby-view + full-map rework — long on that list — shipped this session.)
 
 **Known issues / open.**
 - Boss may be slightly overtuned after the 5s damage bump (the user's "TBD" — left as-is
@@ -42,12 +48,86 @@ passive HP regen.
 - No save/load beyond the high-score table; all run state is in-memory only.
 - The dashboard **Enemies tab is the one hand-mirrored data source** — keep it in sync
   when tuning enemy stats (everything else on the dashboard is imported live).
+- **World Y-sort depth is now compressed** (`systems/depth.ts` `ysortDepth` = `y * 0.3`)
+  so world objects stay below the fixed HUD even though the world is 8000px tall. Any NEW
+  world object that Y-sorts by position must use `ysortDepth(y)`, not raw `y`, or it can
+  draw over the HUD. Fixed-HUD depths (2600–6000) are unchanged and still clear it.
 
 ## Recent Entries
 
 > Older entries in STATUS-archive.md.
 
-### Just finished: Elite melee reach fix + Gloaming Vein design
+### Just finished: Circular bigger world + minimap nearby-view + full-map overlay
+
+Off the master-plan build order (the user paused the Gloaming Vein to first do the world/map
+rework, prepping for M-W1). Built on **Opus** (new world-gen geometry + two new map
+systems). Three asks: (1) make the world **circular + much bigger**, keeping the current
+biome ~its size but leaving room (empty for now) for future biomes; (2) the corner minimap
+should show a **nearby view** (what's on screen), not the whole world; (3) a **full map**
+opened by a button, **zoomable (scroll) + pannable (drag)**, with **POI icons once
+discovered**.
+
+**Circular bigger world.** New geometry constants in `MainScene`: `WORLD_RADIUS` 4000
+(→ `WORLD_SIZE` 8000px square that bounds the world circle), `BIOME_RADIUS` 2000 (the
+central content circle, ~the old 3584×2688 biome, slightly larger), centered at
+`WORLD_CX/CY` = 4000. `WORLD_W`/`WORLD_H` kept as back-compat aliases = `WORLD_SIZE` (all
+the existing `WORLD_W/2`-is-center math still holds). **`Biome` is now origin-aware**
+(`new Biome(originX, originY, regionW, regionH, rng)`) — it generates only a centered
+`BIOME_SIZE` region and `forestWeight`/`creekWeight` return 0 outside it, so the outer ring
+is plain grass. `buildBiomeTexture()` bakes only that region (a `BIOME_SIZE`×`BIOME_SIZE`
+RenderTexture placed at the region origin — kept well under the GPU texture-size limit
+instead of a full-world 8000px bake). All spawn samplers (`pickSpawnPoint`,
+`pickCreekEdgePoint`, `pickPointNearAltar`) now sample within the region and reject points
+outside `BIOME_RADIUS`, so all first-biome content stays in the central circle (verified:
+0/396 nodes outside; a few war-camp/shack guards spill ~120px past onto grass, as the camp
+sits at the biome's outer edge — fine/thematic). `clampPlayerToWorld()` pins the player to
+the world circle each frame; `drawWorldBoundary()` fills a dark **void ring** beyond
+`WORLD_RADIUS` (cheap concentric thick strokes, no giant texture) + a shoreline accent, so
+the playable area reads as a round island.
+
+**Depth regression fixed (important).** Enlarging the world pushed world-object Y-sort
+depth (`= y`) up to ~8000, which drew low trees/enemies OVER the fixed HUD (2600–6000).
+New **`src/systems/depth.ts` `ysortDepth(y) = y * 0.3`** compresses the world Y range into
+a bounded band (max ~2400, below the HUD), applied at every world Y-sort site
+(Player/Enemy/ResourceNode/GremlinShack/BossAltar + war-camp props). Order preserved;
+ground/ring negatives + low-depth drops/damage-numbers unaffected. **Any new Y-sorting
+world object must use `ysortDepth`.**
+
+**Map rework — three pieces.**
+- **`src/systems/ExploredMap.ts`** (new, framework-light) — the shared explored-world
+  model behind both views: a world-space fog color cache (one 0xRRGGBB per 40px fog cell,
+  −1 = unrevealed) + the discovered-POI landmark list. It's the **single consumer** of
+  `FogOfWar`'s reveal queue (`drainRevealed()` updates the cache + returns changed cells),
+  so the two views can't race. Fog grid is now world-space (200×200 @ 40px), decoupled from
+  any HUD panel resolution.
+- **`MinimapUI` rewritten** — the corner panel is now a **player-centered nearby window**
+  (~2240×1680 world px, a touch past the 1920×1080 viewport), repainted each frame from the
+  color cache as clipped Graphics rects (no whole-world shrink). Landmark dots + player
+  marker + night dim. A small **"🗺 Map (M)"** button is tucked in its corner.
+- **`src/ui/WorldMapUI.ts`** (new) — the full-screen overlay (M key / Map button / ✕ /
+  Esc). Draws the whole explored fog cache as clipped, zoom/pan-transformed Graphics rects
+  (a dirty flag rebuilds terrain only on zoom/pan/new-reveal; the same reliable fixed-HUD
+  clipping the minimap uses, no geometry-mask-vs-scroll drift). **Scroll = zoom (1–10×),
+  drag = pan (clamped)**; discovered POIs get an **icon + label** (`map_altar` red/gold war
+  camp, `map_shack` brown — new BootScene markers). **Non-modal** per the locked design —
+  the game keeps running and the player can walk while it's open (world clicks/hover
+  suppressed over it; it doesn't pause). Keybinds panel gained a "World map: M" line.
+
+**Verified live** (`preview_eval` + screenshots): player spawns at center (4000,4000);
+biome origin (2000,2000)/region 4000²/fog 200²@40; altar 1955px from center (in-biome);
+0 nodes outside the biome circle; player shoved to (4000,8300) clamps to dist 3980
+(`WORLD_RADIUS`−20); void/shoreline ring renders at the edge; nearby minimap scrolls with
+the player and shows the edge as void; full map renders the explored trail + war-camp +
+3 shack icons/labels, zoom scales cleanly (clipped to panel), a 250px drag pans and a huge
+drag clamps to 1611; and — the depth fix — trees no longer draw over the map panel (a
+mid-test RunEndUI correctly sat above it at 3500). `tsc --noEmit` clean; console
+error-free. No `RECIPES.md` change (no recipe/cost changes).
+
+**Next:** the **Gloaming Vein** (mineable rarity-ore POI + trophy refinement, plan
+committed at `.claude/plans/amethyst-warding-vein.md`), then **M-TE**, then **M-W1** proper
+(multi-biome content + deterministic seeded gen in this now-circular world).
+
+### Previously: Elite melee reach fix + Gloaming Vein design
 
 Two things this session: a live combat bug fix, and the locked design + committed plan for
 the next feature (the Gloaming Vein — not built yet). The bug fix is Sonnet-class (a fix on
@@ -420,91 +500,3 @@ for later sessions.
 - **Small features:** contextual hint to place a Workbench (Hints.ts); in-game relic
   compendium (see-all-relics view — the dashboard covers the dev side, he wants it in-game too).
 
-### Previously: Contextual hints + pause menu (playtest-readiness pass)
-
-Off the master-plan build order: the user paused M-TE (trophy gear) to instead polish the
-first biome enough for outside playtesters. The first item of that pass tackles the
-biggest cold-start problem — a fresh player has no idea what the goal is or how the
-controls work. Built on Opus (two new systems). Plan:
-`.claude/plans/contextual-hints-and-pause-menu.md`.
-
-- **`src/systems/Hints.ts`** (`HintManager`, framework-free like Run/Buffs) — a
-  Valheim-Hugin-style contextual tip system (explicitly **not** a mascot; the "raven" was
-  only a behavioral reference). `trigger(id)` shows a tip **once per run** if enabled
-  (idempotent — safe from a per-frame hover path). Locked with the user: **keep it a
-  challenge** — 8 tips teach controls + nudge toward mechanics but **never** spell out the
-  totem→altar→boss win condition. "Already shown" state **resets each run** (fresh instance
-  in `create()`); the **on/off preference persists** in localStorage
-  (`survivor-rpg:hints-enabled:v1`, tolerant of a blocked/corrupt store). Disabled is a
-  **true no-op that doesn't mark the hint shown**, so flipping hints back on mid-run still
-  surfaces future first-occurrences.
-- **`src/ui/HintUI.ts`** — corner popup card: right-edge, mid-height (~42%), clear of the
-  minimap/hotbar/prompt/left-column. Slides in from the right, holds 5.2s, fades, click to
-  dismiss; only one at a time (a new hint replaces the current). Flat scrollFactor(0)
-  objects (no Container), depth 2860/2861 (clears WORLD_H, below menus). The slide tween is
-  killed on replace so a stale `onComplete` can't fade the next card early.
-- **8 triggers** wired at existing hook points: `awaken` (spawn +1.5s: WASD + explore),
-  `pickup_reach` (first reachable free pickup: left-click to interact), `tool_locked`
-  (clicked a chop/mine node without the right tool KIND — nudges toward tools, **never
-  names which**, preserving the prompt-gating design), `open_menu` (first recipe unlock:
-  press Tab), `stamina_empty`, `low_hp` (≤30%: cooked food heals), `nightfall` (torch +
-  danger), `elite_trophy` (gremlin/boar/snake trophy in hand → Relic Forge; NOT the boss
-  fang, which is a win-state drop).
-- **`src/ui/PauseMenuUI.ts`** + MainScene wiring — a pause overlay (**Esc**), modeled on
-  RunEndUI. Chosen over a standalone settings panel because it delivers three playtest
-  needs at once: the pause players expect, a Resume/New Run escape hatch, and the home for
-  the Hints ON/OFF toggle (settings didn't exist). **Freeze:** `openPauseMenu()` sets
-  `isPaused`, zeroes player velocity, `physics.world.pause()`, `time.paused = true`;
-  `update()` early-returns on `isPaused` so `run.tick`/day-night never advance — **pausing
-  doesn't burn the speedrun clock**. Blocked once `runOver`/`isDead` (RunEndUI owns the
-  frozen world then). World pointerdown guarded with `isPaused`; **Esc** opens pause only
-  when no other menu is open (else it just closes that menu). All new fields reset in
-  `create()` per the `scene.restart()` field-init gotcha (with a defensive
-  `physics.world.resume()` + `time.paused = false` in case New Run was clicked from the
-  pause menu). Keybinds panel gained a `"Pause / close: Esc"` line for discoverability.
-- `tsc --noEmit` clean; preview console clean. Verified live: card renders + idempotent +
-  one-at-a-time; disabled no-op doesn't burn the hint (re-enable re-shows); pause freezes
-  physics + scene clock + `isPaused` and resumes clean; toggle persists. Screenshots of the
-  PAUSED overlay + the right-edge TIP card. No `RECIPES.md` change (no recipes touched).
-
-### Previously: Timed action bars + slot-machine relic rolls
-
-A playtest feel request from the user (off the standing roguelike loop, not a master-plan
-milestone): crafting/processing/cooking/relic-rolls all completed **instantly** — he wanted
-a short **loading bar before the result lands**, with two distinct feels. Built on Opus
-(new UI-animation mechanic + a per-station "busy" concept that didn't exist). Detailed plan:
-`.claude/plans/generic-meandering-puffin.md`.
-
-- **`src/ui/ProgressBar.ts`** (new) — a small reusable fill bar (flat scrollFactor(0) rects,
-  no Container per the CraftingMenu note). Tweens a `{v}` proxy 0→1 (not the Rectangle
-  itself) so the visuals can hide/cancel without killing the tween. One instance is owned
-  per menu, positioned over the action button, **not** part of the per-frame-cleared `rows`.
-  Used by the three "quick" menus: **craft ~450ms, cook ~500ms, process ~600ms**
-  (`Sine.easeInOut`). A **single bar for a whole batch** (an 8→4 dry is one bar, verified).
-- **Commit-at-end:** inputs are consumed + output granted only when the bar fills (the
-  existing synchronous `craft`/`processAmount`/`cook` methods are unchanged, just invoked
-  from `onComplete`). A `busy` flag greys the button + blocks re-clicks meanwhile.
-  **Closing a menu mid-bar cancels cleanly** (nothing consumed until it fills, so a no-op —
-  chosen over "complete after close" because the station menus lose their station ref on
-  close; uniform + predictable). Verified: normal craft 0→1, cancel-on-close 1→1 (no
-  double-craft, no lost resources), and item lands **after** the bar, not at click.
-- **`src/ui/RelicRevealFx.ts`** (new) — the Relic Forge's **slot-machine** spin (not the
-  generic bar; the feel is different). The roll RESULT is resolved by the caller *before*
-  the spin (trophy consumed + `RelicManager` mutated immediately — verified 5→4 trophies /
-  0→1 relic at click), so an interrupted spin never changes what was won — it's pure theater
-  over a known outcome. A ~1400ms `Quart.easeOut` bar decelerates while a **reel gem**
-  rapid-swaps rarity icons and slows down, then a **rarity-scaled reveal** (data-driven
-  `REVEAL_CFG`, not branching): **Common** = a modest gem punch + faint glow;
-  **Uncommon** adds a panel flash + light shards; **Rare/Mythic** pile on a big additive
-  glow burst (reuses the M-DN `light_soft` texture, tinted per rarity), panel flash, a
-  radial shard burst, a scaled-in `★ RARITY! ★` banner, and a subtle camera shake. A
-  full-panel scrim dims the busy grid + eats clicks during the spin. **Fail** = a grey
-  crumble fizzle. Verified: mid-spin frame (scrim + reel + bar) and the frozen **mythic**
-  payoff (glow blowing past the panel + banner) via a tween-pause trick.
-- **Deferred announce:** `MainScene.rollRelic(trophyKey, announce=false)` for the menu path
-  — the event-log line + `afterRelicChange()` (relic-bar sync, stat bonuses) fire at the
-  **reveal landing** via a new `announceRelicResult()` + the menu's `announceRoll` dep, not
-  at click, so the payoff is the satisfying moment. Verified: log/bar update on reveal, and
-  `busy`/`fxActive` both clear afterward.
-- No `RECIPES.md` change (no recipe/cost changes). `tsc --noEmit` clean; `preview_console_logs`
-  (error) clean across all tests.
