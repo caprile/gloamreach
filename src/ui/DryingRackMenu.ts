@@ -4,6 +4,11 @@ import { itemDef } from "../systems/Items";
 import type { ProcessingStation } from "../systems/Processing";
 import type { Skills } from "../systems/Skills";
 import { Tooltip } from "./Tooltip";
+import { ProgressBar } from "./ProgressBar";
+
+// A short "drying…" bar plays before the output lands — one bar for the whole
+// batch (a 8->4 run is a single bar), a touch longer than a plain craft.
+const PROCESS_BAR_MS = 600;
 
 export interface DryingRackMenuDeps {
   backpack: ItemContainer;
@@ -78,11 +83,15 @@ export class DryingRackMenu {
   // amount shrinks (e.g. after processing).
   private selectedAmount = 0;
   private sliderDragging = false;
+  // True while a process bar is filling — greys the button + blocks re-clicks.
+  private busy = false;
+  private progressBar: ProgressBar;
 
   constructor(scene: Phaser.Scene, deps: DryingRackMenuDeps) {
     this.scene = scene;
     this.deps = deps;
     this.tooltipUI = new Tooltip(scene, deps.skills);
+    this.progressBar = new ProgressBar(scene, { width: 96, height: 26, depth: DEPTH_TEXT + 3 });
 
     this.panelW = 600;
     this.panelH = 400;
@@ -115,6 +124,9 @@ export class DryingRackMenu {
     if (!this.open) return;
     this.open = false;
     this.sliderDragging = false;
+    // Closing mid-process cancels the bar (nothing's consumed until it fills).
+    this.busy = false;
+    this.progressBar.stop();
     this.bg.setVisible(false);
     this.clearRows();
     this.tooltipUI.hide();
@@ -364,9 +376,10 @@ export class DryingRackMenu {
     const previewY = track.y + 22;
     this.addText(px, previewY, previewLabel, 13, preview.output > 0 ? "#8fe38f" : "#5b6472");
 
-    const canProcess = preview.output > 0;
+    const btnY = previewY + 26;
+    const canProcess = preview.output > 0 && !this.busy;
     const btn = this.scene.add
-      .text(px, previewY + 26, "Process", {
+      .text(px, btnY, this.busy ? "Drying…" : "Process", {
         fontFamily: "monospace",
         fontSize: "14px",
         color: canProcess ? "#0a0a0a" : "#4a4a4a",
@@ -377,9 +390,23 @@ export class DryingRackMenu {
       .setDepth(DEPTH_TEXT)
       .setInteractive({ useHandCursor: canProcess })
       .on("pointerdown", () => {
-        if (canProcess) this.deps.processAmount(inputAmount);
+        if (!canProcess) return;
+        // The batch is processed when the bar finishes (busy blocks re-clicks);
+        // tween-driven so it still lands if the menu closes mid-bar.
+        this.busy = true;
+        this.progressBar.setPosition(px, btnY).setSize(96, 26).start(PROCESS_BAR_MS, {
+          onComplete: () => {
+            this.busy = false;
+            this.deps.processAmount(inputAmount);
+            if (this.open) this.render();
+          },
+        });
+        this.render();
       });
     this.rows.push(btn);
+
+    // Keep the running bar pinned over the (greyed) button across re-renders.
+    if (this.busy) this.progressBar.setPosition(px, btnY).setVisible(true);
   }
 
   private promptForAmount(max: number): void {

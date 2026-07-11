@@ -5,6 +5,10 @@ import { COOK_RECIPES, canAffordCook, type CookRecipe } from "../systems/Cooking
 import { stationDisplayName } from "../systems/StationUpgrades";
 import type { Skills } from "../systems/Skills";
 import { Tooltip } from "./Tooltip";
+import { ProgressBar } from "./ProgressBar";
+
+// A short "cooking…" bar plays before the dish lands in the bag.
+const COOK_BAR_MS = 500;
 
 export interface CookingMenuDeps {
   backpack: ItemContainer;
@@ -40,6 +44,11 @@ export class CookingMenu {
   private open = false;
   private rows: Phaser.GameObjects.GameObject[] = [];
   private tooltipUI: Tooltip;
+  // True while a cook bar is filling; busyBtn tracks which row's button to
+  // cover with the bar. All cook buttons grey out meanwhile.
+  private busy = false;
+  private busyBtn = { x: 0, y: 0 };
+  private progressBar: ProgressBar;
 
   private panelX: number;
   private panelY: number;
@@ -50,6 +59,7 @@ export class CookingMenu {
     this.scene = scene;
     this.deps = deps;
     this.tooltipUI = new Tooltip(scene, deps.skills);
+    this.progressBar = new ProgressBar(scene, { width: 76, height: 30, depth: DEPTH_TEXT + 3 });
 
     this.panelW = 520;
     this.panelH = 120 + COOK_RECIPES.length * (ROW_H + ROW_GAP);
@@ -74,6 +84,9 @@ export class CookingMenu {
   close(): void {
     if (!this.open) return;
     this.open = false;
+    // Closing mid-cook cancels the bar (nothing's consumed until it fills).
+    this.busy = false;
+    this.progressBar.stop();
     this.bg.setVisible(false);
     this.clearRows();
     this.tooltipUI.hide();
@@ -200,21 +213,39 @@ export class CookingMenu {
       );
     }
 
+    const btnX = x + rowW - 70;
+    const btnY = y + ROW_H / 2 - 12;
+    const clickable = canCook && !this.busy;
     const btn = this.scene.add
-      .text(x + rowW - 70, y + ROW_H / 2 - 12, "Cook", {
+      .text(btnX, btnY, this.busy ? "…" : "Cook", {
         fontFamily: "monospace",
         fontSize: "14px",
-        color: canCook ? "#0a0a0a" : "#4a4a4a",
-        backgroundColor: canCook ? "#8fe38f" : "#2a2a2a",
+        color: clickable ? "#0a0a0a" : "#4a4a4a",
+        backgroundColor: clickable ? "#8fe38f" : "#2a2a2a",
         padding: { x: 12, y: 6 },
       })
       .setScrollFactor(0)
       .setDepth(DEPTH_TEXT)
-      .setInteractive({ useHandCursor: canCook })
+      .setInteractive({ useHandCursor: clickable })
       .on("pointerdown", () => {
-        if (canCook) this.deps.cook(recipe.id);
+        if (!clickable) return;
+        this.busy = true;
+        this.busyBtn = { x: btnX, y: btnY };
+        this.progressBar.setPosition(btnX, btnY).setSize(76, 30).start(COOK_BAR_MS, {
+          onComplete: () => {
+            this.busy = false;
+            this.deps.cook(recipe.id);
+            if (this.open) this.render();
+          },
+        });
+        this.render();
       });
     this.rows.push(btn);
+
+    // Pin the running bar over the clicked row's (greyed) button.
+    if (this.busy && this.busyBtn.x === btnX && this.busyBtn.y === btnY) {
+      this.progressBar.setPosition(btnX, btnY).setVisible(true);
+    }
   }
 
   private addText(

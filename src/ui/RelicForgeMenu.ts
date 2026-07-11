@@ -13,13 +13,19 @@ import {
   relicEffectText,
   type RollResult,
 } from "../systems/Relics";
+import { RelicRevealFx } from "./RelicRevealFx";
 
 export interface RelicForgeMenuDeps {
   backpack: ItemContainer;
   relics: RelicManager;
-  // Attempt one roll by consuming a trophy of `trophyKey` (scene consumes +
-  // announces). Returns the outcome so the menu can show inline feedback.
+  // Attempt one roll by consuming a trophy of `trophyKey`. The scene consumes
+  // the trophy + mutates RelicManager immediately, but does NOT announce (the
+  // menu's slot-machine reveal defers that to announceRoll). Returns the
+  // resolved outcome so the reveal knows what to land on.
   roll: (trophyKey: string) => RollResult | null;
+  // Fired when the reveal animation lands — the scene logs the result + syncs
+  // the HUD relic bar / stat bonuses at the satisfying moment, not at click.
+  announceRoll: (result: RollResult | null) => void;
 }
 
 const DEPTH_BG = 3000;
@@ -51,8 +57,12 @@ export class RelicForgeMenu {
   private bg: Phaser.GameObjects.Rectangle;
   private open = false;
   private rows: Phaser.GameObjects.GameObject[] = [];
-  // Last roll outcome, shown as inline feedback until the menu closes.
+  // Last roll outcome, shown as inline feedback until the menu closes. Set at
+  // REVEAL time (not click), so the line matches the slot-machine landing.
   private lastResult: RollResult | null = null;
+  // The slot-machine spin/reveal; `busy` blocks a second roll mid-spin.
+  private revealFx: RelicRevealFx;
+  private busy = false;
 
   private tipBg?: Phaser.GameObjects.Rectangle;
   private tipText?: Phaser.GameObjects.Text;
@@ -65,6 +75,7 @@ export class RelicForgeMenu {
   constructor(scene: Phaser.Scene, deps: RelicForgeMenuDeps) {
     this.scene = scene;
     this.deps = deps;
+    this.revealFx = new RelicRevealFx(scene);
     this.panelX = scene.scale.width / 2 - this.panelW / 2;
     this.panelY = scene.scale.height / 2 - this.panelH / 2;
     this.bg = scene.add
@@ -87,6 +98,8 @@ export class RelicForgeMenu {
     if (!this.open) return;
     this.open = false;
     this.lastResult = null;
+    this.busy = false;
+    this.revealFx.stop();
     this.bg.setVisible(false);
     this.clearRows();
     this.hideTooltip();
@@ -100,10 +113,22 @@ export class RelicForgeMenu {
     if (this.open) this.render();
   }
 
-  // Called by the scene right after a roll so the outcome shows inline.
-  showResult(result: RollResult | null): void {
-    this.lastResult = result;
-    if (this.open) this.render();
+  // Consume the trophy + resolve the roll immediately (so state is correct even
+  // if the spin is interrupted), then play the slot-machine spin over a KNOWN
+  // outcome. The reveal landing is when we announce + show the result line.
+  private beginRoll(trophyKey: string): void {
+    if (this.busy) return;
+    const result = this.deps.roll(trophyKey);
+    this.busy = true;
+    this.lastResult = null;
+    this.render(); // clear any prior result line + grey the buttons under the scrim
+    const bounds = { x: this.panelX, y: this.panelY, w: this.panelW, h: this.panelH };
+    this.revealFx.spin(bounds, result, () => {
+      this.busy = false;
+      this.lastResult = result;
+      this.deps.announceRoll(result);
+      if (this.open) this.render();
+    });
   }
 
   containsPoint(screenX: number, screenY: number): boolean {
@@ -191,9 +216,9 @@ export class RelicForgeMenu {
         .setStrokeStyle(1, can ? RARITY_COLOR[t.rarity] : 0x3a4250)
         .setScrollFactor(0)
         .setDepth(DEPTH_ITEM)
-        .setInteractive({ useHandCursor: can })
+        .setInteractive({ useHandCursor: can && !this.busy })
         .on("pointerdown", () => {
-          if (can) this.showResult(this.deps.roll(trophyKey));
+          if (can && !this.busy) this.beginRoll(trophyKey);
         });
       this.rows.push(box);
 

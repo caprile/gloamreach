@@ -265,6 +265,7 @@ export class MainScene extends Phaser.Scene {
   private relicBarUI!: RelicBarUI;
   private hoveredForge: Phaser.GameObjects.Image | null = null;
   private openForge: Phaser.GameObjects.Image | null = null; // the forge the relic menu is bound to
+  private lastRollTrophyKey?: string; // for the deferred reveal's event-log icon
   // Gremlin Shack POI (world-gen-placed, not player-placed) — parallel array
   // to dryingRacks, same "image + live state" pairing shape.
   private gremlinShacks: GremlinShack[] = [];
@@ -1508,7 +1509,10 @@ export class MainScene extends Phaser.Scene {
     this.relicForgeMenu = new RelicForgeMenu(this, {
       backpack: this.backpack,
       relics: this.relics,
-      roll: (trophyKey) => this.rollRelic(trophyKey),
+      // Resolve the roll now (consume trophy + mutate RelicManager) but defer
+      // the log/HUD-sync to the slot-machine reveal landing (announceRoll).
+      roll: (trophyKey) => this.rollRelic(trophyKey, false),
+      announceRoll: (result) => this.announceRelicResult(result),
     });
   }
 
@@ -1534,22 +1538,28 @@ export class MainScene extends Phaser.Scene {
   // chance + a pity counter live in RelicManager.roll(). Re-guarded against an
   // empty backpack even though the menu gates its button. Returns the outcome so
   // the forge menu can show inline feedback.
-  private rollRelic(trophyKey: string): RollResult | null {
+  private rollRelic(trophyKey: string, announce = true): RollResult | null {
     if (!TROPHY_ROLL[trophyKey] || this.backpack.count(trophyKey) < 1) return null;
     this.backpack.removeCount(trophyKey, 1);
+    this.lastRollTrophyKey = trophyKey;
     const result = this.relics.roll(trophyKey);
+    // The forge menu defers this to the slot-machine reveal (announce=false) so
+    // the log + relic-bar + stat bonuses land at the satisfying moment.
+    if (announce) this.announceRelicResult(result);
+    return result;
+  }
+
+  // Log the outcome + re-sync the HUD/stat bonuses. Called at reveal time by the
+  // forge menu's deferred announceRoll, or inline for any non-menu roll path.
+  private announceRelicResult(result: RollResult | null): void {
+    const tex = this.lastRollTrophyKey ? itemDef(this.lastRollTrophyKey)?.texture : undefined;
     if (result?.success && result.id) {
       const def = RELIC_DEFS[result.id];
-      this.eventLog.add(
-        "recipe",
-        `Relic forged: ${def.name} (${rarityName(def.rarity)})`,
-        itemDef(trophyKey)?.texture,
-      );
-    } else {
-      this.eventLog.add("info", "The trophy crumbled to dust — no relic this time.", itemDef(trophyKey)?.texture);
+      this.eventLog.add("recipe", `Relic forged: ${def.name} (${rarityName(def.rarity)})`, tex);
+    } else if (result) {
+      this.eventLog.add("info", "The trophy crumbled to dust — no relic this time.", tex);
     }
     this.afterRelicChange();
-    return result;
   }
 
   // Shared post-roll refresh: relic effects may change max HP/stamina, and both

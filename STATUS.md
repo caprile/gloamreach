@@ -2,7 +2,49 @@
 
 Last updated: 2026-07-10
 
-### Just finished: M-WC — Gremlin War Camp (altar POI upgrade + hints)
+### Just finished: Timed action bars + slot-machine relic rolls
+
+A playtest feel request from the user (off the standing roguelike loop, not a master-plan
+milestone): crafting/processing/cooking/relic-rolls all completed **instantly** — he wanted
+a short **loading bar before the result lands**, with two distinct feels. Built on Opus
+(new UI-animation mechanic + a per-station "busy" concept that didn't exist). Detailed plan:
+`.claude/plans/generic-meandering-puffin.md`.
+
+- **`src/ui/ProgressBar.ts`** (new) — a small reusable fill bar (flat scrollFactor(0) rects,
+  no Container per the CraftingMenu note). Tweens a `{v}` proxy 0→1 (not the Rectangle
+  itself) so the visuals can hide/cancel without killing the tween. One instance is owned
+  per menu, positioned over the action button, **not** part of the per-frame-cleared `rows`.
+  Used by the three "quick" menus: **craft ~450ms, cook ~500ms, process ~600ms**
+  (`Sine.easeInOut`). A **single bar for a whole batch** (an 8→4 dry is one bar, verified).
+- **Commit-at-end:** inputs are consumed + output granted only when the bar fills (the
+  existing synchronous `craft`/`processAmount`/`cook` methods are unchanged, just invoked
+  from `onComplete`). A `busy` flag greys the button + blocks re-clicks meanwhile.
+  **Closing a menu mid-bar cancels cleanly** (nothing consumed until it fills, so a no-op —
+  chosen over "complete after close" because the station menus lose their station ref on
+  close; uniform + predictable). Verified: normal craft 0→1, cancel-on-close 1→1 (no
+  double-craft, no lost resources), and item lands **after** the bar, not at click.
+- **`src/ui/RelicRevealFx.ts`** (new) — the Relic Forge's **slot-machine** spin (not the
+  generic bar; the feel is different). The roll RESULT is resolved by the caller *before*
+  the spin (trophy consumed + `RelicManager` mutated immediately — verified 5→4 trophies /
+  0→1 relic at click), so an interrupted spin never changes what was won — it's pure theater
+  over a known outcome. A ~1400ms `Quart.easeOut` bar decelerates while a **reel gem**
+  rapid-swaps rarity icons and slows down, then a **rarity-scaled reveal** (data-driven
+  `REVEAL_CFG`, not branching): **Common** = a modest gem punch + faint glow;
+  **Uncommon** adds a panel flash + light shards; **Rare/Mythic** pile on a big additive
+  glow burst (reuses the M-DN `light_soft` texture, tinted per rarity), panel flash, a
+  radial shard burst, a scaled-in `★ RARITY! ★` banner, and a subtle camera shake. A
+  full-panel scrim dims the busy grid + eats clicks during the spin. **Fail** = a grey
+  crumble fizzle. Verified: mid-spin frame (scrim + reel + bar) and the frozen **mythic**
+  payoff (glow blowing past the panel + banner) via a tween-pause trick.
+- **Deferred announce:** `MainScene.rollRelic(trophyKey, announce=false)` for the menu path
+  — the event-log line + `afterRelicChange()` (relic-bar sync, stat bonuses) fire at the
+  **reveal landing** via a new `announceRelicResult()` + the menu's `announceRoll` dep, not
+  at click, so the payoff is the satisfying moment. Verified: log/bar update on reveal, and
+  `busy`/`fxActive` both clear afterward.
+- No `RECIPES.md` change (no recipe/cost changes). `tsc --noEmit` clean; `preview_console_logs`
+  (error) clean across all tests.
+
+### Previously: M-WC — Gremlin War Camp (altar POI upgrade + hints)
 
 Next milestone in the locked roguelike meta-loop build order
 (`.claude/plans/roguelike-metaloop-master-plan.md`; detailed plan:

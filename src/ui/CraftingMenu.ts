@@ -8,6 +8,11 @@ import { weaponAttacksPerSecond, weaponDamage, weaponPrimaryDamageType, weaponSt
 import { weaponSkillDamageMultiplier, type Skills } from "../systems/Skills";
 import { weaponStaminaCostMultiplier, type PlayerProgression } from "../systems/Progression";
 import { MARGIN as MINIMAP_MARGIN, PANEL_H as MINIMAP_H } from "./MinimapUI";
+import { ProgressBar } from "./ProgressBar";
+
+// A quick "crafting…" bar plays before the item lands — a small satisfying
+// beat, deliberately short so it never feels like a slog.
+const CRAFT_BAR_MS = 450;
 
 const CATEGORIES: { id: RecipeCategory; label: string }[] = [
   { id: "tools", label: "Tools" },
@@ -68,12 +73,16 @@ export class CraftingMenu {
   private activeCategory: RecipeCategory = "tools";
   private selected: Recipe | null = null;
   private rows: Phaser.GameObjects.GameObject[] = [];
+  // True while a craft bar is filling — greys the button + blocks re-clicks.
+  private busy = false;
+  private progressBar: ProgressBar;
 
   constructor(scene: Phaser.Scene, deps: CraftingMenuDeps) {
     this.scene = scene;
     this.deps = deps;
     this.panelX = scene.scale.width - PANEL_W - MARGIN_RIGHT;
     this.panelY = MARGIN_TOP;
+    this.progressBar = new ProgressBar(scene, { width: 96, height: 26, depth: 3005 });
 
     this.bg = scene.add
       .rectangle(this.panelX, this.panelY, PANEL_W, PANEL_H, 0x0a0a0a, 0.93)
@@ -87,7 +96,13 @@ export class CraftingMenu {
     this.open = !this.open;
     this.bg.setVisible(this.open);
     if (this.open) this.render();
-    else this.clearRows();
+    else {
+      // Closing mid-craft cancels the bar — nothing's consumed until it fills,
+      // so this is a clean no-op (no half-finished craft, no lost resources).
+      this.busy = false;
+      this.progressBar.stop();
+      this.clearRows();
+    }
   }
 
   close(): void {
@@ -311,31 +326,48 @@ export class CraftingMenu {
       y += 18;
     }
 
-    const affordable = isCraftable(this.deps, recipe);
+    const btnY = y;
+    // While a craft bar is filling the button greys out (and the bar covers
+    // it); placeable recipes never use the bar so they stay live.
+    const clickable = isCraftable(this.deps, recipe) && (placeable || !this.busy);
     const btn = this.scene.add
-      .text(x0, y, placeable ? "Place" : "Craft", {
+      .text(x0, btnY, placeable ? "Place" : this.busy ? "Crafting…" : "Craft", {
         fontFamily: "monospace",
         fontSize: "14px",
-        color: affordable ? "#0a0a0a" : "#4a4a4a",
-        backgroundColor: affordable ? "#8fe38f" : "#2a2a2a",
+        color: clickable ? "#0a0a0a" : "#4a4a4a",
+        backgroundColor: clickable ? "#8fe38f" : "#2a2a2a",
         padding: { x: 10, y: 5 },
       })
       .setScrollFactor(0)
       .setDepth(3001)
-      .setInteractive({ useHandCursor: affordable })
+      .setInteractive({ useHandCursor: clickable })
       .on("pointerdown", () => {
-        if (!affordable) return;
+        if (!clickable) return;
         if (placeable) {
           // Per user request: entering placement mode from the crafting menu
           // no longer closes it — the panel stays up (mirrors how it already
           // stayed open for a plain "Craft" click) while the ghost follows
           // the cursor.
           this.deps.startPlacement(recipe);
-        } else {
-          this.deps.craft(recipe);
-          this.render();
+          return;
         }
+        // Consume+grant happens when the bar finishes (the busy flag blocks a
+        // second craft meanwhile). Driven by the tween, so it still lands even
+        // if the menu is closed mid-bar.
+        this.busy = true;
+        this.progressBar.setPosition(x0, btnY).setSize(96, 26).start(CRAFT_BAR_MS, {
+          onComplete: () => {
+            this.busy = false;
+            this.deps.craft(recipe);
+            if (this.open) this.render();
+          },
+        });
+        this.render();
       });
     this.rows.push(btn);
+
+    // Keep the running bar pinned over the (now greyed) button as the panel
+    // re-renders under it.
+    if (this.busy && !placeable) this.progressBar.setPosition(x0, btnY).setVisible(true);
   }
 }
