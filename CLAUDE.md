@@ -749,6 +749,47 @@ mouse-driven only. Don't reintroduce a keybind for this without being asked. Spa
    number; new `DayNight.nightNumber()` (= the day it follows) makes it `[Night N]`,
    symmetric with `[Day N]`.
 
+5o. **M-WC (Gremlin War Camp — altar POI upgrade + hints)** — plan:
+   `.claude/plans/snug-leaping-mochi.md`; built on Sonnet (content + layout on the existing
+   altar/shack/camp-spawn, minimap-landmark, and M-DN night-light systems, no new mechanic).
+   Promotes the lone Boss Altar into a **walled Gremlin War Camp** so it reads as a *place*,
+   not a lone structure. New `MainScene.spawnWarCamp()` (called after `spawnAltarDensity()`,
+   deterministic via `sessionRng`, guard-returns if no altar) lays out purely decorative,
+   non-solid, Y-sorted (`setDepth(y)`) props around `altarPosition`: a **palisade ring**
+   (stakes every ~14° at ~230px, skipping a ~55° **entrance-gate arc** facing world center),
+   **banners**, **totems**, **braziers**, and a **breadcrumb trail** of 2 sparse outer
+   `gremlin_camp_prop` bands (500–1050px) extending the existing 3 inner bands so clutter
+   *increases* as the player approaches (enemy counts unchanged — locked decision 7: prefer a
+   bigger world over more enemies). Four new placeholder textures in `BootScene.ts`
+   (`palisade_stake`/`gremlin_banner`/`war_totem`/`camp_brazier`). **Braziers glow at night**:
+   their world positions feed a new `campLightPoints` field that `collectLights()` iterates
+   (reusing the M-DN light-mask verbatim — the camp reads as an inhabited glow from a distance,
+   verified against the dark forest). Shacks now **cluster denser near the camp** —
+   `SHACK_NEAR_ALTAR_COUNT` 2→3, leaving 2 as wild standalone POIs (the user's locked choice —
+   the scattered-POI exploration content stays). **Minimap landmarks**: the discovery pass
+   (`updateAltarDiscovery()`, generalized) now also reveals each **Gremlin Shack** once explored
+   within `REVEAL_RADIUS` (new `GremlinShack.discoveredOnMap`, a standing backlog item), in a
+   distinct **wood-brown** (`0x8a6a3a`) vs the altar's **larger red** (`0xd6483a`, radius bumped
+   2.5) so the war camp is the standout marker; `MinimapUI.revealLandmark()` gained an optional
+   `radius` param for this. `campLightPoints` resets to `[]` in `create()` per the
+   `scene.restart()`-field-init gotcha. No `RECIPES.md` change (no new recipes).
+   **Same-day playtest follow-up** (the user: "the camp just looks so busy") — the real cause
+   wasn't placeholder art, it was two systems drawing over each other with no exclusion zone:
+   `spawnAltarDensity()`'s pre-existing 40-prop clutter band was still scattering on top of the
+   new camp, and ordinary trees/rocks/bushes/enemies could spawn right through it. Fixed with
+   shared constants `WAR_CAMP_RADIUS`(230)/`WAR_CAMP_CLEAR_RADIUS`(300) that `pickSpawnPoint()`
+   and `pickCreekEdgePoint()` (Cattail's own bespoke sampler) both reject spawns within, plus a
+   `scatterClustered()` jitter-fallback so bush clumps can't slip a node past the wall;
+   `altarPosition` now gets picked *before* any node/enemy spawning in `create()` so all of
+   this can see it. `buildBiomeTexture()` stamps a distinct packed-dirt camp floor. The old
+   3-band clutter scatter in `spawnAltarDensity()` is gone — `spawnWarCamp()` is the single
+   source of all camp dressing now, trail rebased to start just outside the clear zone (300px).
+   The 3 near-altar huts are no longer a random `pickPointNearAltar` roll — `spawnGremlinShacks()`
+   fans them evenly (100° apart, ~170px out) opposite the gate via a new shared
+   `campGateFacing()` helper. Verified across multiple reseeds: 0 of ~396 world nodes land
+   within 300px of the altar. Next per the locked build order: **M-TE (trophy-gated gear)**,
+   then **M-W1** last.
+
 **A new umbrella plan for the long-requested roguelike run/score meta-loop** now exists:
 `.claude/plans/roguelike-metaloop-master-plan.md` (drafted 2026-07-10, locked build order
 confirmed by the user). It supersedes/finalizes several open questions in the **Long-term
@@ -759,8 +800,8 @@ discovery) or 7 (ARPG loot). Locked build order: **M-FX (done) → M-R1 (Run/Sco
 Hardcore death, done — see 5h) → M-DN (Day/Night, done — see 5i) → Comfort item (was
 M-SB/Sleep-Bed, done — see 5j) → M-EL2 (generalized elite spawning, done — see 5k) →
 ~~M-FA~~ (cut, see 5l) → M-RL (trophy → RNG relics, done — see 5m; playtest follow-up 5n) →
-**M-WC (Gremlin War Camp) + M-TE (trophy-gated gear), next** → M-W1 (circular multi-biome
-world, last).**
+M-WC (Gremlin War Camp, done — see 5o) → **M-TE (trophy-gated gear), next** → M-W1 (circular
+multi-biome world, last).**
 
 **Not yet built — next up in rough order:**
 6. **World & discovery** — much bigger generated world, biomes, map, eventually a

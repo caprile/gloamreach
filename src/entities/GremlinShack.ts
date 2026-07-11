@@ -23,6 +23,10 @@ export class GremlinShack {
   readonly loot: LootContainer;
   guards: Enemy[] = [];
   respawnAt: number | null = null;
+  // True once the player has explored close enough to reveal this shack's
+  // fog cell — used to add a one-time minimap landmark (same treatment as
+  // BossAltar.discoveredOnMap, a discovered fixed structure, not a live blip).
+  discoveredOnMap = false;
 
   constructor(scene: Phaser.Scene, cfg: GremlinShackConfig) {
     this.x = cfg.x;

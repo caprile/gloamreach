@@ -126,12 +126,12 @@ export class MinimapUI {
   // every frame. Callers are expected to only invoke this once per landmark
   // (see BossAltar.discoveredOnMap) — still safe to call repeatedly since it
   // just redraws the same pixels.
-  revealLandmark(worldX: number, worldY: number, color = 0xd6483a): void {
+  revealLandmark(worldX: number, worldY: number, color = 0xd6483a, radius = 1.5): void {
     const cx = Math.round(worldX / this.fog.scale);
     const cy = Math.round(worldY / this.fog.scale);
     this.pixel.clear();
     this.pixel.fillStyle(color, 1);
-    this.pixel.fillCircle(1.5, 1.5, 1.5);
-    this.terrain.draw(this.pixel, cx - 1, cy - 1);
+    this.pixel.fillCircle(radius, radius, radius);
+    this.terrain.draw(this.pixel, cx - radius, cy - radius);
   }
 }

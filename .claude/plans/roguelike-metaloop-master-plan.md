@@ -1,8 +1,8 @@
 # Master Plan: Roguelike Run / Score Meta-Loop + Supporting Systems
 
 Status: **design locked at the spine level, sub-decisions open per milestone.** Drafted
-2026-07-10 with the user. **M-FX/M-R1/M-DN/Comfort(M-SB)/M-EL2/M-RL all shipped 2026-07-10;
-M-FA cut the same day (see its section below); M-WC + M-TE are next**, each planned for
+2026-07-10 with the user. **M-FX/M-R1/M-DN/Comfort(M-SB)/M-EL2/M-RL/M-WC all shipped
+2026-07-10; M-FA cut the same day (see its section below); M-TE is next**, each planned for
 its own session (per the project's "one milestone per chat session" convention — see
 `STATUS.md` for ship details on each). This is the umbrella plan for a batch of requested
 systems; each milestone below should get its own detailed plan file when it's picked up
@@ -183,7 +183,25 @@ it's dropped from the build order entirely. **Revisit only if/when M-W1 ships a 
 multi-biome world and per-biome pacing turns out to still be missing** something the
 end-of-run speed multiplier doesn't already cover.
 
-### M-WC — Gremlin War Camp (altar POI upgrade + hints) (M, Opus/Sonnet)
+### M-WC — Gremlin War Camp (altar POI upgrade + hints) (M, Sonnet) — **SHIPPED** 2026-07-10
+
+Detailed plan: `.claude/plans/snug-leaping-mochi.md`; full verification in `STATUS.md`'s
+M-WC entry. Shipped as designed: `MainScene.spawnWarCamp()` lays a palisade ring (with a
+gate arc facing world center), banners, totems, and lit braziers around `altarPosition`,
+plus a breadcrumb prop trail extending outward; braziers glow at night via a new
+`campLightPoints` field read by `collectLights()`; near-altar shacks bumped 2→3 (2 stay
+wild); and the discovery pass now reveals both a larger red war-camp landmark and per-shack
+wood-brown landmarks on the minimap (`MinimapUI.revealLandmark` gained a `radius` param,
+`GremlinShack.discoveredOnMap` added — the standing shack-landmark backlog item folded in).
+
+**Same-day playtest follow-up:** the first ship above still let `spawnAltarDensity()`'s
+pre-existing 40-prop clutter band and ordinary world-gen scatter (trees/rocks/bushes/wild
+enemies) spawn through the new camp — real layout bug, not placeholder art. Fixed with a
+shared no-spawn zone (`WAR_CAMP_RADIUS`/`WAR_CAMP_CLEAR_RADIUS`) enforced in every scatter
+sampler, a distinct camp-floor ground stamp, removal of the old redundant prop band, and
+evenly-spaced (not randomly-clumped) huts. This exclusion-zone pattern is exactly what every
+future M-W1 POI will need too — see the addendum in `.claude/plans/snug-leaping-mochi.md`
+and `STATUS.md` for full detail.
 
 Promote the lone Boss Altar to a **larger POI** — a walled gremlin war camp.
 - Palisade / banner / totem props; the existing 5 shacks + elite guards clustered here;
@@ -284,7 +302,8 @@ incremental ethos), then expand the world under it:
    shows a real gap).
 6. **M-RL** (relics — the replayability hook) — **shipped** 2026-07-10 (detailed plan:
    `.claude/plans/radiant-binding-relic.md`; see `STATUS.md`).
-7. **M-WC** + **M-TE** (content depth) — **next up**.
+7. **M-WC** (Gremlin War Camp — **shipped** 2026-07-10, see the M-WC entry above /
+   `STATUS.md`) + **M-TE** (trophy-gated gear — **next up**) — content depth.
 8. **M-W1** (circular multi-biome world) — expand the world beneath a proven loop.
 
 ## Convention reminders for whoever picks these up

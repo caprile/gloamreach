@@ -252,6 +252,58 @@ export class BootScene extends Phaser.Scene {
     g.fillRect(11, 9, 3, 3);
     g.generateTexture("gremlin_camp_prop", 16, 16);
 
+    // Gremlin War Camp props (M-WC) — all non-interactive decoration around the
+    // Boss Altar, promoting it from a lone structure into a walled camp.
+    // Palisade stake, 12x26: a pointed wooden picket. Tiled into a ring = wall.
+    g.clear();
+    g.fillStyle(0x4a3620, 1);
+    g.fillRect(3, 6, 6, 20); // shaft
+    g.fillStyle(0x63492b, 1);
+    g.fillRect(3, 6, 2, 20); // lit edge
+    g.fillTriangle(3, 6, 9, 6, 6, 0); // sharpened point
+    g.generateTexture("palisade_stake", 12, 26);
+
+    // Gremlin war banner, 16x30: a pole flying a crimson/green war-cloth in the
+    // elite palette so the camp reads as elite-held territory.
+    g.clear();
+    g.fillStyle(0x3a2c1a, 1);
+    g.fillRect(2, 0, 2, 30); // pole
+    g.fillStyle(0x9c2f2f, 1);
+    g.fillRect(4, 2, 11, 14); // crimson cloth
+    g.fillStyle(0xd8b23a, 1);
+    g.fillRect(4, 8, 11, 2); // gold band
+    g.fillStyle(0x2f3f1f, 1);
+    g.fillTriangle(4, 16, 15, 16, 9, 21); // green tattered hem
+    g.generateTexture("gremlin_banner", 16, 30);
+
+    // Camp totem, 18x38: a stacked bone/skull pole — a camp centerpiece prop.
+    g.clear();
+    g.fillStyle(0x4a3620, 1);
+    g.fillRect(7, 4, 4, 34); // post
+    g.fillStyle(0xe8e0cc, 1);
+    g.fillRect(3, 4, 12, 8); // top skull
+    g.fillRect(4, 16, 10, 7); // mid skull
+    g.fillStyle(0x2f2318, 1);
+    g.fillRect(5, 7, 2, 2); // eye
+    g.fillRect(11, 7, 2, 2); // eye
+    g.fillRect(6, 18, 2, 2);
+    g.fillRect(10, 18, 2, 2);
+    g.generateTexture("war_totem", 18, 38);
+
+    // Camp brazier, 14x22: a post with a lit flame bowl — doubles as the night
+    // light source (its world position feeds collectLights()). Flame matches the
+    // Boss Altar's orange (0xe8862c) so the camp reads as one lit place.
+    g.clear();
+    g.fillStyle(0x3a3a3a, 1);
+    g.fillRect(5, 10, 4, 12); // post
+    g.fillStyle(0x5a5a5a, 1);
+    g.fillRect(2, 8, 10, 4); // bowl
+    g.fillStyle(0xe8862c, 1);
+    g.fillTriangle(4, 8, 10, 8, 7, 0); // flame
+    g.fillStyle(0xf0c040, 1);
+    g.fillTriangle(5, 8, 9, 8, 7, 3); // flame highlight
+    g.generateTexture("camp_brazier", 14, 22);
+
     // Gremlin King — boss reskin: a big Troll/Ogre-silhouette humanoid, 40x48
     // (before the runtime BOSS_SCALE multiplier stacks further size on top).
     // Same green-gremlin palette family as the rest of the roster (reads as

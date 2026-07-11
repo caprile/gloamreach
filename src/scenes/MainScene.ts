@@ -125,6 +125,14 @@ const WORLD_H = TILE * 84; // 2688px tall
 // Half-diagonal of the world is ~2240px, so this still leaves the 200-attempt
 // fallback loop in pickSpawnPoint plenty of forest-zone area to land in.
 const ALTAR_CLEAR_RADIUS = 1400;
+// War Camp (M-WC) layout radii — one source of truth shared by the palisade
+// ring (spawnWarCamp), the camp-floor ground stamp (buildBiomeTexture), and
+// the resource-node/enemy no-spawn zone (pickSpawnPoint), so "the camp" means
+// the same physical circle everywhere. CLEAR_RADIUS is padded past the
+// palisade so clustered-node jitter (±40px, see scatterClustered) can never
+// land a bush/tree inside the wall.
+const WAR_CAMP_RADIUS = 230; // palisade wall radius
+const WAR_CAMP_CLEAR_RADIUS = 300; // resource-node/enemy spawn exclusion edge
 const REACH = 64; // how close (px) the player must be to interact
 const PLACEMENT_RADIUS = REACH * 1.25; // how far from the player a placed item may land
 const MAGNET_RADIUS = 100; // px — loose drop pieces within this of the player get pulled in
@@ -269,6 +277,10 @@ export class MainScene extends Phaser.Scene {
   private altarPosition: { x: number; y: number } | null = null;
   private bossAltars: BossAltar[] = [];
   private hoveredAltar: BossAltar | null = null;
+  // War Camp brazier world positions (M-WC) — decorative lit props around the
+  // altar that emit night light via collectLights(). Reset per run in create()
+  // (scene.restart doesn't re-run field initializers).
+  private campLightPoints: { x: number; y: number }[] = [];
   private gremlinKing: GremlinKing | null = null;
   // Right-click "Upgrade / Destroy" popup for any placed object (Workbench,
   // Campfire, Drying Rack, ...) — a single generic system, not per-type.
@@ -453,6 +465,7 @@ export class MainScene extends Phaser.Scene {
     this.altarPosition = null;
     this.bossAltars = [];
     this.hoveredAltar = null;
+    this.campLightPoints = [];
     this.gremlinKing = null;
     this.upgradeTarget = null;
     this.placedLabels = new Map();
@@ -483,6 +496,13 @@ export class MainScene extends Phaser.Scene {
     // can query zone type for placement. Seeded randomly per session (not a
     // fixed string) so the world differs every run.
     this.biome = new Biome(WORLD_W, WORLD_H, this.sessionRng());
+
+    // War Camp position (M-WC) is chosen here, before ground/node/enemy
+    // spawning, so pickSpawnPoint can keep trees/rocks/wild enemies out of the
+    // camp interior (WAR_CAMP_CLEAR_RADIUS) and buildBiomeTexture can stamp a
+    // distinct camp floor — both need to know where the camp is up front,
+    // not after the world is already scattered.
+    this.altarPosition = this.pickAltarPosition(this.sessionRng());
 
     // Ground: one repeating grass texture (the "grassy" look), with the biome
     // overlay baked on top of it — both kept below every entity.
@@ -517,11 +537,9 @@ export class MainScene extends Phaser.Scene {
     // (see STATUS.md), just hitting a boolean instead of a vector.
     this.enemyGroup = this.physics.add.group({ collideWorldBounds: true });
     this.spawnEnemies();
-    // Altar position is chosen once, before the shack/decoration/enemy
-    // density gradient around it — see spawnGremlinShacks/spawnAltarDensity.
-    this.altarPosition = this.pickAltarPosition(this.sessionRng());
     this.spawnGremlinShacks();
     this.spawnAltarDensity();
+    this.spawnWarCamp();
     this.spawnBossAltar();
     this.physics.add.collider(this.enemyGroup, solids);
     this.physics.add.collider(this.player, this.enemyGroup);
@@ -822,6 +840,12 @@ export class MainScene extends Phaser.Scene {
     for (const altar of this.bossAltars) {
       if (!onScreen(altar.x, altar.y)) continue;
       const s = toScreen(altar.x, altar.y);
+      lights.push({ x: s.x, y: s.y, radius: POI_LIGHT_RADIUS });
+    }
+    // War Camp braziers (M-WC) glow like any other POI light.
+    for (const b of this.campLightPoints) {
+      if (!onScreen(b.x, b.y)) continue;
+      const s = toScreen(b.x, b.y);
       lights.push({ x: s.x, y: s.y, radius: POI_LIGHT_RADIUS });
     }
     return lights;
@@ -1790,6 +1814,14 @@ export class MainScene extends Phaser.Scene {
       const y = rng.between(60, WORLD_H - 60);
       last = { x, y };
       if (Phaser.Math.Distance.Between(x, y, WORLD_W / 2, WORLD_H / 2) < clearRadius) continue;
+      // War Camp (M-WC): keep every plain scatter/enemy spawn out of the camp
+      // interior — the camp is world-gen-placed content with its own dressing
+      // (spawnWarCamp), not a spot for random trees/rocks/wild enemies too.
+      if (
+        this.altarPosition &&
+        Phaser.Math.Distance.Between(x, y, this.altarPosition.x, this.altarPosition.y) < WAR_CAMP_CLEAR_RADIUS
+      )
+        continue;
       if (preferred && this.biome.zoneAt(x, y) !== preferred) continue;
       // Creek overlays forest/grassy cells, so a "forest" point can still land
       // on water — keep trees (tall canopy) off the creek where they look wrong.
@@ -1854,6 +1886,36 @@ export class MainScene extends Phaser.Scene {
         const creekW = this.biome.creekWeight(cx, cy);
         if (creekW > 0.02) {
           g.fillStyle(0x3a6ea5, 0.6 * creekW);
+          g.fillRect(px, py, step, step);
+        }
+      }
+    }
+    // War Camp (M-WC): a distinct packed-dirt floor stamped over whatever
+    // biome color sits under the camp, so it reads as a cleared campground
+    // rather than the same grass/forest everywhere else. Only loops the
+    // camp's own small bounding box (not the whole world) since it's the same
+    // supersample stride but a tiny fraction of the area.
+    if (this.altarPosition) {
+      const altar = this.altarPosition;
+      const CAMP_FLOOR_SOFT = 40; // soft-edge falloff width, same idea as the forest/creek blend
+      const CAMP_FLOOR_COLOR = 0x5a4a30;
+      const CAMP_FLOOR_ALPHA = 0.8;
+      const outer = WAR_CAMP_RADIUS;
+      const minPx = Math.max(0, Math.floor((altar.x - outer) / step) * step);
+      const maxPx = Math.min(WORLD_W, Math.ceil((altar.x + outer) / step) * step);
+      const minPy = Math.max(0, Math.floor((altar.y - outer) / step) * step);
+      const maxPy = Math.min(WORLD_H, Math.ceil((altar.y + outer) / step) * step);
+      for (let py = minPy; py < maxPy; py += step) {
+        for (let px = minPx; px < maxPx; px += step) {
+          const cx = px + step / 2;
+          const cy = py + step / 2;
+          const d = Phaser.Math.Distance.Between(cx, cy, altar.x, altar.y);
+          if (d >= outer) continue;
+          const alpha =
+            d < outer - CAMP_FLOOR_SOFT
+              ? CAMP_FLOOR_ALPHA
+              : CAMP_FLOOR_ALPHA * (1 - (d - (outer - CAMP_FLOOR_SOFT)) / CAMP_FLOOR_SOFT);
+          g.fillStyle(CAMP_FLOOR_COLOR, alpha);
           g.fillRect(px, py, step, step);
         }
       }
@@ -1947,6 +2009,17 @@ export class MainScene extends Phaser.Scene {
             x = center.x;
             y = center.y;
           }
+          // Same fallback for the War Camp interior: the center is already
+          // guaranteed clear by WAR_CAMP_CLEAR_RADIUS (300), which has enough
+          // margin past the wall (230) to absorb the ±40 jitter, so falling
+          // back to it always lands outside the palisade.
+          if (
+            this.altarPosition &&
+            Phaser.Math.Distance.Between(x, y, this.altarPosition.x, this.altarPosition.y) < WAR_CAMP_RADIUS
+          ) {
+            x = center.x;
+            y = center.y;
+          }
           const node = new ResourceNode(this, {
             x,
             y,
@@ -2024,6 +2097,13 @@ export class MainScene extends Phaser.Scene {
       const y = rng.between(60, WORLD_H - 60);
       last = { x, y };
       if (Phaser.Math.Distance.Between(x, y, WORLD_W / 2, WORLD_H / 2) < clearRadius) continue;
+      // War Camp (M-WC): same no-clutter exclusion pickSpawnPoint applies —
+      // this sampler has its own rejection loop so it needs its own check.
+      if (
+        this.altarPosition &&
+        Phaser.Math.Distance.Between(x, y, this.altarPosition.x, this.altarPosition.y) < WAR_CAMP_CLEAR_RADIUS
+      )
+        continue;
       if (!this.biome.isCreekEdge(x, y)) continue;
       return { x, y };
     }
@@ -2114,22 +2194,32 @@ export class MainScene extends Phaser.Scene {
 
   // Scatter Gremlin Shacks (first POI) through the forest zone, spread apart
   // via the same pickSpreadSpawnPoint pool the Gremlin-family enemies use.
-  // 2 of the 5 are deliberately biased near the altar (if one has been
-  // placed) as part of the "denser gremlin content = closer to the boss"
-  // environmental-hint gradient — sampled directly around altarPosition
-  // rather than a full pickSpreadSpawnPoint roll. First-pass/tunable counts.
+  // 3 of the 5 populate the War Camp as its "huts" — evenly spaced in a fan on
+  // the side of the camp opposite the entrance gate (not a random roll),
+  // per playtest feedback that a random pickPointNearAltar roll read as a
+  // clumped, messy scatter instead of an arranged camp. The other 2 stay wild
+  // standalone POIs via the normal spread-spawn pool. First-pass/tunable counts.
   private spawnGremlinShacks(): void {
     const rng = this.sessionRng();
     const SHACK_COUNT = 5;
-    const SHACK_NEAR_ALTAR_COUNT = 2;
+    const SHACK_NEAR_ALTAR_COUNT = 3;
     const SHACK_CLEAR_RADIUS = 260;
     const SHACK_MIN_SPACING = 500;
-    const ALTAR_NEAR_RADIUS = 500;
+    const HUT_RADIUS = 170; // inside the palisade (WAR_CAMP_RADIUS = 230)
+    const HUT_ANGLE_STEP = Phaser.Math.DegToRad(100);
     const shackPoints: { x: number; y: number }[] = [];
     for (let i = 0; i < SHACK_COUNT; i++) {
       let point: { x: number; y: number };
       if (i < SHACK_NEAR_ALTAR_COUNT && this.altarPosition) {
-        point = this.pickPointNearAltar(rng, ALTAR_NEAR_RADIUS);
+        const altar = this.altarPosition;
+        const back = this.campGateFacing() + Math.PI; // opposite the gate
+        const offset = (i - (SHACK_NEAR_ALTAR_COUNT - 1) / 2) * HUT_ANGLE_STEP;
+        const angle = back + offset + Phaser.Math.DegToRad(rng.between(-6, 6));
+        const r = HUT_RADIUS + rng.between(-10, 10);
+        point = {
+          x: Phaser.Math.Clamp(altar.x + Math.cos(angle) * r, 60, WORLD_W - 60),
+          y: Phaser.Math.Clamp(altar.y + Math.sin(angle) * r, 60, WORLD_H - 60),
+        };
       } else {
         point = this.pickSpreadSpawnPoint(
           rng,
@@ -2154,10 +2244,18 @@ export class MainScene extends Phaser.Scene {
     return this.pickSpawnPoint(rng, "forest", ALTAR_CLEAR_RADIUS, true);
   }
 
+  // Angle (radians) from the altar toward world center — the War Camp's fixed
+  // gate facing, shared by the palisade opening (spawnWarCamp), the braziers
+  // that flank it, and the evenly-spaced hut fan on the opposite side
+  // (spawnGremlinShacks). Only call once altarPosition is set.
+  private campGateFacing(): number {
+    const altar = this.altarPosition!;
+    return Phaser.Math.Angle.Between(altar.x, altar.y, WORLD_W / 2, WORLD_H / 2);
+  }
+
   // A point sampled around altarPosition within `radius`, rejecting non-
   // forest/creek cells the same way pickSpawnPoint does — used to bias
-  // shack/prop/enemy placement toward the altar without a real per-cell
-  // density field.
+  // enemy placement toward the altar without a real per-cell density field.
   private pickPointNearAltar(rng: Phaser.Math.RandomDataGenerator, radius: number): { x: number; y: number } {
     const altar = this.altarPosition!;
     let last = altar;
@@ -2187,38 +2285,37 @@ export class MainScene extends Phaser.Scene {
   // not a live blip — keeps the minimap's locked "no entity blips" rule intact
   // (a fixed landmark once found is conceptually more like revealed terrain).
   private updateAltarDiscovery(): void {
+    const inReveal = (x: number, y: number) =>
+      Phaser.Math.Distance.Between(this.player.x, this.player.y, x, y) <= REVEAL_RADIUS;
+    // Boss Altar / War Camp — a larger red marker so the camp is the standout
+    // landmark on the minimap.
     for (const altar of this.bossAltars) {
       if (altar.discoveredOnMap) continue;
-      if (Phaser.Math.Distance.Between(this.player.x, this.player.y, altar.x, altar.y) > REVEAL_RADIUS) continue;
+      if (!inReveal(altar.x, altar.y)) continue;
       altar.discoveredOnMap = true;
-      this.minimapUI.revealLandmark(altar.x, altar.y);
+      this.minimapUI.revealLandmark(altar.x, altar.y, 0xd6483a, 2.5);
+    }
+    // Gremlin Shacks (M-WC backlog item) — same discovered-landmark treatment,
+    // in a distinct wood-brown so they read differently from the war camp.
+    for (const shack of this.gremlinShacks) {
+      if (shack.discoveredOnMap) continue;
+      if (!inReveal(shack.x, shack.y)) continue;
+      shack.discoveredOnMap = true;
+      this.minimapUI.revealLandmark(shack.x, shack.y, 0x8a6a3a, 1.5);
     }
   }
 
-  // Escalating environmental hint near the altar: decorative gremlin-camp
-  // clutter (purely visual) plus a small ADDITIVE batch of extra
-  // gremlins/gremlings, layered on top of (not a multiplier on) spawnEnemies'
-  // Milestone-O-tuned base counts, so the rest of the map's balance is
-  // untouched. First-pass/tunable.
+  // Escalating environmental hint near the altar: a small ADDITIVE batch of
+  // extra gremlins/gremlings, layered on top of (not a multiplier on)
+  // spawnEnemies' Milestone-O-tuned base counts, so the rest of the map's
+  // balance is untouched. (The decorative camp-clutter props this used to
+  // scatter here were removed in M-WC — spawnWarCamp now owns ALL camp
+  // dressing, inside the palisade and the breadcrumb trail leading to it, so
+  // there's one source of truth instead of two overlapping prop passes.)
+  // First-pass/tunable.
   private spawnAltarDensity(): void {
     if (!this.altarPosition) return;
     const rng = this.sessionRng();
-
-    // Camp props: 3 concentric bands, denser closer to the altar.
-    const PROP_BANDS: { min: number; max: number; count: number }[] = [
-      { min: 0, max: 150, count: 20 },
-      { min: 150, max: 300, count: 15 },
-      { min: 300, max: 500, count: 5 },
-    ];
-    for (const band of PROP_BANDS) {
-      for (let i = 0; i < band.count; i++) {
-        const angle = Phaser.Math.DegToRad(rng.angle());
-        const r = rng.between(band.min, band.max);
-        const x = Phaser.Math.Clamp(this.altarPosition.x + Math.cos(angle) * r, 20, WORLD_W - 20);
-        const y = Phaser.Math.Clamp(this.altarPosition.y + Math.sin(angle) * r, 20, WORLD_H - 20);
-        this.add.image(x, y, "gremlin_camp_prop").setDepth(y);
-      }
-    }
 
     const ALTAR_NEAR_RADIUS = 500;
     const ALTAR_EXTRA_GREMLINS = 6;
@@ -2234,6 +2331,90 @@ export class MainScene extends Phaser.Scene {
       const gremling = new MeleeGremling(this, { x, y, elite: this.rollElite(rng) });
       this.enemies.push(gremling);
       this.enemyGroup.add(gremling);
+    }
+  }
+
+  // M-WC: promote the altar into a walled Gremlin War Camp — a palisade ring,
+  // banners, totems, lit braziers, plus a breadcrumb prop trail leading toward
+  // it. All purely decorative (non-solid, Y-sorted via setDepth(y)) and untracked
+  // (auto-destroyed on scene.restart) except braziers, whose positions feed
+  // campLightPoints so they glow at night (collectLights). Deterministic via
+  // sessionRng. WAR_CAMP_RADIUS (the palisade radius) is the same constant
+  // pickSpawnPoint/buildBiomeTexture use, so the wall, the ground-floor stamp,
+  // and the no-clutter zone all agree on where "the camp" physically is —
+  // this is now the ONLY prop-scatter pass near the altar (spawnAltarDensity
+  // used to also drop 40 loose cairns inside this same area, which just
+  // looked like clutter piled on top of the real camp dressing; removed).
+  // First-pass/tunable.
+  private spawnWarCamp(): void {
+    if (!this.altarPosition) return;
+    const rng = this.sessionRng();
+    const altar = this.altarPosition;
+    const prop = (x: number, y: number, key: string) =>
+      this.add.image(x, y, key).setDepth(y);
+
+    // Palisade wall: a ring of stakes at the camp radius, one every ~14deg,
+    // leaving a ~55deg entrance gap facing world center so the player walks
+    // in the gate.
+    const GATE_FACING = this.campGateFacing();
+    const GATE_HALF_ARC = Phaser.Math.DegToRad(27.5);
+    for (let deg = 0; deg < 360; deg += 14) {
+      const a = Phaser.Math.DegToRad(deg);
+      // Skip the entrance arc (shortest angular distance to the gate facing).
+      if (Math.abs(Phaser.Math.Angle.Wrap(a - GATE_FACING)) < GATE_HALF_ARC) continue;
+      const r = WAR_CAMP_RADIUS + rng.between(-8, 8);
+      const x = Phaser.Math.Clamp(altar.x + Math.cos(a) * r, 20, WORLD_W - 20);
+      const y = Phaser.Math.Clamp(altar.y + Math.sin(a) * r, 20, WORLD_H - 20);
+      prop(x, y, "palisade_stake");
+    }
+
+    // Banners + totems, kept close to the altar/courtyard (well inside the
+    // ~170px hut radius, see spawnGremlinShacks) so they don't compete for
+    // space with the evenly-spaced huts or the wall.
+    const scatter = (key: string, count: number, minR: number, maxR: number) => {
+      for (let i = 0; i < count; i++) {
+        const a = Phaser.Math.DegToRad(rng.angle());
+        const r = rng.between(minR, maxR);
+        const x = Phaser.Math.Clamp(altar.x + Math.cos(a) * r, 20, WORLD_W - 20);
+        const y = Phaser.Math.Clamp(altar.y + Math.sin(a) * r, 20, WORLD_H - 20);
+        prop(x, y, key);
+      }
+    };
+    scatter("gremlin_banner", 4, 60, 140);
+    scatter("war_totem", 2, 70, 110);
+
+    // Braziers: two flanking the entrance gate, one deeper inside. Their world
+    // positions light the camp at night (collectLights reads campLightPoints).
+    const braziers: { x: number; y: number }[] = [
+      { x: altar.x + Math.cos(GATE_FACING - GATE_HALF_ARC) * (WAR_CAMP_RADIUS - 10), y: altar.y + Math.sin(GATE_FACING - GATE_HALF_ARC) * (WAR_CAMP_RADIUS - 10) },
+      { x: altar.x + Math.cos(GATE_FACING + GATE_HALF_ARC) * (WAR_CAMP_RADIUS - 10), y: altar.y + Math.sin(GATE_FACING + GATE_HALF_ARC) * (WAR_CAMP_RADIUS - 10) },
+      { x: altar.x + Math.cos(GATE_FACING + Math.PI) * 90, y: altar.y + Math.sin(GATE_FACING + Math.PI) * 90 },
+    ];
+    for (const b of braziers) {
+      const x = Phaser.Math.Clamp(b.x, 20, WORLD_W - 20);
+      const y = Phaser.Math.Clamp(b.y, 20, WORLD_H - 20);
+      prop(x, y, "camp_brazier");
+      this.campLightPoints.push({ x, y });
+    }
+
+    // Breadcrumb trail: sparse bands starting just OUTSIDE the camp (pickSpawnPoint
+    // already keeps trees/rocks/wild enemies clear out to WAR_CAMP_CLEAR_RADIUS=300,
+    // so there's no clutter competing with the palisade/floor right at the wall) —
+    // decoration increases as the player approaches. Enemy counts unchanged
+    // (locked: prefer a bigger world over more enemies).
+    const TRAIL_BANDS: { min: number; max: number; count: number }[] = [
+      { min: 300, max: 550, count: 8 },
+      { min: 550, max: 800, count: 6 },
+      { min: 800, max: 1050, count: 4 },
+    ];
+    for (const band of TRAIL_BANDS) {
+      for (let i = 0; i < band.count; i++) {
+        const a = Phaser.Math.DegToRad(rng.angle());
+        const r = rng.between(band.min, band.max);
+        const x = Phaser.Math.Clamp(altar.x + Math.cos(a) * r, 20, WORLD_W - 20);
+        const y = Phaser.Math.Clamp(altar.y + Math.sin(a) * r, 20, WORLD_H - 20);
+        prop(x, y, "gremlin_camp_prop");
+      }
     }
   }
 
