@@ -2,7 +2,60 @@
 
 Last updated: 2026-07-11
 
-### Just finished: Souls-like common-enemy combat (telegraphed attacks)
+### Just finished: Playtest bug-fix batch (5 fixes)
+
+The first chunk of the 25-min-playtest triage backlog after the souls-like combat pass —
+five independent bug fixes ([[survivor-rpg-playtest-feedback-2026-07-11]]). Fixes/UI on
+already-designed systems (Sonnet-class work, though built this session on Opus). No
+`RECIPES.md` change (no recipe/cost changes).
+
+1. **Chest-looted materials never unlocked recipes.** Picking a material up off the ground
+   goes through `MainScene.addToBackpack()` → `discovered.add()` + `refreshDiscovery()`, but
+   moving one out of a chest (or drying rack) uses `moveSlot()` directly + `afterItemMove()`,
+   which never recorded discovery — so e.g. twine looted from a Gremlin Shack chest never
+   unlocked its recipes. New `MainScene.reconcileBackpackDiscovery()` (called from
+   `afterItemMove()`) scans the backpack, marks any not-yet-discovered key discovered, and
+   runs `refreshDiscovery()` only when something new actually appears. General across every
+   container→backpack path, not chest-specific. *Verified: twine placed into the backpack via
+   the move hook went undiscovered→discovered.*
+2. **Cook recipes shown before their ingredients were discovered.** `CookingMenu` filtered
+   dishes only by campfire tier, so "Cooked Boar Meat" advertised itself before the player had
+   ever obtained a shishkabob. Added a `discovered: () => ReadonlySet<string>` dep (wired to
+   `MainScene.discovered`); a dish now also stays hidden until ALL its ingredients are
+   discovered — the same "don't reveal locked info" rule `Crafting.ts` uses. Empty-state note
+   when nothing's known yet. *Verified: 0 dishes at fresh state → 1 (Cooked Boar Meat) after
+   discovering boar_meat + shishkabob.*
+3. **New relic appeared in the "Your Relics" grid before the reveal landed.** The forge's
+   `roll()` mutates `RelicManager` immediately (so an interrupted spin can't change the
+   outcome — 5p), but `render()` then repainted the grid live, popping the new relic in before
+   the slot-machine spin resolved. `RelicForgeMenu` now snapshots `groupedForDisplay()` into
+   `preRollGroups` BEFORE the roll and renders that (via `displayGroups()`) while `busy`,
+   clearing it when the reveal's `onComplete` fires. *Verified via forced-pity roll: mid-spin
+   the manager holds the relic (live len 1) but the grid renders the frozen snapshot (len 0).*
+4. **"Roll Gremlin Trophy" button stuck at 0 while other trophy buttons vanished.**
+   `visibleTrophyKeys()` special-cased `gremlin_trophy` to always show (for at-0
+   discoverability), which read as a broken button next to Boar/Snake buttons disappearing at
+   0. Now every trophy button shows only when owned (count > 0), with a "No trophies — defeat
+   elite enemies to earn them." empty-state note (and the grid's empty message reworded off the
+   Gremlin-Trophy-specific text). The forge recipe itself costs a Gremlin Trophy, so a placed
+   forge already implies the player has met them. *Verified: 0 trophies → note only; +1 gremlin
+   trophy → "Roll Gremlin Trophy" button.*
+5. **Level-up flash was a jumpscare.** `cameras.main.flash()` peak amber dialed well down
+   (90,70,20 → 48,36,12) and the fade lengthened (180→300ms) so it reads as a soft warm pulse,
+   not a hard full-screen pop; the punch-in "LEVEL UP!" banner stays the "big deal" part. No
+   camera shake.
+
+**Verification:** `tsc --noEmit` clean; preview boots console-error-free; the four logic fixes
+asserted live via `preview_eval`. (The "YOU DIED" screen seen during testing was just the idle
+player killed by an enemy over the eval minute — confirms the hardcore run-end flow still works,
+unrelated to these changes.)
+
+**Still queued from the triage** (see [[survivor-rpg-playtest-feedback-2026-07-11]]): the light
+"both" rebalance (armor nerf + enemy-dmg buff), the boss damage bump + GremlinKing cleave
+replacement, and 2 small features (Workbench-placement hint, in-game relic compendium). Then the
+master-plan tail: **M-TE** (trophy gear), **M-W1** (multi-biome world).
+
+### Previously: Souls-like common-enemy combat (telegraphed attacks)
 
 Off the master-plan build order — the next item in the 25-min-playtest triage after the
 dashboard ([[survivor-rpg-playtest-feedback-2026-07-11]]): kill the "kite forever by

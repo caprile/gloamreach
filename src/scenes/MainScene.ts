@@ -1477,10 +1477,29 @@ export class MainScene extends Phaser.Scene {
 
   private afterItemMove(): void {
     this.recomputeEquipped();
+    this.reconcileBackpackDiscovery();
     this.inventoryMenu.refresh();
     this.dryingRackMenu.refresh();
     this.cookingMenu.refresh();
     this.chestMenu.refresh();
+  }
+
+  // Anything that lands in the backpack via a container move (chest loot,
+  // drying-rack retrieval, etc.) counts as discovered, exactly like a world
+  // pickup. Those paths use moveSlot() directly and skip addToBackpack's
+  // discovery hook, so a material first seen inside a chest never unlocked its
+  // recipes. Reconcile against the backpack here; refreshDiscovery only runs
+  // when something genuinely new shows up.
+  private reconcileBackpackDiscovery(): void {
+    let changed = false;
+    for (let i = 0; i < this.backpack.size; i++) {
+      const stack = this.backpack.slot(i);
+      if (stack && !this.discovered.has(stack.key)) {
+        this.discovered.add(stack.key);
+        changed = true;
+      }
+    }
+    if (changed) this.refreshDiscovery();
   }
 
   // --- Drying Rack (processing station) ---
@@ -1520,6 +1539,7 @@ export class MainScene extends Phaser.Scene {
     this.cookingMenu = new CookingMenu(this, {
       backpack: this.backpack,
       skills: this.skills,
+      discovered: () => this.discovered,
       campfireTier: () =>
         this.openCampfire ? ((this.openCampfire.getData("tier") as number | undefined) ?? 0) : null,
       cook: (recipeId) => this.cookAtCampfire(recipeId),
@@ -4422,7 +4442,11 @@ export class MainScene extends Phaser.Scene {
       .setDepth(6000)
       .setAlpha(0);
 
-    this.cameras.main.flash(180, 90, 70, 20);
+    // A gentle warm pulse, not a jumpscare — the punch-in banner below is the
+    // "big deal" part. Peak amber is dialed well down (was 90,70,20) and the
+    // fade lengthened so it reads as a soft glow rather than a hard full-screen
+    // flash. Deliberately no camera shake.
+    this.cameras.main.flash(300, 48, 36, 12);
 
     this.tweens.add({
       targets: title,

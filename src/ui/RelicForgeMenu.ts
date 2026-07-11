@@ -12,6 +12,7 @@ import {
   rarityIcon,
   relicEffectText,
   type RollResult,
+  type RelicGroup,
 } from "../systems/Relics";
 import { RelicRevealFx } from "./RelicRevealFx";
 
@@ -63,6 +64,12 @@ export class RelicForgeMenu {
   // The slot-machine spin/reveal; `busy` blocks a second roll mid-spin.
   private revealFx: RelicRevealFx;
   private busy = false;
+  // Snapshot of the owned-relic grid as it was BEFORE the in-flight roll. The
+  // roll mutates RelicManager immediately (so an interrupted spin can't change
+  // the outcome), but the grid must keep showing the pre-roll set until the
+  // reveal lands — otherwise a new relic pops into the grid before the spin
+  // even resolves, spoiling it.
+  private preRollGroups: RelicGroup[] | null = null;
 
   private tipBg?: Phaser.GameObjects.Rectangle;
   private tipText?: Phaser.GameObjects.Text;
@@ -118,6 +125,9 @@ export class RelicForgeMenu {
   // outcome. The reveal landing is when we announce + show the result line.
   private beginRoll(trophyKey: string): void {
     if (this.busy) return;
+    // Freeze the grid to its pre-roll contents BEFORE mutating the manager, so
+    // the spin can play over a grid that doesn't already show the new relic.
+    this.preRollGroups = this.deps.relics.groupedForDisplay();
     const result = this.deps.roll(trophyKey);
     this.busy = true;
     this.lastResult = null;
@@ -125,10 +135,17 @@ export class RelicForgeMenu {
     const bounds = { x: this.panelX, y: this.panelY, w: this.panelW, h: this.panelH };
     this.revealFx.spin(bounds, result, () => {
       this.busy = false;
+      this.preRollGroups = null;
       this.lastResult = result;
       this.deps.announceRoll(result);
       if (this.open) this.render();
     });
+  }
+
+  // The owned-relic grid renders this snapshot while a roll is spinning, else
+  // the live set. Centralizes the "hold the grid until reveal lands" rule.
+  private displayGroups(): RelicGroup[] {
+    return this.busy && this.preRollGroups ? this.preRollGroups : this.deps.relics.groupedForDisplay();
   }
 
   containsPoint(screenX: number, screenY: number): boolean {
@@ -146,20 +163,21 @@ export class RelicForgeMenu {
     this.rows = [];
   }
 
-  // Trophy types shown as roll buttons: always the Common Gremlin Trophy (so the
-  // mechanic is discoverable at 0), plus any other trophy the player currently
-  // owns (Boar/Snake from their own elites, a fang if ever spendable).
+  // Trophy types shown as roll buttons: every trophy the player currently owns
+  // (Gremlin/Boar/Snake from their own elites, a fang if ever spendable). A
+  // trophy button disappears at 0 like every other — the old special-case that
+  // kept the Gremlin Trophy button pinned at 0 read as a stuck/broken button
+  // next to the others vanishing. With none owned, an empty-state note keeps
+  // the forge's purpose clear.
   private visibleTrophyKeys(): string[] {
-    return Object.keys(TROPHY_ROLL).filter(
-      (k) => k === "gremlin_trophy" || this.deps.backpack.count(k) > 0,
-    );
+    return Object.keys(TROPHY_ROLL).filter((k) => this.deps.backpack.count(k) > 0);
   }
 
   private render(): void {
     this.clearRows();
     this.hideTooltip();
 
-    const groups = this.deps.relics.groupedForDisplay();
+    const groups = this.displayGroups();
     const gridRows = Math.max(1, Math.ceil(groups.length / COLS));
 
     // The roll-button block wraps with the number of trophy types owned; the
@@ -196,6 +214,10 @@ export class RelicForgeMenu {
     this.addText(x, y, "Roll", 13, "#c9a86a");
 
     const keys = this.visibleTrophyKeys();
+    if (keys.length === 0) {
+      this.addText(x, y + 26, "No trophies — defeat elite enemies to earn them.", 12, "#8a93a3");
+      return;
+    }
     keys.forEach((trophyKey, i) => {
       const col = i % BTN_COLS;
       const rowN = Math.floor(i / BTN_COLS);
@@ -254,9 +276,9 @@ export class RelicForgeMenu {
     const x0 = this.panelX + 16;
     this.addText(x0, top - 22, "Your Relics", 13, "#c9a86a");
 
-    const groups = this.deps.relics.groupedForDisplay();
+    const groups = this.displayGroups();
     if (groups.length === 0) {
-      this.addText(x0, top + 6, "No relics yet — feed a Gremlin Trophy above.", 12, "#8a93a3");
+      this.addText(x0, top + 6, "No relics yet — feed a trophy above to forge one.", 12, "#8a93a3");
       return;
     }
 

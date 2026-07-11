@@ -117,3 +117,30 @@ knockback is currently near-cosmetic because `Player.update()` zeroes idle veloc
 frame (overwriting the impulse the frame after) — a *pre-existing* trait of the exact path
 `GremlinKing`'s slam already uses; fixing it is a feel change to the boss too, so it's left
 for the deferred combat-feel/balance pass.
+
+## Follow-up: playtest bug-fix batch (5 fixes — shipped 2026-07-11)
+
+The next chunk of the 25-min-playtest triage after this combat pass — five independent bug
+fixes (Sonnet-class; built this session on Opus). Detail in `STATUS.md`; decisions in
+[[survivor-rpg-playtest-feedback-2026-07-11]] and [[survivor-rpg-relics]].
+
+1. **Chest-looted materials never unlocked recipes.** Container→backpack moves use
+   `moveSlot()` + `afterItemMove()` and skipped `addToBackpack`'s discovery hook. New
+   `MainScene.reconcileBackpackDiscovery()` (in `afterItemMove()`) marks any not-yet-seen
+   backpack key discovered and runs `refreshDiscovery()` only when something new appears.
+2. **Cook recipes shown before ingredients discovered.** `CookingMenu` gained a
+   `discovered: () => ReadonlySet<string>` dep; a dish stays hidden until every ingredient is
+   discovered (same rule `Crafting.ts` uses). Empty-state note when nothing's known.
+3. **New relic appeared in the grid before the reveal landed.** `RelicForgeMenu` snapshots
+   `preRollGroups` before the roll, renders it via `displayGroups()` while spinning.
+4. **"Roll Gremlin Trophy" button stuck at 0.** `visibleTrophyKeys()` no longer special-cases
+   `gremlin_trophy` — buttons show only when owned, with an empty-state note. **Reverses** the
+   earlier always-show-at-0 discoverability decision (see [[survivor-rpg-relics]]).
+5. **Level-up flash jumpscare.** `cameras.main.flash` dialed 90,70,20/180ms → 48,36,12/300ms.
+
+Verified: `tsc --noEmit` clean, preview boots error-free, all four logic fixes asserted live
+via `preview_eval`. No `RECIPES.md` change.
+
+**Still queued from the triage:** light "both" rebalance (armor nerf + enemy-dmg buff), boss
+damage bump + GremlinKing cleave replacement, 2 small features (Workbench-placement hint,
+in-game relic compendium). Then master-plan tail M-TE → M-W1.

@@ -13,6 +13,11 @@ const COOK_BAR_MS = 500;
 export interface CookingMenuDeps {
   backpack: ItemContainer;
   skills: Skills;
+  // Item keys the player has discovered (ever held). A dish stays hidden until
+  // ALL its ingredients are discovered — same "don't reveal locked info" rule
+  // Crafting.ts uses, so e.g. Cooked Boar Meat doesn't advertise itself before
+  // the player has ever obtained a shishkabob.
+  discovered: () => ReadonlySet<string>;
   // Tier of the campfire the menu is currently bound to (null when closed).
   campfireTier: () => number | null;
   // Cook one of `recipeId` — consumes its inputs from the backpack and deposits
@@ -125,11 +130,17 @@ export class CookingMenu {
     this.clearRows();
     this.tooltipUI.hide();
     const tier = this.deps.campfireTier() ?? 0;
+    const discovered = this.deps.discovered();
 
     // Only dishes this campfire's tier can actually cook are listed at all —
     // a higher-tier dish doesn't appear until the campfire is upgraded (per the
-    // user: it shouldn't even be on the list until Lvl 2).
-    const recipes = COOK_RECIPES.filter((r) => r.requiredCampfireTier <= tier);
+    // user: it shouldn't even be on the list until Lvl 2) — AND a dish stays
+    // hidden until every ingredient has been discovered.
+    const recipes = COOK_RECIPES.filter(
+      (r) =>
+        r.requiredCampfireTier <= tier &&
+        Object.keys(r.inputs).every((key) => discovered.has(key)),
+    );
 
     // Size + center the panel to the visible rows (1 at Lvl 1, 2 at Lvl 2).
     this.panelH = 70 + Math.max(1, recipes.length) * (ROW_H + ROW_GAP) + 6;
@@ -144,6 +155,17 @@ export class CookingMenu {
       11,
       "#8a93a3",
     );
+
+    if (recipes.length === 0) {
+      this.addText(
+        this.panelX + 16,
+        this.panelY + 74,
+        "No dishes known yet — gather their ingredients first.",
+        12,
+        "#8a93a3",
+      );
+      return;
+    }
 
     let y = this.panelY + 70;
     for (const recipe of recipes) {
