@@ -2,6 +2,11 @@ import Phaser from "phaser";
 import type { StationUpgradeDef } from "../systems/StationUpgrades";
 import type { ArmorUpgradeDef } from "../systems/ArmorUpgrades";
 import type { WeaponUpgradeDef } from "../systems/WeaponUpgrades";
+import { ProgressBar } from "./ProgressBar";
+
+// A short "upgrading…" bar plays over the clicked row before the tier lands —
+// same commit-at-end feel as craft/process/cook (ProgressBar / roadmap 5p).
+const UPGRADE_BAR_MS = 500;
 
 // A placed station's upgrade, a worn armor piece's upgrade, or an owned
 // weapon's upgrade — all three share the same shape the UI actually reads
@@ -59,6 +64,13 @@ export class UpgradeMenu {
   private bg: Phaser.GameObjects.Rectangle;
   private open = false;
   private rows: Phaser.GameObjects.GameObject[] = [];
+  // True while an upgrade bar is filling — greys every row + blocks re-clicks.
+  private busy = false;
+  private busyUpgradeId: string | null = null;
+  // The baseline (pre-panelY-shift) box rect of the row currently filling, so
+  // the bar can be re-pinned over it after each render's final shift pass.
+  private busyRowRect: { y: number; h: number } | null = null;
+  private progressBar: ProgressBar;
 
   private panelX: number;
   private panelY: number;
@@ -75,6 +87,7 @@ export class UpgradeMenu {
 
     this.panelX = scene.scale.width / 2 - PANEL_W / 2;
     this.panelY = scene.scale.height / 2 - this.panelH / 2;
+    this.progressBar = new ProgressBar(scene, { depth: DEPTH_TEXT + 3 });
 
     this.bg = scene.add
       .rectangle(this.panelX, this.panelY, PANEL_W, this.panelH, 0x0a0a0a, 0.95)
@@ -95,6 +108,12 @@ export class UpgradeMenu {
   close(): void {
     if (!this.open) return;
     this.open = false;
+    // Closing mid-bar cancels it — nothing's consumed until the bar fills, so
+    // this is a clean no-op (no half-applied upgrade, no lost materials).
+    this.busy = false;
+    this.busyUpgradeId = null;
+    this.busyRowRect = null;
+    this.progressBar.stop();
     this.bg.setVisible(false);
     this.clearRows();
   }
@@ -139,7 +158,12 @@ export class UpgradeMenu {
     }
 
     this.panelX = this.anchor ? this.anchor.x : this.scene.scale.width / 2 - PANEL_W / 2;
-    const upgrades = this.deps.upgradesFor(target.itemKey).filter((u) => this.deps.isDiscovered(u));
+    // Only show tiers not yet unlocked (the next one clickable, any further
+    // ones locked) — already-applied tiers are hidden, not greyed, for a
+    // cleaner panel.
+    const upgrades = this.deps
+      .upgradesFor(target.itemKey)
+      .filter((u) => u.resultTier > target.tier && this.deps.isDiscovered(u));
 
     let cursor = 0;
     this.addText(this.panelX + 16, cursor + 14, this.deps.displayName(target.itemKey, target.tier), 16, "#ffffff");
@@ -148,7 +172,13 @@ export class UpgradeMenu {
     cursor += HEADER_H;
 
     if (upgrades.length === 0) {
-      this.addText(this.panelX + 16, cursor + 6, "No upgrades discovered yet.", 12, "#8a93a3");
+      // Distinguish "everything is already applied" from "higher tiers exist
+      // but aren't discovered yet" — the former should read as maxed, not empty.
+      const higherExists = this.deps
+        .upgradesFor(target.itemKey)
+        .some((u) => u.resultTier > target.tier);
+      const msg = higherExists ? "No upgrades discovered yet." : "Fully upgraded.";
+      this.addText(this.panelX + 16, cursor + 6, msg, 12, "#8a93a3");
       cursor += 36;
     } else {
       for (const upg of upgrades) cursor += this.renderUpgradeRow(upg, target, cursor);
@@ -161,20 +191,33 @@ export class UpgradeMenu {
     for (const obj of this.rows) {
       (obj as unknown as { y: number }).y += this.panelY;
     }
+
+    // Pin the running bar over the filling row (rows/panelY only exist now).
+    if (this.busyUpgradeId && this.busyRowRect) {
+      this.progressBar
+        .setPosition(this.panelX + 12, this.busyRowRect.y + this.panelY)
+        .setSize(PANEL_W - 24, this.busyRowRect.h - 6)
+        .setVisible(true);
+    } else {
+      this.progressBar.setVisible(false);
+    }
   }
 
   // Returns this row's total height so the caller can advance its cursor.
+  // Only not-yet-applied tiers reach here (render() filters applied ones out).
   private renderUpgradeRow(upg: UpgradeDef, target: UpgradeTarget, rowY: number): number {
-    const applied = upg.resultTier <= target.tier;
-    const locked = !applied && upg.resultTier > target.tier + 1; // requires an earlier tier first
+    const filling = this.busyUpgradeId === upg.id;
+    const locked = upg.resultTier > target.tier + 1; // requires an earlier tier first
     const affordable = this.deps.canAfford(upg);
-    const blockReason = !applied && !locked ? (this.deps.extraBlockReason?.(upg) ?? null) : null;
-    const clickable = !applied && !locked && affordable && !blockReason;
+    const blockReason = !locked ? (this.deps.extraBlockReason?.(upg) ?? null) : null;
+    // While any row's bar is filling, every row is inert (the bar covers the
+    // filling one; the rest grey out until it lands).
+    const clickable = !this.busy && !locked && affordable && !blockReason;
 
     const contentX = this.panelX + 22;
-    const nameColor = applied ? "#8fe38f" : clickable ? "#ffffff" : "#5b6472";
+    const nameColor = clickable ? "#ffffff" : "#5b6472";
     let suffix = "";
-    if (applied) suffix = "  (Applied)";
+    if (filling) suffix = "  (Upgrading…)";
     else if (locked) suffix = "  (Requires previous tier)";
     else if (blockReason) suffix = `  (${blockReason})`;
     else if (!affordable) suffix = "  (Missing materials)";
@@ -186,6 +229,9 @@ export class UpgradeMenu {
     const descText = this.addText(contentX, descY, upg.description, 10, "#5b6472", 0, 0, PANEL_W - 44);
 
     const rowH = Math.max(descY - rowY + descText.height + 10, MIN_ROW_H);
+    // Remember this row's baseline rect so render()'s final pass can pin the
+    // bar over it (panelY isn't known yet at this point).
+    if (filling) this.busyRowRect = { y: rowY, h: rowH };
 
     const box = this.scene.add
       .rectangle(this.panelX + 12, rowY, PANEL_W - 24, rowH - 6, 0x14181f, 0.9)
@@ -199,11 +245,29 @@ export class UpgradeMenu {
       })
       .on("pointerout", () => box.setFillStyle(0x14181f, 0.9))
       .on("pointerdown", () => {
-        if (clickable) this.deps.apply(upg);
+        if (clickable) this.startUpgrade(upg);
       });
     this.rows.push(box);
 
     return rowH;
+  }
+
+  // Play the upgrade bar over the clicked row, then commit at the end (materials
+  // are consumed by deps.apply on completion, never on click — so a mid-bar
+  // close cancels cleanly). Re-renders to grey the rows while it fills.
+  private startUpgrade(upg: UpgradeDef): void {
+    this.busy = true;
+    this.busyUpgradeId = upg.id;
+    this.render();
+    this.progressBar.start(UPGRADE_BAR_MS, {
+      onComplete: () => {
+        this.busy = false;
+        this.busyUpgradeId = null;
+        // apply() bumps the tier and calls refresh() -> render(), which now
+        // hides the just-applied row and unlocks the next tier.
+        this.deps.apply(upg);
+      },
+    });
   }
 
   private addText(

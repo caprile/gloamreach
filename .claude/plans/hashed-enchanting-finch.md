@@ -141,6 +141,40 @@ fixes (Sonnet-class; built this session on Opus). Detail in `STATUS.md`; decisio
 Verified: `tsc --noEmit` clean, preview boots error-free, all four logic fixes asserted live
 via `preview_eval`. No `RECIPES.md` change.
 
-**Still queued from the triage:** light "both" rebalance (armor nerf + enemy-dmg buff), boss
-damage bump + GremlinKing cleave replacement, 2 small features (Workbench-placement hint,
-in-game relic compendium). Then master-plan tail M-TE → M-W1.
+## Follow-up: armor rebalance (3-tier set) + upgrade-menu polish (shipped 2026-07-11)
+
+The armor half of the triage's "light both rebalance" (Sonnet-class; built on Opus). The old
+Gremlin set jumped the full-set defense **9 → 16 in a single upgrade tier** — too much (the user).
+Reworked into a **3-tier set with a flat +1 armor per tier**, to the user's exact spec:
+
+- Base defenses (`Items.ts`): shirt 4→3, pants 3→2, cap 2 kept. Per-piece per-tier:
+  cap **2/3/4**, shirt **3/4/5**, pants **2/3/4**.
+- Full-set totals: **Lvl 1 = 7, Lvl 2 = 10, Lvl 3 = 13** (verified live via `armorDefenseForTier`).
+- `ArmorUpgrades.ts`: lvl-2 `defenseBonus` retuned to +1-cumulative; new lvl-3 rows
+  (`resultTier: 2`) added per piece (costs escalate from lvl 2, still Workbench-Lvl-2 gated —
+  no higher Workbench tier exists yet). `deltaLabel` is the incremental +1; the stored
+  `defenseBonus` is cumulative over base (matches `armorDefenseForTier`). No wiring needed — the
+  UpgradeMenu / `applyArmorUpgrade` path was already tier-generic (weapon lvl2/lvl3 exercised it).
+- the user's note: the +1/tier proportional impact shrinks as raw numbers climb; re-scale per
+  future biome, don't assume this curve holds deeper in.
+
+**Same-session upgrade-menu UX polish** (`src/ui/UpgradeMenu.ts`, applies to station/armor/weapon
+upgrades since they share the one menu):
+
+- **Timed loading bar before an upgrade lands** — reuses `ProgressBar` (5p) with the same
+  commit-at-end + `busy` + cancel-on-close pattern (`UPGRADE_BAR_MS = 500`; `startUpgrade()`
+  runs the bar, `deps.apply` fires in `onComplete`; materials consumed only on completion).
+  Multi-row tracking via `busyUpgradeId` + a `busyRowRect` re-pinned over the filling row after
+  render()'s panelY shift. (TS gotcha: don't null `busyRowRect` at top of render — see
+  [[survivor-rpg-timed-bars-gamba-relics]].)
+- **Already-applied tiers are hidden, not greyed "(Applied)"** — `render()` filters
+  `resultTier > target.tier`; only the next (clickable) + any locked-future tiers show, and a
+  maxed piece reads "Fully upgraded." Cleaner panel.
+
+Verified live: cap 0→1→2 each played the bar and committed on completion (materials only spent at
+end); applied rows vanished; mid-bar close consumed nothing; max tier showed "Fully upgraded."
+`RECIPES.md` armor-upgrades table updated to match.
+
+**Still queued from the triage:** the enemy-damage-buff half of the rebalance, boss damage bump +
+GremlinKing cleave replacement, 2 small features (Workbench-placement hint, in-game relic
+compendium). Then master-plan tail M-TE → M-W1.

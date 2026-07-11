@@ -348,11 +348,11 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     hotbarable: false,
     armorSlot: "chest",
     armorType: "light_armor",
-    armorDefense: 4,
+    armorDefense: 3,
     stats: [
       { label: "Type", value: "Armor (Chest)" },
       { label: "Armor Type", value: "Light" },
-      { label: "Armor", value: "4" },
+      { label: "Armor", value: "3" },
     ],
   },
   gremlin_pants: {
@@ -364,11 +364,11 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     hotbarable: false,
     armorSlot: "legs",
     armorType: "light_armor",
-    armorDefense: 3,
+    armorDefense: 2,
     stats: [
       { label: "Type", value: "Armor (Legs)" },
       { label: "Armor Type", value: "Light" },
-      { label: "Armor", value: "3" },
+      { label: "Armor", value: "2" },
     ],
   },
 

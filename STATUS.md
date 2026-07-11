@@ -2,7 +2,59 @@
 
 Last updated: 2026-07-11
 
-### Just finished: Playtest bug-fix batch (5 fixes)
+### Just finished: Armor rebalance (3-tier set) + upgrade-menu polish
+
+The armor half of the 25-min-playtest triage's "light both rebalance"
+([[survivor-rpg-playtest-feedback-2026-07-11]]). Number tuning + extending the existing
+(already-designed) armor-upgrade tables plus UI polish on the shared upgrade menu — Sonnet-class
+work, built on Opus. Plan: `.claude/plans/hashed-enchanting-finch.md` (armor-rebalance follow-up
+section).
+
+**Armor: 9→16-in-one-tier was too much.** The old Gremlin set leapt the full-set defense from 9
+(Lvl 1) to 16 (Lvl 2) in a single upgrade. Reworked into a **3-tier set, flat +1 armor per
+tier**, to the user's exact spec:
+
+- Base defenses (`Items.ts`): shirt 4→3, pants 3→2 (cap 2 unchanged). Per-piece per-tier:
+  **cap 2/3/4, shirt 3/4/5, pants 2/3/4**.
+- Full-set totals: **Lvl 1 = 7, Lvl 2 = 10, Lvl 3 = 13** — verified live via `armorDefenseForTier`.
+- `ArmorUpgrades.ts`: existing lvl-2 `defenseBonus` retuned to +1-cumulative; new **lvl-3** rows
+  (`resultTier: 2`) added per piece — costs escalate from lvl 2, all still gated on a
+  Workbench-Lvl-2 (Tool Sharpener), since no higher Workbench tier exists yet. `deltaLabel` is
+  the incremental +1; the stored `defenseBonus` is the cumulative bonus over base (matches
+  `armorDefenseForTier`). **No wiring needed** — the UpgradeMenu / `applyArmorUpgrade` path was
+  already tier-generic (weapon lvl2/lvl3 already exercised it).
+- the user's note: the +1/tier proportional impact shrinks as raw armor numbers climb, so this
+  curve is expected to be re-scaled per future biome, not assumed to hold deeper in.
+
+**Upgrade-menu UX polish** (`src/ui/UpgradeMenu.ts` — one menu serves station/armor/weapon
+upgrades, so both changes apply to all three):
+
+1. **Timed loading bar before the upgrade lands** — reuses `ProgressBar` (roadmap 5p,
+   [[survivor-rpg-timed-bars-gamba-relics]]) with the same commit-at-end + `busy` flag +
+   cancel-on-close pattern as craft/process/cook (`UPGRADE_BAR_MS = 500`). Clicking a tier runs
+   the bar (`startUpgrade()`) and only calls `deps.apply` — which consumes materials + bumps the
+   tier — in the bar's `onComplete`. Every row greys + shows `(Upgrading…)` while it fills;
+   closing the menu mid-bar cancels cleanly (nothing consumed). Multi-row tracking via
+   `busyUpgradeId` + a `busyRowRect` (baseline rect captured in `renderUpgradeRow`, re-pinned over
+   the filling row after render()'s panelY shift).
+2. **Already-applied tiers are hidden, not greyed "(Applied)".** `render()` now filters
+   `resultTier > target.tier`, so only the next (clickable) tier + any still-locked future tiers
+   show. A fully-upgraded piece reads **"Fully upgraded."**; an undiscovered-higher-tier piece
+   still reads "No upgrades discovered yet."
+
+**Verification:** `tsc --noEmit` clean; preview boots error-free. Drove the real menu live via
+`preview_eval` on an equipped cap with a placed tier-1 Workbench: rows showed Lvl 2 (clickable) +
+Lvl 3 (Requires previous tier) with no "Applied" row; clicking played the bar (`busy`/`running`
+true, tier still 0 mid-bar); on completion tier bumped 0→1, materials 20→19, and the applied Lvl 2
+row vanished leaving only Lvl 3; a second upgrade reached tier 2 → "Fully upgraded."; a mid-bar
+`close()` consumed nothing and reset `busy`/tier. `RECIPES.md` armor-upgrades table updated to
+match (now lists Lvl 2 + Lvl 3 rows and the 7/10/13 set totals).
+
+**Still queued from the triage:** the enemy-damage-buff half of the rebalance, the boss damage
+bump + GremlinKing cleave replacement, and 2 small features (Workbench-placement hint, in-game
+relic compendium). Then the master-plan tail: **M-TE** (trophy gear), **M-W1** (multi-biome world).
+
+### Previously: Playtest bug-fix batch (5 fixes)
 
 The first chunk of the 25-min-playtest triage backlog after the souls-like combat pass —
 five independent bug fixes ([[survivor-rpg-playtest-feedback-2026-07-11]]). Fixes/UI on

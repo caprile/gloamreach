@@ -48,18 +48,24 @@ requires standing near a placed Workbench (`MainScene.isNearWorkbench`).
 ## Armor Upgrades (`src/systems/ArmorUpgrades.ts`)
 
 Base defense values live on the item itself (`ItemDef.armorDefense`); each
-upgrade adds `defenseBonus` on top. All three lvl2 upgrades require a nearby
-Workbench that has itself reached Tier 1 (the Tool Sharpener upgrade above).
+upgrade's `defenseBonus` is the **cumulative** bonus over base at that tier
+(total armor at tier N = base + that tier's `defenseBonus`). Every tier now
+adds a flat **+1 armor** — a deliberate flattening of the old single-tier
+9→16 leap. All upgrades require a nearby Workbench that has itself reached
+Tier 1 (the Tool Sharpener upgrade above).
 
 | Item | Base Armor (Lvl 1) | Upgrade | Result Tier | Costs | Extra Gate | Armor After |
 |---|---|---|---|---|---|---|
-| Gremlin Cap | 2 | Gremlin Cap Lvl 2 | 1 | 1 Gremlin Leather, 1 Blackberry | Workbench Lvl 2 | 4 |
-| Gremlin Shirt | 4 | Gremlin Shirt Lvl 2 | 1 | 2 Gremlin Leather, 2 Bones | Workbench Lvl 2 | 7 |
-| Gremlin Pants | 3 | Gremlin Pants Lvl 2 | 1 | 1 Gremlin Leather, 1 Leather Scraps | Workbench Lvl 2 | 5 |
+| Gremlin Cap | 2 | Gremlin Cap Lvl 2 | 1 | 1 Gremlin Leather, 1 Blackberry | Workbench Lvl 2 | 3 |
+| Gremlin Cap | 2 | Gremlin Cap Lvl 3 | 2 | 2 Gremlin Leather, 2 Blackberries | Workbench Lvl 2 | 4 |
+| Gremlin Shirt | 3 | Gremlin Shirt Lvl 2 | 1 | 2 Gremlin Leather, 2 Bones | Workbench Lvl 2 | 4 |
+| Gremlin Shirt | 3 | Gremlin Shirt Lvl 3 | 2 | 3 Gremlin Leather, 3 Bones | Workbench Lvl 2 | 5 |
+| Gremlin Pants | 2 | Gremlin Pants Lvl 2 | 1 | 1 Gremlin Leather, 1 Leather Scraps | Workbench Lvl 2 | 3 |
+| Gremlin Pants | 2 | Gremlin Pants Lvl 3 | 2 | 2 Gremlin Leather, 2 Leather Scraps | Workbench Lvl 2 | 4 |
 
-Full tier-0 set (all three, unupgraded): **9 armor**. Full tier-1 set (all
-three upgraded): **16 armor**. Applied as a flat deduction from incoming
-physical damage, floored at 1 (`MainScene.applyDamageToPlayer`).
+Full-set totals: **Lvl 1 = 7 armor**, **Lvl 2 = 10 armor**, **Lvl 3 = 13
+armor**. Applied as a flat deduction from incoming physical damage, floored at
+1 (`MainScene.applyDamageToPlayer`).
 
 ## Weapon Upgrades (`src/systems/WeaponUpgrades.ts`)
 

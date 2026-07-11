@@ -28,6 +28,12 @@ export interface ArmorUpgradeDef {
   deltaLabel?: string;
 }
 
+// Each tier now grants a flat +1 armor over the previous one (base -> +1 -> +2
+// over base), a deliberate flattening of the old lvl-2's big jump (cap/shirt/
+// pants used to leap the full set 9 -> 16 in a single tier). `defenseBonus` is
+// the cumulative bonus over the item's base armorDefense at that tier — so a
+// piece's total at tier N is base + that tier's defenseBonus (see
+// armorDefenseForTier). Full-set totals: Lvl 1 = 7, Lvl 2 = 10, Lvl 3 = 13.
 export const ARMOR_UPGRADES: ArmorUpgradeDef[] = [
   {
     id: "gremlin_cap_lvl2",
@@ -37,8 +43,19 @@ export const ARMOR_UPGRADES: ArmorUpgradeDef[] = [
     resultTier: 1,
     costs: { gremlin_leather: 1, blackberry: 1 },
     requiresWorkbenchTier: 1,
+    defenseBonus: 1,
+    deltaLabel: "+1 Armor",
+  },
+  {
+    id: "gremlin_cap_lvl3",
+    name: "Gremlin Cap Lvl 3",
+    description: "A double-layered crown of hardened leather.",
+    appliesToItemKey: "gremlin_cap",
+    resultTier: 2,
+    costs: { gremlin_leather: 2, blackberry: 2 },
+    requiresWorkbenchTier: 1,
     defenseBonus: 2,
-    deltaLabel: "+2 Armor",
+    deltaLabel: "+1 Armor",
   },
   {
     id: "gremlin_shirt_lvl2",
@@ -48,8 +65,19 @@ export const ARMOR_UPGRADES: ArmorUpgradeDef[] = [
     resultTier: 1,
     costs: { gremlin_leather: 2, bones: 2 },
     requiresWorkbenchTier: 1,
-    defenseBonus: 3,
-    deltaLabel: "+3 Armor",
+    defenseBonus: 1,
+    deltaLabel: "+1 Armor",
+  },
+  {
+    id: "gremlin_shirt_lvl3",
+    name: "Gremlin Shirt Lvl 3",
+    description: "A bone-ribbed cuirass over the cured hide.",
+    appliesToItemKey: "gremlin_shirt",
+    resultTier: 2,
+    costs: { gremlin_leather: 3, bones: 3 },
+    requiresWorkbenchTier: 1,
+    defenseBonus: 2,
+    deltaLabel: "+1 Armor",
   },
   {
     id: "gremlin_pants_lvl2",
@@ -59,8 +87,19 @@ export const ARMOR_UPGRADES: ArmorUpgradeDef[] = [
     resultTier: 1,
     costs: { gremlin_leather: 1, leather: 1 },
     requiresWorkbenchTier: 1,
+    defenseBonus: 1,
+    deltaLabel: "+1 Armor",
+  },
+  {
+    id: "gremlin_pants_lvl3",
+    name: "Gremlin Pants Lvl 3",
+    description: "Reinforced leg wraps layered with a second cured hide.",
+    appliesToItemKey: "gremlin_pants",
+    resultTier: 2,
+    costs: { gremlin_leather: 2, leather: 2 },
+    requiresWorkbenchTier: 1,
     defenseBonus: 2,
-    deltaLabel: "+2 Armor",
+    deltaLabel: "+1 Armor",
   },
 ];
 
