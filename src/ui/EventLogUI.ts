@@ -9,16 +9,20 @@ const MAX_LINES = 6;
 
 const KIND_COLORS: Record<LogKind, { text: string; border: number; fill: number }> = {
   recipe: { text: "#ffe08a", border: 0xffe08a, fill: 0x3a2f10 },
+  material: { text: "#8ac2e0", border: 0x8ac2e0, fill: 0x102a3a },
   levelup: { text: "#8fe38f", border: 0x8fe38f, fill: 0x123219 },
   info: { text: "#c8d0dc", border: 0x8a93a3, fill: 0x1a1f2a },
   combat: { text: "#ff8a8a", border: 0xff8a8a, fill: 0x3a1414 },
 };
 
-// Recipe-unlock toast: a small card (icon + text) that slides in, holds while
-// stacked under earlier ones, then fades. Anchored on the LEFT, directly
-// under the InventoryMenu panel's box (moved off the top-right per the user —
-// it used to collide visually with nothing there, but the left side under the
-// inventory box is where they want contextual unlock feedback to live).
+// Recipe-unlock / material-discovery toast: a small card (icon + text) that
+// slides in, holds while stacked under earlier ones, then fades. Anchored on
+// the LEFT, directly under the InventoryMenu panel's box (moved off the
+// top-right per the user — it used to collide visually with nothing there,
+// but the left side under the inventory box is where they want contextual
+// unlock feedback to live). Shared by both "recipe" (amber) and "material"
+// (blue, first-time-you-picked-this-up) entries so they stack in one queue
+// rather than colliding if both fire in the same beat.
 const RECIPE_TOAST_W = 220;
 const RECIPE_TOAST_H = 40; // minimum height — grows for a message that wraps past 1 line
 const RECIPE_TOAST_GAP = 6;
@@ -71,7 +75,7 @@ export class EventLogUI {
 
   private onNewEntry(entry: LogEntry): void {
     this.scrollOffset = 0; // jump to newest
-    if (entry.kind === "recipe") this.enqueueRecipeToast(entry);
+    if (entry.kind === "recipe" || entry.kind === "material") this.enqueueRecipeToast(entry);
     else this.showToast(entry);
     this.render();
   }
@@ -225,9 +229,10 @@ export class EventLogUI {
     });
   }
 
-  // Recipe unlocks queue up and slide in one at a time (staggered) rather
-  // than all popping in on the same frame if several unlock together (e.g.
-  // one skill level-up revealing multiple recipes at once).
+  // Recipe unlocks (and material discoveries) queue up and slide in one at a
+  // time (staggered) rather than all popping in on the same frame if several
+  // fire together (e.g. one skill level-up revealing multiple recipes, or
+  // taking all from a chest full of never-seen materials at once).
   private enqueueRecipeToast(entry: LogEntry): void {
     this.recipeToastQueue.push(entry);
     if (!this.recipeToastQueueBusy) this.processRecipeToastQueue();
@@ -245,7 +250,7 @@ export class EventLogUI {
   }
 
   private spawnRecipeToast(entry: LogEntry): void {
-    const colors = KIND_COLORS.recipe;
+    const colors = KIND_COLORS[entry.kind];
     const hasIcon = !!entry.icon;
     const textX = hasIcon ? 10 + RECIPE_TOAST_ICON_SIZE + 8 : 10;
     const wrapWidth = RECIPE_TOAST_W - textX - 8;

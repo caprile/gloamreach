@@ -69,7 +69,7 @@ import { EventLog } from "../systems/EventLog";
 import { Biome, type ZoneType } from "../systems/Biome";
 import { Equipment, EQUIP_SLOTS, type EquipSlot, type EquippedItem } from "../systems/Equipment";
 import { Hotbar, ROW1_COUNT } from "../systems/Hotbar";
-import { ProcessingStation } from "../systems/Processing";
+import { ProcessingStation, PROCESS_RECIPES } from "../systems/Processing";
 import { BuffManager } from "../systems/Buffs";
 import { COOK_RECIPES, canAffordCook } from "../systems/Cooking";
 import { CraftingMenu } from "../ui/CraftingMenu";
@@ -123,6 +123,18 @@ import { RelicForgeMenu } from "../ui/RelicForgeMenu";
 import { RelicBarUI } from "../ui/RelicBarUI";
 
 const HOTBAR_KEYS = ["ONE", "TWO", "THREE", "FOUR", "FIVE", "SIX", "SEVEN", "EIGHT", "NINE"];
+
+// Every item key producible by a recipe/process/cook/refine table — used to
+// tell a raw MATERIAL (first pickup of a gathered/dropped resource) apart
+// from a CRAFTED good (first time a recipe's output lands in the backpack),
+// which already gets its own "New Recipe Unlocked!" toast the moment it
+// becomes craftable. See discoverMaterial().
+const CRAFTED_OUTPUT_KEYS = new Set<string>([
+  ...RECIPES.map(outputKey),
+  ...PROCESS_RECIPES.map((r) => r.output),
+  ...COOK_RECIPES.map((r) => r.output),
+  ...REFINE_RECIPES.map((r) => r.output),
+]);
 
 // Hardcore: one life. Death ends the run and posts a score instead of
 // respawning (M-R1, roguelike meta-loop). Flipping this false restores the
@@ -278,6 +290,11 @@ export class MainScene extends Phaser.Scene {
   private equippedWeaponName: string | null = null;
   private equippedWeaponTier = 0;
   private attackRangeRing!: Phaser.GameObjects.Graphics;
+  // Outline drawn around whatever's hovered, redrawn each frame in
+  // updateHover() — gated on the SAME prompt string the bottom-right text
+  // uses, so it never reveals anything the prompt-gating design hides (no
+  // tool equipped -> no highlight, out of reach -> no highlight, etc).
+  private hoverHighlight!: Phaser.GameObjects.Graphics;
   private hotbar = new Hotbar();
   private equipment = new Equipment();
   private eventLog = new EventLog();
@@ -612,6 +629,7 @@ export class MainScene extends Phaser.Scene {
     // Reach preview ring — only drawn while a tool/weapon is equipped, kept
     // just above the ground and below entities (Milestone F).
     this.attackRangeRing = this.add.graphics().setDepth(-5);
+    this.hoverHighlight = this.add.graphics();
 
     // Trees and boulders are solid; the player bumps into them.
     const solids = this.physics.add.staticGroup();
@@ -898,9 +916,9 @@ export class MainScene extends Phaser.Scene {
     this.runHudUI.update(this.run, this.dayNight);
     this.stamina.tick(delta);
     this.refreshStaminaBar();
-    // Contextual hints: nearly-empty stamina, and low HP (first time each run).
+    // Contextual hint: nearly-empty stamina. (First-damage-taken hint fires
+    // from applyDamageToPlayer() instead, right when it actually happens.)
     if (this.stamina.value() < 5) this.hints.trigger("stamina_empty");
-    if (this.health.value() / this.health.max <= 0.3) this.hints.trigger("low_hp");
     this.updateComfortRegen();
     // Food buffs heal over time; refresh the HP bar only when they actually
     // healed, and keep the buff HUD in sync each frame (countdown/expiry).
@@ -1600,7 +1618,7 @@ export class MainScene extends Phaser.Scene {
     for (let i = 0; i < this.backpack.size; i++) {
       const stack = this.backpack.slot(i);
       if (stack && !this.discovered.has(stack.key)) {
-        this.discovered.add(stack.key);
+        this.discoverMaterial(stack.key);
         changed = true;
       }
     }
@@ -3000,6 +3018,31 @@ export class MainScene extends Phaser.Scene {
       this.promptText.setVisible(false);
       this.input.setDefaultCursor("default");
     }
+    this.updateHoverHighlight(prompt);
+  }
+
+  // Outline whatever's hovered — gated on the identical prompt string the
+  // bottom-right text uses, so a hidden-tool/out-of-reach hover shows no
+  // highlight either, exactly like the text prompt.
+  private updateHoverHighlight(prompt: string | null): void {
+    this.hoverHighlight.clear();
+    if (!prompt) return;
+    const target =
+      this.hoveredNode ??
+      this.hoveredEnemy ??
+      this.hoveredRack ??
+      this.hoveredShack?.chestImage ??
+      this.hoveredAltar?.image ??
+      this.hoveredWorkbench ??
+      this.hoveredCampfire ??
+      this.hoveredForge ??
+      null;
+    if (!target) return;
+    const radius = Math.max(target.displayWidth, target.displayHeight) / 2 + 4;
+    this.hoverHighlight
+      .setDepth(ysortDepth(target.y) + 0.5)
+      .lineStyle(2, 0xffffff, 0.85)
+      .strokeCircle(target.x, target.y, radius);
   }
 
   // The prompt string for a hovered node, or null if nothing should show.
@@ -3214,7 +3257,7 @@ export class MainScene extends Phaser.Scene {
       if (row2Slot !== null) {
         this.hotbar.container.set(row2Slot, { key: node.resource, count: node.amount, tier: node.tier });
         this.hotbarUI.refresh();
-        this.discovered.add(node.resource);
+        this.discoverMaterial(node.resource);
         this.refreshDiscovery();
         return;
       }
@@ -3225,7 +3268,7 @@ export class MainScene extends Phaser.Scene {
         this.spawnLooseDrop(node.resource, node.amount, node.x, node.y, DROPPED_ITEM_MAGNET_COOLDOWN_MS, node.tier);
         return;
       }
-      this.discovered.add(node.resource);
+      this.discoverMaterial(node.resource);
       this.refreshDiscovery();
       return;
     }
@@ -3440,6 +3483,7 @@ export class MainScene extends Phaser.Scene {
     const reduced = Math.max(1, Math.round(relicAdjusted - totalPlayerDefense(this.equipment)));
     const died = this.health.takeDamage(reduced);
     this.refreshHealthBar();
+    this.hints.trigger("took_damage"); // first hit taken this run -> nudge toward healing
     if (knockback) {
       const angle = Phaser.Math.Angle.Between(knockback.fromX, knockback.fromY, this.player.x, this.player.y);
       const body = this.player.body as Phaser.Physics.Arcade.Body;
@@ -3632,7 +3676,7 @@ export class MainScene extends Phaser.Scene {
   // overflow handling — dropping — arrives with the loot-drop milestone.)
   private addToBackpack(key: string, amount: number): number {
     const leftover = this.backpack.add(key, amount);
-    this.discovered.add(key);
+    this.discoverMaterial(key);
     // First elite trophy in hand -> nudge toward the Relic Forge (not the boss
     // fang, which is a win-state drop, not a forge input the player farms).
     if (key === "gremlin_trophy" || key === "boar_trophy" || key === "snake_trophy") {
@@ -3640,6 +3684,20 @@ export class MainScene extends Phaser.Scene {
     }
     this.refreshDiscovery();
     return leftover;
+  }
+
+  // Mark a key discovered; if it's a genuinely NEW raw material (not a
+  // crafted/processed/cooked/refined output — those already get their own
+  // "New Recipe Unlocked!" toast) pop a small discovery toast. Centralizes
+  // every discovered.add() call site so this fires exactly once, wherever
+  // the material is first obtained — world pickup, chest loot, drying-rack
+  // output, etc.
+  private discoverMaterial(key: string): void {
+    if (this.discovered.has(key)) return;
+    this.discovered.add(key);
+    if (CRAFTED_OUTPUT_KEYS.has(key)) return;
+    const def = itemDef(key);
+    if (def) this.eventLog.add("material", `Discovered: ${def.name}`, def.texture);
   }
 
   // Re-run recipe discovery and announce anything newly unlocked. Call after

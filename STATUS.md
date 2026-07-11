@@ -2,8 +2,8 @@
 
 ## Current State
 
-_Living snapshot — edit in place, never append. Last shipped: **Gloaming Vein
-(mineable rarity-ore POI + Gloamwarden mini-boss + trophy refinement)**, **2026-07-11**._
+_Living snapshot — edit in place, never append. Last shipped: **Playtest-readiness Tier 1
+(discovered-material toast + hover highlight + first-damage hint)**, **2026-07-11**._
 
 **The game.** Top-down 2D pixel survival-ARPG (Phaser 3 + TypeScript + Vite; all
 textures are placeholders generated in `BootScene`). One forest biome sitting in the
@@ -32,11 +32,16 @@ death ends a run and posts a `localStorage` high score; killing the Gremlin King
 win. The world is now circular + much larger (M-W1 geometry prep, above); deterministic
 seeded world-gen and actual multi-biome content are still deferred to M-W1 proper.
 
-**In progress / next.** **Gloaming Vein shipped this session** (see below). Next in the
-locked build order: **M-TE** (trophy-gated special gear), then **M-W1** (multi-biome
-content in the now-circular world) last. A separate playtest-polish backlog also remains:
-discovered-material toast, hover highlight on interactables, inventory auto-sort, a ranged
-starter weapon, and passive HP regen.
+**In progress / next.** the user is prepping for the first outside playtesters; audio and
+real pixel art/animations are deliberately deferred until content/balance settle further
+(the whole texture pipeline is built to swap late — see `CLAUDE.md` roadmap item 8).
+Playtest-readiness Tier 1 (3 small comprehension fixes) shipped this session — see below.
+Passive HP regen was explicitly cut from the backlog: Comfort (Bedroll) + cooked-food
+buffs already cover HP sustain, so a passive trickle on top would undercut both. Remaining
+playtest-polish backlog: inventory auto-sort, a ranged starter weapon, then a minimal
+code-generated SFX layer before a second/wider playtest round. Locked build order
+otherwise unchanged: **M-TE** (trophy-gated special gear) next, then **M-W1**
+(multi-biome content in the now-circular world) last.
 
 **Known issues / open.**
 - Boss may be slightly overtuned after the 5s damage bump (the user's "TBD" — left as-is
@@ -56,7 +61,65 @@ starter weapon, and passive HP regen.
 
 > Older entries in STATUS-archive.md.
 
-### Just finished: Gloaming Vein (rarity-ore POI + mini-boss + trophy refinement)
+### Just finished: Playtest-readiness Tier 1 (discovered-material toast + hover highlight + first-damage hint)
+
+Off the playtest-polish backlog (see the previous "Balancing dashboard" entry's triage
+notes), the three cheapest comprehension-gap fixes ahead of handing the build to outside
+playtesters. Sonnet-class fixes/UI on existing systems — no new mechanic. Passive HP regen
+(the fourth backlog item) was explicitly cut per the user: Comfort (Bedroll) + cooked-food
+buffs already own HP sustain, and a passive trickle on top would make both feel pointless.
+
+**Discovered-material toast** (`EventLog.ts`/`EventLogUI.ts`/`MainScene.ts`). New
+`LogKind: "material"` reuses the existing recipe-unlock slide-in/stack/fade toast verbatim
+(`EventLogUI`'s `enqueueRecipeToast`/`spawnRecipeToast`, which only ever hardcoded the
+`recipe` color — now reads `KIND_COLORS[entry.kind]` so both kinds share one queue/stack
+instead of colliding if they fire the same beat), in a new blue accent (`#8ac2e0`) distinct
+from recipe's amber. New `MainScene.discoverMaterial(key)` centralizes every
+`discovered.add()` call site (world pickup via `collectNode`, `addToBackpack` — crafting/
+cooking/processing output included — and `reconcileBackpackDiscovery` for chest/rack loot)
+so the toast fires exactly once, wherever a key is first obtained, regardless of path. A
+new module-level `CRAFTED_OUTPUT_KEYS` (unioned from `RECIPES`/`PROCESS_RECIPES`/
+`COOK_RECIPES`/`REFINE_RECIPES` output keys) excludes crafted/cooked/processed/refined
+goods from the toast — those already get their own "New Recipe Unlocked!" toast the moment
+they become craftable, so a second "Discovered: X" on first craft would be redundant.
+*Verified live: first `wood` pickup → "Discovered: Wood" material toast + its recipe
+unlocks; a second `wood` pickup → no new entries (dedup); adding a crafted `stone_axe` →
+no material toast.*
+
+**Hover highlight** (`MainScene.ts`). A world-space `Graphics` outline (`hoverHighlight`,
+mirrors `attackRangeRing`'s idiom) redrawn each frame in `updateHover()`, strictly gated on
+the SAME `prompt` string the bottom-right text already uses — so a no-tool-equipped or
+out-of-reach hover shows no highlight either, preserving the prompt-gating design's
+"reveal nothing" rule. Depth = `ysortDepth(target.y) + 0.5` (mirrors GremlinKing's
+telegraph-graphics depth convention), so it draws just above whatever's hovered — works
+uniformly across nodes/enemies/racks/shacks/altars/workbench/campfire/forge since they all
+expose `x`/`y`/`displayWidth`/`displayHeight`. *Verified live: `commandBuffer.length` is 0
+with a null prompt, 14 (a drawn circle) with a hovered node + non-null prompt; depth
+computed correctly for the target's y.*
+
+**First-damage hint, not 30%-HP-threshold hint.** The `low_hp` hint used to poll
+`health/max <= 0.3` every frame; renamed to `took_damage` and moved to fire once, right
+when `applyDamageToPlayer()` actually lands a hit — a fresh player doesn't need to bleed
+down to 30% before learning food/rest heal over time, and the old poll could also fire
+well into a fight rather than at the actually-informative moment (first hit ever). Text
+updated to mention both cooked food and Comfort/campfire resting. *Verified live: one hit
+→ hint fires once with the new text; a second hit → no re-fire (idempotent, matches every
+other `HintManager.trigger()` call).*
+
+**Verification:** `tsc --noEmit` clean; preview boots console-error-free (driven via
+`preview_eval` — the preview tab loaded backgrounded/hidden this session, the documented
+quirk in `CLAUDE.md`'s verification workflow; `window.__game.scene.start('MainScene')`
+force-advanced the stalled scene transition so live state could still be exercised).
+`RECIPES.md` unchanged (no recipe/cost changes).
+
+**Still queued:** inventory auto-sort, a ranged starter weapon, then a minimal
+code-generated SFX layer (hit/pickup/craft/level-up/nightfall/death — same placeholder
+ethos as the generated textures, swappable later) before a second/wider playtest round.
+Real pixel art + animations stay deferred until content/balance settle further (last, per
+`CLAUDE.md` roadmap item 8). Then the master-plan tail: **M-TE** (trophy gear), **M-W1**
+(multi-biome world).
+
+### Previously: Gloaming Vein (rarity-ore POI + mini-boss + trophy refinement)
 
 Built the next locked feature after the world/map rework — plan:
 `.claude/plans/amethyst-warding-vein.md`. Built on **Opus** (new mechanic: a POI + a
@@ -461,68 +524,3 @@ unrelated to these changes.)
 "both" rebalance (armor nerf + enemy-dmg buff), the boss damage bump + GremlinKing cleave
 replacement, and 2 small features (Workbench-placement hint, in-game relic compendium). Then the
 master-plan tail: **M-TE** (trophy gear), **M-W1** (multi-biome world).
-
-### Previously: Souls-like common-enemy combat (telegraphed attacks)
-
-Off the master-plan build order — the next item in the 25-min-playtest triage after the
-dashboard ([[survivor-rpg-playtest-feedback-2026-07-11]]): kill the "kite forever by
-spam-left-click + walk away" feel by giving **every** common enemy a telegraphed attack +
-dodge window + recovery/punish window, the way the Gremlin King already works. Built on
-**Opus** (new mechanic). Plan: `.claude/plans/hashed-enchanting-finch.md`. **Mechanic only —
-the balance-number rebalance (armor/enemy-dmg/boss) stays deferred to a separate Sonnet pass**,
-per the user's "get core mechanics playtest-ready first."
-
-**Locked direction (the user):** per-enemy *bespoke* attacks, NOT one uniform system (harder
-enemies feel distinct; common trash can stay simple + kiteable). Tells are **animation/motion/
-tint** (rear-back, wind-up scale-pulse, lunge) — **NO world-space red arcs/lines** ("too
-goofy"); players learn hitboxes over time. No audio system exists (confirmed) → sound tells
-deferred. Ranged Gremlin: telegraph the **melee claw only** (projectile burst untouched).
-
-- **Shared mechanism on base `Enemy`** (`src/entities/Enemy.ts`) — a *mechanism* with
-  per-subclass *numbers* (like the existing `startPursuit`/`hasGivenUpPursuit`/`canAggro`
-  give-up helpers; NOT a shared config table, per the standing "don't fold per-enemy combat
-  stats into one table" rule). New `AttackPhase` (`none|windup|strike|recover`),
-  `SwingConfig` (reach/windup/strike/recover/cooldown + optional `knockback`), `isAttacking()`,
-  `playWindupTell()`/`endWindupTell()` (finite scale-punch ×1.18 + warning tint, restored via
-  an extracted `applyHpTint()` — no `repeat:-1` leak, no x/y tween to fight the arcade body),
-  and `tickMeleeSwing()` (drives a full in-place swing, holds the enemy planted, returns true
-  only at the strike frame **if the player is STILL within reach** — re-checking current
-  position instead of damaging on contact is what makes wind-up dodging real). Damage path is
-  unchanged: `update()` returns true → `applyDamageToPlayer(biteDamage)`. Public
-  `pendingAttackKnockback` (set by `tickMeleeSwing` from `SwingConfig.knockback` or by Boar's
-  charge) is read in `MainScene.updateEnemies()` and fed to `applyDamageToPlayer`'s existing
-  knockback param. Base `Enemy.update()`'s own bite was converted to the telegraphed swing too
-  (canonical reference; deaggro now guarded with `!isAttacking()` so a committed swing plays
-  out). GremlinKing untouched — already has telegraph/poise.
-- **Gremling** (`MeleeGremling`, `Gremlin.ts`) — simple `tickMeleeSwing` claw, the
-  intentionally-boring, still-kiteable baseline.
-- **Snake** (`Snake.ts`) — **coil → locked lunge-bite**: a coil wind-up captures the strike
-  direction on its first frame and never re-aims (stopped its old per-frame homing), then a
-  straight locked lunge (`STRIKE_SPEED` bumped 90→150); a sidestep during the coil makes it
-  whiff, and the existing flee IS the recovery/punish. Fleeing far during the coil cancels
-  the strike; the whole lunge always resolves within COIL_MS+LUNGE_MS so it can't chase forever.
-- **Boar** (`Boar.ts`) — now its own `update()` override (was bare base `Enemy`). Signature
-  **CHARGE**: paws-the-ground wind-up (locks direction like GremlinKing's charge), a fast
-  committed lunge (270px/s) that **overshoots** past the player, then a long
-  recovery/turnaround (the main punish window). Plus a quick point-blank **gore-bite** so it
-  can't be trivially circled. Both feed damage through the boolean contract; the charge sets a
-  300px/s shove. (Renamed its wander fields to `boarWanderTarget`/`boarNextWanderAt` to avoid
-  clashing with base `Enemy`'s privates.)
-- **RangedGremlin** (`Gremlin.ts`) — kiting + 2-shot burst untouched; the melee claw is now a
-  telegraphed `tickMeleeSwing` with a **shove knockback** (210px/s), and won't flip out of
-  melee mode mid-swing.
-- **Verified**: `tsc --noEmit` clean; preview console error-free. Live `preview_eval`
-  (isolated one enemy, banished the rest) confirmed all four: Boar charge
-  (windup→strike→recover→none, 25 dmg at strike, **sidestep whiffs → 0 dmg**, scale 1.18 +
-  orange tint tell — screenshotted), Gremling swipe (cyclic, 8 dmg at strike), Snake coil→lunge
-  (striking→fleeing→hidden, 20 dmg on the lunge), Ranged Gremlin claw (windup→strike→recover,
-  10 dmg, kb=210 plumbed). **No damage ever lands during wind-up.** **Known limitation**: the
-  shove knockback is currently near-cosmetic because `Player.update()` zeroes idle velocity
-  every frame (overwriting the impulse the frame after) — a *pre-existing* trait of the exact
-  path GremlinKing's slam already uses; fixing it is a boss-feel change, left for the deferred
-  combat-feel/balance pass. No `RECIPES.md` change (no recipes touched).
-
-**Still queued from the triage** (see [[survivor-rpg-playtest-feedback-2026-07-11]]): light
-"both" rebalance (armor nerf + enemy-dmg buff), boss damage bump + replace the GremlinKing
-cleave, 5 bug fixes, 2 small features (Workbench-placement hint, in-game relic compendium).
-Then the master-plan tail: **M-TE** (trophy gear), **M-W1** (multi-biome world).

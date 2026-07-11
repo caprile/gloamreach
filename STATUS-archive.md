@@ -3737,3 +3737,67 @@ for later sessions.
   full-screen flash is a jumpscare — keep it a big deal, dial intensity down.
 - **Small features:** contextual hint to place a Workbench (Hints.ts); in-game relic
   compendium (see-all-relics view — the dashboard covers the dev side, he wants it in-game too).
+### Previously: Souls-like common-enemy combat (telegraphed attacks)
+
+Off the master-plan build order — the next item in the 25-min-playtest triage after the
+dashboard ([[survivor-rpg-playtest-feedback-2026-07-11]]): kill the "kite forever by
+spam-left-click + walk away" feel by giving **every** common enemy a telegraphed attack +
+dodge window + recovery/punish window, the way the Gremlin King already works. Built on
+**Opus** (new mechanic). Plan: `.claude/plans/hashed-enchanting-finch.md`. **Mechanic only —
+the balance-number rebalance (armor/enemy-dmg/boss) stays deferred to a separate Sonnet pass**,
+per the user's "get core mechanics playtest-ready first."
+
+**Locked direction (the user):** per-enemy *bespoke* attacks, NOT one uniform system (harder
+enemies feel distinct; common trash can stay simple + kiteable). Tells are **animation/motion/
+tint** (rear-back, wind-up scale-pulse, lunge) — **NO world-space red arcs/lines** ("too
+goofy"); players learn hitboxes over time. No audio system exists (confirmed) → sound tells
+deferred. Ranged Gremlin: telegraph the **melee claw only** (projectile burst untouched).
+
+- **Shared mechanism on base `Enemy`** (`src/entities/Enemy.ts`) — a *mechanism* with
+  per-subclass *numbers* (like the existing `startPursuit`/`hasGivenUpPursuit`/`canAggro`
+  give-up helpers; NOT a shared config table, per the standing "don't fold per-enemy combat
+  stats into one table" rule). New `AttackPhase` (`none|windup|strike|recover`),
+  `SwingConfig` (reach/windup/strike/recover/cooldown + optional `knockback`), `isAttacking()`,
+  `playWindupTell()`/`endWindupTell()` (finite scale-punch ×1.18 + warning tint, restored via
+  an extracted `applyHpTint()` — no `repeat:-1` leak, no x/y tween to fight the arcade body),
+  and `tickMeleeSwing()` (drives a full in-place swing, holds the enemy planted, returns true
+  only at the strike frame **if the player is STILL within reach** — re-checking current
+  position instead of damaging on contact is what makes wind-up dodging real). Damage path is
+  unchanged: `update()` returns true → `applyDamageToPlayer(biteDamage)`. Public
+  `pendingAttackKnockback` (set by `tickMeleeSwing` from `SwingConfig.knockback` or by Boar's
+  charge) is read in `MainScene.updateEnemies()` and fed to `applyDamageToPlayer`'s existing
+  knockback param. Base `Enemy.update()`'s own bite was converted to the telegraphed swing too
+  (canonical reference; deaggro now guarded with `!isAttacking()` so a committed swing plays
+  out). GremlinKing untouched — already has telegraph/poise.
+- **Gremling** (`MeleeGremling`, `Gremlin.ts`) — simple `tickMeleeSwing` claw, the
+  intentionally-boring, still-kiteable baseline.
+- **Snake** (`Snake.ts`) — **coil → locked lunge-bite**: a coil wind-up captures the strike
+  direction on its first frame and never re-aims (stopped its old per-frame homing), then a
+  straight locked lunge (`STRIKE_SPEED` bumped 90→150); a sidestep during the coil makes it
+  whiff, and the existing flee IS the recovery/punish. Fleeing far during the coil cancels
+  the strike; the whole lunge always resolves within COIL_MS+LUNGE_MS so it can't chase forever.
+- **Boar** (`Boar.ts`) — now its own `update()` override (was bare base `Enemy`). Signature
+  **CHARGE**: paws-the-ground wind-up (locks direction like GremlinKing's charge), a fast
+  committed lunge (270px/s) that **overshoots** past the player, then a long
+  recovery/turnaround (the main punish window). Plus a quick point-blank **gore-bite** so it
+  can't be trivially circled. Both feed damage through the boolean contract; the charge sets a
+  300px/s shove. (Renamed its wander fields to `boarWanderTarget`/`boarNextWanderAt` to avoid
+  clashing with base `Enemy`'s privates.)
+- **RangedGremlin** (`Gremlin.ts`) — kiting + 2-shot burst untouched; the melee claw is now a
+  telegraphed `tickMeleeSwing` with a **shove knockback** (210px/s), and won't flip out of
+  melee mode mid-swing.
+- **Verified**: `tsc --noEmit` clean; preview console error-free. Live `preview_eval`
+  (isolated one enemy, banished the rest) confirmed all four: Boar charge
+  (windup→strike→recover→none, 25 dmg at strike, **sidestep whiffs → 0 dmg**, scale 1.18 +
+  orange tint tell — screenshotted), Gremling swipe (cyclic, 8 dmg at strike), Snake coil→lunge
+  (striking→fleeing→hidden, 20 dmg on the lunge), Ranged Gremlin claw (windup→strike→recover,
+  10 dmg, kb=210 plumbed). **No damage ever lands during wind-up.** **Known limitation**: the
+  shove knockback is currently near-cosmetic because `Player.update()` zeroes idle velocity
+  every frame (overwriting the impulse the frame after) — a *pre-existing* trait of the exact
+  path GremlinKing's slam already uses; fixing it is a boss-feel change, left for the deferred
+  combat-feel/balance pass. No `RECIPES.md` change (no recipes touched).
+
+**Still queued from the triage** (see [[survivor-rpg-playtest-feedback-2026-07-11]]): light
+"both" rebalance (armor nerf + enemy-dmg buff), boss damage bump + replace the GremlinKing
+cleave, 5 bug fixes, 2 small features (Workbench-placement hint, in-game relic compendium).
+Then the master-plan tail: **M-TE** (trophy gear), **M-W1** (multi-biome world).

@@ -15,7 +15,7 @@ export type HintId =
   | "tool_locked"
   | "open_menu"
   | "stamina_empty"
-  | "low_hp"
+  | "took_damage"
   | "nightfall"
   | "elite_trophy";
 
@@ -27,7 +27,7 @@ const HINT_TEXT: Record<HintId, string> = {
   tool_locked: "You'll need the right tool equipped for that.",
   open_menu: "Press Tab to open your pack and craft what you've learned.",
   stamina_empty: "Out of stamina. Sprinting, dashing, and attacking all drain it — let it recover.",
-  low_hp: "Low health. Cooked food heals you over time — right-click to eat.",
+  took_damage: "Hurt? Cooked food and resting near a lit campfire both heal you over time.",
   nightfall: "Night falls. Enemies grow bolder in the dark — a torch lights the way.",
   elite_trophy: "That was an elite — it dropped a trophy. A Relic Forge can turn trophies into power.",
 };

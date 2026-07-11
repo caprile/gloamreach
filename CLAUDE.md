@@ -1055,6 +1055,32 @@ mouse-driven only. Don't reintroduce a keybind for this without being asked. Spa
    *gated* climb (rare resource + mini-boss), consistent with "nothing free." See `STATUS.md`
    + [[survivor-rpg-gloaming-vein-plan]].
 
+5x. **Playtest-readiness Tier 1 (discovered-material toast + hover highlight + first-damage
+   hint)** — off the master-plan build order; the first slice of the playtest-polish
+   backlog (5q/5r), aimed at getting the build ready to hand to outside playtesters before
+   audio or real pixel art/animations get touched (both stay deliberately deferred — see
+   roadmap item 8 and the note below). Shipped on Sonnet (fixes/UI on existing systems, no
+   new mechanic). **Discovered-material toast**: a new `LogKind: "material"` reuses the
+   existing recipe-unlock slide-in toast machinery (`EventLogUI`) in a distinct blue
+   accent, fired once per key from a new centralized `MainScene.discoverMaterial()` (every
+   `discovered.add()` call site now routes through it) — excludes crafted/cooked/processed/
+   refined outputs (a `CRAFTED_OUTPUT_KEYS` set unioned from `RECIPES`/`PROCESS_RECIPES`/
+   `COOK_RECIPES`/`REFINE_RECIPES`), since those already get their own unlock toast.
+   **Hover highlight**: a world-space `Graphics` outline around whatever's hovered,
+   strictly gated on the exact same `prompt` string the bottom-right text already uses —
+   preserves the "reveal nothing the prompt-gating design hides" rule with zero new gating
+   logic. **First-damage hint**: the `low_hp` hint (renamed `took_damage`) moved off a
+   per-frame "≤30% HP" poll to fire once, right when the player actually takes their first
+   hit — teaches the food/rest healing loop before a real health scare, not partway into
+   one. **Passive HP regen was explicitly cut** from the backlog (the user's call): Comfort
+   (Bedroll, 5j) + cooked-food buffs (5f) already own HP sustain, and a passive trickle on
+   top would undercut the reason to use either. Full verification in `STATUS.md`.
+   **Remaining playtest-polish backlog: inventory auto-sort and a ranged starter weapon**,
+   then a minimal code-generated SFX layer (same placeholder ethos as the generated
+   textures — hit/pickup/craft/level-up/nightfall/death, swappable later) before a
+   second/wider playtest round. Real pixel art + animations stay last, after content/
+   balance settle further — see roadmap item 8.
+
 **A new umbrella plan for the long-requested roguelike run/score meta-loop** now exists:
 `.claude/plans/roguelike-metaloop-master-plan.md` (drafted 2026-07-10, locked build order
 confirmed by the user). It supersedes/finalizes several open questions in the **Long-term
@@ -1145,11 +1171,14 @@ Blunt 5/Pierce 10/Light Armor 5/Running 3/Chopping 4, max-lvl Primal Spear):**
   **shipped** (roadmap 5f): eating grants a **timed HP-regen buff** (no instant heal, no
   hunger meter), cooking is instant at a placed campfire. Still open: stamina-restore
   food, non-HP buffs (damage/rested), a dedicated cooking station, more dishes.
-- **HP regen system** — the food-buff heal-over-time (5f) is the first piece; a *passive*
-  regen (rest/over-time without eating) still isn't designed.
-- **"Discovered" notification for new raw materials** — picking up a resource type for
-  the first time should announce it, similar in spirit to the existing recipe-unlock
-  toast (`EventLogUI`'s recipe toast) but for raw materials, not recipes.
+- ~~**HP regen system**~~ — **resolved, will NOT be built.** The food-buff heal-over-time
+  (5f) + Comfort/Bedroll's conditional regen (5j) already own HP sustain; the user
+  explicitly cut a passive/no-effort regen on top as redundant with both (5x) — a passive
+  trickle would undercut the reason to cook or place a Bedroll near a campfire.
+- ~~**"Discovered" notification for new raw materials"**~~ — **shipped (5x)**: a
+  `LogKind: "material"` toast, reusing the recipe-unlock toast's slide-in/stack/fade
+  machinery in a distinct blue accent, fires once per raw material (excludes crafted/
+  cooked/processed outputs, which already get their own unlock toast).
 - **Inventory auto-sort** — a keypress while the inventory is open that sorts/auto-stacks
   shared materials together.
 - **Pause system** — doesn't exist yet at all.
@@ -1191,13 +1220,10 @@ Blunt 5/Pierce 10/Light Armor 5/Running 3/Chopping 4, max-lvl Primal Spear):**
   pattern (`MainScene.ts`'s altar-reveal check, generalized to also loop
   `gremlinShacks`) — not blocked on the bigger minimap-radius/full-map rework noted
   below.
-- **Hover highlight border on interactables.** Nothing currently gives a hovered
-  tree/rock/enemy/chest/station a visual outline — the only hover feedback today is the
-  bottom-right text prompt (and cursor, where applicable). Add a highlight (outline/glow)
-  on whatever `MainScene.updateHover()` currently resolves as hovered (node/enemy/rack/
-  shack/altar/workbench/campfire/etc.), gated the same way the prompt already is (reach +
-  equip rules) so it doesn't reveal anything the prompt-gating design intentionally
-  hides. Pure UI polish on top of the existing hover system, no new state.
+- ~~**Hover highlight border on interactables.**~~ — **shipped (5x)**: a world-space
+  `Graphics` outline redrawn each frame in `updateHover()`, gated on the identical
+  `prompt` string the bottom-right text uses, so it never reveals what the prompt-gating
+  design hides.
 - **Generalize Elites to a % chance across all enemy types, with a higher chance at
   night.** Elites currently only exist on `RangedGremlin`/`MeleeGremling` (Group C,
   `witty-drifting-aurora.md`), and only ever spawn via the Gremlin Shack guards being
