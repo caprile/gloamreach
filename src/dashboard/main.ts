@@ -36,6 +36,7 @@ import {
   trophyOverallSuccessChance,
   relicEffectText,
   TROPHY_ROLL,
+  REFINE_RECIPES,
 } from "../systems/Relics";
 
 // ---------------------------------------------------------------------------
@@ -169,6 +170,19 @@ const ENEMIES: EnemyStat[] = [
     loot: "Gremlin King Fang (unique)",
     notes:
       "Poise 100 (stagger → 1.5× dmg for 3s). Enrages <50% HP: shorter telegraphs, faster — not more damage. The only enemy with real telegraph/dodge windows today.",
+  },
+  {
+    name: "Gloamwarden (MINI-BOSS)",
+    hp: 260,
+    speed: 55,
+    aggro: 240,
+    attacks: [
+      { label: "Leaping Smash (leap to locked spot, AoE 95px + knockback)", damage: 22, telegraphMs: 780 },
+      { label: "Gloam Eruption (crystal spikes at locked ground spot, 72px)", damage: 24, telegraphMs: 920 },
+    ],
+    loot: "3-4 Gloam Shard + 1 Refined Trophy (+ cracks the vein)",
+    notes:
+      "Gloaming Vein guardian. Poise 60 (stagger → 1.5× dmg for 2.5s). Scale 1.7, scored as an elite kill. Bespoke attacks (NOT charge/radial-slam): a leaping smash (previews the Gremlin King) + a rooted crystal-eruption ground-target (punish window). Regens 10 HP/s while deaggro'd.",
   },
 ];
 
@@ -395,6 +409,8 @@ function renderRelics(): string {
     boar_trophy: "Elite Boar",
     snake_trophy: "Elite Snake",
     gremlin_king_fang: "Gremlin King (dormant — boss = win)",
+    refined_trophy_uncommon: "Refinement (Gloaming Vein) — roll-only",
+    refined_trophy_rare: "Refinement (scaffold) — roll-only",
   };
   for (const [key, roll] of Object.entries(TROPHY_ROLL)) {
     const bands = TROPHY_OUTCOME_ODDS[roll.rarity];
@@ -420,6 +436,28 @@ function renderRelics(): string {
       <td>${breakdown}${failStr}</td>
       <td class="num">${PITY_THRESHOLD[roll.rarity]}</td>
       <td class="muted">${esc(trophySource[key] ?? "—")}</td>
+    </tr>`;
+  }
+  html += `</tbody></table>`;
+
+  // Trophy refinement (Gloaming Vein) — spend Gloam Shards to climb a raw
+  // trophy one rarity up into a guaranteed-roll refined trophy.
+  html += `<h3>Trophy refinement — Gloaming Vein</h3>
+    <p class="note">The Relic Forge's <b>Refine tab</b> spends <b>Gloam Shards</b> (mined
+    from the Gloaming Vein POI, gated behind the <b>Gloamwarden</b> mini-boss) to climb a
+    raw trophy one rarity up into a <b>refined trophy that never crumbles</b>. Single-step +
+    terminal (refined trophies are never a refine input); species-agnostic; requires
+    trophy tier == shard tier.</p>
+    <table><thead><tr>
+      <th>Input trophies</th><th class="num">Gloam Shards</th><th>Output</th><th class="muted">Notes</th>
+      </tr></thead><tbody>`;
+  for (const r of REFINE_RECIPES) {
+    const scaffold = r.inputRarity !== "common";
+    html += `<tr>
+      <td>${r.inputCount} × ${rarityName(r.inputRarity)} (any species)</td>
+      <td class="num">${r.shardCount}</td>
+      <td><b>${esc(name(r.output))}</b></td>
+      <td class="muted">${scaffold ? "scaffold — no raw source in biome 1" : "biome 1"}</td>
     </tr>`;
   }
   html += `</tbody></table>`;

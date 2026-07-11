@@ -2,8 +2,8 @@
 
 ## Current State
 
-_Living snapshot — edit in place, never append. Last shipped: **circular bigger world
-+ minimap nearby-view + full-map overlay (M-W1 prep)**, **2026-07-11**._
+_Living snapshot — edit in place, never append. Last shipped: **Gloaming Vein
+(mineable rarity-ore POI + Gloamwarden mini-boss + trophy refinement)**, **2026-07-11**._
 
 **The game.** Top-down 2D pixel survival-ARPG (Phaser 3 + TypeScript + Vite; all
 textures are placeholders generated in `BootScene`). One forest biome sitting in the
@@ -18,11 +18,13 @@ smash / charge / ground slam, enrage <50% HP); stamina/sprint/dash with dash i-f
 Skills + Player Level progression; placeable stations (Campfire, Drying Rack, Relic
 Forge, Bedroll); cooking → timed HP-regen food buffs; wearable 3-tier Gremlin armor +
 weapon/station upgrades; elites (chance-based rolls + forced-elite shack guards)
-dropping per-species trophies; a probabilistic trophy→Relic economy; a **nearby-view
+dropping per-species trophies; a probabilistic trophy→Relic economy with a gated
+**trophy-refinement** loop (the Gloaming Vein ore POI + Gloamwarden mini-boss →
+Gloam Shards → the Relic Forge's Refine tab); a **nearby-view
 minimap + full-screen zoomable/pannable world map** (M / Map button) with fog of war and
-discovered-POI icons; the Gremlin War Camp POI; contextual hints + a pause menu; and a
-drift-free balancing dashboard at `/dashboard.html` (second Vite entry, imports live data
-modules).
+discovered-POI icons; the Gremlin War Camp + Gloaming Vein POIs; contextual hints + a
+pause menu; and a drift-free balancing dashboard at `/dashboard.html` (second Vite entry,
+imports live data modules).
 
 **Meta-loop** (`.claude/plans/roguelike-metaloop-master-plan.md`): M-FX / M-R1 /
 M-DN / Comfort(M-SB) / M-EL2 / M-RL / M-WC all shipped; M-FA cut. Hardcore one-life
@@ -30,14 +32,11 @@ death ends a run and posts a `localStorage` high score; killing the Gremlin King
 win. The world is now circular + much larger (M-W1 geometry prep, above); deterministic
 seeded world-gen and actual multi-biome content are still deferred to M-W1 proper.
 
-**In progress / next.** **Gloaming Vein** (mineable rarity-ore POI + gated trophy
-refinement) is designed + locked with a committed plan
-(`.claude/plans/amethyst-warding-vein.md`) but **not yet built** — a content+economy
-pass on the M-RL relic loop, slotting in ahead of M-TE. Then **M-TE** (trophy-gated
-special gear) and **M-W1** (multi-biome content in the now-circular world) last. A
-separate playtest-polish backlog also remains: discovered-material toast, hover highlight
-on interactables, inventory auto-sort, a ranged starter weapon, and passive HP regen.
-(The minimap nearby-view + full-map rework — long on that list — shipped this session.)
+**In progress / next.** **Gloaming Vein shipped this session** (see below). Next in the
+locked build order: **M-TE** (trophy-gated special gear), then **M-W1** (multi-biome
+content in the now-circular world) last. A separate playtest-polish backlog also remains:
+discovered-material toast, hover highlight on interactables, inventory auto-sort, a ranged
+starter weapon, and passive HP regen.
 
 **Known issues / open.**
 - Boss may be slightly overtuned after the 5s damage bump (the user's "TBD" — left as-is
@@ -57,7 +56,85 @@ on interactables, inventory auto-sort, a ranged starter weapon, and passive HP r
 
 > Older entries in STATUS-archive.md.
 
-### Just finished: Circular bigger world + minimap nearby-view + full-map overlay
+### Just finished: Gloaming Vein (rarity-ore POI + mini-boss + trophy refinement)
+
+Built the next locked feature after the world/map rework — plan:
+`.claude/plans/amethyst-warding-vein.md`. Built on **Opus** (new mechanic: a POI + a
+bespoke mini-boss + a refinement data model). A content+economy pass on the M-RL relic
+loop: kill elites → raw Common trophies (86.5% crumble when rolled) → find + clear the ore
+POI → Gloam Shards → spend them at the Relic Forge's new **Refine tab** to climb a raw
+trophy one rarity up into a **Refined trophy that never fails a roll** (Uncommon outcome
+table = 100% floor). Fully gated behind exploration + a mini-boss ("nothing free").
+
+**The POI (world-gen, `MainScene`).** `veinPosition` is chosen once in `create()` after
+the altar (so it stays ≥900px from BOTH world center and the war camp — verified 1290px
+from center / 2429px from camp) and before node/enemy spawning, so a new
+`VEIN_CLEAR_RADIUS` (160) exclusion in `pickSpawnPoint` keeps ordinary trees/rocks/enemies
+out of the ore clearing (same pattern as the war camp — [[feedback_poi_busy_not_placeholder]]).
+`spawnGloamingVein()` drops the **Gloamwarden** guardian at the clearing center ringed by
+**5 shielded ore `ResourceNode`s** (Stone-Pickaxe-gated `mine` action, non-respawning, 1–2
+Gloam Shard each, ~2 hits) plus **10 decorative amethyst crystal clusters**
+(`gloam_crystal_cluster`). New `ResourceNode.shielded` flag + `crack(texture)`: shielded
+nodes are skipped by hover/prompt/interact (like `harvested`) and swap
+`gloaming_vein_shielded` → `gloaming_vein` when the guardian dies. **Unique area look** (so
+the ore reads as its own place, like the war-camp floor does for the altar):
+`buildBiomeTexture()` stamps a distinct **gloam-blighted crystalline floor** over the
+clearing (dark-violet wash + a brighter amethyst core). Vein node + a few crystal positions
+feed `veinLightPoints` that `collectLights()` iterates, so the crystals **glow purple at
+night** — a navigation beacon like the war-camp braziers. Discovered within `REVEAL_RADIUS`
+→ a purple **minimap landmark** (`map_vein`, generalized `updateAltarDiscovery`). New
+per-run fields reset in `create()`.
+
+**The guardian (`src/entities/Gloamwarden.ts`).** A bespoke mini-boss following
+GremlinKing's telegraph/poise pattern but **lighter** (per the "no shared boss framework"
+lock — a trimmed sibling, not a subclass of GremlinKing). Extends `Enemy`, fully overrides
+`update()`. 260 HP, scale 1.7, poise 60 → stagger (2.5s, ×1.5 damage punish), difficulty
+between an elite and the King; regens 10 HP/s while deaggro'd. Two **bespoke** purple-
+telegraphed attacks — deliberately NOT the roster's charge/radial-slam (the user: those read
+as "Boar charge / King slam again"): a **Leaping Smash** (leap to a locked landing spot +
+AoE 95px, 22 dmg + kb — kept to preview the Gremlin King's own leaping smash) and a **Gloam
+Eruption** (the warden roots itself and channels, then crystal spikes erupt at the player's
+locked ground spot, 72px, 24 dmg + small launch — boss stays put + vulnerable = a punish
+window; dodge is to leave the marked ground). Area damage flows through `checkPlayerHit()`
+(queried in `updateEnemies` alongside GremlinKing) into the same `applyDamageToPlayer` choke
+point, so dash i-frames/armor "just work." On death, `onGloamwardenKilled()` cracks the vein
++ guaranteed drop 3–4 Gloam Shard + 1 Refined Trophy. Scored as an **elite** kill (no
+dedicated mini-boss band — the plan's "simplest" open sub-decision).
+
+**Refinement (`Relics.ts` + `RelicForgeMenu.ts`).** New `REFINE_RECIPES` (data-driven,
+tier-keyed) + `refinableTrophyKeys`/`ownedRefineInput`/`canAffordRefine` helpers. Biome-1
+recipe: **3 raw Common trophies (any species mix) + 2 Gloam Shards → 1 Refined Trophy**;
+an Uncommon→Radiant scaffold row exists but never surfaces (no raw Uncommon source in
+biome 1). Refined trophies are **roll-only** `TROPHY_ROLL` keys (never dropped, never a
+refine input — single-step + terminal, which caps biome 1 at Refined Uncommon and blocks
+an infinite ladder). The forge menu gained a **Bind / Refine tab toggle** ("Bind" is the
+in-universe name for rolling — the forge "binds trophies into relics"); the Refine tab
+lists affordable recipes with a live cost readout + a **timed `ProgressBar`** (650ms,
+commit-at-end + cancel-on-close, same as craft/process/cook). `MainScene.refineTrophies()`
+consumes inputs greedily across species + grants the output at bar completion. **The Refine
+tab is hidden entirely until the Relic Forge reaches Lvl 2** (no locked tab, no hint) — a new
+**Gloam Conduit** station upgrade (`StationUpgrades.ts`, 15 Stone + 1 Gloam Shard, right-click
+the forge → Upgrade) unlocks it. So you can't refine until you've mined at least one shard
+(which the upgrade itself costs).
+
+**Verified live** (`preview_eval` + screenshots): all new textures load; POI spawns 5
+shielded nodes + guardian at correct distances; shielded nodes un-hoverable even with a
+pickaxe equipped; guardian cycles telegraph → **Leaping Smash** (22, kb 200) / **Gloam
+Eruption** (24, kb 120) → recover, and poise-0 → staggered; killing it cracks all 5 nodes
+(texture swap, `shielded` false); the vein clearing shows its distinct gloam floor + crystal
+props (screenshotted); the **Refine tab is hidden entirely at forge Lvl 1** (only the Roll
+tab shows) and **appears at Lvl 2**, and the **Gloam Conduit** upgrade applies near a Workbench
+(tier 0→1, −15 Stone/−1 Gloam Shard); refine consumes 3 mixed-species commons + 2 shards →
+1 refined; a Refined trophy rolls **200/200 successes** (Uncommon 100% floor); the
+ProgressBar commits at end (nothing consumed mid-bar); 9 vein light points reach
+`collectLights`.
+`tsc --noEmit` clean; console error-free. `RECIPES.md` + the dashboard (Relics Refine
+table + Enemies Gloamwarden row) updated. See [[survivor-rpg-gloaming-vein-plan]].
+
+**Next:** **M-TE** (trophy-gated special gear), then **M-W1** (multi-biome content in the
+now-circular world) last.
+
+### Previously: Circular bigger world + minimap nearby-view + full-map overlay
 
 Off the master-plan build order (the user paused the Gloaming Vein to first do the world/map
 rework, prepping for M-W1). Built on **Opus** (new world-gen geometry + two new map
@@ -449,54 +526,3 @@ deferred. Ranged Gremlin: telegraph the **melee claw only** (projectile burst un
 "both" rebalance (armor nerf + enemy-dmg buff), boss damage bump + replace the GremlinKing
 cleave, 5 bug fixes, 2 small features (Workbench-placement hint, in-game relic compendium).
 Then the master-plan tail: **M-TE** (trophy gear), **M-W1** (multi-biome world).
-
-### Previously: Balancing dashboard + 25-min playtest triage
-
-Off the master-plan build order (like 5q). the user's 25-min run (player lvl 7, ~lvl 16
-Slash on a Bone Knife, 18 kills + 1 boss, 2 relics) produced a 12-item feedback dump.
-Triaged and locked the order/scope via `AskUserQuestion`; **tackled the dashboard first**
-this session (a tooling deliverable, not a game mechanic). Combat + balance work is queued
-for later sessions.
-
-- **Live HTML balancing dashboard** — `dashboard.html` (repo root) + `src/dashboard/main.ts`,
-  wired as a **second Vite entry** (`vite.config.ts` `build.rollupOptions.input`). Open at
-  **`/dashboard.html`** while `npm run dev` runs (served on whatever port Vite prints).
-  Framework-free plain DOM (no new npm dep); no item icons (BootScene-generated at runtime,
-  unavailable to a static page). **Drift-free by construction:** it imports the SAME
-  source-of-truth data modules the game does (`Recipes`, `Items`, `Weapons`,
-  `WeaponUpgrades`, `ArmorUpgrades`, `StationUpgrades`, `Processing`, `Cooking`, `Relics`) —
-  all Phaser-free, so the page stays lean and updates automatically on any recipe/cost/stat/
-  relic change. 8 searchable tabs: Recipes, Weapons (w/ DPS + upgrade costs), Armor (base +
-  Lvl2 defense, set totals), Stations & Food, Relics (trophy→roll odds/pity + every relic's
-  effect text — answers "Tireless Charm −12% to *what*" → **stamina cost**, and is the
-  see-all-relics list), Enemies, **Balance Overview**, All Items.
-- **Balance Overview tab** — the analysis payload. Computes incoming-damage-vs-armor
-  (flat-deduction, floored at 1) at three armor breakpoints, flagging red where a hit floors
-  to ≤2. Directly **quantifies the "1 damage per hit in Lvl 2 armor" complaint**: Gremling
-  claw (8) and Gremlin claw (10) both floor to **1 dmg = 100 hits to kill you** in armor.
-  Plus weapon time-to-kill per enemy. This is the reference for the queued rebalance.
-- **The one drift risk** (documented in-UI + `RECIPES.md`): the **Enemies tab's `ENEMIES`
-  array is manually mirrored** from the Phaser entity subclasses (Boar/Snake/Gremlin/
-  GremlinKing) — enemy stats live in constructors, not exported tables. Keep in sync when
-  tuning enemies. Everything else is live-imported.
-- `RECIPES.md` got a pointer to the dashboard at the top (kept as the quick static reference).
-
-**Locked decisions from the triage (for the queued follow-up sessions):**
-- **Souls-like combat — ALL enemies, next combat session (Opus, new mechanic):** every enemy
-  (Boar/Snake/Gremlin/Gremling) gets a telegraphed attack + a clear attack/dodge window, like
-  the Gremlin King already has. Goal: kill the "kite forever by spam-left-click + walk away"
-  feel. Boring common enemies are fine, but all need a readable tell + punish window.
-- **Balance — "both, lightly" (Sonnet):** small armor-mitigation nerf + small enemy-damage
-  buff so armor is a bonus, not near-immunity (see the Balance tab).
-- **Boss (Sonnet):** bump Gremlin King damage MORE — should ~2-shot a full-armor player
-  (damage already felt good vs max armor). **Replace the cleave/cone attack** — it reads as a
-  strictly worse 360° slam; design a genuinely different attack.
-- **Bug fixes (Sonnet):** (1) twine picked up from a chest didn't unlock recipes (container
-  pickups skip discovery refresh); (2) Cooked Boar Meat recipe shown before ever making a
-  shishkabob (cook-recipe discovery gating); (3) relic appears in "Your Relics" grid *before*
-  the roll notification (5p deferred-announce missed the grid repaint); (4) "Roll Gremlin
-  Trophy" button stuck in the Relic Forge at 0 count while other trophies vanish; (5) level-up
-  full-screen flash is a jumpscare — keep it a big deal, dial intensity down.
-- **Small features:** contextual hint to place a Workbench (Hints.ts); in-game relic
-  compendium (see-all-relics view — the dashboard covers the dev side, he wants it in-game too).
-

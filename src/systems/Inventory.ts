@@ -31,4 +31,7 @@ export type ResourceType =
   | "gremlin_trophy" // dropped by Elite Gremlins (Gremlin Shack guards); Gremlin Totem ingredient
   | "boar_trophy" // dropped by Elite Boars — a Relic Forge trophy (Common)
   | "snake_trophy" // dropped by Elite Snakes — a Relic Forge trophy (Common)
-  | "gremlin_king_fang"; // Gremlin King's guaranteed unique trophy drop
+  | "gremlin_king_fang" // Gremlin King's guaranteed unique trophy drop
+  | "gloam_shard" // mined from the Gloaming Vein POI — spent at the Relic Forge's Refine tab
+  | "refined_trophy_uncommon" // Common trophies refined up (Gloaming Vein loop) — rolls Uncommon
+  | "refined_trophy_rare"; // scaffold for deeper biomes — rolls Rare

@@ -18,6 +18,7 @@ import { Projectile, type ProjectileConfig } from "../entities/Projectile";
 import { GremlinShack, SHACK_GUARD_RESPAWN_MS } from "../entities/GremlinShack";
 import { BossAltar } from "../entities/BossAltar";
 import { GremlinKing, STAGGER_DAMAGE_MULTIPLIER } from "../entities/GremlinKing";
+import { Gloamwarden, WARDEN_STAGGER_DAMAGE_MULTIPLIER } from "../entities/Gloamwarden";
 import type { LootRollEntry } from "../systems/LootContainer";
 import type { ResourceType } from "../systems/Inventory";
 import {
@@ -108,7 +109,16 @@ import { HintUI } from "../ui/HintUI";
 import { PauseMenuUI } from "../ui/PauseMenuUI";
 import { DayNight } from "../systems/DayNight";
 import { NightOverlayUI, type ScreenLight } from "../ui/NightOverlayUI";
-import { RelicManager, TROPHY_ROLL, RELIC_DEFS, rarityName, type RollResult } from "../systems/Relics";
+import {
+  RelicManager,
+  TROPHY_ROLL,
+  RELIC_DEFS,
+  rarityName,
+  REFINE_RECIPES,
+  refinableTrophyKeys,
+  canAffordRefine,
+  type RollResult,
+} from "../systems/Relics";
 import { RelicForgeMenu } from "../ui/RelicForgeMenu";
 import { RelicBarUI } from "../ui/RelicBarUI";
 
@@ -163,6 +173,16 @@ const ALTAR_CLEAR_RADIUS = 1400;
 // land a bush/tree inside the wall.
 const WAR_CAMP_RADIUS = 230; // palisade wall radius
 const WAR_CAMP_CLEAR_RADIUS = 300; // resource-node/enemy spawn exclusion edge
+// Gloaming Vein POI (rare mineable rarity-ore, gated behind the Gloamwarden).
+// Placed a notable distance from both world center and the war camp so it reads
+// as its own destination. VEIN_CLEAR_RADIUS is the no-spawn zone kept clear of
+// ordinary nodes/enemies (same pattern as the war camp — see
+// feedback_poi_busy_not_placeholder).
+const VEIN_MIN_DIST_FROM_CENTER = 900;
+const VEIN_MIN_DIST_FROM_CAMP = 900; // keep it well away from the altar/war camp
+const VEIN_CLEAR_RADIUS = 160; // ore-clearing spawn exclusion edge
+const VEIN_NODE_COUNT = 5;
+const VEIN_NODE_RING = 90; // px — vein nodes cluster this far around the guardian
 const REACH = 64; // how close (px) the player must be to interact
 const PLACEMENT_RADIUS = REACH * 1.25; // how far from the player a placed item may land
 const MAGNET_RADIUS = 100; // px — loose drop pieces within this of the player get pulled in
@@ -313,6 +333,16 @@ export class MainScene extends Phaser.Scene {
   // (scene.restart doesn't re-run field initializers).
   private campLightPoints: { x: number; y: number }[] = [];
   private gremlinKing: GremlinKing | null = null;
+  // Gloaming Vein POI — chosen once in create() (after altarPosition, so it can
+  // steer clear of the war camp). Its ore nodes start shielded and are cracked
+  // open when the Gloamwarden dies. veinLightPoints glow purple at night
+  // (collectLights). All reset per run in create() (scene.restart field-init gotcha).
+  private veinPosition: { x: number; y: number } | null = null;
+  private gloamingVeinNodes: ResourceNode[] = [];
+  private gloamwarden: Gloamwarden | null = null;
+  private veinCracked = false;
+  private veinDiscoveredOnMap = false;
+  private veinLightPoints: { x: number; y: number }[] = [];
   // Right-click "Upgrade / Destroy" popup for any placed object (Workbench,
   // Campfire, Drying Rack, ...) — a single generic system, not per-type.
   private contextMenu!: ContextMenu;
@@ -515,6 +545,12 @@ export class MainScene extends Phaser.Scene {
     this.hoveredAltar = null;
     this.campLightPoints = [];
     this.gremlinKing = null;
+    this.veinPosition = null;
+    this.gloamingVeinNodes = [];
+    this.gloamwarden = null;
+    this.veinCracked = false;
+    this.veinDiscoveredOnMap = false;
+    this.veinLightPoints = [];
     this.upgradeTarget = null;
     this.placedLabels = new Map();
     this.dragSource = null;
@@ -551,6 +587,10 @@ export class MainScene extends Phaser.Scene {
     // distinct camp floor — both need to know where the camp is up front,
     // not after the world is already scattered.
     this.altarPosition = this.pickAltarPosition(this.sessionRng());
+    // Gloaming Vein POI position — chosen after the altar so it can stay well
+    // clear of the war camp, and before node/enemy spawning so pickSpawnPoint's
+    // VEIN_CLEAR_RADIUS exclusion keeps ordinary content out of the ore clearing.
+    this.veinPosition = this.pickVeinPosition(this.sessionRng());
 
     // Ground: one repeating grass texture (the "grassy" look), with the biome
     // overlay baked on top of it — both kept below every entity.
@@ -593,6 +633,7 @@ export class MainScene extends Phaser.Scene {
     this.spawnAltarDensity();
     this.spawnWarCamp();
     this.spawnBossAltar();
+    this.spawnGloamingVein();
     this.physics.add.collider(this.enemyGroup, solids);
     this.physics.add.collider(this.player, this.enemyGroup);
 
@@ -943,6 +984,14 @@ export class MainScene extends Phaser.Scene {
       if (!onScreen(b.x, b.y)) continue;
       const s = toScreen(b.x, b.y);
       lights.push({ x: s.x, y: s.y, radius: POI_LIGHT_RADIUS });
+    }
+    // Gloaming Vein crystals glow at night (a purple beacon that doubles as a
+    // navigation hint — the vein's own amethyst color shows through the erased
+    // hole, like the war camp glows).
+    for (const v of this.veinLightPoints) {
+      if (!onScreen(v.x, v.y)) continue;
+      const s = toScreen(v.x, v.y);
+      lights.push({ x: s.x, y: s.y, radius: 110 });
     }
     return lights;
   }
@@ -1629,6 +1678,8 @@ export class MainScene extends Phaser.Scene {
       // the log/HUD-sync to the slot-machine reveal landing (announceRoll).
       roll: (trophyKey) => this.rollRelic(trophyKey, false),
       announceRoll: (result) => this.announceRelicResult(result),
+      refine: (recipeId) => this.refineTrophies(recipeId),
+      forgeTier: () => (this.openForge?.getData("tier") as number | undefined) ?? 0,
     });
   }
 
@@ -1687,6 +1738,40 @@ export class MainScene extends Phaser.Scene {
     this.relicBarUI.sync(this.relics.groupedForDisplay());
     this.inventoryMenu.refresh();
     this.hotbarUI.refresh();
+  }
+
+  // Refine raw trophies + Gloam Shards into a refined trophy (Gloaming Vein
+  // loop). Re-guards affordability (the menu gates its button), consumes
+  // inputCount raw trophies of the recipe's rarity — drawn greedily across the
+  // eligible species — plus shardCount Gloam Shards, and grants 1 refined
+  // trophy. Called at the ProgressBar's completion from the forge menu.
+  private refineTrophies(recipeId: string): void {
+    const recipe = REFINE_RECIPES.find((r) => r.id === recipeId);
+    if (!recipe) return;
+    // Gated on Relic Forge Lvl 2 (the menu already hides refine rows below it;
+    // re-guard defensively).
+    if (((this.openForge?.getData("tier") as number | undefined) ?? 0) < 1) return;
+    if (!canAffordRefine(recipe, (k) => this.backpack.count(k))) return;
+
+    let remaining = recipe.inputCount;
+    for (const key of refinableTrophyKeys(recipe.inputRarity, recipe.tier)) {
+      if (remaining <= 0) break;
+      const take = Math.min(remaining, this.backpack.count(key));
+      if (take > 0) {
+        this.backpack.removeCount(key, take);
+        remaining -= take;
+      }
+    }
+    this.backpack.removeCount(recipe.shardKey, recipe.shardCount);
+
+    const leftover = this.addToBackpack(recipe.output, 1);
+    if (leftover > 0) {
+      this.spawnLooseDrop(recipe.output, leftover, this.player.x, this.player.y, DROPPED_ITEM_MAGNET_COOLDOWN_MS);
+      this.eventLog.add("info", "Backpack full — the refined trophy landed on the floor");
+    }
+    const def = itemDef(recipe.output);
+    this.eventLog.add("recipe", `Refined into ${def?.name ?? recipe.output}`, def?.texture);
+    this.afterRelicChange();
   }
 
   // Announce (once each) the cook recipes a campfire of `maxTier` makes
@@ -1952,6 +2037,13 @@ export class MainScene extends Phaser.Scene {
         Phaser.Math.Distance.Between(x, y, this.altarPosition.x, this.altarPosition.y) < WAR_CAMP_CLEAR_RADIUS
       )
         continue;
+      // Gloaming Vein: keep ordinary trees/rocks/wild enemies out of the ore
+      // clearing (the vein has its own guardian + shielded nodes).
+      if (
+        this.veinPosition &&
+        Phaser.Math.Distance.Between(x, y, this.veinPosition.x, this.veinPosition.y) < VEIN_CLEAR_RADIUS
+      )
+        continue;
       if (preferred && this.biome.zoneAt(x, y) !== preferred) continue;
       // Creek overlays forest/grassy cells, so a "forest" point can still land
       // on water — keep trees (tall canopy) off the creek where they look wrong.
@@ -2053,6 +2145,41 @@ export class MainScene extends Phaser.Scene {
               : CAMP_FLOOR_ALPHA * (1 - (d - (outer - CAMP_FLOOR_SOFT)) / CAMP_FLOOR_SOFT);
           g.fillStyle(CAMP_FLOOR_COLOR, alpha);
           g.fillRect(px, py, step, step);
+        }
+      }
+    }
+    // Gloaming Vein: a distinct gloam-blighted crystalline floor stamped over
+    // the clearing, so the ore area reads as its own unique place (like the
+    // war-camp floor makes the altar read as a camp). Two-tone — a dark violet
+    // wash with a brighter amethyst core near the vein center.
+    if (this.veinPosition) {
+      const vlx = this.veinPosition.x - BIOME_ORIGIN_X; // vein in local region coords
+      const vly = this.veinPosition.y - BIOME_ORIGIN_Y;
+      const VEIN_FLOOR_SOFT = 40;
+      const VEIN_FLOOR_OUTER = 150;
+      const VEIN_CORE = 70;
+      const minPx = Math.max(0, Math.floor((vlx - VEIN_FLOOR_OUTER) / step) * step);
+      const maxPx = Math.min(BIOME_SIZE, Math.ceil((vlx + VEIN_FLOOR_OUTER) / step) * step);
+      const minPy = Math.max(0, Math.floor((vly - VEIN_FLOOR_OUTER) / step) * step);
+      const maxPy = Math.min(BIOME_SIZE, Math.ceil((vly + VEIN_FLOOR_OUTER) / step) * step);
+      for (let py = minPy; py < maxPy; py += step) {
+        for (let px = minPx; px < maxPx; px += step) {
+          const cx = px + step / 2;
+          const cy = py + step / 2;
+          const d = Phaser.Math.Distance.Between(cx, cy, vlx, vly);
+          if (d >= VEIN_FLOOR_OUTER) continue;
+          // Dark violet blight across the whole clearing, soft outer edge.
+          const outerAlpha =
+            d < VEIN_FLOOR_OUTER - VEIN_FLOOR_SOFT
+              ? 0.72
+              : 0.72 * (1 - (d - (VEIN_FLOOR_OUTER - VEIN_FLOOR_SOFT)) / VEIN_FLOOR_SOFT);
+          g.fillStyle(0x2a1e3a, outerAlpha);
+          g.fillRect(px, py, step, step);
+          // Brighter amethyst core so the very center glows crystalline.
+          if (d < VEIN_CORE) {
+            g.fillStyle(0x4a2f6e, 0.55 * (1 - d / VEIN_CORE));
+            g.fillRect(px, py, step, step);
+          }
         }
       }
     }
@@ -2453,6 +2580,91 @@ export class MainScene extends Phaser.Scene {
     this.bossAltars.push(altar);
   }
 
+  // Gloaming Vein POI: a forest clearing a notable distance from BOTH world
+  // center and the war camp, so it reads as its own destination. Reuses
+  // pickSpawnPoint (which already excludes the camp) and rejects candidates too
+  // close to the altar. veinPosition isn't set yet here, so its own
+  // VEIN_CLEAR_RADIUS exclusion doesn't reject the pick.
+  private pickVeinPosition(rng: Phaser.Math.RandomDataGenerator): { x: number; y: number } {
+    let last = { x: WORLD_CX, y: WORLD_CY };
+    for (let attempt = 0; attempt < 200; attempt++) {
+      const p = this.pickSpawnPoint(rng, "forest", VEIN_MIN_DIST_FROM_CENTER, true);
+      last = p;
+      if (
+        this.altarPosition &&
+        Phaser.Math.Distance.Between(p.x, p.y, this.altarPosition.x, this.altarPosition.y) < VEIN_MIN_DIST_FROM_CAMP
+      )
+        continue;
+      return p;
+    }
+    return last;
+  }
+
+  // Spawn the Gloaming Vein: the Gloamwarden guardian anchored at the clearing
+  // center, ringed by shielded (un-mineable) ore nodes. The nodes stay inert
+  // until the guardian dies (onGloamwardenKilled cracks them open). Their world
+  // positions feed veinLightPoints so the crystals glow at night, like the war
+  // camp braziers.
+  private spawnGloamingVein(): void {
+    if (!this.veinPosition) return;
+    const rng = this.sessionRng();
+    const c = this.veinPosition;
+
+    const warden = new Gloamwarden(this, { x: c.x, y: c.y });
+    this.gloamwarden = warden;
+    this.enemies.push(warden);
+    this.enemyGroup.add(warden);
+
+    for (let i = 0; i < VEIN_NODE_COUNT; i++) {
+      const a = (i / VEIN_NODE_COUNT) * Math.PI * 2 + rng.frac() * 0.5;
+      const r = VEIN_NODE_RING + rng.between(-14, 14);
+      const x = Phaser.Math.Clamp(c.x + Math.cos(a) * r, 60, WORLD_W - 60);
+      const y = Phaser.Math.Clamp(c.y + Math.sin(a) * r, 60, WORLD_H - 60);
+      const node = new ResourceNode(this, {
+        x,
+        y,
+        texture: "gloaming_vein_shielded",
+        resource: "gloam_shard",
+        amount: rng.between(1, 2),
+        action: "mine",
+        displayName: "Gloaming Vein",
+        loose: false,
+        health: 2, // ~2 hits each
+        shielded: true,
+      });
+      this.nodes.push(node);
+      this.obstacleNodes.push(node);
+      this.gloamingVeinNodes.push(node);
+      this.veinLightPoints.push({ x, y });
+    }
+
+    // Decorative amethyst crystal clusters scattered across the clearing (like
+    // the war-camp props) so the ore area reads as a crystalline field, not a
+    // few nodes on grass. Non-interactive, Y-sorted. A few of the outer ones
+    // also glow at night as extra beacons.
+    const DECOR_COUNT = 10;
+    for (let i = 0; i < DECOR_COUNT; i++) {
+      const a = rng.frac() * Math.PI * 2;
+      const r = rng.between(40, 145);
+      const x = Phaser.Math.Clamp(c.x + Math.cos(a) * r, 20, WORLD_W - 20);
+      const y = Phaser.Math.Clamp(c.y + Math.sin(a) * r, 20, WORLD_H - 20);
+      this.add.image(x, y, "gloam_crystal_cluster").setDepth(ysortDepth(y));
+      if (i % 3 === 0) this.veinLightPoints.push({ x, y });
+    }
+  }
+
+  // The Gloamwarden died — crack open every vein ore node so the player can now
+  // mine Gloam Shards (the visible payoff for the kill).
+  private onGloamwardenKilled(): void {
+    if (this.veinCracked) return;
+    this.veinCracked = true;
+    this.gloamwarden = null;
+    for (const node of this.gloamingVeinNodes) {
+      if (!node.depleted) node.crack("gloaming_vein");
+    }
+    this.eventLog.add("combat", "The Gloaming Vein cracks open — its shards can now be mined.");
+  }
+
   // A discovered (not summoned) Boss Altar gets a one-time landmark marker on
   // the minimap once the player has actually explored close enough to reveal
   // its fog cell — reuses fog's own REVEAL_RADIUS so "discovered" means the
@@ -2488,6 +2700,18 @@ export class MainScene extends Phaser.Scene {
         iconKey: "map_shack",
         label: "Gremlin Shack",
         tint: 0x8a6a3a,
+      });
+    }
+    // Gloaming Vein — a discovered fixed structure, marked in purple. Same
+    // one-shot treatment as the altar/shacks (no live entity blip).
+    if (this.veinPosition && !this.veinDiscoveredOnMap && inReveal(this.veinPosition.x, this.veinPosition.y)) {
+      this.veinDiscoveredOnMap = true;
+      this.exploredMap.addLandmark({
+        worldX: this.veinPosition.x,
+        worldY: this.veinPosition.y,
+        iconKey: "map_vein",
+        label: "Gloaming Vein",
+        tint: 0x9a5ee8,
       });
     }
   }
@@ -2634,7 +2858,7 @@ export class MainScene extends Phaser.Scene {
     let best = Infinity;
 
     for (const node of this.nodes) {
-      if (node.depleted || node.harvested) continue;
+      if (node.depleted || node.harvested || node.shielded) continue;
       const radius = Math.max(node.displayWidth, node.displayHeight) / 2 + 6;
       const d = Phaser.Math.Distance.Between(world.x, world.y, node.x, node.y);
       if (d <= radius && d < best) {
@@ -3046,8 +3270,10 @@ export class MainScene extends Phaser.Scene {
     // Weapon skill bonus + relic damage bonus (M-RL), kept fractional to
     // takeHit (see the fractional-damage note above).
     let dmg = baseDmg * weaponSkillDamageMultiplier(dmgType, this.skills) * this.relics.damageMult();
-    // Gremlin King's poise-break punish window — bonus damage while staggered.
+    // Poise-break punish window — bonus damage while a staggerable boss/mini-boss
+    // is staggered.
     if (enemy instanceof GremlinKing && enemy.isStaggered()) dmg *= STAGGER_DAMAGE_MULTIPLIER;
+    if (enemy instanceof Gloamwarden && enemy.isStaggered()) dmg *= WARDEN_STAGGER_DAMAGE_MULTIPLIER;
     const depleted = enemy.takeHit(dmg);
     this.awardSkillXp(dmgType, 30); // weapon-hit XP to the primary damage type's skill
     this.spawnDamageNumber(enemy.x, enemy.y, Math.round(dmg));
@@ -3073,6 +3299,7 @@ export class MainScene extends Phaser.Scene {
     });
     this.enemies = this.enemies.filter((e) => e !== enemy);
     this.onShackGuardKilled(enemy);
+    if (enemy instanceof Gloamwarden) this.onGloamwardenKilled();
     this.eventLog.add("combat", `Defeated ${enemy.displayName}`);
     this.hoveredEnemy = null;
     this.promptText.setVisible(false);
@@ -3096,7 +3323,9 @@ export class MainScene extends Phaser.Scene {
   // enemy. Kept here (not on Enemy) since it's a scoring concern, not behavior.
   private classifyKill(enemy: Enemy): KillCategory {
     if (enemy instanceof GremlinKing) return "boss";
-    if (enemy.elite) return "elite";
+    // The Gloamwarden is a mini-boss — no dedicated score band exists, so it's
+    // scored at the elite tier (per the plan's "simplest" open sub-decision).
+    if (enemy instanceof Gloamwarden || enemy.elite) return "elite";
     return "normal";
   }
 
@@ -3147,7 +3376,7 @@ export class MainScene extends Phaser.Scene {
       // Gremlin King's melee/AoE kit deals area damage, not a single-point
       // bite — queried separately since it needs richer info (knockback)
       // than Enemy.update()'s plain boolean contract.
-      if (enemy instanceof GremlinKing) {
+      if (enemy instanceof GremlinKing || enemy instanceof Gloamwarden) {
         const areaHit = enemy.checkPlayerHit(this.player.x, this.player.y);
         if (areaHit) {
           this.applyDamageToPlayer(

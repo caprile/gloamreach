@@ -176,7 +176,7 @@ export const RECIPES: Recipe[] = [
     id: "relic_forge",
     name: "Relic Forge",
     description:
-      "A stone plinth that binds monster trophies into relics. Feed it trophies to roll a random relic, or combine relics into rarer ones.",
+      "A stone plinth that binds monster trophies into relics. Feed it a trophy to roll a random relic, or spend Gloam Shards to refine trophies into rarer ones.",
     category: "crafting",
     // Tier 1 (Workbench-gated) like the Drying Rack. Requiring a trophy to
     // build gates it behind the same elite kills that fuel it, and keys its

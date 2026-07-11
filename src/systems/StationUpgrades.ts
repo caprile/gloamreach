@@ -40,6 +40,15 @@ export const STATION_UPGRADES: StationUpgradeDef[] = [
     costs: { twine: 4, stone: 20 },
     deltaLabel: "Unlocks Lvl 2 dishes",
   },
+  {
+    id: "gloam_conduit",
+    name: "Gloam Conduit",
+    description: "A gloam-shard conduit set into the forge. Unlocks trophy refinement.",
+    appliesToItemKey: "relic_forge",
+    resultTier: 1,
+    costs: { stone: 15, gloam_shard: 1 },
+    deltaLabel: "Unlocks the Refine tab",
+  },
 ];
 
 // The upgrades that could apply to a given placed object, ordered by the tier

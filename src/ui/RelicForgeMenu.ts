@@ -12,10 +12,15 @@ import {
   rarityHex,
   rarityIcon,
   relicEffectText,
+  REFINE_RECIPES,
+  ownedRefineInput,
+  canAffordRefine,
+  type RefineRecipe,
   type RollResult,
   type RelicGroup,
 } from "../systems/Relics";
 import { RelicRevealFx } from "./RelicRevealFx";
+import { ProgressBar } from "./ProgressBar";
 
 export interface RelicForgeMenuDeps {
   backpack: ItemContainer;
@@ -28,6 +33,13 @@ export interface RelicForgeMenuDeps {
   // Fired when the reveal animation lands — the scene logs the result + syncs
   // the HUD relic bar / stat bonuses at the satisfying moment, not at click.
   announceRoll: (result: RollResult | null) => void;
+  // Refine raw trophies + Gloam Shards into a refined trophy (Gloaming Vein
+  // loop). The scene consumes inputs + grants the output + logs. Called at the
+  // ProgressBar's completion (commit-at-end).
+  refine: (recipeId: string) => void;
+  // The open forge's upgrade tier (0 = Lvl 1). The Refine tab is gated on
+  // tier >= 1 (Relic Forge Lvl 2, the Gloam Conduit upgrade).
+  forgeTier: () => number;
 }
 
 const DEPTH_BG = 3000;
@@ -47,6 +59,9 @@ const BTN_H = 58;
 const BTN_GAP_X = 12;
 const BTN_GAP_Y = 10;
 const BTN_COLS = 2;
+
+// Refine tab timing — a quick commit-at-end bar, same feel as craft/process/cook.
+const REFINE_BAR_MS = 650;
 
 // The Relic Forge station menu (M-RL): a probabilistic roll — 1 trophy per
 // attempt, success chance by rarity, failure consumes the trophy (with a pity
@@ -72,6 +87,15 @@ export class RelicForgeMenu {
   // even resolves, spoiling it.
   private preRollGroups: RelicGroup[] | null = null;
 
+  // Roll vs Refine tab (Gloaming Vein). The Refine tab spends Gloam Shards to
+  // climb a trophy's rarity into a guaranteed roll.
+  private tab: "roll" | "refine" = "roll";
+  // Refine timed-action bar (commit-at-end + cancel-on-close, same pattern as
+  // craft/process/cook). Owned here, NOT in the per-render `rows`.
+  private refineBar: ProgressBar;
+  private refineBusy = false;
+  private refineBusyId: string | null = null;
+
   private tipBg?: Phaser.GameObjects.Rectangle;
   private tipText?: Phaser.GameObjects.Text;
 
@@ -84,6 +108,7 @@ export class RelicForgeMenu {
     this.scene = scene;
     this.deps = deps;
     this.revealFx = new RelicRevealFx(scene);
+    this.refineBar = new ProgressBar(scene, { fillColor: 0xb069e8, depth: DEPTH_TIP });
     this.panelX = scene.scale.width / 2 - this.panelW / 2;
     this.panelY = scene.scale.height / 2 - this.panelH / 2;
     this.bg = scene.add
@@ -107,6 +132,13 @@ export class RelicForgeMenu {
     this.open = false;
     this.lastResult = null;
     this.busy = false;
+    // Cancel an in-flight refine cleanly — commit-at-end means nothing was
+    // consumed until the bar fills, so closing mid-bar is a no-op (same as
+    // craft/process/cook).
+    this.refineBusy = false;
+    this.refineBusyId = null;
+    this.refineBar.stop();
+    this.tab = "roll";
     this.revealFx.stop();
     this.bg.setVisible(false);
     this.clearRows();
@@ -125,7 +157,7 @@ export class RelicForgeMenu {
   // if the spin is interrupted), then play the slot-machine spin over a KNOWN
   // outcome. The reveal landing is when we announce + show the result line.
   private beginRoll(trophyKey: string): void {
-    if (this.busy) return;
+    if (this.busy || this.refineBusy) return;
     // Freeze the grid to its pre-roll contents BEFORE mutating the manager, so
     // the spin can play over a grid that doesn't already show the new relic.
     this.preRollGroups = this.deps.relics.groupedForDisplay();
@@ -174,10 +206,67 @@ export class RelicForgeMenu {
     return Object.keys(TROPHY_ROLL).filter((k) => this.deps.backpack.count(k) > 0);
   }
 
+  // The Refine tab only exists once the forge is Lvl 2 (Gloam Conduit upgrade).
+  private refineUnlocked(): boolean {
+    return this.deps.forgeTier() >= 1;
+  }
+
   private render(): void {
     this.clearRows();
     this.hideTooltip();
+    // Refine is hidden entirely below Lvl 2 — never leave the menu stuck on a
+    // tab that isn't shown.
+    if (this.tab === "refine" && !this.refineUnlocked()) this.tab = "roll";
+    if (this.tab === "refine") this.renderRefine();
+    else this.renderRoll();
+  }
 
+  // Re-center the panel vertically for the current panelH and repaint the bg.
+  private layoutPanel(): void {
+    this.panelY = this.scene.scale.height / 2 - this.panelH / 2;
+    this.bg.setPosition(this.panelX, this.panelY).setSize(this.panelW, this.panelH);
+  }
+
+  // Shared header: title, Roll/Refine tab buttons, and a per-tab subtitle. Must
+  // run AFTER layoutPanel so panelY is final.
+  private renderHeader(subtitle: string): void {
+    this.addText(this.panelX + 16, this.panelY + 14, "Relic Forge", 16, "#ffffff");
+    this.renderTabs(this.panelY + 40);
+    this.addText(this.panelX + 16, this.panelY + 70, subtitle, 11, "#8a93a3");
+  }
+
+  private renderTabs(y: number): void {
+    // The Refine tab is hidden entirely until the forge is Lvl 2 — no locked
+    // tab, no hint.
+    const tabs: { id: "roll" | "refine"; label: string }[] = [{ id: "roll", label: "Bind" }];
+    if (this.refineUnlocked()) tabs.push({ id: "refine", label: "Refine" });
+    const TW = 90;
+    const TH = 22;
+    const GAP = 6;
+    const locked = this.busy || this.refineBusy; // don't switch tabs mid-action
+    tabs.forEach((t, i) => {
+      const x = this.panelX + 16 + i * (TW + GAP);
+      const active = this.tab === t.id;
+      const box = this.scene.add
+        .rectangle(x, y, TW, TH, active ? 0x2a2333 : 0x14181f, 0.95)
+        .setOrigin(0, 0)
+        .setStrokeStyle(1, active ? 0xc264d8 : 0x3a4250)
+        .setScrollFactor(0)
+        .setDepth(DEPTH_ITEM)
+        .setInteractive({ useHandCursor: !active && !locked })
+        .on("pointerdown", () => {
+          if (this.tab !== t.id && !locked) {
+            this.tab = t.id;
+            this.lastResult = null;
+            this.render();
+          }
+        });
+      this.rows.push(box);
+      this.addText(x + TW / 2, y + TH / 2, t.label, 12, active ? "#e6b8f0" : "#8a93a3", 0.5, 0.5);
+    });
+  }
+
+  private renderRoll(): void {
     const groups = this.displayGroups();
     const gridRows = Math.max(1, Math.ceil(groups.length / COLS));
 
@@ -185,34 +274,128 @@ export class RelicForgeMenu {
     // result line + relic grid stack below it so nothing overlaps as variety
     // grows. All Y values are panel-relative offsets computed up front.
     const btnRows = Math.max(1, Math.ceil(this.visibleTrophyKeys().length / BTN_COLS));
-    const rollTop = 60;
+    const rollTop = 96; // below title + tabs + subtitle
     const btnBlockH = 22 + btnRows * (BTN_H + BTN_GAP_Y);
     const resultY = rollTop + btnBlockH + 4;
     const gridTop = resultY + 42;
 
     this.panelH = gridTop + gridRows * (CHIP_H + CHIP_GAP) + 16;
-    this.panelY = this.scene.scale.height / 2 - this.panelH / 2;
-    this.bg.setPosition(this.panelX, this.panelY).setSize(this.panelW, this.panelH);
-
-    this.addText(this.panelX + 16, this.panelY + 14, "Relic Forge", 16, "#ffffff");
-    this.addText(
-      this.panelX + 16,
-      this.panelY + 38,
-      "Feed a trophy to attempt a relic. A failed attempt still consumes the trophy.",
-      11,
-      "#8a93a3",
-    );
-
+    this.layoutPanel();
+    this.renderHeader("Feed a trophy to attempt a relic. A failed attempt still consumes the trophy.");
     this.renderRollButtons(this.panelY + rollTop);
     this.renderResultLine(this.panelY + resultY);
     this.renderRelicGrid(this.panelY + gridTop);
+  }
+
+  // The Refine tab (Gloaming Vein): spend Gloam Shards to climb a trophy's
+  // rarity one step into a guaranteed-success roll. Only recipes with at least
+  // one eligible input owned surface, so the tab reads empty until the player
+  // has both trophies and shards to work with.
+  private renderRefine(): void {
+    // Only reachable at Lvl 2 — render() forces the Roll tab below that, and the
+    // Refine tab button isn't drawn until unlocked (renderTabs).
+    if (!this.refineUnlocked()) {
+      this.renderRoll();
+      return;
+    }
+
+    const count = (k: string) => this.deps.backpack.count(k);
+    const recipes = REFINE_RECIPES.filter((r) => ownedRefineInput(r, count) > 0);
+    const ROW_H = 72;
+    const listTop = 96;
+
+    this.panelH = listTop + Math.max(1, recipes.length) * (ROW_H + 8) + 20;
+    this.layoutPanel();
+    this.renderHeader("Spend Gloam Shards to refine trophies one rarity up into a guaranteed roll.");
+
+    if (recipes.length === 0) {
+      this.addText(
+        this.panelX + 16,
+        this.panelY + listTop,
+        "Nothing to refine yet. Mine Gloam Shards at a Gloaming Vein,\nand bring the raw trophies to refine.",
+        12,
+        "#8a93a3",
+      );
+      return;
+    }
+    recipes.forEach((recipe, i) => this.renderRefineRow(recipe, this.panelY + listTop + i * (ROW_H + 8), ROW_H));
+  }
+
+  private renderRefineRow(recipe: RefineRecipe, y: number, h: number): void {
+    const count = (k: string) => this.deps.backpack.count(k);
+    const x = this.panelX + 16;
+    const w = this.panelW - 32;
+
+    const box = this.scene.add
+      .rectangle(x, y, w, h, 0x14181f, 0.95)
+      .setOrigin(0, 0)
+      .setStrokeStyle(1, 0x7a3ec8)
+      .setScrollFactor(0)
+      .setDepth(DEPTH_ITEM);
+    this.rows.push(box);
+
+    const outDef = itemDef(recipe.output);
+    if (outDef) {
+      const img = this.scene.add.image(x + 22, y + h / 2, outDef.texture).setScrollFactor(0).setDepth(DEPTH_ITEM + 1);
+      this.rows.push(img);
+    }
+
+    const owned = ownedRefineInput(recipe, count);
+    const shards = count(recipe.shardKey);
+    const trophyOk = owned >= recipe.inputCount;
+    const shardOk = shards >= recipe.shardCount;
+    const shardName = itemDef(recipe.shardKey)?.name ?? recipe.shardKey;
+
+    this.addText(x + 44, y + 8, `→ ${outDef?.name ?? recipe.output}`, 13, "#c79cf0");
+    this.addText(x + 44, y + 28, `${rarityName(recipe.inputRarity)} trophies  ${owned}/${recipe.inputCount}`, 11, trophyOk ? "#c8d0da" : "#e08a8a");
+    this.addText(x + 44, y + 44, `${shardName}  ${shards}/${recipe.shardCount}`, 11, shardOk ? "#c8d0da" : "#e08a8a");
+
+    const can = canAffordRefine(recipe, count);
+    const isBusyRow = this.refineBusy && this.refineBusyId === recipe.id;
+    const btnW = 110;
+    const btnH = 30;
+    const bx = x + w - btnW - 10;
+    const by = y + h / 2 - btnH / 2;
+    const btn = this.scene.add
+      .rectangle(bx, by, btnW, btnH, can && !isBusyRow ? 0x2a2333 : 0x14181f, 0.95)
+      .setOrigin(0, 0)
+      .setStrokeStyle(1, can && !isBusyRow ? 0xc264d8 : 0x3a4250)
+      .setScrollFactor(0)
+      .setDepth(DEPTH_ITEM)
+      .setInteractive({ useHandCursor: can && !this.refineBusy })
+      .on("pointerdown", () => {
+        if (can && !this.refineBusy && !this.busy) this.beginRefine(recipe.id, bx, by, btnW, btnH);
+      });
+    this.rows.push(btn);
+    this.addText(bx + btnW / 2, by + btnH / 2, isBusyRow ? "Refining…" : "Refine", 12, can && !isBusyRow ? "#e6b8f0" : "#6a7280", 0.5, 0.5);
+
+    // Re-pin the progress bar over the busy row after this render pass.
+    if (isBusyRow) this.refineBar.setPosition(bx, by).setSize(btnW, btnH);
+  }
+
+  // Commit-at-end: nothing is consumed until the bar fills (deps.refine runs in
+  // onComplete). Closing the menu mid-bar cancels cleanly.
+  private beginRefine(recipeId: string, bx: number, by: number, bw: number, bh: number): void {
+    if (this.refineBusy || this.busy) return;
+    this.refineBusy = true;
+    this.refineBusyId = recipeId;
+    this.render(); // grey the button + show "Refining…"
+    this.refineBar.setPosition(bx, by).setSize(bw, bh);
+    this.refineBar.start(REFINE_BAR_MS, {
+      onComplete: () => {
+        this.refineBusy = false;
+        this.refineBusyId = null;
+        this.deps.refine(recipeId); // consume inputs + grant output + log (its refresh re-renders)
+        if (this.open) this.render();
+      },
+    });
   }
 
   // A roll button per visible trophy (see visibleTrophyKeys), wrapping into
   // rows of BTN_COLS so any number of trophy types fits the panel width.
   private renderRollButtons(y: number): void {
     const x = this.panelX + 16;
-    this.addText(x, y, "Roll", 13, "#c9a86a");
+    this.addText(x, y, "Bind", 13, "#c9a86a");
 
     const keys = this.visibleTrophyKeys();
     if (keys.length === 0) {
@@ -260,7 +443,7 @@ export class RelicForgeMenu {
 
       // Label by the trophy (its name), not just its rarity, so multiple
       // same-rarity buttons are distinguishable at a glance.
-      this.addText(bx + 42, by + 8, `Roll ${trophyName}`, 12, can ? rarityHex(t.rarity) : "#5a6270");
+      this.addText(bx + 42, by + 8, `Bind ${trophyName}`, 12, can ? rarityHex(t.rarity) : "#5a6270");
       this.addText(bx + 42, by + 26, `${rarityName(t.rarity)} · have ${have}`, 11, can ? "#c8d0da" : "#e08a8a");
       this.addText(bx + 42, by + 42, pityStr, 10, "#8a93a3");
     });

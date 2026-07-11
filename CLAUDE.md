@@ -1011,20 +1011,49 @@ mouse-driven only. Don't reintroduce a keybind for this without being asked. Spa
    gained a "World map: M" line. No `RECIPES.md` change. See `STATUS.md` +
    [[survivor-rpg-minimap-fog-of-war]].
 
-**Gloaming Vein (mineable rarity-ore POI + gated trophy refinement) — designed + locked,
-plan committed, NOT yet built.** Plan: `.claude/plans/amethyst-warding-vein.md` (locked with
-the user 2026-07-11 via brainstorm + `AskUserQuestion`; new mechanic → Opus). A rare, finite,
-purple ore POI (glows purple at night) hard-gated behind a mini-boss ("Gloamwarden");
-mining it yields a magical resource ("Gloam Shard") spent at the **Relic Forge's new "Refine"
-tab** to climb trophy rarity — turning crumble-prone raw Common trophies into
-guaranteed-roll Refined Uncommons. Locked rules: **species-agnostic** refined trophies;
-**single-step + terminal** refinement (raw→one-up only; refined trophies are roll-only, no
-refined→refined — so biome 1 caps at Refined Uncommon while the system already supports
-raw-Uncommon→Refined-Rare for deeper biomes); **biome-tiered** (Tier-1 shard refines Tier-1
-trophies; future biomes get a higher-tier, differently-themed ore needing a better pickaxe).
-This **deliberately overrides M-RL's "rarity not climbable / no manual combine" lock**, but
-as a *gated* climb (rare resource + mini-boss), consistent with "nothing free." Slots in
-ahead of M-TE as a content+economy pass on the M-RL relic loop.
+5w. **Gloaming Vein (mineable rarity-ore POI + Gloamwarden mini-boss + trophy refinement)**
+   — shipped (plan: `.claude/plans/amethyst-warding-vein.md`, built on Opus — new mechanic).
+   A content+economy pass on the M-RL relic loop, slotting in ahead of M-TE. A rare, finite,
+   purple ore POI (glows purple at night) hard-gated behind a mini-boss, whose Gloam Shards
+   are spent at the **Relic Forge's new "Refine" tab** to climb trophy rarity — turning
+   crumble-prone raw Common trophies into guaranteed-roll Refined trophies. **The POI**
+   (`MainScene`): `veinPosition` is picked once in `create()` after the altar (kept ≥900px
+   from both world center and the war camp) and before spawning, so a new `VEIN_CLEAR_RADIUS`
+   exclusion in `pickSpawnPoint` keeps ordinary content out of the clearing (same pattern as
+   the war camp — [[feedback_poi_busy_not_placeholder]]); `spawnGloamingVein()` drops the
+   Gloamwarden guardian ringed by **5 shielded ore `ResourceNode`s** (Stone-Pickaxe `mine`,
+   non-respawning, 1–2 Gloam Shard each) + 10 decorative `gloam_crystal_cluster` props. New
+   `ResourceNode.shielded` + `crack(texture)`: shielded nodes are skipped by
+   hover/prompt/interact (like `harvested`) and swap `gloaming_vein_shielded`→`gloaming_vein`
+   on the guardian's death. **Unique area look** (like the war-camp floor): `buildBiomeTexture()`
+   stamps a distinct gloam-blighted crystalline floor over the clearing (dark-violet + amethyst
+   core). Vein positions feed `veinLightPoints` (purple night glow via `collectLights`) + a
+   purple `map_vein` minimap landmark once discovered. **The guardian**
+   (`src/entities/Gloamwarden.ts`): a bespoke mini-boss following GremlinKing's telegraph/poise
+   pattern but **lighter** (per the "no shared boss framework" lock — a trimmed sibling, NOT a
+   subclass) — extends `Enemy`, fully overrides `update()`. 260 HP, scale 1.7, poise 60 →
+   stagger (×1.5 punish), regens 10 HP/s deaggro'd; two **bespoke** purple-telegraphed attacks
+   (deliberately NOT the roster's charge/radial-slam — the user's call): a **Leaping Smash**
+   (leap to a locked spot + AoE 95px, 22+kb — kept to preview the Gremlin King's own smash)
+   and a **Gloam Eruption** (rooted channel → crystal spikes at the player's locked ground
+   spot, 24 + small launch — a punish window; dodge = leave the marked ground), routed through
+   `checkPlayerHit()` (queried in `updateEnemies` like GremlinKing) → `applyDamageToPlayer`, so
+   dash i-frames/armor just work. Death cracks the vein + drops 3–4 Gloam Shard + 1 Refined
+   Trophy; scored as an **elite** kill. **Refinement** (`Relics.ts` + `RelicForgeMenu.ts`):
+   data-driven tier-keyed `REFINE_RECIPES` + `refinableTrophyKeys`/`ownedRefineInput`/
+   `canAffordRefine`; biome-1 recipe **3 raw Common trophies (any species mix) + 2 Gloam Shards
+   → 1 Refined Trophy** (rolls the Uncommon outcome table = never fails). Refined trophies are
+   **roll-only** `TROPHY_ROLL` keys (never dropped, never a refine input — **single-step +
+   terminal**, capping biome 1 at Refined Uncommon while the system already supports
+   raw-Uncommon→Refined-Rare scaffold for deeper biomes). The forge menu gained a **Bind /
+   Refine tab toggle** ("Bind" is the in-universe name for rolling — the forge binds trophies
+   into relics; timed `ProgressBar`, commit-at-end); **the Refine tab is hidden
+   entirely until the Relic Forge reaches Lvl 2** (no locked tab/hint) — a new **Gloam
+   Conduit** station upgrade (15 Stone + 1 Gloam Shard, `StationUpgrades.ts`) unlocks it, so
+   refining needs at least one mined shard. This
+   **deliberately overrides M-RL's "rarity not climbable / no manual combine" lock**, but as a
+   *gated* climb (rare resource + mini-boss), consistent with "nothing free." See `STATUS.md`
+   + [[survivor-rpg-gloaming-vein-plan]].
 
 **A new umbrella plan for the long-requested roguelike run/score meta-loop** now exists:
 `.claude/plans/roguelike-metaloop-master-plan.md` (drafted 2026-07-10, locked build order
@@ -1036,10 +1065,9 @@ discovery) or 7 (ARPG loot). Locked build order: **M-FX (done) → M-R1 (Run/Sco
 Hardcore death, done — see 5h) → M-DN (Day/Night, done — see 5i) → Comfort item (was
 M-SB/Sleep-Bed, done — see 5j) → M-EL2 (generalized elite spawning, done — see 5k) →
 ~~M-FA~~ (cut, see 5l) → M-RL (trophy → RNG relics, done — see 5m; playtest follow-up 5n) →
-M-WC (Gremlin War Camp, done — see 5o) → **Gloaming Vein (rarity-ore POI + trophy
-refinement — designed/locked, plan committed, NOT yet built; see 5u block above and
-`.claude/plans/amethyst-warding-vein.md`), next** → M-TE (trophy-gated gear) → M-W1 (circular
-multi-biome world, last).**
+M-WC (Gremlin War Camp, done — see 5o) → Gloaming Vein (rarity-ore POI + trophy refinement,
+done — see 5w) → **M-TE (trophy-gated gear), next** → M-W1 (circular multi-biome world,
+last).**
 
 **Not yet built — next up in rough order:**
 6. **World & discovery** — much bigger generated world, biomes, map, eventually a

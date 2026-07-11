@@ -153,3 +153,37 @@ like things to be free").
 - Live: vein spawns in its cleared zone with no nodes inside; nodes are un-mineable until the
   Gloamwarden dies, then mineable + drop shards; purple night glow + minimap landmark.
 - `preview_screenshot` of the POI (day + night glow) and the forge Refine tab.
+
+## As-built (SHIPPED 2026-07-11, roadmap 5w — resolves the open sub-decisions + the user's post-ship tweaks)
+
+Built on Opus. Everything above shipped as designed except where noted below.
+
+**Open sub-decisions, resolved:**
+- **Guardian attack kit** — TWO bespoke attacks, and (per the user's playtest feedback)
+  deliberately NOT the roster's charge/radial-slam, which read as "Boar charge / Gremlin King
+  slam again": a **Leaping Smash** (leap to a locked landing spot + 95px AoE, 22 dmg + kb —
+  kept on purpose to *preview* the Gremlin King's own leaping smash) and a **Gloam Eruption**
+  (the warden roots itself and channels ~920ms, then crystal spikes erupt at the player's
+  LOCKED ground spot, 72px, 24 dmg + small launch — boss stays put + vulnerable = a punish
+  window; dodge = leave the marked ground). Neither is a charge (no line rush) nor a
+  boss-centered radial slam. Poise 60 → stagger 2.5s (×1.5 punish).
+- **Vein POI frequency** — guaranteed **1 per run** (like the Boss Altar).
+- **Guardian kill score** — scored at the **elite** band (`classifyKill` returns `"elite"` via
+  `instanceof Gloamwarden`); no new mini-boss band was added.
+- **Refine-tab layout** — a recipe LIST with per-row cost readout + a Refine button (a timed
+  `ProgressBar`, commit-at-end).
+
+**the user's post-ship tweaks (locked):**
+- **Refine is gated behind Relic Forge Lvl 2**, not just a tab. A new **Gloam Conduit** station
+  upgrade (`StationUpgrades.ts`, **15 Stone + 1 Gloam Shard**, workbench-gated like every
+  tier-1-base upgrade) unlocks it — so you can't refine until you've mined at least one shard.
+  Below Lvl 2 the **Refine tab is hidden ENTIRELY** — no locked tab, no hint (an initial ship
+  showed a "sealed — upgrade to Lvl 2" hint; the user rejected it).
+- **Unique ore-area look** (the vein must read as its own place, like the war-camp floor does
+  for the altar): `buildBiomeTexture()` stamps a distinct **gloam-blighted crystalline floor**
+  (dark-violet wash + amethyst core) over the clearing, plus **10 decorative
+  `gloam_crystal_cluster` props** scattered around it (a few also glow at night).
+- **"Bind", not "Roll"** — the roll tab is labelled **Bind** in-universe (the forge "binds
+  monster trophies into relics"), pairing with **Refine**. Internal id stays `"roll"`.
+
+See `STATUS.md` (### Just finished: Gloaming Vein) for the full ship writeup + verification.

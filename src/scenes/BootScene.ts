@@ -321,6 +321,66 @@ export class BootScene extends Phaser.Scene {
     g.fillRect(10, 20, 20, 14); // chest highlight
     g.generateTexture("gremlin_king", 40, 48);
 
+    // Gloaming Vein (mineable rarity-ore POI). Two states: SHIELDED (inert,
+    // un-mineable until the guardian dies — a dull husk with a faint crystal
+    // core sealed under a grey shell) and CRACKED (open/mineable — bright
+    // amethyst spires jutting up). 28x30 crystalline rock jutting from a base.
+    g.clear();
+    g.fillStyle(0x4a4652, 1);
+    g.fillRect(3, 18, 22, 10); // grey stone husk base
+    g.fillStyle(0x5a5566, 1);
+    g.fillRect(6, 6, 16, 16); // sealed shell
+    g.fillStyle(0x6a5a86, 1);
+    g.fillTriangle(14, 8, 9, 20, 19, 20); // dim crystal core showing through
+    g.generateTexture("gloaming_vein_shielded", 28, 30);
+
+    g.clear();
+    g.fillStyle(0x3a3444, 1);
+    g.fillRect(3, 20, 22, 8); // rocky base
+    g.fillStyle(0x7a3ec8, 1);
+    g.fillTriangle(9, 24, 4, 24, 7, 4); // left spire
+    g.fillTriangle(20, 24, 25, 24, 22, 7); // right spire
+    g.fillStyle(0x9a5ee8, 1);
+    g.fillTriangle(15, 26, 9, 26, 13, 0); // tall center spire
+    g.fillStyle(0xc79cf0, 1);
+    g.fillTriangle(13, 12, 11, 20, 14, 20); // center highlight
+    g.generateTexture("gloaming_vein", 28, 30);
+
+    // Gloam crystal cluster — decorative amethyst formation scattered around
+    // the vein clearing (non-interactive dressing, like the war-camp props).
+    // 16x22: a small jagged crystal outcrop.
+    g.clear();
+    g.fillStyle(0x3a2b52, 1);
+    g.fillRect(3, 16, 10, 6); // dark base
+    g.fillStyle(0x7a3ec8, 1);
+    g.fillTriangle(4, 18, 1, 18, 3, 6); // left shard
+    g.fillTriangle(12, 18, 15, 18, 13, 8); // right shard
+    g.fillStyle(0x9a5ee8, 1);
+    g.fillTriangle(9, 20, 4, 20, 7, 0); // center shard
+    g.fillStyle(0xc79cf0, 1);
+    g.fillRect(6, 8, 2, 10); // bright vein
+    g.generateTexture("gloam_crystal_cluster", 16, 22);
+
+    // Gloamwarden — the vein's guardian mini-boss. An amethyst-mutated gremlin
+    // brute: the gremlin_king silhouette (so it reads as "gremlin, but warped")
+    // recolored to a dark violet with glowing purple crystal growths. 34x42,
+    // smaller than the King's 40x48 base — difficulty sits between an elite and
+    // the King (runtime GLOAMWARDEN_SCALE stacks size on top).
+    g.clear();
+    g.fillStyle(0x3a2b52, 1);
+    g.fillRect(4, 9, 26, 30); // violet torso
+    g.fillStyle(0x281c3a, 1);
+    g.fillRect(7, 0, 20, 12); // head
+    g.fillStyle(0x9a5ee8, 1);
+    g.fillTriangle(2, 20, 6, 10, 8, 22); // left shoulder crystal
+    g.fillTriangle(32, 20, 28, 10, 26, 22); // right shoulder crystal
+    g.fillStyle(0xc79cf0, 1);
+    g.fillRect(12, 16, 10, 10); // glowing chest core
+    g.fillStyle(0xe8d0ff, 1);
+    g.fillRect(11, 4, 3, 3); // eye
+    g.fillRect(20, 4, 3, 3); // eye
+    g.generateTexture("gloamwarden", 34, 42);
+
     this.makeItemIcons(g);
 
     g.destroy(); // we only needed it to bake textures
@@ -703,6 +763,34 @@ export class BootScene extends Phaser.Scene {
     g.fillRect(7, 16, 10, 2); // gold cord/binding
     g.generateTexture("icon_snake_trophy", ICON, ICON);
 
+    // Gloam Shard: a jagged purple crystal shard with a lighter facet.
+    g.clear();
+    g.fillStyle(0x7a3ec8, 1);
+    g.fillTriangle(12, 2, 5, 20, 19, 20); // shard body
+    g.fillStyle(0x9a5ee8, 1);
+    g.fillTriangle(12, 6, 8, 18, 12, 18); // inner facet
+    g.fillStyle(0xc79cf0, 1);
+    g.fillRect(11, 8, 2, 8); // bright vein
+    g.generateTexture("icon_gloam_shard", ICON, ICON);
+
+    // Refined trophies: a trophy claw/base wreathed in gloam crystal, tinted by
+    // the rarity it rolls (Uncommon = green ring, Rare = blue ring) so its
+    // "refined" status + result rarity read at a glance.
+    const refinedTrophy = (key: string, ring: number) => {
+      g.clear();
+      g.fillStyle(0x3a2b52, 1);
+      g.fillCircle(12, 12, 10); // violet gloam socket
+      g.fillStyle(ring, 1);
+      g.fillCircle(12, 12, 8);
+      g.fillStyle(0x7a3ec8, 1);
+      g.fillTriangle(12, 3, 6, 15, 18, 15); // gloam crystal
+      g.fillStyle(0xe8d0ff, 1);
+      g.fillRect(11, 6, 2, 8); // crystal highlight
+      g.generateTexture(key, ICON, ICON);
+    };
+    refinedTrophy("icon_refined_trophy_uncommon", 0x5ad06a);
+    refinedTrophy("icon_refined_trophy_rare", 0x4a9fe8);
+
     // Relic gems — one per rarity (Relics.ts). A cut-gem diamond tinted by the
     // rarity color with a lighter facet highlight; reused for every relic of
     // that rarity, so rarity reads at a glance and the relic's identity comes
@@ -754,6 +842,7 @@ export class BootScene extends Phaser.Scene {
     };
     mapMarker("map_altar", 0xf0c040, 0xd6483a); // Gremlin War Camp — the standout red/gold marker
     mapMarker("map_shack", 0xd8c090, 0x8a6a3a); // Gremlin Shack — wood-brown
+    mapMarker("map_vein", 0xc79cf0, 0x7a3ec8); // Gloaming Vein — purple amethyst
 
     g.destroy();
     this.makeLightTexture();

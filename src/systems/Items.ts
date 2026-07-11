@@ -453,6 +453,32 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     maxStack: 99,
     hotbarable: false,
   },
+
+  // --- gloaming vein (mineable rarity-ore POI + trophy refinement) ---
+  gloam_shard: {
+    key: "gloam_shard",
+    name: "Gloam Shard",
+    description: "A cold, faintly glowing purple crystal prised from a Gloaming Vein. Used at the Relic Forge.",
+    texture: "icon_gloam_shard",
+    maxStack: 99,
+    hotbarable: false,
+  },
+  refined_trophy_uncommon: {
+    key: "refined_trophy_uncommon",
+    name: "Refined Trophy",
+    description: "A monster trophy suffused with gloam and hardened into something greater. Never crumbles at the Relic Forge.",
+    texture: "icon_refined_trophy_uncommon",
+    maxStack: 99,
+    hotbarable: false,
+  },
+  refined_trophy_rare: {
+    key: "refined_trophy_rare",
+    name: "Radiant Trophy",
+    description: "A trophy refined past its nature, humming with power. Never crumbles at the Relic Forge.",
+    texture: "icon_refined_trophy_rare",
+    maxStack: 99,
+    hotbarable: false,
+  },
 };
 
 export function itemDef(key: string): ItemDef | undefined {

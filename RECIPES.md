@@ -44,6 +44,7 @@ requires standing near a placed Workbench (`MainScene.isNearWorkbench`).
 |---|---|---|---|---|
 | Workbench | 1 ("Lvl 2") | Tool Sharpener | 3 Twine, 5 Wood, 2 Stone | — (unlocks gates only) |
 | Campfire | 1 ("Lvl 2") | Stone Hearth | 4 Twine, 20 Stone | Unlocks Lvl 2 campfire dishes |
+| Relic Forge | 1 ("Lvl 2") | Gloam Conduit | 15 Stone, 1 Gloam Shard | Unlocks the Refine tab |
 
 ## Armor Upgrades (`src/systems/ArmorUpgrades.ts`)
 
@@ -144,9 +145,33 @@ means more attempts.
 | Boar Trophy | Elite Boar | Common | 1 |
 | Snake Trophy | Elite Snake | Common | 1 |
 | Gremlin King Fang | Gremlin King | Rare | 1 (dormant: boss = win) |
+| Refined Trophy | Refinement (Gloaming Vein) | Uncommon | 1 (roll-only — never dropped/refined) |
+| Radiant Trophy | Refinement (scaffold) | Rare | 1 (roll-only — deeper biomes) |
 
-Uncommon/Rare-trophy sources + power tiers ≥2 are scaffolding — no trophy source
-feeds them until M-W1 (a Common trophy CAN roll up into Uncommon/Rare relics now).
+Uncommon/Rare-*raw*-trophy sources + power tiers ≥2 are scaffolding — no raw
+trophy source feeds them until M-W1 (a Common trophy CAN roll up into Uncommon/
+Rare relics now). Refined trophies (roll-only) are produced by the Refine tab below.
+
+### Trophy refinement — Gloaming Vein (Refine tab)
+
+The **Relic Forge's Refine tab** (unlocked only once the forge is upgraded to
+**Lvl 2** via the Gloam Conduit — see Station Upgrades) spends **Gloam Shards**
+(mined from the Gloaming Vein POI, gated behind the **Gloamwarden** mini-boss) to
+climb a raw trophy one rarity up into a **refined trophy** that never crumbles. **Single-step
++ terminal**: raw → one up only; refined trophies are never a refine input
+(species-agnostic — any mix of same-rarity raw trophies counts). A recipe requires
+`trophy tier == shard tier` (both Tier 1 now); deeper biomes (M-W1) add higher-tier
+ore + rows.
+
+| Refine | Input trophies | Gloam Shards | Output | Notes |
+|---|---|---|---|---|
+| Common → Refined | 3 Common (any species) | 2 | 1 Refined Trophy (rolls Uncommon) | biome 1 |
+| Uncommon → Radiant | 3 Uncommon (any species) | 3 | 1 Radiant Trophy (rolls Rare) | scaffold — no raw Uncommon source in biome 1 |
+
+**Gloaming Vein POI:** ~5 shielded ore nodes (Stone-Pickaxe-gated, non-respawning,
+1–2 Gloam Shard each) ringed around the **Gloamwarden** guardian; the nodes stay
+un-mineable until it dies. Guardian guaranteed drop: 3–4 Gloam Shard + 1 Refined
+Trophy.
 
 | Rarity | Relics (base effect, ×power-tier mult) |
 |---|---|

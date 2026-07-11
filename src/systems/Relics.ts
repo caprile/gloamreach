@@ -203,7 +203,63 @@ export const TROPHY_ROLL: Record<string, TrophyRoll> = {
   // Dormant this milestone — killing the King wins the run, so a fang can't be
   // spent yet. Correct + ready for M-W1's mid-bosses.
   gremlin_king_fang: { rarity: "rare", powerTier: 1 },
+  // Refined trophies (Gloaming Vein loop). Roll-only keys — produced ONLY by
+  // refinement (never dropped, never a refine input themselves), so they climb
+  // trophies one rarity up into a guaranteed-success roll. A Refined (Uncommon)
+  // trophy rolls the Uncommon outcome table (100% floor + chances to roll up).
+  refined_trophy_uncommon: { rarity: "uncommon", powerTier: 1 },
+  refined_trophy_rare: { rarity: "rare", powerTier: 1 },
 };
+
+// --- Trophy refinement (Gloaming Vein) ---
+//
+// A GATED climb of trophy rarity (this deliberately overrides M-RL's "rarity is
+// not climbable" lock — but behind a rare finite resource + a mini-boss, so it's
+// consistent with "nothing free"). Raw trophies of a given rarity + Gloam Shards
+// are spent to produce ONE refined trophy of the next rarity up. Locked rules:
+//   • Species-agnostic — any mix of same-rarity raw trophies counts (all raw
+//     trophies already share one roll pool + pity, so species is cosmetic).
+//   • Single-step + terminal — raw -> one up only; refined trophies are NEVER a
+//     refine input (only raw-trophy keys qualify), which caps biome 1 at Refined
+//     Uncommon and blocks an infinite ladder.
+//   • Biome-tiered — a recipe requires trophy tier == shard tier (both Tier 1
+//     now). Deeper biomes (M-W1) add higher-tier rows with their own ore.
+export interface RefineRecipe {
+  id: string;
+  inputRarity: RelicRarity; // raw trophies of THIS rarity qualify as input (species-agnostic)
+  inputCount: number;
+  shardKey: string;
+  shardCount: number;
+  tier: number; // biome tier — input trophies AND the shard must both be this tier
+  output: string; // the produced refined-trophy item key
+}
+
+export const REFINE_RECIPES: RefineRecipe[] = [
+  // Biome 1: 3 raw Common trophies + 2 Gloam Shards -> 1 Refined (Uncommon).
+  { id: "refine_common", inputRarity: "common", inputCount: 3, shardKey: "gloam_shard", shardCount: 2, tier: 1, output: "refined_trophy_uncommon" },
+  // Scaffold for deeper biomes — no raw Uncommon trophy drops in biome 1, so
+  // refinableTrophyKeys("uncommon", 1) is empty and this row never surfaces.
+  // M-W1 re-keys the ore/tier when a deeper biome actually drops raw Uncommons.
+  { id: "refine_uncommon", inputRarity: "uncommon", inputCount: 3, shardKey: "gloam_shard", shardCount: 3, tier: 1, output: "refined_trophy_rare" },
+];
+
+// Raw (non-refined) trophy keys of a given rarity + tier — the eligible inputs
+// for a refine recipe. Excludes refined_* keys (roll-only, never re-refined).
+export function refinableTrophyKeys(rarity: RelicRarity, tier: number): string[] {
+  return Object.keys(TROPHY_ROLL).filter(
+    (k) => !k.startsWith("refined_") && TROPHY_ROLL[k].rarity === rarity && TROPHY_ROLL[k].powerTier === tier,
+  );
+}
+
+// Total qualifying raw trophies the player owns for a recipe (summed across
+// species). `count` reads the backpack.
+export function ownedRefineInput(recipe: RefineRecipe, count: (key: string) => number): number {
+  return refinableTrophyKeys(recipe.inputRarity, recipe.tier).reduce((s, k) => s + count(k), 0);
+}
+
+export function canAffordRefine(recipe: RefineRecipe, count: (key: string) => number): boolean {
+  return ownedRefineInput(recipe, count) >= recipe.inputCount && count(recipe.shardKey) >= recipe.shardCount;
+}
 
 // A single owned relic instance — an id at a specific power tier. Duplicates
 // (same id + tier) are collapsed for display but each contributes its effect.

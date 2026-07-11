@@ -93,6 +93,10 @@ export interface ResourceNodeConfig {
   persistent?: boolean;
   pickedTexture?: string;
   regrowMs?: number;
+  // When true, this node is inert/un-mineable until crack() is called (the
+  // Gloaming Vein's ore, sealed until its guardian dies). Shielded nodes are
+  // skipped by hover/prompt/interact, same as `harvested`.
+  shielded?: boolean;
 }
 
 // A single interactable object in the world (branch, rock, tree, boulder, or
@@ -112,6 +116,9 @@ export class ResourceNode extends Phaser.GameObjects.Sprite {
   readonly persistent: boolean;
   readonly pickedTexture?: string;
   readonly regrowMs?: number;
+  // Inert until crack()ed (Gloaming Vein ore). Not readonly — the guardian's
+  // death flips it to false.
+  shielded: boolean;
   private readonly freshTexture: string;
   // True once a persistent node has been harvested but hasn't regrown yet —
   // still exists in the world, but not interactable/hoverable.
@@ -136,6 +143,7 @@ export class ResourceNode extends Phaser.GameObjects.Sprite {
     this.persistent = cfg.persistent ?? false;
     this.pickedTexture = cfg.pickedTexture;
     this.regrowMs = cfg.regrowMs;
+    this.shielded = cfg.shielded ?? false;
     this.freshTexture = cfg.texture;
     scene.add.existing(this);
     // Trees/boulders are tall enough to visually occlude the player/enemies
@@ -255,5 +263,13 @@ export class ResourceNode extends Phaser.GameObjects.Sprite {
     if (this.depleted) return; // node was destroyed while waiting to regrow
     this.harvested = false;
     this.setTexture(this.freshTexture);
+  }
+
+  // Break the seal on a shielded (Gloaming Vein) node — swaps to its mineable
+  // texture and makes it interactable. Called when the vein's guardian dies.
+  crack(mineableTexture: string): void {
+    if (!this.shielded) return;
+    this.shielded = false;
+    this.setTexture(mineableTexture);
   }
 }
