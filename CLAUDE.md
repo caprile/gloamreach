@@ -727,6 +727,28 @@ mouse-driven only. Don't reintroduce a keybind for this without being asked. Spa
    the trophy **unconditionally** (success or fail) and returns the result for menu
    feedback; `create()` resets `new RelicManager()`. See `STATUS.md` for full verification.
 
+5n. **M-RL playtest follow-up — per-species elite trophies + night-number HUD fix**
+   (plan addendum in `.claude/plans/radiant-binding-relic.md`; built on Sonnet — extends the
+   already-designed loot + relic systems, no new mechanic). Off the user's first relic
+   playtest (20-min run → 1 Common relic pre-boss, judged "okay, hoping it scales" — no
+   scaling knob changed, the design already funnels more elites/biomes into more rolls).
+   **Every elite now drops a UNIQUE trophy by species** (was: all elites dropped
+   `gremlin_trophy`, centralized in `Enemy` per 5m): Boar → `boar_trophy`, Snake →
+   `snake_trophy`, Gremlin/Gremling → `gremlin_trophy`. Data-driven, not another central
+   constant — `EnemyConfig.eliteTrophy?: ResourceType` (default `gremlin_trophy`, replacing
+   the old `ELITE_TROPHY_DROP` const with `DEFAULT_ELITE_TROPHY`); the base `Enemy`
+   constructor appends the elite's own trophy to `loot`, `Boar`/`Snake` pass their type,
+   Gremlin/Gremling ride the default. New `boar_trophy`/`snake_trophy` resources
+   (`Inventory.ts`/`Items.ts`/`BootScene.ts` crimson-gold icons). **All three roll the same
+   Common pool + shared per-rarity pity counter** (`TROPHY_ROLL` maps each →
+   `common/tier1/5%`), so more elite variety adds attempts without fragmenting the odds —
+   M-W1's deeper biomes can remap a species' trophy to a higher rarity/tier per source. The
+   **Relic Forge menu's roll buttons now wrap** into rows of 2 (labelled by trophy name) so
+   3+ Common trophies fit the panel, with the result line + owned grid stacking below the
+   measured button block. **HUD night-number fix**: `RunHudUI` showed `[Night]` with no
+   number; new `DayNight.nightNumber()` (= the day it follows) makes it `[Night N]`,
+   symmetric with `[Day N]`.
+
 **A new umbrella plan for the long-requested roguelike run/score meta-loop** now exists:
 `.claude/plans/roguelike-metaloop-master-plan.md` (drafted 2026-07-10, locked build order
 confirmed by the user). It supersedes/finalizes several open questions in the **Long-term
@@ -736,8 +758,9 @@ plan file for the full locked-decision list before touching anything in items 6 
 discovery) or 7 (ARPG loot). Locked build order: **M-FX (done) → M-R1 (Run/Score/
 Hardcore death, done — see 5h) → M-DN (Day/Night, done — see 5i) → Comfort item (was
 M-SB/Sleep-Bed, done — see 5j) → M-EL2 (generalized elite spawning, done — see 5k) →
-~~M-FA~~ (cut, see 5l) → M-RL (trophy → RNG relics, done — see 5m) → **M-WC (Gremlin War
-Camp) + M-TE (trophy-gated gear), next** → M-W1 (circular multi-biome world, last).**
+~~M-FA~~ (cut, see 5l) → M-RL (trophy → RNG relics, done — see 5m; playtest follow-up 5n) →
+**M-WC (Gremlin War Camp) + M-TE (trophy-gated gear), next** → M-W1 (circular multi-biome
+world, last).**
 
 **Not yet built — next up in rough order:**
 6. **World & discovery** — much bigger generated world, biomes, map, eventually a

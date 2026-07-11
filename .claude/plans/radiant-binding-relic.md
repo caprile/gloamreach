@@ -69,6 +69,23 @@ Centralized in base `Enemy` (`ELITE_TROPHY_DROP` appended to `loot` when
 the ranged Gremlin's inline trophy entry was deleted (no double-drop). Boss
 unchanged (drops `gremlin_king_fang`, not an elite so no `gremlin_trophy`).
 
+## Playtest follow-up (per-species trophies + night-number HUD)
+First relic-economy playtest (the user, 20-min run → 1 Common relic pre-boss, "okay,
+hoping it scales"). No scaling knob changed — the design already funnels more
+elites/biomes into more rolls; revisit if a full multi-biome run still feels thin.
+Two changes shipped:
+- **Unique trophy per species** — the M-RL "all elites drop `gremlin_trophy`"
+  prerequisite (Part 1) is generalized: Boar → `boar_trophy`, Snake →
+  `snake_trophy`, Gremlin/Gremling → `gremlin_trophy`. `EnemyConfig.eliteTrophy?:
+  ResourceType` (default `gremlin_trophy`); base `Enemy` appends it when elite. New
+  `boar_trophy`/`snake_trophy` items+textures. **All three roll the same Common
+  pool + shared per-rarity pity** (`TROPHY_ROLL` maps each → `common/tier1/5%`), so
+  variety adds attempts without splitting odds — deeper biomes can remap per source
+  later. `RelicForgeMenu` roll buttons now wrap into rows of 2 (labelled by trophy
+  name) so 3+ Common trophies fit the panel.
+- **Night HUD number** — `RunHudUI` showed `[Night]` with no number; added
+  `DayNight.nightNumber()` (= the day it follows) so it reads `[Night N]`.
+
 ## Deferred / notes
 - Uncommon/Mythic pools + power tiers 2+ are dead until M-W1 supplies their
   trophy sources / deeper biomes.

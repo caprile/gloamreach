@@ -54,6 +54,7 @@ export class Snake extends Enemy {
       maxHealth: elite ? Math.round(MAX_HEALTH * 1.5) : MAX_HEALTH,
       biteDamage: elite ? Math.round(BITE_DAMAGE * 1.5) : BITE_DAMAGE,
       elite,
+      eliteTrophy: "snake_trophy",
     });
     this.setAlpha(HIDDEN_ALPHA);
     if (elite) {

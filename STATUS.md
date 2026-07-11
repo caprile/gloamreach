@@ -2,7 +2,50 @@
 
 Last updated: 2026-07-10
 
-### Just finished: M-RL relic economy rework (probabilistic roll + power tiers) + all-elites-drop-trophy
+### Just finished: M-RL playtest follow-up — per-species elite trophies + night-number HUD fix
+
+Small follow-up batch off the first M-RL relic playtest (the user, 20-min run: got 1
+Common relic before the boss — "okay, hoping it scales" with more enemies/biomes; no
+scaling change made this pass, just noted the design already supports it). Built on
+Sonnet (extends the already-designed loot + relic systems + a one-line HUD fix, no new
+mechanic).
+
+- **Every elite now drops a UNIQUE trophy by species** (was: all elites dropped
+  `gremlin_trophy`). Boar → **Boar Trophy**, Snake → **Snake Trophy**, Gremlin/Gremling →
+  **Gremlin Trophy** (unchanged). The trophy type is data-driven, not another centralized
+  constant: `EnemyConfig` gained an optional `eliteTrophy?: ResourceType` (defaults to
+  `gremlin_trophy`); the base `Enemy` constructor appends `{ resource: cfg.eliteTrophy ??
+  DEFAULT_ELITE_TROPHY, min: 1, max: 1 }` to `loot` when elite (the old `ELITE_TROPHY_DROP`
+  const was replaced by `DEFAULT_ELITE_TROPHY`). `Boar`/`Snake` pass their own
+  `eliteTrophy`; Gremlin/Gremling ride the default. **New resources** `boar_trophy` /
+  `snake_trophy` (`Inventory.ts` `ResourceType`, `Items.ts` `ITEM_DEFS`, `BootScene.ts`
+  `icon_boar_trophy`/`icon_snake_trophy` — crossed-tusks / coiled-fanged-head icons in the
+  same crimson/gold elite palette as the gremlin trophy; the item texture doubles as the
+  loose-drop sprite).
+- **All three trophies roll the same Common pool + shared pity counter** — new
+  `TROPHY_ROLL` entries `boar_trophy`/`snake_trophy` → `{ common, tier 1, 5% }`. Because
+  pity is per-*rarity* (not per-trophy), more elite variety just funnels more attempts into
+  Common without fragmenting the odds. Deeper biomes (M-W1) can remap a species' trophy to a
+  higher rarity/tier per source — the plumbing already supports it.
+- **Relic Forge menu wraps its roll buttons** — the layout hardcoded 2 buttons on one row
+  (fit the 560px panel); with up to 3 Common trophies it now wraps into rows of `BTN_COLS`
+  (2) and the result line + owned-relic grid stack below the measured button block, so
+  nothing overlaps as trophy variety grows. Each button is now labelled by its **trophy
+  name** ("Roll Boar Trophy"), not just its rarity, so same-rarity buttons are
+  distinguishable.
+- **HUD night number fix** — `RunHudUI` showed `[Day N]` by day but a bare `[Night]` at
+  night. New `DayNight.nightNumber()` (a night shares the number of the day it follows) →
+  the HUD now reads `[Night N]`, symmetric with `[Day N]`.
+
+**Verified** — `tsc --noEmit` clean; live `preview_eval`: elite Boar/Snake/Gremlin/Gremling
+each `rollLoot()` → their own unique trophy ×1 (normal Boar → none); `TROPHY_ROLL` has all
+4 keys; both new trophies roll into the Common pool (forced-success → Warrior's Charm,
+forced-miss → streak++); the HUD reads `[Night 1]`/`[Night 2]`/`[Day 1]` across cycles;
+`preview_screenshot` of the forge menu shows the 3 roll buttons wrapping cleanly (Gremlin +
+Boar on row 1, Snake on row 2) over the owned-relics grid. No console errors. Next per the
+locked build order: **M-WC (Gremlin War Camp) + M-TE (trophy-gated gear)**, then **M-W1**.
+
+### Previously: M-RL relic economy rework (probabilistic roll + power tiers) + all-elites-drop-trophy
 
 Reworked the M-RL relic economy the user shipped earlier the same day, per a new
 locked spec, and did the trophy-drop prerequisite first. Detailed plan:

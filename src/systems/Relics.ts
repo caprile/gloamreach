@@ -152,6 +152,12 @@ export interface TrophyRoll {
 }
 export const TROPHY_ROLL: Record<string, TrophyRoll> = {
   gremlin_trophy: { rarity: "common", powerTier: 1, successChance: RARITY_SUCCESS_CHANCE.common },
+  // Elite Boar / Snake trophies also roll Common at tier 1 this milestone — they
+  // share the Common pool + pity counter with gremlin_trophy, so more elite
+  // variety just means more Common rolls (not fragmented odds). Deeper biomes
+  // (M-W1) can remap these to higher rarities/tiers per source.
+  boar_trophy: { rarity: "common", powerTier: 1, successChance: RARITY_SUCCESS_CHANCE.common },
+  snake_trophy: { rarity: "common", powerTier: 1, successChance: RARITY_SUCCESS_CHANCE.common },
   // Dormant this milestone — killing the King wins the run, so a fang can't be
   // spent yet. Correct + ready for M-W1's mid-bosses.
   gremlin_king_fang: { rarity: "rare", powerTier: 1, successChance: RARITY_SUCCESS_CHANCE.rare },

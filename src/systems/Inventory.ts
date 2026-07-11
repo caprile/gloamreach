@@ -28,4 +28,6 @@ export type ResourceType =
   | "twine"
   | "gremlin_leather"
   | "gremlin_trophy" // dropped by Elite Gremlins (Gremlin Shack guards); Gremlin Totem ingredient
+  | "boar_trophy" // dropped by Elite Boars — a Relic Forge trophy (Common)
+  | "snake_trophy" // dropped by Elite Snakes — a Relic Forge trophy (Common)
   | "gremlin_king_fang"; // Gremlin King's guaranteed unique trophy drop

@@ -46,6 +46,12 @@ export class DayNight {
     return Math.floor(this.elapsedMs / CYCLE_MS) + 1;
   }
 
+  // 1-based night counter for the HUD ("Night 1", ...). A night is the tail of
+  // the same cycle as the day it follows, so it shares that day's number.
+  nightNumber(): number {
+    return this.dayNumber();
+  }
+
   // Binary (phase-based) speed multiplier for enemies. Kept binary rather than
   // ramped so "night = faster" reads clearly; the visual intensity below is
   // the thing that fades smoothly.

@@ -29,9 +29,13 @@ export class RunHudUI {
 
   update(run: Run, dayNight?: DayNight): void {
     const clock = formatDuration(run.elapsedMs);
-    // Day/night phase prefix (M-DN) — "Day N" during daylight, "Night" once the
-    // sun's down. Minimized view keeps just the phase tag + clock.
-    const phase = dayNight ? (dayNight.isNight() ? "Night" : `Day ${dayNight.dayNumber()}`) : "";
+    // Day/night phase prefix (M-DN) — "Day N" / "Night N" (the night shares the
+    // number of the day it follows). Minimized view keeps just the phase tag + clock.
+    const phase = dayNight
+      ? dayNight.isNight()
+        ? `Night ${dayNight.nightNumber()}`
+        : `Day ${dayNight.dayNumber()}`
+      : "";
     const tag = phase ? `[${phase}] ` : "";
     this.text.setText(
       this.minimized ? `${tag}T ${clock}` : `${tag}T ${clock}    Score ${run.score()}`,

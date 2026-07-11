@@ -589,6 +589,32 @@ export class BootScene extends Phaser.Scene {
     g.fillRect(7, 16, 10, 2); // gold cord/binding
     g.generateTexture("icon_gremlin_trophy", ICON, ICON);
 
+    // Boar Trophy: an Elite Boar drop — a pair of crossed tusks on a gold cord,
+    // crimson/gold to echo the elite palette (matches the other trophies).
+    g.clear();
+    g.fillStyle(0x6a1f3a, 1);
+    g.fillRect(9, 9, 6, 7); // snout/base
+    g.fillStyle(0xe8e0cc, 1);
+    g.fillTriangle(9, 15, 5, 4, 8, 4); // left tusk
+    g.fillTriangle(15, 15, 19, 4, 16, 4); // right tusk
+    g.fillStyle(0xf0c040, 1);
+    g.fillRect(7, 16, 10, 2); // gold cord/binding
+    g.generateTexture("icon_boar_trophy", ICON, ICON);
+
+    // Snake Trophy: an Elite Snake drop — a coiled fanged head on a gold cord,
+    // crimson/gold to echo the elite palette.
+    g.clear();
+    g.fillStyle(0x6a1f3a, 1);
+    g.fillCircle(12, 9, 5); // head
+    g.fillStyle(0x8a2f4a, 1);
+    g.fillRect(8, 12, 8, 4); // coil
+    g.fillStyle(0xe8e0cc, 1);
+    g.fillRect(10, 12, 1, 3); // left fang
+    g.fillRect(13, 12, 1, 3); // right fang
+    g.fillStyle(0xf0c040, 1);
+    g.fillRect(7, 16, 10, 2); // gold cord/binding
+    g.generateTexture("icon_snake_trophy", ICON, ICON);
+
     // Relic gems — one per rarity (Relics.ts). A cut-gem diamond tinted by the
     // rarity color with a lighter facet highlight; reused for every relic of
     // that rarity, so rarity reads at a glance and the relic's identity comes

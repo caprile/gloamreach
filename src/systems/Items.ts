@@ -403,6 +403,22 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     maxStack: 99,
     hotbarable: false,
   },
+  boar_trophy: {
+    key: "boar_trophy",
+    name: "Boar Trophy",
+    description: "A tusked trophy torn from an Elite Boar. Feed it to a Relic Forge to attempt a relic.",
+    texture: "icon_boar_trophy",
+    maxStack: 99,
+    hotbarable: false,
+  },
+  snake_trophy: {
+    key: "snake_trophy",
+    name: "Snake Trophy",
+    description: "A fanged trophy torn from an Elite Snake. Feed it to a Relic Forge to attempt a relic.",
+    texture: "icon_snake_trophy",
+    maxStack: 99,
+    hotbarable: false,
+  },
   gremlin_king_fang: {
     key: "gremlin_king_fang",
     name: "Gremlin King Fang",

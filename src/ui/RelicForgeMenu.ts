@@ -32,6 +32,14 @@ const CHIP_H = 62;
 const CHIP_GAP = 8;
 const COLS = 6;
 
+// Roll-button layout — buttons wrap so any number of trophy types (Gremlin +
+// Boar + Snake today, more with later biomes) lays out without overflowing.
+const BTN_W = 250;
+const BTN_H = 58;
+const BTN_GAP_X = 12;
+const BTN_GAP_Y = 10;
+const BTN_COLS = 2;
+
 // The Relic Forge station menu (M-RL): a probabilistic roll — 1 trophy per
 // attempt, success chance by rarity, failure consumes the trophy (with a pity
 // counter shown). No manual combine; duplicates auto-stack. Owned relics are a
@@ -113,6 +121,15 @@ export class RelicForgeMenu {
     this.rows = [];
   }
 
+  // Trophy types shown as roll buttons: always the Common Gremlin Trophy (so the
+  // mechanic is discoverable at 0), plus any other trophy the player currently
+  // owns (Boar/Snake from their own elites, a fang if ever spendable).
+  private visibleTrophyKeys(): string[] {
+    return Object.keys(TROPHY_ROLL).filter(
+      (k) => k === "gremlin_trophy" || this.deps.backpack.count(k) > 0,
+    );
+  }
+
   private render(): void {
     this.clearRows();
     this.hideTooltip();
@@ -120,8 +137,16 @@ export class RelicForgeMenu {
     const groups = this.deps.relics.groupedForDisplay();
     const gridRows = Math.max(1, Math.ceil(groups.length / COLS));
 
-    // Header + roll block are fixed height; the grid grows with owned variety.
-    this.panelH = 192 + gridRows * (CHIP_H + CHIP_GAP) + 16;
+    // The roll-button block wraps with the number of trophy types owned; the
+    // result line + relic grid stack below it so nothing overlaps as variety
+    // grows. All Y values are panel-relative offsets computed up front.
+    const btnRows = Math.max(1, Math.ceil(this.visibleTrophyKeys().length / BTN_COLS));
+    const rollTop = 60;
+    const btnBlockH = 22 + btnRows * (BTN_H + BTN_GAP_Y);
+    const resultY = rollTop + btnBlockH + 4;
+    const gridTop = resultY + 42;
+
+    this.panelH = gridTop + gridRows * (CHIP_H + CHIP_GAP) + 16;
     this.panelY = this.scene.scale.height / 2 - this.panelH / 2;
     this.bg.setPosition(this.panelX, this.panelY).setSize(this.panelW, this.panelH);
 
@@ -134,22 +159,25 @@ export class RelicForgeMenu {
       "#8a93a3",
     );
 
-    this.renderRollButtons(this.panelY + 60);
-    this.renderResultLine(this.panelY + 150);
-    this.renderRelicGrid(this.panelY + 192);
+    this.renderRollButtons(this.panelY + rollTop);
+    this.renderResultLine(this.panelY + resultY);
+    this.renderRelicGrid(this.panelY + gridTop);
   }
 
-  // A roll button per trophy the player can use (always shows the Common Gremlin
-  // Trophy so the mechanic is discoverable at 0; rarer trophies only once owned).
+  // A roll button per visible trophy (see visibleTrophyKeys), wrapping into
+  // rows of BTN_COLS so any number of trophy types fits the panel width.
   private renderRollButtons(y: number): void {
     const x = this.panelX + 16;
     this.addText(x, y, "Roll", 13, "#c9a86a");
 
-    let bx = x;
-    const by = y + 22;
-    for (const trophyKey of Object.keys(TROPHY_ROLL)) {
+    const keys = this.visibleTrophyKeys();
+    keys.forEach((trophyKey, i) => {
+      const col = i % BTN_COLS;
+      const rowN = Math.floor(i / BTN_COLS);
+      const bx = x + col * (BTN_W + BTN_GAP_X);
+      const by = y + 22 + rowN * (BTN_H + BTN_GAP_Y);
+
       const have = this.deps.backpack.count(trophyKey);
-      if (have <= 0 && trophyKey !== "gremlin_trophy") continue;
       const t = TROPHY_ROLL[trophyKey];
       const trophyName = itemDef(trophyKey)?.name ?? trophyKey;
       const can = have >= 1;
@@ -157,9 +185,8 @@ export class RelicForgeMenu {
       const pityLeft = Math.max(0, PITY_THRESHOLD[t.rarity] - this.deps.relics.missStreak(t.rarity));
       const pityStr = t.successChance >= 1 ? "guaranteed" : `${pct}% · pity in ${pityLeft}`;
 
-      const btnW = 250;
       const box = this.scene.add
-        .rectangle(bx, by, btnW, 58, 0x14181f, 0.95)
+        .rectangle(bx, by, BTN_W, BTN_H, 0x14181f, 0.95)
         .setOrigin(0, 0)
         .setStrokeStyle(1, can ? RARITY_COLOR[t.rarity] : 0x3a4250)
         .setScrollFactor(0)
@@ -176,12 +203,12 @@ export class RelicForgeMenu {
         .setDepth(DEPTH_ITEM + 1);
       this.rows.push(gem);
 
-      this.addText(bx + 42, by + 8, `Roll ${rarityName(t.rarity)}`, 13, can ? rarityHex(t.rarity) : "#5a6270");
-      this.addText(bx + 42, by + 26, `${trophyName}: ${have}`, 11, can ? "#c8d0da" : "#e08a8a");
+      // Label by the trophy (its name), not just its rarity, so multiple
+      // same-rarity buttons are distinguishable at a glance.
+      this.addText(bx + 42, by + 8, `Roll ${trophyName}`, 12, can ? rarityHex(t.rarity) : "#5a6270");
+      this.addText(bx + 42, by + 26, `${rarityName(t.rarity)} · have ${have}`, 11, can ? "#c8d0da" : "#e08a8a");
       this.addText(bx + 42, by + 42, pityStr, 10, "#8a93a3");
-
-      bx += btnW + 12;
-    }
+    });
   }
 
   // Inline feedback for the most recent roll (success = the forged relic;

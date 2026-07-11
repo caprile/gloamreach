@@ -106,10 +106,17 @@ you already own (same id + power tier) **auto-stacks** (×N, aggregated effects)
 Relics are run-length passives (reset on New Run), shown in the bottom-left HUD
 relic bar.
 
-| Trophy | Rarity | Power Tier | Success Chance | Pity (miss cap) |
-|---|---|---|---|---|
-| Gremlin Trophy | Common | 1 | 5% | 15 |
-| Gremlin King Fang | Rare | 1 | 100% | — (dormant: boss = win) |
+Each elite drops a **unique trophy by species** (Boar → Boar Trophy, Snake →
+Snake Trophy, Gremlin/Gremling → Gremlin Trophy). All three roll the **same
+Common pool + shared pity counter**, so more elite variety just means more
+Common rolls.
+
+| Trophy | Source | Rarity | Power Tier | Success Chance | Pity (miss cap) |
+|---|---|---|---|---|---|
+| Gremlin Trophy | Elite Gremlin/Gremling | Common | 1 | 5% | 15 |
+| Boar Trophy | Elite Boar | Common | 1 | 5% | 15 (shared w/ Common) |
+| Snake Trophy | Elite Snake | Common | 1 | 5% | 15 (shared w/ Common) |
+| Gremlin King Fang | Gremlin King | Rare | 1 | 100% | — (dormant: boss = win) |
 
 Uncommon (10%, pity 8) and Mythic pools + power tiers ≥2 are scaffolding — no
 trophy source feeds them until M-W1.

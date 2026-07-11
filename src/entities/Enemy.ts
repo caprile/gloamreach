@@ -40,7 +40,10 @@ export interface LootEntry {
 // M-EL2-era "Elite Gremlings drop no trophy" special case). Centralized here so
 // the rule holds for every elite type, present and future, without each
 // subclass restating it in its own loot literal.
-const ELITE_TROPHY_DROP: LootEntry = { resource: "gremlin_trophy", min: 1, max: 1 };
+// The trophy TYPE is per-species (Boar -> boar_trophy, Snake -> snake_trophy,
+// Gremlin/Gremling -> gremlin_trophy), so each elite drops a unique trophy.
+// Subclasses set EnemyConfig.eliteTrophy; it defaults to gremlin_trophy.
+const DEFAULT_ELITE_TROPHY: ResourceType = "gremlin_trophy";
 
 export interface EnemyConfig {
   x: number;
@@ -50,10 +53,13 @@ export interface EnemyConfig {
   loot: LootEntry[];
   maxHealth: number;
   biteDamage: number;
-  // Elite variant (default false). When true, +the shared trophy drop is
-  // appended to `loot` (see the constructor) and Run.ts scores the kill as
-  // "elite". Subclasses pass this through from their own cfg.
+  // Elite variant (default false). When true, one trophy drop is appended to
+  // `loot` (see the constructor) and Run.ts scores the kill as "elite".
+  // Subclasses pass this through from their own cfg.
   elite?: boolean;
+  // Which trophy an elite drops (unique per species). Ignored when not elite;
+  // defaults to gremlin_trophy. Boar/Snake override it with their own type.
+  eliteTrophy?: ResourceType;
 }
 
 // A simple melee enemy (currently only "Boar"). Ranged attacks, ambush AI,
@@ -106,8 +112,11 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     super(scene, cfg.x, cfg.y, cfg.texture);
     this.displayName = cfg.displayName;
     this.elite = cfg.elite ?? false;
-    // Elites always drop a trophy on top of their own loot table.
-    this.loot = this.elite ? [...cfg.loot, ELITE_TROPHY_DROP] : cfg.loot;
+    // Elites always drop one trophy (unique per species) on top of their own
+    // loot table.
+    this.loot = this.elite
+      ? [...cfg.loot, { resource: cfg.eliteTrophy ?? DEFAULT_ELITE_TROPHY, min: 1, max: 1 }]
+      : cfg.loot;
     this.maxHealth = cfg.maxHealth;
     this.health = cfg.maxHealth;
     this.biteDamageValue = cfg.biteDamage;
