@@ -372,6 +372,19 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     ],
   },
 
+  // --- relic forge ---
+  relic_forge: {
+    key: "relic_forge",
+    name: "Relic Forge",
+    description:
+      "A stone plinth that binds monster trophies into relics. Feed it trophies to roll a random relic, or combine relics into rarer ones. Requires a nearby Workbench to build.",
+    texture: "icon_relic_forge",
+    maxStack: 1,
+    hotbarable: true,
+    stats: [{ label: "Type", value: "Station" }],
+    placeable: true,
+  },
+
   // --- boss altar ---
   gremlin_totem: {
     key: "gremlin_totem",

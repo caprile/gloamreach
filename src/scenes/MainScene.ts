@@ -25,6 +25,7 @@ import {
   skillDisplayName,
   weaponSkillDamageMultiplier,
   runningSprintMultiplier,
+  type SkillType,
 } from "../systems/Skills";
 import {
   PlayerProgression,
@@ -101,6 +102,9 @@ import { RunHudUI } from "../ui/RunHudUI";
 import { RunEndUI } from "../ui/RunEndUI";
 import { DayNight } from "../systems/DayNight";
 import { NightOverlayUI, type ScreenLight } from "../ui/NightOverlayUI";
+import { RelicManager, TROPHY_ROLL, RELIC_DEFS, rarityName, type RollResult } from "../systems/Relics";
+import { RelicForgeMenu } from "../ui/RelicForgeMenu";
+import { RelicBarUI } from "../ui/RelicBarUI";
 
 const HOTBAR_KEYS = ["ONE", "TWO", "THREE", "FOUR", "FIVE", "SIX", "SEVEN", "EIGHT", "NINE"];
 
@@ -246,6 +250,13 @@ export class MainScene extends Phaser.Scene {
   private hoveredCampfire: Phaser.GameObjects.Image | null = null;
   private cookingMenu!: CookingMenu;
   private openCampfire: Phaser.GameObjects.Image | null = null; // the campfire the cooking menu is bound to
+  // Relic Forge (M-RL) — trophies -> RNG relics + combine. Same
+  // sourced-from-placedObjects-by-itemKey hover/open shape as the Campfire.
+  private relics!: RelicManager;
+  private relicForgeMenu!: RelicForgeMenu;
+  private relicBarUI!: RelicBarUI;
+  private hoveredForge: Phaser.GameObjects.Image | null = null;
+  private openForge: Phaser.GameObjects.Image | null = null; // the forge the relic menu is bound to
   // Gremlin Shack POI (world-gen-placed, not player-placed) — parallel array
   // to dryingRacks, same "image + live state" pairing shape.
   private gremlinShacks: GremlinShack[] = [];
@@ -433,6 +444,9 @@ export class MainScene extends Phaser.Scene {
     this.hoveredWorkbench = null;
     this.hoveredCampfire = null;
     this.openCampfire = null;
+    this.relics = new RelicManager();
+    this.hoveredForge = null;
+    this.openForge = null;
     this.gremlinShacks = [];
     this.openChest = null;
     this.hoveredShack = null;
@@ -578,6 +592,7 @@ export class MainScene extends Phaser.Scene {
     this.createChestMenu();
     this.createUpgradeMenu();
     this.createCharacterMenu();
+    this.createRelicForgeMenu();
     this.hotbarUI = new HotbarUI(this, this.hotbar, {
       skills: this.skills,
       progression: this.progression,
@@ -590,6 +605,7 @@ export class MainScene extends Phaser.Scene {
     this.createHealthBar();
     this.createBuffBar();
     this.createXpBar();
+    this.createRelicBar();
     this.createStatPointsBadge();
     // Sits beside the Keybinds panel (same top row), not stacked underneath
     // it — an open InventoryMenu panel occupies that same top-left column
@@ -644,6 +660,7 @@ export class MainScene extends Phaser.Scene {
       this.closeDryingRackMenu();
       this.closeCookingMenu();
       this.closeChestMenu();
+      this.closeRelicForgeMenu();
       this.craftingMenu.close();
       this.inventoryMenu.close();
     });
@@ -724,11 +741,12 @@ export class MainScene extends Phaser.Scene {
     const canSprint = this.stamina.canAfford(sprintCost);
     const canDash = this.stamina.canAfford(DASH_STAMINA_COST);
     const sprintMultiplier = runningSprintMultiplier(this.skills);
-    const frame = this.player.update(delta, canSprint, canDash, sprintMultiplier);
+    // Relic move-speed bonus (M-RL) multiplies walk & sprint alike.
+    const frame = this.player.update(delta, canSprint, canDash, sprintMultiplier, this.relics.moveSpeedMult());
 
     if (frame.sprinting) {
       this.stamina.spend(sprintCost);
-      this.skills.addXp("running", RUNNING_XP_PER_SEC * (delta / 1000));
+      this.awardSkillXp("running", RUNNING_XP_PER_SEC * (delta / 1000));
     }
     if (frame.dashStarted) {
       this.stamina.spend(DASH_STAMINA_COST);
@@ -960,7 +978,8 @@ export class MainScene extends Phaser.Scene {
       this.chestMenu.isOpen() ||
       this.contextMenu.isOpen() ||
       this.upgradeMenu.isOpen() ||
-      this.characterMenu.isOpen()
+      this.characterMenu.isOpen() ||
+      this.relicForgeMenu.isOpen()
     );
   }
 
@@ -1420,6 +1439,7 @@ export class MainScene extends Phaser.Scene {
     this.craftingMenu.close();
     this.inventoryMenu.close();
     this.closeUpgradeMenu();
+    this.closeRelicForgeMenu();
     this.openRack = rack.station;
     this.dryingRackMenu.openMenu();
   }
@@ -1448,6 +1468,7 @@ export class MainScene extends Phaser.Scene {
     this.closeDryingRackMenu();
     this.closeCookingMenu();
     this.closeChestMenu();
+    this.closeRelicForgeMenu();
     this.openCampfire = image;
     this.cookingMenu.openMenu();
   }
@@ -1455,6 +1476,67 @@ export class MainScene extends Phaser.Scene {
   private closeCookingMenu(): void {
     this.cookingMenu.close();
     this.openCampfire = null;
+  }
+
+  // --- Relic Forge (M-RL) ---
+
+  private createRelicForgeMenu(): void {
+    this.relicForgeMenu = new RelicForgeMenu(this, {
+      backpack: this.backpack,
+      relics: this.relics,
+      roll: (trophyKey) => this.rollRelic(trophyKey),
+    });
+  }
+
+  private openRelicForgeMenu(image: Phaser.GameObjects.Image): void {
+    this.craftingMenu.close();
+    this.inventoryMenu.close();
+    this.closeUpgradeMenu();
+    this.closeDryingRackMenu();
+    this.closeCookingMenu();
+    this.closeChestMenu();
+    this.closeRelicForgeMenu();
+    this.openForge = image;
+    this.relicForgeMenu.openMenu();
+  }
+
+  private closeRelicForgeMenu(): void {
+    this.relicForgeMenu.close();
+    this.openForge = null;
+  }
+
+  // Attempt one relic roll by consuming a trophy of `trophyKey`. Probabilistic
+  // (M-RL): the trophy is consumed whether the roll succeeds or fails; success
+  // chance + a pity counter live in RelicManager.roll(). Re-guarded against an
+  // empty backpack even though the menu gates its button. Returns the outcome so
+  // the forge menu can show inline feedback.
+  private rollRelic(trophyKey: string): RollResult | null {
+    if (!TROPHY_ROLL[trophyKey] || this.backpack.count(trophyKey) < 1) return null;
+    this.backpack.removeCount(trophyKey, 1);
+    const result = this.relics.roll(trophyKey);
+    if (result?.success && result.id) {
+      const def = RELIC_DEFS[result.id];
+      this.eventLog.add(
+        "recipe",
+        `Relic forged: ${def.name} (${rarityName(def.rarity)})`,
+        itemDef(trophyKey)?.texture,
+      );
+    } else {
+      this.eventLog.add("info", "The trophy crumbled to dust — no relic this time.", itemDef(trophyKey)?.texture);
+    }
+    this.afterRelicChange();
+    return result;
+  }
+
+  // Shared post-roll refresh: relic effects may change max HP/stamina, and both
+  // the forge menu (owned grid + trophy counts) and the HUD relic bar need
+  // re-syncing; a consumed trophy also changed backpack/hotbar counts.
+  private afterRelicChange(): void {
+    this.syncStatBonuses();
+    this.relicForgeMenu.refresh();
+    this.relicBarUI.sync(this.relics.groupedForDisplay());
+    this.inventoryMenu.refresh();
+    this.hotbarUI.refresh();
   }
 
   // Announce (once each) the cook recipes a campfire of `maxTier` makes
@@ -1525,6 +1607,7 @@ export class MainScene extends Phaser.Scene {
     this.craftingMenu.close();
     this.inventoryMenu.close();
     this.closeUpgradeMenu();
+    this.closeRelicForgeMenu();
     shack.loot.rollIfEmpty(GREMLIN_SHACK_LOOT_TABLE);
     this.openChest = shack.loot.items;
     this.chestMenu.openMenu();
@@ -2179,6 +2262,7 @@ export class MainScene extends Phaser.Scene {
     let hoveredAltar: BossAltar | null = null;
     let hoveredWorkbench: Phaser.GameObjects.Image | null = null;
     let hoveredCampfire: Phaser.GameObjects.Image | null = null;
+    let hoveredForge: Phaser.GameObjects.Image | null = null;
     let best = Infinity;
 
     for (const node of this.nodes) {
@@ -2193,6 +2277,7 @@ export class MainScene extends Phaser.Scene {
         hoveredAltar = null;
         hoveredWorkbench = null;
         hoveredCampfire = null;
+        hoveredForge = null;
         best = d;
       }
     }
@@ -2208,6 +2293,7 @@ export class MainScene extends Phaser.Scene {
         hoveredAltar = null;
         hoveredWorkbench = null;
         hoveredCampfire = null;
+        hoveredForge = null;
         best = d;
       }
     }
@@ -2223,6 +2309,7 @@ export class MainScene extends Phaser.Scene {
         hoveredAltar = null;
         hoveredWorkbench = null;
         hoveredCampfire = null;
+        hoveredForge = null;
         best = d;
       }
     }
@@ -2238,6 +2325,7 @@ export class MainScene extends Phaser.Scene {
         hoveredAltar = null;
         hoveredWorkbench = null;
         hoveredCampfire = null;
+        hoveredForge = null;
         best = d;
       }
     }
@@ -2253,20 +2341,22 @@ export class MainScene extends Phaser.Scene {
         hoveredShack = null;
         hoveredWorkbench = null;
         hoveredCampfire = null;
+        hoveredForge = null;
         best = d;
       }
     }
-    // Workbench (opens the crafting menu) and Campfire (opens the cooking menu)
-    // are both plain placedObjects, distinguished by itemKey — handled in one
-    // loop since they share the same hover/reach/interact shape.
+    // Workbench (crafting menu), Campfire (cooking menu) and Relic Forge (relic
+    // menu) are all plain placedObjects, distinguished by itemKey — handled in
+    // one loop since they share the same hover/reach/interact shape.
     for (const obj of this.placedObjects) {
       const key = obj.getData("itemKey");
-      if (key !== "workbench" && key !== "campfire") continue;
+      if (key !== "workbench" && key !== "campfire" && key !== "relic_forge") continue;
       const radius = Math.max(obj.displayWidth, obj.displayHeight) / 2 + 6;
       const d = Phaser.Math.Distance.Between(world.x, world.y, obj.x, obj.y);
       if (d <= radius && d < best) {
         hoveredWorkbench = key === "workbench" ? obj : null;
         hoveredCampfire = key === "campfire" ? obj : null;
+        hoveredForge = key === "relic_forge" ? obj : null;
         hoveredNode = null;
         hoveredEnemy = null;
         hoveredRack = null;
@@ -2283,6 +2373,7 @@ export class MainScene extends Phaser.Scene {
     this.hoveredAltar = hoveredAltar;
     this.hoveredWorkbench = hoveredWorkbench;
     this.hoveredCampfire = hoveredCampfire;
+    this.hoveredForge = hoveredForge;
 
     // Station level labels are passive flavor, not part of the interact/
     // prompt system above — shown purely on hover, independent of the
@@ -2307,7 +2398,9 @@ export class MainScene extends Phaser.Scene {
                 ? this.promptForWorkbench(hoveredWorkbench)
                 : hoveredCampfire
                   ? this.promptForCampfire(hoveredCampfire)
-                  : null;
+                  : hoveredForge
+                    ? this.promptForForge(hoveredForge)
+                    : null;
     if (prompt) {
       this.promptText.setText(prompt).setVisible(true);
       this.input.setDefaultCursor("pointer");
@@ -2389,6 +2482,11 @@ export class MainScene extends Phaser.Scene {
     return inReach ? "[LMB] Cook" : null;
   }
 
+  private promptForForge(image: Phaser.GameObjects.Image): string | null {
+    const inReach = Phaser.Math.Distance.Between(this.player.x, this.player.y, image.x, image.y) <= REACH;
+    return inReach ? "[LMB] Use Relic Forge" : null;
+  }
+
   // Mirrors the tool-kind gating philosophy exactly: no Gremlin Totem
   // selected in the hotbar -> show nothing, never reveal what's required
   // (same "no tool of the right kind -> show nothing" rule as promptFor()).
@@ -2437,6 +2535,10 @@ export class MainScene extends Phaser.Scene {
       if (this.promptForCampfire(this.hoveredCampfire)) this.openCookingMenu(this.hoveredCampfire);
       return;
     }
+    if (this.hoveredForge) {
+      if (this.promptForForge(this.hoveredForge)) this.openRelicForgeMenu(this.hoveredForge);
+      return;
+    }
     // Holding (selected) a food item in the hotbar: a left-click on open ground
     // eats one, so food can be consumed straight from the hotbar. Skipped when
     // hovering a node (that click should still gather) — enemies/stations above
@@ -2466,7 +2568,8 @@ export class MainScene extends Phaser.Scene {
       const cooldownMs = toolCooldownMs(this.equippedTool);
       if (this.time.now - this.lastToolHitAt < cooldownMs) return;
 
-      const staminaCost = toolStaminaCost(this.equippedTool);
+      // Relic stamina-cost reduction (M-RL) applies to tool swings too.
+      const staminaCost = Math.round(toolStaminaCost(this.equippedTool) * this.relics.staminaCostMult());
       if (!this.stamina.canAfford(staminaCost)) return; // exhausted — silent, same as the guards above
 
       this.lastToolHitAt = this.time.now;
@@ -2476,7 +2579,7 @@ export class MainScene extends Phaser.Scene {
       const depleted = node.takeHit(toolDamage(this.equippedTool));
       // Every swing grants gather-skill XP (not just the depleting one). `kind`
       // is already resolved above from requiredKind(node.action).
-      this.skills.addXp(kind === "axe" ? "chopping" : "mining", 30);
+      this.awardSkillXp(kind === "axe" ? "chopping" : "mining", 30);
       if (!depleted) return; // node survives the hit; stays interactable
 
       this.spawnLooseDrop(node.resource, node.amount, node.x, node.y);
@@ -2547,7 +2650,9 @@ export class MainScene extends Phaser.Scene {
     // weapon SKILL's own level (not player stat points) — see Skills.ts.
     const dmgType = weaponPrimaryDamageType(this.equippedWeapon);
     const staminaCost = Math.round(
-      weaponStaminaCost(this.equippedWeapon) * weaponStaminaCostMultiplier(dmgType, this.progression),
+      weaponStaminaCost(this.equippedWeapon) *
+        weaponStaminaCostMultiplier(dmgType, this.progression) *
+        this.relics.staminaCostMult(),
     );
     if (!this.stamina.canAfford(staminaCost)) return; // exhausted — silent, same as tool guard
 
@@ -2564,17 +2669,24 @@ export class MainScene extends Phaser.Scene {
     // display; the true float is what actually damages the enemy, so small
     // skill increments always matter even when the displayed number doesn't
     // visibly change hit-to-hit.
-    let dmg = baseDmg * weaponSkillDamageMultiplier(dmgType, this.skills);
+    // Weapon skill bonus + relic damage bonus (M-RL), kept fractional to
+    // takeHit (see the fractional-damage note above).
+    let dmg = baseDmg * weaponSkillDamageMultiplier(dmgType, this.skills) * this.relics.damageMult();
     // Gremlin King's poise-break punish window — bonus damage while staggered.
     if (enemy instanceof GremlinKing && enemy.isStaggered()) dmg *= STAGGER_DAMAGE_MULTIPLIER;
     const depleted = enemy.takeHit(dmg);
-    this.skills.addXp(dmgType, 30); // weapon-hit XP to the primary damage type's skill
+    this.awardSkillXp(dmgType, 30); // weapon-hit XP to the primary damage type's skill
     this.spawnDamageNumber(enemy.x, enemy.y, Math.round(dmg));
     if (!depleted) return;
 
-    // Kill: grant armor-skill XP once per distinct worn armor type.
+    // Kill: relic on-kill heal (M-RL), then armor-skill XP per distinct worn type.
+    const killHeal = this.relics.killHeal();
+    if (killHeal > 0) {
+      this.health.heal(killHeal);
+      this.refreshHealthBar();
+    }
     for (const armorType of armorTypesWorn(EQUIP_SLOTS.map((s) => this.equipment.get(s.id)))) {
-      this.skills.addXp(armorType, 30);
+      this.awardSkillXp(armorType, 30);
     }
 
     const dropX = enemy.x;
@@ -2597,6 +2709,13 @@ export class MainScene extends Phaser.Scene {
     if (enemy instanceof GremlinKing) {
       this.time.delayedCall(1200, () => this.endRun("won"));
     }
+  }
+
+  // Single entry point for granting skill XP, so a relic's +% skill XP bonus
+  // (M-RL) applies uniformly to every source (weapon hits, kills, tool swings,
+  // running) without repeating the multiplier at each call site.
+  private awardSkillXp(skill: SkillType, base: number): void {
+    this.skills.addXp(skill, base * this.relics.xpMult());
   }
 
   // Kill category for run scoring: the final boss, an elite variant, or a plain
@@ -2700,11 +2819,13 @@ export class MainScene extends Phaser.Scene {
   ): void {
     if (this.isDead) return;
     if (this.time.now < this.invulnerableUntil) return;
-    // Flat armor deduction — everything dealt today is physical damage (no
+    // Relic damage-taken reduction (M-RL) applies first (a percentage), then
+    // flat armor deduction — everything dealt today is physical damage (no
     // magic/elemental sources exist yet), so this applies uniformly; branch
-    // on a damage type here once one does. Floored at 1 so no armor
+    // on a damage type here once one does. Floored at 1 so no relic/armor
     // combination grants full immunity.
-    const reduced = Math.max(1, Math.round(amount - totalPlayerDefense(this.equipment)));
+    const relicAdjusted = amount * this.relics.damageTakenMult();
+    const reduced = Math.max(1, Math.round(relicAdjusted - totalPlayerDefense(this.equipment)));
     const died = this.health.takeDamage(reduced);
     this.refreshHealthBar();
     if (knockback) {
@@ -2914,8 +3035,10 @@ export class MainScene extends Phaser.Scene {
   // Push the current Endurance/Vitality bonuses into the Stamina/HP pools.
   // Called on create and after either is spent, so the max bars grow live.
   private syncStatBonuses(): void {
-    this.health.setBonusMax(this.progression.vitalityHealthBonus());
-    this.stamina.setBonusMax(this.progression.enduranceStaminaBonus());
+    // Max HP/stamina come from allocated stat points (Progression) PLUS any
+    // owned relics' flat bonuses (M-RL). Rolling/combining a relic calls this.
+    this.health.setBonusMax(this.progression.vitalityHealthBonus() + this.relics.maxHpBonus());
+    this.stamina.setBonusMax(this.progression.enduranceStaminaBonus() + this.relics.maxStaminaBonus());
     this.refreshHealthBar();
     this.refreshStaminaBar();
   }
@@ -2953,6 +3076,7 @@ export class MainScene extends Phaser.Scene {
     this.closeCookingMenu();
     this.closeChestMenu();
     this.closeUpgradeMenu();
+    this.closeRelicForgeMenu();
     const opening = !this.inventoryMenu.isOpen();
     if (opening) {
       this.inventoryMenu.toggle();
@@ -3018,6 +3142,7 @@ export class MainScene extends Phaser.Scene {
     this.closeDryingRackMenu();
     this.closeCookingMenu();
     this.closeChestMenu();
+    this.closeRelicForgeMenu();
     this.placementMode = { recipe, itemSource: { container, key: stack.key } };
     const pos = this.clampedPlacementPoint();
     this.placementGhost = this.add.image(pos.x, pos.y, def.texture).setAlpha(0.5).setDepth(500);
@@ -3323,6 +3448,7 @@ export class MainScene extends Phaser.Scene {
     this.closeDryingRackMenu();
     this.closeCookingMenu();
     this.closeChestMenu();
+    this.closeRelicForgeMenu();
     this.upgradeTarget = obj;
     this.upgradeMenu.openMenu();
   }
@@ -3340,6 +3466,7 @@ export class MainScene extends Phaser.Scene {
     this.closeDryingRackMenu();
     this.closeCookingMenu();
     this.closeChestMenu();
+    this.closeRelicForgeMenu();
     this.upgradeTarget = { armorSlot: slot };
     this.upgradeMenu.openMenu({ x: INVENTORY_PANEL_X + INVENTORY_PANEL_W + 12, y: INVENTORY_PANEL_Y });
   }
@@ -3354,6 +3481,7 @@ export class MainScene extends Phaser.Scene {
     this.closeDryingRackMenu();
     this.closeCookingMenu();
     this.closeChestMenu();
+    this.closeRelicForgeMenu();
     this.upgradeTarget = { weaponSlot: { container, index } };
     if (this.inventoryMenu.isOpen()) {
       this.upgradeMenu.openMenu({ x: INVENTORY_PANEL_X + INVENTORY_PANEL_W + 12, y: INVENTORY_PANEL_Y });
@@ -3523,6 +3651,8 @@ export class MainScene extends Phaser.Scene {
 
     // Destroying the campfire whose cooking menu is open closes it too.
     if (this.openCampfire === obj) this.closeCookingMenu();
+    // Same for the Relic Forge.
+    if (this.openForge === obj) this.closeRelicForgeMenu();
 
     // Carry the placed instance's upgrade tier into the pickup so re-placing
     // it restores the same tier (fixes the old bug where Destroy silently
@@ -3572,9 +3702,12 @@ export class MainScene extends Phaser.Scene {
       return { weaponName: null, damage: 0, damageTypeName: null, attackSpeed: 0, staminaCost: 0, armor, attackRange };
     const dmgType = weaponPrimaryDamageType(this.equippedWeapon);
     const baseDmg = weaponDamage(this.equippedWeapon) + weaponTierDamageBonus(this.equippedWeapon, this.equippedWeaponTier);
-    const damage = Math.round(baseDmg * weaponSkillDamageMultiplier(dmgType, this.skills));
+    // Include relic bonuses (M-RL) so the panel matches tryAttackEnemy's real math.
+    const damage = Math.round(baseDmg * weaponSkillDamageMultiplier(dmgType, this.skills) * this.relics.damageMult());
     const staminaCost = Math.round(
-      weaponStaminaCost(this.equippedWeapon) * weaponStaminaCostMultiplier(dmgType, this.progression),
+      weaponStaminaCost(this.equippedWeapon) *
+        weaponStaminaCostMultiplier(dmgType, this.progression) *
+        this.relics.staminaCostMult(),
     );
     return {
       weaponName: this.equippedWeaponName,
@@ -3588,19 +3721,22 @@ export class MainScene extends Phaser.Scene {
   }
 
   // Live "what determines the player's move speed right now" breakdown —
-  // base walk speed + the Running skill's sprint multiplier. No item speed
-  // bonuses exist yet (itemBonus is a framework line for that future case).
+  // base walk speed + the Running skill's sprint multiplier, then any relic
+  // move-speed bonus (M-RL) folded into the effective walk/sprint figures so
+  // the panel shows real numbers (itemBonus carries the relic px contribution).
   private runSpeedBreakdown(): RunSpeedView {
-    const walk = PLAYER_WALK_SPEED;
+    const base = PLAYER_WALK_SPEED;
+    const moveMult = this.relics.moveSpeedMult();
+    const walk = Math.round(base * moveMult);
     const sprintMultiplier = runningSprintMultiplier(this.skills);
     const runningLevel = this.skills.get("running");
     return {
       walk,
       sprintMultiplier,
-      sprint: Math.round(walk * sprintMultiplier),
+      sprint: Math.round(base * sprintMultiplier * moveMult),
       runningLevel,
-      runningBonus: Math.round(runningLevel * 0.005 * walk),
-      itemBonus: 0,
+      runningBonus: Math.round(runningLevel * 0.005 * base),
+      itemBonus: Math.round(base * (moveMult - 1)),
     };
   }
 
@@ -3878,6 +4014,15 @@ export class MainScene extends Phaser.Scene {
     this.buffBarUI = new BuffBarUI(this);
     this.buffBarUI.layout(this.scale.width / 2, healthBarY - 6);
     this.buffBarUI.sync(this.buffs.active());
+  }
+
+  // Owned-relics HUD strip (M-RL) — bottom-left, growing right/wrapping up. Only
+  // changes on roll/combine (afterRelicChange re-syncs), so it's built once and
+  // synced with the run's current (empty at a fresh start) relic set.
+  private createRelicBar(): void {
+    this.relicBarUI = new RelicBarUI(this);
+    this.relicBarUI.layout(12, this.scale.height - 12);
+    this.relicBarUI.sync(this.relics.groupedForDisplay());
   }
 
   // Player-level XP bar: sits directly under the hotbar, spanning its exact

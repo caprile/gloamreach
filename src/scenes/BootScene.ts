@@ -589,6 +589,42 @@ export class BootScene extends Phaser.Scene {
     g.fillRect(7, 16, 10, 2); // gold cord/binding
     g.generateTexture("icon_gremlin_trophy", ICON, ICON);
 
+    // Relic gems — one per rarity (Relics.ts). A cut-gem diamond tinted by the
+    // rarity color with a lighter facet highlight; reused for every relic of
+    // that rarity, so rarity reads at a glance and the relic's identity comes
+    // from the tooltip. Colors mirror Relics.ts RARITY_COLOR.
+    const relicGem = (key: string, base: number, light: number) => {
+      g.clear();
+      g.fillStyle(0x1a1a20, 1);
+      g.fillCircle(12, 12, 10); // dark socket backing
+      g.fillStyle(base, 1);
+      g.fillTriangle(12, 3, 4, 11, 20, 11); // upper facets
+      g.fillTriangle(4, 11, 20, 11, 12, 21); // lower point
+      g.fillStyle(light, 1);
+      g.fillTriangle(12, 5, 8, 11, 12, 11); // highlight facet
+      g.generateTexture(key, ICON, ICON);
+    };
+    relicGem("icon_relic_common", 0x9aa4b2, 0xc8d0da);
+    relicGem("icon_relic_uncommon", 0x5ad06a, 0x9cf0a8);
+    relicGem("icon_relic_rare", 0x4a9fe8, 0x9cccf6);
+    relicGem("icon_relic_mythic", 0xe8a83c, 0xf6d68e);
+
+    // Relic Forge icon (also the placed-station sprite — placed stations render
+    // from their item icon, like the Workbench/Campfire/Drying Rack). A dark
+    // stone plinth with a glowing violet relic gem cradled on top.
+    g.clear();
+    g.fillStyle(0x3a3340, 1);
+    g.fillRect(3, 13, 18, 8); // plinth base
+    g.fillStyle(0x2b2530, 1);
+    g.fillRect(5, 18, 14, 3); // shadowed foot
+    g.fillStyle(0x4a4152, 1);
+    g.fillRect(7, 9, 10, 5); // cradle
+    g.fillStyle(0xc264d8, 1);
+    g.fillTriangle(12, 1, 7, 10, 17, 10); // gem
+    g.fillStyle(0xe6a8f0, 1);
+    g.fillTriangle(12, 3, 9, 9, 12, 9); // gem highlight
+    g.generateTexture("icon_relic_forge", ICON, ICON);
+
     g.destroy();
     this.makeLightTexture();
   }

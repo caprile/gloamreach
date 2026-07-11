@@ -515,7 +515,9 @@ mouse-driven only. Don't reintroduce a keybind for this without being asked. Spa
      in the world; every other gremlin (`spawnEnemies()`, `spawnAltarDensity()`) stays
      normal. Since 2 of 5 shacks already bias near the Boss Altar, an altar-proximity
      elite cluster falls out naturally. The **ranged Elite Gremlin drops a new
-     `gremlin_trophy`** (1 each; the melee Elite Gremling does NOT — user decision), and
+     `gremlin_trophy`** (1 each; the melee Elite Gremling does NOT — user decision;
+     *superseded by the M-RL economy rework — see 5m: ALL elites, including melee
+     Gremlings and now Boar/Snake, drop exactly 1 trophy, centralized in `Enemy`*), and
      both elite variants drop 2x their normal loot. The **Gremlin Totem** recipe was reworked from
      `{ gremlin_leather: 4, gremlin_guck: 3, bones: 8, twine: 4 }` + Light-Armor-lvl-3
      gate to **`{ gremlin_trophy: 3, wood: 1, gremlin_guck: 1 }`** with no skill gate
@@ -685,6 +687,46 @@ mouse-driven only. Don't reintroduce a keybind for this without being asked. Spa
    master plan's M-FA section for the full reasoning. Revisit only if M-W1's multi-biome
    world later shows a real gap the end-of-run speed multiplier doesn't cover.
 
+5m. **M-RL (Relics — probabilistic trophy → relic economy)** — plan:
+   `.claude/plans/radiant-binding-relic.md` (the ARPG/Slay-the-Spire spine of the roguelike
+   meta-loop, built on Opus). Trophies won from elites/bosses are fed to a placed **Relic
+   Forge** to attempt a **probabilistic** roll into a random relic. **Prerequisite (Part
+   1): every elite now drops exactly 1 trophy**, centralized in base `Enemy`
+   (`ELITE_TROPHY_DROP` appended to `loot` when `cfg.elite`) — reverses the M-EL2-era
+   "melee Elite Gremlings drop no trophy" rule; `Boar`/`Snake`/`RangedGremlin`/
+   `MeleeGremling` pass `elite` through to `super` and the ranged Gremlin's inline trophy
+   entry was deleted (no double-drop). **Two axes (locked, the user):** *rarity*
+   (Common/Uncommon/Rare/Mythic) is the effect pool + roll odds and is
+   **source-determined by the trophy, NOT climbable — there is no manual combine**; *power
+   tier* (biome depth) is a magnitude multiplier on a relic's numbers (`POWER_TIER_MULT`,
+   geometric — flat ×1.0 this milestone, scaffolding for M-W1). **Roll:** 1 trophy per
+   attempt, **success chance by rarity (Common 5% / Uncommon 10% / Rare 100%)**, a **failed
+   roll still consumes the trophy**, and a **per-rarity pity counter** (`PITY_THRESHOLD`,
+   Common 15) guarantees a success after N misses (kills the 5% feel-bad tail).
+   **Duplicate auto-stacking IS the "combining":** rolling an id (at a power tier) you own
+   merges into that entry with ×N + aggregated stats (effects were always additive — each
+   instance contributes `base × its power-tier mult`). `TROPHY_ROLL`:
+   `gremlin_trophy → Common/tier1` (the only live path), `gremlin_king_fang → Rare/tier1`
+   (dormant — boss=win). *(This supersedes an earlier same-day ship of M-RL that used a
+   manual 2→1 combine ladder; the combine mechanic was removed.)* `src/systems/Relics.ts`
+   (framework-free) holds `RelicInstance {id, powerTier}` + a per-rarity miss counter;
+   `roll(trophyKey, rng)` returns a `RollResult` (`{success, rarity, id?, powerTier?,
+   pity?}`), plus `missStreak()`, `groupedForDisplay()` (by id@powerTier), and the same
+   **aggregate effect getters** (damage/move/stamina/damage-taken/kill-heal/maxHP/
+   maxStamina/XP, summed over instances × power-tier mult) MainScene reads at existing hook
+   points. The **Relic Forge** is a tier-1 (Workbench-gated) placeable (`10 Stone / 5 Bones
+   / 1 Gremlin Trophy`), reusing the generic placement + hover-by-itemKey + Upgrade/Destroy
+   machinery (`promptForForge` → `"[LMB] Use Relic Forge"`). `src/ui/RelicForgeMenu.ts`
+   (roll button per trophy with a `"5% · pity in N"` readout + inline success/"crumbled"
+   result line + read-only owned grid with **T#** power-tier badges; **no combine bar**) and
+   `src/ui/RelicBarUI.ts` (bottom-left grouped-gem HUD strip with a T# badge) are the UIs.
+   **Effect hooks (unchanged from the first ship):** weapon `damageMult`, on-kill
+   `killHeal`, `damageTakenMult` (pre-armor), `staminaCostMult` (weapon+tool),
+   `Player.update(...moveMult)` for `moveSpeedMult`, max HP/stamina in `syncStatBonuses`,
+   and `awardSkillXp` applying `xpMult`. Gem icons are one per rarity. `rollRelic` consumes
+   the trophy **unconditionally** (success or fail) and returns the result for menu
+   feedback; `create()` resets `new RelicManager()`. See `STATUS.md` for full verification.
+
 **A new umbrella plan for the long-requested roguelike run/score meta-loop** now exists:
 `.claude/plans/roguelike-metaloop-master-plan.md` (drafted 2026-07-10, locked build order
 confirmed by the user). It supersedes/finalizes several open questions in the **Long-term
@@ -694,8 +736,8 @@ plan file for the full locked-decision list before touching anything in items 6 
 discovery) or 7 (ARPG loot). Locked build order: **M-FX (done) → M-R1 (Run/Score/
 Hardcore death, done — see 5h) → M-DN (Day/Night, done — see 5i) → Comfort item (was
 M-SB/Sleep-Bed, done — see 5j) → M-EL2 (generalized elite spawning, done — see 5k) →
-~~M-FA~~ (cut, see 5l) → **M-RL (trophy → RNG relics, next)** → M-WC (Gremlin War Camp) +
-M-TE (trophy-gated gear) → M-W1 (circular multi-biome world, last).**
+~~M-FA~~ (cut, see 5l) → M-RL (trophy → RNG relics, done — see 5m) → **M-WC (Gremlin War
+Camp) + M-TE (trophy-gated gear), next** → M-W1 (circular multi-biome world, last).**
 
 **Not yet built — next up in rough order:**
 6. **World & discovery** — much bigger generated world, biomes, map, eventually a

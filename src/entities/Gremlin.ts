@@ -82,11 +82,12 @@ export class RangedGremlin extends Enemy {
       y: cfg.y,
       texture: elite ? "gremlin_elite" : "gremlin",
       displayName: elite ? "Elite Gremlin" : "Gremlin",
+      // Trophy is appended centrally by Enemy when elite (no inline entry here,
+      // which would double-drop) — only the skin/blood counts differ by tier.
       loot: elite
         ? [
             { resource: "gremlin_skin", min: 2, max: 2 },
             { resource: "gremlin_blood", min: 2, max: 2 },
-            { resource: "gremlin_trophy", min: 1, max: 1 },
           ]
         : [
             { resource: "gremlin_skin", min: 1, max: 1 },
@@ -94,11 +95,11 @@ export class RangedGremlin extends Enemy {
           ],
       maxHealth: elite ? Math.round(RANGED_MAX_HEALTH * 1.5) : RANGED_MAX_HEALTH,
       biteDamage: elite ? Math.round(RANGED_CLAW_DAMAGE * 1.5) : RANGED_CLAW_DAMAGE, // reuses Enemy's shared "melee hit" field name
+      elite,
     });
     this.spawnX = cfg.x;
     this.spawnY = cfg.y;
     if (elite) {
-      this.elite = true;
       this.speedMult = 1.1;
       this.setScale(1.4);
     }
@@ -322,17 +323,18 @@ export class MeleeGremling extends Enemy {
       y: cfg.y,
       texture: elite ? "gremling_elite" : "gremling_weak",
       displayName: elite ? "Elite Gremling" : "Gremling",
-      // Elite Gremlings (melee) do NOT drop a trophy — only the ranged Elite
-      // Gremlin does (user decision). They still drop 2x blood.
+      // Elite Gremlings now drop a trophy too (appended centrally by Enemy) —
+      // the trophy is what feeds the relic economy, so every elite yields one.
+      // Their own loot is 2x blood at elite tier.
       loot: elite
         ? [{ resource: "gremlin_blood", min: 2, max: 2 }]
         : [{ resource: "gremlin_blood", min: 1, max: 1 }],
       maxHealth: elite ? Math.round(MELEE_MAX_HEALTH * 1.5) : MELEE_MAX_HEALTH,
       biteDamage: elite ? Math.round(MELEE_CLAW_DAMAGE * 1.5) : MELEE_CLAW_DAMAGE,
+      elite,
     });
     this.wanderAnchor = cfg.wanderAnchor ?? null;
     if (elite) {
-      this.elite = true;
       this.speedMult = 1.1;
       this.setScale(1.4);
     }

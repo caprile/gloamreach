@@ -2,7 +2,76 @@
 
 Last updated: 2026-07-10
 
-### Just finished: M-FA cut (design discussion, no code change)
+### Just finished: M-RL relic economy rework (probabilistic roll + power tiers) + all-elites-drop-trophy
+
+Reworked the M-RL relic economy the user shipped earlier the same day, per a new
+locked spec, and did the trophy-drop prerequisite first. Detailed plan:
+`.claude/plans/radiant-binding-relic.md` (rewritten). Built on Opus (core-system
+rework).
+
+**Part 1 — every elite drops a trophy (prerequisite, standalone).** Reverses the
+M-EL2-era "Elite Gremlings drop no trophy" special case. Centralized in base
+`Enemy`: `EnemyConfig` gained `elite?: boolean`, and the constructor now does
+`this.elite = cfg.elite ?? false` + appends a shared `ELITE_TROPHY_DROP`
+(`gremlin_trophy` ×1) to `loot` when elite. `Boar`/`Snake`/`RangedGremlin`/
+`MeleeGremling` pass `elite` through to `super({...})` and dropped their own
+`this.elite = true` lines; the ranged Gremlin's inline trophy entry was deleted
+(no double-drop) and the melee Gremling's stale "do NOT drop a trophy" comment
+fixed. Boss unchanged (drops `gremlin_king_fang`, not an elite → no
+`gremlin_trophy`). Verified via `preview_eval`: elite Boar/Snake/Gremlin/Gremling
+each `rollLoot()` → exactly 1 trophy; ranged elite still 1 (not 2); all normals 0;
+King → 1 fang, 0 trophies.
+
+**Part 2 — probabilistic economy (replaces the combine ladder).** Two axes:
+- **Rarity** (Common/Uncommon/Rare/Mythic) = effect pool + roll odds,
+  **source-determined by the trophy, NOT climbable — no manual combine.**
+- **Power tier** (biome depth) = a magnitude multiplier on a relic's numbers
+  (`POWER_TIER_MULT`, geometric ×1.0/1.5/2.25/3.375). **Flat ×1.0 this milestone**;
+  scaffolding that activates in M-W1.
+- **Probabilistic roll:** 1 trophy per attempt; **success chance by rarity — Common
+  5% / Uncommon 10% / Rare 100%**; a **failed roll still consumes the trophy**. A
+  **per-rarity pity counter** (`PITY_THRESHOLD`, Common 15) guarantees a success
+  after N consecutive misses. Trophy map (`TROPHY_ROLL`): `gremlin_trophy →
+  Common/tier1`, `gremlin_king_fang → Rare/tier1` (dormant, boss=win).
+- **Duplicate auto-stacking replaces combine:** rolling a relic id (at a power
+  tier) you own merges into that entry with ×N + aggregated stats — effects were
+  always additive (each instance contributes `base × its power-tier mult`).
+
+- **`src/systems/Relics.ts`** rewritten — `RelicInstance {id, powerTier}`,
+  `POWER_TIER_MULT`/`powerTierMult`, `RARITY_SUCCESS_CHANCE`, `PITY_THRESHOLD`,
+  `TROPHY_ROLL` (`{rarity, powerTier, successChance}`); `RelicManager` holds
+  instances + a per-rarity miss counter, `roll(trophyKey, rng)` → a `RollResult`
+  (`{success, rarity, id?, powerTier?, pity?}`), `missStreak()`,
+  `groupedForDisplay()` (groups by id@powerTier), and the same aggregate getters
+  (now summed over instances × power-tier mult). No `add()`/`combine()`/`nextRarity`.
+  The 19-relic `RELIC_DEFS` pool is unchanged (only Common is reachable now).
+- **`src/ui/RelicForgeMenu.ts`** rewritten — a **roll button per trophy** showing
+  `"5% · pity in N"` (or "guaranteed" for Rare), an inline **result line** (forged
+  relic name, or "The trophy crumbled to dust — no relic this time"), and a
+  read-only owned-relics grid with a **T#** power-tier badge + scaled-number
+  tooltips. **Combine bar removed.** `deps.roll` now returns the `RollResult` so the
+  menu shows feedback. **`RelicBarUI.ts`** gained a small **T#** power-tier badge +
+  power-tier in its grouping signature/tooltip.
+- **MainScene** — `rollRelic(trophyKey)` now consumes the trophy **unconditionally**
+  (before the roll), announces success or the "crumbled" failure, and returns the
+  `RollResult`; `combineRelics` deleted; import `TROPHY_ROLL_RARITY→TROPHY_ROLL`;
+  `.grouped()→.groupedForDisplay()`. All the effect hook points (damage/damage-taken/
+  stamina/move/maxHP/maxStamina/killHeal/xp) are unchanged from the first ship.
+
+**Verified** — `tsc --noEmit` clean; live `preview_eval`: forced fail (rng 0.99 >
+5%) → no relic, miss streak 1, trophy consumed; forced success (rng 0) → Warrior's
+Charm T1 added, streak reset; Rare (fang) always succeeds; **pity fires exactly at
+attempt 15** (flagged `pity:true`); duplicate rolls → `groupedForDisplay()` "Warrior's
+Charm T1 x2", `damageMult` 1.16; scene `rollRelic` consumes a trophy on **both** fail
+(5→4, 0 relics) and success (4→3, +1 relic), returns null with no trophy;
+`preview_screenshot` of the reworked forge menu (roll button with "5% · pity in 15",
+"Forged:" result line, no Combine, T1 badges, ×2 stack) + bottom-left relic bar. No
+console errors. (UI-render evals hit a canvas-context-pool exhaustion on the
+long-HMR'd tab — an environment artifact that also hit untouched HotbarUI; a page
+reload cleared it and the screenshot confirms the layout.) Next per the locked build
+order: **M-WC (Gremlin War Camp) + M-TE (trophy-gated gear)**, then **M-W1** last.
+
+### Previously: M-FA cut (design discussion, no code change)
 
 The locked build order's next milestone was M-FA (Fresh Assault: a per-biome decaying
 kill-bonus timer starting on entering a new biome). Reviewed with the user before starting
@@ -454,7 +523,9 @@ Opus per the model-switch convention (a new mechanic, not just UI/tuning).
   `MeleeGremling` constructors (`src/entities/Gremlin.ts`). No AI/state-machine change:
   the flag only swaps texture/displayName, multiplies `maxHealth`/`biteDamage` by 1.5
   (rounded), doubles each base loot entry, appends `{ gremlin_trophy: 1 }` **on the ranged
-  Elite Gremlin only** (the melee Elite Gremling drops no trophy — user decision), and sets a new
+  Elite Gremlin only** (the melee Elite Gremling drops no trophy — user decision; **superseded
+  by the M-RL economy rework: ALL elites now drop a trophy, centralized in `Enemy` — see the
+  top entry**), and sets a new
   `protected speedMult` (`Enemy.ts`, default 1 → 1.1 for elites) that the two AIs multiply
   into their chase/pursue/kite speeds. Bigger `setScale(1.4)` is the tint-proof visual
   tell (hit-feedback `setTint` recolors the base texture during combat, same as every

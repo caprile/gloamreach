@@ -24,6 +24,7 @@ requires standing near a placed Workbench (`MainScene.isNearWorkbench`).
 | Workbench | Crafting | 0 | No | 10 Wood | — | Item (placeable) |
 | Bedroll | Crafting | 0 | No | 3 Wood, 5 Cattail | — | Item (placeable — near a lit Campfire + no enemies nearby grants +1 HP/s "Resting") |
 | Drying Rack | Crafting | 1 | Yes | 5 Wood, 4 Leather Scraps, 2 Bones | — | Item (placeable, station) |
+| Relic Forge | Crafting | 1 | Yes | 10 Stone, 5 Bones, 1 Gremlin Trophy | — | Item (placeable, station — roll/combine relics) |
 | Gremlin Cap | Armor | 1 | Yes | 1 Gremlin Leather, 5 Blackberries | Light Armor 0 | Item (armor, helmet) |
 | Gremlin Shirt | Armor | 1 | Yes | 3 Gremlin Leather, 1 Leather Scraps, 5 Bones | Light Armor 0 | Item (armor, chest) |
 | Gremlin Pants | Armor | 1 | Yes | 2 Gremlin Leather, 2 Leather Scraps, 1 Blackberry | Light Armor 0 | Item (armor, legs) |
@@ -91,3 +92,31 @@ strip above the HP bar).
 |---|---|---|---|---|
 | Cooked Boar Meat | 0 (any) | 1 Shishkabob, 1 Boar Meat | Cooked Boar Meat | +2 HP/s for 20s |
 | Bramble-Glazed Boar Skewer | 1 (Lvl 2) | 1 Shishkabob, 1 Boar Meat, 2 Blackberries | Bramble-Glazed Boar Skewer | +3 HP/s for 30s |
+
+## Relics (`src/systems/Relics.ts`) — M-RL
+
+**Probabilistic** roll at a placed **Relic Forge** (recipe above). 1 trophy per
+attempt → a random relic from that trophy's rarity pool, **but only on success**;
+a **failed attempt still consumes the trophy**. Success chance is set by rarity;
+a **per-rarity pity counter** guarantees a success after N consecutive misses.
+Rarity is **source-determined by the trophy — not climbable, no manual combine.**
+A separate **power tier** (biome depth) multiplies a relic's numbers
+(`POWER_TIER_MULT` ×1.0/1.5/2.25/… — flat ×1.0 this milestone). Rolling a relic
+you already own (same id + power tier) **auto-stacks** (×N, aggregated effects).
+Relics are run-length passives (reset on New Run), shown in the bottom-left HUD
+relic bar.
+
+| Trophy | Rarity | Power Tier | Success Chance | Pity (miss cap) |
+|---|---|---|---|---|
+| Gremlin Trophy | Common | 1 | 5% | 15 |
+| Gremlin King Fang | Rare | 1 | 100% | — (dormant: boss = win) |
+
+Uncommon (10%, pity 8) and Mythic pools + power tiers ≥2 are scaffolding — no
+trophy source feeds them until M-W1.
+
+| Rarity | Relics (base effect, ×power-tier mult) |
+|---|---|
+| Common | Warrior's Charm (+8% dmg) · Swift Charm (+8% move) · Stoneskin Charm (−8% dmg taken) · Tireless Charm (−12% stamina cost) · Bloodroot Charm (+2 HP/kill) · Stout Charm (+15 max HP) |
+| Uncommon | Warrior's Idol (+16% dmg) · Swift Idol (+16% move) · Ironhide Idol (−14% dmg taken) · Vigor Idol (+25 HP, +20 stam) · Sanguine Idol (+4 HP/kill) · Scholar's Idol (+25% skill XP) |
+| Rare | War Totem (+26% dmg, −12% stamina) · Phantom Totem (+22% move, −12% dmg taken) · Titan Totem (+50 HP, +35 stam) · Reaper Totem (+8 HP/kill, +14% dmg) |
+| Mythic | Gremlin King's Wrath (+40% dmg, +18% move) · Undying Heart (+15 HP/kill, −22% dmg taken) · Avatar's Mantle (+30% dmg, +25% move, −20% stamina) |

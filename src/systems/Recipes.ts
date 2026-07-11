@@ -173,6 +173,19 @@ export const RECIPES: Recipe[] = [
     output: { kind: "item", itemId: "gremlin_pants", itemName: "Gremlin Pants" },
   },
   {
+    id: "relic_forge",
+    name: "Relic Forge",
+    description:
+      "A stone plinth that binds monster trophies into relics. Feed it trophies to roll a random relic, or combine relics into rarer ones.",
+    category: "crafting",
+    // Tier 1 (Workbench-gated) like the Drying Rack. Requiring a trophy to
+    // build gates it behind the same elite kills that fuel it, and keys its
+    // discovery to the moment the relic loop becomes relevant.
+    tier: 1,
+    costs: { stone: 10, bones: 5, gremlin_trophy: 1 },
+    output: { kind: "item", itemId: "relic_forge", itemName: "Relic Forge" },
+  },
+  {
     id: "gremlin_totem",
     name: "Gremlin Totem",
     description: "A grim totem bound with gremlin remains and dark bindings. Its purpose becomes clear at the Boss Altar's fire.",

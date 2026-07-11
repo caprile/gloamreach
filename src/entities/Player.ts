@@ -68,7 +68,16 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   // actually takes effect this frame. `sprintMultiplier` is computed by the
   // scene from the Running skill level (Skills.ts) — Player has no skill
   // knowledge of its own, it just applies whatever multiplier it's handed.
-  update(delta: number, canSprint: boolean, canDash: boolean, sprintMultiplier: number): PlayerFrameResult {
+  // `moveMult` is an external walk/sprint speed multiplier (relic bonuses,
+  // M-RL) — 1 when nothing modifies it. Applied to normal movement only, not
+  // the fixed dash burst.
+  update(
+    delta: number,
+    canSprint: boolean,
+    canDash: boolean,
+    sprintMultiplier: number,
+    moveMult = 1,
+  ): PlayerFrameResult {
     const now = this.scene.time.now;
     const body = this.body as Phaser.Physics.Arcade.Body;
 
@@ -119,7 +128,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       body.setVelocity(0, 0);
     } else {
       const len = Math.hypot(vx, vy);
-      const speed = sprinting ? PLAYER_WALK_SPEED * sprintMultiplier : PLAYER_WALK_SPEED;
+      const speed = (sprinting ? PLAYER_WALK_SPEED * sprintMultiplier : PLAYER_WALK_SPEED) * moveMult;
       body.setVelocity((vx / len) * speed, (vy / len) * speed);
     }
     return { moving, sprinting, dashStarted: false, facing: this.facing };

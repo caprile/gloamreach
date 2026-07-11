@@ -36,6 +36,12 @@ export interface LootEntry {
   max: number;
 }
 
+// Every elite drops exactly one trophy (M-RL prerequisite — reverses the
+// M-EL2-era "Elite Gremlings drop no trophy" special case). Centralized here so
+// the rule holds for every elite type, present and future, without each
+// subclass restating it in its own loot literal.
+const ELITE_TROPHY_DROP: LootEntry = { resource: "gremlin_trophy", min: 1, max: 1 };
+
 export interface EnemyConfig {
   x: number;
   y: number;
@@ -44,6 +50,10 @@ export interface EnemyConfig {
   loot: LootEntry[];
   maxHealth: number;
   biteDamage: number;
+  // Elite variant (default false). When true, +the shared trophy drop is
+  // appended to `loot` (see the constructor) and Run.ts scores the kill as
+  // "elite". Subclasses pass this through from their own cfg.
+  elite?: boolean;
 }
 
 // A simple melee enemy (currently only "Boar"). Ranged attacks, ambush AI,
@@ -56,8 +66,9 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   readonly maxHealth: number;
   health: number;
   depleted = false;
-  // Elite variant flag (default false). Set by elite Gremlin/Gremling
-  // constructors; read for run-score kill classification (see Run.ts).
+  // Elite variant flag (default false). Set from EnemyConfig.elite in the
+  // constructor; read for run-score kill classification (see Run.ts) and to
+  // append the shared trophy drop.
   elite = false;
   state: EnemyState = "idle";
   private lastBiteAt = -Infinity;
@@ -94,7 +105,9 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   constructor(scene: Phaser.Scene, cfg: EnemyConfig) {
     super(scene, cfg.x, cfg.y, cfg.texture);
     this.displayName = cfg.displayName;
-    this.loot = cfg.loot;
+    this.elite = cfg.elite ?? false;
+    // Elites always drop a trophy on top of their own loot table.
+    this.loot = this.elite ? [...cfg.loot, ELITE_TROPHY_DROP] : cfg.loot;
     this.maxHealth = cfg.maxHealth;
     this.health = cfg.maxHealth;
     this.biteDamageValue = cfg.biteDamage;

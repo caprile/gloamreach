@@ -1,9 +1,9 @@
 # Master Plan: Roguelike Run / Score Meta-Loop + Supporting Systems
 
 Status: **design locked at the spine level, sub-decisions open per milestone.** Drafted
-2026-07-10 with the user. **M-FX/M-R1/M-DN/Comfort(M-SB)/M-EL2 all shipped 2026-07-10;
-M-FA cut the same day (see its section below); M-RL is next**, planned for its own
-session (per the project's "one milestone per chat session" convention — see
+2026-07-10 with the user. **M-FX/M-R1/M-DN/Comfort(M-SB)/M-EL2/M-RL all shipped 2026-07-10;
+M-FA cut the same day (see its section below); M-WC + M-TE are next**, each planned for
+its own session (per the project's "one milestone per chat session" convention — see
 `STATUS.md` for ship details on each). This is the umbrella plan for a batch of requested
 systems; each milestone below should get its own detailed plan file when it's picked up
 (per the "plans committed in-repo" convention), but this doc is the shared vision +
@@ -57,7 +57,11 @@ Everything requested this session is a spoke on that hub:
 ## Open sub-decisions (resolve when the relevant milestone starts)
 
 - Exact **score formula weights** (M-R1) — first-pass proposal below, expect tuning.
-- **Relic effect pool + rarity tiers + how many you can hold** (M-RL) — proposal below.
+- ~~**Relic effect pool + rarity tiers + how many you can hold** (M-RL)~~ — **resolved,
+  M-RL shipped 2026-07-10** (reworked same day): 19 relics across 4 rarities, unlimited
+  holding, duplicates auto-stack. **No manual combine** — rarity is source-determined by
+  the trophy; a probabilistic roll (Common 5%/Uncommon 10%/Rare 100% + per-rarity pity)
+  gates progress, and a separate power-tier axis (flat ×1.0 now) scales magnitudes for M-W1.
 - **Day length / night length** and how aggressive the night tint is (M-DN).
 - **Sleep's non-time effect** — a "Rested" buff? just skip-to-dawn? (M-SB).
 - Whether **new-run reseed** is a menu/keypress/death-screen button (M-R1).
@@ -220,18 +224,35 @@ ships, while this one is fully self-contained. Full detail in `STATUS.md`'s M-EL
 - Kill-scoring needed zero changes — the existing classifier already reads `enemy.elite`
   generically, so Boar/Snake elite kills automatically score as `"elite"`.
 
-### M-RL — Relics (trophies → RNG run-length passives) (L, Opus) — the ARPG spine
+### M-RL — Relics (probabilistic trophy → relic economy) (L, Opus) — **SHIPPED** 2026-07-10
 
-- **Relic forge** action: consume trophies → roll **one random relic** from a pool
-  **weighted by the trophy's tier** (Gremlin Trophy = common pool; Gremlin King Fang =
-  rare pool). Player does **not** pick the relic.
-- Relics are **permanent, run-length, StS-style passives** (examples to design: kill-heal,
-  +move speed, start-each-biome-with-X, +Fresh-Assault-window, cheaper stamina, etc.).
-- **Held in a relic bar** (proposal: unlimited, StS-style; hover for effect). **Reset on
-  new seed** (they belong to the run, not the character).
-- Data model: a `Relic` def table + a `RelicManager` (framework-free, like Buffs/Skills)
-  that applies passive effects; a relic bar UI (mirror `BuffBarUI` pattern). Rarity tiers
-  + effect pool are the main open sub-decision.
+The ARPG/Slay-the-Spire spine. Detailed plan: `.claude/plans/radiant-binding-relic.md`;
+full verification in `STATUS.md`'s M-RL entry. **Note:** first shipped 2026-07-10 with a
+manual 2→1 combine ladder, then reworked the same day to the probabilistic economy below
+(the combine mechanic was removed) — locked with the user.
+
+- **Prerequisite (Part 1):** every elite drops exactly 1 trophy, centralized in base
+  `Enemy` (`ELITE_TROPHY_DROP` appended when `cfg.elite`) — reverses M-EL2's "melee elites
+  drop no trophy" rule.
+- **Placeable Relic Forge** station (tier 1, Workbench-gated: `10 Stone / 5 Bones / 1
+  Gremlin Trophy`) — chosen over a Boss-Altar action / always-open panel.
+- **Two axes:** *rarity* (Common/Uncommon/Rare/Mythic) = effect pool + odds,
+  **source-determined by the trophy, NOT climbable — no manual combine**; *power tier*
+  (biome depth) = a magnitude multiplier on the relic's numbers (`POWER_TIER_MULT`,
+  geometric — flat ×1.0 this milestone, scaffolding for M-W1).
+- **Probabilistic roll:** 1 trophy per attempt, **success chance by rarity (Common 5% /
+  Uncommon 10% / Rare 100%)**; a **failed roll still consumes the trophy**; a **per-rarity
+  pity counter** guarantees success after N misses. `gremlin_trophy → Common/tier1` (live),
+  `gremlin_king_fang → Rare/tier1` (dormant — boss = win).
+- **Duplicate auto-stacking replaces combine:** rolling an id (at a power tier) you own
+  merges into that entry (×N, aggregated effects — always additive).
+- **19 relics** (`RELIC_DEFS`) across a `RelicEffect` channel model. `RelicManager`
+  (framework-free) holds `RelicInstance {id, powerTier}` + a per-rarity miss counter,
+  `roll()` → a `RollResult`, and **aggregate effect getters** MainScene reads at existing
+  hook points; **reset on new seed** via a fresh `new RelicManager()` in `create()`.
+- **UI:** `RelicForgeMenu` (roll button per trophy with a chance/pity readout + result
+  line + read-only owned grid with T# power-tier badges — no combine bar) and `RelicBarUI`
+  (bottom-left grouped-gem HUD strip with a T# badge, mirrors `BuffBarUI`).
 
 ### M-TE — Trophy-crafted special equipment (M, Opus/Sonnet)
 
@@ -261,8 +282,9 @@ incremental ethos), then expand the world under it:
 5. ~~M-FA (speed payoff)~~ — **cut** 2026-07-10, see the M-FA section above (redundant
    with M-R1's already-shipped end-of-run speed multiplier; revisit only if M-W1 later
    shows a real gap).
-6. **M-RL** (relics — the replayability hook) — **next up**.
-7. **M-WC** + **M-TE** (content depth).
+6. **M-RL** (relics — the replayability hook) — **shipped** 2026-07-10 (detailed plan:
+   `.claude/plans/radiant-binding-relic.md`; see `STATUS.md`).
+7. **M-WC** + **M-TE** (content depth) — **next up**.
 8. **M-W1** (circular multi-biome world) — expand the world beneath a proven loop.
 
 ## Convention reminders for whoever picks these up

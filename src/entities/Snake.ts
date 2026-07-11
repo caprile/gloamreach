@@ -53,10 +53,10 @@ export class Snake extends Enemy {
       loot: elite ? [{ resource: "leather", min: 2, max: 2 }] : [{ resource: "leather", min: 1, max: 1 }],
       maxHealth: elite ? Math.round(MAX_HEALTH * 1.5) : MAX_HEALTH,
       biteDamage: elite ? Math.round(BITE_DAMAGE * 1.5) : BITE_DAMAGE,
+      elite,
     });
     this.setAlpha(HIDDEN_ALPHA);
     if (elite) {
-      this.elite = true;
       this.speedMult = 1.1;
       this.setScale(1.3);
     }

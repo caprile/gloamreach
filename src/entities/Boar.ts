@@ -31,9 +31,9 @@ export class Boar extends Enemy {
           ],
       maxHealth: elite ? Math.round(MAX_HEALTH * 1.5) : MAX_HEALTH,
       biteDamage: elite ? Math.round(BITE_DAMAGE * 1.5) : BITE_DAMAGE,
+      elite,
     });
     if (elite) {
-      this.elite = true;
       this.speedMult = 1.1;
       this.setScale(1.3);
     }
