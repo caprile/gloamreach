@@ -32,7 +32,7 @@ requires standing near a placed Workbench (`MainScene.isNearWorkbench`).
 | Workbench | Crafting | 0 | No | 10 Wood | — | Item (placeable) |
 | Bedroll | Crafting | 0 | No | 3 Wood, 5 Cattail | — | Item (placeable — near a lit Campfire + no enemies nearby grants +1 HP/s "Resting") |
 | Drying Rack | Crafting | 1 | Yes | 5 Wood, 4 Leather Scraps, 2 Bones | — | Item (placeable, station) |
-| Relic Forge | Crafting | 1 | Yes | 10 Stone, 5 Bones, 1 Gremlin Trophy | — | Item (placeable, station — roll/combine relics) |
+| Relic Forge | Crafting | 1 | Yes | 10 Stone, 5 Bones, 1 Gremlin Trophy | — | Item (placeable, station — roll relics) |
 | Gremlin Cap | Armor | 1 | Yes | 1 Gremlin Leather, 5 Blackberries | Light Armor 0 | Item (armor, helmet) |
 | Gremlin Shirt | Armor | 1 | Yes | 3 Gremlin Leather, 1 Leather Scraps, 5 Bones | Light Armor 0 | Item (armor, chest) |
 | Gremlin Pants | Armor | 1 | Yes | 2 Gremlin Leather, 2 Leather Scraps, 1 Blackberry | Light Armor 0 | Item (armor, legs) |
@@ -76,7 +76,7 @@ the weapon (backpack or hotbar).
 | Weapon | Base Dmg / Cooldown / Stamina | Damage Type | Lvl 2 (tier 1) | Lvl 3 (tier 2) |
 |---|---|---|---|---|
 | Stone Club | 5 / 550ms / 14 | Blunt | +2 Dmg — 3 Wood, 3 Stone | +2 Dmg — 5 Wood, 5 Stone, 3 Bones |
-| Bone Knife | 4 / 350ms / 8 | Slash | +1 Dmg — 5 Bones | +2 Dmg — 8 Bones, 2 Gremlin Guck |
+| Bone Knife | 4 / 350ms / 8 | Slash | +1 Dmg — 3 Bones | +2 Dmg — 8 Bones, 2 Gremlin Guck |
 | Primal Spear | 8 / 650ms / 16 | Pierce | +2 Dmg — 3 Wood, 2 Stone, 3 Bones | +3 Dmg — 5 Wood, 4 Stone, 3 Gremlin Guck |
 
 Max damage at Lvl 3: Stone Club 9, Bone Knife 7, Primal Spear 12 (before the
@@ -106,34 +106,47 @@ strip above the HP bar).
 |---|---|---|---|---|
 | Cooked Boar Meat | 0 (any) | 1 Shishkabob, 1 Boar Meat | Cooked Boar Meat | +2 HP/s for 20s |
 | Bramble-Glazed Boar Skewer | 1 (Lvl 2) | 1 Shishkabob, 1 Boar Meat, 2 Blackberries | Bramble-Glazed Boar Skewer | +3 HP/s for 30s |
+| Cooked Snake Meat | 0 (any) | 1 Shishkabob, 1 Snake Meat | Cooked Snake Meat | +2 HP/s for 22s |
+| Blood-Glazed Snake Skewer | 1 (Lvl 2) | 1 Shishkabob, 1 Snake Meat, 1 Gremlin Blood | Blood-Glazed Snake Skewer | +3 HP/s for 35s |
 
 ## Relics (`src/systems/Relics.ts`) — M-RL
 
 **Probabilistic** roll at a placed **Relic Forge** (recipe above). 1 trophy per
-attempt → a random relic from that trophy's rarity pool, **but only on success**;
-a **failed attempt still consumes the trophy**. Success chance is set by rarity;
-a **per-rarity pity counter** guarantees a success after N consecutive misses.
-Rarity is **source-determined by the trophy — not climbable, no manual combine.**
-A separate **power tier** (biome depth) multiplies a relic's numbers
-(`POWER_TIER_MULT` ×1.0/1.5/2.25/… — flat ×1.0 this milestone). Rolling a relic
+attempt → a random relic; a **failed attempt still consumes the trophy**. A
+trophy's own **rarity drives an outcome table** over the RESULT rarity (a Common
+trophy can roll up to Uncommon/Rare — never Mythic — and can also fail; higher
+trophies guarantee at least their own rarity with a chance to roll up). Rarity is
+**source-determined by the trophy — not climbable, no manual combine.** The run's
+**first roll is a guaranteed success** (the hook); beyond that a per-rarity pity
+counter guarantees a base-rarity success after N misses. A separate **power tier**
+(biome depth) multiplies a relic's numbers (`POWER_TIER_MULT` ×1.0/1.5/2.25/… —
+flat ×1.0 this milestone) and **always equals the trophy's tier**. Rolling a relic
 you already own (same id + power tier) **auto-stacks** (×N, aggregated effects).
 Relics are run-length passives (reset on New Run), shown in the bottom-left HUD
 relic bar.
 
 Each elite drops a **unique trophy by species** (Boar → Boar Trophy, Snake →
-Snake Trophy, Gremlin/Gremling → Gremlin Trophy). All three roll the **same
-Common pool + shared pity counter**, so more elite variety just means more
-Common rolls.
+Snake Trophy, Gremlin/Gremling → Gremlin Trophy). All three are **Common / Tier 1**
+and share the Common outcome table + pity counter, so more elite variety just
+means more attempts.
 
-| Trophy | Source | Rarity | Power Tier | Success Chance | Pity (miss cap) |
-|---|---|---|---|---|---|
-| Gremlin Trophy | Elite Gremlin/Gremling | Common | 1 | 5% | 15 |
-| Boar Trophy | Elite Boar | Common | 1 | 5% | 15 (shared w/ Common) |
-| Snake Trophy | Elite Snake | Common | 1 | 5% | 15 (shared w/ Common) |
-| Gremlin King Fang | Gremlin King | Rare | 1 | 100% | — (dormant: boss = win) |
+**Outcome odds by trophy rarity** (locked 2026-07-11):
 
-Uncommon (10%, pity 8) and Mythic pools + power tiers ≥2 are scaffolding — no
-trophy source feeds them until M-W1.
+| Trophy rarity | → Common | → Uncommon | → Rare | → Mythic | Fail | Pity (miss cap) |
+|---|---|---|---|---|---|---|
+| Common | 10% | 2.5% | 1% | — | 86.5% | 12 |
+| Uncommon | — | rest (94%) | 5% | 1% | 0% | 8 |
+| Rare | — | — | rest (90%) | 10% | 0% | — |
+
+| Trophy | Source | Rarity | Power Tier |
+|---|---|---|---|
+| Gremlin Trophy | Elite Gremlin/Gremling | Common | 1 |
+| Boar Trophy | Elite Boar | Common | 1 |
+| Snake Trophy | Elite Snake | Common | 1 |
+| Gremlin King Fang | Gremlin King | Rare | 1 (dormant: boss = win) |
+
+Uncommon/Rare-trophy sources + power tiers ≥2 are scaffolding — no trophy source
+feeds them until M-W1 (a Common trophy CAN roll up into Uncommon/Rare relics now).
 
 | Rarity | Relics (base effect, ×power-tier mult) |
 |---|---|

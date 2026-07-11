@@ -26,7 +26,7 @@ const HINT_TEXT: Record<HintId, string> = {
   pickup_reach: "Left-click things within reach to interact.",
   tool_locked: "You'll need the right tool equipped for that.",
   open_menu: "Press Tab to open your pack and craft what you've learned.",
-  stamina_empty: "Out of stamina — ease off sprinting to catch your breath.",
+  stamina_empty: "Out of stamina. Sprinting, dashing, and attacking all drain it — let it recover.",
   low_hp: "Low health. Cooked food heals you over time — right-click to eat.",
   nightfall: "Night falls. Enemies grow bolder in the dark — a torch lights the way.",
   elite_trophy: "That was an elite — it dropped a trophy. A Relic Forge can turn trophies into power.",

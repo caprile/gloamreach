@@ -706,7 +706,11 @@ mouse-driven only. Don't reintroduce a keybind for this without being asked. Spa
    geometric — flat ×1.0 this milestone, scaffolding for M-W1). **Roll:** 1 trophy per
    attempt, **success chance by rarity (Common 5% / Uncommon 10% / Rare 100%)**, a **failed
    roll still consumes the trophy**, and a **per-rarity pity counter** (`PITY_THRESHOLD`,
-   Common 15) guarantees a success after N misses (kills the 5% feel-bad tail).
+   Common 15) guarantees a success after N misses (kills the 5% feel-bad tail). *(Roll model
+   REWORKED 2026-07-11 — see 5t below: the trophy's rarity now drives an OUTCOME TABLE over
+   the result rarity (Common trophy can roll UP to Uncommon/Rare, ~13.5% total success);
+   power tier = trophy tier; first roll of a run is guaranteed. These success-%-by-rarity
+   numbers are superseded.)*
    **Duplicate auto-stacking IS the "combining":** rolling an id (at a power tier) you own
    merges into that entry with ×N + aggregated stats (effects were always additive — each
    instance contributes `base × its power-tier mult`). `TROPHY_ROLL`:
@@ -926,6 +930,36 @@ mouse-driven only. Don't reintroduce a keybind for this without being asked. Spa
    combat-feel pass. No `RECIPES.md` change. See `STATUS.md` for full verification. **Remaining
    playtest-polish backlog** (from the same triage): light "both" rebalance, boss dmg bump +
    GremlinKing cleave replacement, 5 bug fixes, 2 small features — then master-plan tail M-TE, M-W1.
+5t. **40-min-playtest fix batch (12 items) + relic rarity/tier rework** — off the master-plan
+   build order, built on Opus (the relic change is a new data model). No new milestone letter.
+   the user's session ("almost died a lot, feels harder — good"). **Relic rework (`Relics.ts`,
+   supersedes 5m/5n's success-%-by-rarity model):** a trophy's rarity now drives an
+   **outcome table** (`TROPHY_OUTCOME_ODDS` + `rollOutcomeRarity()`) over the RESULT rarity —
+   **Common** trophy → 1% Rare / 2.5% Uncommon / 10% Common (else fail, never Mythic); **Uncommon**
+   → 1% Mythic / 5% Rare / rest Uncommon; **Rare** → 10% Mythic / rest Rare (odds locked by
+   the user). A Common trophy can **roll UP** into an Uncommon/Rare relic (`RollResult.rarity` =
+   produced rarity, drives the `RelicRevealFx` reveal = the gamba payoff). A relic's **power tier
+   always == the trophy's tier**. **First roll of a run is a guaranteed success** (the "hook",
+   `firstRollDone`/`isFirstRollPending()`). `TrophyRoll` dropped `successChance`;
+   `RARITY_SUCCESS_CHANCE` removed; added `trophyOverallSuccessChance()`. All first-biome trophies
+   stay Common/Tier 1. Verified live (20k rolls match spec + pity). Forge readout + dashboard
+   Relics tab + `RECIPES.md` updated. See [[survivor-rpg-relics]]. **The other 11 (playtest
+   notes):** dashboard Armor **Lvl 3** column (was Base+Lvl2 only, full-set 7/10/13); **Boar/Snake
+   face their charge/coil wind-up** (new `Enemy.faceAngle()` — `applyFacing()` no-ops on the unit
+   vectors those tells passed); **committed attacks aren't interruptible by hits**
+   (`Enemy.playHitFeedback()` skips the position-shake only while an attack is *moving*, so a
+   charging Boar plays out); **GremlinKing regens 12 HP/s + poise while fully deaggro'd** (kiting
+   to rest isn't a free chip-damage bank); **smash `SMASH_RADIUS` 120→95** (a walking player only
+   travels ~102px in the telegraph+leap, so 120 was undodgeable by movement — i-frames confirmed
+   working via `applyDamageToPlayer`'s `invulnerableUntil` guard); **Snake Meat** resource (Snake
+   drops it) + **Cooked Snake Meat** / **Blood-Glazed Snake Skewer** cook dishes; **bones economy**
+   (Boar bones 1→1-2, elite 2→2-3; Bone Knife Lvl 2 cost 5→3 — chose drop-bump+cost-ease over a
+   boar-respawn system, noted as a future option); **stamina hint** reworded (no longer blames
+   sprinting); **workbench placement bug** (crafting a placeable left the crafting menu open → a
+   following recipe click fell through and placed ANOTHER workbench; `startPlacement()` now closes
+   it + a guard skips placement clicks over the crafting panel); **placed-object "Destroy" →
+   "Pick up"** (it returns a recoverable item; backpack-stack "Destroy" — a real delete — kept);
+   Relic Forge description dropped the stale "or combine relics". See `STATUS.md`.
 
 **A new umbrella plan for the long-requested roguelike run/score meta-loop** now exists:
 `.claude/plans/roguelike-metaloop-master-plan.md` (drafted 2026-07-10, locked build order
@@ -1295,3 +1329,24 @@ interaction, verify in the live preview rather than just type-checking:
   the feature. The global `~/.claude/plans/` dir isn't part of this repo and isn't
   guaranteed to be reachable from other sessions/machines — every prior milestone's plan
   file went missing this way until they were recovered and copied in here.
+
+## STATUS.md maintenance (keep it single-pass readable)
+
+STATUS.md must stay small enough to Read in one call (target < 40KB). Structure:
+
+- `## Current State` — a LIVING snapshot, edited in place, never appended to. Holds:
+  build summary (what the game is right now), last shipped (`<id>`, date), in
+  progress / next, and known issues.
+- `## Recent Entries` — append each milestone's ship/verification writeup under a
+  stable `### <id> — <title>` heading (e.g. `### 5w — Snake meat + relic rework`).
+
+Rules for every session that ships something:
+1. After adding the new entry, UPDATE `## Current State` in place to match.
+2. PRUNE: if STATUS.md is now over ~40KB or has more than 10 entries under Recent
+   Entries, move the OLDEST entries (verbatim, `###` headings intact) into
+   `STATUS-archive.md` until back under budget. Add a pointer line at the top of
+   Recent Entries: `> Older entries in STATUS-archive.md.`
+3. STATUS-archive.md is append-only and ONLY ever grep'd — never Read in full.
+
+To answer "what happened with X": grep STATUS.md, then STATUS-archive.md. Never
+reconstruct shipped history from memory.

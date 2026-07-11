@@ -347,6 +347,15 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     this.setRotation(Math.atan2(vy, vx) + Math.PI);
   }
 
+  // Face an explicit direction (radians), bypassing applyFacing's
+  // near-stopped guard — for telegraphs where the enemy is planted but must
+  // point where it's about to strike (Boar charge wind-up, Snake coil). Passing
+  // a unit vector to applyFacing silently no-ops (magnitude < 3), which is why
+  // those tells previously didn't rotate the sprite. Same nose-first PI offset.
+  protected faceAngle(angle: number): void {
+    this.setRotation(angle + Math.PI);
+  }
+
   // Same shape/feel as ResourceNode.takeHit: apply damage + feedback, return
   // true once depleted so the caller awards loot and destroys.
   takeHit(damage: number): boolean {
@@ -363,7 +372,21 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     return this.health <= 0;
   }
 
+  // Don't disrupt a committed attack that's mid-MOVEMENT: a charging Boar /
+  // lunging Snake should PLAY OUT when hit (souls-like — you can't stunlock a
+  // committed attack out of it). The x-shake tween below fights the attack's
+  // own body velocity and snaps position back on complete, which read as
+  // "attacking cancels the charge." When the attacker is planted (wind-up /
+  // recovery punish window) the shake is harmless and still gives hit
+  // feedback, so only skip it while actually moving under attack velocity.
   private playHitFeedback(): void {
+    const body = this.body as Phaser.Physics.Arcade.Body | undefined;
+    const movingAttack =
+      this.isAttacking() && !!body && (Math.abs(body.velocity.x) > 1 || Math.abs(body.velocity.y) > 1);
+    if (movingAttack) {
+      this.applyHpTint();
+      return;
+    }
     this.scene.tweens.killTweensOf(this);
     const baseX = this.x;
     this.scene.tweens.add({

@@ -63,14 +63,17 @@ export class Boar extends Enemy {
       y: cfg.y,
       texture: elite ? "boar_elite" : "boar",
       displayName: elite ? "Elite Boar" : "Boar",
+      // Bones feed a lot of upgrades (bone knife, armor, spear), so a normal
+      // Boar drops 1-2 (was flat 1) to keep the run economy from starving —
+      // see the 2026-07-11 playtest "ran out of bones" note.
       loot: elite
         ? [
             { resource: "boar_meat", min: 2, max: 2 },
-            { resource: "bones", min: 2, max: 2 },
+            { resource: "bones", min: 2, max: 3 },
           ]
         : [
             { resource: "boar_meat", min: 1, max: 1 },
-            { resource: "bones", min: 1, max: 1 },
+            { resource: "bones", min: 1, max: 2 },
           ],
       maxHealth: elite ? Math.round(MAX_HEALTH * 1.5) : MAX_HEALTH,
       biteDamage: elite ? Math.round(BITE_DAMAGE * 1.5) : BITE_DAMAGE,
@@ -201,7 +204,9 @@ export class Boar extends Enemy {
     this.attackStartedAt = now;
     // Lock the charge direction NOW — never re-aimed, so a sidestep dodges it.
     this.chargeAngle = Phaser.Math.Angle.Between(this.x, this.y, playerX, playerY);
-    this.applyFacing(Math.cos(this.chargeAngle), Math.sin(this.chargeAngle));
+    // Point the sprite along the locked charge direction for the whole wind-up
+    // (faceAngle, not applyFacing — the latter no-ops on the unit vector).
+    this.faceAngle(this.chargeAngle);
     this.playWindupTell(CHARGE_WINDUP_MS, 0xff7a3a); // hotter/orange tell for the big attack
     this.chargeTraveled = 0;
     this.chargeHit = false;

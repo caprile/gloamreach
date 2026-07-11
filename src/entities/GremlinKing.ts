@@ -19,6 +19,13 @@ const BOSS_AGGRO_RADIUS = 260;
 const BOSS_ARENA_LEASH_RADIUS = 500; // from spawn point — kiting this far fully deaggros
 const BOSS_MOVE_SPEED = 45; // slow deliberate approach outside of an attack
 
+// Regen while fully deaggro'd (player kited past the leash / never engaged) so
+// running away to heal/rest isn't a free reset of chip damage — the boss claws
+// HP back between engagements. Only ticks when NOT aggroed; a real fight never
+// sees it (poise/HP only refill via stagger/kill). 12 HP/s → ~50s to full from
+// empty, meaningful but not instant.
+const BOSS_DEAGGRO_REGEN_PER_SEC = 12;
+
 export const BOSS_MAX_POISE = 100; // exported for the fixed-HUD BossHealthUI's poise-bar fraction
 const STAGGER_DURATION_MS = 3000;
 export const STAGGER_DAMAGE_MULTIPLIER = 1.5; // exported for MainScene.tryAttackEnemy's bonus-damage check
@@ -38,7 +45,12 @@ const SMASH_IMPACT_MS = 130; // planted beat on landing — the strike window ch
 const SMASH_RECOVER_MS = 750; // punish window after the impact
 const SMASH_MAX_LEAP = 380; // cap leap distance — closes gaps, but no cross-arena teleport
 const MELEE_STOP_RANGE = 90; // boss stops approaching (and may attack) inside this — was CLEAVE_RANGE
-const SMASH_RADIUS = 120; // AoE radius at the landing point
+// AoE radius at the landing point. Tuned DOWN from 120 (2026-07-11): the landing
+// point is locked at the player's spot at telegraph-start, and in the ~1080ms of
+// telegraph+leap a walking player (95px/s) only clears ~102px — LESS than 120,
+// so the smash was undodgeable by movement (dash i-frames aside). 95 makes
+// walking laterally out of the circle a real dodge; sprint/dash gives margin.
+const SMASH_RADIUS = 95;
 const SMASH_DAMAGE = 60; // ~2-shots a full-armor (Lvl3 = 13) 100-HP player: (60-13)*2 = 94
 const SMASH_KNOCKBACK = 220;
 const SMASH_LAND_EPS = 10; // px — treat as "arrived" within this of the locked point
@@ -187,6 +199,12 @@ export class GremlinKing extends Enemy {
     if (this.depleted) return false;
     this.enraged = this.health <= this.maxHealth * ENRAGE_HP_THRESHOLD;
     this.updatePoiseRegen(delta, now);
+    // Heal back between engagements (only while fully deaggro'd) so kiting away
+    // to rest doesn't permanently bank chip damage.
+    if (!this.aggroed && this.health < this.maxHealth) {
+      this.health = Math.min(this.maxHealth, this.health + BOSS_DEAGGRO_REGEN_PER_SEC * (delta / 1000));
+      this.applyHpTint();
+    }
 
     switch (this.bossState) {
       case "staggered":

@@ -601,9 +601,11 @@ export class MainScene extends Phaser.Scene {
       if (this.placementMode) {
         if (this.pointerOverHud(pointer)) return;
         // The inventory can stay open during placement (see
-        // startItemPlacement) — a click on its still-open panel must not
-        // fall through and place an object underneath it.
+        // startItemPlacement) — a click on its still-open panel (or the
+        // crafting panel, as a belt-and-suspenders guard) must not fall
+        // through and place an object underneath it.
         if (this.inventoryMenu.isOpen() && this.inventoryMenu.containsPoint(pointer.x, pointer.y)) return;
+        if (this.craftingMenu.isOpen() && this.craftingMenu.containsPoint(pointer.x, pointer.y)) return;
         if (pointer.leftButtonDown()) this.attemptPlaceObject();
         else if (pointer.rightButtonDown()) this.cancelPlacement();
         return;
@@ -3411,6 +3413,10 @@ export class MainScene extends Phaser.Scene {
   // attemptPlaceObject). Cancelling is always free.
   private startPlacement(recipe: Recipe): void {
     this.suppressNextPointerdown = true;
+    // Close the crafting menu — placement intercepts world clicks, so leaving it
+    // open let a subsequent recipe click fall through and place ANOTHER object
+    // (the "every craft click drops a workbench" bug). Mirrors startItemPlacement.
+    this.craftingMenu.close();
     this.placementMode = { recipe };
     const texture = itemDef(outputKey(recipe))?.texture;
     const pos = this.clampedPlacementPoint();
@@ -3686,7 +3692,10 @@ export class MainScene extends Phaser.Scene {
     // pointerdown, same guard the "Place" button double-fire uses.
     const items: ContextMenuItem[] = [
       { label: "Upgrade", enabled: true, onClick: () => { this.suppressNextPointerdown = true; this.openUpgradeMenu(obj); } },
-      { label: "Destroy", enabled: true, onClick: () => { this.suppressNextPointerdown = true; this.destroyPlacedObject(obj); } },
+      // "Pick up", not "Destroy" — the object returns as a recoverable loose
+      // item (Minecraft-style), it isn't deleted. (Deleting a backpack stack
+      // stays "Destroy" — that one really does delete.)
+      { label: "Pick up", enabled: true, onClick: () => { this.suppressNextPointerdown = true; this.destroyPlacedObject(obj); } },
     ];
     this.contextMenu.show(screenX, screenY, items);
   }
@@ -3959,7 +3968,7 @@ export class MainScene extends Phaser.Scene {
     this.spawnLooseDrop(itemKey, 1, obj.x, obj.y, DROPPED_ITEM_MAGNET_COOLDOWN_MS, tier || undefined);
     this.placedObjects = this.placedObjects.filter((o) => o !== obj);
     obj.destroy();
-    this.eventLog.add("info", `Destroyed ${name}`);
+    this.eventLog.add("info", `Picked up ${name}`);
   }
 
   // --- Inventory ---

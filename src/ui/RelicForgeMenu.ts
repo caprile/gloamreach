@@ -6,6 +6,7 @@ import {
   RELIC_DEFS,
   TROPHY_ROLL,
   PITY_THRESHOLD,
+  trophyOverallSuccessChance,
   RARITY_COLOR,
   rarityName,
   rarityHex,
@@ -228,9 +229,16 @@ export class RelicForgeMenu {
       const t = TROPHY_ROLL[trophyKey];
       const trophyName = itemDef(trophyKey)?.name ?? trophyKey;
       const can = have >= 1;
-      const pct = Math.round(t.successChance * 100);
+      const overall = trophyOverallSuccessChance(t.rarity);
+      const pct = Math.round(overall * 100);
       const pityLeft = Math.max(0, PITY_THRESHOLD[t.rarity] - this.deps.relics.missStreak(t.rarity));
-      const pityStr = t.successChance >= 1 ? "guaranteed" : `${pct}% · pity in ${pityLeft}`;
+      // First roll of a run is a guaranteed success — surface the hook.
+      const pityStr =
+        overall >= 1
+          ? "guaranteed"
+          : this.deps.relics.isFirstRollPending()
+            ? `${pct}% · first roll guaranteed`
+            : `${pct}% · pity in ${pityLeft}`;
 
       const box = this.scene.add
         .rectangle(bx, by, BTN_W, BTN_H, 0x14181f, 0.95)

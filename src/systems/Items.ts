@@ -221,6 +221,14 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     maxStack: 99,
     hotbarable: false,
   },
+  snake_meat: {
+    key: "snake_meat",
+    name: "Snake Meat",
+    description: "Raw meat from a snake. Cook it on a Shishkabob at a campfire.",
+    texture: "icon_snake_meat",
+    maxStack: 99,
+    hotbarable: false,
+  },
   bones: {
     key: "bones",
     name: "Bones",
@@ -282,6 +290,24 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     maxStack: 99,
     hotbarable: true,
     edible: { hpPerSec: 3, durationMs: 30000 },
+  },
+  cooked_snake_meat: {
+    key: "cooked_snake_meat",
+    name: "Cooked Snake Meat",
+    description: "A skewer of fire-roasted snake. Right-click to eat.",
+    texture: "icon_cooked_snake_meat",
+    maxStack: 99,
+    hotbarable: true,
+    edible: { hpPerSec: 2, durationMs: 22000 },
+  },
+  blood_snake_skewer: {
+    key: "blood_snake_skewer",
+    name: "Blood-Glazed Snake Skewer",
+    description: "Roast snake lacquered with dark gremlin blood. Right-click to eat.",
+    texture: "icon_blood_snake_skewer",
+    maxStack: 99,
+    hotbarable: true,
+    edible: { hpPerSec: 3, durationMs: 35000 },
   },
 
   // --- processed goods (Drying Rack outputs) ---
@@ -377,7 +403,7 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     key: "relic_forge",
     name: "Relic Forge",
     description:
-      "A stone plinth that binds monster trophies into relics. Feed it trophies to roll a random relic, or combine relics into rarer ones. Requires a nearby Workbench to build.",
+      "A stone plinth that binds monster trophies into relics. Feed it a trophy to roll a random relic. Requires a nearby Workbench to build.",
     texture: "icon_relic_forge",
     maxStack: 1,
     hotbarable: true,

@@ -31,11 +31,11 @@ import {
   RELIC_POOLS,
   rarityName,
   rarityHex,
-  RARITY_SUCCESS_CHANCE,
   PITY_THRESHOLD,
+  TROPHY_OUTCOME_ODDS,
+  trophyOverallSuccessChance,
   relicEffectText,
   TROPHY_ROLL,
-  type RelicRarity,
 } from "../systems/Relics";
 
 // ---------------------------------------------------------------------------
@@ -114,21 +114,24 @@ const ENEMIES: EnemyStat[] = [
     name: "Boar",
     hp: 20,
     speed: 60,
-    aggro: 105,
-    attacks: [{ label: "Bite", damage: 25 }],
-    loot: "1 Boar Meat, 1 Bones",
+    aggro: 120,
+    attacks: [
+      { label: "Charge (locked line, overshoots)", damage: 25, telegraphMs: 620 },
+      { label: "Gore bite (point-blank)", damage: 25, telegraphMs: 260 },
+    ],
+    loot: "1 Boar Meat, 1-2 Bones",
     trophy: "Boar Trophy (elite)",
-    notes: "Plain chase + bite. No telegraph/dodge window yet.",
+    notes: "Souls-like: telegraphed committed charge (sidestep-dodgeable) + gore bite, long recovery punish window.",
   },
   {
     name: "Snake",
     hp: 11,
     speed: 90,
     aggro: 45,
-    attacks: [{ label: "Ambush bite", damage: 20 }],
-    loot: "1 Leather Scraps",
+    attacks: [{ label: "Coil → lunge (locked dir)", damage: 20, telegraphMs: 340 }],
+    loot: "1 Leather Scraps, 1 Snake Meat",
     trophy: "Snake Trophy (elite)",
-    notes: "Hidden ambusher: strike → flee → re-hide. Tight 45px trigger.",
+    notes: "Hidden ambusher: coil wind-up → locked lunge → flee/re-hide. Tight 45px trigger.",
   },
   {
     name: "Gremling (melee)",
@@ -267,34 +270,55 @@ function renderArmor(): string {
   let html = `<h2>Armor</h2>
     <p class="note">Defense is a <b>flat deduction</b> from incoming physical damage,
     floored at 1 per hit (<code>MainScene.applyDamageToPlayer</code>). Base from
-    <code>Items.ts</code>; Lvl 2 bonus from <code>ArmorUpgrades.ts</code> (all require a
-    Workbench that has itself reached Lvl 2).</p>
+    <code>Items.ts</code>; Lvl 2 / Lvl 3 bonuses from <code>ArmorUpgrades.ts</code> (each
+    upgrade requires a Workbench that has itself reached Lvl 2).</p>
     <table><thead><tr>
-      <th>Piece</th><th>Slot</th><th class="num">Base armor</th><th class="num">Lvl 2 armor</th>
-      <th>Craft cost</th><th>Lvl 2 upgrade cost</th>
+      <th>Piece</th><th>Slot</th><th class="num">Base (Lvl 1)</th><th class="num">Lvl 2</th>
+      <th class="num">Lvl 3</th><th>Craft cost</th>
       </tr></thead><tbody>`;
+  const upgFor = (key: string, tier: number) => ARMOR_UPGRADES.find((u) => u.appliesToItemKey === key && u.resultTier === tier);
   let baseTotal = 0;
-  let upgTotal = 0;
+  let lvl2Total = 0;
+  let lvl3Total = 0;
   for (const d of armorItems) {
     const base = armorDefenseForTier(d.key, 0);
-    const upg = ARMOR_UPGRADES.find((u) => u.appliesToItemKey === d.key);
-    const lvl2 = upg ? armorDefenseForTier(d.key, upg.resultTier) : base;
+    // Highest defined upgrade tier for this piece; missing tiers fall back to
+    // the previous value so a piece with fewer upgrades still totals correctly.
+    const lvl2 = upgFor(d.key, 1) ? armorDefenseForTier(d.key, 1) : base;
+    const lvl3 = upgFor(d.key, 2) ? armorDefenseForTier(d.key, 2) : lvl2;
     baseTotal += base;
-    upgTotal += lvl2;
+    lvl2Total += lvl2;
+    lvl3Total += lvl3;
     const recipe = RECIPES.find((r) => r.output.kind === "item" && r.output.itemId === d.key);
     html += `<tr>
       <td><b>${esc(d.name)}</b></td>
       <td>${esc(prettify(d.armorSlot!))}</td>
       <td class="num">${base}</td>
       <td class="num pos">${lvl2}</td>
+      <td class="num pos">${lvl3}</td>
       <td class="cost">${recipe ? esc(costsText(recipe.costs)) : "—"}</td>
-      <td class="cost">${upg ? esc(costsText(upg.costs)) : "—"}</td>
     </tr>`;
   }
   html += `<tr><td colspan="2"><b>Full set</b></td>
     <td class="num"><b>${baseTotal}</b></td>
-    <td class="num pos"><b>${upgTotal}</b></td>
-    <td colspan="2" class="muted">flat damage reduction, all pieces worn</td></tr>`;
+    <td class="num pos"><b>${lvl2Total}</b></td>
+    <td class="num pos"><b>${lvl3Total}</b></td>
+    <td class="muted">flat damage reduction, all pieces worn</td></tr>`;
+  html += `</tbody></table>`;
+
+  // Per-tier upgrade costs — two steps per piece (Lvl 2, Lvl 3).
+  html += `<h3>Armor upgrade costs</h3><table><thead><tr>
+    <th>Piece</th><th>Upgrade</th><th>Result</th><th class="num">+Armor</th><th>Cost</th>
+    </tr></thead><tbody>`;
+  for (const u of ARMOR_UPGRADES) {
+    html += `<tr>
+      <td>${esc(name(u.appliesToItemKey))}</td>
+      <td>${esc(u.name)}</td>
+      <td><span class="tag tier1">Lvl ${u.resultTier + 1}</span></td>
+      <td class="num pos">+${u.defenseBonus ?? 0}</td>
+      <td class="cost">${esc(costsText(u.costs))}</td>
+    </tr>`;
+  }
   html += `</tbody></table>`;
   return html;
 }
@@ -354,12 +378,17 @@ function renderRelics(): string {
   let html = `<h2>Relics</h2>
     <p class="note">Run-length passives rolled at a Relic Forge from monster trophies
     (<code>Relics.ts</code>). Rolling is <b>probabilistic</b>: each attempt consumes one
-    trophy whether it succeeds or fails, with a per-rarity pity counter guaranteeing a
+    trophy whether it succeeds or fails. A trophy's own rarity drives an <b>outcome table</b>
+    over the result rarity — a Common trophy can roll up to Uncommon/Rare (never Mythic) and
+    can also fail; higher trophies guarantee at least their own rarity with a chance to roll
+    up. A relic's power tier always equals the trophy's tier. The run's <b>first roll is a
+    guaranteed success</b>; beyond that a per-rarity pity counter guarantees a base-rarity
     success after N misses. Effect numbers shown at Power Tier 1 (×1.0, the only tier this
-    milestone). Only the Common pool has a live trophy source today.</p>`;
+    milestone). Only Common-trophy sources are live today.</p>`;
 
-  html += `<h3>Trophy → roll odds</h3><table><thead><tr>
-    <th>Trophy</th><th>Rarity</th><th class="num">Success</th><th class="num">Pity (miss cap)</th><th class="muted">Source</th>
+  html += `<h3>Trophy → outcome odds</h3><table><thead><tr>
+    <th>Trophy</th><th>Trophy rarity</th><th class="num">Any relic</th><th>Outcome breakdown</th>
+    <th class="num">Pity</th><th class="muted">Source</th>
     </tr></thead><tbody>`;
   const trophySource: Record<string, string> = {
     gremlin_trophy: "Elite Gremlin / Gremling",
@@ -368,10 +397,27 @@ function renderRelics(): string {
     gremlin_king_fang: "Gremlin King (dormant — boss = win)",
   };
   for (const [key, roll] of Object.entries(TROPHY_ROLL)) {
+    const bands = TROPHY_OUTCOME_ODDS[roll.rarity];
+    // Bands are sequential ranges; a Rare/Uncommon floor band (100%) shows as
+    // "rest", others as their exact chance.
+    let used = 0;
+    const breakdown = bands
+      .map((b) => {
+        const label =
+          b.chance >= 1
+            ? `${rarityName(b.rarity)} (rest)`
+            : `${(b.chance * 100).toFixed(b.chance * 100 < 10 ? 1 : 0)}% ${rarityName(b.rarity)}`;
+        used += b.chance;
+        return `<span style="color:${rarityHex(b.rarity)}">${label}</span>`;
+      })
+      .join(", ");
+    const failPct = Math.max(0, 1 - used);
+    const failStr = failPct > 0 ? `, <span class="muted">${Math.round(failPct * 100)}% fail</span>` : "";
     html += `<tr>
       <td>${esc(name(key))}</td>
-      <td><span class="dot" style="background:${rarityHex(roll.rarity)}"></span>${rarityName(roll.rarity)}</td>
-      <td class="num">${Math.round(roll.successChance * 100)}%</td>
+      <td><span class="dot" style="background:${rarityHex(roll.rarity)}"></span>${rarityName(roll.rarity)} · T${roll.powerTier}</td>
+      <td class="num">${Math.round(trophyOverallSuccessChance(roll.rarity) * 100)}%</td>
+      <td>${breakdown}${failStr}</td>
       <td class="num">${PITY_THRESHOLD[roll.rarity]}</td>
       <td class="muted">${esc(trophySource[key] ?? "—")}</td>
     </tr>`;
@@ -382,11 +428,13 @@ function renderRelics(): string {
   for (const rarity of RELIC_RARITIES) {
     const ids = RELIC_POOLS[rarity];
     if (!ids.length) continue;
-    const live = TROPHY_ROLL && Object.values(TROPHY_ROLL).some((t) => t.rarity === rarity);
+    // A pool is "reachable" if any trophy's outcome table can produce it.
+    const live = Object.values(TROPHY_ROLL).some((t) =>
+      TROPHY_OUTCOME_ODDS[t.rarity].some((b) => b.rarity === rarity),
+    );
     html += `<h3 style="color:${rarityHex(rarity)}">${rarityName(rarity)}
       <span class="muted" style="font-size:12px;font-weight:400">
-      · ${Math.round(RARITY_SUCCESS_CHANCE[rarity] * 100)}% roll · pity ${PITY_THRESHOLD[rarity]}
-      ${live ? "" : "· <i>no trophy source yet (M-W1 scaffolding)</i>"}</span></h3>`;
+      ${live ? "· reachable from a live trophy" : "· <i>no trophy source yet (M-W1 scaffolding)</i>"}</span></h3>`;
     html += `<table data-table="relics"><thead><tr><th>Relic</th><th>Effect</th></tr></thead><tbody>`;
     for (const id of ids) {
       const def = RELIC_DEFS[id];
@@ -444,9 +492,11 @@ function renderBalance(): string {
   // or a set picker, and likely more than one set column.
   const armorItems = Object.values(ITEM_DEFS).filter((d) => d.armorSlot);
   const baseSet = armorItems.reduce((s, d) => s + armorDefenseForTier(d.key, 0), 0);
+  // Fully-upgraded set = each piece at its highest defined upgrade tier (Lvl 3).
   const upgSet = armorItems.reduce((s, d) => {
-    const u = ARMOR_UPGRADES.find((x) => x.appliesToItemKey === d.key);
-    return s + armorDefenseForTier(d.key, u?.resultTier ?? 0);
+    const tiers = ARMOR_UPGRADES.filter((x) => x.appliesToItemKey === d.key).map((x) => x.resultTier);
+    const maxTier = tiers.length ? Math.max(...tiers) : 0;
+    return s + armorDefenseForTier(d.key, maxTier);
   }, 0);
 
   const dealt = (raw: number, armor: number) => Math.max(1, raw - armor);
@@ -464,7 +514,7 @@ function renderBalance(): string {
     <div class="cardrow">
       <div class="card"><div class="big">${PLAYER_BASE_HP}</div><div class="lbl">Base HP</div></div>
       <div class="card"><div class="big">${baseSet}</div><div class="lbl">Full armor (base)</div></div>
-      <div class="card"><div class="big">${upgSet}</div><div class="lbl">Full armor (Lvl 2)</div></div>
+      <div class="card"><div class="big">${upgSet}</div><div class="lbl">Full armor (Lvl 3)</div></div>
     </div>`;
 
   const isBoss = (e: EnemyStat) => e.name.includes("BOSS");
@@ -475,7 +525,7 @@ function renderBalance(): string {
     rows are the +50% variant — this is where you check whether armor still holds up. This is the exact spot the light rebalance targets.</p>
     <table><thead><tr>
       <th>Attack</th><th class="num">Raw</th><th class="num">No armor</th>
-      <th class="num">Base set (${baseSet})</th><th class="num">Lvl 2 set (${upgSet})</th>
+      <th class="num">Base set (${baseSet})</th><th class="num">Lvl 3 set (${upgSet})</th>
       </tr></thead><tbody>`;
   // Both normal and elite entries; the elite row is skipped when it wouldn't
   // differ (e.g. the Gremlin's non-scaled rock projectile) to avoid a dup.

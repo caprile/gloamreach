@@ -56,7 +56,15 @@ export class Snake extends Enemy {
       y: cfg.y,
       texture: elite ? "snake_elite" : "snake",
       displayName: elite ? "Elite Snake" : "Snake",
-      loot: elite ? [{ resource: "leather", min: 2, max: 2 }] : [{ resource: "leather", min: 1, max: 1 }],
+      loot: elite
+        ? [
+            { resource: "leather", min: 2, max: 2 },
+            { resource: "snake_meat", min: 2, max: 2 },
+          ]
+        : [
+            { resource: "leather", min: 1, max: 1 },
+            { resource: "snake_meat", min: 1, max: 1 },
+          ],
       maxHealth: elite ? Math.round(MAX_HEALTH * 1.5) : MAX_HEALTH,
       biteDamage: elite ? Math.round(BITE_DAMAGE * 1.5) : BITE_DAMAGE,
       elite,
@@ -93,7 +101,9 @@ export class Snake extends Enemy {
         body.setVelocity(0, 0);
         if (!this.strikeLocked) {
           this.lockedStrikeAngle = Phaser.Math.Angle.Between(this.x, this.y, playerX, playerY);
-          this.applyFacing(Math.cos(this.lockedStrikeAngle), Math.sin(this.lockedStrikeAngle));
+          // Point along the locked lunge direction during the coil (faceAngle,
+          // not applyFacing — the latter no-ops on the unit vector).
+          this.faceAngle(this.lockedStrikeAngle);
           this.playWindupTell(COIL_MS, 0x9be89b); // greenish coil tell
           this.strikeLocked = true;
         }

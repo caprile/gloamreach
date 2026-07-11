@@ -47,7 +47,7 @@ export const WEAPON_UPGRADES: WeaponUpgradeDef[] = [
     description: "A finer edge, ground down from a second bone.",
     appliesToItemKey: "bone_knife",
     resultTier: 1,
-    costs: { bones: 5 },
+    costs: { bones: 3 }, // was 5 — bones are in high demand; eased per 2026-07-11 playtest
     damageBonus: 1,
     deltaLabel: "+1 Damage",
   },

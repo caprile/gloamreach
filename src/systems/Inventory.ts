@@ -19,6 +19,7 @@ export type ResourceType =
   | "stone"
   | "leather"
   | "boar_meat"
+  | "snake_meat"
   | "bones"
   | "gremlin_blood"
   | "gremlin_guck"

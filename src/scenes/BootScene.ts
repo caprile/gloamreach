@@ -457,6 +457,32 @@ export class BootScene extends Phaser.Scene {
     g.fillRect(14, 10, 2, 2);
     g.generateTexture("icon_bramble_boar_skewer", ICON, ICON);
 
+    // Cooked Snake Meat: a skewer with roasted, pale-pink coiled meat.
+    g.clear();
+    g.fillStyle(0xc0a060, 1);
+    g.fillRect(3, 11, 18, 2); // skewer
+    g.fillStyle(0x9a5a4a, 1);
+    g.fillRect(6, 7, 6, 6);
+    g.fillRect(13, 7, 5, 6);
+    g.fillStyle(0xc07f6a, 1);
+    g.fillRect(7, 8, 3, 3);
+    g.fillRect(14, 8, 2, 3);
+    g.generateTexture("icon_cooked_snake_meat", ICON, ICON);
+
+    // Blood-Glazed Snake Skewer: roasted snake with a dark-red gremlin-blood glaze.
+    g.clear();
+    g.fillStyle(0xc0a060, 1);
+    g.fillRect(3, 11, 18, 2); // skewer
+    g.fillStyle(0x9a5a4a, 1);
+    g.fillRect(6, 7, 6, 6);
+    g.fillRect(13, 7, 5, 6);
+    g.fillStyle(0x6e141c, 1); // gremlin-blood glaze
+    g.fillRect(6, 6, 12, 2);
+    g.fillStyle(0x9a2230, 1);
+    g.fillRect(8, 9, 2, 2);
+    g.fillRect(14, 10, 2, 2);
+    g.generateTexture("icon_blood_snake_skewer", ICON, ICON);
+
     // Campfire: stacked logs + flame.
     g.clear();
     g.fillStyle(0x7a4a22, 1);
@@ -475,6 +501,16 @@ export class BootScene extends Phaser.Scene {
     g.fillStyle(0xd06a4a, 1);
     g.fillRect(7, 8, 8, 6);
     g.generateTexture("icon_boar_meat", ICON, ICON);
+
+    // Snake Meat: a raw pale-pink fillet with a faint green tinge (vs boar's red).
+    g.clear();
+    g.fillStyle(0x9a6a5a, 1);
+    g.fillRect(5, 7, 14, 10);
+    g.fillStyle(0xc48f7a, 1);
+    g.fillRect(7, 9, 8, 5);
+    g.fillStyle(0x5a7a3e, 1);
+    g.fillRect(5, 7, 14, 2); // greenish skin edge
+    g.generateTexture("icon_snake_meat", ICON, ICON);
 
     // Bones: two crossed off-white bone shapes.
     g.clear();

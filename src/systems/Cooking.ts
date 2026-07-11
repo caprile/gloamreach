@@ -36,6 +36,20 @@ export const COOK_RECIPES: CookRecipe[] = [
     inputs: { shishkabob: 1, boar_meat: 1, blackberry: 2 },
     requiredCampfireTier: 1,
   },
+  {
+    id: "cooked_snake_meat",
+    name: "Cooked Snake Meat",
+    output: "cooked_snake_meat",
+    inputs: { shishkabob: 1, snake_meat: 1 },
+    requiredCampfireTier: 0,
+  },
+  {
+    id: "blood_snake_skewer",
+    name: "Blood-Glazed Snake Skewer",
+    output: "blood_snake_skewer",
+    inputs: { shishkabob: 1, snake_meat: 1, gremlin_blood: 1 },
+    requiredCampfireTier: 1,
+  },
 ];
 
 export function canAffordCook(recipe: CookRecipe, backpack: ItemContainer): boolean {

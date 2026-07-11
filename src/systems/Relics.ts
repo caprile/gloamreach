@@ -1,20 +1,25 @@
 // Relics — the roguelike run-length passive-power system (M-RL). Trophies won
 // from elites/bosses are consumed at a placed Relic Forge to attempt a
 // PROBABILISTIC roll into a random relic. Two independent axes:
-//   • Rarity (Common/Uncommon/Rare/Mythic) — which effect pool + roll odds a
-//     relic comes from. Source-determined by the trophy; NOT climbable (there is
-//     no manual combine — see the plan doc; this replaced an earlier combine
-//     ladder idea).
+//   • Rarity (Common/Uncommon/Rare/Mythic) — which effect pool a relic comes
+//     from. A trophy has its OWN rarity, which drives an OUTCOME TABLE over the
+//     result rarity: a Common trophy can produce Common/Uncommon/Rare (never
+//     Mythic) at its listed odds and can also FAIL; higher-rarity trophies
+//     guarantee at least their own rarity with a chance to roll up. Rarity is
+//     still source-determined by the trophy — NOT climbable via any manual
+//     combine (see TROPHY_OUTCOME_ODDS; odds locked with the user 2026-07-11).
 //   • Power tier (biome depth) — a magnitude multiplier on the relic's numbers
-//     (POWER_TIER_MULT). Flat x1.0 this milestone (single biome); scaffolding
-//     that activates in M-W1.
+//     (POWER_TIER_MULT). A relic's power tier ALWAYS equals the trophy's tier
+//     (a Tier-1 trophy only ever produces a Tier-1 relic). Flat x1.0 this
+//     milestone (single biome); scaffolding that activates in M-W1.
 //
-// A roll consumes 1 trophy whether it succeeds or fails; success chance is set
-// by rarity (Common 5% / Uncommon 10% / Rare 100%), with a per-rarity PITY
-// counter that guarantees a success after N consecutive misses. Rolling a relic
-// id (at a given power tier) you already own auto-stacks onto that entry (+count,
-// aggregated stats) — that IS the "combining." Effects were always additive:
-// each owned instance contributes base x its power-tier mult.
+// A roll consumes 1 trophy whether it succeeds or fails. As a hook, the very
+// FIRST roll of a run is a guaranteed success (at the trophy's base rarity);
+// beyond that a per-rarity PITY counter guarantees a base-rarity success after N
+// consecutive misses. Rolling a relic id (at a given power tier) you already own
+// auto-stacks onto that entry (+count, aggregated stats) — that IS the
+// "combining." Effects were always additive: each owned instance contributes
+// base x its power-tier mult.
 //
 // Framework-free (no Phaser), like Health/Stamina/Buffs/Skills/Run. MainScene
 // reads the aggregate effect getters at existing hook points, so wiring is
@@ -66,19 +71,57 @@ export function powerTierMult(tier: number): number {
   return POWER_TIER_MULT[tier] ?? 1;
 }
 
-// Per-rarity roll success chance and pity threshold (guaranteed success after
-// this many consecutive misses of that rarity — kills the low-% feel-bad tail).
-// All tunable; if Common feels thin at playtest, bump its chance here.
-export const RARITY_SUCCESS_CHANCE: Record<RelicRarity, number> = {
-  common: 0.05,
-  uncommon: 0.1,
-  rare: 1.0,
-  mythic: 1.0,
+// Outcome table per TROPHY rarity: ordered highest-rarity-first bands. A roll
+// draws one number in [0,1) and walks the bands, subtracting each chance, to
+// pick the produced rarity — so the listed `chance` values ARE the exact
+// per-rarity odds. A trophy whose bands don't sum to 1 can FAIL (crumble): only
+// Common does (13.5% total), since Uncommon/Rare have a 100% floor band at their
+// own rarity. Locked odds (the user, 2026-07-11):
+//   Common trophy   → 1% Rare, 2.5% Uncommon, 10% Common (else fail)
+//   Uncommon trophy → 1% Mythic, 5% Rare, else Uncommon (never fails)
+//   Rare trophy     → 10% Mythic, else Rare (never fails)
+export const TROPHY_OUTCOME_ODDS: Record<RelicRarity, { rarity: RelicRarity; chance: number }[]> = {
+  common: [
+    { rarity: "rare", chance: 0.01 },
+    { rarity: "uncommon", chance: 0.025 },
+    { rarity: "common", chance: 0.1 },
+  ],
+  uncommon: [
+    { rarity: "mythic", chance: 0.01 },
+    { rarity: "rare", chance: 0.05 },
+    { rarity: "uncommon", chance: 1.0 },
+  ],
+  rare: [
+    { rarity: "mythic", chance: 0.1 },
+    { rarity: "rare", chance: 1.0 },
+  ],
+  mythic: [{ rarity: "mythic", chance: 1.0 }],
 };
+
+// Overall chance a trophy of this rarity produces ANY relic (sum of its bands,
+// capped at 1) — for the forge/dashboard "success %" readout.
+export function trophyOverallSuccessChance(trophyRarity: RelicRarity): number {
+  return Math.min(1, TROPHY_OUTCOME_ODDS[trophyRarity].reduce((s, b) => s + b.chance, 0));
+}
+
+// Resolve the produced result rarity for one roll of a trophy of the given
+// rarity (null = the trophy failed / crumbled).
+function rollOutcomeRarity(trophyRarity: RelicRarity, rng: () => number): RelicRarity | null {
+  let r = rng();
+  for (const band of TROPHY_OUTCOME_ODDS[trophyRarity]) {
+    if (r < band.chance) return band.rarity;
+    r -= band.chance;
+  }
+  return null;
+}
+
+// Pity threshold: after this many consecutive misses of a trophy rarity, the
+// next roll is a guaranteed base-rarity success (kills the low-% feel-bad tail).
+// Only Common can miss, so only its value bites; the rest are moot (100% floor).
 export const PITY_THRESHOLD: Record<RelicRarity, number> = {
-  common: 15,
+  common: 12,
   uncommon: 8,
-  rare: 1, // 100% chance anyway; pity is moot
+  rare: 1, // 100% floor anyway; pity is moot
   mythic: 1,
 };
 
@@ -143,24 +186,23 @@ export const RELIC_POOLS: Record<RelicRarity, string[]> = (() => {
   return out;
 })();
 
-// What a trophy rolls: the rarity pool, the power tier of the resulting relic,
-// and the per-attempt success chance (sourced from the rarity table).
+// What a trophy rolls: its own rarity (drives the outcome table above) and the
+// power tier of the resulting relic (always == the trophy's tier).
 export interface TrophyRoll {
   rarity: RelicRarity;
   powerTier: number;
-  successChance: number;
 }
 export const TROPHY_ROLL: Record<string, TrophyRoll> = {
-  gremlin_trophy: { rarity: "common", powerTier: 1, successChance: RARITY_SUCCESS_CHANCE.common },
-  // Elite Boar / Snake trophies also roll Common at tier 1 this milestone — they
-  // share the Common pool + pity counter with gremlin_trophy, so more elite
-  // variety just means more Common rolls (not fragmented odds). Deeper biomes
-  // (M-W1) can remap these to higher rarities/tiers per source.
-  boar_trophy: { rarity: "common", powerTier: 1, successChance: RARITY_SUCCESS_CHANCE.common },
-  snake_trophy: { rarity: "common", powerTier: 1, successChance: RARITY_SUCCESS_CHANCE.common },
+  // Every first-biome elite trophy is Common / Tier 1 — they share the Common
+  // outcome table + pity counter, so more elite variety just means more attempts
+  // (not fragmented odds). Deeper biomes (M-W1) remap a species' trophy to a
+  // higher rarity/tier per source.
+  gremlin_trophy: { rarity: "common", powerTier: 1 },
+  boar_trophy: { rarity: "common", powerTier: 1 },
+  snake_trophy: { rarity: "common", powerTier: 1 },
   // Dormant this milestone — killing the King wins the run, so a fang can't be
   // spent yet. Correct + ready for M-W1's mid-bosses.
-  gremlin_king_fang: { rarity: "rare", powerTier: 1, successChance: RARITY_SUCCESS_CHANCE.rare },
+  gremlin_king_fang: { rarity: "rare", powerTier: 1 },
 };
 
 // A single owned relic instance — an id at a specific power tier. Duplicates
@@ -178,6 +220,8 @@ export interface RelicGroup {
 }
 
 // Outcome of a roll attempt (the trophy is always consumed by the caller).
+// `rarity` is the PRODUCED relic's rarity on success (which may exceed the
+// trophy's own rarity if it rolled up), or the trophy's rarity on failure.
 export interface RollResult {
   success: boolean;
   rarity: RelicRarity;
@@ -213,6 +257,9 @@ export class RelicManager {
   private instances: RelicInstance[] = [];
   // Consecutive misses since the last success, per rarity (drives pity).
   private misses: Record<RelicRarity, number> = { common: 0, uncommon: 0, rare: 0, mythic: 0 };
+  // The very first roll of a run is a guaranteed success (the "hook") — this
+  // flips true after the first roll of any kind.
+  private firstRollDone = false;
 
   count(): number {
     return this.instances.length;
@@ -223,26 +270,39 @@ export class RelicManager {
     return this.misses[rarity];
   }
 
+  // Whether the next roll would be the run's first (and thus guaranteed) — the
+  // forge surfaces this so the hook is discoverable.
+  isFirstRollPending(): boolean {
+    return !this.firstRollDone;
+  }
+
   // Attempt a roll by consuming one trophy of `trophyKey`. Returns the outcome
-  // (the CALLER consumes the trophy either way — success or fail). On success a
-  // random relic of the trophy's rarity/power-tier is added (auto-stacked).
-  // Pity: a success is forced once misses reach the rarity's threshold.
+  // (the CALLER consumes the trophy either way — success or fail). The trophy's
+  // rarity drives an outcome table (rollOutcomeRarity) that resolves the PRODUCED
+  // rarity, which may roll up past the trophy's own. The relic's power tier
+  // always equals the trophy's tier. A would-be failure is floored to a
+  // base-rarity success on (a) the run's first roll ever, or (b) once misses
+  // reach the pity threshold.
   roll(trophyKey: string, rng: () => number = Math.random): RollResult | null {
     const t = TROPHY_ROLL[trophyKey];
     if (!t) return null;
-    const pool = RELIC_POOLS[t.rarity];
-    if (!pool.length) return null;
 
-    const pityHit = this.misses[t.rarity] + 1 >= PITY_THRESHOLD[t.rarity];
-    const success = pityHit || rng() < t.successChance;
-    if (!success) {
+    let resultRarity = rollOutcomeRarity(t.rarity, rng);
+    const firstRollHit = !resultRarity && !this.firstRollDone;
+    const pityHit = !resultRarity && this.misses[t.rarity] + 1 >= PITY_THRESHOLD[t.rarity];
+    if (!resultRarity && (firstRollHit || pityHit)) resultRarity = t.rarity;
+    this.firstRollDone = true;
+
+    if (!resultRarity) {
       this.misses[t.rarity] += 1;
       return { success: false, rarity: t.rarity };
     }
     this.misses[t.rarity] = 0;
+    const pool = RELIC_POOLS[resultRarity];
+    if (!pool.length) return null; // every rarity has a pool; guard for safety
     const id = pool[Math.floor(rng() * pool.length)];
     this.instances.push({ id, powerTier: t.powerTier });
-    return { success: true, rarity: t.rarity, id, powerTier: t.powerTier, pity: pityHit };
+    return { success: true, rarity: resultRarity, id, powerTier: t.powerTier, pity: pityHit };
   }
 
   // Owned relics collapsed to (id, powerTier, count) groups, ordered by

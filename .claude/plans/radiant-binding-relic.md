@@ -86,7 +86,31 @@ Two changes shipped:
 - **Night HUD number** — `RunHudUI` showed `[Night]` with no number; added
   `DayNight.nightNumber()` (= the day it follows) so it reads `[Night N]`.
 
+## 2026-07-11 rework — rarity/tier outcome tables + first-roll guarantee
+Off the user's 40-min playtest (STATUS 5t). **SUPERSEDES the "success chance by
+trophy rarity (Common 5% / Uncommon 10% / Rare 100%)" model above.** Locked odds:
+
+- A trophy's rarity drives an **outcome table over the RESULT rarity**
+  (`TROPHY_OUTCOME_ODDS`, walked by `rollOutcomeRarity()` — bands subtract, so the
+  listed chances ARE the exact odds):
+  - **Common** trophy → 1% Rare, 2.5% Uncommon, 10% Common, else FAIL (86.5%, never Mythic)
+  - **Uncommon** trophy → 1% Mythic, 5% Rare, rest Uncommon (never fails)
+  - **Rare** trophy → 10% Mythic, rest Rare (never fails)
+- So a Common trophy can **roll UP** into an Uncommon/Rare relic. `RollResult.rarity`
+  is now the PRODUCED rarity (may exceed the trophy's), and `RelicRevealFx` shows the
+  bigger reveal — that roll-up is the gamba payoff.
+- A relic's **power tier ALWAYS equals the trophy's tier** (Tier-1 trophy → Tier-1
+  relic only). All first-biome trophies stay Common / Tier 1.
+- **First roll of a run is a guaranteed success** (the user's "hook") — `firstRollDone`
+  flag + `isFirstRollPending()`; the forge button shows "first roll guaranteed". Pity
+  kept as a floor (common 12).
+- Code: `TrophyRoll` dropped `successChance`; `RARITY_SUCCESS_CHANCE` removed; added
+  `TROPHY_OUTCOME_ODDS` + `trophyOverallSuccessChance()`. `RelicForgeMenu` readout +
+  dashboard Relics tab (outcome breakdown) + `RECIPES.md` updated. Verified live:
+  20k-roll sample → Rare 1.02% / Uncommon 2.71% / Common 12.74% (10% + pity) /
+  Mythic 0% / fail 83.5%; first roll guaranteed.
+
 ## Deferred / notes
-- Uncommon/Mythic pools + power tiers 2+ are dead until M-W1 supplies their
-  trophy sources / deeper biomes.
+- Uncommon/Mythic pools + power tiers 2+ still have no *native* trophy source until
+  M-W1 (a Common trophy CAN now roll up into an Uncommon/Rare relic, though).
 - One gem icon per rarity (placeholder-art ethos; identity via tooltip).
