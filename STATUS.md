@@ -2,13 +2,12 @@
 
 ## Current State
 
-_Living snapshot — edit in place, never append. Last shipped: **M-SS — Stats &
-Skills depth pass: an all-weapon CRIT system (Strength = crit damage / Agility =
-crit chance / per-weapon base crit), Endurance/Vitality gained secondary regen &
-healing-received axes, Intelligence = +XP / Willpower renamed Wisdom = +buff
-duration, light_armor → dash i-frame window, running → sprint-drain cut,
-chopping/mining → bonus-drop chance, per-piece armor XP, and HP/stamina relics
-converted flat→percent so they compound with a stats build**, **2026-07-11**._
+_Living snapshot — edit in place, never append. Last shipped: **Enemy respawn —
+fog top-up: the enemy roster is no longer one-shot/finite; a periodic check keeps
+the live non-boss count near the player topped up (spawning off-screen in the fog
+ring at a ~5 min/area pace, meat-weighted), so food/loot stay renewable
+over a run. Bosses + shack guards excluded**, **2026-07-11**. Prior: M-SS (stats/
+skills depth pass — crit + distinct-axis effects + relic synergy)._
 
 **The game.** Top-down 2D pixel survival-ARPG (Phaser 3 + TypeScript + Vite; all
 textures are placeholders generated in `BootScene`). One forest biome sitting in the
@@ -37,10 +36,11 @@ death ends a run and posts a `localStorage` high score; killing the Gremlin King
 win. The world is now circular + much larger (M-W1 geometry prep, above); deterministic
 seeded world-gen and actual multi-biome content are still deferred to M-W1 proper.
 
-**In progress / next.** M-SS (stats/skills depth pass — see the entry below) shipped
-this session, so Stats + Skills now each own a distinct, always-live axis relics don't
-touch (crit, regen/healing, XP/buff-duration, gather bonuses, dash-window), and HP/stamina
-relics were converted flat→percent so they multiply a stats build instead of dwarfing it.
+**In progress / next.** Enemy respawn (fog top-up — see the top entry below) shipped this
+session, off the build order, so the enemy roster is renewable and food/loot no longer drain
+to empty over a run. Before that, M-SS gave Stats + Skills each a distinct, always-live axis
+relics don't touch (crit, regen/healing, XP/buff-duration, gather bonuses, dash-window), and
+converted HP/stamina relics flat→percent so they multiply a stats build instead of dwarfing it.
 Real pixel art/animations stay deliberately deferred until content/balance settle further
 (the whole texture pipeline is built to swap late — see `CLAUDE.md` roadmap item 8). Next:
 resume the locked build order — **M-TE** (trophy-gated special gear; it will read the
@@ -67,6 +67,48 @@ now that crit is a player-driven damage ramp).
 ## Recent Entries
 
 > Older entries in STATUS-archive.md.
+
+### Enemy respawn — fog top-up (playtest food-economy fix)
+
+Off the master-plan build order, built on **Opus** (a new spawn subsystem with its own
+timing/state, not just a tuning change). Playtesters were burning through food far faster
+than expected because the enemy roster was **one-shot and finite** — only wild (non-camp)
+Gremlin Shack guards ever came back (their own 6-min pair timer). Meat sources (Boar/Snake)
+drained to empty over a run. Now the world keeps itself huntable.
+
+**Model (locked with the user via `AskUserQuestion`): fog top-up**, chosen over per-kill
+replacement and full-world repopulation. A periodic check (`MainScene.updateRespawns`, every
+`RESPAWN_TICK_MS` = **30s**, called from `update()`'s **alive branch only**) keeps the live
+non-boss enemy count within `RESPAWN_NEARBY_RADIUS` (1500px) of the player topped up toward
+`RESPAWN_NEARBY_TARGET` (10), spawning at most `RESPAWN_PER_TICK` (1) replacement per tick. At
+1/30s that repopulates a fully cleared area in **~5 min** — the locked pace (an initial 7s/
+~1-2 min tick felt way too fast in playtest; the user wanted ~5 min/area max). Bounded both
+locally (the target) and globally (`RESPAWN_MAX_LIVE` 160) so camping can't build a swarm and
+a long run can't run away.
+
+**Off-screen spawns.** Reuses the nightfall-surge spawner: `pickNightSpawnPoint` gained
+optional `ringMin`/`ringMax` params (default to the night constants), and respawns call it
+with `RESPAWN_RING_MIN`/`_MAX` = **1150–1600px** — just past the camera's ~1102px
+half-diagonal, so a replacement never materializes on-screen. Verified live via
+`preview_eval`: at every realistic in-biome player position (center out to the ~1800px biome
+edge) **100% of 200 sampled spawns landed >1102px away**; the only close spawns occur way out
+in the empty outer grass (2800+px from center) where ring points clip the world edge and get
+clamped — a spot players never hunt.
+
+**Species mix.** `makeRespawnEnemy` weights by the baseline `spawnEnemies()` counts
+(Boar 24 / Snake 28 / RangedGremlin 22 / MeleeGremling 8 = 82), so meat sources (~63%)
+dominate — respawns fix the food shortage directly while keeping variety. Elite rolls at the
+standard `rollElite` chance, night-boosted (`NIGHT_ELITE_CHANCE_MULT`) like every other spawn
+path, so trophies stay renewable too.
+
+**Excluded:** Gremlin King / Gloamwarden (one-shot win/mini-boss — filtered from both the
+count and the spawn table), and the Gremlin Shack guards keep their own timer untouched.
+`respawnAccumMs` resets in `create()` per the `scene.restart()` field-init gotcha. Verified:
+tsc clean; the top-up paces exactly 1/tick up to the target of 10 then stops; no console
+errors. No `RECIPES.md`/dashboard change (no recipe or enemy-stat change). One bounded
+tradeoff, noted in-code: enemies you kite far away and abandon still count toward
+`RESPAWN_MAX_LIVE`, so a very long roaming run could eventually park at the cap — the cap is
+generous enough that this stays theoretical.
 
 ### M-SS — Stats & Skills depth pass (crit + distinct-axis effects + relic synergy)
 

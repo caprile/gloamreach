@@ -250,6 +250,27 @@ const POI_LIGHT_RADIUS = 150;
 const NIGHT_SPAWN_RING_MIN = 500;
 const NIGHT_SPAWN_RING_MAX = 850;
 
+// Enemy respawn — "fog top-up" (2026-07-11). Playtesters burned through food far
+// faster than a one-shot, finite roster could supply, so the world now keeps
+// itself huntable: a periodic check tops the live enemy count back up toward a
+// target near the player, spawning replacements OFF-SCREEN in the fog ring (like
+// the nightfall surge) so nothing pops into view. Bounded locally (TARGET) and
+// globally (MAX_LIVE) so camping can't build a swarm and the population can't run
+// away. Moderate pace (locked with the user): a cleared area refills in ~1-2 min.
+// Bosses (GremlinKing/Gloamwarden) and Shack guards are excluded — their own
+// lifecycles own them. All first-pass/tunable.
+// Pace (locked with the user): a fully cleared area repopulates in ~5 min, NOT
+// faster — TICK_MS 30s × TARGET 10 at PER_TICK 1 = ~300s to refill from empty.
+const RESPAWN_TICK_MS = 30000; // how often the top-up check runs (30s → ~5 min full refill)
+const RESPAWN_NEARBY_RADIUS = 1500; // "near the player" window kept populated
+const RESPAWN_NEARBY_TARGET = 10; // desired live non-boss enemies within that window
+const RESPAWN_PER_TICK = 1; // at most N replacements per tick — this paces the refill
+const RESPAWN_MAX_LIVE = 160; // global safety cap on total non-boss enemies
+// Ring is pushed just past the camera's half-diagonal (~1102 at 1920x1080) so a
+// replacement never materializes on-screen, even on a horizontal spawn.
+const RESPAWN_RING_MIN = 1150;
+const RESPAWN_RING_MAX = 1600;
+
 // Generalized elite spawning (M-EL2, added 2026-07-10) — a base % chance for
 // any normal enemy spawn (Boar/Snake/Gremlin/Gremling) to roll as its elite
 // variant instead, replacing the old all-or-nothing-per-site model (only the
@@ -491,6 +512,9 @@ export class MainScene extends Phaser.Scene {
   private wasNight = false;
   private nightSpawns: Enemy[] = [];
   private equippedLightRadius = 0;
+  // Accumulates frame delta toward the next fog-top-up respawn check (see
+  // updateRespawns / RESPAWN_TICK_MS). Reset each run.
+  private respawnAccumMs = 0;
 
   // Placement mode: crafting a placeable recipe (e.g. campfire) enters this
   // instead of landing in the backpack. A ghost preview follows the cursor,
@@ -546,6 +570,7 @@ export class MainScene extends Phaser.Scene {
     this.wasNight = false;
     this.nightSpawns = [];
     this.equippedLightRadius = 0;
+    this.respawnAccumMs = 0;
 
     this.nodes = [];
     this.obstacleNodes = [];
@@ -982,6 +1007,7 @@ export class MainScene extends Phaser.Scene {
     else if (!this.anyMenuOpen() && !this.worldMapUI.isOpen()) this.updateHover();
     this.updateMagnet(delta);
     this.updateEnemies(delta);
+    this.updateRespawns(delta);
     this.updateTreeOcclusion(delta);
     this.updateMapReveal();
     this.bossHealthUI.update(this.gremlinKing);
@@ -1118,14 +1144,77 @@ export class MainScene extends Phaser.Scene {
     this.nightSpawns = [];
   }
 
+  // Fog top-up respawns (2026-07-11): keep a moderate number of huntable enemies
+  // around the player so meat/loot stay renewable over a long run. Every
+  // RESPAWN_TICK_MS, if the live non-boss count within RESPAWN_NEARBY_RADIUS is
+  // under target (and the global cap isn't hit), spawn up to RESPAWN_PER_TICK
+  // replacements off-screen in the fog ring. Bosses (GremlinKing/Gloamwarden) are
+  // excluded; Shack guards still count toward density but keep their own respawn
+  // timer. Called from update()'s alive branch only (no respawns while dead). The
+  // one bounded tradeoff: enemies you kite far away and abandon still count toward
+  // MAX_LIVE, so a very long roaming run can eventually park at the cap — the cap
+  // is generous enough that this stays a non-issue in practice.
+  private updateRespawns(delta: number): void {
+    this.respawnAccumMs += delta;
+    if (this.respawnAccumMs < RESPAWN_TICK_MS) return;
+    this.respawnAccumMs = 0;
+
+    const isBoss = (e: Enemy) => e instanceof GremlinKing || e instanceof Gloamwarden;
+    const alive = this.enemies.filter((e) => !e.depleted && !isBoss(e));
+    if (alive.length >= RESPAWN_MAX_LIVE) return;
+
+    const r2 = RESPAWN_NEARBY_RADIUS * RESPAWN_NEARBY_RADIUS;
+    const nearby = alive.filter(
+      (e) => Phaser.Math.Distance.Squared(e.x, e.y, this.player.x, this.player.y) <= r2,
+    ).length;
+    let toSpawn = Math.min(
+      RESPAWN_NEARBY_TARGET - nearby,
+      RESPAWN_PER_TICK,
+      RESPAWN_MAX_LIVE - alive.length,
+    );
+    if (toSpawn <= 0) return;
+
+    const rng = this.sessionRng();
+    const eliteMult = this.dayNight.isNight() ? NIGHT_ELITE_CHANCE_MULT : 1;
+    while (toSpawn-- > 0) {
+      const { x, y } = this.pickNightSpawnPoint(rng, RESPAWN_RING_MIN, RESPAWN_RING_MAX);
+      const enemy = this.makeRespawnEnemy(rng, x, y, eliteMult);
+      this.enemies.push(enemy);
+      this.enemyGroup.add(enemy);
+    }
+  }
+
+  // Pick a respawn species weighted by the baseline spawnEnemies() mix
+  // (Boar 24 / Snake 28 / RangedGremlin 22 / MeleeGremling 8 = 82) — meat sources
+  // (Boar/Snake, ~63%) dominate, so respawns solve the food shortage directly
+  // while keeping variety. Elite rolls at the standard chance (night-boosted,
+  // matching every other spawn path).
+  private makeRespawnEnemy(
+    rng: Phaser.Math.RandomDataGenerator,
+    x: number,
+    y: number,
+    eliteMult: number,
+  ): Enemy {
+    const elite = this.rollElite(rng, eliteMult);
+    const roll = rng.between(1, 82);
+    if (roll <= 24) return new Boar(this, { x, y, elite });
+    if (roll <= 52) return new Snake(this, { x, y, elite });
+    if (roll <= 74) return new RangedGremlin(this, { x, y, elite });
+    return new MeleeGremling(this, { x, y, elite });
+  }
+
   // Ring around the player, biased to still-fogged (unexplored) non-creek
   // cells so a surge appears out in the dark rather than in already-cleared
   // ground. Falls back to any in-bounds ring point after the attempt cap.
-  private pickNightSpawnPoint(rng: Phaser.Math.RandomDataGenerator): { x: number; y: number } {
+  private pickNightSpawnPoint(
+    rng: Phaser.Math.RandomDataGenerator,
+    ringMin = NIGHT_SPAWN_RING_MIN,
+    ringMax = NIGHT_SPAWN_RING_MAX,
+  ): { x: number; y: number } {
     let last = { x: this.player.x, y: this.player.y };
     for (let attempt = 0; attempt < 60; attempt++) {
       const angle = rng.rotation();
-      const r = rng.between(NIGHT_SPAWN_RING_MIN, NIGHT_SPAWN_RING_MAX);
+      const r = rng.between(ringMin, ringMax);
       const x = Phaser.Math.Clamp(this.player.x + Math.cos(angle) * r, 60, WORLD_W - 60);
       const y = Phaser.Math.Clamp(this.player.y + Math.sin(angle) * r, 60, WORLD_H - 60);
       last = { x, y };
