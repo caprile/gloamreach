@@ -526,15 +526,18 @@ export function itemDef(key: string): ItemDef | undefined {
   return ITEM_DEFS[key];
 }
 
-// Distinct armor material types currently worn across the given equip slots
-// (deduped — two Light pieces count once). Used to grant per-armor-type skill
-// XP on a kill. Lives here since Items.ts owns armorType lookups.
-export function armorTypesWorn(slots: (EquippedItem | null)[]): ArmorType[] {
-  const out = new Set<ArmorType>();
+// Armor material type PER worn piece across the given equip slots (NOT deduped
+// — two Light pieces yield two entries). Used to grant per-piece armor skill XP
+// on a kill (M-SS changed this from the old per-distinct-type award, so a
+// mix-and-match loadout is rewarded per piece and heavy_armor will accrue
+// naturally once biome-2 heavy gear ships). Lives here since Items.ts owns
+// armorType lookups.
+export function armorTypesWornPerPiece(slots: (EquippedItem | null)[]): ArmorType[] {
+  const out: ArmorType[] = [];
   for (const eq of slots) {
     if (!eq) continue;
     const t = ITEM_DEFS[eq.key]?.armorType;
-    if (t) out.add(t);
+    if (t) out.push(t);
   }
-  return [...out];
+  return out;
 }

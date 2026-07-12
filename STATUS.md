@@ -2,12 +2,13 @@
 
 ## Current State
 
-_Living snapshot — edit in place, never append. Last shipped: **third playtest fix
-batch — one-shot placement, no more full-screen level-up flash, station-label depth
-fix, aggro-based Comfort resting, output-based craft slider, Cook menu overflow fix,
-craft-into-hotbar stacking, boss return-to-spawn on deaggro, War Camp guards no longer
-respawn (or map-clutter) mid-fight, and a Victory/Death-screen input lock**,
-**2026-07-11**._
+_Living snapshot — edit in place, never append. Last shipped: **M-SS — Stats &
+Skills depth pass: an all-weapon CRIT system (Strength = crit damage / Agility =
+crit chance / per-weapon base crit), Endurance/Vitality gained secondary regen &
+healing-received axes, Intelligence = +XP / Willpower renamed Wisdom = +buff
+duration, light_armor → dash i-frame window, running → sprint-drain cut,
+chopping/mining → bonus-drop chance, per-piece armor XP, and HP/stamina relics
+converted flat→percent so they compound with a stats build**, **2026-07-11**._
 
 **The game.** Top-down 2D pixel survival-ARPG (Phaser 3 + TypeScript + Vite; all
 textures are placeholders generated in `BootScene`). One forest biome sitting in the
@@ -36,24 +37,18 @@ death ends a run and posts a `localStorage` high score; killing the Gremlin King
 win. The world is now circular + much larger (M-W1 geometry prep, above); deterministic
 seeded world-gen and actual multi-biome content are still deferred to M-W1 proper.
 
-**In progress / next.** the user is prepping for the first outside playtesters. This
-session's batch (see below) is a further round of playtest fixes on top of 5z. A
-brainstorm/plan is also in flight (not yet built): reworking Stats + Skills, which feel
-negligible next to Relics now — the user's own direction is relics = the stats/buffs
-layer, recipes = the uniqueness layer (e.g. a weapon recipe with a proc chance), with
-Skills/Stats needing their own distinct reason to invest. **This is now a LOCKED plan
-(milestone M-SS): `.claude/plans/crit-tempering-lodestar.md`** — a new crit system
-(Strength = crit multiplier / Agility = crit chance, all-weapon; base crit per-weapon),
-Vitality/Endurance get a flat bump + a distinct secondary axis (healing received / stamina
-regen), relics reworked to synergize (flat HP/stam relics -> percent so they multiply the
-stat-built base; new crit relic channels), light_armor -> dash i-frame window,
-running/chopping/mining wired up, per-piece armor XP, Willpower->Wisdom rename; heavy_armor
-deferred to biome 2, blocking deferred. Build on Opus. Real pixel art/animations stay
-deliberately deferred until content/balance
-settle further (the whole texture pipeline is built to swap late — see `CLAUDE.md`
-roadmap item 8). Next: build **M-SS**, then resume the
-locked build order — **M-TE** (trophy-gated special gear), then **M-W1** (multi-biome
-content in the now-circular world) last.
+**In progress / next.** M-SS (stats/skills depth pass — see the entry below) shipped
+this session, so Stats + Skills now each own a distinct, always-live axis relics don't
+touch (crit, regen/healing, XP/buff-duration, gather bonuses, dash-window), and HP/stamina
+relics were converted flat→percent so they multiply a stats build instead of dwarfing it.
+Real pixel art/animations stay deliberately deferred until content/balance settle further
+(the whole texture pipeline is built to swap late — see `CLAUDE.md` roadmap item 8). Next:
+resume the locked build order — **M-TE** (trophy-gated special gear; it will read the
+untouched-but-reserved weapon-skill threshold hook for procs), then **M-W1** (multi-biome
+content in the now-circular world) last. Crit numbers, per-point stat values, and the
+skill-effect rates are all first-pass — expect a tuning pass after a playtest (per-weapon
+base crit is the lever if a weapon feels off; re-check the "boss slightly overtuned" gap
+now that crit is a player-driven damage ramp).
 
 **Known issues / open.**
 - Boss may be slightly overtuned after the 5s damage bump (the user's "TBD" — left as-is
@@ -72,6 +67,72 @@ content in the now-circular world) last.
 ## Recent Entries
 
 > Older entries in STATUS-archive.md.
+
+### M-SS — Stats & Skills depth pass (crit + distinct-axis effects + relic synergy)
+
+Plan: `.claude/plans/crit-tempering-lodestar.md`. Built on **Opus** (crit is a new combat
+mechanic + the relic change is a data-model change). Fixes the "Stats/Skills feel
+negligible next to Relics" problem via the locked three-layer split: Relics = raw-% stat
+layer, crafted gear = uniqueness/procs (M-TE, later), and **Stats/Skills = the reliable,
+player-steered layer on axes relics don't touch** — plus making relics *synergize with*
+stats instead of dwarfing them.
+
+**Crit system (the headline).** Split by AXIS, not weapon class: **Strength = crit
+multiplier** (+0.04×/pt, retired the old melee stamina-cost knob), **Agility = crit
+chance** (+0.5%/pt, retired the ranged one), both **all-weapon**, multiplying together so a
+crit build wants both. **Per-weapon base crit** lives in `Weapons.ts`
+(`WEAPON_BASE_CRIT_CHANCE`/`_MULT` + getters) — slow/heavy weapons get higher base
+(primal_spear 8%/1.6×, fast bone_knife 4%/1.5×), doubling as an attack-speed lever. The
+locked pipeline is `weaponBase × (1+skill%) × (1+relic dmg%) × staggerMult ×
+(critRoll?critMult:1)` — crit is the final multiplicative step. `MainScene.applyCrit()`
+rolls it (chance/mult = weapon base + stat + relic, soft-capped `CRIT_CHANCE_CAP` 0.60 /
+`CRIT_MULT_CAP` 3.0, `Math.random` — combat crit isn't seeded), called from both
+`tryMeleeAttack` (rolled at hit) and `tryRangedAttack` (rolled at fire, baked into the
+projectile via a new `Projectile.isCrit` — no weapon context at impact). A crit tints the
+floating damage number orange-yellow + "!" and plays a new `Sfx.crit()` cue. The inventory
+Combat column + the weapon Tooltip both surface crit (base + live stat/relic rollup).
+
+**Stat rework (`Progression.ts`).** Every stat now has a live effect: **Endurance** +3 max
+stam **and** +2% stamina-regen rate/pt; **Vitality** +4 max HP **and** +1.5%
+healing-received/pt (amplifies food/Comfort/kill-heal, NOT passive regen — there is none);
+**Intelligence** +1.5% skill-XP/pt (stacks with the Scholar's-Idol relic + is applied in
+`awardSkillXp`); **`willpower` renamed `wisdom`** = +2% buff/food duration/pt. New getters:
+`critChanceBonus`/`critMultBonus`/`healingReceivedMult`/`staminaRegenMult`/`xpMult`/
+`buffDurationMult`. `weaponStaminaCostMultiplier` **retired** — grep'd out of MainScene (×3),
+Tooltip, and CraftingMenu (their weapon "Stamina" tooltip line now shows the authored base;
+only relics discount stamina now).
+
+**Skill rework (`Skills.ts`).** Second/first real effects for one-note & dormant skills:
+**light_armor** → +5ms dash i-frame/level over the 150ms base, cap +100ms (Monster Hunter
+"Evade Window", added to `DASH_IFRAME_MS`); **running** also cuts sprint stamina drain
+−1%/level cap −40%; **chopping/mining** → +1%/level (cap 60%) chance for a bonus +1 drop on
+a depleted tree/rock (incl. cracked Gloam ore), rolled in the tool-swing path. `heavy_armor`
++ `blocking` stay deliberately dormant (biome-2 heavy gear / a real block mechanic) with an
+explicit "no effect yet" impact line. **Per-piece armor XP** — the kill loop now awards +30
+per *worn piece* (`armorTypesWornPerPiece`, replacing the old per-distinct-type
+`armorTypesWorn`), so full-light (3) gives 3 light ticks and heavy_armor will accrue
+naturally once biome-2 heavy gear ships. The 5 weapon-damage skills are unchanged (+0.5%/lvl)
+— reserved as the M-TE proc-threshold hook.
+
+**Relic synergy (`Relics.ts`).** HP/stamina relic channels went **flat → percent**
+(`maxHpPct`/`maxStaminaPct` + `maxHpPctMult`/`maxStaminaPctMult` getters): Stout 15→15%,
+Vigor 25/20→20%/18%, Titan 50/35→40%/30%. `MainScene.syncStatBonuses` now compounds
+`(100 + statBonus) × relicPctMult − 100`, so stats × relics multiply (verified: 20 Vitality
+→ base 180, +Stout+Vigor 35% → 243 max HP). New **crit relic channels** (`critChancePct`/
+`critDamagePct` + getters) with two seeds — Common **Keen Charm** (+5% crit chance),
+Uncommon **Savage Idol** (+0.30× crit dmg). `scaledEffectText` updated for all new channels;
+`allocateStat` now always re-syncs (every stat feeds a cached multiplier now).
+
+**Verified live** (`preview_eval`, console error-free): every stat getter (20 Vit → healMult
+1.3, 10 End → regenMult 1.2, 10 Str → +0.4 crit mult, 10 Agi → +0.05 crit chance, 5 Int →
+xpMult 1.075, 5 Wis → buffDurationMult 1.1); relic %-HP compounds the stat base (180×1.35=243
+HP, 130×1.18=153.4 stam); crit rolls & applies (primal_spear 18%×2.30 → 10 dmg crits to 23,
+non-crit 10) and both caps hold (mult 3.0 → 30, chance 0.60); heal 10×1.3=+13, buff 1000×1.1
+→ 1100ms, stamina regen 20×1.2 → +24/s; all four skill getters + impact strings correct
+(dash +100ms cap, drain 0.6, chop 30%, mine 60% cap); per-piece armor XP returns 3 light
+entries for 3 worn pieces; Combat column reports crit 18%×2.30. `tsc --noEmit` + full build
+clean. `RECIPES.md` relic table + dashboard weapons tab (base-crit + eff-DPS columns)
+updated. See [[survivor-rpg-stats-skills-relics-direction]].
 
 ### 5aa — Third playtest fix batch (placement, level-up flash, resting, sliders, boss/camp fixes, victory-screen lock)
 
@@ -412,152 +473,3 @@ ethos as the generated textures, swappable later) before a second/wider playtest
 Real pixel art + animations stay deferred until content/balance settle further (last, per
 `CLAUDE.md` roadmap item 8). Then the master-plan tail: **M-TE** (trophy gear), **M-W1**
 (multi-biome world).
-
-### Previously: Gloaming Vein (rarity-ore POI + mini-boss + trophy refinement)
-
-Built the next locked feature after the world/map rework — plan:
-`.claude/plans/amethyst-warding-vein.md`. Built on **Opus** (new mechanic: a POI + a
-bespoke mini-boss + a refinement data model). A content+economy pass on the M-RL relic
-loop: kill elites → raw Common trophies (86.5% crumble when rolled) → find + clear the ore
-POI → Gloam Shards → spend them at the Relic Forge's new **Refine tab** to climb a raw
-trophy one rarity up into a **Refined trophy that never fails a roll** (Uncommon outcome
-table = 100% floor). Fully gated behind exploration + a mini-boss ("nothing free").
-
-**The POI (world-gen, `MainScene`).** `veinPosition` is chosen once in `create()` after
-the altar (so it stays ≥900px from BOTH world center and the war camp — verified 1290px
-from center / 2429px from camp) and before node/enemy spawning, so a new
-`VEIN_CLEAR_RADIUS` (160) exclusion in `pickSpawnPoint` keeps ordinary trees/rocks/enemies
-out of the ore clearing (same pattern as the war camp — [[feedback_poi_busy_not_placeholder]]).
-`spawnGloamingVein()` drops the **Gloamwarden** guardian at the clearing center ringed by
-**5 shielded ore `ResourceNode`s** (Stone-Pickaxe-gated `mine` action, non-respawning, 1–2
-Gloam Shard each, ~2 hits) plus **10 decorative amethyst crystal clusters**
-(`gloam_crystal_cluster`). New `ResourceNode.shielded` flag + `crack(texture)`: shielded
-nodes are skipped by hover/prompt/interact (like `harvested`) and swap
-`gloaming_vein_shielded` → `gloaming_vein` when the guardian dies. **Unique area look** (so
-the ore reads as its own place, like the war-camp floor does for the altar):
-`buildBiomeTexture()` stamps a distinct **gloam-blighted crystalline floor** over the
-clearing (dark-violet wash + a brighter amethyst core). Vein node + a few crystal positions
-feed `veinLightPoints` that `collectLights()` iterates, so the crystals **glow purple at
-night** — a navigation beacon like the war-camp braziers. Discovered within `REVEAL_RADIUS`
-→ a purple **minimap landmark** (`map_vein`, generalized `updateAltarDiscovery`). New
-per-run fields reset in `create()`.
-
-**The guardian (`src/entities/Gloamwarden.ts`).** A bespoke mini-boss following
-GremlinKing's telegraph/poise pattern but **lighter** (per the "no shared boss framework"
-lock — a trimmed sibling, not a subclass of GremlinKing). Extends `Enemy`, fully overrides
-`update()`. 260 HP, scale 1.7, poise 60 → stagger (2.5s, ×1.5 damage punish), difficulty
-between an elite and the King; regens 10 HP/s while deaggro'd. Two **bespoke** purple-
-telegraphed attacks — deliberately NOT the roster's charge/radial-slam (the user: those read
-as "Boar charge / King slam again"): a **Leaping Smash** (leap to a locked landing spot +
-AoE 95px, 22 dmg + kb — kept to preview the Gremlin King's own leaping smash) and a **Gloam
-Eruption** (the warden roots itself and channels, then crystal spikes erupt at the player's
-locked ground spot, 72px, 24 dmg + small launch — boss stays put + vulnerable = a punish
-window; dodge is to leave the marked ground). Area damage flows through `checkPlayerHit()`
-(queried in `updateEnemies` alongside GremlinKing) into the same `applyDamageToPlayer` choke
-point, so dash i-frames/armor "just work." On death, `onGloamwardenKilled()` cracks the vein
-+ guaranteed drop 3–4 Gloam Shard + 1 Refined Trophy. Scored as an **elite** kill (no
-dedicated mini-boss band — the plan's "simplest" open sub-decision).
-
-**Refinement (`Relics.ts` + `RelicForgeMenu.ts`).** New `REFINE_RECIPES` (data-driven,
-tier-keyed) + `refinableTrophyKeys`/`ownedRefineInput`/`canAffordRefine` helpers. Biome-1
-recipe: **3 raw Common trophies (any species mix) + 2 Gloam Shards → 1 Refined Trophy**;
-an Uncommon→Radiant scaffold row exists but never surfaces (no raw Uncommon source in
-biome 1). Refined trophies are **roll-only** `TROPHY_ROLL` keys (never dropped, never a
-refine input — single-step + terminal, which caps biome 1 at Refined Uncommon and blocks
-an infinite ladder). The forge menu gained a **Bind / Refine tab toggle** ("Bind" is the
-in-universe name for rolling — the forge "binds trophies into relics"); the Refine tab
-lists affordable recipes with a live cost readout + a **timed `ProgressBar`** (650ms,
-commit-at-end + cancel-on-close, same as craft/process/cook). `MainScene.refineTrophies()`
-consumes inputs greedily across species + grants the output at bar completion. **The Refine
-tab is hidden entirely until the Relic Forge reaches Lvl 2** (no locked tab, no hint) — a new
-**Gloam Conduit** station upgrade (`StationUpgrades.ts`, 15 Stone + 1 Gloam Shard, right-click
-the forge → Upgrade) unlocks it. So you can't refine until you've mined at least one shard
-(which the upgrade itself costs).
-
-**Verified live** (`preview_eval` + screenshots): all new textures load; POI spawns 5
-shielded nodes + guardian at correct distances; shielded nodes un-hoverable even with a
-pickaxe equipped; guardian cycles telegraph → **Leaping Smash** (22, kb 200) / **Gloam
-Eruption** (24, kb 120) → recover, and poise-0 → staggered; killing it cracks all 5 nodes
-(texture swap, `shielded` false); the vein clearing shows its distinct gloam floor + crystal
-props (screenshotted); the **Refine tab is hidden entirely at forge Lvl 1** (only the Roll
-tab shows) and **appears at Lvl 2**, and the **Gloam Conduit** upgrade applies near a Workbench
-(tier 0→1, −15 Stone/−1 Gloam Shard); refine consumes 3 mixed-species commons + 2 shards →
-1 refined; a Refined trophy rolls **200/200 successes** (Uncommon 100% floor); the
-ProgressBar commits at end (nothing consumed mid-bar); 9 vein light points reach
-`collectLights`.
-`tsc --noEmit` clean; console error-free. `RECIPES.md` + the dashboard (Relics Refine
-table + Enemies Gloamwarden row) updated. See [[survivor-rpg-gloaming-vein-plan]].
-
-**Next:** **M-TE** (trophy-gated special gear), then **M-W1** (multi-biome content in the
-now-circular world) last.
-
-### Previously: Circular bigger world + minimap nearby-view + full-map overlay
-
-Off the master-plan build order (the user paused the Gloaming Vein to first do the world/map
-rework, prepping for M-W1). Built on **Opus** (new world-gen geometry + two new map
-systems). Three asks: (1) make the world **circular + much bigger**, keeping the current
-biome ~its size but leaving room (empty for now) for future biomes; (2) the corner minimap
-should show a **nearby view** (what's on screen), not the whole world; (3) a **full map**
-opened by a button, **zoomable (scroll) + pannable (drag)**, with **POI icons once
-discovered**.
-
-**Circular bigger world.** New geometry constants in `MainScene`: `WORLD_RADIUS` 4000
-(→ `WORLD_SIZE` 8000px square that bounds the world circle), `BIOME_RADIUS` 2000 (the
-central content circle, ~the old 3584×2688 biome, slightly larger), centered at
-`WORLD_CX/CY` = 4000. `WORLD_W`/`WORLD_H` kept as back-compat aliases = `WORLD_SIZE` (all
-the existing `WORLD_W/2`-is-center math still holds). **`Biome` is now origin-aware**
-(`new Biome(originX, originY, regionW, regionH, rng)`) — it generates only a centered
-`BIOME_SIZE` region and `forestWeight`/`creekWeight` return 0 outside it, so the outer ring
-is plain grass. `buildBiomeTexture()` bakes only that region (a `BIOME_SIZE`×`BIOME_SIZE`
-RenderTexture placed at the region origin — kept well under the GPU texture-size limit
-instead of a full-world 8000px bake). All spawn samplers (`pickSpawnPoint`,
-`pickCreekEdgePoint`, `pickPointNearAltar`) now sample within the region and reject points
-outside `BIOME_RADIUS`, so all first-biome content stays in the central circle (verified:
-0/396 nodes outside; a few war-camp/shack guards spill ~120px past onto grass, as the camp
-sits at the biome's outer edge — fine/thematic). `clampPlayerToWorld()` pins the player to
-the world circle each frame; `drawWorldBoundary()` fills a dark **void ring** beyond
-`WORLD_RADIUS` (cheap concentric thick strokes, no giant texture) + a shoreline accent, so
-the playable area reads as a round island.
-
-**Depth regression fixed (important).** Enlarging the world pushed world-object Y-sort
-depth (`= y`) up to ~8000, which drew low trees/enemies OVER the fixed HUD (2600–6000).
-New **`src/systems/depth.ts` `ysortDepth(y) = y * 0.3`** compresses the world Y range into
-a bounded band (max ~2400, below the HUD), applied at every world Y-sort site
-(Player/Enemy/ResourceNode/GremlinShack/BossAltar + war-camp props). Order preserved;
-ground/ring negatives + low-depth drops/damage-numbers unaffected. **Any new Y-sorting
-world object must use `ysortDepth`.**
-
-**Map rework — three pieces.**
-- **`src/systems/ExploredMap.ts`** (new, framework-light) — the shared explored-world
-  model behind both views: a world-space fog color cache (one 0xRRGGBB per 40px fog cell,
-  −1 = unrevealed) + the discovered-POI landmark list. It's the **single consumer** of
-  `FogOfWar`'s reveal queue (`drainRevealed()` updates the cache + returns changed cells),
-  so the two views can't race. Fog grid is now world-space (200×200 @ 40px), decoupled from
-  any HUD panel resolution.
-- **`MinimapUI` rewritten** — the corner panel is now a **player-centered nearby window**
-  (~2240×1680 world px, a touch past the 1920×1080 viewport), repainted each frame from the
-  color cache as clipped Graphics rects (no whole-world shrink). Landmark dots + player
-  marker + night dim. A small **"🗺 Map (M)"** button is tucked in its corner.
-- **`src/ui/WorldMapUI.ts`** (new) — the full-screen overlay (M key / Map button / ✕ /
-  Esc). Draws the whole explored fog cache as clipped, zoom/pan-transformed Graphics rects
-  (a dirty flag rebuilds terrain only on zoom/pan/new-reveal; the same reliable fixed-HUD
-  clipping the minimap uses, no geometry-mask-vs-scroll drift). **Scroll = zoom (1–10×),
-  drag = pan (clamped)**; discovered POIs get an **icon + label** (`map_altar` red/gold war
-  camp, `map_shack` brown — new BootScene markers). **Non-modal** per the locked design —
-  the game keeps running and the player can walk while it's open (world clicks/hover
-  suppressed over it; it doesn't pause). Keybinds panel gained a "World map: M" line.
-
-**Verified live** (`preview_eval` + screenshots): player spawns at center (4000,4000);
-biome origin (2000,2000)/region 4000²/fog 200²@40; altar 1955px from center (in-biome);
-0 nodes outside the biome circle; player shoved to (4000,8300) clamps to dist 3980
-(`WORLD_RADIUS`−20); void/shoreline ring renders at the edge; nearby minimap scrolls with
-the player and shows the edge as void; full map renders the explored trail + war-camp +
-3 shack icons/labels, zoom scales cleanly (clipped to panel), a 250px drag pans and a huge
-drag clamps to 1611; and — the depth fix — trees no longer draw over the map panel (a
-mid-test RunEndUI correctly sat above it at 3500). `tsc --noEmit` clean; console
-error-free. No `RECIPES.md` change (no recipe/cost changes).
-
-**Next:** the **Gloaming Vein** (mineable rarity-ore POI + trophy refinement, plan
-committed at `.claude/plans/amethyst-warding-vein.md`), then **M-TE**, then **M-W1** proper
-(multi-biome content + deterministic seeded gen in this now-circular world).
-

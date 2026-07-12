@@ -1108,6 +1108,49 @@ mouse-driven only. Don't reintroduce a keybind for this without being asked. Spa
    server cap): slingshot fire/impact/ammo-decrement, 0-ammo + out-of-range silent no-ops,
    javelin self-consume + auto-unequip at 0, melee unaffected, auto-sort, shift-split, and
    all 6 SFX cues (no console errors). Full detail in `STATUS.md`.
+5z/5aa. **Two playtest fix batches** (Sonnet, fixes/tuning only — full detail in
+   `STATUS.md`, not re-narrated here): SFX/flash feel tuning, top-toast overlap fix, batch
+   quantity sliders for crafting/cooking, Javelin/Slingshot-Pellets gating, forge roll UI
+   consolidated to one-button-per-rarity (5z); then one-shot placement, level-up flash
+   removed, station-label depth fix, aggro-based (not radius-based) Comfort resting,
+   output-unit craft slider, cook-menu overflow fix, craft-into-hotbar stacking, boss
+   return-to-spawn on deaggro, War-Camp guards no longer respawn mid-fight, and a
+   victory/death-screen input lock (5aa).
+5ab. **M-SS (Stats & Skills depth pass — crit + distinct-axis effects + relic synergy)** —
+   plan: `.claude/plans/crit-tempering-lodestar.md`, built on Opus (new combat mechanic +
+   relic data-model change). **This SUPERSEDES the stat/skill numbers described in roadmap
+   item 5 (Progression) above** — read this entry for the current values. The locked
+   three-layer split: Relics = raw-% stat layer, crafted gear = uniqueness/procs (M-TE,
+   later), Stats/Skills = the reliable player-steered layer on axes relics don't touch.
+   **New all-weapon CRIT system**: split by AXIS — **Strength = crit multiplier**
+   (+0.04×/pt, cap 3.0×), **Agility = crit chance** (+0.5%/pt, cap 60%), both retiring the
+   old per-class stamina-cost knob (`weaponStaminaCostMultiplier` fully removed). Per-weapon
+   **base crit** lives in `Weapons.ts` (`WEAPON_BASE_CRIT_CHANCE`/`_MULT`; slow weapons
+   higher — primal_spear 8%/1.6×, fast bone_knife 4%/1.5×) — an attack-speed lever + what
+   keeps each stat worth a point alone. Pipeline (multiplicative, `MainScene.applyCrit`,
+   `Math.random` — combat crit isn't seeded): `weaponBase × (1+skill%) × (1+relic dmg%) ×
+   staggerMult × (critRoll?critMult:1)`, rolled in `tryMeleeAttack` (at hit) and
+   `tryRangedAttack` (at fire, carried by a new `Projectile.isCrit` since impact has no
+   weapon context). Crit tints the damage number orange + plays `Sfx.crit()`; the inventory
+   Combat column + weapon Tooltip surface it. **Stat effects (all live now)**: Endurance +3
+   max stam & +2% stamina-regen/pt; Vitality +4 max HP & +1.5% healing-received/pt (food/
+   Comfort/kill-heal, NOT passive regen); Intelligence +1.5% skill-XP/pt (stacks w/
+   Scholar's-Idol relic); **Willpower → Wisdom** = +2% buff/food duration/pt. Secondary
+   axes are centralized in `Health.setHealMult`/`Stamina.setRegenMult`/
+   `BuffManager.setDurationMult`, all pushed from `syncStatBonuses` (which `allocateStat`
+   now always calls). **Skill effects**: light_armor → +5ms dash i-frame/lvl over the 150ms
+   base (cap +100ms); running also cuts sprint stamina drain −1%/lvl (cap −40%); chopping/
+   mining → +1%/lvl (cap 60%) chance for a bonus +1 drop on a depleted tree/rock (incl.
+   Gloam ore). **Per-piece armor XP** (new `Items.armorTypesWornPerPiece`, replaced the
+   deduped `armorTypesWorn`) — full-light gives 3 light ticks; heavy_armor/blocking stay
+   deliberately dormant (biome-2 heavy gear / a real parry mechanic) with an explicit "no
+   effect yet" impact line; the 5 weapon-damage skills are unchanged (reserved as the M-TE
+   proc-threshold hook). **Relics synergize now**: HP/stamina channels went **flat →
+   percent** (`maxHpPct`/`maxStaminaPct` — Stout 15%, Vigor 20%/18%, Titan 40%/30%) so
+   `syncStatBonuses` compounds `(100 + statBonus) × relicPctMult`; new crit relic channels
+   (`critChancePct`/`critDamagePct`) + two seeds (Common **Keen Charm** +5% crit chance,
+   Uncommon **Savage Idol** +0.30× crit dmg). All numbers first-pass/tunable. `RECIPES.md`
+   relic table + dashboard weapons tab updated. See `STATUS.md`.
 
 **A new umbrella plan for the long-requested roguelike run/score meta-loop** now exists:
 `.claude/plans/roguelike-metaloop-master-plan.md` (drafted 2026-07-10, locked build order
@@ -1120,8 +1163,8 @@ Hardcore death, done — see 5h) → M-DN (Day/Night, done — see 5i) → Comfo
 M-SB/Sleep-Bed, done — see 5j) → M-EL2 (generalized elite spawning, done — see 5k) →
 ~~M-FA~~ (cut, see 5l) → M-RL (trophy → RNG relics, done — see 5m; playtest follow-up 5n) →
 M-WC (Gremlin War Camp, done — see 5o) → Gloaming Vein (rarity-ore POI + trophy refinement,
-done — see 5w) → **M-TE (trophy-gated gear), next** → M-W1 (circular multi-biome world,
-last).**
+done — see 5w) → M-SS (stats/skills depth pass + crit, done — see 5ab) → **M-TE
+(trophy-gated gear), next** → M-W1 (circular multi-biome world, last).**
 
 **Not yet built — next up in rough order:**
 6. **World & discovery** — much bigger generated world, biomes, map, eventually a

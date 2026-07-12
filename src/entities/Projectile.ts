@@ -13,6 +13,7 @@ export interface ProjectileConfig {
   texture: string;
   maxRangePx: number;
   sourceIsPlayer: boolean; // who fired it — not yet used to pick a group (only enemy-sourced projectiles exist so far), but part of describing a projectile regardless of source
+  isCrit?: boolean; // player ranged crit (M-SS) — rolled at fire time, carried so the impact damage number tints
 }
 
 // Whatever spawns projectiles (currently just MainScene) implements this —
@@ -26,6 +27,7 @@ export interface ProjectileHost {
 export class Projectile extends Phaser.Physics.Arcade.Sprite {
   readonly damage: number;
   readonly sourceIsPlayer: boolean;
+  readonly isCrit: boolean;
   private readonly spawnX: number;
   private readonly spawnY: number;
   private readonly maxRangePx: number;
@@ -36,6 +38,7 @@ export class Projectile extends Phaser.Physics.Arcade.Sprite {
     super(scene, cfg.x, cfg.y, cfg.texture);
     this.damage = cfg.damage;
     this.sourceIsPlayer = cfg.sourceIsPlayer;
+    this.isCrit = cfg.isCrit ?? false;
     this.spawnX = cfg.x;
     this.spawnY = cfg.y;
     this.maxRangePx = cfg.maxRangePx;

@@ -199,7 +199,7 @@ Trophy.
 
 | Rarity | Relics (base effect, ×power-tier mult) |
 |---|---|
-| Common | Warrior's Charm (+8% dmg) · Swift Charm (+8% move) · Stoneskin Charm (−8% dmg taken) · Tireless Charm (−12% stamina cost) · Bloodroot Charm (+2 HP/kill) · Stout Charm (+15 max HP) |
-| Uncommon | Warrior's Idol (+16% dmg) · Swift Idol (+16% move) · Ironhide Idol (−14% dmg taken) · Vigor Idol (+25 HP, +20 stam) · Sanguine Idol (+4 HP/kill) · Scholar's Idol (+25% skill XP) |
-| Rare | War Totem (+26% dmg, −12% stamina) · Phantom Totem (+22% move, −12% dmg taken) · Titan Totem (+50 HP, +35 stam) · Reaper Totem (+8 HP/kill, +14% dmg) |
+| Common | Warrior's Charm (+8% dmg) · Swift Charm (+8% move) · Stoneskin Charm (−8% dmg taken) · Tireless Charm (−12% stamina cost) · Bloodroot Charm (+2 HP/kill) · Stout Charm (+15% max HP) · Keen Charm (+5% crit chance) |
+| Uncommon | Warrior's Idol (+16% dmg) · Swift Idol (+16% move) · Ironhide Idol (−14% dmg taken) · Vigor Idol (+20% HP, +18% stam) · Sanguine Idol (+4 HP/kill) · Scholar's Idol (+25% skill XP) · Savage Idol (+0.30× crit dmg) |
+| Rare | War Totem (+26% dmg, −12% stamina) · Phantom Totem (+22% move, −12% dmg taken) · Titan Totem (+40% HP, +30% stam) · Reaper Totem (+8 HP/kill, +14% dmg) |
 | Mythic | Gremlin King's Wrath (+40% dmg, +18% move) · Undying Heart (+15 HP/kill, −22% dmg taken) · Avatar's Mantle (+30% dmg, +25% move, −20% stamina) |

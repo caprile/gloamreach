@@ -70,6 +70,35 @@ export function damageTypeDisplayName(type: DamageType): string {
   return type.charAt(0).toUpperCase() + type.slice(1);
 }
 
+// Per-weapon base crit (M-SS). This is where "base crit" lives — grounded
+// per-weapon rather than one arbitrary global player constant — AND doubles as
+// an attack-speed lever: slow/heavy weapons get higher base crit (a burst where
+// overkill is least wasted), fast weapons lower. Strength (crit mult) / Agility
+// (crit chance) stats and relic crit channels ADD on top of these bases; the
+// totals are soft-capped in MainScene's crit roll (chance 60%, mult 3.0x).
+const WEAPON_BASE_CRIT_CHANCE: Record<WeaponType, number> = {
+  bone_knife: 0.04, // fast (350ms)
+  wood_club: 0.05,
+  stone_club: 0.05,
+  slingshot: 0.05,
+  javelin: 0.05,
+  primal_spear: 0.08, // slow (650ms)
+};
+const WEAPON_BASE_CRIT_MULT: Record<WeaponType, number> = {
+  bone_knife: 1.5,
+  wood_club: 1.5,
+  stone_club: 1.5,
+  slingshot: 1.5,
+  javelin: 1.5,
+  primal_spear: 1.6,
+};
+export function weaponBaseCritChance(weapon: WeaponType): number {
+  return WEAPON_BASE_CRIT_CHANCE[weapon];
+}
+export function weaponBaseCritMult(weapon: WeaponType): number {
+  return WEAPON_BASE_CRIT_MULT[weapon];
+}
+
 // A ranged weapon fires a Projectile instead of applying damage instantly at
 // melee reach — see MainScene.tryRangedAttack. Absent for every melee weapon
 // (isRangedWeapon is a plain key-presence check). Deliberately slow

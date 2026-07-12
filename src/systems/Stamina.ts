@@ -15,6 +15,13 @@ export class Stamina {
   private elapsed = 0; // running clock fed only by tick(delta)
   private regenAt = 0; // elapsed-time value regen may resume at
   private bonusMax = 0; // additive max from Endurance points (Progression.ts)
+  private regenMult = 1; // Endurance stamina-regen-rate amplifier (M-SS)
+
+  // Set the regen-rate multiplier (Endurance). Speeds refill only; the
+  // post-spend delay window is unchanged.
+  setRegenMult(m: number): void {
+    this.regenMult = Math.max(0, m);
+  }
 
   get max(): number {
     return MAX_STAMINA + this.bonusMax;
@@ -49,6 +56,6 @@ export class Stamina {
     this.elapsed += delta;
     if (this.elapsed < this.regenAt) return; // still in the post-spend delay window
     if (this.current >= this.max) return;
-    this.current = Math.min(this.max, this.current + REGEN_PER_SEC * (delta / 1000));
+    this.current = Math.min(this.max, this.current + REGEN_PER_SEC * this.regenMult * (delta / 1000));
   }
 }

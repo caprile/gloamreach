@@ -1,11 +1,16 @@
-import type { DamageType } from "./Weapons";
-
 // The overall character Level — separate from per-activity Skills. Fed BY skill
 // leveling (each skill level-up grants the player that level-up's XP cost),
 // and unlike skills it drives real stats: reaching level N grants N allocatable
 // points spent across the stats below. First-pass numbers throughout — expect
 // tuning, like every other system in this project.
-export type StatType = "endurance" | "vitality" | "strength" | "agility" | "intelligence" | "willpower";
+//
+// M-SS reworked every stat to a distinct, always-live axis relics don't touch:
+// crit is split by AXIS (Strength = crit multiplier, Agility = crit chance,
+// both all-weapon), Endurance/Vitality each got a flat bump plus a secondary
+// regen/healing axis, and the old "spell/mana placeholder" pair became real
+// XP-gain (Intelligence) / buff-duration (Wisdom) knobs. `willpower` was
+// renamed `wisdom` in the same pass.
+export type StatType = "endurance" | "vitality" | "strength" | "agility" | "intelligence" | "wisdom";
 // (No "luck" — deliberately deferred; don't stub it in.)
 
 export const STAT_TYPES: StatType[] = [
@@ -14,7 +19,7 @@ export const STAT_TYPES: StatType[] = [
   "strength",
   "agility",
   "intelligence",
-  "willpower",
+  "wisdom",
 ];
 
 const STAT_NAMES: Record<StatType, string> = {
@@ -23,24 +28,22 @@ const STAT_NAMES: Record<StatType, string> = {
   strength: "Strength",
   agility: "Agility",
   intelligence: "Intelligence",
-  willpower: "Willpower",
+  wisdom: "Wisdom",
 };
 export function statDisplayName(stat: StatType): string {
   return STAT_NAMES[stat];
 }
 
-// Intelligence/Willpower describe systems that don't exist yet (spell cast
-// time, mana) — kept as placeholders per the user's own framing ("basically
-// placeholders because these magical concepts don't exist in the game or
-// plan yet"). No mechanical hook for either exists; the description is
-// forward-looking only.
+// Every stat now has a live mechanical effect (M-SS). Crit is the headline:
+// Strength scales crit MULTIPLIER, Agility scales crit CHANCE — both apply to
+// all weapons and multiply together, so a crit build wants both.
 const STAT_DESCRIPTIONS: Record<StatType, string> = {
-  endurance: "+1 max Stamina per point",
-  vitality: "+1 max HP per point",
-  strength: "-0.5% stamina cost — melee weapons, per point",
-  agility: "-0.5% stamina cost — ranged weapons, per point",
-  intelligence: "-0.5% spell cast time per point (no spells yet)",
-  willpower: "-0.5% mana cost to magic attacks per point (no mana yet)",
+  endurance: "+3 max Stamina & +2% stamina regen per point",
+  vitality: "+4 max HP & +1.5% healing received per point",
+  strength: "+0.04x crit damage per point (all weapons)",
+  agility: "+0.5% crit chance per point (all weapons)",
+  intelligence: "+1.5% skill XP gain per point",
+  wisdom: "+2% buff & food duration per point",
 };
 export function statDescription(stat: StatType): string {
   return STAT_DESCRIPTIONS[stat];
@@ -60,10 +63,15 @@ export function xpToNextPlayerLevel(level: number): number {
   return Math.round(XP_BASE * Math.pow(level + 1, XP_EXPONENT));
 }
 
-const ENDURANCE_STAMINA_PER_POINT = 1;
-const VITALITY_HP_PER_POINT = 1;
-const STAMINA_COST_PCT_PER_POINT = 0.005; // -0.5% weapon stamina cost per point
-const MIN_STAMINA_COST_MULT = 0.1; // floor so cost can't reach 0/negative
+// --- per-point stat values (M-SS, all tunable) ---
+const ENDURANCE_STAMINA_PER_POINT = 3;
+const ENDURANCE_STAMINA_REGEN_PCT_PER_POINT = 0.02; // +2% stamina regen rate
+const VITALITY_HP_PER_POINT = 4;
+const VITALITY_HEALING_PCT_PER_POINT = 0.015; // +1.5% healing received
+const STRENGTH_CRIT_MULT_PER_POINT = 0.04; // +0.04x crit damage multiplier
+const AGILITY_CRIT_CHANCE_PER_POINT = 0.005; // +0.5% crit chance
+const INT_XP_PCT_PER_POINT = 0.015; // +1.5% skill XP gain
+const WISDOM_BUFF_DURATION_PCT_PER_POINT = 0.02; // +2% buff/food duration
 
 type LevelUpListener = (level: number, pointsAwarded: number) => void;
 
@@ -77,7 +85,7 @@ export class PlayerProgression {
     strength: 0,
     agility: 0,
     intelligence: 0,
-    willpower: 0,
+    wisdom: 0,
   };
   private listeners: LevelUpListener[] = [];
 
@@ -117,13 +125,35 @@ export class PlayerProgression {
   vitalityHealthBonus(): number {
     return this.stats.vitality * VITALITY_HP_PER_POINT;
   }
-}
 
-// Non-magical melee (slash/blunt/pierce) is scaled by Strength, ranged by
-// Agility. Magic has no active stamina-cost stat today — Intelligence/
-// Willpower's job is spell-cast-time/mana-cost, neither of which exist yet.
-export function weaponStaminaCostMultiplier(dmgType: DamageType, p: PlayerProgression): number {
-  if (dmgType === "magic") return 1;
-  const stat: StatType = dmgType === "ranged" ? "agility" : "strength";
-  return Math.max(MIN_STAMINA_COST_MULT, 1 - p.statValue(stat) * STAMINA_COST_PCT_PER_POINT);
+  // --- M-SS secondary axes (multipliers/additives read at MainScene hooks) ---
+
+  // Agility's additive crit-chance contribution (weapon base + relics add on
+  // top; the total is soft-capped in MainScene's crit roll). Fraction, e.g.
+  // 0.05 = +5%.
+  critChanceBonus(): number {
+    return this.stats.agility * AGILITY_CRIT_CHANCE_PER_POINT;
+  }
+  // Strength's additive crit-multiplier contribution (e.g. 0.4 = +0.4x).
+  critMultBonus(): number {
+    return this.stats.strength * STRENGTH_CRIT_MULT_PER_POINT;
+  }
+  // Vitality amplifies ALL healing received (food/Comfort/kill-heal) — NOT
+  // passive regen (there is none). Multiplier, e.g. 1.15 at 10 Vitality.
+  healingReceivedMult(): number {
+    return 1 + this.stats.vitality * VITALITY_HEALING_PCT_PER_POINT;
+  }
+  // Endurance speeds stamina regen (an axis relics don't touch). Multiplier.
+  staminaRegenMult(): number {
+    return 1 + this.stats.endurance * ENDURANCE_STAMINA_REGEN_PCT_PER_POINT;
+  }
+  // Intelligence boosts all skill-XP gain (stacks additively with the
+  // Scholar's-Idol relic's xpPct at the MainScene award site). Multiplier.
+  xpMult(): number {
+    return 1 + this.stats.intelligence * INT_XP_PCT_PER_POINT;
+  }
+  // Wisdom lengthens buff/food durations (auto-covers future buff procs).
+  buffDurationMult(): number {
+    return 1 + this.stats.wisdom * WISDOM_BUFF_DURATION_PCT_PER_POINT;
+  }
 }

@@ -1,11 +1,17 @@
 import Phaser from "phaser";
 import { itemDef, type ItemDef, type ItemStat } from "../systems/Items";
 import { stationDisplayName } from "../systems/StationUpgrades";
-import { weaponAttacksPerSecond, weaponDamage, weaponPrimaryDamageType, weaponStaminaCost } from "../systems/Weapons";
+import {
+  weaponAttacksPerSecond,
+  weaponBaseCritChance,
+  weaponBaseCritMult,
+  weaponDamage,
+  weaponPrimaryDamageType,
+} from "../systems/Weapons";
 import { weaponSkillDamageMultiplier, type Skills } from "../systems/Skills";
 import { armorDefenseForTier } from "../systems/ArmorUpgrades";
 import { weaponTierDamageBonus } from "../systems/WeaponUpgrades";
-import { weaponStaminaCostMultiplier, type PlayerProgression } from "../systems/Progression";
+import type { PlayerProgression } from "../systems/Progression";
 
 export type TooltipPlacement = "right" | "above";
 
@@ -46,6 +52,13 @@ export class Tooltip {
     if (def.stats?.length) {
       lines.push("");
       for (const s of def.stats) lines.push(`${s.label}: ${this.statValue(def, s, tier ?? 0)}`);
+    }
+    // Weapon base crit (M-SS) — the per-weapon floor; Strength/Agility + crit
+    // relics add on top (shown live in the inventory Combat column).
+    if (def.weapon) {
+      lines.push(
+        `Crit: ${Math.round(weaponBaseCritChance(def.weapon) * 100)}% x${weaponBaseCritMult(def.weapon).toFixed(1)}`,
+      );
     }
     // Food: derive the effect line from `edible` so the numbers live in one
     // place (Items.ts) rather than being re-authored as static stat strings.
@@ -98,13 +111,8 @@ export class Tooltip {
       const adjusted = armorDefenseForTier(def.key, tier);
       return adjusted === base ? `${base}` : `${base} (${adjusted})`;
     }
-    if (stat.label === "Stamina" && def.weapon) {
-      const base = weaponStaminaCost(def.weapon);
-      if (!this.progression) return `${base}`;
-      const dmgType = weaponPrimaryDamageType(def.weapon);
-      const adjusted = Math.round(base * weaponStaminaCostMultiplier(dmgType, this.progression));
-      return adjusted === base ? `${base}` : `${base} (${adjusted})`;
-    }
+    // (Stamina cost is shown as-authored — Strength/Agility no longer discount
+    // it after M-SS; only relics do, and the tooltip is relic-agnostic.)
     if (stat.label === "Attack Speed" && def.weapon) {
       return `${weaponAttacksPerSecond(def.weapon).toFixed(1)}/s`;
     }

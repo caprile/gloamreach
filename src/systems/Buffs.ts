@@ -27,9 +27,16 @@ export class BuffManager {
   // Max concurrent buffs. A locked design cap (currently 2) that future items/
   // buffs may raise — hence a settable field, not a hardcoded constant.
   private maxBuffs = 2;
+  // Wisdom's buff/food-duration amplifier (M-SS). Scales the durationMs of
+  // every applied buff (and its refresh), so Wisdom lengthens food + Comfort.
+  private durationMult = 1;
 
   setMaxBuffs(n: number): void {
     this.maxBuffs = Math.max(1, n);
+  }
+
+  setDurationMult(m: number): void {
+    this.durationMult = Math.max(0.1, m);
   }
 
   // Apply (or refresh) a buff. Re-eating the same food resets its timer to full
@@ -38,9 +45,10 @@ export class BuffManager {
   // a new (distinct) buff evicts whichever active buff has the least time left,
   // so eating always does something rather than silently wasting the food.
   apply(spec: BuffSpec): void {
+    const durationMs = spec.durationMs * this.durationMult;
     const existing = this.buffs.find((b) => b.id === spec.id);
     if (existing) {
-      Object.assign(existing, spec, { remainingMs: spec.durationMs });
+      Object.assign(existing, spec, { durationMs, remainingMs: durationMs });
       return;
     }
     if (this.buffs.length >= this.maxBuffs) {
@@ -50,7 +58,7 @@ export class BuffManager {
       }
       this.buffs.splice(minIdx, 1);
     }
-    this.buffs.push({ ...spec, remainingMs: spec.durationMs });
+    this.buffs.push({ ...spec, durationMs, remainingMs: durationMs });
   }
 
   // Advance every buff by `delta` ms, healing via each active buff's hpPerSec

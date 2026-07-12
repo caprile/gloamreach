@@ -27,6 +27,8 @@ export interface CombatStatsView {
   armor: number; // total flat defense from all worn armor
   attackRange: number; // px, same reach used for interact/attack gating
   ammo: { name: string; count: number } | null; // loaded ranged ammo, if any
+  critChance: number; // 0..0.6 fraction (weapon base + Agility + relics), 0 if no weapon
+  critMult: number; // crit damage multiplier (weapon base + Strength + relics), 0 if no weapon
 }
 
 // Live "what determines the player's move speed right now" breakdown,
@@ -274,6 +276,14 @@ export class InventoryMenu {
     );
     y += lineGap;
     this.addText(x0, y, `Attack Speed: ${stats.weaponName ? `${stats.attackSpeed.toFixed(1)}/s` : "-"}`, 12, "#8a93a3");
+    y += lineGap;
+    this.addText(
+      x0,
+      y,
+      `Crit: ${stats.weaponName ? `${Math.round(stats.critChance * 100)}% x${stats.critMult.toFixed(2)}` : "-"}`,
+      12,
+      "#8a93a3",
+    );
     y += lineGap;
     this.addText(x0, y, `Attack Stamina: ${stats.weaponName ? stats.staminaCost : "-"}`, 12, "#8a93a3");
     y += lineGap;

@@ -26,11 +26,14 @@ import {
   skillDisplayName,
   weaponSkillDamageMultiplier,
   runningSprintMultiplier,
+  dashIframeBonusMs,
+  sprintStaminaDrainMult,
+  choppingBonusChance,
+  miningBonusChance,
   type SkillType,
 } from "../systems/Skills";
 import {
   PlayerProgression,
-  weaponStaminaCostMultiplier,
   xpToNextPlayerLevel,
   type StatType,
 } from "../systems/Progression";
@@ -46,11 +49,13 @@ import {
   damageTypeDisplayName,
   rangedWeaponConfig,
   isRangedWeapon,
+  weaponBaseCritChance,
+  weaponBaseCritMult,
   type WeaponType,
   type DamageType,
 } from "../systems/Weapons";
 import { outputKey, RECIPES, type Recipe } from "../systems/Recipes";
-import { itemDef, armorTypesWorn } from "../systems/Items";
+import { itemDef, armorTypesWornPerPiece } from "../systems/Items";
 import { ItemContainer, moveSlot, sortAndStack, type ItemStack } from "../systems/ItemContainer";
 import {
   STATION_UPGRADES,
@@ -213,6 +218,10 @@ const SPRINT_DRAIN_PER_SEC = 33; // stamina/sec while sprinting — full bar in 
 const RUNNING_XP_PER_SEC = 20;
 const DASH_STAMINA_COST = 25; // flat cost per dash — 4 dashes per full bar
 const DASH_IFRAME_MS = 150; // outlasts the dash burst itself (Milestone E)
+// Crit (M-SS) soft caps on the COMBINED total (weapon base + Strength/Agility
+// stats + relic crit channels). Applied in applyCrit().
+const CRIT_CHANCE_CAP = 0.6;
+const CRIT_MULT_CAP = 3.0;
 const WORKBENCH_RANGE = 100; // px — looser than REACH; "am I near it," not a precise click
 const BLACKBERRY_REGROW_MS = 3 * 60 * 1000; // a picked bush regrows berries after 3 in-game minutes
 // Comfort (Bedroll) HP regen: player must be near a placed Bedroll, that
@@ -689,7 +698,7 @@ export class MainScene extends Phaser.Scene {
     this.physics.add.overlap(this.playerProjectiles, this.enemyGroup, (a, b) => {
       const projectile = (a instanceof Projectile ? a : b) as Projectile;
       const enemy = (a instanceof Enemy ? a : b) as Enemy;
-      if (!enemy.depleted) this.resolveWeaponHit(enemy, projectile.damage, "ranged");
+      if (!enemy.depleted) this.resolveWeaponHit(enemy, projectile.damage, "ranged", projectile.isCrit);
       projectile.destroy();
     });
 
@@ -934,7 +943,9 @@ export class MainScene extends Phaser.Scene {
     // — otherwise a partial remainder that's too small to spend keeps
     // regenerating just enough to pass a ">0" check forever, and sprint never
     // actually hard-blocks.
-    const sprintCost = SPRINT_DRAIN_PER_SEC * (delta / 1000);
+    // Running skill reduces sprint stamina drain (M-SS), on top of keeping
+    // sprint speed.
+    const sprintCost = SPRINT_DRAIN_PER_SEC * sprintStaminaDrainMult(this.skills) * (delta / 1000);
     const canSprint = this.stamina.canAfford(sprintCost);
     const canDash = this.stamina.canAfford(DASH_STAMINA_COST);
     const sprintMultiplier = runningSprintMultiplier(this.skills);
@@ -948,7 +959,8 @@ export class MainScene extends Phaser.Scene {
     }
     if (frame.dashStarted) {
       this.stamina.spend(DASH_STAMINA_COST);
-      this.invulnerableUntil = this.time.now + DASH_IFRAME_MS;
+      // light_armor extends the dodge window (M-SS "Evade Window").
+      this.invulnerableUntil = this.time.now + DASH_IFRAME_MS + dashIframeBonusMs(this.skills);
     }
     this.run.tick(delta);
     this.updateDayNight(delta);
@@ -3349,6 +3361,10 @@ export class MainScene extends Phaser.Scene {
       if (!depleted) return; // node survives the hit; stays interactable
 
       this.spawnLooseDrop(node.resource, node.amount, node.x, node.y);
+      // Chopping/Mining skill: rolled chance for a bonus +1 drop (M-SS). Routes
+      // by tool kind (chop→chopping, mine→mining, incl. cracked Gloam ore).
+      const bonusChance = kind === "axe" ? choppingBonusChance(this.skills) : miningBonusChance(this.skills);
+      if (Math.random() < bonusChance) this.spawnLooseDrop(node.resource, 1, node.x, node.y);
       node.deplete();
       this.nodes = this.nodes.filter((n) => n !== node);
       this.hoveredNode = null;
@@ -3421,15 +3437,12 @@ export class MainScene extends Phaser.Scene {
     const cooldownMs = weaponCooldownMs(this.equippedWeapon);
     if (this.time.now - this.lastWeaponHitAt < cooldownMs) return;
 
-    // Damage type routes both the on-hit skill XP and the Strength/Agility
-    // stamina-cost discount. Weapon damage itself now scales with the
-    // weapon SKILL's own level (not player stat points) — see Skills.ts.
+    // Damage type routes the on-hit skill XP. Weapon damage itself scales with
+    // the weapon SKILL's own level (not player stat points) — see Skills.ts.
+    // (Strength/Agility no longer discount stamina cost — retired in M-SS; only
+    // relics do now.)
     const dmgType = weaponPrimaryDamageType(this.equippedWeapon);
-    const staminaCost = Math.round(
-      weaponStaminaCost(this.equippedWeapon) *
-        weaponStaminaCostMultiplier(dmgType, this.progression) *
-        this.relics.staminaCostMult(),
-    );
+    const staminaCost = Math.round(weaponStaminaCost(this.equippedWeapon) * this.relics.staminaCostMult());
     if (!this.stamina.canAfford(staminaCost)) return; // exhausted — silent, same as tool guard
 
     this.lastWeaponHitAt = this.time.now;
@@ -3452,7 +3465,10 @@ export class MainScene extends Phaser.Scene {
     // is staggered.
     if (enemy instanceof GremlinKing && enemy.isStaggered()) dmg *= STAGGER_DAMAGE_MULTIPLIER;
     if (enemy instanceof Gloamwarden && enemy.isStaggered()) dmg *= WARDEN_STAGGER_DAMAGE_MULTIPLIER;
-    this.resolveWeaponHit(enemy, dmg, dmgType);
+    // Crit is the final multiplicative step (M-SS), rolled here where the weapon
+    // is known — carried into resolveWeaponHit only for the tint.
+    const critResult = this.applyCrit(this.equippedWeapon, dmg);
+    this.resolveWeaponHit(enemy, critResult.dmg, dmgType, critResult.crit);
   }
 
   // Ranged: cooldown/stamina/ammo-gated fire-and-forget. Damage (including
@@ -3471,11 +3487,7 @@ export class MainScene extends Phaser.Scene {
     if (this.time.now - this.lastWeaponHitAt < cooldownMs) return;
 
     const dmgType = weaponPrimaryDamageType(this.equippedWeapon);
-    const staminaCost = Math.round(
-      weaponStaminaCost(this.equippedWeapon) *
-        weaponStaminaCostMultiplier(dmgType, this.progression) *
-        this.relics.staminaCostMult(),
-    );
+    const staminaCost = Math.round(weaponStaminaCost(this.equippedWeapon) * this.relics.staminaCostMult());
     if (!this.stamina.canAfford(staminaCost)) return; // exhausted — silent, same as melee's guard
 
     // Ammo gate — silent no-op if unavailable, same "never reveal what's
@@ -3502,6 +3514,10 @@ export class MainScene extends Phaser.Scene {
     let dmg = baseDmg * weaponSkillDamageMultiplier(dmgType, this.skills) * this.relics.damageMult();
     if (enemy instanceof GremlinKing && enemy.isStaggered()) dmg *= STAGGER_DAMAGE_MULTIPLIER;
     if (enemy instanceof Gloamwarden && enemy.isStaggered()) dmg *= WARDEN_STAGGER_DAMAGE_MULTIPLIER;
+    // Crit is rolled at fire time (same "captured at commit time" precedent as
+    // the stagger multiplier) and carried by the projectile so the impact tints
+    // correctly — resolveWeaponHit can't re-roll it (no weapon context there).
+    const critResult = this.applyCrit(this.equippedWeapon, dmg);
 
     const angle = Phaser.Math.Angle.Between(this.player.x, this.player.y, enemy.x, enemy.y);
     this.spawnProjectile({
@@ -3509,10 +3525,11 @@ export class MainScene extends Phaser.Scene {
       y: this.player.y,
       angle,
       speed: cfg.projectileSpeed,
-      damage: dmg,
+      damage: critResult.dmg,
       texture: cfg.projectileTexture,
       maxRangePx: cfg.maxRangePx,
       sourceIsPlayer: true,
+      isCrit: critResult.crit,
     });
 
     // Refreshes hotbar/ammo-slot UI counts and — critically for Javelin —
@@ -3526,20 +3543,23 @@ export class MainScene extends Phaser.Scene {
   // (skill XP, floating damage number, kill loot/armor-XP/run-scoring) —
   // shared by melee (applied instantly) and ranged (applied on projectile
   // impact), so the two firing paths can't drift out of sync on kill logic.
-  private resolveWeaponHit(enemy: Enemy, dmg: number, dmgType: DamageType): void {
-    this.sfx.hit();
+  private resolveWeaponHit(enemy: Enemy, dmg: number, dmgType: DamageType, isCrit = false): void {
+    if (isCrit) this.sfx.crit();
+    else this.sfx.hit();
     const depleted = enemy.takeHit(dmg);
     this.awardSkillXp(dmgType, 30); // weapon-hit XP to the primary damage type's skill
-    this.spawnDamageNumber(enemy.x, enemy.y, Math.round(dmg));
+    this.spawnDamageNumber(enemy.x, enemy.y, Math.round(dmg), isCrit);
     if (!depleted) return;
 
-    // Kill: relic on-kill heal (M-RL), then armor-skill XP per distinct worn type.
+    // Kill: relic on-kill heal (M-RL), then armor-skill XP per WORN PIECE (M-SS
+    // — changed from per-distinct-type, so a mix-and-match loadout is rewarded
+    // per piece and heavy_armor accrues once biome-2 heavy gear exists).
     const killHeal = this.relics.killHeal();
     if (killHeal > 0) {
       this.health.heal(killHeal);
       this.refreshHealthBar();
     }
-    for (const armorType of armorTypesWorn(EQUIP_SLOTS.map((s) => this.equipment.get(s.id)))) {
+    for (const armorType of armorTypesWornPerPiece(EQUIP_SLOTS.map((s) => this.equipment.get(s.id)))) {
       this.awardSkillXp(armorType, 30);
     }
 
@@ -3566,11 +3586,30 @@ export class MainScene extends Phaser.Scene {
     }
   }
 
-  // Single entry point for granting skill XP, so a relic's +% skill XP bonus
-  // (M-RL) applies uniformly to every source (weapon hits, kills, tool swings,
-  // running) without repeating the multiplier at each call site.
+  // Single entry point for granting skill XP, so the relic +% skill XP bonus
+  // (M-RL) AND Intelligence's +% XP (M-SS) apply uniformly to every source
+  // (weapon hits, kills, tool swings, running) without repeating the multiplier
+  // at each call site. The two stack additively-then-multiplied here; the
+  // Player-XP feed downstream reads skill level-ups, so there's no double-count.
   private awardSkillXp(skill: SkillType, base: number): void {
-    this.skills.addXp(skill, base * this.relics.xpMult());
+    this.skills.addXp(skill, base * this.relics.xpMult() * this.progression.xpMult());
+  }
+
+  // Roll crit for one hit of `weapon` (M-SS). Chance = weapon base + Agility +
+  // relics (cap CRIT_CHANCE_CAP); mult = weapon base + Strength + relics (cap
+  // CRIT_MULT_CAP). Shared by melee (rolled at hit) and ranged (rolled at fire,
+  // baked into the projectile). Uses Math.random — combat crit isn't seeded.
+  private applyCrit(weapon: WeaponType, dmg: number): { dmg: number; crit: boolean } {
+    const chance = Math.min(
+      CRIT_CHANCE_CAP,
+      weaponBaseCritChance(weapon) + this.progression.critChanceBonus() + this.relics.critChanceBonus(),
+    );
+    if (Math.random() >= chance) return { dmg, crit: false };
+    const mult = Math.min(
+      CRIT_MULT_CAP,
+      weaponBaseCritMult(weapon) + this.progression.critMultBonus() + this.relics.critDamageBonus(),
+    );
+    return { dmg: dmg * mult, crit: true };
   }
 
   // Kill category for run scoring: the final boss, an elite variant, or a plain
@@ -3583,16 +3622,16 @@ export class MainScene extends Phaser.Scene {
     return "normal";
   }
 
-  // Floating combat-text on a successful hit. Plain white for now — once dmg
-  // types/resistances exist, this is the spot to color/vary the text.
-  private spawnDamageNumber(x: number, y: number, amount: number): void {
+  // Floating combat-text on a successful hit. A crit (M-SS) is tinted
+  // orange-yellow and drawn a bit larger with a "!" so the burst reads clearly.
+  private spawnDamageNumber(x: number, y: number, amount: number, isCrit = false): void {
     const text = this.add
-      .text(x, y - 14, `${amount}`, {
+      .text(x, y - 14, isCrit ? `${amount}!` : `${amount}`, {
         fontFamily: "monospace",
-        fontSize: "14px",
-        color: "#ffffff",
+        fontSize: isCrit ? "20px" : "14px",
+        color: isCrit ? "#ffca3a" : "#ffffff",
         stroke: "#000000",
-        strokeThickness: 3,
+        strokeThickness: isCrit ? 4 : 3,
       })
       .setOrigin(0.5, 0.5)
       .setDepth(50);
@@ -3977,21 +4016,32 @@ export class MainScene extends Phaser.Scene {
   // Push the current Endurance/Vitality bonuses into the Stamina/HP pools.
   // Called on create and after either is spent, so the max bars grow live.
   private syncStatBonuses(): void {
-    // Max HP/stamina come from allocated stat points (Progression) PLUS any
-    // owned relics' flat bonuses (M-RL). Rolling/combining a relic calls this.
-    this.health.setBonusMax(this.progression.vitalityHealthBonus() + this.relics.maxHpBonus());
-    this.stamina.setBonusMax(this.progression.enduranceStaminaBonus() + this.relics.maxStaminaBonus());
+    // M-SS: stat-built base compounds MULTIPLICATIVELY with relic percent
+    // bonuses (was a flat additive that dwarfed a few stat points). Flat relic
+    // maxHp/maxStamina (legacy channel — none in the current pool) folds into
+    // the base before the percent so it still works if a flat relic ever ships.
+    const baseMaxHp = 100 + this.progression.vitalityHealthBonus() + this.relics.maxHpBonus();
+    const finalMaxHp = baseMaxHp * this.relics.maxHpPctMult();
+    this.health.setBonusMax(finalMaxHp - 100);
+    const baseMaxStam = 100 + this.progression.enduranceStaminaBonus() + this.relics.maxStaminaBonus();
+    const finalMaxStam = baseMaxStam * this.relics.maxStaminaPctMult();
+    this.stamina.setBonusMax(finalMaxStam - 100);
+    // Secondary stat axes (M-SS): Vitality healing-received, Endurance stamina
+    // regen, Wisdom buff duration — pushed into the pools/managers that own each.
+    this.health.setHealMult(this.progression.healingReceivedMult());
+    this.stamina.setRegenMult(this.progression.staminaRegenMult());
+    this.buffs.setDurationMult(this.progression.buffDurationMult());
     this.refreshHealthBar();
     this.refreshStaminaBar();
   }
 
-  // Spend one unspent point on a stat (from the Character menu). Endurance/
-  // Vitality additionally re-sync the HP/Stamina max; the others take effect
-  // the next time their multiplier is read (weapon hit). Refreshes the menu
-  // in place.
+  // Spend one unspent point on a stat (from the Character menu). Always
+  // re-syncs — every M-SS stat now feeds a cached multiplier (crit is read live
+  // at hit time, but HP/stamina/heal/regen/buff-duration caches all live in the
+  // pools), so it's cheap and keeps them all fresh. Refreshes the menu in place.
   private allocateStat(stat: StatType): void {
     if (!this.progression.allocate(stat)) return;
-    if (stat === "endurance" || stat === "vitality") this.syncStatBonuses();
+    this.syncStatBonuses();
     this.characterMenu?.refresh();
     this.refreshStatPointsBadge();
   }
@@ -4710,17 +4760,36 @@ export class MainScene extends Phaser.Scene {
     const armor = totalPlayerDefense(this.equipment);
     const ammo = this.ammoView();
     if (!this.equippedWeapon)
-      return { weaponName: null, damage: 0, damageTypeName: null, attackSpeed: 0, staminaCost: 0, armor, attackRange: REACH, ammo };
+      return {
+        weaponName: null,
+        damage: 0,
+        damageTypeName: null,
+        attackSpeed: 0,
+        staminaCost: 0,
+        armor,
+        attackRange: REACH,
+        ammo,
+        critChance: 0,
+        critMult: 0,
+      };
     const dmgType = weaponPrimaryDamageType(this.equippedWeapon);
     const baseDmg = weaponDamage(this.equippedWeapon) + weaponTierDamageBonus(this.equippedWeapon, this.equippedWeaponTier);
     // Include relic bonuses (M-RL) so the panel matches tryAttackEnemy's real math.
     const damage = Math.round(baseDmg * weaponSkillDamageMultiplier(dmgType, this.skills) * this.relics.damageMult());
-    const staminaCost = Math.round(
-      weaponStaminaCost(this.equippedWeapon) *
-        weaponStaminaCostMultiplier(dmgType, this.progression) *
-        this.relics.staminaCostMult(),
-    );
+    // Stamina cost no longer scales with Strength/Agility (retired in M-SS) —
+    // only relics discount it now.
+    const staminaCost = Math.round(weaponStaminaCost(this.equippedWeapon) * this.relics.staminaCostMult());
     const attackRange = rangedWeaponConfig(this.equippedWeapon)?.maxRangePx ?? REACH;
+    // Crit rollup (M-SS) — same weapon-base + stat + relic math applyCrit uses,
+    // capped for display.
+    const critChance = Math.min(
+      CRIT_CHANCE_CAP,
+      weaponBaseCritChance(this.equippedWeapon) + this.progression.critChanceBonus() + this.relics.critChanceBonus(),
+    );
+    const critMult = Math.min(
+      CRIT_MULT_CAP,
+      weaponBaseCritMult(this.equippedWeapon) + this.progression.critMultBonus() + this.relics.critDamageBonus(),
+    );
     return {
       weaponName: this.equippedWeaponName,
       damage,
@@ -4730,6 +4799,8 @@ export class MainScene extends Phaser.Scene {
       armor,
       attackRange,
       ammo,
+      critChance,
+      critMult,
     };
   }
 

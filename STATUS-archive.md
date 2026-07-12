@@ -4059,3 +4059,152 @@ supports raw-Uncommon→Refined-Rare for deeper biomes. This **deliberately over
 mini-boss), consistent with "nothing free." First-pass numbers in the plan; relic-strength
 retune is a separate later pass. New-mechanic build is Opus territory.
 
+
+### Previously: Gloaming Vein (rarity-ore POI + mini-boss + trophy refinement)
+
+Built the next locked feature after the world/map rework — plan:
+`.claude/plans/amethyst-warding-vein.md`. Built on **Opus** (new mechanic: a POI + a
+bespoke mini-boss + a refinement data model). A content+economy pass on the M-RL relic
+loop: kill elites → raw Common trophies (86.5% crumble when rolled) → find + clear the ore
+POI → Gloam Shards → spend them at the Relic Forge's new **Refine tab** to climb a raw
+trophy one rarity up into a **Refined trophy that never fails a roll** (Uncommon outcome
+table = 100% floor). Fully gated behind exploration + a mini-boss ("nothing free").
+
+**The POI (world-gen, `MainScene`).** `veinPosition` is chosen once in `create()` after
+the altar (so it stays ≥900px from BOTH world center and the war camp — verified 1290px
+from center / 2429px from camp) and before node/enemy spawning, so a new
+`VEIN_CLEAR_RADIUS` (160) exclusion in `pickSpawnPoint` keeps ordinary trees/rocks/enemies
+out of the ore clearing (same pattern as the war camp — [[feedback_poi_busy_not_placeholder]]).
+`spawnGloamingVein()` drops the **Gloamwarden** guardian at the clearing center ringed by
+**5 shielded ore `ResourceNode`s** (Stone-Pickaxe-gated `mine` action, non-respawning, 1–2
+Gloam Shard each, ~2 hits) plus **10 decorative amethyst crystal clusters**
+(`gloam_crystal_cluster`). New `ResourceNode.shielded` flag + `crack(texture)`: shielded
+nodes are skipped by hover/prompt/interact (like `harvested`) and swap
+`gloaming_vein_shielded` → `gloaming_vein` when the guardian dies. **Unique area look** (so
+the ore reads as its own place, like the war-camp floor does for the altar):
+`buildBiomeTexture()` stamps a distinct **gloam-blighted crystalline floor** over the
+clearing (dark-violet wash + a brighter amethyst core). Vein node + a few crystal positions
+feed `veinLightPoints` that `collectLights()` iterates, so the crystals **glow purple at
+night** — a navigation beacon like the war-camp braziers. Discovered within `REVEAL_RADIUS`
+→ a purple **minimap landmark** (`map_vein`, generalized `updateAltarDiscovery`). New
+per-run fields reset in `create()`.
+
+**The guardian (`src/entities/Gloamwarden.ts`).** A bespoke mini-boss following
+GremlinKing's telegraph/poise pattern but **lighter** (per the "no shared boss framework"
+lock — a trimmed sibling, not a subclass of GremlinKing). Extends `Enemy`, fully overrides
+`update()`. 260 HP, scale 1.7, poise 60 → stagger (2.5s, ×1.5 damage punish), difficulty
+between an elite and the King; regens 10 HP/s while deaggro'd. Two **bespoke** purple-
+telegraphed attacks — deliberately NOT the roster's charge/radial-slam (the user: those read
+as "Boar charge / King slam again"): a **Leaping Smash** (leap to a locked landing spot +
+AoE 95px, 22 dmg + kb — kept to preview the Gremlin King's own leaping smash) and a **Gloam
+Eruption** (the warden roots itself and channels, then crystal spikes erupt at the player's
+locked ground spot, 72px, 24 dmg + small launch — boss stays put + vulnerable = a punish
+window; dodge is to leave the marked ground). Area damage flows through `checkPlayerHit()`
+(queried in `updateEnemies` alongside GremlinKing) into the same `applyDamageToPlayer` choke
+point, so dash i-frames/armor "just work." On death, `onGloamwardenKilled()` cracks the vein
++ guaranteed drop 3–4 Gloam Shard + 1 Refined Trophy. Scored as an **elite** kill (no
+dedicated mini-boss band — the plan's "simplest" open sub-decision).
+
+**Refinement (`Relics.ts` + `RelicForgeMenu.ts`).** New `REFINE_RECIPES` (data-driven,
+tier-keyed) + `refinableTrophyKeys`/`ownedRefineInput`/`canAffordRefine` helpers. Biome-1
+recipe: **3 raw Common trophies (any species mix) + 2 Gloam Shards → 1 Refined Trophy**;
+an Uncommon→Radiant scaffold row exists but never surfaces (no raw Uncommon source in
+biome 1). Refined trophies are **roll-only** `TROPHY_ROLL` keys (never dropped, never a
+refine input — single-step + terminal, which caps biome 1 at Refined Uncommon and blocks
+an infinite ladder). The forge menu gained a **Bind / Refine tab toggle** ("Bind" is the
+in-universe name for rolling — the forge "binds trophies into relics"); the Refine tab
+lists affordable recipes with a live cost readout + a **timed `ProgressBar`** (650ms,
+commit-at-end + cancel-on-close, same as craft/process/cook). `MainScene.refineTrophies()`
+consumes inputs greedily across species + grants the output at bar completion. **The Refine
+tab is hidden entirely until the Relic Forge reaches Lvl 2** (no locked tab, no hint) — a new
+**Gloam Conduit** station upgrade (`StationUpgrades.ts`, 15 Stone + 1 Gloam Shard, right-click
+the forge → Upgrade) unlocks it. So you can't refine until you've mined at least one shard
+(which the upgrade itself costs).
+
+**Verified live** (`preview_eval` + screenshots): all new textures load; POI spawns 5
+shielded nodes + guardian at correct distances; shielded nodes un-hoverable even with a
+pickaxe equipped; guardian cycles telegraph → **Leaping Smash** (22, kb 200) / **Gloam
+Eruption** (24, kb 120) → recover, and poise-0 → staggered; killing it cracks all 5 nodes
+(texture swap, `shielded` false); the vein clearing shows its distinct gloam floor + crystal
+props (screenshotted); the **Refine tab is hidden entirely at forge Lvl 1** (only the Roll
+tab shows) and **appears at Lvl 2**, and the **Gloam Conduit** upgrade applies near a Workbench
+(tier 0→1, −15 Stone/−1 Gloam Shard); refine consumes 3 mixed-species commons + 2 shards →
+1 refined; a Refined trophy rolls **200/200 successes** (Uncommon 100% floor); the
+ProgressBar commits at end (nothing consumed mid-bar); 9 vein light points reach
+`collectLights`.
+`tsc --noEmit` clean; console error-free. `RECIPES.md` + the dashboard (Relics Refine
+table + Enemies Gloamwarden row) updated. See [[survivor-rpg-gloaming-vein-plan]].
+
+**Next:** **M-TE** (trophy-gated special gear), then **M-W1** (multi-biome content in the
+now-circular world) last.
+
+### Previously: Circular bigger world + minimap nearby-view + full-map overlay
+
+Off the master-plan build order (the user paused the Gloaming Vein to first do the world/map
+rework, prepping for M-W1). Built on **Opus** (new world-gen geometry + two new map
+systems). Three asks: (1) make the world **circular + much bigger**, keeping the current
+biome ~its size but leaving room (empty for now) for future biomes; (2) the corner minimap
+should show a **nearby view** (what's on screen), not the whole world; (3) a **full map**
+opened by a button, **zoomable (scroll) + pannable (drag)**, with **POI icons once
+discovered**.
+
+**Circular bigger world.** New geometry constants in `MainScene`: `WORLD_RADIUS` 4000
+(→ `WORLD_SIZE` 8000px square that bounds the world circle), `BIOME_RADIUS` 2000 (the
+central content circle, ~the old 3584×2688 biome, slightly larger), centered at
+`WORLD_CX/CY` = 4000. `WORLD_W`/`WORLD_H` kept as back-compat aliases = `WORLD_SIZE` (all
+the existing `WORLD_W/2`-is-center math still holds). **`Biome` is now origin-aware**
+(`new Biome(originX, originY, regionW, regionH, rng)`) — it generates only a centered
+`BIOME_SIZE` region and `forestWeight`/`creekWeight` return 0 outside it, so the outer ring
+is plain grass. `buildBiomeTexture()` bakes only that region (a `BIOME_SIZE`×`BIOME_SIZE`
+RenderTexture placed at the region origin — kept well under the GPU texture-size limit
+instead of a full-world 8000px bake). All spawn samplers (`pickSpawnPoint`,
+`pickCreekEdgePoint`, `pickPointNearAltar`) now sample within the region and reject points
+outside `BIOME_RADIUS`, so all first-biome content stays in the central circle (verified:
+0/396 nodes outside; a few war-camp/shack guards spill ~120px past onto grass, as the camp
+sits at the biome's outer edge — fine/thematic). `clampPlayerToWorld()` pins the player to
+the world circle each frame; `drawWorldBoundary()` fills a dark **void ring** beyond
+`WORLD_RADIUS` (cheap concentric thick strokes, no giant texture) + a shoreline accent, so
+the playable area reads as a round island.
+
+**Depth regression fixed (important).** Enlarging the world pushed world-object Y-sort
+depth (`= y`) up to ~8000, which drew low trees/enemies OVER the fixed HUD (2600–6000).
+New **`src/systems/depth.ts` `ysortDepth(y) = y * 0.3`** compresses the world Y range into
+a bounded band (max ~2400, below the HUD), applied at every world Y-sort site
+(Player/Enemy/ResourceNode/GremlinShack/BossAltar + war-camp props). Order preserved;
+ground/ring negatives + low-depth drops/damage-numbers unaffected. **Any new Y-sorting
+world object must use `ysortDepth`.**
+
+**Map rework — three pieces.**
+- **`src/systems/ExploredMap.ts`** (new, framework-light) — the shared explored-world
+  model behind both views: a world-space fog color cache (one 0xRRGGBB per 40px fog cell,
+  −1 = unrevealed) + the discovered-POI landmark list. It's the **single consumer** of
+  `FogOfWar`'s reveal queue (`drainRevealed()` updates the cache + returns changed cells),
+  so the two views can't race. Fog grid is now world-space (200×200 @ 40px), decoupled from
+  any HUD panel resolution.
+- **`MinimapUI` rewritten** — the corner panel is now a **player-centered nearby window**
+  (~2240×1680 world px, a touch past the 1920×1080 viewport), repainted each frame from the
+  color cache as clipped Graphics rects (no whole-world shrink). Landmark dots + player
+  marker + night dim. A small **"🗺 Map (M)"** button is tucked in its corner.
+- **`src/ui/WorldMapUI.ts`** (new) — the full-screen overlay (M key / Map button / ✕ /
+  Esc). Draws the whole explored fog cache as clipped, zoom/pan-transformed Graphics rects
+  (a dirty flag rebuilds terrain only on zoom/pan/new-reveal; the same reliable fixed-HUD
+  clipping the minimap uses, no geometry-mask-vs-scroll drift). **Scroll = zoom (1–10×),
+  drag = pan (clamped)**; discovered POIs get an **icon + label** (`map_altar` red/gold war
+  camp, `map_shack` brown — new BootScene markers). **Non-modal** per the locked design —
+  the game keeps running and the player can walk while it's open (world clicks/hover
+  suppressed over it; it doesn't pause). Keybinds panel gained a "World map: M" line.
+
+**Verified live** (`preview_eval` + screenshots): player spawns at center (4000,4000);
+biome origin (2000,2000)/region 4000²/fog 200²@40; altar 1955px from center (in-biome);
+0 nodes outside the biome circle; player shoved to (4000,8300) clamps to dist 3980
+(`WORLD_RADIUS`−20); void/shoreline ring renders at the edge; nearby minimap scrolls with
+the player and shows the edge as void; full map renders the explored trail + war-camp +
+3 shack icons/labels, zoom scales cleanly (clipped to panel), a 250px drag pans and a huge
+drag clamps to 1611; and — the depth fix — trees no longer draw over the map panel (a
+mid-test RunEndUI correctly sat above it at 3500). `tsc --noEmit` clean; console
+error-free. No `RECIPES.md` change (no recipe/cost changes).
+
+**Next:** the **Gloaming Vein** (mineable rarity-ore POI + trophy refinement, plan
+committed at `.claude/plans/amethyst-warding-vein.md`), then **M-TE**, then **M-W1** proper
+(multi-biome content + deterministic seeded gen in this now-circular world).
+

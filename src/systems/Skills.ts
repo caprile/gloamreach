@@ -75,6 +75,35 @@ export function runningSprintMultiplier(skills: Skills): number {
   return BASE_SPRINT_MULTIPLIER + skills.get("running") * RUNNING_SPRINT_BONUS_PER_LEVEL;
 }
 
+// --- M-SS: second real effects for previously one-note / dormant skills ---
+
+// light_armor extends the dash i-frame window (Monster Hunter "Evade Window").
+// +5ms/level over the 150ms base, capped at +100ms (→ 250ms max). Live now
+// since light gear exists.
+const LIGHT_ARMOR_IFRAME_MS_PER_LEVEL = 5;
+const LIGHT_ARMOR_IFRAME_CAP_MS = 100;
+export function dashIframeBonusMs(skills: Skills): number {
+  return Math.min(LIGHT_ARMOR_IFRAME_CAP_MS, skills.get("light_armor") * LIGHT_ARMOR_IFRAME_MS_PER_LEVEL);
+}
+
+// running also reduces sprint stamina drain: -1%/level, capped at -40%.
+const RUNNING_DRAIN_REDUCTION_PER_LEVEL = 0.01;
+const RUNNING_DRAIN_REDUCTION_CAP = 0.4;
+export function sprintStaminaDrainMult(skills: Skills): number {
+  return 1 - Math.min(RUNNING_DRAIN_REDUCTION_CAP, skills.get("running") * RUNNING_DRAIN_REDUCTION_PER_LEVEL);
+}
+
+// chopping/mining: chance for a bonus +1 drop on a depleted tree / rock (incl.
+// Gloam ore). +1%/level, soft-capped at 60%.
+const GATHER_BONUS_CHANCE_PER_LEVEL = 0.01;
+const GATHER_BONUS_CHANCE_CAP = 0.6;
+export function choppingBonusChance(skills: Skills): number {
+  return Math.min(GATHER_BONUS_CHANCE_CAP, skills.get("chopping") * GATHER_BONUS_CHANCE_PER_LEVEL);
+}
+export function miningBonusChance(skills: Skills): number {
+  return Math.min(GATHER_BONUS_CHANCE_CAP, skills.get("mining") * GATHER_BONUS_CHANCE_PER_LEVEL);
+}
+
 // Hover-tooltip text for a skill's mechanical impact — always returns
 // something so every skill's row is hoverable, even ones with no live effect
 // yet (per the user: they want visibility into what a level is *actually*
@@ -90,7 +119,27 @@ export function skillImpactDescription(skill: SkillType, skills: Skills): string
     const level = skills.get("running");
     const mult = runningSprintMultiplier(skills);
     const sprint = Math.round(PLAYER_WALK_SPEED * mult);
-    return `+0.5% sprint speed per level — Walk ${PLAYER_WALK_SPEED} / Sprint ${sprint} (x${mult.toFixed(2)}) at Lvl ${level}`;
+    const drainCut = Math.round((1 - sprintStaminaDrainMult(skills)) * 100);
+    return `+0.5% sprint speed & -1% sprint stamina drain per level — Sprint ${sprint} (x${mult.toFixed(2)}), -${drainCut}% drain at Lvl ${level}`;
+  }
+  if (skill === "light_armor") {
+    const level = skills.get("light_armor");
+    const bonus = dashIframeBonusMs(skills);
+    return `+5ms dash i-frames per level (cap +100ms) — dodge window ${150 + bonus}ms at Lvl ${level}`;
+  }
+  if (skill === "chopping") {
+    const pct = Math.round(choppingBonusChance(skills) * 100);
+    return `+1% bonus-drop chance on trees per level (cap 60%) — currently ${pct}% for +1 wood`;
+  }
+  if (skill === "mining") {
+    const pct = Math.round(miningBonusChance(skills) * 100);
+    return `+1% bonus-drop chance on rocks/ore per level (cap 60%) — currently ${pct}% for +1`;
+  }
+  if (skill === "heavy_armor") {
+    return "No effect yet — heavy gear & magic resist arrive in biome 2";
+  }
+  if (skill === "blocking") {
+    return "No effect yet — needs a block/parry mechanic first";
   }
   return "No combat/gather effect yet — recipe gate only";
 }

@@ -5,7 +5,15 @@ const MAX_HEALTH = 100;
 // regen; not implemented here.
 export class Health {
   private current = MAX_HEALTH;
-  private bonusMax = 0; // additive max from Endurance points (Progression.ts)
+  private bonusMax = 0; // additive max from Vitality points + relics (see MainScene.syncStatBonuses)
+  private healMult = 1; // Vitality "healing received" amplifier (M-SS)
+
+  // Set the healing-received multiplier (Vitality). Applies to EVERY heal()
+  // call — food buffs, Comfort, relic kill-heal — so it's one central knob.
+  // reset() bypasses heal(), so a full respawn refill is unaffected.
+  setHealMult(m: number): void {
+    this.healMult = Math.max(0, m);
+  }
 
   get max(): number {
     return MAX_HEALTH + this.bonusMax;
@@ -37,7 +45,7 @@ export class Health {
   }
 
   heal(amount: number): void {
-    this.current = Math.min(this.max, this.current + amount);
+    this.current = Math.min(this.max, this.current + amount * this.healMult);
   }
 
   // Called on respawn. Refills to the current (Endurance-bonused) max; the

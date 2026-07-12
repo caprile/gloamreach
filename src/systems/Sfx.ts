@@ -88,6 +88,14 @@ export class SfxPlayer {
     this.tone(180, 55, "square", { toFreq: 90, gain: 0.035 });
   }
 
+  // Crit hit (M-SS) — a brighter upward zing distinct from the soft downward
+  // hit() blip, so a crit reads by ear. Fires only on crits (rarer than every
+  // hit), but still kept modest per the "subtle feedback for frequent events"
+  // note.
+  crit(): void {
+    this.tone(520, 70, "square", { toFreq: 880, gain: 0.055 });
+  }
+
   // Quick upward chirp.
   pickup(): void {
     this.tone(520, 90, "sine", { toFreq: 900, gain: 0.09 });

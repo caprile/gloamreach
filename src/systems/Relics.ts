@@ -135,9 +135,21 @@ export interface RelicEffect {
   staminaCostPct?: number; // negative = cheaper
   damageTakenPct?: number; // negative = less taken
   killHeal?: number; // flat HP per kill
-  maxHp?: number; // flat + max HP
-  maxStamina?: number; // flat + max stamina
+  maxHp?: number; // flat + max HP (legacy; the seed pool now uses maxHpPct)
+  maxStamina?: number; // flat + max stamina (legacy)
   xpPct?: number; // + skill XP
+  // M-SS: HP/stamina relics went PERCENT so they MULTIPLY the stat-built base
+  // (100 + Vitality×4 / 100 + Endurance×3) instead of a flat bump that dwarfs a
+  // few stat points — relics now synergize with a stats build rather than
+  // competing with it.
+  maxHpPct?: number; // +% max HP (multiplies the stat-built base)
+  maxStaminaPct?: number; // +% max stamina
+  // M-SS crit channels. critChancePct is additive crit chance (5 = +5%);
+  // critDamagePct is additive crit MULTIPLIER as a percent (30 = +0.30x). Both
+  // stack onto weapon base + Agility/Strength; the totals are soft-capped in
+  // MainScene's crit roll.
+  critChancePct?: number;
+  critDamagePct?: number;
 }
 
 export interface RelicDef {
@@ -157,20 +169,22 @@ export const RELIC_DEFS: Record<string, RelicDef> = {
   relic_stoneskin_charm: { id: "relic_stoneskin_charm", name: "Stoneskin Charm", rarity: "common", effect: { damageTakenPct: -8 } },
   relic_tireless_charm: { id: "relic_tireless_charm", name: "Tireless Charm", rarity: "common", effect: { staminaCostPct: -12 } },
   relic_bloodroot_charm: { id: "relic_bloodroot_charm", name: "Bloodroot Charm", rarity: "common", effect: { killHeal: 2 } },
-  relic_stout_charm: { id: "relic_stout_charm", name: "Stout Charm", rarity: "common", effect: { maxHp: 15 } },
+  relic_stout_charm: { id: "relic_stout_charm", name: "Stout Charm", rarity: "common", effect: { maxHpPct: 15 } },
+  relic_keen_charm: { id: "relic_keen_charm", name: "Keen Charm", rarity: "common", effect: { critChancePct: 5 } },
 
   // --- uncommon (bigger single / small dual) ---
   relic_warriors_idol: { id: "relic_warriors_idol", name: "Warrior's Idol", rarity: "uncommon", effect: { damagePct: 16 } },
   relic_swift_idol: { id: "relic_swift_idol", name: "Swift Idol", rarity: "uncommon", effect: { moveSpeedPct: 16 } },
   relic_ironhide_idol: { id: "relic_ironhide_idol", name: "Ironhide Idol", rarity: "uncommon", effect: { damageTakenPct: -14 } },
-  relic_vigor_idol: { id: "relic_vigor_idol", name: "Vigor Idol", rarity: "uncommon", effect: { maxHp: 25, maxStamina: 20 } },
+  relic_vigor_idol: { id: "relic_vigor_idol", name: "Vigor Idol", rarity: "uncommon", effect: { maxHpPct: 20, maxStaminaPct: 18 } },
   relic_sanguine_idol: { id: "relic_sanguine_idol", name: "Sanguine Idol", rarity: "uncommon", effect: { killHeal: 4 } },
   relic_scholars_idol: { id: "relic_scholars_idol", name: "Scholar's Idol", rarity: "uncommon", effect: { xpPct: 25 } },
+  relic_savage_idol: { id: "relic_savage_idol", name: "Savage Idol", rarity: "uncommon", effect: { critDamagePct: 30 } },
 
   // --- rare (strong dual) ---
   relic_war_totem: { id: "relic_war_totem", name: "War Totem", rarity: "rare", effect: { damagePct: 26, staminaCostPct: -12 } },
   relic_phantom_totem: { id: "relic_phantom_totem", name: "Phantom Totem", rarity: "rare", effect: { moveSpeedPct: 22, damageTakenPct: -12 } },
-  relic_titan_totem: { id: "relic_titan_totem", name: "Titan Totem", rarity: "rare", effect: { maxHp: 50, maxStamina: 35 } },
+  relic_titan_totem: { id: "relic_titan_totem", name: "Titan Totem", rarity: "rare", effect: { maxHpPct: 40, maxStaminaPct: 30 } },
   relic_reaper_totem: { id: "relic_reaper_totem", name: "Reaper Totem", rarity: "rare", effect: { killHeal: 8, damagePct: 14 } },
 
   // --- mythic (very strong / triple) ---
@@ -300,6 +314,10 @@ function scaledEffectText(def: RelicDef, powerTier: number): string {
   if (e.killHeal) parts.push(`+${flat(e.killHeal)} HP on kill`);
   if (e.maxHp) parts.push(`+${flat(e.maxHp)} max HP`);
   if (e.maxStamina) parts.push(`+${flat(e.maxStamina)} max stamina`);
+  if (e.maxHpPct) parts.push(`+${pct(e.maxHpPct)}% max HP`);
+  if (e.maxStaminaPct) parts.push(`+${pct(e.maxStaminaPct)}% max stamina`);
+  if (e.critChancePct) parts.push(`+${pct(e.critChancePct)}% crit chance`);
+  if (e.critDamagePct) parts.push(`+${(0.01 * e.critDamagePct * m).toFixed(2)}x crit damage`);
   if (e.xpPct) parts.push(`+${pct(e.xpPct)}% skill XP`);
   return parts.join(", ");
 }
@@ -418,6 +436,24 @@ export class RelicManager {
   }
   maxStaminaBonus(): number {
     return Math.round(this.sumEffect("maxStamina"));
+  }
+  // M-SS: percent max-HP/stamina relics multiply the stat-built base in
+  // MainScene.syncStatBonuses (so stats + relics compound instead of the flat
+  // relic dwarfing a few stat points).
+  maxHpPctMult(): number {
+    return 1 + this.sumEffect("maxHpPct") / 100;
+  }
+  maxStaminaPctMult(): number {
+    return 1 + this.sumEffect("maxStaminaPct") / 100;
+  }
+  // M-SS crit channels (additive onto weapon base + Agility/Strength; totals
+  // soft-capped in the MainScene crit roll). Returned as fractions/multiplier
+  // deltas: critChanceBonus 0.05 = +5%, critDamageBonus 0.30 = +0.30x.
+  critChanceBonus(): number {
+    return this.sumEffect("critChancePct") / 100;
+  }
+  critDamageBonus(): number {
+    return this.sumEffect("critDamagePct") / 100;
   }
   xpMult(): number {
     return 1 + this.sumEffect("xpPct") / 100;

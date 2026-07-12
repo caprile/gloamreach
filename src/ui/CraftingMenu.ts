@@ -4,9 +4,9 @@ import type { Crafting } from "../systems/Crafting";
 import type { ResourceType } from "../systems/Inventory";
 import type { ItemContainer } from "../systems/ItemContainer";
 import { itemDef, type ItemStat } from "../systems/Items";
-import { weaponAttacksPerSecond, weaponDamage, weaponPrimaryDamageType, weaponStaminaCost } from "../systems/Weapons";
+import { weaponAttacksPerSecond, weaponDamage, weaponPrimaryDamageType } from "../systems/Weapons";
 import { weaponSkillDamageMultiplier, type Skills } from "../systems/Skills";
-import { weaponStaminaCostMultiplier, type PlayerProgression } from "../systems/Progression";
+import type { PlayerProgression } from "../systems/Progression";
 import { MARGIN as MINIMAP_MARGIN, PANEL_H as MINIMAP_H } from "./MinimapUI";
 import { ProgressBar } from "./ProgressBar";
 
@@ -274,12 +274,8 @@ export class CraftingMenu {
     if (stat.label === "Armor" && def.armorSlot) {
       return `${def.armorDefense ?? 0}`;
     }
-    if (stat.label === "Stamina" && def.weapon) {
-      const base = weaponStaminaCost(def.weapon);
-      const dmgType = weaponPrimaryDamageType(def.weapon);
-      const adjusted = Math.round(base * weaponStaminaCostMultiplier(dmgType, this.deps.progression));
-      return adjusted === base ? `${base}` : `${base} (${adjusted})`;
-    }
+    // (Stamina cost shown as-authored — Strength/Agility no longer discount it
+    // after M-SS; only relics do, which this menu doesn't factor.)
     if (stat.label === "Attack Speed" && def.weapon) {
       return `${weaponAttacksPerSecond(def.weapon).toFixed(1)}/s`;
     }
