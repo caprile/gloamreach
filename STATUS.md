@@ -2,22 +2,29 @@
 
 ## Current State
 
-_Living snapshot — edit in place, never append. Last shipped: **Welcome overlay now
-shows once per page load during early access** (localStorage "once ever" gate swapped for
-a per-page-load in-memory flag so playtesters reliably see it), **2026-07-12**. Prior:
-first-launch Welcome + How to Play overlay, plus Ctrl+Click/Shift+Click keybind lines.
-Before that: Playtest polish batch (11 fixes) — F11/right-click hints, elite red hover tooltip,
-diagonal javelin icon + nose-first thrown angle, dash afterimage VFX, Gloamwarden
-return-to-spawn leash, slower text fades, altar/totem win-path guidance hints, and a
-"Now:" total-effect line per stat on the Character menu. Before that: Enemy respawn
-(fog top-up); M-SS (stats/skills depth pass — crit + distinct-axis effects + relic
-synergy)._
+_Living snapshot — edit in place, never append. Last shipped: **Biome 2 — Phase 0
+(Patchwork worldgen)** — the world grew to 28000px (`WORLD_RADIUS` 14000) with a Valheim-style
+**patchwork** outer worldgen: a universal base layer + biome BLOBS (badlands + a placeholder
+dunes biome) where **radius sets a danger CEILING** (higher biomes gated behind an unlock
+radius; lower biomes can appear anywhere), forest a protected center chunk that also spawns as
+blobs beyond it. Plus a **current-biome HUD label**, a **first-entry discovery toast**, and a
+`Ctrl+Shift+M` dev reveal-map command; **empty of content**. (Reworked same session from an
+initial concentric-rings version the user found too uniform.) **2026-07-12**. Prior: Welcome
+overlay per-page-load gate; Enemy respawn (fog top-up); M-SS (stats/skills depth pass)._
 
 **The game.** Top-down 2D pixel survival-ARPG (Phaser 3 + TypeScript + Vite; all
-textures are placeholders generated in `BootScene`). One forest biome sitting in the
-center of a large **circular** world (8000px, `WORLD_RADIUS` 4000; the biome fills a
-central `BIOME_RADIUS` 2000 circle, the rest empty grass reserved for future biomes —
-danger scales outward, the locked M-W1 direction). Day/night cycle and a hardcore
+textures are placeholders generated in `BootScene`). A forest biome (biome 1) in the center of a
+large **circular** world (now **28000px, `WORLD_RADIUS` 14000**, grown for ~5 biomes). Biome 1
+is a solid **protected forest disc** (`BIOME_RADIUS` 2000, unchanged); everything beyond it is a
+**Valheim-style patchwork** (`src/systems/WorldBiomes.ts`): a universal base layer that grades
+grass→dusty outward, with biome **blobs** painted on top (metaball coverage). **Radius sets a
+danger CEILING** — a blob may be any biome with `tier ≤ ceiling(r)`, weighted toward the ceiling,
+so a higher-tier biome never appears below its unlock radius (no out-of-order danger) while lower
+biomes (forest, badlands) can appear anywhere out in later-biome territory; forest also spawns as
+blobs beyond the disc. Two outer biomes exist as **terrain only, no content**: the **Sunscorch
+Badlands** (dusty red-brown) and a placeholder **Windswept Dunes** (pale sand). A **current-biome
+label** sits on the minimap and a **discovery toast** fires on first entry to each biome
+(`Ctrl+Shift+M` = dev reveal-whole-map). Day/night cycle and a hardcore
 run/score meta-loop (seed is display-only for now). Shipped systems: gather/craft with
 tool-KIND gating + a Workbench tier gate;
 souls-like telegraphed combat on **every** enemy (Boar charge, Snake coil-lunge,
@@ -40,21 +47,19 @@ death ends a run and posts a `localStorage` high score; killing the Gremlin King
 win. The world is now circular + much larger (M-W1 geometry prep, above); deterministic
 seeded world-gen and actual multi-biome content are still deferred to M-W1 proper.
 
-**In progress / next.** A playtest polish batch (11 fixes — see the top entry below) shipped
-this session off the build order (discoverability hints, elite/boss hover tooltip, javelin
-art + throw angle, dash VFX, mini-boss leash, slower text fades, altar/totem guidance, stat
-total-effect display). Before that, enemy respawn (fog top-up) made the roster renewable, and
-M-SS gave Stats + Skills each a distinct, always-live axis
-relics don't touch (crit, regen/healing, XP/buff-duration, gather bonuses, dash-window), and
-converted HP/stamina relics flat→percent so they multiply a stats build instead of dwarfing it.
-Real pixel art/animations stay deliberately deferred until content/balance settle further
-(the whole texture pipeline is built to swap late — see `CLAUDE.md` roadmap item 8). Next:
-resume the locked build order — **M-TE** (trophy-gated special gear; it will read the
-untouched-but-reserved weapon-skill threshold hook for procs), then **M-W1** (multi-biome
-content in the now-circular world) last. Crit numbers, per-point stat values, and the
-skill-effect rates are all first-pass — expect a tuning pass after a playtest (per-weapon
-base crit is the lever if a weapon feels off; re-check the "boss slightly overtuned" gap
-now that crit is a player-driven damage ramp).
+**In progress / next.** **Biome 2 (Sunscorch Badlands) is now underway** — a phased umbrella
+plan (`.claude/plans/biome-2-sunscorch-badlands.md`) drives it, and **Phase 0 (Patchwork
+worldgen)** just shipped: the world grew to 28000px for ~5 biomes, with the patchwork
+foundation above (base + biome blobs by danger; forest core protected) — walkable, mapped, but
+**empty of content**. The umbrella plan's ring model is superseded by this patchwork. Remaining phases (own
+Opus sessions each, own plan files): **Phase 1** — combat systems layer (magic damage +
+resist/weak, per-weapon AOE arcs, swarm pack-aggro), **next**; Phase 2 enemies/wildlife;
+Phase 3 badlands boss (new win-con, demotes Gremlin King) + King critical-drop rework + 2
+POIs; Phase 4 smelting/forging gear tier; Phase 5 tier-2 relics + biome-1 trim +
+family-replace-with-refund. The master-plan tail **M-TE** (trophy-gated gear) is folded into
+this biome-2 work. Real pixel art/animations stay deliberately deferred until content/balance
+settle (roadmap item 8). Crit numbers, per-point stat values, and skill-effect rates are all
+first-pass — expect a tuning pass after a playtest.
 
 **Known issues / open.**
 - Boss may be slightly overtuned after the 5s damage bump (the user's "TBD" — left as-is
@@ -65,12 +70,79 @@ now that crit is a player-driven damage ramp).
 - No save/load beyond the high-score table; all run state is in-memory only.
 - The dashboard **Enemies tab is the one hand-mirrored data source** — keep it in sync
   when tuning enemy stats (everything else on the dashboard is imported live).
-- **World Y-sort depth is now compressed** (`systems/depth.ts` `ysortDepth` = `y * 0.3`)
-  so world objects stay below the fixed HUD even though the world is 8000px tall. Any NEW
-  world object that Y-sorts by position must use `ysortDepth(y)`, not raw `y`, or it can
-  draw over the HUD. Fixed-HUD depths (2600–6000) are unchanged and still clear it.
+- **World Y-sort depth is compressed** (`systems/depth.ts` `ysortDepth` = `y * 0.09`,
+  shrunk when the world grew to 28000px in biome-2 Phase 0) so world objects stay below the
+  fixed HUD. Max-world-y depth 28000×0.09 = 2520, clear of the 2600 HUD floor. Any NEW world
+  object that Y-sorts by position must use `ysortDepth(y)`, not raw `y`. **If the world grows
+  further, shrink this again** (invariant: `WORLD_SIZE × scale < 2600`).
+- **A world-sized `tileSprite` is out-of-memory** and must never be recreated. Phaser
+  TileSprite allocates a canvas its own size; at 28000² that's ~3GB → boot OOM (this bit us
+  this session). The grass tilesprite now covers only the forest region (`BIOME_SIZE`); the
+  outer ground is a single bounded `bakeOuterOverlay` RenderTexture (`OVERLAY_TEX` 4096²,
+  LINEAR-filtered, stretched over the world — constant GPU cost at any world size). Never size
+  a tilesprite/RenderTexture to the whole world.
+- **Outer world is empty of content for now.** The forest disc (biome 1) holds all enemies/
+  nodes/POIs; the badlands + dunes patchwork beyond it is terrain only until Phases 1–5. A
+  player can walk far into empty patchwork — harmless. The world map opens centered on the
+  player (nearby view); zoom-out to full world via the wheel.
 
 ## Recent Entries
+
+### Biome 2 — Phase 0: Patchwork worldgen (bigger world + base-layer + biome blobs)
+
+Plan: `.claude/plans/biome-2-phase-0-world-ring.md` (Phase 0 of the
+`biome-2-sunscorch-badlands.md` umbrella). Built on **Opus** (world-gen rework). **Note:** an
+initial concentric-**rings** version shipped and was **reworked same session** — the user found
+rings too uniform and wanted Valheim-style diversity. This is the patchwork rebuild.
+
+**Locked model (this session's brainstorm):** biome 1 = a solid **protected forest disc**
+(unchanged, safe tutorial); *beyond* it a **universal base layer** (grades grass→dusty outward)
+with biome **blobs** on top, each blob's biome drawn weighted by `danger = radialTier(r) + noise`
+(moderate variance). Biome types repeat; blobs blend at seams with base-layer gaps between. World
+grows **~2×** for ~5 biomes. Map centers on the player.
+
+- **World grown to `WORLD_RADIUS` 14000 (28000px).** `depth.ts` `WORLD_DEPTH_SCALE` 0.3→**0.09**
+  (28000×0.09 = 2520 < 2600 HUD floor; all Y-sort sites already use `ysortDepth`).
+- **`src/systems/WorldBiomes.ts` (new, framework-light).** The level-1 biome-TYPE map: a
+  jittered-grid **blob seed scatter** (which also serves as the spatial bucket for O(3×3)
+  `coverageAt`), each seed's biome picked by `dangerAt(seed)` (nearest tier: badlands=2,
+  dunes=3). `coverageAt` = metaball smoothstep falloff w/ noisy edges; `forestCoverage(r)`
+  forces a solid disc ≤2000. **`worldBiomeColorAt`** is the single terrain-color source (base
+  graded + badlands + dunes + forest-on-top) used by BOTH the bake and the map → no drift.
+- **Palettes:** `Badlands.ts` (dusty red-brown `0x8f5a42` clay + mesa + ravine) and new
+  `Dunes.ts` (pale sand) — a **placeholder terrain-only** biome so the patchwork reads with >1
+  outer biome. Both reuse **one tiled `Biome`** for feature detail (new `Biome` `tiled` mode
+  wraps coords, so a small cheap Biome repeats across the huge world vs a 28000px Voronoi).
+  `colorUtil.ts` holds the shared `blendColors`.
+- **Rendering (bounded, GPU-safe at any world size).** Forest keeps its crisp 4000² bake (now
+  faded by `forestCoverage` so it never paints past the edge) — biome 1 pixel-identical. The
+  outer ground is ONE `bakeOuterOverlay` RenderTexture (`OVERLAY_TEX` 4096², ~64MB,
+  LINEAR-filtered, stretched over the world; skips the forest core). **A world-sized
+  `tileSprite` OOMs** (28000²≈3GB — the boot bug this session, found via a stack trap since the
+  uncaught error wasn't in the console filter); grass is now forest-region-sized only.
+- **Map.** `ExploredMap.terrainColorFn = worldBiomeColorAt`; `WorldMapUI.openMap(px,py)` now
+  **centers on the player** (new `centerOn`), framed to a ~5000px nearby view (wheel zooms out).
+
+**Verified** (`tsc --noEmit` clean; `preview_eval` + screenshots, console error-free): boot OK;
+forest core pixel-identical; coverage gradient forest→badlands→dunes with `dangerAt` rising
+2.1→4.4 outward; badlands = dusty red-brown, dunes = pale sand, base-layer gaps between blobs,
+all smoothly blended; world map shows the patchwork centered on the player; **all 401 nodes +
+103 enemies stayed in the forest disc** (no leak into the empty patchwork). No `RECIPES.md`/
+dashboard change. See [[survivor-rpg-biome-2-plan]], [[survivor-rpg-circular-world]].
+
+**Same-session refinements (the user's feedback):**
+- **Biome ordering → radius sets a danger CEILING** (`WorldBiomes.ceilingTier`/`pickBiome`), not
+  a fixed tier. A blob may be any biome with `tier ≤ ceiling(r)`, weighted toward the ceiling —
+  higher biomes gated behind an unlock radius (no out-of-order danger), lower biomes appear
+  anywhere. **Forest is now a blob biome too** (spawns beyond the disc); the center chunk stays
+  biome-1-only via `forestCoverage`. Verified across 600 samples/band: **dunes = 0 in every band
+  before ~6500**; forest present at all radii (307→136→186→69→74).
+- **Current-biome HUD label** on the minimap + a **first-entry discovery toast** (new `"biome"`
+  `LogKind`, gold center toast; forest pre-marked so the first toast is genuinely new). Verified:
+  entering badlands/dunes updated the label + fired one toast each. `BIOME_NAMES` = placeholder
+  flavor (Verdant Woods / Sunscorch Badlands / Windswept Dunes / The Wilds).
+- **Dev command `Ctrl+Shift+M`** (`revealEntireMap`) clears all fog + opens the world map for
+  worldgen inspection (undocumented — not in the Keybinds panel). Verified: 490k cells revealed.
 
 ### Welcome overlay — show once per page load during early access
 

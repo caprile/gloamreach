@@ -13,6 +13,9 @@ const KIND_COLORS: Record<LogKind, { text: string; border: number; fill: number 
   levelup: { text: "#8fe38f", border: 0x8fe38f, fill: 0x123219 },
   info: { text: "#c8d0dc", border: 0x8a93a3, fill: 0x1a1f2a },
   combat: { text: "#ff8a8a", border: 0xff8a8a, fill: 0x3a1414 },
+  // Biome discovery — a prominent warm-gold center toast (routed to showToast, not
+  // the side recipe/material queue), for the "you've entered a new region" beat.
+  biome: { text: "#ffd27a", border: 0xffd27a, fill: 0x3a2a10 },
 };
 
 // Recipe-unlock / material-discovery toast: a small card (icon + text) that

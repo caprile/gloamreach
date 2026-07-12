@@ -55,9 +55,17 @@ export class WorldMapUI {
   private dragPanY = 0;
   private dirty = true;
 
-  constructor(scene: Phaser.Scene, map: ExploredMap) {
+  // World-px radius of the "content" region the map opens framed on. With the
+  // world grown to 18000px for future biomes but content only in the central
+  // ~3700px, opening at zoom 1 (whole world) would show mostly black void — so
+  // the default open zoom frames this radius instead. Zooming out to the full
+  // world is still available via the wheel (MIN_ZOOM = 1).
+  private contentRadius: number;
+
+  constructor(scene: Phaser.Scene, map: ExploredMap, contentRadius = 3700) {
     this.scene = scene;
     this.map = map;
+    this.contentRadius = contentRadius;
     const W = scene.scale.width;
     const H = scene.scale.height;
     const px = 60;
@@ -154,16 +162,18 @@ export class WorldMapUI {
     return this.open && this.panel.getBounds().contains(x, y);
   }
 
-  toggle(): void {
+  toggle(playerX = 0, playerY = 0): void {
     if (this.open) this.close();
-    else this.openMap();
+    else this.openMap(playerX, playerY);
   }
 
-  openMap(): void {
+  openMap(playerX = 0, playerY = 0): void {
     this.open = true;
-    this.zoom = 1;
-    this.panX = 0;
-    this.panY = 0;
+    // Open framed on a nearby view CENTERED ON THE PLAYER (the world is far too
+    // big to show whole and centered on the player is what you want when you hit
+    // M). Zoom-out to see more is still available via the wheel.
+    this.zoom = this.fitContentZoom();
+    this.centerOn(playerX, playerY);
     this.dirty = true;
     this.scrim.setVisible(true);
     this.panel.setVisible(true);
@@ -204,6 +214,27 @@ export class WorldMapUI {
 
   private baseScale(): number {
     return Math.min(this.iw / this.map.cols, this.ih / this.map.rows);
+  }
+
+  // Zoom that fits a content-radius-diameter circle into ~90% of the shorter
+  // interior dimension. Clamped to the wheel's zoom range.
+  private fitContentZoom(): number {
+    const diameterCells = (2 * this.contentRadius) / this.map.cellSize;
+    if (diameterCells <= 0) return 1;
+    const fit = (0.9 * Math.min(this.iw, this.ih)) / (diameterCells * this.baseScale());
+    return Phaser.Math.Clamp(fit, MIN_ZOOM, MAX_ZOOM);
+  }
+
+  // Pan so a world point sits at the center of the terrain view (used on open to
+  // center the player). Derived from update()'s origin math:
+  //   playerScreen = (cxp - contentW/2 + panX) + (worldX/cell)*scale
+  // set == cxp -> panX = contentW/2 - (worldX/cell)*scale = (cols/2 - worldX/cell)*scale.
+  private centerOn(worldX: number, worldY: number): void {
+    const scale = this.baseScale() * this.zoom;
+    const cell = this.map.cellSize;
+    this.panX = (this.map.cols / 2 - worldX / cell) * scale;
+    this.panY = (this.map.rows / 2 - worldY / cell) * scale;
+    this.clampPan();
   }
 
   private clampPan(): void {

@@ -1163,20 +1163,48 @@ Hardcore death, done — see 5h) → M-DN (Day/Night, done — see 5i) → Comfo
 M-SB/Sleep-Bed, done — see 5j) → M-EL2 (generalized elite spawning, done — see 5k) →
 ~~M-FA~~ (cut, see 5l) → M-RL (trophy → RNG relics, done — see 5m; playtest follow-up 5n) →
 M-WC (Gremlin War Camp, done — see 5o) → Gloaming Vein (rarity-ore POI + trophy refinement,
-done — see 5w) → M-SS (stats/skills depth pass + crit, done — see 5ab) → **M-TE
-(trophy-gated gear), next** → M-W1 (circular multi-biome world, last).**
+done — see 5w) → M-SS (stats/skills depth pass + crit, done — see 5ab) → **Biome 2 /
+M-W1 + M-TE, IN PROGRESS (see 5ac + the biome-2 umbrella plan below).**
+
+5ac. **Biome 2 (Sunscorch Badlands) — Phase 0: Patchwork worldgen.** Plan:
+   `.claude/plans/biome-2-phase-0-world-ring.md` (Phase 0 of the
+   `.claude/plans/biome-2-sunscorch-badlands.md` umbrella — see below). Built on Opus
+   (world-gen rework). **An initial concentric-rings version shipped and was reworked the
+   same session** — the user found rings too uniform and wanted Valheim-style diversity, so
+   the umbrella plan's ring model is superseded by a **patchwork**. Locked model: biome 1
+   stays a solid **protected forest disc** (unchanged, safe tutorial); *beyond* it, a
+   **universal base layer** (grades grass→dusty outward) with biome **blobs** painted on top
+   (`src/systems/WorldBiomes.ts`), each blob's biome drawn weighted by
+   `danger = radialTier(r) + noise` (moderate variance). Biome types repeat; blobs blend at
+   seams with base-layer gaps between; nastier biomes get likelier outward. Two outer biomes
+   exist as **terrain only, no content**: the **Sunscorch Badlands** (dusty red-brown clay +
+   mesa/flats/ravine, `Badlands.ts`) and a **placeholder Dunes** (pale sand, `Dunes.ts`, added
+   just so the patchwork reads with >1 biome). Both reuse one **tiled** `Biome` for feature
+   detail (new `Biome` `tiled` mode). **The world grew to `WORLD_RADIUS` 14000 (28000px)** for
+   ~5 biomes; `depth.ts` `WORLD_DEPTH_SCALE` shrank 0.3→**0.09**. Rendering is bounded at any
+   world size: forest keeps its crisp full-res bake, the outer ground is ONE `bakeOuterOverlay`
+   RenderTexture (4096², LINEAR, stretched over the world). **Gotcha found: a world-sized
+   `tileSprite` OOMs** (28000²≈3GB) — grass is now forest-region-sized only. Map:
+   `WorldMapUI` opens centered on the player. **Same-session refinements (the user):** biome
+   ordering = **radius sets a danger CEILING** (`ceilingTier`/`pickBiome` — a blob may be any
+   biome with `tier ≤ ceiling(r)`, so higher biomes are gated behind an unlock radius but lower
+   ones appear anywhere; forest is now a blob biome too, spawning beyond the disc while the
+   center chunk stays biome-1-only); a **current-biome minimap label** + **first-entry discovery
+   toast** (new `"biome"` `LogKind`); and a `Ctrl+Shift+M` **dev reveal-whole-map** command
+   (undocumented). Forest content/gameplay verified unchanged. See `STATUS.md` +
+   [[survivor-rpg-biome-2-plan]].
 
 **Not yet built — next up in rough order:**
-6. **World & discovery** — much bigger generated world, biomes, map, eventually a
-   single giant circular Valheim-style map (spawn at center, danger increases
-   outward — locked direction from the user). **The circular bigger-world GEOMETRY
-   has now shipped (roadmap 5v):** the world is a large circle (`WORLD_RADIUS` 4000)
-   with the first biome in a central `BIOME_RADIUS` 2000 circle and empty grass out
-   to the edge; still-needed for M-W1 proper: actual multi-biome CONTENT out in the
-   ring + deterministic seeded world-gen. See **First biome — content notes** below
-   for the first biome's terrain-zone concept. (Minimap + fog of war has shipped —
-   see 5a, reworked into a nearby-view + full-map overlay in 5v; the Gremlin Shack
-   POI has shipped — see 5b above.)
+6. **World & discovery** — much bigger generated world, biomes, map, a single giant
+   circular Valheim-style map (spawn at center, danger increases outward). **The circular
+   geometry (5v) AND biome 2's patchwork terrain foundation (5ac) have shipped:** the world is
+   now a 28000px circle (`WORLD_RADIUS` 14000) with a protected forest disc at center and a
+   **patchwork** of badlands + placeholder-dunes blobs beyond (base-layer between; danger scales
+   outward). **Still needed for M-W1 proper:** biome CONTENT (Phases 1–5 of the biome-2 umbrella
+   — combat systems, enemies, boss/POIs, forging gear tier, tier-2 relics) + deterministic
+   seeded world-gen. See **First biome — content notes** below for terrain-zone concept.
+   (Minimap + fog of war: 5a, reworked into nearby-view + full-map overlay in 5v; Gremlin Shack
+   POI: 5b.)
 7. **ARPG loot** — rarity, randomized drops/recipes, replayability.
 8. **Cross-cutting:** save/load (localStorage), real pixel-art tilesets.
 

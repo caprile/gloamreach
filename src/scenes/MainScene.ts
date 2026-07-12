@@ -106,6 +106,17 @@ import { WorldMapUI } from "../ui/WorldMapUI";
 import { BossHealthUI } from "../ui/BossHealthUI";
 import { FogOfWar, REVEAL_RADIUS } from "../systems/Fog";
 import { ExploredMap } from "../systems/ExploredMap";
+import { WorldBiomes, type BiomeId } from "../systems/WorldBiomes";
+
+// Display names for the current-biome HUD label + discovery toast. Placeholder
+// flavor (Gloamreach setting) — easy to rename. "base" = the open wilds between
+// biome blobs. Only the three real biomes fire a discovery notification.
+const BIOME_NAMES: Record<BiomeId | "base", string> = {
+  forest: "Verdant Woods",
+  badlands: "Sunscorch Badlands",
+  dunes: "Windswept Dunes",
+  base: "The Wilds",
+};
 import { ysortDepth } from "../systems/depth";
 import { Run, type RunOutcome, type KillCategory } from "../systems/Run";
 import { clearHighScores, recordHighScore } from "../systems/HighScores";
@@ -161,9 +172,23 @@ const TILE = 32;
 // M-W1 direction). Physics/camera bounds stay a square that bounds the world
 // circle; the player is clamped to the circle each frame (clampPlayerToWorld),
 // and a dark "void" ring is drawn beyond WORLD_RADIUS (drawWorldBoundary).
-const BIOME_RADIUS = 2000; // central content circle (~the old 3584x2688 biome, slightly larger)
-const WORLD_RADIUS = 4000; // full circular world edge — big empty ring for future biomes
-const WORLD_SIZE = WORLD_RADIUS * 2; // 8000px square that bounds the world circle
+const BIOME_RADIUS = 2000; // forest (biome 1) content circle — unchanged
+// Biome 2+ worldgen is a Valheim-style PATCHWORK (see systems/WorldBiomes.ts): a
+// universal base layer with biome blobs painted on top, weighted by danger =
+// radialTier(r) + noise. Biome 1 (forest) is a solid PROTECTED disc at the center;
+// the patchwork only exists beyond it. No concentric rings — the ring model was
+// tried and reworked (too uniform). WorldBiomes owns the FOREST_CORE/EDGE + biome
+// tier constants; MainScene only needs the world size + the forest region below.
+// One tiled feature-Biome region size, shared by the outer biomes' internal look
+// (badlands mesa/flats/ravine, dune ridge/hollow) so a small cheap Biome tiles
+// across the whole outer world instead of a 28000px Voronoi.
+const OUTER_FEATURE_SIZE = 4000;
+// Full circular world edge — grown to ~14000 for ~5 patchwork biomes (locked:
+// "bigger world + 2x chunks"). The rendering (one bounded coarse overlay texture +
+// the crisp forest bake, ysortDepth compression, world-space fog) is sized for
+// this, so growing it further later is a constant change, not a rearchitecture.
+const WORLD_RADIUS = 14000;
+const WORLD_SIZE = WORLD_RADIUS * 2; // 28000px square that bounds the world circle
 const WORLD_CX = WORLD_RADIUS; // world center
 const WORLD_CY = WORLD_RADIUS;
 // Back-compat: existing spawn/camera code references WORLD_W/WORLD_H and treats
@@ -302,7 +327,16 @@ const GREMLIN_SHACK_LOOT_TABLE: LootRollEntry[] = [
 // follow the camera, and run the mouse-driven interaction + HUD.
 export class MainScene extends Phaser.Scene {
   private player!: Player;
-  private biome!: Biome; // procedural zone layout, generated fresh each session
+  private biome!: Biome; // forest (biome 1) zone layout, generated fresh each session
+  // Patchwork worldgen (biome 2+): decides which biome type covers each outer
+  // point (blob coverage + danger). `outerFeatureBiome` is one tiled Biome its
+  // outer biomes reinterpret for their internal look. Both fresh per session.
+  private worldBiomes!: WorldBiomes;
+  private outerFeatureBiome!: Biome;
+  // Current-biome HUD label + first-time discovery tracking.
+  private biomeLabel?: Phaser.GameObjects.Text;
+  private currentBiome: BiomeId | "base" = "forest";
+  private discoveredBiomes = new Set<string>();
   private nodes: ResourceNode[] = [];
   // Subset of `nodes` that can visually occlude the player (trees/boulders —
   // see updateTreeOcclusion). Ground clutter (pickups/loose drops) never
@@ -654,11 +688,36 @@ export class MainScene extends Phaser.Scene {
     this.placedObjects = [];
     this.everPlacedWorkbench = false;
     this.suppressNextPointerdown = false;
+    // Per-run biome discovery state (reset here per the scene.restart() field-init gotcha).
+    // Forest is pre-marked known — the player starts there, so the FIRST discovery
+    // toast is a genuinely new region (the label still reads "Verdant Woods" at spawn).
+    this.discoveredBiomes = new Set<string>(["forest"]);
+    this.currentBiome = "forest";
 
     // Procedural biome layout — must exist before spawning so nodes/enemies
     // can query zone type for placement. Seeded randomly per session (not a
     // fixed string) so the world differs every run.
     this.biome = new Biome(BIOME_ORIGIN_X, BIOME_ORIGIN_Y, BIOME_SIZE, BIOME_SIZE, this.sessionRng());
+    // Patchwork worldgen (biome 2+). Assigned here (not field initializers) so
+    // scene.restart() re-seeds them. The outer feature Biome is TILED (origin 0)
+    // so its mesa/flats/ravine pattern repeats across the whole outer world at a
+    // sane scale instead of a giant Voronoi.
+    this.outerFeatureBiome = new Biome(
+      0,
+      0,
+      OUTER_FEATURE_SIZE,
+      OUTER_FEATURE_SIZE,
+      this.sessionRng(),
+      true, // tiled
+    );
+    this.worldBiomes = new WorldBiomes(
+      WORLD_CX,
+      WORLD_CY,
+      WORLD_RADIUS,
+      this.biome,
+      this.outerFeatureBiome,
+      this.sessionRng(),
+    );
 
     // War Camp position (M-WC) is chosen here, before ground/node/enemy
     // spawning, so pickSpawnPoint can keep trees/rocks/wild enemies out of the
@@ -671,9 +730,20 @@ export class MainScene extends Phaser.Scene {
     // VEIN_CLEAR_RADIUS exclusion keeps ordinary content out of the ore clearing.
     this.veinPosition = this.pickVeinPosition(this.sessionRng());
 
-    // Ground: one repeating grass texture (the "grassy" look), with the biome
-    // overlay baked on top of it — both kept below every entity.
-    this.add.tileSprite(0, 0, WORLD_W, WORLD_H, "grass").setOrigin(0, 0).setDepth(-10);
+    // Ground: a repeating grass texture only over the FOREST REGION (biome 1),
+    // where it shows through the translucent forest bake. A world-sized tilesprite
+    // is impossible now — TileSprite allocates a canvas its own size, and 28000² is
+    // ~3GB (out-of-memory). The outer patchwork paints its own base color (graded
+    // grass->dust) in the overlay, so grass is only needed here in the core.
+    this.add
+      .tileSprite(BIOME_ORIGIN_X, BIOME_ORIGIN_Y, BIOME_SIZE, BIOME_SIZE, "grass")
+      .setOrigin(0, 0)
+      .setDepth(-10);
+    // Outer patchwork ground: ONE bounded coarse overlay texture stretched over the
+    // whole world (constant GPU cost at any world size), UNDER the crisp forest bake.
+    this.bakeOuterOverlay();
+    // Forest (biome 1) crisp bake on top — unchanged look; fades out past the
+    // forest edge so it never paints over an outer biome.
     this.buildBiomeTexture();
     // Circular world edge: a dark "void" ring beyond WORLD_RADIUS so the
     // playable area reads as a round island, not an invisible wall in open grass.
@@ -825,10 +895,17 @@ export class MainScene extends Phaser.Scene {
     // the reveal grid, MinimapUI draws/repaints it. Sized 1:1 to the minimap's
     // own pixel resolution so a revealed cell maps directly to one pixel.
     this.fog = new FogOfWar(WORLD_SIZE, WORLD_SIZE, FOG_COLS, FOG_COLS);
-    this.exploredMap = new ExploredMap(this.biome, this.fog, WORLD_CX, WORLD_CY, WORLD_RADIUS);
+    // The map samples the SAME terrain color the ground bakes (the single
+    // worldBiomeColorAt source), so minimap/world-map mirror the ground exactly.
+    this.exploredMap = new ExploredMap(this.biome, this.fog, WORLD_CX, WORLD_CY, WORLD_RADIUS, (x, y) =>
+      this.worldBiomes.worldBiomeColorAt(x, y),
+    );
     this.minimapUI = new MinimapUI(this, this.exploredMap);
-    this.worldMapUI = new WorldMapUI(this, this.exploredMap);
+    // Open the map framed on a ~5000px-radius nearby view centered on the player
+    // (the 28000px world is too big to show whole). Wheel zooms out to see more.
+    this.worldMapUI = new WorldMapUI(this, this.exploredMap, 5000);
     this.createMapButton();
+    this.createBiomeLabel();
     this.bossHealthUI = new BossHealthUI(this);
     // Night darkness + torch-light layer (M-DN). Depth ~2700 sits above the
     // world but below the minimap/HUD created around it, so only the world dims.
@@ -930,7 +1007,15 @@ export class MainScene extends Phaser.Scene {
     this.input.keyboard!.on("keydown-R", () => !this.runOver && this.takeAllFromChest());
     this.input.keyboard!.on("keydown-H", () => !this.runOver && this.toggleWheelSpansBothRows());
     this.input.keyboard!.on("keydown-J", () => this.runHudUI.toggleMinimized());
-    this.input.keyboard!.on("keydown-M", () => !this.runOver && this.toggleWorldMap());
+    this.input.keyboard!.on("keydown-M", (e: KeyboardEvent) => {
+      if (this.runOver) return;
+      // DEV: Ctrl+Shift+M reveals the whole map for worldgen inspection.
+      if (e.ctrlKey && e.shiftKey) {
+        this.revealEntireMap();
+        return;
+      }
+      this.toggleWorldMap();
+    });
 
     // Skill level-ups: announce, feed the overall Player Level the same XP the
     // skill level cost (Progression.ts), and re-run recipe discovery/crafting
@@ -1050,6 +1135,7 @@ export class MainScene extends Phaser.Scene {
     if (changed.length > 0) this.worldMapUI.markDirty();
     this.minimapUI.update(this.player.x, this.player.y);
     this.updateAltarDiscovery();
+    this.updateBiomeUI();
     if (this.worldMapUI.isOpen()) this.worldMapUI.update(this.player.x, this.player.y);
   }
 
@@ -2374,14 +2460,21 @@ export class MainScene extends Phaser.Scene {
       for (let lx = 0; lx < BIOME_SIZE; lx += step) {
         const wx = BIOME_ORIGIN_X + lx + step / 2;
         const wy = BIOME_ORIGIN_Y + ly + step / 2;
+        // Fade the forest overlay out past the forest edge (forestCoverage), so
+        // this crisp inner bake never paints green forest over an outer biome in
+        // the region-square corners — the coarse overlay owns those, showing
+        // through where this bake draws nothing. In the core coverage is 1
+        // (unchanged: biome 1 stays pixel-identical).
+        const fc = this.worldBiomes.forestCoverage(Math.hypot(wx - WORLD_CX, wy - WORLD_CY));
+        if (fc <= 0.01) continue;
         const forestW = this.biome.forestWeight(wx, wy);
         if (forestW > 0.02) {
-          g.fillStyle(0x24421c, 0.55 * forestW);
+          g.fillStyle(0x24421c, 0.55 * forestW * fc);
           g.fillRect(lx, ly, step, step);
         }
         const creekW = this.biome.creekWeight(wx, wy);
         if (creekW > 0.02) {
-          g.fillStyle(0x3a6ea5, 0.6 * creekW);
+          g.fillStyle(0x3a6ea5, 0.6 * creekW * fc);
           g.fillRect(lx, ly, step, step);
         }
       }
@@ -2457,6 +2550,47 @@ export class MainScene extends Phaser.Scene {
       .setOrigin(0, 0)
       .setDepth(-9);
     rt.draw(g);
+    g.destroy();
+  }
+
+  // Bake the outer patchwork ground (biome 2+) into ONE bounded RenderTexture that
+  // covers the whole world, no matter how big the world gets. The world is far too
+  // large (28000px) to bake at full resolution, so this bakes a coarse OVERLAY_TEX²
+  // texture (~64MB, constant cost) and stretches it across the world — soft, which
+  // is fine for placeholder ground. Only the FOREST CORE is skipped (transparent),
+  // so biome 1 stays the crisp forest bake + grass tilesprite (pixel-identical);
+  // everything past it reads worldBiomeColorAt (base + biome blobs). Depth -9.5 sits
+  // just under the crisp forest bake (-9) and above the grass tilesprite (-10).
+  // 4096²/step4 ≈ 1M fills (~1.5s one-time bake, 64MB texture) — bounded and
+  // constant at any world size. Stretched ~6.8x over the world with LINEAR
+  // filtering forced (the game is pixelArt/NEAREST by default) so the outer ground
+  // reads as a smooth gradient rather than blocky. Soft is fine for placeholder.
+  private static readonly OVERLAY_TEX = 4096; // texture resolution
+  private static readonly OVERLAY_STEP = 4; // texel block size baked per fill
+
+  private bakeOuterOverlay(): void {
+    const TEX = MainScene.OVERLAY_TEX;
+    const step = MainScene.OVERLAY_STEP;
+    const worldPerTexel = WORLD_SIZE / TEX;
+    const g = this.make.graphics({}, false); // offscreen
+    for (let ty = 0; ty < TEX; ty += step) {
+      for (let tx = 0; tx < TEX; tx += step) {
+        const wx = (tx + step / 2) * worldPerTexel;
+        const wy = (ty + step / 2) * worldPerTexel;
+        const r = Math.hypot(wx - WORLD_CX, wy - WORLD_CY);
+        if (r > WORLD_RADIUS) continue; // beyond the world edge: the void ring covers it
+        // The pure forest core is owned by the crisp bake + grass tilesprite —
+        // leave it transparent here so biome 1 is untouched. The transition band
+        // (forestCoverage < 1) DOES draw, so it blends outward correctly.
+        if (this.worldBiomes.forestCoverage(r) >= 0.999) continue;
+        g.fillStyle(this.worldBiomes.worldBiomeColorAt(wx, wy), 1);
+        g.fillRect(tx, ty, step, step);
+      }
+    }
+    const rt = this.add.renderTexture(0, 0, TEX, TEX).setOrigin(0, 0).setDepth(-9.5);
+    rt.draw(g);
+    rt.texture.setFilter(Phaser.Textures.FilterMode.LINEAR); // smooth the big stretch
+    rt.setDisplaySize(WORLD_SIZE, WORLD_SIZE); // stretch the coarse texture over the world
     g.destroy();
   }
 
@@ -5473,7 +5607,57 @@ export class MainScene extends Phaser.Scene {
   private toggleWorldMap(): void {
     if (this.runOver || this.isPaused) return;
     if (!this.worldMapUI.isOpen() && this.anyMenuOpen()) return;
-    this.worldMapUI.toggle();
+    this.worldMapUI.toggle(this.player.x, this.player.y);
+  }
+
+  // Current-biome name banner, pinned to the top edge of the minimap panel
+  // (depth above the minimap terrain, below the crafting/menu panels). Updated
+  // each frame in updateBiomeUI().
+  private createBiomeLabel(): void {
+    const cxp = this.scale.width - MINIMAP_MARGIN - MINIMAP_W / 2;
+    this.biomeLabel = this.add
+      .text(cxp, MINIMAP_MARGIN + 2, BIOME_NAMES[this.currentBiome], {
+        fontFamily: "monospace",
+        fontSize: "12px",
+        color: "#ffe6b0",
+        backgroundColor: "#0a0e14cc",
+        padding: { x: 6, y: 2 },
+      })
+      .setOrigin(0.5, 0)
+      .setScrollFactor(0)
+      .setDepth(2902);
+  }
+
+  // Track which biome the player is standing in: refresh the HUD label and fire a
+  // one-time discovery toast the first time a real biome is entered.
+  private updateBiomeUI(): void {
+    const b = this.worldBiomes.dominantBiomeAt(this.player.x, this.player.y);
+    if (b !== this.currentBiome) {
+      this.currentBiome = b;
+      this.biomeLabel?.setText(BIOME_NAMES[b]);
+    }
+    if (b !== "base" && !this.discoveredBiomes.has(b)) {
+      this.discoveredBiomes.add(b);
+      this.eventLog.add("biome", `Discovered: ${BIOME_NAMES[b]}`);
+    }
+  }
+
+  // DEV: reveal the entire explored map (all fog cleared) + open the full map, for
+  // debugging/inspecting world generation. Bound to Ctrl+Shift+M (undocumented —
+  // not in the Keybinds panel, since it's a dev/playtest cheat, not a game feature).
+  private revealEntireMap(): void {
+    const cell = this.exploredMap.cellSize;
+    for (let cy = 0; cy < this.exploredMap.rows; cy++) {
+      for (let cx = 0; cx < this.exploredMap.cols; cx++) {
+        this.fog.reveal((cx + 0.5) * cell, (cy + 0.5) * cell);
+      }
+    }
+    this.exploredMap.drainRevealed();
+    // The corner minimap repaints its nearby window every frame, so it needs no
+    // dirty nudge; the full map does.
+    this.worldMapUI.markDirty();
+    if (!this.worldMapUI.isOpen()) this.worldMapUI.openMap(this.player.x, this.player.y);
+    this.eventLog.add("info", "[DEV] Whole map revealed");
   }
 
   private createStatPointsBadge(): void {

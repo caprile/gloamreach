@@ -40,6 +40,11 @@ export class Biome {
   readonly regionH: number;
   readonly cols: number;
   readonly rows: number;
+  // When true the region TILES infinitely (coords wrap modulo the region) instead
+  // of reading as plain grass outside it — used by the badlands/dunes feature layer
+  // so a small, cheap Biome's mesa/flats/ravine pattern repeats across the huge
+  // outer world at a sane blob scale, rather than generating a 28000px Voronoi.
+  private readonly tiled: boolean;
   private zones: ZoneType[] = []; // length cols*rows
   private creek: boolean[] = []; // length cols*rows; a cell can be forest AND creek
   // Numeric mirrors of the two grids above (forest=1/grassy=0, creek 1/0),
@@ -54,19 +59,28 @@ export class Biome {
     regionW: number,
     regionH: number,
     rng: Phaser.Math.RandomDataGenerator,
+    tiled = false,
   ) {
     this.originX = originX;
     this.originY = originY;
     this.regionW = regionW;
     this.regionH = regionH;
+    this.tiled = tiled;
     this.cols = Math.ceil(regionW / CELL);
     this.rows = Math.ceil(regionH / CELL);
     this.generate(rng);
   }
 
+  // Wrap a cell index into [0, n) for tiled sampling.
+  private static wrapCell(c: number, n: number): number {
+    return ((c % n) + n) % n;
+  }
+
   // Whether a world point falls inside the generated biome region. Points
-  // outside it are plain grass with no forest/creek overlay.
+  // outside it are plain grass with no forest/creek overlay. Tiled biomes are
+  // "everywhere" (coords wrap), so they're always in-region.
   private inRegion(worldX: number, worldY: number): boolean {
+    if (this.tiled) return true;
     return (
       worldX >= this.originX &&
       worldX < this.originX + this.regionW &&
@@ -198,8 +212,15 @@ export class Biome {
   // --- queries ---
 
   private cellIndex(worldX: number, worldY: number): number {
-    const cx = Phaser.Math.Clamp(Math.floor((worldX - this.originX) / CELL), 0, this.cols - 1);
-    const cy = Phaser.Math.Clamp(Math.floor((worldY - this.originY) / CELL), 0, this.rows - 1);
+    let cx = Math.floor((worldX - this.originX) / CELL);
+    let cy = Math.floor((worldY - this.originY) / CELL);
+    if (this.tiled) {
+      cx = Biome.wrapCell(cx, this.cols);
+      cy = Biome.wrapCell(cy, this.rows);
+    } else {
+      cx = Phaser.Math.Clamp(cx, 0, this.cols - 1);
+      cy = Phaser.Math.Clamp(cy, 0, this.rows - 1);
+    }
     return cy * this.cols + cx;
   }
 
@@ -248,8 +269,8 @@ export class Biome {
     const tx = gx - x0;
     const ty = gy - y0;
     const sample = (cx: number, cy: number): number => {
-      const cxs = Phaser.Math.Clamp(cx, 0, this.cols - 1);
-      const cys = Phaser.Math.Clamp(cy, 0, this.rows - 1);
+      const cxs = this.tiled ? Biome.wrapCell(cx, this.cols) : Phaser.Math.Clamp(cx, 0, this.cols - 1);
+      const cys = this.tiled ? Biome.wrapCell(cy, this.rows) : Phaser.Math.Clamp(cy, 0, this.rows - 1);
       return grid[cys * this.cols + cxs];
     };
     const v00 = sample(x0, y0);

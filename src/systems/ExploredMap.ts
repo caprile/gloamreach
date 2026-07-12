@@ -32,7 +32,9 @@ function blend(base: number, overlay: number, alpha: number): number {
   return (r << 16) | (g << 8) | b;
 }
 
-function terrainColorAt(biome: Biome, worldX: number, worldY: number): number {
+// Forest (biome 1) terrain color for a world point. Exported so MainScene can
+// layer the badlands palette on top of it in the terrainColorFn it supplies.
+export function forestTerrainColorAt(biome: Biome, worldX: number, worldY: number): number {
   let color = GRASS_COLOR;
   const forestW = biome.forestWeight(worldX, worldY);
   if (forestW > 0.02) color = blend(color, FOREST_COLOR, FOREST_ALPHA * forestW);
@@ -67,11 +69,22 @@ export class ExploredMap {
   private worldCx: number;
   private worldCy: number;
   private worldRadius: number;
+  // Full terrain color (forest + badlands + …) for a world point. When omitted,
+  // falls back to the forest-only palette — so the corner map/full map always
+  // mirror whatever the ground bake actually paints.
+  private terrainColorFn: (worldX: number, worldY: number) => number;
   // 0xRRGGBB per revealed cell; -1 while still fogged.
   private colors: Int32Array;
   readonly landmarks: MapLandmark[] = [];
 
-  constructor(biome: Biome, fog: FogOfWar, worldCx: number, worldCy: number, worldRadius: number) {
+  constructor(
+    biome: Biome,
+    fog: FogOfWar,
+    worldCx: number,
+    worldCy: number,
+    worldRadius: number,
+    terrainColorFn?: (worldX: number, worldY: number) => number,
+  ) {
     this.biome = biome;
     this.fog = fog;
     this.cols = fog.cols;
@@ -80,6 +93,7 @@ export class ExploredMap {
     this.worldCx = worldCx;
     this.worldCy = worldCy;
     this.worldRadius = worldRadius;
+    this.terrainColorFn = terrainColorFn ?? ((x, y) => forestTerrainColorAt(this.biome, x, y));
     this.colors = new Int32Array(this.cols * this.rows).fill(-1);
   }
 
@@ -98,7 +112,7 @@ export class ExploredMap {
       const wx = (cx + 0.5) * this.cellSize;
       const wy = (cy + 0.5) * this.cellSize;
       const beyond = Math.hypot(wx - this.worldCx, wy - this.worldCy) > this.worldRadius;
-      const color = beyond ? EDGE_COLOR : terrainColorAt(this.biome, wx, wy);
+      const color = beyond ? EDGE_COLOR : this.terrainColorFn(wx, wy);
       this.colors[cy * this.cols + cx] = color;
       out.push({ cx, cy, color });
     }
