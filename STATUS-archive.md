@@ -4340,3 +4340,211 @@ Auto-sort merges+front-packs (wood 5+10→15, alphabetical); Shift-split 11→6+
 next slot, null fallback when the container is full. All 6 SFX cues fire with no console
 errors. The inventory panel renders the Sort button, the Ammo equipment slot (with count
 badge), and the "Ammo: N …" Combat-column line.
+
+### 5aa — Third playtest fix batch (placement, level-up flash, resting, sliders, boss/camp fixes, victory-screen lock)
+
+An 11-item feedback batch off the user's continued playtesting (post-5z). Sonnet-class
+fixes/tuning on already-designed systems — no new mechanic.
+
+**Placement mode no longer re-arms after one placement (`MainScene.attemptPlaceObject`).**
+The "stays armed so you can place several in a row" behavior (shipped in 5z) was built
+anticipating a workflow the user doesn't want — a successful placement now always calls
+`cancelPlacement()` immediately, both for crafted placements and re-placing an owned
+stack (previously that path only exited once the very last owned copy was placed).
+Placing another requires a fresh Place click / hotbar selection, matching how every
+other equip-and-act flow already works.
+
+**Level-up feedback drops the whole-screen `camera.flash` entirely
+(`MainScene.showLevelUpBanner`).** Two prior tuning passes (5z included) dialed it down
+and it still read as "annoying" — cut outright, replaced with a small local glow circle
+behind the punch-in banner text (a growing, fading `Graphics` circle, screen-space,
+scoped to the banner's own area) so there's still a "big deal" beat without washing the
+whole screen.
+
+**Station label depth fix — "hover a bench, the text is hidden behind other benches"
+(`MainScene.refreshStationLabel`).** The per-station upgrade-tier label
+(`this.placedLabels`) was a world-space `Text` with no explicit depth (default 0), so
+any nearby placed object's own y-sorted depth (up to ~2400) could render right over it.
+Now pinned to depth 2500 — above every world object, still below the fixed HUD
+(2600+), same convention the hover-highlight outline already uses.
+
+**Comfort resting is now aggro-gated, not radius-gated
+(`MainScene.isAnyEnemyAggro`, replaces `isEnemyNearby`).** "As long as no enemies are
+aggro'd on you, you should be able to rest" — the flat `COMFORT_SAFE_RADIUS` (350px)
+blocked resting even when nearby enemies were just idling/wandering, not a real threat.
+"Safe" is now `enemy.isAggro()` across all live enemies, regardless of distance.
+
+**Crafting-menu batch slider now reads in OUTPUT units, not craft-repetitions
+(`CraftingMenu.ts`).** Most recipes are 1:1 so this was invisible, but Shishkabob (x2),
+Slingshot Pellets (x25), and Javelin (x2) all grant more than one item per craft — the
+"Qty: N / max" readout and the "Craft xN" button now show `batch * recipe.output.count`
+instead of the raw batch count, so the slider reads as "how many items," matching the
+Drying Rack's existing output-based slider (4f).
+
+**Cook menu intro blurb no longer overflows the panel, and is confirmed pinned at the
+top (`CookingMenu.ts`).** The "Cook meat and vegetables..." blurb rendered as one
+unwrapped line that could run past the panel's right edge; now wrapped to the panel
+width with its real (possibly 2-line) height measured up front so the panel is sized/
+centered around it correctly, right under the title. Also fixed a second, worse overflow
+in the footer's selected-dish cost line: it repeated the dish's own name
+(`"${recipe.name} — ${costParts}"`, already shown on the row above) which was wide
+enough on 3-ingredient dishes to run under the Cook button — now cost-only, plus a
+wordWrap safety net stopping short of the button column either way.
+
+**Crafting a stackable item you already have in the hotbar now tops that stack up
+first (`MainScene.addToBackpack`/`topUpExistingHotbarStack`).** Previously EVERY craft/
+cook/process/refine output landed straight in the backpack regardless of what was
+already equipped in the hotbar. `addToBackpack` now tops up a matching hotbar stack
+(any slot, up to its max) before falling back to `backpack.add()` — but only tops up an
+EXISTING stack, never places a new item into an empty hotbar slot (that would be a
+surprising side effect of crafting).
+
+**Boss wanders back to its spawn point once deaggro'd (`GremlinKing.updateIdle`).**
+Getting kited past the leash mid-charge used to leave the King standing wherever it
+ended up, fully idle. The deaggro'd branch now walks it back toward `spawnX/spawnY` at
+`BOSS_MOVE_SPEED` (re-aggroing normally if the player wanders back within
+`BOSS_AGGRO_RADIUS` along the way) instead of freezing in place.
+
+**Gremlin Shack guards near the War Camp never respawn, and the huts are folded into
+one map POI (`GremlinShack.nearCamp`, `MainScene`).** The 3 shacks fanned inside the War
+Camp (vs. the 2 wild standalone ones) had their guards firing the same 6-min respawn
+timer as every other shack — with no idea a Gremlin King fight might be in progress,
+guards could pop mid-boss-fight. `onShackGuardKilled` now no-ops the respawn schedule
+entirely for `nearCamp` shacks (the camp's own density — `spawnAltarDensity` — covers
+ongoing camp danger instead); wild shacks are unaffected. `updateAltarDiscovery` also
+now skips adding a separate "Gremlin Shack" landmark for `nearCamp` shacks — they're
+part of the "Gremlin War Camp" POI, not their own, so the map doesn't show 4 markers
+stacked on top of each other.
+
+**Victory/Death screen now actually freezes input (`MainScene.create`'s global
+listeners).** `update()` already early-returned on `runOver`, but the global
+`pointerdown` handler and several `keydown-*` listeners (TAB, K, M, R, V, O, H, the
+hotbar-select keys, mouse wheel) had no `runOver` guard at all — a player could still
+craft, gather, attack, or open menus behind the RunEndUI. All now short-circuit on
+`this.runOver`.
+
+**Verification:** `tsc --noEmit` clean; full build unaffected. Extensive live
+`preview_eval` verification (console error-free throughout): placement exits after one
+object; hotbar stack topped 2→4 on a matching craft; `isAnyEnemyAggro` replaces the old
+radius check; crafting-menu Qty/button read output units (Shishkabob batch 5 → "Qty: 10
+/ 238", `output.count` 2); station labels report depth 2500; boss walked back toward
+spawn (velocity pointed home, x decreasing) once forced deaggro'd from 700px out; a
+War-Camp shack's guards left `respawnAt: null` after both were killed; the explored-map
+landmark list held exactly one "Gremlin War Camp" entry near 3 discovered huts; TAB
+opened the crafting menu normally but was a no-op once `runOver` was set (verified via
+real `keyboard.emit('keydown-TAB')` dispatches); Cook menu blurb wrapped to 2 lines
+within the panel; footer cost line for a 3-ingredient dish rendered without running
+under the Cook button.
+
+### 5z — Second playtest polish batch (SFX feel, toast fix, batch sliders, gating, forge UI)
+
+Plan: `.claude/plans/nimble-polishing-lantern.md`. A 14-item feedback batch off the user's
+5y playtest — fixes/tuning/UI on already-designed systems, built on **Sonnet** per the
+model-switch convention (no new mechanic). Two forks locked via `AskUserQuestion` before
+starting: Javelin's gate = tier-1 (Workbench-proximity, like Stone Pickaxe), not an
+upgraded-Workbench gate; the trophy-generalization discussion (#14) = don't merge the
+data model, just consolidate the Relic Forge's roll UI.
+
+**SFX/feel tuning (`Sfx.ts`, `MainScene.ts`, `Boar.ts`).** `hit()` gain 0.1→0.035 and
+shortened 90→55ms (was "annoying" at sustained combat pace — it fires on every hit both
+directions). New `Sfx.skillUp()` (quiet two-note blip) fires from `skills.onLevelUp`,
+distinct from the fuller `levelUp()` triad reserved for Player-level. The Player level-up
+`camera.flash` cut 300ms@(48,36,12) → 150ms@(20,15,5) (still no shake) — "full screen
+flash is too much" was itself a second dial-down of an already-softened flash from an
+earlier batch. Boar charge `CHARGE_MAX_DISTANCE` 230→170 and `CHARGE_RECOVER_MS` 820→550
+(still a real punish window, less brutal overshoot/recovery).
+
+**Top-middle toast overlap — root cause found and fixed (`EventLogUI.ts`).**
+`showToast`'s old `y = 72 + activeToasts * 40` counter decremented on fade-**complete**,
+but toasts share a fixed delay+duration so the earliest-created one always completes
+first — its slot could free up while a LATER toast was still visible, and the next toast
+reused that Y and overlapped it (rapid cooking made "Cooked X" toasts collide; affected
+every `info`/`combat`/`levelup` toast, not just cooking). Replaced with a reflowing
+`activeCenterToasts: {height}[]` list (mirrors the `activeRecipeToasts` pattern already in
+the same file for the side toasts) — each toast gets a real cumulative-height slot and
+splices itself out on fade-complete. *Verified live: 3 rapid `info` toasts got distinct
+stable-height slots (34px each), no overlap.*
+
+**Crafting menu stays open through placement + re-arms on a new Place click
+(`MainScene.ts`, `CraftingMenu.ts`).** Reverses a 40-min-batch fix that CLOSED the
+crafting menu on `startPlacement` (to kill an "every craft click drops a workbench"
+fall-through bug). That old bug is now prevented a different way: the global pointerdown
+handler already returns early for any click landing on the still-open crafting panel
+while `placementMode` is set (`craftingMenu.containsPoint` guard, pre-existing) — so
+`startPlacement` no longer needs to close the panel to stay safe. `startPlacement` is now
+idempotent/re-entrant: calling it again while already mid-placement (e.g. clicking a
+DIFFERENT placeable recipe's "Place" button) destroys the old ghost and re-arms to the new
+recipe instead of leaking a ghost or stacking placements. `attemptPlaceObject` also now
+calls `craftingMenu.refresh()` so the live cost readout stays accurate as materials are
+spent across repeated placements. *Verified live: workbench→campfire re-arm swapped the
+ghost texture cleanly with the crafting menu staying open and zero actual placements
+landing; the old fall-through bug confirmed still dead (panel clicks return early).*
+
+**Batch-quantity sliders for stackable crafting + cooking
+(`CraftingMenu.ts`, `CookingMenu.ts`, `MainScene.ts`, `ItemContainer.ts`).**
+`craftRecipe`/`cookAtCampfire` both gained a `batches` param (default 1, loops the
+existing per-unit craft/cook + grants total output, one shared commit) backed by new
+`maxCraftBatches`/`maxCookBatches` (min of cost-affordable batches and
+`ItemContainer.roomFor()`-bounded batches — `roomFor` is a new `ItemContainer` method,
+`hasRoomFor`'s boolean check generalized to return the actual remaining capacity).
+**CraftingMenu**: a slider appears above the Craft button only for non-placeable,
+stackable-output (`maxStack > 1`) recipes with >1 batch affordable; the ingredient-cost
+readout scales live with the slider, button reads "Craft x{N}", one `ProgressBar` covers
+the whole batch. **CookingMenu was restructured** from "each row has its own inline Cook
+button" into a select-a-row-then-shared-footer flow (mirrors CraftingMenu's list+detail
+shape) — clicking a dish row selects it (highlighted border) instead of cooking it
+immediately; a new footer below the row list shows the selected dish's batch-scaled
+ingredient cost, a slider (when >1 batch is affordable), and one Cook button. Both
+sliders share MainScene's existing global pointermove/pointerup drag plumbing (extended
+with `isDraggingSlider`/`updateSliderFromPointer`/`endSliderDrag`, same pattern
+`DryingRackMenu`'s amount slider already used). *Verified live: 3-batch Shishkabob craft
+spent 3 wood → 6 shishkabob (recipe now 1 wood → 2, see below); 4-batch Cooked Boar Meat
+spent 4 boar_meat → 4 dishes; dragging the cooking slider to max showed "Qty: 6/6" and
+"Cook x6" with the ingredient text scaling to match.*
+
+**Drying Rack output slot shows the output item's icon (`DryingRackMenu.ts`).** The
+"→ N Twine" preview text now sits next to a small icon of the actual output item
+(`itemDef(recipe.output).texture`), reading visually like the input slot instead of
+text-only.
+
+**Shishkabob recipe + art (`Recipes.ts`, `BootScene.ts`).** Output bumped to `count: 2`
+(1 Wood → 2 Shishkabob, cost unchanged). Texture redrawn from a stick-with-red/green-
+chunks (which "already looked full of stuff") to a bare wooden skewer with a sharpened
+tip — chunks now only belong on the COOKED dishes.
+
+**Javelin + Slingshot Pellets recipe gating (`Recipes.ts`, `Crafting.ts`).** Javelin
+bumped tier 0→1 (Workbench-proximity gate, like Stone Pickaxe/Slingshot — the locked fork
+answer) + `requiredSkills: [{skill: "pierce", level: 5}]` — a free starter javelin at
+Pierce 0 undercut the point of the (also-ranged, pierce-typed) Slingshot as the actual
+early opener. New `Recipe.requiresDiscovered?: string[]` field + a
+`Crafting.otherRecipesDiscovered` check: Slingshot Pellets now stays hidden until the
+player has crafted a Slingshot at least once (`requiresDiscovered: ["slingshot"]`) — stone
+is common enough it would otherwise appear immediately, well before there's a launcher to
+load it into. *Verified live: both hidden pre-gate, both discovered immediately after
+placing a workbench+Pierce 5 / crafting a slingshot respectively.*
+
+**Relic Forge roll UI consolidated to one button per RARITY, not per species
+(`RelicForgeMenu.ts`).** From the #14 discussion: species trophies (Boar/Snake/Gremlin)
+stay separate as drops (flavor + M-W1 per-source-rarity scaffolding — NOT merged), but
+since they already share identical odds/pity by rarity (5n), showing 3 near-identical
+"Bind X Trophy" buttons was pure UI noise. New `rarityGroups()` groups every owned trophy
+key by its `TROPHY_ROLL` rarity and renders ONE button per group ("Roll a Common Trophy",
+showing the combined count); `pickTrophyToRoll()` consumes whichever species has the
+highest count on click, draining stock evenly rather than favoring one arbitrarily. Odds/
+pity/reveal-fx are unaffected (same `beginRoll` path, just fed a different key). *Verified
+live: 3 owned trophy types (gremlin/boar/snake, totaling 9) collapsed into one Common
+group; the picker correctly chose the highest-count species (boar_trophy, 5 owned).*
+
+**Dashboard "sometimes doesn't load" — investigated, no bug found.** `/dashboard.html` is
+a second Vite entry that only serves while `npm run dev` is running THIS project.
+`.claude/launch.json`'s Preview config has `"autoPort": true`; if a stale/orphaned Vite
+process from an earlier closed session is still holding port 5173 (exactly what happened
+in 5y — 5 orphaned processes), a *new* session's dev server silently starts on 5174+
+instead, but a bookmarked fixed-port URL still points at 5173 — looks broken even though a
+server IS running. No code fix applies; environmental (kill orphaned `node.exe` processes
+before starting a fresh session).
+
+**Verification:** `tsc --noEmit` clean; full `npm run build` succeeds (main bundle
+>500kB warning is pre-existing/unrelated). Extensive live `preview_eval` verification per
+item above (console error-free throughout). `RECIPES.md` updated (Shishkabob output x2,
+Javelin tier 1 + Pierce 5, Slingshot Pellets discovery-gate footnote).

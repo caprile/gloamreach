@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import type { ResourceType } from "../systems/Inventory";
+import type { DamageType } from "../systems/Weapons";
 import { ysortDepth } from "../systems/depth";
 
 export type EnemyState = "idle" | "chasing";
@@ -90,6 +91,12 @@ export interface EnemyConfig {
   // Which trophy an elite drops (unique per species). Ignored when not elite;
   // defaults to gremlin_trophy. Boar/Snake override it with their own type.
   eliteTrophy?: ResourceType;
+  // Per-damage-type incoming multiplier (Biome 2 Phase 1). <1 = resistant,
+  // >1 = weak; any type absent = 1 (neutral). Lets badlands enemies teach the
+  // damage-type layer (e.g. a rock reptile resists blunt, is weak to pierce)
+  // purely as data — the resist math lives in MainScene.resolveWeaponHit. Empty
+  // for every biome-1 enemy, so their combat is unchanged.
+  resistances?: Partial<Record<DamageType, number>>;
 }
 
 // A simple melee enemy (currently only "Boar"). Ranged attacks, ambush AI,
@@ -106,6 +113,16 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   // constructor; read for run-score kill classification (see Run.ts) and to
   // append the shared trophy drop.
   elite = false;
+  // Per-damage-type incoming multiplier (Biome 2 Phase 1). Read by
+  // MainScene.resolveWeaponHit via resistMultiplier(); empty for biome-1 enemies.
+  private readonly resistances: Partial<Record<DamageType, number>>;
+  // --- swarm pack-aggro (Biome 2 Phase 1, opt-in) ---
+  // When true, this enemy both propagates aggro to and receives aggro from
+  // nearby same-type pack members (MainScene.updatePackAggro drives it). Off by
+  // default so only Phase 2's swarm creature opts in — every existing enemy is
+  // unaffected. packAggroRadius is how close a woken ally must be to also wake.
+  packAggro = false;
+  packAggroRadius = 220;
   state: EnemyState = "idle";
   private wanderTarget: { x: number; y: number } | null = null;
   private nextWanderAt = 0;
@@ -169,6 +186,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     this.maxHealth = cfg.maxHealth;
     this.health = cfg.maxHealth;
     this.biteDamageValue = cfg.biteDamage;
+    this.resistances = cfg.resistances ?? {};
     scene.add.existing(this);
     scene.physics.add.existing(this);
     this.setCollideWorldBounds(true); // matches Player — without this, chase/flee/kite AI can walk enemies off the map
@@ -217,6 +235,28 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
 
   get biteDamage(): number {
     return this.biteDamageValue;
+  }
+
+  // Incoming-damage multiplier for a given damage type (Biome 2 Phase 1). 1 =
+  // neutral (the default for any type not listed in this enemy's resistances).
+  resistMultiplier(type: DamageType): number {
+    return this.resistances[type] ?? 1;
+  }
+
+  // Wake this enemy into a chase without dealing it damage — a pack member
+  // reacting to a nearby ally engaging (swarm pack-aggro, Biome 2 Phase 1).
+  // No-op if depleted or already chasing; clears the post-giveup immunity so a
+  // woken ally actually commits rather than shrugging it off. Drives the base
+  // `state` machine; a subclass that tracks aggro via its OWN field (Boar/Snake/
+  // Gremlin use a private `mode`) MUST override this to flip that field — the
+  // exact same reason they override isAggro(). Phase 2's swarm creature (the
+  // first real packAggro user) will either use the base machine or override
+  // both, so this base version stays correct for the common case.
+  forceAggro(now: number): void {
+    if (this.depleted || this.state === "chasing") return;
+    this.state = "chasing";
+    this.startPursuit(now);
+    this.aggroImmuneUntil = 0;
   }
 
   // Resource(s) dropped on death — data-driven per EnemyConfig so MainScene's

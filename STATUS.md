@@ -2,15 +2,17 @@
 
 ## Current State
 
-_Living snapshot — edit in place, never append. Last shipped: **Biome 2 — Phase 0
-(Patchwork worldgen)** — the world grew to 28000px (`WORLD_RADIUS` 14000) with a Valheim-style
-**patchwork** outer worldgen: a universal base layer + biome BLOBS (badlands + a placeholder
-dunes biome) where **radius sets a danger CEILING** (higher biomes gated behind an unlock
-radius; lower biomes can appear anywhere), forest a protected center chunk that also spawns as
-blobs beyond it. Plus a **current-biome HUD label**, a **first-entry discovery toast**, and a
-`Ctrl+Shift+M` dev reveal-map command; **empty of content**. (Reworked same session from an
-initial concentric-rings version the user found too uniform.) **2026-07-12**. Prior: Welcome
-overlay per-page-load gate; Enemy respawn (fog top-up); M-SS (stats/skills depth pass)._
+_Living snapshot — edit in place, never append. Last shipped: **Biome 2 — Phase 1
+(Combat systems layer)** — the reusable mechanics biome-2 content will declare as data, all
+dormant hooks until Phase 2 enemies/Phase 4 weapons use them: (1) a per-enemy **damage-type
+resist/weakness** multiplier (`EnemyConfig.resistances`, applied in `resolveWeaponHit`; the
+floating damage number recolors — orange-red weak, dim-blue resisted); (2) **per-weapon AOE
+arc** melee cleave (`WEAPON_ARC` — spear/clubs sweep multiple in a cone, knife stays
+single-target, ranged untouched, per-target crit); (3) **swarm pack-aggro** base
+(`Enemy.packAggro`/`forceAggro` + `MainScene.updatePackAggro` — an aggro'd member wakes idle
+same-type neighbors). Plus a dormant **magic-bypasses-flat-armor** branch in
+`applyDamageToPlayer`. **2026-07-12**. Prior: Biome 2 Phase 0 (patchwork worldgen); Welcome
+overlay per-page-load gate; Enemy respawn (fog top-up)._
 
 **The game.** Top-down 2D pixel survival-ARPG (Phaser 3 + TypeScript + Vite; all
 textures are placeholders generated in `BootScene`). A forest biome (biome 1) in the center of a
@@ -47,19 +49,20 @@ death ends a run and posts a `localStorage` high score; killing the Gremlin King
 win. The world is now circular + much larger (M-W1 geometry prep, above); deterministic
 seeded world-gen and actual multi-biome content are still deferred to M-W1 proper.
 
-**In progress / next.** **Biome 2 (Sunscorch Badlands) is now underway** — a phased umbrella
-plan (`.claude/plans/biome-2-sunscorch-badlands.md`) drives it, and **Phase 0 (Patchwork
-worldgen)** just shipped: the world grew to 28000px for ~5 biomes, with the patchwork
-foundation above (base + biome blobs by danger; forest core protected) — walkable, mapped, but
-**empty of content**. The umbrella plan's ring model is superseded by this patchwork. Remaining phases (own
-Opus sessions each, own plan files): **Phase 1** — combat systems layer (magic damage +
-resist/weak, per-weapon AOE arcs, swarm pack-aggro), **next**; Phase 2 enemies/wildlife;
+**In progress / next.** **Biome 2 (Sunscorch Badlands) is underway** — a phased umbrella
+plan (`.claude/plans/biome-2-sunscorch-badlands.md`) drives it. **Phase 0 (Patchwork
+worldgen)** and **Phase 1 (Combat systems layer)** have shipped: the world grew to 28000px for
+~5 biomes with the patchwork terrain foundation, and the reusable combat mechanics (damage-type
+resist/weak, per-weapon AOE arcs, swarm pack-aggro base, magic-armor-bypass hook) now exist as
+dormant data hooks — walkable/mapped, but **still empty of content**. Remaining phases (own
+Opus sessions each, own plan files): **Phase 2** — badlands enemies & wildlife (Gloamreach-
+flavored canid swarm, rock reptile, magical gremlin, +1 native creature, arid flora), **next**;
 Phase 3 badlands boss (new win-con, demotes Gremlin King) + King critical-drop rework + 2
 POIs; Phase 4 smelting/forging gear tier; Phase 5 tier-2 relics + biome-1 trim +
 family-replace-with-refund. The master-plan tail **M-TE** (trophy-gated gear) is folded into
 this biome-2 work. Real pixel art/animations stay deliberately deferred until content/balance
-settle (roadmap item 8). Crit numbers, per-point stat values, and skill-effect rates are all
-first-pass — expect a tuning pass after a playtest.
+settle (roadmap item 8). Phase 1's arc/resist/pack numbers are all first-pass — expect a tuning
+pass once Phase 2 enemies actually use them.
 
 **Known issues / open.**
 - Boss may be slightly overtuned after the 5s damage bump (the user's "TBD" — left as-is
@@ -87,6 +90,57 @@ first-pass — expect a tuning pass after a playtest.
   player (nearby view); zoom-out to full world via the wheel.
 
 ## Recent Entries
+
+> Older entries in STATUS-archive.md.
+
+### Biome 2 — Phase 1: Combat systems layer (damage types, resist/weak, AOE arcs, swarm base)
+
+Plan: `.claude/plans/biome-2-phase-1-combat-systems.md` (Phase 1 of the
+`biome-2-sunscorch-badlands.md` umbrella). Built on **Opus** (new combat mechanics). Three
+reusable mechanics built *before* the biome-2 content so Phase 2 enemies / Phase 4 weapons can
+declare them as data — all dormant until then, so biome-1 combat is unchanged. No new
+enemies/weapons/content; verified by temporarily flagging existing enemies/weapons via eval.
+
+**1. Damage-type resist/weakness.** `magic` already existed in `DamageType`; this adds the
+multiplier layer. `EnemyConfig.resistances?: Partial<Record<DamageType, number>>` (`<1` resist,
+`>1` weak, absent = 1) → stored on `Enemy`, exposed via `resistMultiplier(type)`. Applied at
+the single choke point `resolveWeaponHit` (so it covers **both** melee and ranged and can't
+drift), which also derives an effectiveness (`weak`/`resist`/`normal`) and passes it to
+`spawnDamageNumber` — a non-crit number tints bright orange-red (weak) / dim blue (resisted);
+crit's yellow still wins. Empty for every biome-1 enemy.
+
+**2. Player-side magic-armor bypass (dormant hook).** `applyDamageToPlayer` gained an optional
+`dmgType?: DamageType`; when `"magic"` it **skips the flat-armor term** (relic %-reduction
+still applies, still floored at 1). No enemy deals magic until Phase 2's magical gremlin, so
+every current caller uses the unchanged physical path. Verified live: 30 magic vs 30 blunt in
+10-armor gremlin set → 30 taken (bypassed) vs 20 taken (30−10).
+
+**3. Per-weapon AOE arc** (locked decision 6). `WEAPON_ARC: Record<WeaponType, {halfAngleDeg;
+range; falloff}>` + `weaponArc()` in `Weapons.ts` — knife 25°/34px/0.5 (near single-target),
+clubs medium, **primal_spear 50°/58px/0.7 (wide sweeper)**, ranged `range: 0`. `tryMeleeAttack`
+now computes a shared pre-stagger/pre-crit `raw`, resolves the primary, then (if `arc.range > 0`)
+sweeps other live enemies within `range` and `±halfAngle` of the swing direction (player →
+primary target), each taking `raw × staggerMult × falloff` with **its own per-target crit**
+through the same `resolveWeaponHit` (own resist, kill/loot/XP). Extracted
+`staggerMultiplierFor(enemy)` (the GremlinKing/Gloamwarden `isStaggered()` checks) so
+primary/secondary/ranged share it. `enemyRadiusBonus()` lets the cone still catch a big
+elite/boss at its edge. Verified live: spear hit primary + in-cone neighbor (falloff) but not
+the out-of-cone one; knife hit only the primary (neighbor beyond its 34px range).
+
+**4. Swarm pack-aggro base** (opt-in). Public `Enemy.packAggro`/`packAggroRadius` (220) +
+`forceAggro(now)` (wakes idle→chasing without damage; clears post-giveup immunity).
+`MainScene.updatePackAggro(now)` (called each frame from `updateEnemies`) wakes idle **same-class**
+`packAggro` neighbors of any aggro'd `packAggro` member — O(k·n) with k = packAggro count (0
+today → effectively free). `forceAggro` drives the base `state` machine; a subclass tracking
+aggro via its own field (Boar/Snake/Gremlin's private `mode`) must **override** it, exactly as
+they already override `isAggro()` — documented in-code for Phase 2's swarm author. Verified live:
+leader woke a 120px neighbor, not a 600px one, and not a different-class enemy 10px away.
+
+**Verification.** `tsc --noEmit` clean. Live `preview_eval` against `MainScene` confirmed all
+four (the render loop was throttled/backgrounded — pumped `game.loop.step` to reach RUNNING, per
+CLAUDE.md's "assert against scene state, not screenshots" guidance). No `RECIPES.md`/dashboard
+change (no recipe or enemy-stat data change — resist values arrive with Phase 2 enemies). See
+[[survivor-rpg-biome-2-plan]].
 
 ### Biome 2 — Phase 0: Patchwork worldgen (bigger world + base-layer + biome blobs)
 
@@ -202,8 +256,6 @@ patterns, no new core mechanic). the user flagged two gaps: Ctrl+Click and Shift
   Playing), `finish()` unfreezes + sets the localStorage flag, and the pause-menu →
   "How to Play" → close → back-to-pause-menu round-trip restores the correct frozen
   state. No console errors. No `RECIPES.md` change (no recipe/cost changes).
-
-> Older entries in STATUS-archive.md.
 
 ### Playtest polish batch — hints, elite tooltip, javelin, dash VFX, miniboss leash, text timings, stats display
 
@@ -354,211 +406,3 @@ non-crit 10) and both caps hold (mult 3.0 → 30, chance 0.60); heal 10×1.3=+13
 entries for 3 worn pieces; Combat column reports crit 18%×2.30. `tsc --noEmit` + full build
 clean. `RECIPES.md` relic table + dashboard weapons tab (base-crit + eff-DPS columns)
 updated. See [[survivor-rpg-stats-skills-relics-direction]].
-
-### 5aa — Third playtest fix batch (placement, level-up flash, resting, sliders, boss/camp fixes, victory-screen lock)
-
-An 11-item feedback batch off the user's continued playtesting (post-5z). Sonnet-class
-fixes/tuning on already-designed systems — no new mechanic.
-
-**Placement mode no longer re-arms after one placement (`MainScene.attemptPlaceObject`).**
-The "stays armed so you can place several in a row" behavior (shipped in 5z) was built
-anticipating a workflow the user doesn't want — a successful placement now always calls
-`cancelPlacement()` immediately, both for crafted placements and re-placing an owned
-stack (previously that path only exited once the very last owned copy was placed).
-Placing another requires a fresh Place click / hotbar selection, matching how every
-other equip-and-act flow already works.
-
-**Level-up feedback drops the whole-screen `camera.flash` entirely
-(`MainScene.showLevelUpBanner`).** Two prior tuning passes (5z included) dialed it down
-and it still read as "annoying" — cut outright, replaced with a small local glow circle
-behind the punch-in banner text (a growing, fading `Graphics` circle, screen-space,
-scoped to the banner's own area) so there's still a "big deal" beat without washing the
-whole screen.
-
-**Station label depth fix — "hover a bench, the text is hidden behind other benches"
-(`MainScene.refreshStationLabel`).** The per-station upgrade-tier label
-(`this.placedLabels`) was a world-space `Text` with no explicit depth (default 0), so
-any nearby placed object's own y-sorted depth (up to ~2400) could render right over it.
-Now pinned to depth 2500 — above every world object, still below the fixed HUD
-(2600+), same convention the hover-highlight outline already uses.
-
-**Comfort resting is now aggro-gated, not radius-gated
-(`MainScene.isAnyEnemyAggro`, replaces `isEnemyNearby`).** "As long as no enemies are
-aggro'd on you, you should be able to rest" — the flat `COMFORT_SAFE_RADIUS` (350px)
-blocked resting even when nearby enemies were just idling/wandering, not a real threat.
-"Safe" is now `enemy.isAggro()` across all live enemies, regardless of distance.
-
-**Crafting-menu batch slider now reads in OUTPUT units, not craft-repetitions
-(`CraftingMenu.ts`).** Most recipes are 1:1 so this was invisible, but Shishkabob (x2),
-Slingshot Pellets (x25), and Javelin (x2) all grant more than one item per craft — the
-"Qty: N / max" readout and the "Craft xN" button now show `batch * recipe.output.count`
-instead of the raw batch count, so the slider reads as "how many items," matching the
-Drying Rack's existing output-based slider (4f).
-
-**Cook menu intro blurb no longer overflows the panel, and is confirmed pinned at the
-top (`CookingMenu.ts`).** The "Cook meat and vegetables..." blurb rendered as one
-unwrapped line that could run past the panel's right edge; now wrapped to the panel
-width with its real (possibly 2-line) height measured up front so the panel is sized/
-centered around it correctly, right under the title. Also fixed a second, worse overflow
-in the footer's selected-dish cost line: it repeated the dish's own name
-(`"${recipe.name} — ${costParts}"`, already shown on the row above) which was wide
-enough on 3-ingredient dishes to run under the Cook button — now cost-only, plus a
-wordWrap safety net stopping short of the button column either way.
-
-**Crafting a stackable item you already have in the hotbar now tops that stack up
-first (`MainScene.addToBackpack`/`topUpExistingHotbarStack`).** Previously EVERY craft/
-cook/process/refine output landed straight in the backpack regardless of what was
-already equipped in the hotbar. `addToBackpack` now tops up a matching hotbar stack
-(any slot, up to its max) before falling back to `backpack.add()` — but only tops up an
-EXISTING stack, never places a new item into an empty hotbar slot (that would be a
-surprising side effect of crafting).
-
-**Boss wanders back to its spawn point once deaggro'd (`GremlinKing.updateIdle`).**
-Getting kited past the leash mid-charge used to leave the King standing wherever it
-ended up, fully idle. The deaggro'd branch now walks it back toward `spawnX/spawnY` at
-`BOSS_MOVE_SPEED` (re-aggroing normally if the player wanders back within
-`BOSS_AGGRO_RADIUS` along the way) instead of freezing in place.
-
-**Gremlin Shack guards near the War Camp never respawn, and the huts are folded into
-one map POI (`GremlinShack.nearCamp`, `MainScene`).** The 3 shacks fanned inside the War
-Camp (vs. the 2 wild standalone ones) had their guards firing the same 6-min respawn
-timer as every other shack — with no idea a Gremlin King fight might be in progress,
-guards could pop mid-boss-fight. `onShackGuardKilled` now no-ops the respawn schedule
-entirely for `nearCamp` shacks (the camp's own density — `spawnAltarDensity` — covers
-ongoing camp danger instead); wild shacks are unaffected. `updateAltarDiscovery` also
-now skips adding a separate "Gremlin Shack" landmark for `nearCamp` shacks — they're
-part of the "Gremlin War Camp" POI, not their own, so the map doesn't show 4 markers
-stacked on top of each other.
-
-**Victory/Death screen now actually freezes input (`MainScene.create`'s global
-listeners).** `update()` already early-returned on `runOver`, but the global
-`pointerdown` handler and several `keydown-*` listeners (TAB, K, M, R, V, O, H, the
-hotbar-select keys, mouse wheel) had no `runOver` guard at all — a player could still
-craft, gather, attack, or open menus behind the RunEndUI. All now short-circuit on
-`this.runOver`.
-
-**Verification:** `tsc --noEmit` clean; full build unaffected. Extensive live
-`preview_eval` verification (console error-free throughout): placement exits after one
-object; hotbar stack topped 2→4 on a matching craft; `isAnyEnemyAggro` replaces the old
-radius check; crafting-menu Qty/button read output units (Shishkabob batch 5 → "Qty: 10
-/ 238", `output.count` 2); station labels report depth 2500; boss walked back toward
-spawn (velocity pointed home, x decreasing) once forced deaggro'd from 700px out; a
-War-Camp shack's guards left `respawnAt: null` after both were killed; the explored-map
-landmark list held exactly one "Gremlin War Camp" entry near 3 discovered huts; TAB
-opened the crafting menu normally but was a no-op once `runOver` was set (verified via
-real `keyboard.emit('keydown-TAB')` dispatches); Cook menu blurb wrapped to 2 lines
-within the panel; footer cost line for a 3-ingredient dish rendered without running
-under the Cook button.
-
-### 5z — Second playtest polish batch (SFX feel, toast fix, batch sliders, gating, forge UI)
-
-Plan: `.claude/plans/nimble-polishing-lantern.md`. A 14-item feedback batch off the user's
-5y playtest — fixes/tuning/UI on already-designed systems, built on **Sonnet** per the
-model-switch convention (no new mechanic). Two forks locked via `AskUserQuestion` before
-starting: Javelin's gate = tier-1 (Workbench-proximity, like Stone Pickaxe), not an
-upgraded-Workbench gate; the trophy-generalization discussion (#14) = don't merge the
-data model, just consolidate the Relic Forge's roll UI.
-
-**SFX/feel tuning (`Sfx.ts`, `MainScene.ts`, `Boar.ts`).** `hit()` gain 0.1→0.035 and
-shortened 90→55ms (was "annoying" at sustained combat pace — it fires on every hit both
-directions). New `Sfx.skillUp()` (quiet two-note blip) fires from `skills.onLevelUp`,
-distinct from the fuller `levelUp()` triad reserved for Player-level. The Player level-up
-`camera.flash` cut 300ms@(48,36,12) → 150ms@(20,15,5) (still no shake) — "full screen
-flash is too much" was itself a second dial-down of an already-softened flash from an
-earlier batch. Boar charge `CHARGE_MAX_DISTANCE` 230→170 and `CHARGE_RECOVER_MS` 820→550
-(still a real punish window, less brutal overshoot/recovery).
-
-**Top-middle toast overlap — root cause found and fixed (`EventLogUI.ts`).**
-`showToast`'s old `y = 72 + activeToasts * 40` counter decremented on fade-**complete**,
-but toasts share a fixed delay+duration so the earliest-created one always completes
-first — its slot could free up while a LATER toast was still visible, and the next toast
-reused that Y and overlapped it (rapid cooking made "Cooked X" toasts collide; affected
-every `info`/`combat`/`levelup` toast, not just cooking). Replaced with a reflowing
-`activeCenterToasts: {height}[]` list (mirrors the `activeRecipeToasts` pattern already in
-the same file for the side toasts) — each toast gets a real cumulative-height slot and
-splices itself out on fade-complete. *Verified live: 3 rapid `info` toasts got distinct
-stable-height slots (34px each), no overlap.*
-
-**Crafting menu stays open through placement + re-arms on a new Place click
-(`MainScene.ts`, `CraftingMenu.ts`).** Reverses a 40-min-batch fix that CLOSED the
-crafting menu on `startPlacement` (to kill an "every craft click drops a workbench"
-fall-through bug). That old bug is now prevented a different way: the global pointerdown
-handler already returns early for any click landing on the still-open crafting panel
-while `placementMode` is set (`craftingMenu.containsPoint` guard, pre-existing) — so
-`startPlacement` no longer needs to close the panel to stay safe. `startPlacement` is now
-idempotent/re-entrant: calling it again while already mid-placement (e.g. clicking a
-DIFFERENT placeable recipe's "Place" button) destroys the old ghost and re-arms to the new
-recipe instead of leaking a ghost or stacking placements. `attemptPlaceObject` also now
-calls `craftingMenu.refresh()` so the live cost readout stays accurate as materials are
-spent across repeated placements. *Verified live: workbench→campfire re-arm swapped the
-ghost texture cleanly with the crafting menu staying open and zero actual placements
-landing; the old fall-through bug confirmed still dead (panel clicks return early).*
-
-**Batch-quantity sliders for stackable crafting + cooking
-(`CraftingMenu.ts`, `CookingMenu.ts`, `MainScene.ts`, `ItemContainer.ts`).**
-`craftRecipe`/`cookAtCampfire` both gained a `batches` param (default 1, loops the
-existing per-unit craft/cook + grants total output, one shared commit) backed by new
-`maxCraftBatches`/`maxCookBatches` (min of cost-affordable batches and
-`ItemContainer.roomFor()`-bounded batches — `roomFor` is a new `ItemContainer` method,
-`hasRoomFor`'s boolean check generalized to return the actual remaining capacity).
-**CraftingMenu**: a slider appears above the Craft button only for non-placeable,
-stackable-output (`maxStack > 1`) recipes with >1 batch affordable; the ingredient-cost
-readout scales live with the slider, button reads "Craft x{N}", one `ProgressBar` covers
-the whole batch. **CookingMenu was restructured** from "each row has its own inline Cook
-button" into a select-a-row-then-shared-footer flow (mirrors CraftingMenu's list+detail
-shape) — clicking a dish row selects it (highlighted border) instead of cooking it
-immediately; a new footer below the row list shows the selected dish's batch-scaled
-ingredient cost, a slider (when >1 batch is affordable), and one Cook button. Both
-sliders share MainScene's existing global pointermove/pointerup drag plumbing (extended
-with `isDraggingSlider`/`updateSliderFromPointer`/`endSliderDrag`, same pattern
-`DryingRackMenu`'s amount slider already used). *Verified live: 3-batch Shishkabob craft
-spent 3 wood → 6 shishkabob (recipe now 1 wood → 2, see below); 4-batch Cooked Boar Meat
-spent 4 boar_meat → 4 dishes; dragging the cooking slider to max showed "Qty: 6/6" and
-"Cook x6" with the ingredient text scaling to match.*
-
-**Drying Rack output slot shows the output item's icon (`DryingRackMenu.ts`).** The
-"→ N Twine" preview text now sits next to a small icon of the actual output item
-(`itemDef(recipe.output).texture`), reading visually like the input slot instead of
-text-only.
-
-**Shishkabob recipe + art (`Recipes.ts`, `BootScene.ts`).** Output bumped to `count: 2`
-(1 Wood → 2 Shishkabob, cost unchanged). Texture redrawn from a stick-with-red/green-
-chunks (which "already looked full of stuff") to a bare wooden skewer with a sharpened
-tip — chunks now only belong on the COOKED dishes.
-
-**Javelin + Slingshot Pellets recipe gating (`Recipes.ts`, `Crafting.ts`).** Javelin
-bumped tier 0→1 (Workbench-proximity gate, like Stone Pickaxe/Slingshot — the locked fork
-answer) + `requiredSkills: [{skill: "pierce", level: 5}]` — a free starter javelin at
-Pierce 0 undercut the point of the (also-ranged, pierce-typed) Slingshot as the actual
-early opener. New `Recipe.requiresDiscovered?: string[]` field + a
-`Crafting.otherRecipesDiscovered` check: Slingshot Pellets now stays hidden until the
-player has crafted a Slingshot at least once (`requiresDiscovered: ["slingshot"]`) — stone
-is common enough it would otherwise appear immediately, well before there's a launcher to
-load it into. *Verified live: both hidden pre-gate, both discovered immediately after
-placing a workbench+Pierce 5 / crafting a slingshot respectively.*
-
-**Relic Forge roll UI consolidated to one button per RARITY, not per species
-(`RelicForgeMenu.ts`).** From the #14 discussion: species trophies (Boar/Snake/Gremlin)
-stay separate as drops (flavor + M-W1 per-source-rarity scaffolding — NOT merged), but
-since they already share identical odds/pity by rarity (5n), showing 3 near-identical
-"Bind X Trophy" buttons was pure UI noise. New `rarityGroups()` groups every owned trophy
-key by its `TROPHY_ROLL` rarity and renders ONE button per group ("Roll a Common Trophy",
-showing the combined count); `pickTrophyToRoll()` consumes whichever species has the
-highest count on click, draining stock evenly rather than favoring one arbitrarily. Odds/
-pity/reveal-fx are unaffected (same `beginRoll` path, just fed a different key). *Verified
-live: 3 owned trophy types (gremlin/boar/snake, totaling 9) collapsed into one Common
-group; the picker correctly chose the highest-count species (boar_trophy, 5 owned).*
-
-**Dashboard "sometimes doesn't load" — investigated, no bug found.** `/dashboard.html` is
-a second Vite entry that only serves while `npm run dev` is running THIS project.
-`.claude/launch.json`'s Preview config has `"autoPort": true`; if a stale/orphaned Vite
-process from an earlier closed session is still holding port 5173 (exactly what happened
-in 5y — 5 orphaned processes), a *new* session's dev server silently starts on 5174+
-instead, but a bookmarked fixed-port URL still points at 5173 — looks broken even though a
-server IS running. No code fix applies; environmental (kill orphaned `node.exe` processes
-before starting a fresh session).
-
-**Verification:** `tsc --noEmit` clean; full `npm run build` succeeds (main bundle
->500kB warning is pre-existing/unrelated). Extensive live `preview_eval` verification per
-item above (console error-free throughout). `RECIPES.md` updated (Shishkabob output x2,
-Javelin tier 1 + Pierce 5, Slingshot Pellets discovery-gate footnote).

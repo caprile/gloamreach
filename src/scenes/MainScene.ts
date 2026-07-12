@@ -51,6 +51,7 @@ import {
   isRangedWeapon,
   weaponBaseCritChance,
   weaponBaseCritMult,
+  weaponArc,
   type WeaponType,
   type DamageType,
 } from "../systems/Weapons";
@@ -254,6 +255,9 @@ const DASH_IFRAME_MS = 150; // outlasts the dash burst itself (Milestone E)
 // stats + relic crit channels). Applied in applyCrit().
 const CRIT_CHANCE_CAP = 0.6;
 const CRIT_MULT_CAP = 3.0;
+// How a weapon's damage type landed against a target's resistances (Biome 2
+// Phase 1) — drives the floating-damage-number tint. "normal" = neutral (×1).
+type DamageEffectiveness = "normal" | "weak" | "resist";
 const WORKBENCH_RANGE = 100; // px — looser than REACH; "am I near it," not a precise click
 const BLACKBERRY_REGROW_MS = 3 * 60 * 1000; // a picked bush regrows berries after 3 in-game minutes
 // Comfort (Bedroll) HP regen: player must be near a placed Bedroll, that
@@ -3749,17 +3753,53 @@ export class MainScene extends Phaser.Scene {
     // display; the true float is what actually damages the enemy, so small
     // skill increments always matter even when the displayed number doesn't
     // visibly change hit-to-hit.
-    // Weapon skill bonus + relic damage bonus (M-RL), kept fractional to
-    // takeHit (see the fractional-damage note above).
-    let dmg = baseDmg * weaponSkillDamageMultiplier(dmgType, this.skills) * this.relics.damageMult();
-    // Poise-break punish window — bonus damage while a staggerable boss/mini-boss
-    // is staggered.
-    if (enemy instanceof GremlinKing && enemy.isStaggered()) dmg *= STAGGER_DAMAGE_MULTIPLIER;
-    if (enemy instanceof Gloamwarden && enemy.isStaggered()) dmg *= WARDEN_STAGGER_DAMAGE_MULTIPLIER;
-    // Crit is the final multiplicative step (M-SS), rolled here where the weapon
-    // is known — carried into resolveWeaponHit only for the tint.
-    const critResult = this.applyCrit(this.equippedWeapon, dmg);
-    this.resolveWeaponHit(enemy, critResult.dmg, dmgType, critResult.crit);
+    // Weapon skill bonus + relic damage bonus (M-RL), pre-stagger/pre-crit —
+    // this "raw" value is shared by the primary hit and any AOE-arc secondaries.
+    const raw = baseDmg * weaponSkillDamageMultiplier(dmgType, this.skills) * this.relics.damageMult();
+
+    // Primary hit: per-enemy stagger punish (poise-break bonus damage) then a
+    // crit roll (the final multiplicative step, M-SS), rolled here where the
+    // weapon is known — carried into resolveWeaponHit only for the tint.
+    const primary = this.applyCrit(this.equippedWeapon, raw * this.staggerMultiplierFor(enemy));
+    this.resolveWeaponHit(enemy, primary.dmg, dmgType, primary.crit);
+
+    // AOE arc sweep (Biome 2 Phase 1, locked decision 6): wide weapons also hit
+    // other live enemies within `range` and within ±halfAngle of the swing
+    // direction (player → primary target). Each secondary rolls its own
+    // stagger/crit and flows through the same resolveWeaponHit (own resist,
+    // kill/loot/XP). enemy may already be dead here (a lethal primary), but the
+    // arc is keyed off the swing direction, not the primary's live position.
+    const arc = weaponArc(this.equippedWeapon);
+    if (arc.range > 0) {
+      const swingAngle = Phaser.Math.Angle.Between(this.player.x, this.player.y, enemy.x, enemy.y);
+      const halfAngle = Phaser.Math.DegToRad(arc.halfAngleDeg);
+      for (const other of this.enemies) {
+        if (other === enemy || other.depleted) continue;
+        const d = Phaser.Math.Distance.Between(this.player.x, this.player.y, other.x, other.y);
+        if (d > arc.range + this.enemyRadiusBonus(other)) continue;
+        const a = Phaser.Math.Angle.Between(this.player.x, this.player.y, other.x, other.y);
+        if (Math.abs(Phaser.Math.Angle.Wrap(a - swingAngle)) > halfAngle) continue;
+        const sec = this.applyCrit(this.equippedWeapon, raw * this.staggerMultiplierFor(other) * arc.falloff);
+        this.resolveWeaponHit(other, sec.dmg, dmgType, sec.crit);
+      }
+    }
+  }
+
+  // Poise-break punish multiplier for a staggerable boss/mini-boss, else 1.
+  // Shared by the primary melee hit, arc secondaries, and ranged so the three
+  // can't drift.
+  private staggerMultiplierFor(enemy: Enemy): number {
+    if (enemy instanceof GremlinKing && enemy.isStaggered()) return STAGGER_DAMAGE_MULTIPLIER;
+    if (enemy instanceof Gloamwarden && enemy.isStaggered()) return WARDEN_STAGGER_DAMAGE_MULTIPLIER;
+    return 1;
+  }
+
+  // Half the extra body-radius a larger (elite/boss) enemy adds past the
+  // baseline — same term enemyReach() adds for the player's own reach, reused
+  // so an AOE arc can still catch a big enemy at the cone's edge.
+  private enemyRadiusBonus(enemy: Enemy): number {
+    const radius = Math.max(enemy.displayWidth, enemy.displayHeight) / 2;
+    return Math.max(0, radius - MainScene.BASELINE_ENEMY_RADIUS);
   }
 
   // Ranged: cooldown/stamina/ammo-gated fire-and-forget. Damage (including
@@ -3802,9 +3842,7 @@ export class MainScene extends Phaser.Scene {
     this.player.playEquippedSwing();
 
     const baseDmg = weaponDamage(this.equippedWeapon) + weaponTierDamageBonus(this.equippedWeapon, this.equippedWeaponTier);
-    let dmg = baseDmg * weaponSkillDamageMultiplier(dmgType, this.skills) * this.relics.damageMult();
-    if (enemy instanceof GremlinKing && enemy.isStaggered()) dmg *= STAGGER_DAMAGE_MULTIPLIER;
-    if (enemy instanceof Gloamwarden && enemy.isStaggered()) dmg *= WARDEN_STAGGER_DAMAGE_MULTIPLIER;
+    const dmg = baseDmg * weaponSkillDamageMultiplier(dmgType, this.skills) * this.relics.damageMult() * this.staggerMultiplierFor(enemy);
     // Crit is rolled at fire time (same "captured at commit time" precedent as
     // the stagger multiplier) and carried by the projectile so the impact tints
     // correctly — resolveWeaponHit can't re-roll it (no weapon context there).
@@ -3838,9 +3876,17 @@ export class MainScene extends Phaser.Scene {
   private resolveWeaponHit(enemy: Enemy, dmg: number, dmgType: DamageType, isCrit = false): void {
     if (isCrit) this.sfx.crit();
     else this.sfx.hit();
-    const depleted = enemy.takeHit(dmg);
+    // Resist/weakness layer (Biome 2 Phase 1) — applied at the single choke point
+    // both melee and ranged flow through, so it covers every attack and can't
+    // drift. Neutral (×1) for every biome-1 enemy. The tint tells the player
+    // whether this weapon type is effective here.
+    const resistMult = enemy.resistMultiplier(dmgType);
+    const finalDmg = dmg * resistMult;
+    const effectiveness: DamageEffectiveness =
+      resistMult > 1.001 ? "weak" : resistMult < 0.999 ? "resist" : "normal";
+    const depleted = enemy.takeHit(finalDmg);
     this.awardSkillXp(dmgType, 30); // weapon-hit XP to the primary damage type's skill
-    this.spawnDamageNumber(enemy.x, enemy.y, Math.round(dmg), isCrit);
+    this.spawnDamageNumber(enemy.x, enemy.y, Math.round(finalDmg), isCrit, effectiveness);
     if (!depleted) return;
 
     // Kill: relic on-kill heal (M-RL), then armor-skill XP per WORN PIECE (M-SS
@@ -3916,12 +3962,28 @@ export class MainScene extends Phaser.Scene {
 
   // Floating combat-text on a successful hit. A crit (M-SS) is tinted
   // orange-yellow and drawn a bit larger with a "!" so the burst reads clearly.
-  private spawnDamageNumber(x: number, y: number, amount: number, isCrit = false): void {
+  // Effectiveness (Biome 2 Phase 1) recolors a non-crit number: weak =
+  // bright orange-red, resisted = dim blue (crit's yellow wins — it's the rarer,
+  // more important signal).
+  private spawnDamageNumber(
+    x: number,
+    y: number,
+    amount: number,
+    isCrit = false,
+    effectiveness: DamageEffectiveness = "normal",
+  ): void {
+    const color = isCrit
+      ? "#ffca3a"
+      : effectiveness === "weak"
+        ? "#ff5a3a"
+        : effectiveness === "resist"
+          ? "#7db4ff"
+          : "#ffffff";
     const text = this.add
       .text(x, y - 14, isCrit ? `${amount}!` : `${amount}`, {
         fontFamily: "monospace",
         fontSize: isCrit ? "20px" : "14px",
-        color: isCrit ? "#ffca3a" : "#ffffff",
+        color,
         stroke: "#000000",
         strokeThickness: isCrit ? 4 : 3,
       })
@@ -3971,6 +4033,26 @@ export class MainScene extends Phaser.Scene {
         }
       }
     }
+    this.updatePackAggro(now);
+  }
+
+  // Swarm pack-aggro (Biome 2 Phase 1): an aggro'd pack member wakes nearby
+  // idle same-type pack members, so a swarm converges once one engages or is
+  // hit. Opt-in via Enemy.packAggro (off for every biome-1 enemy — Phase 2's
+  // canid swarm is the first user), so the outer loop is empty today and this
+  // is effectively free. Same-class only (constructor identity) keeps a Boar
+  // from waking a Gremlin.
+  private updatePackAggro(now: number): void {
+    for (const leader of this.enemies) {
+      if (!leader.packAggro || leader.depleted || !leader.isAggro()) continue;
+      for (const other of this.enemies) {
+        if (other === leader || other.depleted || !other.packAggro || other.isAggro()) continue;
+        if (other.constructor !== leader.constructor) continue;
+        if (Phaser.Math.Distance.Between(leader.x, leader.y, other.x, other.y) <= other.packAggroRadius) {
+          other.forceAggro(now);
+        }
+      }
+    }
   }
 
   // Trees/boulders are non-solid but still Y-sorted (see ResourceNode's
@@ -4013,17 +4095,20 @@ export class MainScene extends Phaser.Scene {
   private applyDamageToPlayer(
     amount: number,
     knockback?: { fromX: number; fromY: number; speed: number },
+    dmgType?: DamageType,
   ): void {
     if (this.isDead) return;
     if (this.time.now < this.invulnerableUntil) return;
     this.sfx.hit();
     // Relic damage-taken reduction (M-RL) applies first (a percentage), then
-    // flat armor deduction — everything dealt today is physical damage (no
-    // magic/elemental sources exist yet), so this applies uniformly; branch
-    // on a damage type here once one does. Floored at 1 so no relic/armor
-    // combination grants full immunity.
+    // flat armor deduction. Magic damage (Biome 2 Phase 1) BYPASSES the flat
+    // armor term — it gives the badlands magical enemy real teeth and seeds a
+    // future magic-resist-gear hook; the relic %-reduction still applies. Every
+    // biome-1 source deals physical, so the default path is unchanged. Floored
+    // at 1 so no relic/armor combination grants full immunity.
     const relicAdjusted = amount * this.relics.damageTakenMult();
-    const reduced = Math.max(1, Math.round(relicAdjusted - totalPlayerDefense(this.equipment)));
+    const armor = dmgType === "magic" ? 0 : totalPlayerDefense(this.equipment);
+    const reduced = Math.max(1, Math.round(relicAdjusted - armor));
     const died = this.health.takeDamage(reduced);
     this.refreshHealthBar();
     this.hints.trigger("took_damage"); // first hit taken this run -> nudge toward healing

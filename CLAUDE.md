@@ -1164,7 +1164,8 @@ M-SB/Sleep-Bed, done — see 5j) → M-EL2 (generalized elite spawning, done —
 ~~M-FA~~ (cut, see 5l) → M-RL (trophy → RNG relics, done — see 5m; playtest follow-up 5n) →
 M-WC (Gremlin War Camp, done — see 5o) → Gloaming Vein (rarity-ore POI + trophy refinement,
 done — see 5w) → M-SS (stats/skills depth pass + crit, done — see 5ab) → **Biome 2 /
-M-W1 + M-TE, IN PROGRESS (see 5ac + the biome-2 umbrella plan below).**
+M-W1 + M-TE, IN PROGRESS — Phase 0 worldgen (5ac) + Phase 1 combat systems (5ad) done; Phase 2
+enemies next (see the biome-2 umbrella plan below).**
 
 5ac. **Biome 2 (Sunscorch Badlands) — Phase 0: Patchwork worldgen.** Plan:
    `.claude/plans/biome-2-phase-0-world-ring.md` (Phase 0 of the
@@ -1194,15 +1195,43 @@ M-W1 + M-TE, IN PROGRESS (see 5ac + the biome-2 umbrella plan below).**
    (undocumented). Forest content/gameplay verified unchanged. See `STATUS.md` +
    [[survivor-rpg-biome-2-plan]].
 
+5ad. **Biome 2 — Phase 1: Combat systems layer.** Plan:
+   `.claude/plans/biome-2-phase-1-combat-systems.md` (Phase 1 of the biome-2 umbrella). Built
+   on Opus (new combat mechanics). The reusable mechanics biome-2 content will declare as
+   **data**, built before the content so Phase 2 enemies / Phase 4 weapons carry no logic — all
+   **dormant hooks** until then, so biome-1 combat is byte-for-byte unchanged (no new
+   enemies/weapons/recipes). Three features + one hook: (1) **damage-type resist/weakness** —
+   `EnemyConfig.resistances?: Partial<Record<DamageType, number>>` (`<1` resist, `>1` weak,
+   absent = neutral), stored on `Enemy` (`resistMultiplier(type)`), applied at the single choke
+   point `MainScene.resolveWeaponHit` so it covers BOTH melee and ranged and can't drift; the
+   floating damage number recolors by effectiveness (orange-red weak / dim-blue resisted, crit's
+   yellow still wins). (2) **Per-weapon AOE arc** (locked decision 6) — `WEAPON_ARC` +
+   `weaponArc()` in `Weapons.ts` (knife 25°/34px near-single-target, clubs medium, primal_spear
+   50°/58px wide sweeper, ranged `range:0`); `tryMeleeAttack` resolves the primary then sweeps
+   other live enemies within `range` and `±halfAngle` of the swing direction (player → primary),
+   each taking `raw × staggerMult × falloff` with its **own per-target crit** through the same
+   `resolveWeaponHit`. Extracted `staggerMultiplierFor(enemy)` (shared by primary/secondary/
+   ranged). (3) **Swarm pack-aggro base** (opt-in) — public `Enemy.packAggro`/`packAggroRadius`
+   (220) + `forceAggro(now)`; `MainScene.updatePackAggro` wakes idle **same-class** `packAggro`
+   neighbors of any aggro'd member (O(k·n), k=0 today → free). `forceAggro` drives the base
+   `state` machine; a subclass tracking aggro via its own field (Boar/Snake/Gremlin `mode`) must
+   **override** it like they already override `isAggro()` (documented in-code for Phase 2's swarm
+   author). (4) **Dormant magic-armor-bypass hook** — `applyDamageToPlayer` gained optional
+   `dmgType?: DamageType`; `"magic"` skips the flat-armor term (relic %-reduction + floor-at-1
+   still apply). No source deals magic until Phase 2's magical gremlin. Verified live via
+   `preview_eval` (magic bypass, spear-cleave-vs-knife, pack wake radius/class gating). No
+   `RECIPES.md`/dashboard change. See `STATUS.md` + [[survivor-rpg-biome-2-plan]].
+
 **Not yet built — next up in rough order:**
 6. **World & discovery** — much bigger generated world, biomes, map, a single giant
    circular Valheim-style map (spawn at center, danger increases outward). **The circular
    geometry (5v) AND biome 2's patchwork terrain foundation (5ac) have shipped:** the world is
    now a 28000px circle (`WORLD_RADIUS` 14000) with a protected forest disc at center and a
    **patchwork** of badlands + placeholder-dunes blobs beyond (base-layer between; danger scales
-   outward). **Still needed for M-W1 proper:** biome CONTENT (Phases 1–5 of the biome-2 umbrella
-   — combat systems, enemies, boss/POIs, forging gear tier, tier-2 relics) + deterministic
-   seeded world-gen. See **First biome — content notes** below for terrain-zone concept.
+   outward). **Phase 1 (combat systems layer — damage-type resist/weak, AOE arcs, swarm
+   pack-aggro) has also shipped (5ad).** **Still needed for M-W1 proper:** biome CONTENT (Phases
+   2–5 of the biome-2 umbrella — enemies, boss/POIs, forging gear tier, tier-2 relics) +
+   deterministic seeded world-gen. See **First biome — content notes** below for terrain-zone concept.
    (Minimap + fog of war: 5a, reworked into nearby-view + full-map overlay in 5v; Gremlin Shack
    POI: 5b.)
 7. **ARPG loot** — rarity, randomized drops/recipes, replayability.

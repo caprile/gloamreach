@@ -126,3 +126,27 @@ export function rangedWeaponConfig(weapon: WeaponType): RangedWeaponConfig | und
 export function isRangedWeapon(weapon: WeaponType): boolean {
   return weapon in RANGED_WEAPONS;
 }
+
+// Per-weapon melee AOE arc (Biome 2 Phase 1, locked decision 6). A melee swing
+// hits its primary hovered target at full damage, then sweeps any other enemies
+// within `range` px of the player AND within ±`halfAngleDeg` of the direction to
+// that primary target, dealing `primary × falloff` to each. Wide sweepers (spear,
+// future warhammer) clear packs; the knife stays near-single-target. Ranged
+// weapons never sweep (`range: 0`, and they never reach tryMeleeAttack anyway).
+// First-pass numbers — tunable. Pairs with the Phase 2 swarm enemies.
+export interface WeaponArc {
+  halfAngleDeg: number; // half-width of the cone, each side of the swing direction
+  range: number; // px from the player a secondary target must be within (0 = no sweep)
+  falloff: number; // secondary-target damage as a fraction of the primary hit
+}
+const WEAPON_ARC: Record<WeaponType, WeaponArc> = {
+  bone_knife: { halfAngleDeg: 25, range: 34, falloff: 0.5 }, // near single-target
+  wood_club: { halfAngleDeg: 45, range: 40, falloff: 0.6 },
+  stone_club: { halfAngleDeg: 50, range: 44, falloff: 0.65 },
+  primal_spear: { halfAngleDeg: 50, range: 58, falloff: 0.7 }, // the wide sweeper
+  slingshot: { halfAngleDeg: 0, range: 0, falloff: 0 },
+  javelin: { halfAngleDeg: 0, range: 0, falloff: 0 },
+};
+export function weaponArc(weapon: WeaponType): WeaponArc {
+  return WEAPON_ARC[weapon];
+}
