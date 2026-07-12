@@ -47,7 +47,15 @@ export class EventLogUI {
   private collapsed = true;
   private scrollOffset = 0; // entries scrolled up from the newest
   private rows: Phaser.GameObjects.GameObject[] = [];
-  private activeToasts = 0;
+  // Ordered (oldest first) heights of currently-visible center toasts, so a
+  // new one's Y offset is the real cumulative stack height rather than a bare
+  // counter. The old counter approach decremented on fade-COMPLETE, but with
+  // a shared delay+duration the earliest-created toast always completes
+  // first — so a later toast's slot could free up while it was still
+  // visible, and the next toast reused that same Y and overlapped it
+  // (playtest: rapid cooking made "Cooked X" toasts collide). Mirrors the
+  // `activeRecipeToasts` pattern already used below for the side toasts.
+  private activeCenterToasts: { height: number }[] = [];
   private leftX: number;
   private topY: number;
   private recipeToastQueue: LogEntry[] = [];
@@ -195,11 +203,11 @@ export class EventLogUI {
   private showToast(entry: LogEntry): void {
     const colors = KIND_COLORS[entry.kind];
     const cx = this.scene.scale.width / 2;
-    const y = 72 + this.activeToasts * 40;
-    this.activeToasts++;
 
+    // Measure first (off-position) so the slot height reflects this
+    // message's real size, same as spawnRecipeToast does below.
     const text = this.scene.add
-      .text(cx, y, entry.message, {
+      .text(0, 0, entry.message, {
         fontFamily: "monospace",
         fontSize: "16px",
         color: colors.text,
@@ -208,6 +216,12 @@ export class EventLogUI {
       .setOrigin(0.5, 0)
       .setScrollFactor(0)
       .setDepth(6001);
+
+    const slotH = text.height + 18; // box padding + gap to the next toast
+    const y = 72 + this.activeCenterToasts.reduce((sum, t) => sum + t.height, 0);
+    const stackEntry = { height: slotH };
+    this.activeCenterToasts.push(stackEntry);
+    text.setPosition(cx, y);
 
     const box = this.scene.add
       .rectangle(cx, y - 6, text.width + 24, text.height + 12, colors.fill, 0.95)
@@ -224,7 +238,8 @@ export class EventLogUI {
       onComplete: () => {
         text.destroy();
         box.destroy();
-        this.activeToasts = Math.max(0, this.activeToasts - 1);
+        const idx = this.activeCenterToasts.indexOf(stackEntry);
+        if (idx !== -1) this.activeCenterToasts.splice(idx, 1);
       },
     });
   }

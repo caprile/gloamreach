@@ -74,7 +74,7 @@ import { Equipment, EQUIP_SLOTS, type EquipSlot, type EquippedItem } from "../sy
 import { Hotbar, ROW1_COUNT } from "../systems/Hotbar";
 import { ProcessingStation, PROCESS_RECIPES } from "../systems/Processing";
 import { BuffManager } from "../systems/Buffs";
-import { COOK_RECIPES, canAffordCook } from "../systems/Cooking";
+import { COOK_RECIPES, type CookRecipe } from "../systems/Cooking";
 import { CraftingMenu } from "../ui/CraftingMenu";
 import { ContextMenu, type ContextMenuItem } from "../ui/ContextMenu";
 import { DryingRackMenu } from "../ui/DryingRackMenu";
@@ -790,17 +790,26 @@ export class MainScene extends Phaser.Scene {
 
     // Scene-level drag: a slot starts it, the pointer drags a ghost icon, and
     // release resolves the move against whichever container is under the
-    // pointer (backpack grid or hotbar). The Drying Rack's amount slider
-    // shares this same global pointermove/up pair for its own drag gesture.
+    // pointer (backpack grid or hotbar). The Drying Rack/Crafting/Cooking
+    // menus' batch-amount sliders share this same global pointermove/up pair
+    // for their own drag gesture.
     this.input.on("pointermove", (p: Phaser.Input.Pointer) => {
       if (this.dragGhost) this.dragGhost.setPosition(p.x, p.y);
       if (this.dryingRackMenu.isOpen() && this.dryingRackMenu.isDraggingSlider()) {
         this.dryingRackMenu.updateSliderFromPointer(p.x);
       }
+      if (this.craftingMenu.isOpen() && this.craftingMenu.isDraggingSlider()) {
+        this.craftingMenu.updateSliderFromPointer(p.x);
+      }
+      if (this.cookingMenu.isOpen() && this.cookingMenu.isDraggingSlider()) {
+        this.cookingMenu.updateSliderFromPointer(p.x);
+      }
     });
     this.input.on("pointerup", (p: Phaser.Input.Pointer) => {
       this.resolveItemDrag(p);
       this.dryingRackMenu.endSliderDrag();
+      this.craftingMenu.endSliderDrag();
+      this.cookingMenu.endSliderDrag();
     });
 
     // Mouse wheel cycles the hotbar selection (looping), unless the pointer is
@@ -861,6 +870,7 @@ export class MainScene extends Phaser.Scene {
     // menu since a level-up may satisfy a skill-gated recipe's requirement.
     this.skills.onLevelUp((skill, newLevel, xpCost) => {
       this.eventLog.add("levelup", `${skillDisplayName(skill)} leveled up -> Lvl ${newLevel}`);
+      this.sfx.skillUp();
       this.progression.addXp(xpCost);
       this.craftingMenu?.refresh();
       this.refreshXpBar();
@@ -1727,7 +1737,8 @@ export class MainScene extends Phaser.Scene {
       discovered: () => this.discovered,
       campfireTier: () =>
         this.openCampfire ? ((this.openCampfire.getData("tier") as number | undefined) ?? 0) : null,
-      cook: (recipeId) => this.cookAtCampfire(recipeId),
+      cook: (recipeId, batches) => this.cookAtCampfire(recipeId, batches),
+      maxBatches: (recipe) => this.maxCookBatches(recipe),
     });
   }
 
@@ -1871,20 +1882,39 @@ export class MainScene extends Phaser.Scene {
   // gates its button, but re-guard defensively), consume inputs, and deposit
   // the food. Overflow drops on the floor rather than being lost — same pattern
   // as the Drying Rack's processed output.
-  private cookAtCampfire(recipeId: string): void {
+  // `batches` cooks the same dish that many times in one call (a bulk-cook
+  // slider, mirrors craftRecipe's batch param) — defaults to 1.
+  private cookAtCampfire(recipeId: string, batches: number = 1): void {
     const recipe = COOK_RECIPES.find((r) => r.id === recipeId);
     if (!recipe || !this.openCampfire) return;
     const tier = (this.openCampfire.getData("tier") as number | undefined) ?? 0;
-    if (tier < recipe.requiredCampfireTier || !canAffordCook(recipe, this.backpack)) return;
-    for (const [key, n] of Object.entries(recipe.inputs)) this.backpack.removeCount(key, n);
-    const leftover = this.addToBackpack(recipe.output, 1);
-    if (leftover > 0) {
-      this.spawnLooseDrop(recipe.output, leftover, this.player.x, this.player.y, DROPPED_ITEM_MAGNET_COOLDOWN_MS);
-      this.eventLog.add("info", "Backpack full — the dish landed on the floor");
+    if (tier < recipe.requiredCampfireTier) return;
+    const affordable = Object.entries(recipe.inputs).every(([key, n]) => this.backpack.count(key) >= n * batches);
+    if (!affordable) return;
+    for (let i = 0; i < batches; i++) {
+      for (const [key, n] of Object.entries(recipe.inputs)) this.backpack.removeCount(key, n);
+      const leftover = this.addToBackpack(recipe.output, 1);
+      if (leftover > 0) {
+        this.spawnLooseDrop(recipe.output, leftover, this.player.x, this.player.y, DROPPED_ITEM_MAGNET_COOLDOWN_MS);
+        this.eventLog.add("info", "Backpack full — the dish landed on the floor");
+      }
     }
-    this.eventLog.add("info", `Cooked ${recipe.name}`);
+    this.eventLog.add("info", batches > 1 ? `Cooked ${batches}x ${recipe.name}` : `Cooked ${recipe.name}`);
     this.sfx.craft();
     this.afterItemMove();
+  }
+
+  // Max number of times a cook recipe could run right now — the lower of
+  // "can afford N batches" and "backpack has room for N dishes".
+  private maxCookBatches(recipe: CookRecipe): number {
+    let costBatches = Infinity;
+    for (const [key, n] of Object.entries(recipe.inputs)) {
+      if (n <= 0) continue;
+      costBatches = Math.min(costBatches, Math.floor(this.backpack.count(key) / n));
+    }
+    if (!Number.isFinite(costBatches)) costBatches = 0;
+    const roomBatches = this.backpack.roomFor(recipe.output);
+    return Math.max(0, Math.min(costBatches, roomBatches));
   }
 
   // Eat one `edible` item from `container[index]`, applying its heal-over-time
@@ -3928,7 +3958,8 @@ export class MainScene extends Phaser.Scene {
     this.craftingMenu = new CraftingMenu(this, {
       backpack: this.backpack,
       crafting: this.crafting,
-      craft: (recipe) => this.craftRecipe(recipe),
+      craft: (recipe, batches) => this.craftRecipe(recipe, batches),
+      maxBatches: (recipe) => this.maxCraftBatches(recipe),
       startPlacement: (recipe) => this.startPlacement(recipe),
       isNearWorkbench: () => this.isNearWorkbench(this.player.x, this.player.y),
       skills: this.skills,
@@ -3955,24 +3986,54 @@ export class MainScene extends Phaser.Scene {
     }
   }
 
-  private craftRecipe(recipe: Recipe): void {
+  // `batches` repeats the recipe that many times in one call (a batch-craft
+  // slider for stackable outputs, e.g. 5x Shishkabob) — defaults to 1, the
+  // original single-craft behavior.
+  private craftRecipe(recipe: Recipe, batches: number = 1): void {
     const key = outputKey(recipe);
     const outCount = recipe.output.kind === "item" ? recipe.output.count ?? 1 : 1;
-    // Check affordability AND room before deducting, so a full backpack can't
-    // eat the resources (the bug this replaces). Then create the item — a 2nd
-    // tool now makes a new stack instead of a silent no-op.
-    if (!this.crafting.canAfford(recipe, this.backpack)) return;
+    const totalOut = outCount * batches;
+    // Check affordability AND room for the WHOLE batch before deducting
+    // anything, so a full backpack can't eat the resources (the bug this
+    // replaces) and a partial batch can never be crafted. Then create the
+    // item(s) — a 2nd tool now makes a new stack instead of a silent no-op.
+    if (!this.canAffordBatch(recipe, batches)) return;
     if (recipe.tier > 0 && !this.isNearWorkbench(this.player.x, this.player.y)) return;
-    if (!this.backpack.hasRoomFor(key, outCount)) {
+    if (!this.backpack.hasRoomFor(key, totalOut)) {
       this.eventLog.add("info", "Inventory full");
       return;
     }
-    this.crafting.craft(recipe, this.backpack);
-    this.addToBackpack(key, outCount);
+    for (let i = 0; i < batches; i++) {
+      this.crafting.craft(recipe, this.backpack);
+      this.addToBackpack(key, outCount);
+    }
     this.sfx.craft();
     this.recomputeEquipped();
     this.refreshHud();
     this.inventoryMenu.refresh();
+  }
+
+  private canAffordBatch(recipe: Recipe, batches: number): boolean {
+    return (Object.entries(recipe.costs) as [ResourceType, number][]).every(
+      ([resource, amount]) => this.backpack.count(resource) >= amount * batches,
+    );
+  }
+
+  // Max number of times `recipe` could be crafted right now — the lower of
+  // "can afford N batches" and "backpack has room for N batches' worth of
+  // output" (only meaningful for a non-placeable, stackable-output recipe;
+  // batch sliders in CraftingMenu/CookingMenu use this to bound the slider).
+  private maxCraftBatches(recipe: Recipe): number {
+    const key = outputKey(recipe);
+    const outCount = recipe.output.kind === "item" ? recipe.output.count ?? 1 : 1;
+    let costBatches = Infinity;
+    for (const [resource, amount] of Object.entries(recipe.costs) as [ResourceType, number][]) {
+      if (amount <= 0) continue;
+      costBatches = Math.min(costBatches, Math.floor(this.backpack.count(resource) / amount));
+    }
+    if (!Number.isFinite(costBatches)) costBatches = 0;
+    const roomBatches = Math.floor(this.backpack.roomFor(key) / outCount);
+    return Math.max(0, Math.min(costBatches, roomBatches));
   }
 
   // --- Placement mode (world-placed items: campfire, building pieces) ---
@@ -3980,12 +4041,20 @@ export class MainScene extends Phaser.Scene {
   // Enters placement mode without spending anything yet — cost is only
   // deducted per-unit, on each successful LMB placement (see
   // attemptPlaceObject). Cancelling is always free.
+  //
+  // Per playtest feedback, the crafting menu now STAYS OPEN through placement
+  // (was: closed here, to fix an earlier "every craft click drops a
+  // workbench" fall-through bug). That old bug is prevented a different way
+  // now: the global pointerdown handler already returns early for any click
+  // that lands on the still-open crafting panel while placementMode is set
+  // (see the `craftingMenu.containsPoint` guard), so a panel click can never
+  // fall through to a world placement. This also makes startPlacement
+  // re-entrant: clicking a DIFFERENT placeable recipe's "Place" button while
+  // already mid-placement just re-arms the ghost to the new recipe, instead
+  // of being a no-op or stacking placements.
   private startPlacement(recipe: Recipe): void {
     this.suppressNextPointerdown = true;
-    // Close the crafting menu — placement intercepts world clicks, so leaving it
-    // open let a subsequent recipe click fall through and place ANOTHER object
-    // (the "every craft click drops a workbench" bug). Mirrors startItemPlacement.
-    this.craftingMenu.close();
+    this.placementGhost?.destroy();
     this.placementMode = { recipe };
     const texture = itemDef(outputKey(recipe))?.texture;
     const pos = this.clampedPlacementPoint();
@@ -4125,6 +4194,10 @@ export class MainScene extends Phaser.Scene {
     if (key === "campfire") this.discoverCookRecipes(placedTier);
     this.refreshHud();
     this.inventoryMenu.refresh();
+    // The crafting menu can now stay open through placement (see
+    // startPlacement) — keep its live cost readout in sync as materials are
+    // spent on each successive placement.
+    this.craftingMenu.refresh();
     // Placing from an owned stack changed a count — keep the hotbar display in
     // sync too (refreshHud only touches the crafting/inventory menus).
     if (itemSource) {
@@ -5101,11 +5174,11 @@ export class MainScene extends Phaser.Scene {
       .setDepth(6000)
       .setAlpha(0);
 
-    // A gentle warm pulse, not a jumpscare — the punch-in banner below is the
-    // "big deal" part. Peak amber is dialed well down (was 90,70,20) and the
-    // fade lengthened so it reads as a soft glow rather than a hard full-screen
-    // flash. Deliberately no camera shake.
-    this.cameras.main.flash(300, 48, 36, 12);
+    // A barely-there warm pulse, not a jumpscare — the punch-in banner below
+    // is the "big deal" part. Dialed down again per playtest feedback ("full
+    // screen flash is too much") — was 300ms @ 48,36,12, now a much shorter,
+    // dimmer nudge. Deliberately no camera shake.
+    this.cameras.main.flash(150, 20, 15, 5);
 
     this.tweens.add({
       targets: title,

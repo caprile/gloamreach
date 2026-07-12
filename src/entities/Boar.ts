@@ -34,9 +34,11 @@ const GORE_KNOCKBACK = 120;
 const CHARGE_TRIGGER_MAX = 220; // px — beyond this it just chases to close the gap
 const CHARGE_WINDUP_MS = 620; // paws-the-ground tell — long enough to read and sidestep
 const CHARGE_SPEED = 270; // px/s — clearly faster than chase, so it closes a kiter
-const CHARGE_MAX_DISTANCE = 230; // travels this far, overshooting past the player
+// Overshoot + recovery both trimmed per playtest feedback ("recover faster,
+// don't overshoot so much") — still a real punish window, just less brutal.
+const CHARGE_MAX_DISTANCE = 170; // travels this far, overshooting past the player (was 230)
 const CHARGE_HIT_RADIUS = 26; // point+radius contact check along the rush
-const CHARGE_RECOVER_MS = 820; // long turnaround — the main punish window
+const CHARGE_RECOVER_MS = 550; // long turnaround — the main punish window (was 820)
 const CHARGE_COOLDOWN_MS = 700;
 const CHARGE_KNOCKBACK = 300;
 

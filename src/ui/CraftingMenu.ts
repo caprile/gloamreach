@@ -11,8 +11,11 @@ import { MARGIN as MINIMAP_MARGIN, PANEL_H as MINIMAP_H } from "./MinimapUI";
 import { ProgressBar } from "./ProgressBar";
 
 // A quick "crafting…" bar plays before the item lands — a small satisfying
-// beat, deliberately short so it never feels like a slog.
+// beat, deliberately short so it never feels like a slog. One bar covers the
+// WHOLE batch (e.g. crafting x8 Shishkabob is still a single 450ms bar).
 const CRAFT_BAR_MS = 450;
+const SLIDER_W = 140;
+const SLIDER_H = 10;
 
 const CATEGORIES: { id: RecipeCategory; label: string }[] = [
   { id: "tools", label: "Tools" },
@@ -33,7 +36,10 @@ const MARGIN_TOP = MINIMAP_MARGIN + MINIMAP_H + 40;
 export interface CraftingMenuDeps {
   backpack: ItemContainer;
   crafting: Crafting;
-  craft: (recipe: Recipe) => void;
+  craft: (recipe: Recipe, batches: number) => void;
+  // Max number of times `recipe` could be crafted right now (cost- and
+  // room-limited) — backs the batch-quantity slider for stackable outputs.
+  maxBatches: (recipe: Recipe) => number;
   startPlacement: (recipe: Recipe) => void;
   isNearWorkbench: () => boolean;
   skills: Skills;
@@ -76,6 +82,11 @@ export class CraftingMenu {
   // True while a craft bar is filling — greys the button + blocks re-clicks.
   private busy = false;
   private progressBar: ProgressBar;
+  // Batch-quantity slider for stackable-output recipes (e.g. 5x Shishkabob in
+  // one craft) — reset to 1 whenever a different recipe is selected.
+  private batchAmount = 1;
+  private sliderDragging = false;
+  private sliderTrack: { x: number; y: number; w: number } = { x: 0, y: 0, w: SLIDER_W };
 
   constructor(scene: Phaser.Scene, deps: CraftingMenuDeps) {
     this.scene = scene;
@@ -130,6 +141,25 @@ export class CraftingMenu {
   // owned state stay in sync while the menu is open.
   refresh(): void {
     if (this.open) this.render();
+  }
+
+  // --- batch slider drag (driven by MainScene's shared global pointermove/up,
+  // same pattern as DryingRackMenu's amount slider) ---
+
+  isDraggingSlider(): boolean {
+    return this.sliderDragging;
+  }
+
+  endSliderDrag(): void {
+    this.sliderDragging = false;
+  }
+
+  updateSliderFromPointer(screenX: number): void {
+    if (!this.selected) return;
+    const max = this.deps.maxBatches(this.selected);
+    const frac = Phaser.Math.Clamp((screenX - this.sliderTrack.x) / this.sliderTrack.w, 0, 1);
+    this.batchAmount = Math.max(1, Math.round(frac * max));
+    this.render();
   }
 
   private clearRows(): void {
@@ -193,6 +223,7 @@ export class CraftingMenu {
       const label = recipe.name;
       const selectRecipe = () => {
         this.selected = recipe;
+        this.batchAmount = 1;
         this.render();
       };
 
@@ -286,12 +317,22 @@ export class CraftingMenu {
       y += 4;
     }
 
+    const placeable = isPlaceableRecipe(recipe);
+    // A batch slider only makes sense for a non-placeable recipe whose output
+    // actually stacks (maxStack > 1) AND there's more than one batch worth of
+    // resources+room available right now.
+    const maxBatch = !placeable && (def?.maxStack ?? 1) > 1 ? this.deps.maxBatches(recipe) : 0;
+    const stackable = maxBatch > 1;
+    if (stackable) this.batchAmount = Phaser.Math.Clamp(this.batchAmount, 1, maxBatch);
+    const batch = stackable ? this.batchAmount : 1;
+
     for (const [resource, amount] of Object.entries(recipe.costs) as [ResourceType, number][]) {
       const have = this.deps.backpack.count(resource);
-      const t = this.scene.add.text(x0, y, `${resource}: ${have}/${amount}`, {
+      const need = amount * batch;
+      const t = this.scene.add.text(x0, y, `${resource}: ${have}/${need}`, {
         fontFamily: "monospace",
         fontSize: "13px",
-        color: have >= amount ? "#8fe38f" : "#e38f8f",
+        color: have >= need ? "#8fe38f" : "#e38f8f",
       });
       t.setScrollFactor(0).setDepth(3001);
       this.rows.push(t);
@@ -310,7 +351,6 @@ export class CraftingMenu {
       y += 18;
     }
 
-    const placeable = isPlaceableRecipe(recipe);
     // Placeable recipes (build pieces) don't land in the backpack at all, so
     // an inventory count for them would just always read 0 — only show this
     // for recipes whose output actually goes into the backpack.
@@ -326,12 +366,52 @@ export class CraftingMenu {
       y += 18;
     }
 
+    if (stackable) {
+      const t = this.scene.add.text(x0, y, `Qty: ${batch} / ${maxBatch}`, {
+        fontFamily: "monospace",
+        fontSize: "12px",
+        color: "#e8ecf2",
+      });
+      t.setScrollFactor(0).setDepth(3001);
+      this.rows.push(t);
+      y += 18;
+
+      this.sliderTrack = { x: x0, y, w: SLIDER_W };
+      const trackBg = this.scene.add
+        .rectangle(x0, y, SLIDER_W, SLIDER_H, 0x1a1f2a, 0.95)
+        .setOrigin(0, 0)
+        .setStrokeStyle(1, 0x3a4250)
+        .setScrollFactor(0)
+        .setDepth(3001)
+        .setInteractive({ useHandCursor: true })
+        .on("pointerdown", (pointer: Phaser.Input.Pointer) => {
+          this.sliderDragging = true;
+          this.updateSliderFromPointer(pointer.x);
+        });
+      this.rows.push(trackBg);
+      const frac = batch / maxBatch;
+      const fill = this.scene.add
+        .rectangle(x0 + 1, y + 1, Math.max(0, (SLIDER_W - 2) * frac), SLIDER_H - 2, 0xc9a86a, 1)
+        .setOrigin(0, 0)
+        .setScrollFactor(0)
+        .setDepth(3002);
+      this.rows.push(fill);
+      const knob = this.scene.add
+        .rectangle(x0 + SLIDER_W * frac, y + SLIDER_H / 2, 8, SLIDER_H + 8, 0xffffff, 1)
+        .setOrigin(0.5, 0.5)
+        .setScrollFactor(0)
+        .setDepth(3003);
+      this.rows.push(knob);
+      y += SLIDER_H + 14;
+    }
+
     const btnY = y;
     // While a craft bar is filling the button greys out (and the bar covers
     // it); placeable recipes never use the bar so they stay live.
     const clickable = isCraftable(this.deps, recipe) && (placeable || !this.busy);
+    const btnLabel = placeable ? "Place" : this.busy ? "Crafting…" : stackable ? `Craft x${batch}` : "Craft";
     const btn = this.scene.add
-      .text(x0, btnY, placeable ? "Place" : this.busy ? "Crafting…" : "Craft", {
+      .text(x0, btnY, btnLabel, {
         fontFamily: "monospace",
         fontSize: "14px",
         color: clickable ? "#0a0a0a" : "#4a4a4a",
@@ -358,7 +438,8 @@ export class CraftingMenu {
         this.progressBar.setPosition(x0, btnY).setSize(96, 26).start(CRAFT_BAR_MS, {
           onComplete: () => {
             this.busy = false;
-            this.deps.craft(recipe);
+            this.deps.craft(recipe, batch);
+            this.batchAmount = 1;
             if (this.open) this.render();
           },
         });

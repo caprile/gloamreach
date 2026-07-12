@@ -1,5 +1,172 @@
 # STATUS Archive — older milestone entries (grep by id; never Read in full)
 
+### Previously: 40-min playtest fix batch (12 items) + relic rarity/tier rework
+
+A grab-bag off the user's 40-min "almost died a lot, feels harder — good" session. Built on
+Opus (the relic change is a new data model). No new milestone letter. All 12 items done +
+verified in the live preview.
+
+**Relic rarity/tier rework (the big one — `Relics.ts`).** Trophies now carry a **rarity +
+tier**, and a trophy's rarity drives an **outcome table** over the RESULT rarity (locked
+odds, the user): a **Common** trophy → 1% Rare / 2.5% Uncommon / 10% Common (else 86.5% fail,
+never Mythic); **Uncommon** → 1% Mythic / 5% Rare / rest Uncommon (never fails); **Rare** →
+10% Mythic / rest Rare. A relic's **power tier always equals the trophy's tier**
+(Tier-1 trophy → Tier-1 relic only). New `TROPHY_OUTCOME_ODDS` + `rollOutcomeRarity()` (walks
+the bands, subtracting each — the listed chances ARE the exact odds) +
+`trophyOverallSuccessChance()`. `TrophyRoll` dropped its `successChance` field;
+`RARITY_SUCCESS_CHANCE` removed. `RollResult.rarity` is now the PRODUCED rarity (may exceed
+the trophy's — a Common trophy CAN roll up into an Uncommon/Rare relic, and the
+`RelicRevealFx` slot-machine shows that bigger reveal, which is the gamba payoff). **First
+roll of a run is a guaranteed success** (the "hook" the user floated) via a `firstRollDone`
+flag + `isFirstRollPending()`; the forge button surfaces "first roll guaranteed". Pity kept
+as a floor (common 12). All first-biome trophies stay Common/Tier 1. Verified live: 20k-roll
+sample gave Rare 1.02% / Uncommon 2.71% / Common 12.74% / Mythic 0% / fail 83.5% (matches
+spec + pity), first roll guaranteed. `RelicForgeMenu` readout + the dashboard Relics tab
+(outcome breakdown) + `RECIPES.md` all updated.
+
+**The other 11 (playtest notes):**
+- **Dashboard armor Lvl 3.** The Armor tab only showed Base + Lvl 2 (the 3-tier rebalance
+  shipped but the dashboard never got a Lvl 3 column). Now Base/Lvl 2/Lvl 3 columns
+  (full-set 7/10/13) + an "Armor upgrade costs" table. Balance tab's "Full armor" card now
+  uses the max tier (Lvl 3). Verified live.
+- **Boar faces its charge.** `applyFacing()` silently no-ops on a unit vector (magnitude < 3),
+  so the charge/coil wind-up tells never rotated the sprite. New `Enemy.faceAngle(angle)`
+  bypasses the guard; Boar's charge wind-up + Snake's coil now point the right way.
+- **Committed attacks aren't interruptible by hits.** `Enemy.playHitFeedback()`'s x-shake
+  tween fought a charging Boar's own body velocity + snapped it back on complete — read as
+  "attacking cancels the charge." Now skips the shake only while an attack is *moving*
+  (wind-up/recovery punish windows still flash).
+- **Boss regens while deaggro'd.** `GremlinKing` heals 12 HP/s (+ poise refill) only while
+  fully deaggro'd, so kiting away to rest doesn't bank chip damage for free.
+- **Smash is dodgeable (i-frames confirmed working).** i-frames DO work — the slam routes
+  through `applyDamageToPlayer`'s `invulnerableUntil` guard. The real bug: `SMASH_RADIUS` 120
+  was bigger than the ~102px a walking player (95px/s) can travel in the ~1080ms telegraph+
+  leap, so it was undodgeable by movement. Cut to **95** (walk-dodge viable, sprint/dash gives
+  margin).
+- **Snake Meat + 2 dishes.** New `snake_meat` resource (Snake drops 1, elite 2, alongside
+  leather) → **Cooked Snake Meat** (shishkabob + snake_meat, +2 HP/s 22s) and **Blood-Glazed
+  Snake Skewer** (+ gremlin blood, Lvl 2 campfire, +3 HP/s 35s). New Items/textures/Cooking
+  rows; verified textures load.
+- **Bones economy.** Boar bones drop 1→**1-2** (elite 2→2-3); Bone Knife Lvl 2 cost 5→**3**
+  bones. (Chose drop-bump + cost-ease over a boar respawn system — noted as a future option.)
+- **Stamina hint reworded** — no longer blames sprinting ("Sprinting, dashing, and attacking
+  all drain it").
+- **Workbench placement bug.** Crafting a placeable left the crafting menu open; a following
+  recipe click fell through and placed ANOTHER workbench. `startPlacement()` now closes the
+  crafting menu (mirrors `startItemPlacement`), + a belt-and-suspenders guard skips placement
+  clicks over the crafting panel.
+- **"Destroy" → "Pick up"** on the placed-object context menu + its event-log line (it
+  returns a recoverable item, not a delete). Backpack-stack "Destroy" (a real delete) kept.
+- **Relic Forge description** dropped the stale "or combine relics" (combine was removed).
+
+### Previously: Enemy-dmg buff + boss dmg bump + GremlinKing "leaping smash"
+
+The remaining balance half of the 25-min-playtest triage's "light both rebalance"
+([[survivor-rpg-playtest-feedback-2026-07-11]]), plus the boss damage bump and the
+cleave-replacement design. Number tuning + swapping one attack inside the *existing*
+GremlinKing state machine — Sonnet-class work, built on Opus. the user locked the two open
+forks via `AskUserQuestion`: cleave replacement = **leaping smash**; scope = **full balance
+pass this session**.
+
+**Enemy-dmg buff (gremlin-focused).** The dashboard Balance tab confirmed the "1 dmg/hit in
+Lvl 2 armor" complaint was *specifically the gremlins* — flat mitigation
+(`max(1, round(dmg − def))`) floored their 8-10 dmg to 1 against Lvl-2 (10) / Lvl-3 (13)
+armor, while Boar (25) / Snake (20) still hurt. So the buff is a targeted gremlin bump, not
+across-the-board (keeps it "light"): `RangedGremlin` claw **10→15**, projectile **8→11**,
+`Gremling` claw **8→12** (`src/entities/Gremlin.ts`). Ordering preserved
+(projectile < gremling claw < ranged claw < Snake < Boar); elite ×1.5 scales automatically
+(claw→23/18). vs Lvl-2 armor gremlins now chip ~2-5 instead of 1; vs Lvl-3 they trickle to
+1-2. Boar/Snake untouched (already threatening; buffing them would be "heavy").
+
+**Boss dmg bump (~2-shot a full-armor player).** `GremlinKing.ts` charge **40→55**, slam
+**45→55**, new smash **60** — sized so two hits through full armor (Lvl-3 = 13) roughly kill
+a base 100-HP player (e.g. `(60−13)×2 = 94`). All three stay fully telegraphed/dodgeable, so
+the threat is "respect the tells," not an undodgeable wall.
+
+**Leaping smash replaces the cleave.** The old 140° forward cleave read as "just a worse
+360° slam" (the user). Replaced with a **gap-closer**: at telegraph-start the boss locks the
+player's position (clamped to `SMASH_MAX_LEAP` = 380px, like the charge target), draws a
+growing **landing-zone marker circle at that locked point** (distinct from the boss's own
+position), then leaps to it over `SMASH_LEAP_MS` (300ms) and impacts a 120px AoE + knockback
+on landing. It *punishes running away* (the zone chases where you were) — dodge is to step
+laterally out of the marked circle during the 780ms telegraph, a genuinely different read
+from charge (fixed line, sidestep) and slam (fires where the boss stands). New state plumbing:
+`smashTargetX/Y` + `smashLanded`/`smashElapsed`; `checkPlayerHit` gates the AoE on
+`smashLanded` so it only connects after the leap arrives (null mid-air). `MELEE_STOP_RANGE`
+(was `CLEAVE_RANGE`) is the new approach-stop distance. `BossAttackType` `cleave`→`smash`
+throughout; `telegraphMsFor`/`recoverMsFor`/`pickAttack`/`drawTelegraph`/`beginExecute`/
+`updateExecuting` all updated.
+
+**Dashboard Enemies tab** (the one hand-mirrored data source) updated: gremlin damages, boss
+attack list (Leaping Smash 60 / Charge 55 / Slam 55), and two now-stale "no telegraph" notes
+corrected. No `RECIPES.md` change (no recipe/cost changes).
+
+**Verification:** `tsc --noEmit` clean; preview boots error-free. Drove a live-spawned boss
+via `preview_eval`: synchronous state-machine walk asserted `checkPlayerHit` returns null
+mid-leap and `{60, kb 220}` only after `smashLanded`, plus charge `{55}` / slam `{55, kb 260}`;
+a second **async** eval under the real physics loop confirmed the leap actually moves the boss
+— it landed exactly on the locked point (`distToTarget: 0`, `movedFromStart: 380` = clamped
+max toward a far player). `preview_screenshot` confirmed the landing-zone marker renders as a
+distinct offset circle. Live enemies read the new claw damages (Gremlin 15 / Gremling 12,
+elites 23/18; Boar 25 / Snake 20 unchanged). Zero console errors.
+
+**Still queued from the triage:** 2 small features — Workbench-placement contextual hint
+(`Hints.ts`) and an in-game relic compendium. Then the master-plan tail: **M-TE** (trophy
+gear), **M-W1** (multi-biome world).
+
+### Previously: Armor rebalance (3-tier set) + upgrade-menu polish
+
+The armor half of the 25-min-playtest triage's "light both rebalance"
+([[survivor-rpg-playtest-feedback-2026-07-11]]). Number tuning + extending the existing
+(already-designed) armor-upgrade tables plus UI polish on the shared upgrade menu — Sonnet-class
+work, built on Opus. Plan: `.claude/plans/hashed-enchanting-finch.md` (armor-rebalance follow-up
+section).
+
+**Armor: 9→16-in-one-tier was too much.** The old Gremlin set leapt the full-set defense from 9
+(Lvl 1) to 16 (Lvl 2) in a single upgrade. Reworked into a **3-tier set, flat +1 armor per
+tier**, to the user's exact spec:
+
+- Base defenses (`Items.ts`): shirt 4→3, pants 3→2 (cap 2 unchanged). Per-piece per-tier:
+  **cap 2/3/4, shirt 3/4/5, pants 2/3/4**.
+- Full-set totals: **Lvl 1 = 7, Lvl 2 = 10, Lvl 3 = 13** — verified live via `armorDefenseForTier`.
+- `ArmorUpgrades.ts`: existing lvl-2 `defenseBonus` retuned to +1-cumulative; new **lvl-3** rows
+  (`resultTier: 2`) added per piece — costs escalate from lvl 2, all still gated on a
+  Workbench-Lvl-2 (Tool Sharpener), since no higher Workbench tier exists yet. `deltaLabel` is
+  the incremental +1; the stored `defenseBonus` is the cumulative bonus over base (matches
+  `armorDefenseForTier`). **No wiring needed** — the UpgradeMenu / `applyArmorUpgrade` path was
+  already tier-generic (weapon lvl2/lvl3 already exercised it).
+- the user's note: the +1/tier proportional impact shrinks as raw armor numbers climb, so this
+  curve is expected to be re-scaled per future biome, not assumed to hold deeper in.
+
+**Upgrade-menu UX polish** (`src/ui/UpgradeMenu.ts` — one menu serves station/armor/weapon
+upgrades, so both changes apply to all three):
+
+1. **Timed loading bar before the upgrade lands** — reuses `ProgressBar` (roadmap 5p,
+   [[survivor-rpg-timed-bars-gamba-relics]]) with the same commit-at-end + `busy` flag +
+   cancel-on-close pattern as craft/process/cook (`UPGRADE_BAR_MS = 500`). Clicking a tier runs
+   the bar (`startUpgrade()`) and only calls `deps.apply` — which consumes materials + bumps the
+   tier — in the bar's `onComplete`. Every row greys + shows `(Upgrading…)` while it fills;
+   closing the menu mid-bar cancels cleanly (nothing consumed). Multi-row tracking via
+   `busyUpgradeId` + a `busyRowRect` (baseline rect captured in `renderUpgradeRow`, re-pinned over
+   the filling row after render()'s panelY shift).
+2. **Already-applied tiers are hidden, not greyed "(Applied)".** `render()` now filters
+   `resultTier > target.tier`, so only the next (clickable) tier + any still-locked future tiers
+   show. A fully-upgraded piece reads **"Fully upgraded."**; an undiscovered-higher-tier piece
+   still reads "No upgrades discovered yet."
+
+**Verification:** `tsc --noEmit` clean; preview boots error-free. Drove the real menu live via
+`preview_eval` on an equipped cap with a placed tier-1 Workbench: rows showed Lvl 2 (clickable) +
+Lvl 3 (Requires previous tier) with no "Applied" row; clicking played the bar (`busy`/`running`
+true, tier still 0 mid-bar); on completion tier bumped 0→1, materials 20→19, and the applied Lvl 2
+row vanished leaving only Lvl 3; a second upgrade reached tier 2 → "Fully upgraded."; a mid-bar
+`close()` consumed nothing and reset `busy`/tier. `RECIPES.md` armor-upgrades table updated to
+match (now lists Lvl 2 + Lvl 3 rows and the 7/10/13 set totals).
+
+**Still queued from the triage:** the enemy-damage-buff half of the rebalance, the boss damage
+bump + GremlinKing cleave replacement, and 2 small features (Workbench-placement hint, in-game
+relic compendium). Then the master-plan tail: **M-TE** (trophy gear), **M-W1** (multi-biome world).
+
+
 ### Previously: M-RL relic economy rework (probabilistic roll + power tiers) + all-elites-drop-trophy
 
 Reworked the M-RL relic economy the user shipped earlier the same day, per a new

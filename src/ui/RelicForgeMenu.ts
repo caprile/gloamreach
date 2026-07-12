@@ -18,6 +18,7 @@ import {
   type RefineRecipe,
   type RollResult,
   type RelicGroup,
+  type RelicRarity,
 } from "../systems/Relics";
 import { RelicRevealFx } from "./RelicRevealFx";
 import { ProgressBar } from "./ProgressBar";
@@ -196,14 +197,35 @@ export class RelicForgeMenu {
     this.rows = [];
   }
 
-  // Trophy types shown as roll buttons: every trophy the player currently owns
-  // (Gremlin/Boar/Snake from their own elites, a fang if ever spendable). A
-  // trophy button disappears at 0 like every other — the old special-case that
-  // kept the Gremlin Trophy button pinned at 0 read as a stuck/broken button
-  // next to the others vanishing. With none owned, an empty-state note keeps
-  // the forge's purpose clear.
-  private visibleTrophyKeys(): string[] {
-    return Object.keys(TROPHY_ROLL).filter((k) => this.deps.backpack.count(k) > 0);
+  // Roll buttons are grouped by RARITY, not by individual species — every
+  // Common trophy (Gremlin/Boar/Snake) already shares the same odds + pity
+  // counter (5n), so three separate "Bind X Trophy" buttons was pure UI
+  // noise with zero mechanical difference between them (per playtest
+  // feedback / the #14 discussion — species trophies stay separate as drops
+  // for future per-source rarity scaling, this only collapses the FORGE UI).
+  // A group disappears once every trophy of that rarity hits 0, same as the
+  // old per-species behavior.
+  private rarityGroups(): { rarity: RelicRarity; keys: string[]; total: number }[] {
+    const byRarity = new Map<RelicRarity, string[]>();
+    for (const key of Object.keys(TROPHY_ROLL)) {
+      if (this.deps.backpack.count(key) <= 0) continue;
+      const rarity = TROPHY_ROLL[key].rarity;
+      const list = byRarity.get(rarity);
+      if (list) list.push(key);
+      else byRarity.set(rarity, [key]);
+    }
+    return Array.from(byRarity.entries()).map(([rarity, keys]) => ({
+      rarity,
+      keys,
+      total: keys.reduce((sum, k) => sum + this.deps.backpack.count(k), 0),
+    }));
+  }
+
+  // Which specific trophy key a rarity-group's button actually consumes —
+  // whichever species the player currently has the most of, so stock drains
+  // evenly across species rather than always favoring one.
+  private pickTrophyToRoll(keys: string[]): string {
+    return keys.reduce((best, k) => (this.deps.backpack.count(k) > this.deps.backpack.count(best) ? k : best));
   }
 
   // The Refine tab only exists once the forge is Lvl 2 (Gloam Conduit upgrade).
@@ -270,10 +292,10 @@ export class RelicForgeMenu {
     const groups = this.displayGroups();
     const gridRows = Math.max(1, Math.ceil(groups.length / COLS));
 
-    // The roll-button block wraps with the number of trophy types owned; the
+    // The roll-button block wraps with the number of rarity groups owned; the
     // result line + relic grid stack below it so nothing overlaps as variety
     // grows. All Y values are panel-relative offsets computed up front.
-    const btnRows = Math.max(1, Math.ceil(this.visibleTrophyKeys().length / BTN_COLS));
+    const btnRows = Math.max(1, Math.ceil(this.rarityGroups().length / BTN_COLS));
     const rollTop = 96; // below title + tabs + subtitle
     const btnBlockH = 22 + btnRows * (BTN_H + BTN_GAP_Y);
     const resultY = rollTop + btnBlockH + 4;
@@ -391,30 +413,31 @@ export class RelicForgeMenu {
     });
   }
 
-  // A roll button per visible trophy (see visibleTrophyKeys), wrapping into
-  // rows of BTN_COLS so any number of trophy types fits the panel width.
+  // One roll button per owned RARITY (see rarityGroups), wrapping into rows
+  // of BTN_COLS. Consuming a group's button picks whichever species trophy
+  // is most plentiful (pickTrophyToRoll) — odds/pity are identical across
+  // species of the same rarity, so the choice is purely about draining stock
+  // evenly, not a player-visible decision.
   private renderRollButtons(y: number): void {
     const x = this.panelX + 16;
     this.addText(x, y, "Bind", 13, "#c9a86a");
 
-    const keys = this.visibleTrophyKeys();
-    if (keys.length === 0) {
+    const groups = this.rarityGroups();
+    if (groups.length === 0) {
       this.addText(x, y + 26, "No trophies — defeat elite enemies to earn them.", 12, "#8a93a3");
       return;
     }
-    keys.forEach((trophyKey, i) => {
+    groups.forEach((group, i) => {
       const col = i % BTN_COLS;
       const rowN = Math.floor(i / BTN_COLS);
       const bx = x + col * (BTN_W + BTN_GAP_X);
       const by = y + 22 + rowN * (BTN_H + BTN_GAP_Y);
 
-      const have = this.deps.backpack.count(trophyKey);
-      const t = TROPHY_ROLL[trophyKey];
-      const trophyName = itemDef(trophyKey)?.name ?? trophyKey;
-      const can = have >= 1;
-      const overall = trophyOverallSuccessChance(t.rarity);
+      const rarity = group.rarity;
+      const can = group.total >= 1;
+      const overall = trophyOverallSuccessChance(rarity);
       const pct = Math.round(overall * 100);
-      const pityLeft = Math.max(0, PITY_THRESHOLD[t.rarity] - this.deps.relics.missStreak(t.rarity));
+      const pityLeft = Math.max(0, PITY_THRESHOLD[rarity] - this.deps.relics.missStreak(rarity));
       // First roll of a run is a guaranteed success — surface the hook.
       const pityStr =
         overall >= 1
@@ -426,25 +449,23 @@ export class RelicForgeMenu {
       const box = this.scene.add
         .rectangle(bx, by, BTN_W, BTN_H, 0x14181f, 0.95)
         .setOrigin(0, 0)
-        .setStrokeStyle(1, can ? RARITY_COLOR[t.rarity] : 0x3a4250)
+        .setStrokeStyle(1, can ? RARITY_COLOR[rarity] : 0x3a4250)
         .setScrollFactor(0)
         .setDepth(DEPTH_ITEM)
         .setInteractive({ useHandCursor: can && !this.busy })
         .on("pointerdown", () => {
-          if (can && !this.busy) this.beginRoll(trophyKey);
+          if (can && !this.busy) this.beginRoll(this.pickTrophyToRoll(group.keys));
         });
       this.rows.push(box);
 
       const gem = this.scene.add
-        .image(bx + 22, by + 29, rarityIcon(t.rarity))
+        .image(bx + 22, by + 29, rarityIcon(rarity))
         .setScrollFactor(0)
         .setDepth(DEPTH_ITEM + 1);
       this.rows.push(gem);
 
-      // Label by the trophy (its name), not just its rarity, so multiple
-      // same-rarity buttons are distinguishable at a glance.
-      this.addText(bx + 42, by + 8, `Bind ${trophyName}`, 12, can ? rarityHex(t.rarity) : "#5a6270");
-      this.addText(bx + 42, by + 26, `${rarityName(t.rarity)} · have ${have}`, 11, can ? "#c8d0da" : "#e08a8a");
+      this.addText(bx + 42, by + 8, `Roll a ${rarityName(rarity)} Trophy`, 12, can ? rarityHex(rarity) : "#5a6270");
+      this.addText(bx + 42, by + 26, `have ${group.total}`, 11, can ? "#c8d0da" : "#e08a8a");
       this.addText(bx + 42, by + 42, pityStr, 10, "#8a93a3");
     });
   }

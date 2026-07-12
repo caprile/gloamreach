@@ -80,14 +80,21 @@ export class ItemContainer {
   }
 
   hasRoomFor(key: string, count: number): boolean {
+    return this.roomFor(key) >= count;
+  }
+
+  // Total additional units of `key` this container can hold right now, across
+  // existing partial stacks plus empty slots — used to cap a batch-quantity
+  // slider (crafting/cooking) so it can't compute a size that would silently
+  // overflow the backpack.
+  roomFor(key: string): number {
     const max = maxStackOf(key);
     let room = 0;
     for (const s of this.slots) {
       if (s === null) room += max;
       else if (s.key === key) room += max - s.count;
-      if (room >= count) return true;
     }
-    return room >= count;
+    return room;
   }
 
   count(key: string): number {

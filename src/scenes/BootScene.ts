@@ -521,14 +521,14 @@ export class BootScene extends Phaser.Scene {
     g.fillTriangle(1, 4, 7, 4, 4, 0);
     g.generateTexture("javelin_projectile", 8, 16);
 
-    // Shishkabob: skewer stick with red + green chunks.
+    // Shishkabob: just a bare wooden skewer with a sharpened tip — no food
+    // chunks. Playtest feedback: the old red+green-chunk version already
+    // looked "full of stuff" before anything was cooked on it; chunks belong
+    // on the COOKED dishes below, not the raw skewer itself.
     g.clear();
-    g.fillStyle(0xc0a060, 1);
-    g.fillRect(3, 11, 18, 2); // skewer
-    g.fillStyle(0xb0452c, 1);
-    g.fillRect(6, 8, 5, 5);
-    g.fillStyle(0x4f9a3a, 1);
-    g.fillRect(13, 8, 5, 5);
+    g.fillStyle(0xa9793f, 1);
+    g.fillRect(2, 12, 15, 3); // shaft
+    g.fillTriangle(17, 12, 17, 15, 22, 13.5); // sharpened tip
     g.generateTexture("icon_shishkabob", ICON, ICON);
 
     // Cooked Boar Meat: a skewer with browned, roasted meat chunks (darker,

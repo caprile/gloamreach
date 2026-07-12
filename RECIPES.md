@@ -28,9 +28,9 @@ requires standing near a placed Workbench (`MainScene.isNearWorkbench`).
 | Bone Knife | Weapons | 1 | Yes | 1 Leather Scraps, 4 Bones | — | Item (weapon, slash) |
 | Primal Spear | Weapons | 1 | Yes | 4 Wood, 2 Stone, 1 Leather Scraps | — | Item (weapon, pierce) |
 | Slingshot | Weapons | 1 | Yes | 2 Wood, 2 Leather Scraps | — | Item (weapon, ranged — uses the Ammo slot) |
-| Slingshot Pellets | Weapons | 0 | No | 5 Stone | — | Item x25 (ammo) |
-| Javelin | Weapons | 0 | No | 3 Wood, 1 Stone | — | Item x2 (weapon, ranged, disposable — self-consuming stack) |
-| Shishkabob | Misc | 0 | No | 1 Wood | — | Item |
+| Slingshot Pellets | Weapons | 0 | No\* | 5 Stone | — | Item x25 (ammo) |
+| Javelin | Weapons | 1 | Yes | 3 Wood, 1 Stone | Pierce 5 | Item x2 (weapon, ranged, disposable — self-consuming stack) |
+| Shishkabob | Misc | 0 | No | 1 Wood | — | Item x2 |
 | Campfire | Crafting | 0 | No | 5 Wood, 5 Stone | — | Item (placeable) |
 | Workbench | Crafting | 0 | No | 10 Wood | — | Item (placeable) |
 | Bedroll | Crafting | 0 | No | 3 Wood, 5 Cattail | — | Item (placeable — near a lit Campfire + no enemies nearby grants +1 HP/s "Resting") |
@@ -40,6 +40,11 @@ requires standing near a placed Workbench (`MainScene.isNearWorkbench`).
 | Gremlin Shirt | Armor | 1 | Yes | 3 Gremlin Leather, 1 Leather Scraps, 5 Bones | Light Armor 0 | Item (armor, chest) |
 | Gremlin Pants | Armor | 1 | Yes | 2 Gremlin Leather, 2 Leather Scraps, 1 Blackberry | Light Armor 0 | Item (armor, legs) |
 | Gremlin Totem | Misc | 1 | Yes | 3 Gremlin Trophy, 1 Wood, 1 Gremlin Guck | — | Item (ritual — summons the Gremlin King at the Boss Altar) |
+
+\* Slingshot Pellets is tier 0 (no Workbench needed) but has an extra discovery
+gate beyond tier/ingredients: it stays hidden until the player has crafted a
+Slingshot at least once (`Recipe.requiresDiscovered`), so it doesn't advertise
+ammo before there's a launcher to load it into.
 
 ## Station Upgrades (`src/systems/StationUpgrades.ts`)
 

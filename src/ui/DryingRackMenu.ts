@@ -371,10 +371,31 @@ export class DryingRackMenu {
     const preview = station.previewFor(inputAmount);
     const previewLabel =
       preview.output > 0 && recipe
-        ? `-> ${preview.output} ${itemDef(recipe.output)?.name ?? ""}`
+        ? `${preview.output} ${itemDef(recipe.output)?.name ?? ""}`
         : "-> nothing yet";
     const previewY = track.y + 22;
-    this.addText(px, previewY, previewLabel, 13, preview.output > 0 ? "#8fe38f" : "#5b6472");
+    // Show the OUTPUT item's icon next to the preview text (was text-only) —
+    // reads visually like the input slot instead of just a number.
+    let previewTextX = px;
+    if (preview.output > 0 && recipe) {
+      const outDef = itemDef(recipe.output);
+      if (outDef) {
+        const icon = this.scene.add
+          .image(px + 8, previewY + 8, outDef.texture)
+          .setDisplaySize(16, 16)
+          .setScrollFactor(0)
+          .setDepth(DEPTH_TEXT);
+        this.rows.push(icon);
+      }
+      previewTextX = px + 20;
+    }
+    this.addText(
+      previewTextX,
+      previewY,
+      preview.output > 0 ? `-> ${previewLabel}` : previewLabel,
+      13,
+      preview.output > 0 ? "#8fe38f" : "#5b6472",
+    );
 
     const btnY = previewY + 26;
     const canProcess = preview.output > 0 && !this.busy;

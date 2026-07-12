@@ -81,9 +81,11 @@ export class SfxPlayer {
   }
 
   // Short percussive downward blip — shared by both "you hit something" and
-  // "something hit you" (no separate variant; minimal scope).
+  // "something hit you" (no separate variant; minimal scope). Fires on EVERY
+  // hit in combat, so it's kept deliberately soft/short (playtest feedback:
+  // the original was "annoying" at sustained combat pace).
   hit(): void {
-    this.tone(180, 90, "square", { toFreq: 90, gain: 0.1 });
+    this.tone(180, 55, "square", { toFreq: 90, gain: 0.035 });
   }
 
   // Quick upward chirp.
@@ -98,11 +100,20 @@ export class SfxPlayer {
     this.tone(660, 100, "triangle", { gain: 0.1, delaySec: 0.08 });
   }
 
-  // Three-note ascending arpeggio (A-C#-E major triad).
+  // Three-note ascending arpeggio (A-C#-E major triad) — reserved for the
+  // rarer Player Level-up (the "big deal" moment).
   levelUp(): void {
     this.tone(440, 90, "square", { gain: 0.11 });
     this.tone(554, 90, "square", { gain: 0.11, delaySec: 0.09 });
     this.tone(659, 160, "square", { gain: 0.12, delaySec: 0.18 });
+  }
+
+  // Quieter two-note blip for a SKILL level-up — these fire much more often
+  // than Player level-ups, so it's a lower-key cousin of levelUp(), not the
+  // full triad.
+  skillUp(): void {
+    this.tone(392, 70, "triangle", { gain: 0.06 });
+    this.tone(494, 100, "triangle", { gain: 0.07, delaySec: 0.07 });
   }
 
   // Low ominous swell sweeping downward.

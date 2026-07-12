@@ -25,7 +25,11 @@ export class Crafting {
     for (const recipe of RECIPES) {
       if (this.discoveredIds.has(recipe.id)) continue;
       if (recipe.tier > 0 && !workbenchPlaced) continue;
-      if (this.ingredientsKnown(recipe, discoveredItems) && this.skillsMet(recipe, skills)) {
+      if (
+        this.ingredientsKnown(recipe, discoveredItems) &&
+        this.skillsMet(recipe, skills) &&
+        this.otherRecipesDiscovered(recipe, discoveredItems)
+      ) {
         this.discoveredIds.add(recipe.id);
         newlyUnlocked.push(recipe);
       }
@@ -60,5 +64,12 @@ export class Crafting {
 
   private skillsMet(recipe: Recipe, skills: Skills): boolean {
     return (recipe.requiredSkills ?? []).every((req) => skills.get(req.skill) >= req.level);
+  }
+
+  // requiresDiscovered lists item KEYS (not recipe ids) that must already be
+  // in the discovered-items set — the same set ingredientsKnown reads, which
+  // covers crafted outputs too (addToBackpack discovers every key it adds).
+  private otherRecipesDiscovered(recipe: Recipe, discovered: ReadonlySet<string>): boolean {
+    return (recipe.requiresDiscovered ?? []).every((key) => discovered.has(key));
   }
 }

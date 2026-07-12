@@ -27,6 +27,12 @@ export interface Recipe {
   // ALL entries must be met to craft. Multiple allowed for future weapons
   // gated on more than one skill (e.g. "5 Slash + 5 Pierce").
   requiredSkills?: { skill: SkillType; level: number }[];
+  // Extra discovery gate beyond "ingredients known": recipe IDs (of OTHER
+  // recipes' output items) that must already be discovered. Used for a
+  // recipe whose own ingredients are common but that only makes sense once
+  // some other item exists (e.g. Slingshot Pellets shouldn't appear before
+  // the player has crafted a Slingshot to use them with).
+  requiresDiscovered?: string[];
   output: RecipeOutput;
 }
 
@@ -115,6 +121,10 @@ export const RECIPES: Recipe[] = [
     category: "weapons",
     tier: 0,
     costs: { stone: 5 },
+    // Stone is common enough that this would otherwise appear immediately —
+    // gate its discovery on having actually crafted a Slingshot first, so it
+    // doesn't show up before there's anything to load it into.
+    requiresDiscovered: ["slingshot"],
     output: { kind: "item", itemId: "slingshot_pellets", itemName: "Slingshot Pellets", count: 25 },
   },
   {
@@ -122,8 +132,12 @@ export const RECIPES: Recipe[] = [
     name: "Javelin",
     description: "A disposable thrown spear. Hits harder than a pellet, but each throw burns one.",
     category: "weapons",
-    tier: 0,
+    // Bumped to tier 1 + a Pierce skill gate per playtest feedback — a free
+    // starter javelin at Pierce 0 undercut the point of the (also ranged,
+    // pierce-typed) Slingshot as the actual early opener.
+    tier: 1,
     costs: { wood: 3, stone: 1 },
+    requiredSkills: [{ skill: "pierce", level: 5 }],
     output: { kind: "item", itemId: "javelin", itemName: "Javelin", count: 2 },
   },
   {
@@ -133,7 +147,7 @@ export const RECIPES: Recipe[] = [
     category: "misc",
     tier: 0,
     costs: { wood: 1 },
-    output: { kind: "item", itemId: "shishkabob", itemName: "Shishkabob" },
+    output: { kind: "item", itemId: "shishkabob", itemName: "Shishkabob", count: 2 },
   },
   {
     id: "campfire",

@@ -2,9 +2,10 @@
 
 ## Current State
 
-_Living snapshot — edit in place, never append. Last shipped: **Inventory auto-sort +
-Shift-Click split-stack, ranged starter weapons (Slingshot + Javelin) with a new Ammo
-equipment slot, and a minimal procedural SFX layer**, **2026-07-11**._
+_Living snapshot — edit in place, never append. Last shipped: **second playtest polish
+batch — SFX/level-up feel tuning, a toast-stacking bug fix, batch-quantity sliders for
+crafting + cooking, crafting-menu-stays-open placement, Javelin/Pellets recipe gating,
+and a consolidated Relic Forge roll button**, **2026-07-11**._
 
 **The game.** Top-down 2D pixel survival-ARPG (Phaser 3 + TypeScript + Vite; all
 textures are placeholders generated in `BootScene`). One forest biome sitting in the
@@ -34,12 +35,17 @@ win. The world is now circular + much larger (M-W1 geometry prep, above); determ
 seeded world-gen and actual multi-biome content are still deferred to M-W1 proper.
 
 **In progress / next.** the user is prepping for the first outside playtesters. This
-session's batch (inventory sort/split + ranged weapons + SFX, see below) closes out the
-playtest-polish backlog started in 5x. Real pixel art/animations stay deliberately
-deferred until content/balance settle further (the whole texture pipeline is built to
-swap late — see `CLAUDE.md` roadmap item 8). Next: a wider playtest round, then locked
-build order resumes — **M-TE** (trophy-gated special gear), then **M-W1** (multi-biome
-content in the now-circular world) last.
+session's batch (see below) works through a fresh round of playtest feedback on top of
+5y's ranged-weapons/SFX ship — SFX felt too loud/jarring, a UI toast-overlap bug, and
+several crafting/cooking UX asks (batch sliders, placement-menu flow). Real pixel
+art/animations stay deliberately deferred until content/balance settle further (the whole
+texture pipeline is built to swap late — see `CLAUDE.md` roadmap item 8). One open
+discussion item (NOT changed, deliberately left for the user): whether to generalize
+species trophies (Boar/Snake/Gremlin) into one "Tier 1 Common Trophy" — recommended
+against for now (M-W1 per-source-rarity scaffolding), but the Relic Forge UI was
+consolidated to a single roll-by-rarity button either way (see below). Next: a wider
+playtest round, then locked build order resumes — **M-TE** (trophy-gated special gear),
+then **M-W1** (multi-biome content in the now-circular world) last.
 
 **Known issues / open.**
 - Boss may be slightly overtuned after the 5s damage bump (the user's "TBD" — left as-is
@@ -58,6 +64,119 @@ content in the now-circular world) last.
 ## Recent Entries
 
 > Older entries in STATUS-archive.md.
+
+### 5z — Second playtest polish batch (SFX feel, toast fix, batch sliders, gating, forge UI)
+
+Plan: `.claude/plans/nimble-polishing-lantern.md`. A 14-item feedback batch off the user's
+5y playtest — fixes/tuning/UI on already-designed systems, built on **Sonnet** per the
+model-switch convention (no new mechanic). Two forks locked via `AskUserQuestion` before
+starting: Javelin's gate = tier-1 (Workbench-proximity, like Stone Pickaxe), not an
+upgraded-Workbench gate; the trophy-generalization discussion (#14) = don't merge the
+data model, just consolidate the Relic Forge's roll UI.
+
+**SFX/feel tuning (`Sfx.ts`, `MainScene.ts`, `Boar.ts`).** `hit()` gain 0.1→0.035 and
+shortened 90→55ms (was "annoying" at sustained combat pace — it fires on every hit both
+directions). New `Sfx.skillUp()` (quiet two-note blip) fires from `skills.onLevelUp`,
+distinct from the fuller `levelUp()` triad reserved for Player-level. The Player level-up
+`camera.flash` cut 300ms@(48,36,12) → 150ms@(20,15,5) (still no shake) — "full screen
+flash is too much" was itself a second dial-down of an already-softened flash from an
+earlier batch. Boar charge `CHARGE_MAX_DISTANCE` 230→170 and `CHARGE_RECOVER_MS` 820→550
+(still a real punish window, less brutal overshoot/recovery).
+
+**Top-middle toast overlap — root cause found and fixed (`EventLogUI.ts`).**
+`showToast`'s old `y = 72 + activeToasts * 40` counter decremented on fade-**complete**,
+but toasts share a fixed delay+duration so the earliest-created one always completes
+first — its slot could free up while a LATER toast was still visible, and the next toast
+reused that Y and overlapped it (rapid cooking made "Cooked X" toasts collide; affected
+every `info`/`combat`/`levelup` toast, not just cooking). Replaced with a reflowing
+`activeCenterToasts: {height}[]` list (mirrors the `activeRecipeToasts` pattern already in
+the same file for the side toasts) — each toast gets a real cumulative-height slot and
+splices itself out on fade-complete. *Verified live: 3 rapid `info` toasts got distinct
+stable-height slots (34px each), no overlap.*
+
+**Crafting menu stays open through placement + re-arms on a new Place click
+(`MainScene.ts`, `CraftingMenu.ts`).** Reverses a 40-min-batch fix that CLOSED the
+crafting menu on `startPlacement` (to kill an "every craft click drops a workbench"
+fall-through bug). That old bug is now prevented a different way: the global pointerdown
+handler already returns early for any click landing on the still-open crafting panel
+while `placementMode` is set (`craftingMenu.containsPoint` guard, pre-existing) — so
+`startPlacement` no longer needs to close the panel to stay safe. `startPlacement` is now
+idempotent/re-entrant: calling it again while already mid-placement (e.g. clicking a
+DIFFERENT placeable recipe's "Place" button) destroys the old ghost and re-arms to the new
+recipe instead of leaking a ghost or stacking placements. `attemptPlaceObject` also now
+calls `craftingMenu.refresh()` so the live cost readout stays accurate as materials are
+spent across repeated placements. *Verified live: workbench→campfire re-arm swapped the
+ghost texture cleanly with the crafting menu staying open and zero actual placements
+landing; the old fall-through bug confirmed still dead (panel clicks return early).*
+
+**Batch-quantity sliders for stackable crafting + cooking
+(`CraftingMenu.ts`, `CookingMenu.ts`, `MainScene.ts`, `ItemContainer.ts`).**
+`craftRecipe`/`cookAtCampfire` both gained a `batches` param (default 1, loops the
+existing per-unit craft/cook + grants total output, one shared commit) backed by new
+`maxCraftBatches`/`maxCookBatches` (min of cost-affordable batches and
+`ItemContainer.roomFor()`-bounded batches — `roomFor` is a new `ItemContainer` method,
+`hasRoomFor`'s boolean check generalized to return the actual remaining capacity).
+**CraftingMenu**: a slider appears above the Craft button only for non-placeable,
+stackable-output (`maxStack > 1`) recipes with >1 batch affordable; the ingredient-cost
+readout scales live with the slider, button reads "Craft x{N}", one `ProgressBar` covers
+the whole batch. **CookingMenu was restructured** from "each row has its own inline Cook
+button" into a select-a-row-then-shared-footer flow (mirrors CraftingMenu's list+detail
+shape) — clicking a dish row selects it (highlighted border) instead of cooking it
+immediately; a new footer below the row list shows the selected dish's batch-scaled
+ingredient cost, a slider (when >1 batch is affordable), and one Cook button. Both
+sliders share MainScene's existing global pointermove/pointerup drag plumbing (extended
+with `isDraggingSlider`/`updateSliderFromPointer`/`endSliderDrag`, same pattern
+`DryingRackMenu`'s amount slider already used). *Verified live: 3-batch Shishkabob craft
+spent 3 wood → 6 shishkabob (recipe now 1 wood → 2, see below); 4-batch Cooked Boar Meat
+spent 4 boar_meat → 4 dishes; dragging the cooking slider to max showed "Qty: 6/6" and
+"Cook x6" with the ingredient text scaling to match.*
+
+**Drying Rack output slot shows the output item's icon (`DryingRackMenu.ts`).** The
+"→ N Twine" preview text now sits next to a small icon of the actual output item
+(`itemDef(recipe.output).texture`), reading visually like the input slot instead of
+text-only.
+
+**Shishkabob recipe + art (`Recipes.ts`, `BootScene.ts`).** Output bumped to `count: 2`
+(1 Wood → 2 Shishkabob, cost unchanged). Texture redrawn from a stick-with-red/green-
+chunks (which "already looked full of stuff") to a bare wooden skewer with a sharpened
+tip — chunks now only belong on the COOKED dishes.
+
+**Javelin + Slingshot Pellets recipe gating (`Recipes.ts`, `Crafting.ts`).** Javelin
+bumped tier 0→1 (Workbench-proximity gate, like Stone Pickaxe/Slingshot — the locked fork
+answer) + `requiredSkills: [{skill: "pierce", level: 5}]` — a free starter javelin at
+Pierce 0 undercut the point of the (also-ranged, pierce-typed) Slingshot as the actual
+early opener. New `Recipe.requiresDiscovered?: string[]` field + a
+`Crafting.otherRecipesDiscovered` check: Slingshot Pellets now stays hidden until the
+player has crafted a Slingshot at least once (`requiresDiscovered: ["slingshot"]`) — stone
+is common enough it would otherwise appear immediately, well before there's a launcher to
+load it into. *Verified live: both hidden pre-gate, both discovered immediately after
+placing a workbench+Pierce 5 / crafting a slingshot respectively.*
+
+**Relic Forge roll UI consolidated to one button per RARITY, not per species
+(`RelicForgeMenu.ts`).** From the #14 discussion: species trophies (Boar/Snake/Gremlin)
+stay separate as drops (flavor + M-W1 per-source-rarity scaffolding — NOT merged), but
+since they already share identical odds/pity by rarity (5n), showing 3 near-identical
+"Bind X Trophy" buttons was pure UI noise. New `rarityGroups()` groups every owned trophy
+key by its `TROPHY_ROLL` rarity and renders ONE button per group ("Roll a Common Trophy",
+showing the combined count); `pickTrophyToRoll()` consumes whichever species has the
+highest count on click, draining stock evenly rather than favoring one arbitrarily. Odds/
+pity/reveal-fx are unaffected (same `beginRoll` path, just fed a different key). *Verified
+live: 3 owned trophy types (gremlin/boar/snake, totaling 9) collapsed into one Common
+group; the picker correctly chose the highest-count species (boar_trophy, 5 owned).*
+
+**Dashboard "sometimes doesn't load" — investigated, no bug found.** `/dashboard.html` is
+a second Vite entry that only serves while `npm run dev` is running THIS project.
+`.claude/launch.json`'s Preview config has `"autoPort": true`; if a stale/orphaned Vite
+process from an earlier closed session is still holding port 5173 (exactly what happened
+in 5y — 5 orphaned processes), a *new* session's dev server silently starts on 5174+
+instead, but a bookmarked fixed-port URL still points at 5173 — looks broken even though a
+server IS running. No code fix applies; environmental (kill orphaned `node.exe` processes
+before starting a fresh session).
+
+**Verification:** `tsc --noEmit` clean; full `npm run build` succeeds (main bundle
+>500kB warning is pre-existing/unrelated). Extensive live `preview_eval` verification per
+item above (console error-free throughout). `RECIPES.md` updated (Shishkabob output x2,
+Javelin tier 1 + Pierce 5, Slingshot Pellets discovery-gate footnote).
 
 ### 5y — Inventory sort/split + ranged starter weapons (Slingshot + Javelin) + minimal SFX
 
@@ -377,170 +496,4 @@ supports raw-Uncommon→Refined-Rare for deeper biomes. This **deliberately over
 "rarity not climbable / no manual combine" lock** — but as a *gated* climb (rare resource +
 mini-boss), consistent with "nothing free." First-pass numbers in the plan; relic-strength
 retune is a separate later pass. New-mechanic build is Opus territory.
-
-### Previously: 40-min playtest fix batch (12 items) + relic rarity/tier rework
-
-A grab-bag off the user's 40-min "almost died a lot, feels harder — good" session. Built on
-Opus (the relic change is a new data model). No new milestone letter. All 12 items done +
-verified in the live preview.
-
-**Relic rarity/tier rework (the big one — `Relics.ts`).** Trophies now carry a **rarity +
-tier**, and a trophy's rarity drives an **outcome table** over the RESULT rarity (locked
-odds, the user): a **Common** trophy → 1% Rare / 2.5% Uncommon / 10% Common (else 86.5% fail,
-never Mythic); **Uncommon** → 1% Mythic / 5% Rare / rest Uncommon (never fails); **Rare** →
-10% Mythic / rest Rare. A relic's **power tier always equals the trophy's tier**
-(Tier-1 trophy → Tier-1 relic only). New `TROPHY_OUTCOME_ODDS` + `rollOutcomeRarity()` (walks
-the bands, subtracting each — the listed chances ARE the exact odds) +
-`trophyOverallSuccessChance()`. `TrophyRoll` dropped its `successChance` field;
-`RARITY_SUCCESS_CHANCE` removed. `RollResult.rarity` is now the PRODUCED rarity (may exceed
-the trophy's — a Common trophy CAN roll up into an Uncommon/Rare relic, and the
-`RelicRevealFx` slot-machine shows that bigger reveal, which is the gamba payoff). **First
-roll of a run is a guaranteed success** (the "hook" the user floated) via a `firstRollDone`
-flag + `isFirstRollPending()`; the forge button surfaces "first roll guaranteed". Pity kept
-as a floor (common 12). All first-biome trophies stay Common/Tier 1. Verified live: 20k-roll
-sample gave Rare 1.02% / Uncommon 2.71% / Common 12.74% / Mythic 0% / fail 83.5% (matches
-spec + pity), first roll guaranteed. `RelicForgeMenu` readout + the dashboard Relics tab
-(outcome breakdown) + `RECIPES.md` all updated.
-
-**The other 11 (playtest notes):**
-- **Dashboard armor Lvl 3.** The Armor tab only showed Base + Lvl 2 (the 3-tier rebalance
-  shipped but the dashboard never got a Lvl 3 column). Now Base/Lvl 2/Lvl 3 columns
-  (full-set 7/10/13) + an "Armor upgrade costs" table. Balance tab's "Full armor" card now
-  uses the max tier (Lvl 3). Verified live.
-- **Boar faces its charge.** `applyFacing()` silently no-ops on a unit vector (magnitude < 3),
-  so the charge/coil wind-up tells never rotated the sprite. New `Enemy.faceAngle(angle)`
-  bypasses the guard; Boar's charge wind-up + Snake's coil now point the right way.
-- **Committed attacks aren't interruptible by hits.** `Enemy.playHitFeedback()`'s x-shake
-  tween fought a charging Boar's own body velocity + snapped it back on complete — read as
-  "attacking cancels the charge." Now skips the shake only while an attack is *moving*
-  (wind-up/recovery punish windows still flash).
-- **Boss regens while deaggro'd.** `GremlinKing` heals 12 HP/s (+ poise refill) only while
-  fully deaggro'd, so kiting away to rest doesn't bank chip damage for free.
-- **Smash is dodgeable (i-frames confirmed working).** i-frames DO work — the slam routes
-  through `applyDamageToPlayer`'s `invulnerableUntil` guard. The real bug: `SMASH_RADIUS` 120
-  was bigger than the ~102px a walking player (95px/s) can travel in the ~1080ms telegraph+
-  leap, so it was undodgeable by movement. Cut to **95** (walk-dodge viable, sprint/dash gives
-  margin).
-- **Snake Meat + 2 dishes.** New `snake_meat` resource (Snake drops 1, elite 2, alongside
-  leather) → **Cooked Snake Meat** (shishkabob + snake_meat, +2 HP/s 22s) and **Blood-Glazed
-  Snake Skewer** (+ gremlin blood, Lvl 2 campfire, +3 HP/s 35s). New Items/textures/Cooking
-  rows; verified textures load.
-- **Bones economy.** Boar bones drop 1→**1-2** (elite 2→2-3); Bone Knife Lvl 2 cost 5→**3**
-  bones. (Chose drop-bump + cost-ease over a boar respawn system — noted as a future option.)
-- **Stamina hint reworded** — no longer blames sprinting ("Sprinting, dashing, and attacking
-  all drain it").
-- **Workbench placement bug.** Crafting a placeable left the crafting menu open; a following
-  recipe click fell through and placed ANOTHER workbench. `startPlacement()` now closes the
-  crafting menu (mirrors `startItemPlacement`), + a belt-and-suspenders guard skips placement
-  clicks over the crafting panel.
-- **"Destroy" → "Pick up"** on the placed-object context menu + its event-log line (it
-  returns a recoverable item, not a delete). Backpack-stack "Destroy" (a real delete) kept.
-- **Relic Forge description** dropped the stale "or combine relics" (combine was removed).
-
-### Previously: Enemy-dmg buff + boss dmg bump + GremlinKing "leaping smash"
-
-The remaining balance half of the 25-min-playtest triage's "light both rebalance"
-([[survivor-rpg-playtest-feedback-2026-07-11]]), plus the boss damage bump and the
-cleave-replacement design. Number tuning + swapping one attack inside the *existing*
-GremlinKing state machine — Sonnet-class work, built on Opus. the user locked the two open
-forks via `AskUserQuestion`: cleave replacement = **leaping smash**; scope = **full balance
-pass this session**.
-
-**Enemy-dmg buff (gremlin-focused).** The dashboard Balance tab confirmed the "1 dmg/hit in
-Lvl 2 armor" complaint was *specifically the gremlins* — flat mitigation
-(`max(1, round(dmg − def))`) floored their 8-10 dmg to 1 against Lvl-2 (10) / Lvl-3 (13)
-armor, while Boar (25) / Snake (20) still hurt. So the buff is a targeted gremlin bump, not
-across-the-board (keeps it "light"): `RangedGremlin` claw **10→15**, projectile **8→11**,
-`Gremling` claw **8→12** (`src/entities/Gremlin.ts`). Ordering preserved
-(projectile < gremling claw < ranged claw < Snake < Boar); elite ×1.5 scales automatically
-(claw→23/18). vs Lvl-2 armor gremlins now chip ~2-5 instead of 1; vs Lvl-3 they trickle to
-1-2. Boar/Snake untouched (already threatening; buffing them would be "heavy").
-
-**Boss dmg bump (~2-shot a full-armor player).** `GremlinKing.ts` charge **40→55**, slam
-**45→55**, new smash **60** — sized so two hits through full armor (Lvl-3 = 13) roughly kill
-a base 100-HP player (e.g. `(60−13)×2 = 94`). All three stay fully telegraphed/dodgeable, so
-the threat is "respect the tells," not an undodgeable wall.
-
-**Leaping smash replaces the cleave.** The old 140° forward cleave read as "just a worse
-360° slam" (the user). Replaced with a **gap-closer**: at telegraph-start the boss locks the
-player's position (clamped to `SMASH_MAX_LEAP` = 380px, like the charge target), draws a
-growing **landing-zone marker circle at that locked point** (distinct from the boss's own
-position), then leaps to it over `SMASH_LEAP_MS` (300ms) and impacts a 120px AoE + knockback
-on landing. It *punishes running away* (the zone chases where you were) — dodge is to step
-laterally out of the marked circle during the 780ms telegraph, a genuinely different read
-from charge (fixed line, sidestep) and slam (fires where the boss stands). New state plumbing:
-`smashTargetX/Y` + `smashLanded`/`smashElapsed`; `checkPlayerHit` gates the AoE on
-`smashLanded` so it only connects after the leap arrives (null mid-air). `MELEE_STOP_RANGE`
-(was `CLEAVE_RANGE`) is the new approach-stop distance. `BossAttackType` `cleave`→`smash`
-throughout; `telegraphMsFor`/`recoverMsFor`/`pickAttack`/`drawTelegraph`/`beginExecute`/
-`updateExecuting` all updated.
-
-**Dashboard Enemies tab** (the one hand-mirrored data source) updated: gremlin damages, boss
-attack list (Leaping Smash 60 / Charge 55 / Slam 55), and two now-stale "no telegraph" notes
-corrected. No `RECIPES.md` change (no recipe/cost changes).
-
-**Verification:** `tsc --noEmit` clean; preview boots error-free. Drove a live-spawned boss
-via `preview_eval`: synchronous state-machine walk asserted `checkPlayerHit` returns null
-mid-leap and `{60, kb 220}` only after `smashLanded`, plus charge `{55}` / slam `{55, kb 260}`;
-a second **async** eval under the real physics loop confirmed the leap actually moves the boss
-— it landed exactly on the locked point (`distToTarget: 0`, `movedFromStart: 380` = clamped
-max toward a far player). `preview_screenshot` confirmed the landing-zone marker renders as a
-distinct offset circle. Live enemies read the new claw damages (Gremlin 15 / Gremling 12,
-elites 23/18; Boar 25 / Snake 20 unchanged). Zero console errors.
-
-**Still queued from the triage:** 2 small features — Workbench-placement contextual hint
-(`Hints.ts`) and an in-game relic compendium. Then the master-plan tail: **M-TE** (trophy
-gear), **M-W1** (multi-biome world).
-
-### Previously: Armor rebalance (3-tier set) + upgrade-menu polish
-
-The armor half of the 25-min-playtest triage's "light both rebalance"
-([[survivor-rpg-playtest-feedback-2026-07-11]]). Number tuning + extending the existing
-(already-designed) armor-upgrade tables plus UI polish on the shared upgrade menu — Sonnet-class
-work, built on Opus. Plan: `.claude/plans/hashed-enchanting-finch.md` (armor-rebalance follow-up
-section).
-
-**Armor: 9→16-in-one-tier was too much.** The old Gremlin set leapt the full-set defense from 9
-(Lvl 1) to 16 (Lvl 2) in a single upgrade. Reworked into a **3-tier set, flat +1 armor per
-tier**, to the user's exact spec:
-
-- Base defenses (`Items.ts`): shirt 4→3, pants 3→2 (cap 2 unchanged). Per-piece per-tier:
-  **cap 2/3/4, shirt 3/4/5, pants 2/3/4**.
-- Full-set totals: **Lvl 1 = 7, Lvl 2 = 10, Lvl 3 = 13** — verified live via `armorDefenseForTier`.
-- `ArmorUpgrades.ts`: existing lvl-2 `defenseBonus` retuned to +1-cumulative; new **lvl-3** rows
-  (`resultTier: 2`) added per piece — costs escalate from lvl 2, all still gated on a
-  Workbench-Lvl-2 (Tool Sharpener), since no higher Workbench tier exists yet. `deltaLabel` is
-  the incremental +1; the stored `defenseBonus` is the cumulative bonus over base (matches
-  `armorDefenseForTier`). **No wiring needed** — the UpgradeMenu / `applyArmorUpgrade` path was
-  already tier-generic (weapon lvl2/lvl3 already exercised it).
-- the user's note: the +1/tier proportional impact shrinks as raw armor numbers climb, so this
-  curve is expected to be re-scaled per future biome, not assumed to hold deeper in.
-
-**Upgrade-menu UX polish** (`src/ui/UpgradeMenu.ts` — one menu serves station/armor/weapon
-upgrades, so both changes apply to all three):
-
-1. **Timed loading bar before the upgrade lands** — reuses `ProgressBar` (roadmap 5p,
-   [[survivor-rpg-timed-bars-gamba-relics]]) with the same commit-at-end + `busy` flag +
-   cancel-on-close pattern as craft/process/cook (`UPGRADE_BAR_MS = 500`). Clicking a tier runs
-   the bar (`startUpgrade()`) and only calls `deps.apply` — which consumes materials + bumps the
-   tier — in the bar's `onComplete`. Every row greys + shows `(Upgrading…)` while it fills;
-   closing the menu mid-bar cancels cleanly (nothing consumed). Multi-row tracking via
-   `busyUpgradeId` + a `busyRowRect` (baseline rect captured in `renderUpgradeRow`, re-pinned over
-   the filling row after render()'s panelY shift).
-2. **Already-applied tiers are hidden, not greyed "(Applied)".** `render()` now filters
-   `resultTier > target.tier`, so only the next (clickable) tier + any still-locked future tiers
-   show. A fully-upgraded piece reads **"Fully upgraded."**; an undiscovered-higher-tier piece
-   still reads "No upgrades discovered yet."
-
-**Verification:** `tsc --noEmit` clean; preview boots error-free. Drove the real menu live via
-`preview_eval` on an equipped cap with a placed tier-1 Workbench: rows showed Lvl 2 (clickable) +
-Lvl 3 (Requires previous tier) with no "Applied" row; clicking played the bar (`busy`/`running`
-true, tier still 0 mid-bar); on completion tier bumped 0→1, materials 20→19, and the applied Lvl 2
-row vanished leaving only Lvl 3; a second upgrade reached tier 2 → "Fully upgraded."; a mid-bar
-`close()` consumed nothing and reset `busy`/tier. `RECIPES.md` armor-upgrades table updated to
-match (now lists Lvl 2 + Lvl 3 rows and the 7/10/13 set totals).
-
-**Still queued from the triage:** the enemy-damage-buff half of the rebalance, the boss damage
-bump + GremlinKing cleave replacement, and 2 small features (Workbench-placement hint, in-game
-relic compendium). Then the master-plan tail: **M-TE** (trophy gear), **M-W1** (multi-biome world).
 
