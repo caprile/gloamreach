@@ -332,7 +332,8 @@ export class CraftingMenu {
     for (const [resource, amount] of Object.entries(recipe.costs) as [ResourceType, number][]) {
       const have = this.deps.backpack.count(resource);
       const need = amount * batch;
-      const t = this.scene.add.text(x0, y, `${resource}: ${have}/${need}`, {
+      const resourceName = itemDef(resource)?.name ?? resource;
+      const t = this.scene.add.text(x0, y, `${resourceName}: ${have}/${need}`, {
         fontFamily: "monospace",
         fontSize: "13px",
         color: have >= need ? "#8fe38f" : "#e38f8f",

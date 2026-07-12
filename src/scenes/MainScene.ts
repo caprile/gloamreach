@@ -325,6 +325,9 @@ export class MainScene extends Phaser.Scene {
   // Unlocked!" toast tracking, same as discoveredUpgradeIds but for the cook
   // table. Tier-0 dishes unlock on first campfire placement; tier-1 on upgrade.
   private discoveredCookRecipeIds = new Set<string>();
+  // Highest-tier campfire ever placed/upgraded; -1 = none placed yet. Gates
+  // announceCookRecipes() alongside ingredient discovery.
+  private campfireMaxTierSeen = -1;
   // The single tool the player currently has "out". Driven by the selected
   // hotbar slot.
   private equippedTool: ToolType | null = null;
@@ -595,6 +598,7 @@ export class MainScene extends Phaser.Scene {
     this.discovered = new Set<string>();
     this.discoveredUpgradeIds = new Set<string>();
     this.discoveredCookRecipeIds = new Set<string>();
+    this.campfireMaxTierSeen = -1;
     this.equippedTool = null;
     this.equippedWeapon = null;
     this.equippedWeaponName = null;
@@ -1997,13 +2001,24 @@ export class MainScene extends Phaser.Scene {
     this.afterRelicChange();
   }
 
-  // Announce (once each) the cook recipes a campfire of `maxTier` makes
-  // available — fired on first campfire placement (tier 0) and on upgrade
-  // (tier 1). Mirrors the recipe-unlock toast the crafting system uses.
+  // Record the highest-tier campfire ever placed/upgraded, then re-run the
+  // announce pass — fired on first campfire placement (tier 0) and on
+  // upgrade (tier 1). Mirrors the recipe-unlock toast the crafting system
+  // uses, but a dish also needs every ingredient DISCOVERED (not just a
+  // high-enough campfire) before it announces — otherwise "New Recipe
+  // Unlocked! Cooked Boar Meat" could fire the moment any campfire goes down,
+  // before the player has ever obtained a shishkabob or boar meat.
   private discoverCookRecipes(maxTier: number): void {
+    this.campfireMaxTierSeen = Math.max(this.campfireMaxTierSeen, maxTier);
+    this.announceCookRecipes();
+  }
+
+  private announceCookRecipes(): void {
+    if (this.campfireMaxTierSeen < 0) return;
     for (const r of COOK_RECIPES) {
-      if (r.requiredCampfireTier > maxTier) continue;
+      if (r.requiredCampfireTier > this.campfireMaxTierSeen) continue;
       if (this.discoveredCookRecipeIds.has(r.id)) continue;
+      if (!Object.keys(r.inputs).every((key) => this.discovered.has(key))) continue;
       this.discoveredCookRecipeIds.add(r.id);
       this.eventLog.add("recipe", `New Recipe Unlocked! ${r.name}`, itemDef(r.output)?.texture);
     }
@@ -2183,6 +2198,10 @@ export class MainScene extends Phaser.Scene {
     } else if (this.backpack.count("gremlin_totem") >= 1) {
       this.backpack.removeCount("gremlin_totem", 1);
     } else {
+      // The altar is now always interactable-looking (highlight + prompt) so
+      // it reads as a real POI even before the player has a totem — clicking
+      // without one just needs a reason why nothing happened.
+      this.eventLog.add("info", "The altar needs something offered to it first.");
       return;
     }
     this.afterItemMove();
@@ -3397,12 +3416,17 @@ export class MainScene extends Phaser.Scene {
   // selected in the hotbar -> show nothing, never reveal what's required
   // (same "no tool of the right kind -> show nothing" rule as promptFor()).
   // Also hides once the boss has already been summoned this session.
+  // Unlike tool-gated resource nodes (which deliberately show nothing until
+  // the right tool is equipped, so as not to reveal a requirement), the altar
+  // always shows a prompt + hover highlight once in reach — it's a unique,
+  // one-of-a-kind landmark, and playtesting found it read as non-interactive
+  // scenery without SOME feedback. Whether the player is actually carrying a
+  // totem only changes what the click does (see attemptSummonBoss), not
+  // whether the altar looks interactable.
   private promptForAltar(altar: BossAltar): string | null {
     const inReach = Phaser.Math.Distance.Between(this.player.x, this.player.y, altar.x, altar.y) <= REACH;
     if (!inReach || altar.summoned) return null;
-    const selected = this.hotbar.get(this.hotbar.selected());
-    if (!selected || selected.key !== "gremlin_totem") return null;
-    return "[LMB] Place Totem";
+    return "[LMB] Call Their Leader";
   }
 
   // Left-click action on the currently hovered, in-reach node (or enemy/rack).
@@ -4074,10 +4098,40 @@ export class MainScene extends Phaser.Scene {
           // exploding) — don't resurrect it with a fresh bob tween.
           if (node.depleted) return;
           node.startBob();
+          if (resource === "gloam_shard") this.playGloamShardPop(node);
           this.consolidateDrop(node);
         },
       });
     }
+  }
+
+  // A little extra pop on Gloam Shard drops (Gloamwarden's rare currency) so
+  // they read as a special reward, not just another loose pickup — a scale
+  // punch on the sprite plus a quick purple glow burst (reuses the light_soft
+  // gradient the M-DN torch/vein lighting already established).
+  private playGloamShardPop(node: ResourceNode): void {
+    node.setScale(0.4);
+    this.tweens.add({
+      targets: node,
+      scale: 1,
+      duration: 260,
+      ease: "Back.easeOut",
+    });
+    const glow = this.add
+      .image(node.x, node.y, "light_soft")
+      .setTint(0xb266ff)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setAlpha(0.85)
+      .setScale(0.3)
+      .setDepth(ysortDepth(node.y) + 1);
+    this.tweens.add({
+      targets: glow,
+      scale: 1.1,
+      alpha: 0,
+      duration: 380,
+      ease: "Cubic.easeOut",
+      onComplete: () => glow.destroy(),
+    });
   }
 
   // After a drop piece lands, merge it into another nearby piece of the same
@@ -4175,6 +4229,7 @@ export class MainScene extends Phaser.Scene {
       const icon = itemDef(upg.appliesToItemKey)?.texture;
       this.eventLog.add("recipe", `New Upgrade Unlocked! ${upg.name}`, icon);
     }
+    this.announceCookRecipes();
     this.craftingMenu?.refresh();
     this.inventoryMenu?.refresh();
     this.upgradeMenu?.refresh();
@@ -4804,7 +4859,10 @@ export class MainScene extends Phaser.Scene {
     this.applyTierVisual(obj, upg.resultTier);
     this.refreshStationLabel(obj);
     const itemKey = obj.getData("itemKey") as string;
-    this.eventLog.add("info", `${stationDisplayName(itemKey, upg.resultTier)} upgraded: ${upg.name}`);
+    // "recipe" kind (not "info") so this uses the left-anchored, under-
+    // inventory toast lane instead of the top-center one — the top-center
+    // toast used to render right over the just-opened Upgrade panel.
+    this.eventLog.add("recipe", `${stationDisplayName(itemKey, upg.resultTier)} upgraded: ${upg.name}`, itemDef(itemKey)?.texture);
     // Upgrading a Campfire to Lvl 2 unlocks (and announces) its tier-1 dishes.
     if (itemKey === "campfire") this.discoverCookRecipes(upg.resultTier);
     this.upgradeMenu.refresh();
@@ -4818,7 +4876,10 @@ export class MainScene extends Phaser.Scene {
     if (!eq || !this.canAffordUpgrade(upg) || this.upgradeBlockReason(upg)) return;
     for (const [r, n] of Object.entries(upg.costs)) this.backpack.removeCount(r, n ?? 0);
     this.equipment.set(slot, { key: eq.key, tier: upg.resultTier });
-    this.eventLog.add("info", `${stationDisplayName(eq.key, upg.resultTier)} upgraded: ${upg.name}`);
+    // Left-anchored "recipe" toast, not the top-center "info" one — the
+    // Upgrade panel for a paper-doll slot opens right beside/over where the
+    // center toast used to land (see applyStationUpgrade's note).
+    this.eventLog.add("recipe", `${stationDisplayName(eq.key, upg.resultTier)} upgraded: ${upg.name}`, itemDef(eq.key)?.texture);
     this.upgradeMenu.refresh();
     this.afterItemMove();
   }
@@ -4830,7 +4891,7 @@ export class MainScene extends Phaser.Scene {
     if (!stack || !this.canAffordUpgrade(upg) || this.upgradeBlockReason(upg)) return;
     for (const [r, n] of Object.entries(upg.costs)) this.backpack.removeCount(r, n ?? 0);
     container.set(index, { ...stack, tier: upg.resultTier });
-    this.eventLog.add("info", `${stationDisplayName(stack.key, upg.resultTier)} upgraded: ${upg.name}`);
+    this.eventLog.add("recipe", `${stationDisplayName(stack.key, upg.resultTier)} upgraded: ${upg.name}`, itemDef(stack.key)?.texture);
     // The upgraded weapon may be the currently-equipped hotbar item — refresh
     // equippedWeaponTier so the damage bonus applies immediately.
     this.recomputeEquipped();
@@ -5112,12 +5173,21 @@ export class MainScene extends Phaser.Scene {
     }
     const items: ContextMenuItem[] = eq
       ? [
+          {
+            label: "Upgrade",
+            // Only lit up when an actual next tier is both defined AND
+            // discovered (mirrors UpgradeMenu's own row filter) — otherwise
+            // it's a dead click into an empty panel.
+            enabled: armorUpgradesForItem(eq.key).some(
+              (u) => u.resultTier > eq.tier && this.upgradeIngredientsKnown(u),
+            ),
+            onClick: () => this.openArmorUpgradeMenu(slot),
+          },
           { label: "Unequip", enabled: true, onClick: () => this.unequipArmorSlot(slot) },
-          { label: "Upgrade", enabled: true, onClick: () => this.openArmorUpgradeMenu(slot) },
         ]
       : [
-          { label: "Equip", enabled: false, onClick: () => {} },
           { label: "Upgrade", enabled: false, onClick: () => {} },
+          { label: "Equip", enabled: false, onClick: () => {} },
         ];
     this.contextMenu.show(screenX, screenY, items);
   }
