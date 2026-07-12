@@ -21,10 +21,17 @@ const AGGRO_RADIUS = 160;
 const DEAGGRO_RADIUS = 280;
 const CHASE_SPEED = 92; // fast — nearly the player's walk speed, so it runs you down
 const WANDER_SPEED = 22;
-const MELEE_RANGE = 20;
+// 30, not 20: a flat 20px bite whiffed on diagonal approaches because the
+// player↔enemy collider holds their centers ~24px apart on the diagonal, so the
+// strike-frame reach check never saw the player in range (the user: "melee
+// attacks don't hit me at some angles"). 30 clears the body-separation gap.
+const MELEE_RANGE = 30;
 
 const MAX_HEALTH = 20; // noticeably tougher than a Gremling (12), still low for a swarm unit
-const BITE_DAMAGE = 14;
+// 20, not 14: in a full Tier-2 Gremlin set (13 flat armor) a 14-dmg bite floored
+// to 1 (the user: "duskrunner does 1dmg per hit... not enough"). 20 → ~7 through
+// max armor, and a pack of 3-4 landing that together is real pressure.
+const BITE_DAMAGE = 20;
 
 const PACK_AGGRO_RADIUS = 260; // a woken packmate within this range also engages
 
@@ -44,7 +51,7 @@ const POUNCE_RANGE_MAX = 190; // within this (and past bite range) → pounce
 const POUNCE_WINDUP_MS = 260; // crouch/load tell
 const POUNCE_SPEED = 330; // clearly faster than chase — closes the gap in a blink
 const POUNCE_MAX_DIST = 185; // travels this far before landing/recovering
-const POUNCE_HIT_RADIUS = 22; // contact check along the leap
+const POUNCE_HIT_RADIUS = 32; // contact check along the leap (was 22 — same body-gap fix as MELEE_RANGE)
 const POUNCE_RECOVER_MS = 320; // landing recovery — the punish window
 const POUNCE_COOLDOWN_MS = 850;
 const POUNCE_KNOCKBACK = 90; // a small shove on a landed pounce
@@ -228,5 +235,27 @@ export class Duskrunner extends Enemy {
       this.pounceCooldownUntil = now + POUNCE_COOLDOWN_MS;
     }
     return false;
+  }
+
+  // --- pack coordination (the user: "attack as a pack") ---
+  // A single pouncing Duskrunner rallies its neighbors so a pack converges and
+  // leaps in the same beat instead of trickling in one at a time. Driven by
+  // MainScene.updateDuskrunnerPacks; the rally only takes during the leader's
+  // wind-up so the joiners' leaps land together, not staggered.
+
+  // True only during the crouch tell of a pounce — the window to rally on.
+  isPounceWindup(): boolean {
+    return this.currentAttack === "pounce" && this.attackPhase === "windup";
+  }
+
+  // Rally call: if chasing, in a valid pounce band, and off cooldown, commit a
+  // pounce now. No-op otherwise (already attacking, on cooldown, wrong range),
+  // so it's safe to call every frame from the sync pass.
+  joinPounce(now: number, playerX: number, playerY: number): void {
+    if (this.depleted || this.state !== "chasing" || this.isAttacking()) return;
+    if (now < this.pounceCooldownUntil) return;
+    const dist = Phaser.Math.Distance.Between(this.x, this.y, playerX, playerY);
+    if (dist < POUNCE_RANGE_MIN || dist > POUNCE_RANGE_MAX) return;
+    this.startPounce(now, playerX, playerY);
   }
 }

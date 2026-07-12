@@ -36,15 +36,23 @@ const BASHER_SWING: SwingConfig = {
 };
 
 // Rolling charge — locked-direction shell roll that overshoots then recovers.
+// Reworked (the user: "too easy to sidestep without requiring sprint/dodge" and
+// "feels the same as duskrunner"): faster + a wider hit radius so a lazy
+// side-step no longer clears it (you need a dash/committed move), and a connect
+// now opens a BLEED wound on top of the big shove — getting rolled is the heavy,
+// scary threat that separates the tank from the Duskrunner's quick light pounce.
 const ROLL_TRIGGER_MAX = 215; // beyond MELEE_RANGE and within this → roll to close
 const ROLL_WINDUP_MS = 560; // tuck-in tell
-const ROLL_SPEED = 240; // much faster than its lumbering chase
-const ROLL_MAX_DIST = 215;
-const ROLL_HIT_RADIUS = 30;
+const ROLL_SPEED = 300; // was 240 — fast enough to catch a strafing player
+const ROLL_MAX_DIST = 230;
+const ROLL_HIT_RADIUS = 40; // was 30 — a casual sidestep no longer clears the shell
 const ROLL_RECOVER_MS = 640; // unroll/turnaround — the punish window
 const ROLL_COOLDOWN_MS = 1000;
 const ROLL_KNOCKBACK = 230;
 const ROLL_SPIN_RATE = 0.03; // rad/ms sprite spin while rolling (the visual tell)
+// Bleed opened by a landed roll: 5/s for 4s (~20 total, stacks if re-rolled).
+const ROLL_BLEED_DPS = 5;
+const ROLL_BLEED_MS = 4000;
 
 type CragAttack = "basher" | "roll";
 
@@ -194,6 +202,7 @@ export class Cragscale extends Enemy {
       if (!this.rollHit && dist <= ROLL_HIT_RADIUS + this.reachBonus()) {
         this.rollHit = true;
         this.pendingAttackKnockback = ROLL_KNOCKBACK;
+        this.pendingBleed = { dmgPerSec: ROLL_BLEED_DPS, durationMs: ROLL_BLEED_MS };
         this.markAttackLanded(now);
         body.setVelocity(0, 0);
         this.faceAngle(this.rollAngle); // stop spinning, settle facing

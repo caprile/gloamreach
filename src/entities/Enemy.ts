@@ -155,6 +155,12 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   // Set by tickMeleeSwing (from SwingConfig.knockback) or directly by a
   // subclass's own attack (e.g. Boar's charge gore).
   pendingAttackKnockback = 0;
+  // Bleed (damage-over-time) to apply to the player when the current attack
+  // connects, read by MainScene.updateEnemies() the frame the hit lands, then
+  // cleared. null = no bleed (every attack except Cragscale's rolling charge).
+  // Rides the same i-frame guard as the hit's direct damage, so a dashed-through
+  // roll applies neither.
+  pendingBleed: { dmgPerSec: number; durationMs: number } | null = null;
   // The unscaled/base display scale to restore after a wind-up scale-pulse.
   // Elites bump this to their own scale so the pulse throbs around the right
   // size (see each subclass's elite branch).

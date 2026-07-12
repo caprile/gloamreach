@@ -83,6 +83,7 @@ import { Equipment, EQUIP_SLOTS, type EquipSlot, type EquippedItem } from "../sy
 import { Hotbar, ROW1_COUNT } from "../systems/Hotbar";
 import { ProcessingStation, PROCESS_RECIPES } from "../systems/Processing";
 import { BuffManager } from "../systems/Buffs";
+import { BleedManager } from "../systems/Bleed";
 import { COOK_RECIPES, type CookRecipe } from "../systems/Cooking";
 import { CraftingMenu } from "../ui/CraftingMenu";
 import { ContextMenu, type ContextMenuItem } from "../ui/ContextMenu";
@@ -521,6 +522,7 @@ export class MainScene extends Phaser.Scene {
   // Timed player buffs (heal-over-time from eating cooked food today) + their
   // HUD strip above the HP bar. See Buffs.ts / BuffBarUI.ts.
   private buffs = new BuffManager();
+  private bleed = new BleedManager();
   private buffBarUI!: BuffBarUI;
   private healthBarBg!: Phaser.GameObjects.Rectangle;
   private healthBarFill!: Phaser.GameObjects.Rectangle;
@@ -685,6 +687,7 @@ export class MainScene extends Phaser.Scene {
     this.stamina = new Stamina();
     this.enemies = [];
     this.health = new Health();
+    this.bleed = new BleedManager();
     this.buffs = new BuffManager();
     // 2 -> 3: Comfort's "Resting" buff shouldn't have to fight two
     // simultaneous food buffs for one of only 2 slots.
@@ -742,16 +745,27 @@ export class MainScene extends Phaser.Scene {
     // is impossible now — TileSprite allocates a canvas its own size, and 28000² is
     // ~3GB (out-of-memory). The outer patchwork paints its own base color (graded
     // grass->dust) in the overlay, so grass is only needed here in the core.
-    this.add
+    const grass = this.add
       .tileSprite(BIOME_ORIGIN_X, BIOME_ORIGIN_Y, BIOME_SIZE, BIOME_SIZE, "grass")
       .setOrigin(0, 0)
-      .setDepth(-10);
+      .setDepth(-9.4); // ABOVE the outer overlay (-9.5) so the feathered core shows through it
     // Outer patchwork ground: ONE bounded coarse overlay texture stretched over the
-    // whole world (constant GPU cost at any world size), UNDER the crisp forest bake.
+    // whole world (constant GPU cost at any world size), a continuous smooth base.
     this.bakeOuterOverlay();
     // Forest (biome 1) crisp bake on top — unchanged look; fades out past the
     // forest edge so it never paints over an outer biome.
-    this.buildBiomeTexture();
+    const forestRT = this.buildBiomeTexture();
+    // Feather the crisp forest region (grass + forest bake) into the outer overlay
+    // with a soft-disc bitmap mask, so their SQUARE edges no longer meet the
+    // overlay as hard straight lines (the user). The mask disc is scaled to the
+    // region square; it's opaque across the play area and fades to 0 by the edge.
+    const feather = this.add
+      .image(WORLD_CX, WORLD_CY, "forest_feather")
+      .setVisible(false)
+      .setDisplaySize(BIOME_SIZE, BIOME_SIZE);
+    const featherMask = feather.createBitmapMask();
+    grass.setMask(featherMask);
+    forestRT.setMask(featherMask);
     // Circular world edge: a dark "void" ring beyond WORLD_RADIUS so the
     // playable area reads as a round island, not an invisible wall in open grass.
     this.drawWorldBoundary();
@@ -1123,6 +1137,16 @@ export class MainScene extends Phaser.Scene {
     // healed, and keep the buff HUD in sync each frame (countdown/expiry).
     if (this.buffs.tick(delta, this.health).healed) this.refreshHealthBar();
     this.buffBarUI.sync(this.buffs.active());
+    // Bleed DoT (Cragscale roll): ticks whole damage points regardless of
+    // i-frames (it's applied inside the i-frame guard at wound time, not here)
+    // and ignores armor. A small red number over the player reads as "bleeding".
+    const bleedDmg = this.bleed.tick(delta);
+    if (bleedDmg > 0 && !this.isDead) {
+      const died = this.health.takeDamage(bleedDmg);
+      this.refreshHealthBar();
+      this.spawnDamageNumber(this.player.x, this.player.y, bleedDmg, false, "weak");
+      if (died) this.onPlayerDeath();
+    }
     this.player.syncEquippedIconPosition();
     this.updateAttackRangeRing();
 
@@ -2480,6 +2504,13 @@ export class MainScene extends Phaser.Scene {
         Phaser.Math.Distance.Between(x, y, this.veinPosition.x, this.veinPosition.y) < VEIN_CLEAR_RADIUS
       )
         continue;
+      // Badlands must be the DOMINANT biome here, not merely present: near the
+      // forest transition a point can carry >=0.4 badlands coverage while forest
+      // (disc or an overlapping forest blob) still wins the blend — placing a
+      // badlands enemy/flora there reads as "spawned in the woods" (the user's
+      // report). dominantBiomeAt already resolves the winner incl. the forest
+      // disc, so gate on it. minCoverage remains a floor for "meaningfully in".
+      if (this.worldBiomes.dominantBiomeAt(x, y) !== "badlands") continue;
       if (this.worldBiomes.coverageAt(x, y, "badlands") < minCoverage) continue;
       return { x, y };
     }
@@ -2499,7 +2530,7 @@ export class MainScene extends Phaser.Scene {
   // rounded line rather than a low-res jagged edge.
   private static readonly BIOME_SUPERSAMPLE = 8;
 
-  private buildBiomeTexture(): void {
+  private buildBiomeTexture(): Phaser.GameObjects.RenderTexture {
     const step = MainScene.BIOME_SUPERSAMPLE;
     const g = this.make.graphics({}, false); // offscreen; not on the display list
     // Only bake the biome REGION (a centered BIOME_SIZE square), not the whole
@@ -2602,6 +2633,7 @@ export class MainScene extends Phaser.Scene {
       .setDepth(-9);
     rt.draw(g);
     g.destroy();
+    return rt;
   }
 
   // Bake the outer patchwork ground (biome 2+) into ONE bounded RenderTexture that
@@ -2630,10 +2662,13 @@ export class MainScene extends Phaser.Scene {
         const wy = (ty + step / 2) * worldPerTexel;
         const r = Math.hypot(wx - WORLD_CX, wy - WORLD_CY);
         if (r > WORLD_RADIUS) continue; // beyond the world edge: the void ring covers it
-        // The pure forest core is owned by the crisp bake + grass tilesprite —
-        // leave it transparent here so biome 1 is untouched. The transition band
-        // (forestCoverage < 1) DOES draw, so it blends outward correctly.
-        if (this.worldBiomes.forestCoverage(r) >= 0.999) continue;
+        // Draw the overlay CONTINUOUSLY, including under the forest core — it's a
+        // smooth base for the whole world. The crisp grass tilesprite + forest
+        // bake sit on top and are feathered to a soft disc (forest_feather mask),
+        // so their square edges fade into this overlay instead of cutting a hard
+        // line (the user's "straight vertical/horizontal lines"). worldBiomeColorAt
+        // returns the forest color in the core, so what shows through the feather
+        // ring is continuous green, not a gap.
         g.fillStyle(this.worldBiomes.worldBiomeColorAt(wx, wy), 1);
         g.fillRect(tx, ty, step, step);
       }
@@ -4151,22 +4186,51 @@ export class MainScene extends Phaser.Scene {
         this.applyDamageToPlayer(
           enemy.biteDamage,
           kb > 0 ? { fromX: enemy.x, fromY: enemy.y, speed: kb } : undefined,
+          undefined,
+          enemy.pendingBleed ?? undefined,
         );
+        enemy.pendingBleed = null; // consumed this frame
       }
-      // Gremlin King's melee/AoE kit deals area damage, not a single-point
-      // bite — queried separately since it needs richer info (knockback)
-      // than Enemy.update()'s plain boolean contract.
-      if (enemy instanceof GremlinKing || enemy instanceof Gloamwarden) {
-        const areaHit = enemy.checkPlayerHit(this.player.x, this.player.y);
+      // Area-damage attacks (boss slams, the Hexling's flame strike) deal AoE,
+      // not a single-point bite — queried separately since they need richer info
+      // (knockback, magic dmgType) than Enemy.update()'s plain boolean contract.
+      // The cast widens the three subclasses' return shapes to their common
+      // superset so both knockback + dmgType read cleanly (each only sets its own).
+      if (enemy instanceof GremlinKing || enemy instanceof Gloamwarden || enemy instanceof Hexling) {
+        const areaHit = enemy.checkPlayerHit(this.player.x, this.player.y) as
+          | { damage: number; knockback?: number; dmgType?: DamageType }
+          | null;
         if (areaHit) {
           this.applyDamageToPlayer(
             areaHit.damage,
             areaHit.knockback ? { fromX: enemy.x, fromY: enemy.y, speed: areaHit.knockback } : undefined,
+            areaHit.dmgType,
           );
         }
       }
     }
     this.updatePackAggro(now);
+    this.updateDuskrunnerPacks(now);
+  }
+
+  // Duskrunner pack-attack sync (the user: "attack as a pack"). When one dog is
+  // in its pounce wind-up, rally nearby chasing packmates to pounce in the same
+  // beat so a pack leaps together rather than one at a time. joinPounce no-ops
+  // for anything out of band / on cooldown / already attacking, so this is cheap
+  // and self-limiting (k Duskrunners aggro'd, 0 today outside the badlands).
+  private static readonly DUSK_PACK_SYNC_RADIUS = 210;
+  private updateDuskrunnerPacks(now: number): void {
+    const px = this.player.x;
+    const py = this.player.y;
+    for (const leader of this.enemies) {
+      if (!(leader instanceof Duskrunner) || leader.depleted || !leader.isPounceWindup()) continue;
+      for (const other of this.enemies) {
+        if (other === leader || !(other instanceof Duskrunner)) continue;
+        if (Phaser.Math.Distance.Between(leader.x, leader.y, other.x, other.y) > MainScene.DUSK_PACK_SYNC_RADIUS)
+          continue;
+        other.joinPounce(now, px, py);
+      }
+    }
   }
 
   // Swarm pack-aggro (Biome 2 Phase 1): an aggro'd pack member wakes nearby
@@ -4229,10 +4293,14 @@ export class MainScene extends Phaser.Scene {
     amount: number,
     knockback?: { fromX: number; fromY: number; speed: number },
     dmgType?: DamageType,
+    bleed?: { dmgPerSec: number; durationMs: number },
   ): void {
     if (this.isDead) return;
     if (this.time.now < this.invulnerableUntil) return;
     this.sfx.hit();
+    // Bleed rides the same i-frame guard above, so a dashed-through Cragscale
+    // roll opens no wound (the whole attack is dodged, not just its direct hit).
+    if (bleed) this.bleed.apply(bleed.dmgPerSec, bleed.durationMs);
     // Relic damage-taken reduction (M-RL) applies first (a percentage), then
     // flat armor deduction. Magic damage (Biome 2 Phase 1) BYPASSES the flat
     // armor term — it gives the badlands magical enemy real teeth and seeds a
@@ -4259,8 +4327,9 @@ export class MainScene extends Phaser.Scene {
     this.sfx.death();
     this.isDead = true;
     this.player.setVelocity(0, 0);
-    // Active food buffs are lost on death (they don't carry into respawn).
+    // Active food buffs + any bleed are lost on death (don't carry into respawn).
     this.buffs.clear();
+    this.bleed.clear();
     this.buffBarUI.sync(this.buffs.active());
     this.eventLog.add("combat", "You died...");
     // Hardcore: death is terminal — end the run and post the score after a

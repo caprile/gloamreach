@@ -944,29 +944,49 @@ export class BootScene extends Phaser.Scene {
     g.fillRect(0, 8, 6, 7);
     g.generateTexture("cragscale_elite", 28, 18);
 
-    // Hexling — magical gremlin variant. Same squat humanoid silhouette as the
-    // gremlin, recolored to violet/ember gloam-fire with a glowing eye, so it
-    // reads as the arcane threat.
-    g.clear();
-    g.fillStyle(0x5a3a7a, 1); // violet body
-    g.fillRect(2, 4, 14, 16);
-    g.fillStyle(0x3f2858, 1);
-    g.fillRect(4, 0, 10, 6); // head
-    g.fillStyle(0xc86ef0, 1);
-    g.fillRect(5, 10, 8, 6); // gloam belly glow
-    g.fillStyle(0xff8a3a, 1);
-    g.fillRect(6, 2, 2, 2); // ember eye
-    g.generateTexture("hexling", 18, 22);
-
-    g.clear(); // Elite Hexling
-    g.fillStyle(0x6a1f3a, 1);
-    g.fillRect(2, 4, 14, 16);
-    g.fillStyle(0x3f1030, 1);
-    g.fillRect(4, 0, 10, 6);
-    g.fillStyle(0xf0c040, 1);
-    g.fillRect(5, 10, 8, 6);
-    g.fillRect(6, 2, 2, 2);
-    g.generateTexture("hexling_elite", 18, 22);
+    // Hexling — the badlands MAGE. A deliberately DISTINCT silhouette from the
+    // squat gremlins (the user: "mages look too similar to the gremlins"): a
+    // taller 20x30 hooded/robed caster with a pointed hood, a glowing eye slit, a
+    // chest rune, and a staff topped with a glowing orb held to one side. Reads as
+    // "arcane threat," not "recolored gremlin."
+    const drawHexling = (
+      key: string,
+      robe: number,
+      hood: number,
+      hem: number,
+      glow: number,
+    ) => {
+      g.clear();
+      // Robe — a trapezoid widening to the hem (stacked rects), the caster body.
+      g.fillStyle(robe, 1);
+      g.fillRect(6, 10, 8, 4); // shoulders
+      g.fillRect(5, 14, 10, 4);
+      g.fillRect(4, 18, 12, 4);
+      g.fillRect(3, 22, 14, 4);
+      g.fillRect(2, 26, 16, 3); // hem base
+      g.fillStyle(hem, 1);
+      g.fillRect(2, 28, 16, 2); // hem highlight
+      // Pointed hood + head.
+      g.fillStyle(hood, 1);
+      g.fillRect(6, 6, 8, 5); // head
+      g.fillRect(7, 3, 6, 3);
+      g.fillRect(9, 0, 2, 3); // hood tip
+      // Glowing eye slit + a chest rune.
+      g.fillStyle(glow, 1);
+      g.fillRect(8, 7, 3, 2); // eye
+      g.fillStyle(glow, 0.9);
+      g.fillRect(8, 16, 3, 3); // chest rune
+      // Staff on the right: wooden shaft + a glowing orb at its top.
+      g.fillStyle(0x6b4a2a, 1);
+      g.fillRect(17, 8, 2, 21);
+      g.fillStyle(glow, 1);
+      g.fillCircle(18, 6, 3);
+      g.fillStyle(0xffffff, 0.8);
+      g.fillCircle(18, 6, 1.4); // bright orb core
+      g.generateTexture(key, 20, 30);
+    };
+    drawHexling("hexling", 0x4a2d6e, 0x33204d, 0x5f3d88, 0xc86ef0); // violet caster, magenta magic
+    drawHexling("hexling_elite", 0x6a1f3a, 0x3f1030, 0x8a2a4a, 0xf0c040); // crimson/gold elite
 
     // Hexling's magic bolt — small violet orb with a bright core (contrasts the
     // grey gremlin rock so a "this one eats armor" bolt reads differently).
@@ -1105,6 +1125,7 @@ export class BootScene extends Phaser.Scene {
 
     g.destroy();
     this.makeLightTexture();
+    this.makeForestFeatherTexture();
   }
 
   // Soft radial light gradient (white, opaque center -> transparent edge), used
@@ -1121,6 +1142,29 @@ export class BootScene extends Phaser.Scene {
     const grad = ctx.createRadialGradient(r, r, 0, r, r, r);
     grad.addColorStop(0, "rgba(255,255,255,1)");
     grad.addColorStop(0.55, "rgba(255,255,255,0.7)");
+    grad.addColorStop(1, "rgba(255,255,255,0)");
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, size, size);
+    canvas.refresh();
+  }
+
+  // Soft-edged disc used as a BITMAP MASK for the crisp forest region (the grass
+  // tilesprite + forest bake). Those layers are SQUARE (BIOME_SIZE), so their
+  // edges met the blurry outer overlay as hard vertical/horizontal lines
+  // (the user: "huge straight vertical and horizontal lines that don't blend").
+  // Masking them with this disc fades the crisp core into the continuous outer
+  // overlay as a soft circle instead. Opaque across the play area, ramping to 0
+  // only in the outer ~22% so the whole forest stays crisp; the fade completes
+  // by the mask's edge, which is scaled to sit inside the square.
+  private makeForestFeatherTexture(): void {
+    const size = 512;
+    const canvas = this.textures.createCanvas("forest_feather", size, size);
+    if (!canvas) return;
+    const ctx = canvas.getContext();
+    const r = size / 2;
+    const grad = ctx.createRadialGradient(r, r, 0, r, r, r);
+    grad.addColorStop(0, "rgba(255,255,255,1)");
+    grad.addColorStop(0.78, "rgba(255,255,255,1)");
     grad.addColorStop(1, "rgba(255,255,255,0)");
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, size, size);
