@@ -313,6 +313,48 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     hotbarable: false,
   },
 
+  // --- badlands (biome 2) raw materials + flora ---
+  duskrunner_pelt: {
+    key: "duskrunner_pelt",
+    name: "Duskrunner Pelt",
+    description: "The dusty, gloam-touched hide of a badlands jackal. Coarse, but it might tan into something.",
+    texture: "icon_duskrunner_pelt",
+    maxStack: 99,
+    hotbarable: false,
+  },
+  cragscale_plate: {
+    key: "cragscale_plate",
+    name: "Cragscale Plate",
+    description: "A slab of stone-hard reptile scale from the Sunscorch flats. Heavy, and hard to work.",
+    texture: "icon_cragscale_plate",
+    maxStack: 99,
+    hotbarable: false,
+  },
+  hex_essence: {
+    key: "hex_essence",
+    name: "Hex Essence",
+    description: "A vial of unstable gloam-fire wrung from a Hexling. It hums against the palm.",
+    texture: "icon_hex_essence",
+    maxStack: 99,
+    hotbarable: false,
+  },
+  emberbloom: {
+    key: "emberbloom",
+    name: "Emberbloom",
+    description: "A hardy desert herb that glows a faint ember at dusk. Said to steady the blood.",
+    texture: "icon_emberbloom",
+    maxStack: 99,
+    hotbarable: false,
+  },
+  sunfruit: {
+    key: "sunfruit",
+    name: "Sunfruit",
+    description: "The swollen fruit of a Sunscorch cactus — bitter raw, but full of water.",
+    texture: "icon_sunfruit",
+    maxStack: 99,
+    hotbarable: false,
+  },
+
   // --- food (cooked at a campfire; right-click to eat) ---
   cooked_boar_meat: {
     key: "cooked_boar_meat",
@@ -483,6 +525,32 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     name: "Snake Trophy",
     description: "A fanged trophy torn from an Elite Snake. Feed it to a Relic Forge to attempt a relic.",
     texture: "icon_snake_trophy",
+    maxStack: 99,
+    hotbarable: false,
+  },
+  // Badlands elite trophies (biome 2 Phase 2). Common/tier1 at the Relic Forge
+  // for now (Phase 5 retiers them to tier-2 + Ember refinement).
+  duskrunner_trophy: {
+    key: "duskrunner_trophy",
+    name: "Duskrunner Trophy",
+    description: "A pack-leader's ember-flecked fang, torn from an Elite Duskrunner. Feed it to a Relic Forge.",
+    texture: "icon_duskrunner_trophy",
+    maxStack: 99,
+    hotbarable: false,
+  },
+  cragscale_trophy: {
+    key: "cragscale_trophy",
+    name: "Cragscale Trophy",
+    description: "A cracked crest-plate torn from an Elite Cragscale. Feed it to a Relic Forge.",
+    texture: "icon_cragscale_trophy",
+    maxStack: 99,
+    hotbarable: false,
+  },
+  hexling_trophy: {
+    key: "hexling_trophy",
+    name: "Hexling Trophy",
+    description: "A still-smoldering hex-node cut from an Elite Hexling. Feed it to a Relic Forge.",
+    texture: "icon_hexling_trophy",
     maxStack: 99,
     hotbarable: false,
   },

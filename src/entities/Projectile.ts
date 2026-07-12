@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import type { DamageType } from "../systems/Weapons";
 
 // Generic reusable projectile — first ranged-attack primitive in the game
 // (Gremlin's rock throw). Not Gremlin-specific: the Slingshot is expected to
@@ -14,6 +15,12 @@ export interface ProjectileConfig {
   maxRangePx: number;
   sourceIsPlayer: boolean; // who fired it — not yet used to pick a group (only enemy-sourced projectiles exist so far), but part of describing a projectile regardless of source
   isCrit?: boolean; // player ranged crit (M-SS) — rolled at fire time, carried so the impact damage number tints
+  // Damage type carried to the hit resolver (Biome 2 Phase 2). Absent = physical:
+  // an enemy projectile with no type subtracts the player's flat armor as usual;
+  // "magic" (Hexling bolt) bypasses that armor term in applyDamageToPlayer. Player
+  // projectiles resolve as their weapon's "ranged" type in the enemy overlap and
+  // don't read this field.
+  damageType?: DamageType;
   // Extra rotation (radians) added to the travel angle when orienting the
   // sprite — for a texture whose "forward" isn't +x. The javelin art points UP
   // (-y), so it needs +90° to point along its flight; symmetric art (pellets)
@@ -33,6 +40,7 @@ export class Projectile extends Phaser.Physics.Arcade.Sprite {
   readonly damage: number;
   readonly sourceIsPlayer: boolean;
   readonly isCrit: boolean;
+  readonly damageType?: DamageType;
   private readonly spawnX: number;
   private readonly spawnY: number;
   private readonly maxRangePx: number;
@@ -44,6 +52,7 @@ export class Projectile extends Phaser.Physics.Arcade.Sprite {
     this.damage = cfg.damage;
     this.sourceIsPlayer = cfg.sourceIsPlayer;
     this.isCrit = cfg.isCrit ?? false;
+    this.damageType = cfg.damageType;
     this.spawnX = cfg.x;
     this.spawnY = cfg.y;
     this.maxRangePx = cfg.maxRangePx;

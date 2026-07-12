@@ -214,6 +214,13 @@ export const TROPHY_ROLL: Record<string, TrophyRoll> = {
   gremlin_trophy: { rarity: "common", powerTier: 1 },
   boar_trophy: { rarity: "common", powerTier: 1 },
   snake_trophy: { rarity: "common", powerTier: 1 },
+  // Badlands (biome 2 Phase 2) elite trophies. Common / Tier 1 for now so they
+  // ride the same shared outcome table + pity as the forest trophies (an early
+  // badlands run still funnels into the existing relic loop). Phase 5 retiers
+  // these to tier-2 + Ember-Shard refinement per the biome-2 umbrella.
+  duskrunner_trophy: { rarity: "common", powerTier: 1 },
+  cragscale_trophy: { rarity: "common", powerTier: 1 },
+  hexling_trophy: { rarity: "common", powerTier: 1 },
   // Dormant this milestone — killing the King wins the run, so a fang can't be
   // spent yet. Correct + ready for M-W1's mid-bosses.
   gremlin_king_fang: { rarity: "rare", powerTier: 1 },

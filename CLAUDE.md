@@ -1164,8 +1164,9 @@ M-SB/Sleep-Bed, done — see 5j) → M-EL2 (generalized elite spawning, done —
 ~~M-FA~~ (cut, see 5l) → M-RL (trophy → RNG relics, done — see 5m; playtest follow-up 5n) →
 M-WC (Gremlin War Camp, done — see 5o) → Gloaming Vein (rarity-ore POI + trophy refinement,
 done — see 5w) → M-SS (stats/skills depth pass + crit, done — see 5ab) → **Biome 2 /
-M-W1 + M-TE, IN PROGRESS — Phase 0 worldgen (5ac) + Phase 1 combat systems (5ad) done; Phase 2
-enemies next (see the biome-2 umbrella plan below).**
+M-W1 + M-TE, IN PROGRESS — Phase 0 worldgen (5ac) + Phase 1 combat systems (5ad) + Phase 2
+core enemies & flora (5ae) done; Phase 2b (4th native creature) next (see the biome-2 umbrella
+plan below).**
 
 5ac. **Biome 2 (Sunscorch Badlands) — Phase 0: Patchwork worldgen.** Plan:
    `.claude/plans/biome-2-phase-0-world-ring.md` (Phase 0 of the
@@ -1221,6 +1222,50 @@ enemies next (see the biome-2 umbrella plan below).**
    still apply). No source deals magic until Phase 2's magical gremlin. Verified live via
    `preview_eval` (magic bypass, spear-cleave-vs-knife, pack wake radius/class gating). No
    `RECIPES.md`/dashboard change. See `STATUS.md` + [[survivor-rpg-biome-2-plan]].
+
+5ae. **Biome 2 — Phase 2: Badlands enemies & wildlife (core 3 + flora).** Plan:
+   `.claude/plans/biome-2-phase-2-enemies.md` (Phase 2 of the biome-2 umbrella). Built on Opus
+   (new content/AI). The first *content* in the badlands — three bespoke enemies that each light
+   up a Phase 1 dormant hook, spawned out in the badlands patchwork (never the forest disc) via a
+   new `MainScene.pickBadlandsPoint` (polar-annulus sweep + real `coverageAt(..,"badlands")`,
+   honoring the War-Camp/Vein exclusions). Scope locked with the user via `AskUserQuestion`: **the
+   core 3 enemies + arid flora** (the 4th native creature deferred to **Phase 2b**); difficulty
+   **noticeably tougher** than the forest roster; Cragscale resist = **resist slash, neutral
+   blunt, weak pierce**. Each enemy follows the per-enemy precedent (own subclass/state machine/
+   constants/loot, elite variant, `rollElite` spawning). **Duskrunner** (`Duskrunner.ts`) — fast
+   (92) low-HP (20) canid swarm, short 220ms bite; deliberately drives the **base `state` field**
+   so the inherited `forceAggro()`/`isAggro()` work with **zero override** (the reference
+   `packAggro` user, radius 260) — spawns in **packs of 3-4** so `updatePackAggro` converges them;
+   the AOE-arc payoff enemy (neutral resists). **Cragscale** (`Cragscale.ts`) — slow (40) tanky
+   (HP 60) armored bruiser, one heavy 520ms basher (+180 knockback); **teaches the damage-type
+   layer** via `resistances: { slash: 0.5, blunt: 1.0, pierce: 1.6 }` (data-only — the resist math
+   + damage-number tint already live in `resolveWeaponHit`). **Hexling** (`Hexling.ts`) — compact
+   **stand-and-cast magic kiter** (own subclass, NOT extending RangedGremlin; private `mode` +
+   `isAggro()` override), casts a `hex_bolt` with **`damageType: "magic"`** which **bypasses the
+   player's flat armor** — the dormant Phase 1 `applyDamageToPlayer` hook goes live. `Projectile`
+   gained an optional `damageType`; the enemy-projectile→player overlap forwards it (physical
+   Gremlin rocks leave it undefined = unchanged). Resists `{ magic: 0.4, slash/blunt/pierce: 1.4 }`.
+   Each has an elite variant + a **per-species trophy** (`duskrunner_trophy`/`cragscale_trophy`/
+   `hexling_trophy`, Common/tier1 in `TROPHY_ROLL` for now — Phase 5 retiers to tier-2 + Ember
+   refinement). **Flora:** **Emberbloom** (desert herb) + **Sunfruit** (cactus fruit), persistent
+   free-pickups reusing the Blackberry `persistent`/`pickedTexture`/`regrowMs` path — **no recipes
+   wired** (future alchemy/food ingredients, surfaced only via the discovered-material toast). 8
+   new `ResourceType`s + `Items.ts` defs + ~17 `BootScene` textures. **Same-session feedback pass
+   (the user playtested):** (1) **density** — badlands was ~22× sparser than forest (0 enemies found
+   in an area); `pickBadlandsPoint` now concentrates in the accessible inner band (r 2500-5200,
+   inner-weighted) + counts bumped to ~124 (Duskrunner 16 packs / Cragscale 34 / Hexling 34);
+   (2) **terrain** — `badlandsGroundColorAt` rewritten with multi-scale value-noise mottling (new
+   `colorUtil.valueNoise2D`) across a dustier warm-earth palette (was a flat clay fill reading as
+   solid pink); (3) **borders** — `WorldBiomes.seedCoverage` now uses a 3-harmonic wobble + bigger
+   lobes for organic blob edges (was a single sine); (4) **distinctive kits** — Duskrunner **pounce**
+   (leap gap-closer), Cragscale **rolling charge** (catches kiters, spins), Hexling **blink**
+   (teleport-evade when cornered). Verified live: 124 badlands enemies + 72 flora at r∈[2501, 5228],
+   none in the forest disc; Cragscale slash 10→5 / pierce 10→16; Hexling bolt `damageType:"magic"` +
+   blink teleport; pack-aggro woke packmates; 47 distinct terrain tones per patch. **Dashboard
+   Enemies tab updated** (manual mirror); no `RECIPES.md` change. **Known limitation:** the
+   enemy-respawn top-up spawns forest species near the player regardless of biome (the badlands
+   roster doesn't replenish) — a Phase 2b/M-W1 follow-up. See `STATUS.md` +
+   [[survivor-rpg-biome-2-plan]].
 
 **Not yet built — next up in rough order:**
 6. **World & discovery** — much bigger generated world, biomes, map, a single giant

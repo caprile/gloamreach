@@ -15,3 +15,33 @@ export function blendColors(base: number, overlay: number, alpha: number): numbe
   const b = Math.round(bb * (1 - a) + ob * a);
   return (r << 16) | (g << 8) | b;
 }
+
+// Deterministic integer-lattice hash -> 0..1. No RNG object, so it's safe to call
+// per-pixel in the terrain bake AND per-cell on the map (they must agree).
+function hash2(ix: number, iy: number): number {
+  let h = (ix * 374761393 + iy * 668265263) | 0;
+  h = (Math.imul(h ^ (h >>> 13), 1274126177)) | 0;
+  h ^= h >>> 16;
+  return (h >>> 0) / 4294967295;
+}
+
+// Smooth value noise at `x,y`, one lattice cell = `scale` world px. Returns 0..1.
+// Cheap (4 hashes + smoothstep bilerp) — used to mottle otherwise-flat terrain
+// color so a placeholder biome reads as varied ground rather than a solid fill.
+export function valueNoise2D(x: number, y: number, scale: number): number {
+  const gx = x / scale;
+  const gy = y / scale;
+  const ix = Math.floor(gx);
+  const iy = Math.floor(gy);
+  const fx = gx - ix;
+  const fy = gy - iy;
+  const sx = fx * fx * (3 - 2 * fx);
+  const sy = fy * fy * (3 - 2 * fy);
+  const a = hash2(ix, iy);
+  const b = hash2(ix + 1, iy);
+  const c = hash2(ix, iy + 1);
+  const d = hash2(ix + 1, iy + 1);
+  const top = a + (b - a) * sx;
+  const bot = c + (d - c) * sx;
+  return top + (bot - top) * sy;
+}

@@ -173,7 +173,8 @@ export class WorldBiomes {
           y: sy,
           biome: this.pickBiome(r, rng),
           radius,
-          wAmp: radius * (0.12 + rng.frac() * 0.14),
+          // Bigger lobes (0.18-0.36 of radius) for more pronounced blob shapes.
+          wAmp: radius * (0.18 + rng.frac() * 0.18),
           wK: 3 + Math.floor(rng.frac() * 4),
           wPhase: rng.frac() * Math.PI * 2,
         };
@@ -185,10 +186,20 @@ export class WorldBiomes {
     const dx = x - s.x;
     const dy = y - s.y;
     const d = Math.hypot(dx, dy);
-    const eff = s.radius + s.wAmp * Math.sin(Math.atan2(dy, dx) * s.wK + s.wPhase);
+    // Multi-octave angular wobble (3 harmonics) instead of a single sine, so the
+    // blob edge reads as an organic lumpy outline rather than a smooth oval — the
+    // extra frequencies also break up the long near-axis runs that baked as
+    // "jagged straight lines" at the coarse overlay resolution (the user's note).
+    const ang = Math.atan2(dy, dx);
+    const wob =
+      0.6 * Math.sin(ang * s.wK + s.wPhase) +
+      0.28 * Math.sin(ang * (s.wK * 2 + 1) + s.wPhase * 1.7) +
+      0.16 * Math.sin(ang * (s.wK * 3 + 2) - s.wPhase * 0.6);
+    const eff = s.radius + s.wAmp * wob;
     if (d >= eff) return 0;
-    // Full-strength core, smooth falloff to the wobbly edge.
-    return smoothstep(eff, eff * 0.55, d);
+    // Full-strength core, wide smooth falloff to the wobbly edge (softer border →
+    // the LINEAR-filtered stretch blends it into a curve, not a hard line).
+    return smoothstep(eff, eff * 0.5, d);
   }
 
   // 0..1 coverage of a biome type at a point — max over nearby blobs of that type.

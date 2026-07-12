@@ -890,6 +890,219 @@ export class BootScene extends Phaser.Scene {
     mapMarker("map_shack", 0xd8c090, 0x8a6a3a); // Gremlin Shack — wood-brown
     mapMarker("map_vein", 0xc79cf0, 0x7a3ec8); // Gloaming Vein — purple amethyst
 
+    // ===== Badlands (biome 2 Phase 2) content =====
+
+    // Duskrunner — gloam-touched canid. 24x14: low four-legged silhouette, dusty
+    // purple-tan body, a darker muzzle, and a faint ember eye glint so it reads as
+    // "corrupted", not a plain coyote. Drawn facing left (nose at -x) to match the
+    // boar's nose-first convention (Enemy.applyFacing's PI offset).
+    g.clear();
+    g.fillStyle(0x8a7a6a, 1); // dusty tan body
+    g.fillRect(4, 3, 16, 7);
+    g.fillStyle(0x5a4a5a, 1); // gloam-purple muzzle/head
+    g.fillRect(0, 4, 7, 6);
+    g.fillStyle(0x6a5a4a, 1); // legs
+    g.fillRect(5, 9, 3, 4);
+    g.fillRect(15, 9, 3, 4);
+    g.fillStyle(0xff8a3a, 1); // ember eye
+    g.fillRect(3, 5, 2, 2);
+    g.generateTexture("duskrunner", 24, 14);
+
+    g.clear(); // Elite Duskrunner — crimson/gold elite palette
+    g.fillStyle(0x6a1f2a, 1);
+    g.fillRect(4, 3, 16, 7);
+    g.fillStyle(0x3f1020, 1);
+    g.fillRect(0, 4, 7, 6);
+    g.fillStyle(0x6a1f2a, 1);
+    g.fillRect(5, 9, 3, 4);
+    g.fillRect(15, 9, 3, 4);
+    g.fillStyle(0xf0c040, 1); // gold eye
+    g.fillRect(3, 5, 2, 2);
+    g.generateTexture("duskrunner_elite", 24, 14);
+
+    // Cragscale — armored rock reptile. 28x18: chunky grey-red body with a ridged
+    // plated back so it reads as heavily armored (the "slash bounces" tell).
+    g.clear();
+    g.fillStyle(0x7a5040, 1); // clay-red hide
+    g.fillRect(2, 6, 24, 10);
+    g.fillStyle(0x8a8078, 1); // stone-grey back plates
+    g.fillRect(6, 3, 5, 5);
+    g.fillRect(13, 2, 5, 6);
+    g.fillRect(20, 3, 5, 5);
+    g.fillStyle(0x4a3228, 1); // dark head
+    g.fillRect(0, 8, 6, 7);
+    g.generateTexture("cragscale", 28, 18);
+
+    g.clear(); // Elite Cragscale
+    g.fillStyle(0x6a1f2a, 1);
+    g.fillRect(2, 6, 24, 10);
+    g.fillStyle(0xf0c040, 1);
+    g.fillRect(6, 3, 5, 5);
+    g.fillRect(13, 2, 5, 6);
+    g.fillRect(20, 3, 5, 5);
+    g.fillStyle(0x3f1020, 1);
+    g.fillRect(0, 8, 6, 7);
+    g.generateTexture("cragscale_elite", 28, 18);
+
+    // Hexling — magical gremlin variant. Same squat humanoid silhouette as the
+    // gremlin, recolored to violet/ember gloam-fire with a glowing eye, so it
+    // reads as the arcane threat.
+    g.clear();
+    g.fillStyle(0x5a3a7a, 1); // violet body
+    g.fillRect(2, 4, 14, 16);
+    g.fillStyle(0x3f2858, 1);
+    g.fillRect(4, 0, 10, 6); // head
+    g.fillStyle(0xc86ef0, 1);
+    g.fillRect(5, 10, 8, 6); // gloam belly glow
+    g.fillStyle(0xff8a3a, 1);
+    g.fillRect(6, 2, 2, 2); // ember eye
+    g.generateTexture("hexling", 18, 22);
+
+    g.clear(); // Elite Hexling
+    g.fillStyle(0x6a1f3a, 1);
+    g.fillRect(2, 4, 14, 16);
+    g.fillStyle(0x3f1030, 1);
+    g.fillRect(4, 0, 10, 6);
+    g.fillStyle(0xf0c040, 1);
+    g.fillRect(5, 10, 8, 6);
+    g.fillRect(6, 2, 2, 2);
+    g.generateTexture("hexling_elite", 18, 22);
+
+    // Hexling's magic bolt — small violet orb with a bright core (contrasts the
+    // grey gremlin rock so a "this one eats armor" bolt reads differently).
+    g.clear();
+    g.fillStyle(0x7a3ec8, 1);
+    g.fillCircle(4, 4, 4);
+    g.fillStyle(0xe0b0ff, 1);
+    g.fillCircle(4, 4, 2);
+    g.generateTexture("hex_bolt", 8, 8);
+
+    // Emberbloom — desert herb. 14x18: slim green stalk + a small ember-orange
+    // bloom. Picked = bare stalk (mirrors the blackberry picked-bush pattern).
+    g.clear();
+    g.fillStyle(0x5a7a4a, 1);
+    g.fillRect(6, 6, 2, 12); // stalk
+    g.fillStyle(0x4a6a3a, 1);
+    g.fillRect(3, 10, 3, 2); // leaf
+    g.fillRect(8, 8, 3, 2);
+    g.fillStyle(0xff8a3a, 1);
+    g.fillCircle(7, 4, 4); // ember bloom
+    g.fillStyle(0xffd24a, 1);
+    g.fillCircle(7, 4, 2);
+    g.generateTexture("emberbloom", 14, 18);
+
+    g.clear(); // picked Emberbloom — stalk only
+    g.fillStyle(0x5a7a4a, 1);
+    g.fillRect(6, 6, 2, 12);
+    g.fillStyle(0x4a6a3a, 1);
+    g.fillRect(3, 10, 3, 2);
+    g.fillRect(8, 8, 3, 2);
+    g.generateTexture("emberbloom_picked", 14, 18);
+
+    // Sunfruit cactus — 16x24: a green columnar cactus with a red fruit near the
+    // top. Picked = cactus with no fruit.
+    g.clear();
+    g.fillStyle(0x3f7a4a, 1);
+    g.fillRect(5, 4, 6, 20); // trunk
+    g.fillRect(1, 10, 4, 8); // left arm
+    g.fillRect(11, 8, 4, 8); // right arm
+    g.fillStyle(0xd83a3a, 1);
+    g.fillCircle(8, 6, 3); // fruit
+    g.generateTexture("sunfruit_cactus", 16, 24);
+
+    g.clear(); // picked cactus — no fruit
+    g.fillStyle(0x3f7a4a, 1);
+    g.fillRect(5, 4, 6, 20);
+    g.fillRect(1, 10, 4, 8);
+    g.fillRect(11, 8, 4, 8);
+    g.generateTexture("sunfruit_cactus_picked", 16, 24);
+
+    // --- badlands resource icons (ICON=24) ---
+    g.clear(); // Duskrunner Pelt — a stretched tan/purple hide
+    g.fillStyle(0x8a7a6a, 1);
+    g.fillRect(5, 4, 14, 16);
+    g.fillStyle(0x5a4a5a, 1);
+    g.fillRect(8, 7, 8, 10);
+    g.fillStyle(0x6a5a4a, 1);
+    g.fillRect(3, 3, 3, 3); // corner peg
+    g.fillRect(18, 18, 3, 3);
+    g.generateTexture("icon_duskrunner_pelt", ICON, ICON);
+
+    g.clear(); // Cragscale Plate — a grey-red scale slab with a crack
+    g.fillStyle(0x7a5040, 1);
+    g.fillRect(4, 5, 16, 14);
+    g.fillStyle(0x8a8078, 1);
+    g.fillRect(6, 7, 12, 10);
+    g.fillStyle(0x4a3228, 1);
+    g.fillRect(11, 6, 2, 12); // crack
+    g.generateTexture("icon_cragscale_plate", ICON, ICON);
+
+    g.clear(); // Hex Essence — a violet vial of gloam-fire
+    g.fillStyle(0x4a4152, 1);
+    g.fillRect(9, 3, 6, 3); // stopper
+    g.fillStyle(0x2b2530, 1);
+    g.fillRect(7, 6, 10, 15); // glass
+    g.fillStyle(0x7a3ec8, 1);
+    g.fillRect(8, 11, 8, 9); // essence
+    g.fillStyle(0xe0b0ff, 1);
+    g.fillRect(10, 13, 2, 5); // glow
+    g.generateTexture("icon_hex_essence", ICON, ICON);
+
+    g.clear(); // Emberbloom icon — a herb sprig with an ember bloom
+    g.fillStyle(0x5a7a4a, 1);
+    g.fillRect(11, 10, 2, 11);
+    g.fillStyle(0x4a6a3a, 1);
+    g.fillRect(6, 14, 5, 2);
+    g.fillRect(13, 12, 5, 2);
+    g.fillStyle(0xff8a3a, 1);
+    g.fillCircle(12, 7, 5);
+    g.fillStyle(0xffd24a, 1);
+    g.fillCircle(12, 7, 2);
+    g.generateTexture("icon_emberbloom", ICON, ICON);
+
+    g.clear(); // Sunfruit icon — a red fruit with a green nub
+    g.fillStyle(0xd83a3a, 1);
+    g.fillCircle(12, 13, 8);
+    g.fillStyle(0xf06a5a, 1);
+    g.fillCircle(9, 10, 3); // highlight
+    g.fillStyle(0x3f7a4a, 1);
+    g.fillRect(10, 3, 4, 4); // stem nub
+    g.generateTexture("icon_sunfruit", ICON, ICON);
+
+    // Badlands elite trophies — crimson/gold to echo the elite palette (matches
+    // the boar/snake/gremlin trophies), each with a species tell.
+    g.clear(); // Duskrunner Trophy — a fanged canid skull on a gold cord
+    g.fillStyle(0x6a1f3a, 1);
+    g.fillCircle(12, 9, 5);
+    g.fillStyle(0xe8e0cc, 1);
+    g.fillRect(10, 12, 1, 4); // fang
+    g.fillRect(13, 12, 1, 4);
+    g.fillStyle(0xff8a3a, 1);
+    g.fillRect(9, 7, 2, 2); // ember eye
+    g.fillStyle(0xf0c040, 1);
+    g.fillRect(7, 16, 10, 2); // gold cord
+    g.generateTexture("icon_duskrunner_trophy", ICON, ICON);
+
+    g.clear(); // Cragscale Trophy — a cracked crest-plate on a gold cord
+    g.fillStyle(0x6a1f3a, 1);
+    g.fillRect(7, 5, 10, 11);
+    g.fillStyle(0x8a2f4a, 1);
+    g.fillRect(9, 4, 2, 12); // crack line
+    g.fillStyle(0xf0c040, 1);
+    g.fillRect(7, 16, 10, 2);
+    g.generateTexture("icon_cragscale_trophy", ICON, ICON);
+
+    g.clear(); // Hexling Trophy — a smoldering hex-node on a gold cord
+    g.fillStyle(0x6a1f3a, 1);
+    g.fillTriangle(12, 3, 6, 15, 18, 15);
+    g.fillStyle(0xc86ef0, 1);
+    g.fillCircle(12, 11, 3); // gloam core
+    g.fillStyle(0xff8a3a, 1);
+    g.fillCircle(12, 11, 1);
+    g.fillStyle(0xf0c040, 1);
+    g.fillRect(7, 16, 10, 2);
+    g.generateTexture("icon_hexling_trophy", ICON, ICON);
+
     g.destroy();
     this.makeLightTexture();
   }

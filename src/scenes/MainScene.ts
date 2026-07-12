@@ -14,6 +14,9 @@ import { Enemy } from "../entities/Enemy";
 import { Boar } from "../entities/Boar";
 import { Snake } from "../entities/Snake";
 import { RangedGremlin, MeleeGremling } from "../entities/Gremlin";
+import { Duskrunner } from "../entities/Duskrunner";
+import { Cragscale } from "../entities/Cragscale";
+import { Hexling } from "../entities/Hexling";
 import { Projectile, type ProjectileConfig } from "../entities/Projectile";
 import { GremlinShack, SHACK_GUARD_RESPAWN_MS } from "../entities/GremlinShack";
 import { BossAltar } from "../entities/BossAltar";
@@ -770,6 +773,7 @@ export class MainScene extends Phaser.Scene {
     // Trees and boulders are solid; the player bumps into them.
     const solids = this.physics.add.staticGroup();
     this.spawnNodes(solids);
+    this.spawnBadlandsFlora(); // biome 2 Phase 2 arid harvestables (free pickups, not solid)
     this.physics.add.collider(this.player, solids);
 
     // Enemies: physical collision with solids and the player (separation
@@ -788,6 +792,7 @@ export class MainScene extends Phaser.Scene {
     this.spawnWarCamp();
     this.spawnBossAltar();
     this.spawnGloamingVein();
+    this.spawnBadlandsEnemies(); // biome 2 Phase 2 — out in the badlands patchwork
     this.physics.add.collider(this.enemyGroup, solids);
     this.physics.add.collider(this.player, this.enemyGroup);
 
@@ -803,7 +808,10 @@ export class MainScene extends Phaser.Scene {
       // had no `.scene`, so the next Player.update() threw). Pick whichever
       // argument actually is a Projectile instead of assuming a slot.
       const projectile = (a instanceof Projectile ? a : b) as Projectile;
-      this.applyDamageToPlayer(projectile.damage);
+      // Pass the projectile's damage type so a Hexling's "magic" bolt bypasses
+      // the player's flat armor (Phase 1 hook); a physical Gremlin rock leaves
+      // damageType undefined and subtracts armor as usual.
+      this.applyDamageToPlayer(projectile.damage, undefined, projectile.damageType);
       projectile.destroy();
     });
 
@@ -2439,6 +2447,45 @@ export class MainScene extends Phaser.Scene {
     return last;
   }
 
+  // Sample a point out in the badlands patchwork (biome 2 Phase 2). Unlike the
+  // forest samplers (which sample the central BIOME region), this sweeps a polar
+  // annulus in the badlands radius band and requires real badlands blob coverage
+  // there — so content lands in the dusty flats, never the forest disc or the
+  // base-layer gaps between blobs. Honors the same War-Camp/Vein exclusions
+  // pickSpawnPoint uses. Returns null only if no covered point is found (badlands
+  // always generates, so callers that get null simply spawn nothing).
+  private pickBadlandsPoint(
+    rng: Phaser.Math.RandomDataGenerator,
+    minCoverage = 0.4,
+  ): { x: number; y: number } | null {
+    // Concentrated in the ACCESSIBLE inner badlands band (the first badlands a
+    // player reaches from the forest edge), biased toward the inner edge — the
+    // deep badlands stays sparse. Content here needs real density or a player
+    // walks through empty dusty ground (the user: "0 enemies in a badlands area").
+    const R_MIN = 2500; // right at the forest edge / transition
+    const R_MAX = 5200; // inner-to-mid badlands; deep ring left sparse for now
+    let last: { x: number; y: number } | null = null;
+    for (let attempt = 0; attempt < 400; attempt++) {
+      const ang = rng.frac() * Math.PI * 2;
+      const r = R_MIN + Math.pow(rng.frac(), 1.7) * (R_MAX - R_MIN); // inner-weighted
+      const x = WORLD_CX + Math.cos(ang) * r;
+      const y = WORLD_CY + Math.sin(ang) * r;
+      if (
+        this.altarPosition &&
+        Phaser.Math.Distance.Between(x, y, this.altarPosition.x, this.altarPosition.y) < WAR_CAMP_CLEAR_RADIUS
+      )
+        continue;
+      if (
+        this.veinPosition &&
+        Phaser.Math.Distance.Between(x, y, this.veinPosition.x, this.veinPosition.y) < VEIN_CLEAR_RADIUS
+      )
+        continue;
+      if (this.worldBiomes.coverageAt(x, y, "badlands") < minCoverage) continue;
+      return { x, y };
+    }
+    return last;
+  }
+
   // One-time background bake: a single RenderTexture over the whole world,
   // depth just above the grass and below every entity. Forest gets a darker-
   // green overlay, grassy is left showing the base grass, and creek draws a
@@ -2896,6 +2943,92 @@ export class MainScene extends Phaser.Scene {
       this.enemies.push(gremling);
       this.enemyGroup.add(gremling);
     }
+  }
+
+  // Badlands roster (biome 2 Phase 2) — spawned out in the badlands patchwork via
+  // pickBadlandsPoint, never the forest disc. "Noticeably tougher" (locked): the
+  // enemies themselves carry ~1.5-2x forest stats, and Duskrunners come in packs.
+  // Counts are sized so the ACCESSIBLE inner badlands has roughly forest-comparable
+  // findable density (an earlier ~39-over-the-whole-ring pass left whole badlands
+  // areas empty — the user's "0 enemies" report). Deep badlands stays sparse via
+  // pickBadlandsPoint's inner-weighting. First-pass/tunable.
+  private spawnBadlandsEnemies(): void {
+    const rng = this.sessionRng();
+
+    // Duskrunner packs — the pack-aggro payoff. Each pack clusters around one
+    // badlands point so updatePackAggro visibly converges them once one engages.
+    const PACK_COUNT = 16;
+    const PACK_JITTER = 70;
+    for (let p = 0; p < PACK_COUNT; p++) {
+      const center = this.pickBadlandsPoint(rng);
+      if (!center) break;
+      const size = rng.between(3, 4);
+      for (let i = 0; i < size; i++) {
+        const x = Phaser.Math.Clamp(center.x + rng.between(-PACK_JITTER, PACK_JITTER), 60, WORLD_W - 60);
+        const y = Phaser.Math.Clamp(center.y + rng.between(-PACK_JITTER, PACK_JITTER), 60, WORLD_H - 60);
+        const d = new Duskrunner(this, { x, y, elite: this.rollElite(rng) });
+        this.enemies.push(d);
+        this.enemyGroup.add(d);
+      }
+    }
+
+    // Cragscales — scattered lone armored bruisers (the damage-type teachers).
+    const CRAGSCALE_COUNT = 34;
+    for (let i = 0; i < CRAGSCALE_COUNT; i++) {
+      const pt = this.pickBadlandsPoint(rng);
+      if (!pt) break;
+      const c = new Cragscale(this, { x: pt.x, y: pt.y, elite: this.rollElite(rng) });
+      this.enemies.push(c);
+      this.enemyGroup.add(c);
+    }
+
+    // Hexlings — scattered magic casters (the first magic damage to the player).
+    const HEXLING_COUNT = 34;
+    for (let i = 0; i < HEXLING_COUNT; i++) {
+      const pt = this.pickBadlandsPoint(rng);
+      if (!pt) break;
+      const h = new Hexling(this, { x: pt.x, y: pt.y, elite: this.rollElite(rng) });
+      this.enemies.push(h);
+      this.enemyGroup.add(h);
+    }
+  }
+
+  // Arid harvestables (biome 2 Phase 2) — free pickups scattered through the
+  // badlands, reusing the persistent + regrow pattern (like Blackberry): harvest
+  // yields the resource and swaps to a "picked" look, regrowing after a timer.
+  // No recipes wired yet — they're future alchemy/food ingredients, surfaced only
+  // via the discovered-material toast.
+  private spawnBadlandsFlora(): void {
+    const rng = this.sessionRng();
+    const scatterFlora = (
+      texture: string,
+      pickedTexture: string,
+      resource: ResourceType,
+      displayName: string,
+      count: number,
+    ) => {
+      for (let i = 0; i < count; i++) {
+        const pt = this.pickBadlandsPoint(rng);
+        if (!pt) break;
+        const node = new ResourceNode(this, {
+          x: pt.x,
+          y: pt.y,
+          texture,
+          resource,
+          amount: 1,
+          action: "pickup",
+          displayName,
+          loose: false,
+          health: 1,
+          persistent: true,
+          pickedTexture,
+          regrowMs: BLACKBERRY_REGROW_MS,
+        });
+        this.nodes.push(node);
+      }
+    };
+    scatterFlora("emberbloom", "emberbloom_picked", "emberbloom", "Emberbloom", 40);
+    scatterFlora("sunfruit_cactus", "sunfruit_cactus_picked", "sunfruit", "Sunfruit", 32);
   }
 
   // Scatter Gremlin Shacks (first POI) through the forest zone, spread apart
