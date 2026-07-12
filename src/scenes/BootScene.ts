@@ -27,12 +27,51 @@ export class BootScene extends Phaser.Scene {
     g.fillRect(24, 5, 2, 2);
     g.generateTexture("grass", 32, 32);
 
-    // Player (20x20): body plus a lighter patch so it reads as a character.
+    // Player (20x20) — a front-facing little adventurer in a blue tunic. The
+    // sprite orientation is static (facing is tracked only to offset the equipped
+    // item icon), so a symmetric front view reads best. Detailed to the Hexling bar.
     g.clear();
+    // legs + boots
+    g.fillStyle(0x2c3f5a, 1);
+    g.fillRect(6, 14, 3, 4);
+    g.fillRect(11, 14, 3, 4);
+    g.fillStyle(0x161f2b, 1);
+    g.fillRect(5, 17, 4, 3);
+    g.fillRect(11, 17, 4, 3);
+    // arms
+    g.fillStyle(0x2f5a86, 1);
+    g.fillRect(3, 9, 2, 6);
+    g.fillRect(15, 9, 2, 6);
+    // hands
+    g.fillStyle(0xd9a066, 1);
+    g.fillRect(3, 14, 2, 2);
+    g.fillRect(15, 14, 2, 2);
+    // tunic
     g.fillStyle(0x3b6ea5, 1);
-    g.fillRect(0, 0, 20, 20);
-    g.fillStyle(0x8fc0ec, 1);
-    g.fillRect(6, 4, 8, 6);
+    g.fillRect(5, 9, 10, 5);
+    g.fillStyle(0x2f5a86, 1);
+    g.fillRect(5, 12, 10, 2); // shaded underside
+    g.fillStyle(0x6fa8dc, 1);
+    g.fillRect(9, 9, 2, 3); // center highlight
+    // belt + buckle
+    g.fillStyle(0x3a2718, 1);
+    g.fillRect(5, 13, 10, 1);
+    g.fillStyle(0xcaa24a, 1);
+    g.fillRect(9, 13, 2, 1);
+    // head
+    g.fillStyle(0xd9a066, 1);
+    g.fillRect(6, 3, 8, 6);
+    g.fillStyle(0xc0894f, 1);
+    g.fillRect(6, 8, 8, 1); // jaw shadow
+    // hair
+    g.fillStyle(0x5a3a1c, 1);
+    g.fillRect(6, 2, 8, 2);
+    g.fillRect(6, 3, 1, 2);
+    g.fillRect(13, 3, 1, 2);
+    // eyes
+    g.fillStyle(0x21303f, 1);
+    g.fillRect(8, 5, 1, 2);
+    g.fillRect(11, 5, 1, 2);
     g.generateTexture("player", 20, 20);
 
     // Branch — free WOOD pickup (18x8), a little brown stick.
@@ -71,85 +110,213 @@ export class BootScene extends Phaser.Scene {
     g.fillRect(8, 7, 8, 6);
     g.generateTexture("boulder", 30, 24);
 
-    // Boar — melee enemy. 26x20: brown body + a darker snout patch.
-    g.clear();
-    g.fillStyle(0x6b4a2a, 1);
-    g.fillRect(2, 4, 22, 14);
-    g.fillStyle(0x4a3018, 1);
-    g.fillRect(0, 8, 6, 6); // snout
-    g.generateTexture("boar", 26, 20);
+    // Boar (26x20) — a bristly hog drawn facing RIGHT (head/snout at +x), so the
+    // non-rotating flipX facing (Enemy.applyUprightFacing) mirrors it correctly.
+    // Bulky body, back bristles, an upward tusk, a beady eye. Elite = crimson/gold
+    // recolor of the identical silhouette.
+    const drawBoar = (
+      key: string,
+      body: number,
+      belly: number,
+      bristle: number,
+      snout: number,
+      tusk: number,
+      eye: number,
+    ) => {
+      g.clear();
+      // legs
+      g.fillStyle(0x3a2412, 1);
+      g.fillRect(5, 15, 3, 5);
+      g.fillRect(10, 16, 3, 4);
+      g.fillRect(15, 16, 3, 4);
+      g.fillRect(19, 15, 3, 5);
+      // tail + body mass + hump
+      g.fillStyle(body, 1);
+      g.fillRect(2, 8, 2, 4);
+      g.fillRect(4, 6, 18, 10);
+      g.fillRect(6, 4, 13, 2);
+      g.fillRect(18, 6, 6, 9); // head at right
+      // belly shadow
+      g.fillStyle(belly, 1);
+      g.fillRect(4, 13, 18, 3);
+      // back highlight + bristle spikes
+      g.fillStyle(bristle, 1);
+      g.fillRect(6, 4, 13, 1);
+      g.fillTriangle(8, 4, 10, 4, 9, 1);
+      g.fillTriangle(11, 4, 13, 4, 12, 1);
+      g.fillTriangle(14, 4, 16, 4, 15, 1);
+      // snout + nostrils
+      g.fillStyle(snout, 1);
+      g.fillRect(23, 9, 3, 5);
+      g.fillStyle(eye, 1);
+      g.fillRect(24, 10, 1, 1);
+      g.fillRect(24, 12, 1, 1);
+      // tusk
+      g.fillStyle(tusk, 1);
+      g.fillTriangle(21, 14, 23, 14, 22, 10);
+      // eye + glint
+      g.fillStyle(eye, 1);
+      g.fillRect(20, 8, 2, 2);
+      g.fillStyle(0xffffff, 0.75);
+      g.fillRect(20, 8, 1, 1);
+      g.generateTexture(key, 26, 20);
+    };
+    drawBoar("boar", 0x6b4a2a, 0x4a3018, 0x8a6238, 0x3a2412, 0xece4d0, 0x1a1008);
+    drawBoar("boar_elite", 0x6a1f2a, 0x3f1020, 0xf0c040, 0x2a0c14, 0xf7e8b0, 0xf0c040);
 
-    // Elite Boar (M-EL2) — same silhouette, crimson/gold recolor matching the
-    // gremlin_elite palette so "elite" reads consistently across every enemy
-    // type. The runtime setScale(1.3) stacks size on top, same pattern.
-    g.clear();
-    g.fillStyle(0x6a1f2a, 1); // crimson body
-    g.fillRect(2, 4, 22, 14);
-    g.fillStyle(0xf0c040, 1); // gold snout accent
-    g.fillRect(0, 8, 6, 6);
-    g.generateTexture("boar_elite", 26, 20);
+    // Snake (20x8) — a low serpent drawn facing RIGHT (head at +x). Scale-pattern
+    // flecks, a belly underline, a yellow eye and a flicking forked tongue lift it
+    // off the flat bar it used to be. Still low-profile so it reads as "in the
+    // grass" under Snake.ts's hidden-alpha fade. Elite = crimson/gold.
+    const drawSnake = (
+      key: string,
+      body: number,
+      belly: number,
+      scale: number,
+      head: number,
+      eye: number,
+    ) => {
+      g.clear();
+      // body + slight arch
+      g.fillStyle(body, 1);
+      g.fillRect(1, 3, 15, 3);
+      g.fillRect(3, 2, 11, 1);
+      // belly underline
+      g.fillStyle(belly, 1);
+      g.fillRect(1, 5, 15, 1);
+      // scale-pattern flecks
+      g.fillStyle(scale, 1);
+      g.fillRect(3, 3, 2, 1);
+      g.fillRect(7, 3, 2, 1);
+      g.fillRect(11, 3, 2, 1);
+      // head at right
+      g.fillStyle(head, 1);
+      g.fillRect(14, 2, 5, 4);
+      // eye + pupil
+      g.fillStyle(eye, 1);
+      g.fillRect(16, 3, 2, 1);
+      g.fillStyle(0x1a1008, 1);
+      g.fillRect(17, 3, 1, 1);
+      // forked tongue
+      g.fillStyle(0xd83a3a, 1);
+      g.fillRect(19, 3, 1, 1);
+      g.generateTexture(key, 20, 8);
+    };
+    drawSnake("snake", 0x3e6b2f, 0x274a1c, 0x5f8f3e, 0x315a26, 0xe8c83a);
+    drawSnake("snake_elite", 0x6a1f2a, 0x3f1020, 0xf0c040, 0x4a1018, 0xf7e8b0);
 
-    // Snake — hidden/ambush enemy. 20x8: long green body + darker head patch.
-    // Low profile reads as "in the grass" even before the hidden-alpha fade
-    // (Snake.ts) is applied.
-    g.clear();
-    g.fillStyle(0x3e6b2f, 1);
-    g.fillRect(1, 2, 18, 4);
-    g.fillStyle(0x274a1c, 1);
-    g.fillRect(0, 1, 6, 6); // head
-    g.generateTexture("snake", 20, 8);
+    // Gremlin (18x22) — the ranged goblin. A front-facing hunched imp: big pointed
+    // ears, glowing eyes, snaggle teeth, a pot-belly, clawed hands and a loincloth.
+    // Symmetric/front-on so the non-rotating flipX facing just mirrors it. Elite =
+    // crimson/gold recolor of the identical silhouette.
+    const drawGremlin = (
+      key: string,
+      skin: number,
+      dark: number,
+      belly: number,
+      earIn: number,
+      eye: number,
+      loin: number,
+    ) => {
+      g.clear();
+      // legs + feet
+      g.fillStyle(dark, 1);
+      g.fillRect(4, 17, 3, 5);
+      g.fillRect(11, 17, 3, 5);
+      g.fillRect(3, 20, 4, 2);
+      g.fillRect(11, 20, 4, 2);
+      // arms + clawed hands
+      g.fillStyle(skin, 1);
+      g.fillRect(1, 10, 2, 6);
+      g.fillRect(15, 10, 2, 6);
+      g.fillStyle(dark, 1);
+      g.fillRect(0, 15, 3, 2);
+      g.fillRect(15, 15, 3, 2);
+      // torso + belly
+      g.fillStyle(skin, 1);
+      g.fillRect(4, 9, 10, 9);
+      g.fillStyle(belly, 1);
+      g.fillRect(6, 11, 6, 5);
+      // loincloth
+      g.fillStyle(loin, 1);
+      g.fillRect(4, 16, 10, 2);
+      // head
+      g.fillStyle(skin, 1);
+      g.fillRect(4, 1, 10, 8);
+      // ears
+      g.fillTriangle(4, 2, 4, 7, 0, 3);
+      g.fillTriangle(14, 2, 14, 7, 18, 3);
+      g.fillStyle(earIn, 1);
+      g.fillTriangle(4, 3, 4, 6, 1, 3);
+      g.fillTriangle(14, 3, 14, 6, 17, 3);
+      // brow shadow
+      g.fillStyle(dark, 1);
+      g.fillRect(4, 1, 10, 2);
+      // eyes + pupils
+      g.fillStyle(eye, 1);
+      g.fillRect(6, 4, 2, 2);
+      g.fillRect(10, 4, 2, 2);
+      g.fillStyle(0x1a1008, 1);
+      g.fillRect(7, 5, 1, 1);
+      g.fillRect(11, 5, 1, 1);
+      // mouth + snaggle teeth
+      g.fillStyle(0x24160c, 1);
+      g.fillRect(6, 7, 6, 1);
+      g.fillStyle(0xece4d0, 1);
+      g.fillRect(7, 7, 1, 1);
+      g.fillRect(10, 7, 1, 1);
+      g.generateTexture(key, 18, 22);
+    };
+    drawGremlin("gremlin", 0x5a7a3a, 0x3f5a28, 0x8ab05a, 0x486a2e, 0xf0d020, 0x6b4a26);
+    drawGremlin("gremlin_elite", 0x6a1f3a, 0x3f1030, 0xb0405a, 0x8a2f4a, 0xf0c040, 0x2a0c14);
 
-    // Elite Snake (M-EL2) — same crimson/gold elite palette.
-    g.clear();
-    g.fillStyle(0x6a1f2a, 1);
-    g.fillRect(1, 2, 18, 4);
-    g.fillStyle(0xf0c040, 1);
-    g.fillRect(0, 1, 6, 6);
-    g.generateTexture("snake_elite", 20, 8);
-
-    // Ranged Gremlin — stronger variant. 18x22: a squat purple-green
-    // humanoid with a lighter belly patch, reads as "bigger/tougher" than the
-    // melee variant below.
-    g.clear();
-    g.fillStyle(0x5a7a3a, 1);
-    g.fillRect(2, 4, 14, 16);
-    g.fillStyle(0x3f5a28, 1);
-    g.fillRect(4, 0, 10, 6); // head
-    g.fillStyle(0x8ab05a, 1);
-    g.fillRect(5, 10, 8, 6); // belly highlight
-    g.generateTexture("gremlin", 18, 22);
-
-    // Gremling — weaker melee-only variant. Smaller (14x16), duller color, no
-    // belly highlight, so it visually reads as the lesser threat.
-    g.clear();
-    g.fillStyle(0x4a5a3a, 1);
-    g.fillRect(1, 3, 12, 12);
-    g.fillStyle(0x33421f, 1);
-    g.fillRect(3, 0, 8, 5); // head
-    g.generateTexture("gremling_weak", 14, 16);
-
-    // Elite Gremlin variants (Gremlin Shack guards) — same silhouettes as the
-    // normal gremlin/gremling above, recolored to a menacing crimson/dark-purple
-    // palette with a gold accent so they read as "elite" at a glance. The runtime
-    // setScale(1.4) stacks further size on top (mirrors how gremlin_king is a
-    // base texture scaled by BOSS_SCALE). Base dims match their normal counterparts.
-    g.clear();
-    g.fillStyle(0x6a1f3a, 1); // crimson body
-    g.fillRect(2, 4, 14, 16);
-    g.fillStyle(0x3f1030, 1); // dark head
-    g.fillRect(4, 0, 10, 6);
-    g.fillStyle(0xf0c040, 1); // gold belly accent
-    g.fillRect(5, 10, 8, 6);
-    g.generateTexture("gremlin_elite", 18, 22);
-
-    g.clear();
-    g.fillStyle(0x5a1830, 1); // crimson body (duller than ranged)
-    g.fillRect(1, 3, 12, 12);
-    g.fillStyle(0x33101f, 1); // dark head
-    g.fillRect(3, 0, 8, 5);
-    g.fillStyle(0xf0c040, 1); // gold accent stripe
-    g.fillRect(3, 8, 8, 2);
-    g.generateTexture("gremling_elite", 14, 16);
+    // Gremling (14x16) — the weaker melee goblin. The same imp language, smaller
+    // and simpler (no loincloth, tighter body) so it reads as the lesser threat.
+    const drawGremling = (
+      key: string,
+      skin: number,
+      dark: number,
+      belly: number,
+      eye: number,
+    ) => {
+      g.clear();
+      // legs
+      g.fillStyle(dark, 1);
+      g.fillRect(3, 12, 3, 4);
+      g.fillRect(8, 12, 3, 4);
+      // arms + claws
+      g.fillStyle(skin, 1);
+      g.fillRect(0, 8, 2, 4);
+      g.fillRect(12, 8, 2, 4);
+      g.fillStyle(dark, 1);
+      g.fillRect(0, 11, 2, 2);
+      g.fillRect(12, 11, 2, 2);
+      // torso + belly
+      g.fillStyle(skin, 1);
+      g.fillRect(3, 7, 8, 6);
+      g.fillStyle(belly, 1);
+      g.fillRect(5, 9, 4, 3);
+      // head
+      g.fillStyle(skin, 1);
+      g.fillRect(3, 1, 8, 6);
+      // ears
+      g.fillTriangle(3, 2, 3, 5, 0, 2);
+      g.fillTriangle(11, 2, 11, 5, 14, 2);
+      // brow
+      g.fillStyle(dark, 1);
+      g.fillRect(3, 1, 8, 2);
+      // eyes
+      g.fillStyle(eye, 1);
+      g.fillRect(4, 3, 2, 2);
+      g.fillRect(8, 3, 2, 2);
+      // teeth
+      g.fillStyle(0xece4d0, 1);
+      g.fillRect(5, 6, 1, 1);
+      g.fillRect(8, 6, 1, 1);
+      g.generateTexture(key, 14, 16);
+    };
+    drawGremling("gremling_weak", 0x4a5a3a, 0x33421f, 0x6a8a4a, 0xf0d020);
+    drawGremling("gremling_elite", 0x5a1830, 0x33101f, 0x9a3048, 0xf0c040);
 
     // Gremlin's thrown rock — tiny gray projectile.
     g.clear();
@@ -304,21 +471,66 @@ export class BootScene extends Phaser.Scene {
     g.fillTriangle(5, 8, 9, 8, 7, 3); // flame highlight
     g.generateTexture("camp_brazier", 14, 22);
 
-    // Gremlin King — boss reskin: a big Troll/Ogre-silhouette humanoid, 40x48
-    // (before the runtime BOSS_SCALE multiplier stacks further size on top).
-    // Same green-gremlin palette family as the rest of the roster (reads as
-    // "gremlin, but massive") with heavier proportions and visible tusks to
-    // read as a boss at a glance, not just a bigger regular enemy.
+    // Gremlin King (40x48 before BOSS_SCALE) — a hulking ogre-gremlin: a broad
+    // muscled torso, huge fists, a bone crown, glowing eyes and upward tusks, so
+    // it reads as a boss at a glance, not just a big regular gremlin. Same
+    // green-gremlin palette family as the roster ("gremlin, but massive").
     g.clear();
-    g.fillStyle(0x445a2e, 1);
-    g.fillRect(4, 10, 32, 34); // torso
-    g.fillStyle(0x2f3f1f, 1);
-    g.fillRect(8, 0, 24, 14); // head
-    g.fillStyle(0xe8e0cc, 1);
-    g.fillRect(9, 10, 4, 6); // left tusk
-    g.fillRect(27, 10, 4, 6); // right tusk
-    g.fillStyle(0x6a8a3e, 1);
-    g.fillRect(10, 20, 20, 14); // chest highlight
+    // legs + feet claws
+    g.fillStyle(0x354a22, 1);
+    g.fillRect(8, 38, 9, 10);
+    g.fillRect(23, 38, 9, 10);
+    g.fillStyle(0x22140a, 1);
+    g.fillRect(6, 46, 11, 2);
+    g.fillRect(23, 46, 11, 2);
+    // arms
+    g.fillStyle(0x4f6a34, 1);
+    g.fillRect(0, 16, 8, 20);
+    g.fillRect(32, 16, 8, 20);
+    // fists + knuckle claws
+    g.fillStyle(0x354a22, 1);
+    g.fillRect(0, 32, 9, 7);
+    g.fillRect(31, 32, 9, 7);
+    g.fillStyle(0x22140a, 1);
+    g.fillRect(0, 32, 9, 1);
+    g.fillRect(31, 32, 9, 1);
+    // torso
+    g.fillStyle(0x4f6a34, 1);
+    g.fillRect(6, 16, 28, 24);
+    g.fillStyle(0x6f8f42, 1);
+    g.fillRect(7, 16, 26, 2); // shoulder highlight
+    g.fillStyle(0x86a854, 1);
+    g.fillRect(11, 22, 18, 13); // chest/belly
+    // loincloth
+    g.fillStyle(0x5a3a1c, 1);
+    g.fillRect(9, 36, 22, 5);
+    g.fillStyle(0x3a2510, 1);
+    g.fillRect(9, 36, 22, 1);
+    // head + brow ridge
+    g.fillStyle(0x4f6a34, 1);
+    g.fillRect(9, 3, 22, 15);
+    g.fillStyle(0x354a22, 1);
+    g.fillRect(9, 3, 22, 5);
+    // bone crown
+    g.fillStyle(0xd8cbb0, 1);
+    g.fillTriangle(11, 4, 16, 4, 13, 0);
+    g.fillTriangle(18, 4, 23, 4, 20, 0);
+    g.fillTriangle(25, 4, 30, 4, 27, 0);
+    // eyes (glowing) + pupils
+    g.fillStyle(0xf0d020, 1);
+    g.fillRect(13, 8, 4, 3);
+    g.fillRect(23, 8, 4, 3);
+    g.fillStyle(0x1a1008, 1);
+    g.fillRect(14, 9, 2, 2);
+    g.fillRect(24, 9, 2, 2);
+    // snarl + tusks
+    g.fillStyle(0x1e2a12, 1);
+    g.fillRect(13, 14, 14, 3);
+    g.fillStyle(0xece4d0, 1);
+    g.fillTriangle(13, 17, 16, 17, 14, 11); // left tusk (up)
+    g.fillTriangle(24, 17, 27, 17, 26, 11); // right tusk (up)
+    g.fillRect(16, 14, 2, 2);
+    g.fillRect(22, 14, 2, 2);
     g.generateTexture("gremlin_king", 40, 48);
 
     // Gloaming Vein (mineable rarity-ore POI). Two states: SHIELDED (inert,
@@ -361,24 +573,50 @@ export class BootScene extends Phaser.Scene {
     g.fillRect(6, 8, 2, 10); // bright vein
     g.generateTexture("gloam_crystal_cluster", 16, 22);
 
-    // Gloamwarden — the vein's guardian mini-boss. An amethyst-mutated gremlin
-    // brute: the gremlin_king silhouette (so it reads as "gremlin, but warped")
-    // recolored to a dark violet with glowing purple crystal growths. 34x42,
-    // smaller than the King's 40x48 base — difficulty sits between an elite and
-    // the King (runtime GLOAMWARDEN_SCALE stacks size on top).
+    // Gloamwarden (34x42 before GLOAMWARDEN_SCALE) — the vein's guardian mini-boss,
+    // an amethyst-mutated gremlin brute: a dark-violet body with jagged crystal
+    // growths on the shoulders/head, crystalline fists, a glowing chest core and
+    // eyes. Reads as "gremlin, but warped." Difficulty sits between an elite and
+    // the King.
     g.clear();
-    g.fillStyle(0x3a2b52, 1);
-    g.fillRect(4, 9, 26, 30); // violet torso
+    // legs
     g.fillStyle(0x281c3a, 1);
-    g.fillRect(7, 0, 20, 12); // head
+    g.fillRect(7, 34, 8, 8);
+    g.fillRect(19, 34, 8, 8);
+    // arms
+    g.fillStyle(0x3a2b52, 1);
+    g.fillRect(0, 14, 7, 18);
+    g.fillRect(27, 14, 7, 18);
+    // crystal fists
     g.fillStyle(0x9a5ee8, 1);
-    g.fillTriangle(2, 20, 6, 10, 8, 22); // left shoulder crystal
-    g.fillTriangle(32, 20, 28, 10, 26, 22); // right shoulder crystal
+    g.fillTriangle(0, 31, 7, 31, 3, 37);
+    g.fillTriangle(27, 31, 34, 31, 31, 37);
+    // torso + head
+    g.fillStyle(0x3a2b52, 1);
+    g.fillRect(5, 13, 24, 23);
+    g.fillRect(9, 1, 16, 13);
+    // brow shadow
+    g.fillStyle(0x281c3a, 1);
+    g.fillRect(9, 1, 16, 4);
+    // shoulder crystals + head crystal crown
+    g.fillStyle(0x9a5ee8, 1);
+    g.fillTriangle(1, 19, 6, 9, 8, 21);
+    g.fillTriangle(33, 19, 28, 9, 26, 21);
     g.fillStyle(0xc79cf0, 1);
-    g.fillRect(12, 16, 10, 10); // glowing chest core
+    g.fillTriangle(11, 3, 15, 3, 13, 0);
+    g.fillTriangle(19, 3, 23, 3, 21, 0);
+    // glowing chest core
+    g.fillStyle(0xc79cf0, 1);
+    g.fillRect(12, 17, 10, 10);
     g.fillStyle(0xe8d0ff, 1);
-    g.fillRect(11, 4, 3, 3); // eye
-    g.fillRect(20, 4, 3, 3); // eye
+    g.fillRect(14, 19, 6, 6);
+    // eyes
+    g.fillStyle(0xe8d0ff, 1);
+    g.fillRect(11, 6, 4, 3);
+    g.fillRect(19, 6, 4, 3);
+    g.fillStyle(0x3a1a5a, 1);
+    g.fillRect(12, 7, 2, 2);
+    g.fillRect(20, 7, 2, 2);
     g.generateTexture("gloamwarden", 34, 42);
 
     this.makeItemIcons(g);
@@ -892,57 +1130,113 @@ export class BootScene extends Phaser.Scene {
 
     // ===== Badlands (biome 2 Phase 2) content =====
 
-    // Duskrunner — gloam-touched canid. 24x14: low four-legged silhouette, dusty
-    // purple-tan body, a darker muzzle, and a faint ember eye glint so it reads as
-    // "corrupted", not a plain coyote. Drawn facing left (nose at -x) to match the
-    // boar's nose-first convention (Enemy.applyFacing's PI offset).
-    g.clear();
-    g.fillStyle(0x8a7a6a, 1); // dusty tan body
-    g.fillRect(4, 3, 16, 7);
-    g.fillStyle(0x5a4a5a, 1); // gloam-purple muzzle/head
-    g.fillRect(0, 4, 7, 6);
-    g.fillStyle(0x6a5a4a, 1); // legs
-    g.fillRect(5, 9, 3, 4);
-    g.fillRect(15, 9, 3, 4);
-    g.fillStyle(0xff8a3a, 1); // ember eye
-    g.fillRect(3, 5, 2, 2);
-    g.generateTexture("duskrunner", 24, 14);
+    // Duskrunner (24x14) — a lean gloam-touched jackal drawn facing RIGHT (muzzle
+    // at +x, matching the roster's non-rotating flipX facing). A bushy tail, four
+    // legs, a pointed ear and an ember eye so it reads as "corrupted," not a plain
+    // coyote. Elite = crimson/gold.
+    const drawDuskrunner = (
+      key: string,
+      body: number,
+      head: number,
+      belly: number,
+      back: number,
+      eye: number,
+      eyeGlint: number,
+    ) => {
+      g.clear();
+      // legs
+      g.fillStyle(0x4a3d34, 1);
+      g.fillRect(5, 9, 2, 5);
+      g.fillRect(8, 10, 2, 4);
+      g.fillRect(14, 10, 2, 4);
+      g.fillRect(17, 9, 2, 5);
+      // tail + body
+      g.fillStyle(body, 1);
+      g.fillTriangle(0, 4, 5, 4, 4, 10);
+      g.fillRect(4, 4, 15, 6);
+      // back highlight
+      g.fillStyle(back, 1);
+      g.fillRect(5, 4, 13, 1);
+      // belly shadow
+      g.fillStyle(belly, 1);
+      g.fillRect(4, 8, 15, 2);
+      // head + snout (right) + ear
+      g.fillStyle(head, 1);
+      g.fillRect(17, 3, 6, 6);
+      g.fillRect(22, 6, 2, 2);
+      g.fillTriangle(18, 4, 20, 4, 18, 0);
+      // muzzle line
+      g.fillStyle(0x241826, 1);
+      g.fillRect(21, 7, 3, 1);
+      // ember eye + glint
+      g.fillStyle(eye, 1);
+      g.fillRect(19, 4, 2, 2);
+      g.fillStyle(eyeGlint, 1);
+      g.fillRect(19, 4, 1, 1);
+      g.generateTexture(key, 24, 14);
+    };
+    drawDuskrunner("duskrunner", 0x8a7a6a, 0x5a4a5a, 0x5f5044, 0xa89684, 0xff8a3a, 0xffd24a);
+    drawDuskrunner("duskrunner_elite", 0x6a1f2a, 0x3f1020, 0x3f1020, 0xf0c040, 0xf0c040, 0xffe8a0);
 
-    g.clear(); // Elite Duskrunner — crimson/gold elite palette
-    g.fillStyle(0x6a1f2a, 1);
-    g.fillRect(4, 3, 16, 7);
-    g.fillStyle(0x3f1020, 1);
-    g.fillRect(0, 4, 7, 6);
-    g.fillStyle(0x6a1f2a, 1);
-    g.fillRect(5, 9, 3, 4);
-    g.fillRect(15, 9, 3, 4);
-    g.fillStyle(0xf0c040, 1); // gold eye
-    g.fillRect(3, 5, 2, 2);
-    g.generateTexture("duskrunner_elite", 24, 14);
-
-    // Cragscale — armored rock reptile. 28x18: chunky grey-red body with a ridged
-    // plated back so it reads as heavily armored (the "slash bounces" tell).
-    g.clear();
-    g.fillStyle(0x7a5040, 1); // clay-red hide
-    g.fillRect(2, 6, 24, 10);
-    g.fillStyle(0x8a8078, 1); // stone-grey back plates
-    g.fillRect(6, 3, 5, 5);
-    g.fillRect(13, 2, 5, 6);
-    g.fillRect(20, 3, 5, 5);
-    g.fillStyle(0x4a3228, 1); // dark head
-    g.fillRect(0, 8, 6, 7);
-    g.generateTexture("cragscale", 28, 18);
-
-    g.clear(); // Elite Cragscale
-    g.fillStyle(0x6a1f2a, 1);
-    g.fillRect(2, 6, 24, 10);
-    g.fillStyle(0xf0c040, 1);
-    g.fillRect(6, 3, 5, 5);
-    g.fillRect(13, 2, 5, 6);
-    g.fillRect(20, 3, 5, 5);
-    g.fillStyle(0x3f1020, 1);
-    g.fillRect(0, 8, 6, 7);
-    g.generateTexture("cragscale_elite", 28, 18);
+    // Cragscale (28x18) — an armored rock reptile drawn facing RIGHT. A ridged,
+    // spiked stone-plated back (the "slash bounces" tell), stubby legs, a thick
+    // tail and a low head with a beady eye. Elite = crimson body / gold plates.
+    const drawCragscale = (
+      key: string,
+      hide: number,
+      belly: number,
+      plate: number,
+      plateLight: number,
+      head: number,
+      eye: number,
+    ) => {
+      g.clear();
+      // legs
+      g.fillStyle(0x3a281e, 1);
+      g.fillRect(4, 13, 3, 5);
+      g.fillRect(9, 14, 3, 4);
+      g.fillRect(16, 14, 3, 4);
+      g.fillRect(21, 13, 3, 5);
+      // tail + body
+      g.fillStyle(hide, 1);
+      g.fillTriangle(0, 8, 4, 6, 4, 12);
+      g.fillRect(3, 6, 22, 9);
+      // belly
+      g.fillStyle(belly, 1);
+      g.fillRect(3, 12, 22, 3);
+      // head (right) + mouth
+      g.fillStyle(head, 1);
+      g.fillRect(23, 7, 5, 7);
+      g.fillStyle(0x1a1008, 1);
+      g.fillRect(24, 12, 4, 1);
+      // eye
+      g.fillStyle(eye, 1);
+      g.fillRect(25, 8, 2, 2);
+      g.fillStyle(0x1a1008, 1);
+      g.fillRect(26, 8, 1, 1);
+      // back plates
+      g.fillStyle(plate, 1);
+      g.fillRect(5, 3, 5, 4);
+      g.fillRect(11, 2, 6, 5);
+      g.fillRect(18, 3, 5, 4);
+      // plate highlights
+      g.fillStyle(plateLight, 1);
+      g.fillRect(5, 3, 5, 1);
+      g.fillRect(11, 2, 6, 1);
+      g.fillRect(18, 3, 5, 1);
+      // plate ridge separators
+      g.fillStyle(0x4a4038, 1);
+      g.fillRect(10, 3, 1, 4);
+      g.fillRect(17, 3, 1, 4);
+      // plate spikes
+      g.fillStyle(plate, 1);
+      g.fillTriangle(7, 3, 9, 3, 8, 0);
+      g.fillTriangle(13, 2, 15, 2, 14, 0);
+      g.fillTriangle(19, 3, 21, 3, 20, 0);
+      g.generateTexture(key, 28, 18);
+    };
+    drawCragscale("cragscale", 0x7a5040, 0x5a3c30, 0x8a8078, 0xa39a90, 0x4a3228, 0xd8a83a);
+    drawCragscale("cragscale_elite", 0x6a1f2a, 0x3f1020, 0xf0c040, 0xffe8a0, 0x3f1020, 0xffe08a);
 
     // Hexling — the badlands MAGE. A deliberately DISTINCT silhouette from the
     // squat gremlins (the user: "mages look too similar to the gremlins"): a

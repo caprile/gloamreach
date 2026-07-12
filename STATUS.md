@@ -2,7 +2,28 @@
 
 ## Current State
 
-_Living snapshot — edit in place, never append. Last shipped: **Biome 2 playtest fix batch #2**
+_Living snapshot — edit in place, never append. Last shipped: **Placeholder art pass — all
+creatures + non-rotating facing** (2026-07-12, Opus). Every enemy and the player were still flat
+colored blocks except the recently-loved Hexling; this brings the whole roster up to the Hexling's
+detail bar (layered silhouette, shading, feature details, glow) while keeping every texture's exact
+dimensions so no combat/reach/scale tuning changes. Redrawn in `BootScene.ts`: **player** (front-
+facing blue-tunic adventurer), **Boar**, **Snake**, **Gremlin**, **Gremling**, **Duskrunner**,
+**Cragscale**, **Gremlin King**, **Gloamwarden** — each normal + elite via a parameterized draw
+helper (crimson/gold elite recolor of the identical silhouette, matching the Hexling's
+`drawHexling` pattern). **Non-rotating facing is now the DEFAULT for every enemy**, not just the
+Hexling: `EnemyConfig.upright` flips to `?? true` in `Enemy.ts`, so all creatures use
+`applyUprightFacing` (mirror left/right via `flipX`, ≤~11° up/down tilt, never rotating
+off-vertical) instead of the old full-360° rotation — which had been literally flipping the
+vertically-drawn bosses upside-down when they walked. Every creature texture is redrawn facing
+RIGHT so the flip reads correctly. This is **purely visual** — attack direction/hit-checks use x/y
+distance math and are untouched (an enemy can still hit you while its sprite faces a slightly
+different way, as requested). The Cragscale roll-spin (a deliberate rolling-ball attack tell that
+sets `rotation` directly) is preserved. World props (trees/rocks/stations) and item icons were left
+as-is — out of scope for a creature pass. Verified live via a `preview_eval` texture-showcase
+overlay + confirming all 233 live enemies report `upright:true` with near-zero rotation. Type-check
+clean, no console errors. See "Placeholder art pass" below. [[survivor-rpg-enemy-art-facing]]_
+
+_Prior: **Biome 2 playtest fix batch #2**
 (2026-07-12, Sonnet). Fixed the REAL cause of the map's "flat lines"/hard seams: the tiled
 `outerFeatureBiome`'s Voronoi/CA zone generation + creek carve were never toroidal-aware, but
 `Biome.bilinear()` wrapped it anyway for tiled sampling — bilinearly blending two UNRELATED grid
@@ -154,6 +175,55 @@ all first-pass — expect a tuning pass as the biome fills out.
 ## Recent Entries
 
 > Older entries in STATUS-archive.md.
+
+### Placeholder art pass — all creatures + non-rotating facing (2026-07-12, Opus)
+
+the user: bring the placeholder art up to real effort even before real pixel art, using the new
+**Hexling as the minimum detail bar** (it "looks awesome"), revamp every model that hadn't had
+love, and make enemies follow the Hexling's **non-rotating** facing — noting this is visual only
+and must NOT change attack direction (an enemy can still hit you while not facing exactly at you).
+
+**Non-rotating facing (Enemy.ts).** The `upright` flag already existed (Hexling-only) — flipped its
+default from `?? false` to `?? true`, so EVERY enemy is now non-rotating: `applyUprightFacing`
+mirrors left/right via `flipX` with a ≤~11° (`UPRIGHT_MAX_TILT` 0.22 rad) up/down tilt, never
+rotating off-vertical. The old default (`applyFacing`'s full-360° rotation-toward-travel + a random
+full spawn rotation) was literally flipping the vertically-drawn Gremlin King / Gloamwarden
+upside-down as they walked. Base `Enemy` is never instantiated directly (all subclasses), and no
+subclass passes `upright:false`, so the single default flip covers the whole roster; the spawn
+randomizer now only picks a random `flipX` mirror. **Purely visual** — attack hit-checks all use
+x/y distance math (`tickMeleeSwing`, `checkPlayerHit`, charge/pounce/roll contact radii), never
+sprite facing, so nothing about who-can-hit-whom changed. Kept the **Cragscale roll-spin** (it sets
+`rotation` directly as a deliberate rolling-ball attack tell); after the roll it settles via
+`faceAngle` back to the upright tilt. Comments on `EnemyConfig.upright` / the constructor /
+`applyFacing` updated to describe the new default.
+
+**Art (BootScene.ts).** Every creature texture redrawn to the Hexling's bar (layered silhouette +
+base/shadow/highlight shading + feature details + glow), **preserving each texture's exact
+dimensions** so reach/scale/body-separation tuning is untouched. All side-view creatures are now
+drawn facing **RIGHT** (was nose-left) so the `flipX` convention reads correctly. Each with a
+parameterized `draw*` helper generating normal + a crimson/gold **elite** recolor of the identical
+silhouette (matching the existing `drawHexling` pattern):
+- **player** (20x20) — front-facing blue-tunic adventurer: head+hair+eyes, tunic w/ belt+buckle,
+  arms+hands, legs+boots. (Player is its own class, not `upright`; orientation is static, only the
+  equipped-icon offset tracks facing — so a symmetric front view is correct.)
+- **Boar** (26x20) — bristly hog, back-spikes, upward tusk, snout+nostrils, beady eye+glint.
+- **Snake** (20x8) — head+yellow eye+forked tongue at right, scale flecks, belly underline.
+- **Gremlin** (18x22) / **Gremling** (14x16) — hunched imps: pointed ears, glowing eyes, snaggle
+  teeth, pot-belly, clawed hands (Gremling smaller/simpler = lesser threat).
+- **Duskrunner** (24x14) — lean jackal: bushy tail, pointed ear, ember eye, four legs.
+- **Cragscale** (28x18) — armored reptile: ridged + spiked stone-plate back, stubby legs, tail.
+- **Gremlin King** (40x48) — hulking ogre-gremlin: bone crown, glowing eyes, upward tusks, huge
+  fists, muscled torso + loincloth.
+- **Gloamwarden** (34x42) — amethyst brute: violet body, shoulder/head crystal growths, crystalline
+  fists, glowing chest core + eyes.
+- **Hexling** left as-is (the benchmark). World props (trees/rocks/stations) + item icons left
+  as-is — out of scope for a creature pass.
+
+**Verification.** Type-check clean; no console errors. Live `preview_eval` texture-showcase overlay
+confirmed all sprites render with the intended detail; a follow-up query confirmed all 233 live
+enemies report `upright:true` with near-zero rotation and varied `flipX`. Real pixel art +
+animations still deferred (roadmap item 8) — this is a polish-the-placeholder pass, not the final
+art.
 
 ### Biome 2 playtest fix batch #2 (worldgen seam, ground texture, Hexling rotation, damage)
 

@@ -97,11 +97,14 @@ export interface EnemyConfig {
   // purely as data — the resist math lives in MainScene.resolveWeaponHit. Empty
   // for every biome-1 enemy, so their combat is unchanged.
   resistances?: Partial<Record<DamageType, number>>;
-  // True for a humanoid/upright sprite (Hexling) — skips the random full-360°
-  // spawn rotation below and makes applyFacing (see applyUprightFacing) mirror
-  // left/right via flipX with only a slight up/down tilt, never rotating past
-  // horizontal. Default false = the nose-first full-rotation facing every other
-  // enemy (Boar/Snake/Duskrunner/...) already uses.
+  // Visual facing mode. DEFAULT (true, as of the 2026-07 art pass) = non-rotating:
+  // the sprite mirrors left/right via flipX with only a slight up/down tilt, never
+  // rotating past horizontal (applyUprightFacing). Every creature texture is drawn
+  // facing RIGHT so this reads correctly. This is PURELY VISUAL — it never affects
+  // attack direction/hit-checks, which use x/y distance math, so an enemy can
+  // still hit you while its sprite faces a slightly different way. Set false only
+  // for a sprite that genuinely wants to rotate to point along travel (nothing
+  // does today) — that path keeps the old nose-first full-360° rotation.
   upright?: boolean;
 }
 
@@ -206,12 +209,11 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     scene.physics.add.existing(this);
     this.setCollideWorldBounds(true); // matches Player — without this, chase/flee/kite AI can walk enemies off the map
     this.setDepth(ysortDepth(cfg.y)); // Y-sorted against the player/trees, see preUpdate
-    // Randomized initial facing — without this every enemy defaults to the
-    // same unrotated orientation and only ever rotates once it moves, which
-    // reads as "always facing the same direction" for anything that spends
-    // most of its life stationary (Snake hidden, Gremlin idle). An upright
-    // humanoid (Hexling) never rotates at all — it only randomizes its mirror.
-    this.upright = cfg.upright ?? false;
+    // Non-rotating by default (2026-07 art pass): randomize only the left/right
+    // MIRROR so a field of idle creatures isn't all facing the same way, without
+    // ever rotating the sprite off-vertical. The rare opt-out (upright:false)
+    // instead randomizes a full spawn rotation — nothing uses it today.
+    this.upright = cfg.upright ?? true;
     if (this.upright) {
       this.setFlipX(Phaser.Math.Between(0, 1) === 1);
     } else {
@@ -397,13 +399,12 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     return false;
   }
 
-  // Full 360° facing: rotate the sprite to point along its current
-  // direction of travel rather than just flipping left/right. The boar
-  // texture is drawn nose-first toward the left (angle PI when unrotated —
-  // see BootScene), so the rotation needed to align it with a movement
-  // vector is that vector's angle offset by PI. Skips the update while
-  // nearly stopped so it keeps its last facing (e.g. mid-bite) instead of
-  // snapping to an arbitrary angle from a near-zero velocity.
+  // Facing update from a travel vector. Default (upright) sprites take the
+  // flipX path (applyUprightFacing) — no rotation. The legacy full-360° branch
+  // below (only reachable when upright===false, which nothing uses today) rotates
+  // a nose-first-left sprite to point along travel (angle offset by PI). Skips
+  // the update while nearly stopped so it keeps its last facing (e.g. mid-bite)
+  // instead of snapping to an arbitrary angle from a near-zero velocity.
   protected applyFacing(vx: number, vy: number): void {
     if (Math.abs(vx) < 3 && Math.abs(vy) < 3) return;
     if (this.upright) {
