@@ -67,7 +67,7 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
   // --- tools ---
   stone_axe: {
     key: "stone_axe",
-    name: "Stone Axe",
+    name: "Woodcutter's Axe",
     description: "A crude axe for chopping trees.",
     texture: "icon_stone_axe",
     maxStack: 1,
@@ -203,7 +203,7 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     name: "Slingshot Pellets",
     description: "Rounded stones sized for a Slingshot. Load them into the Ammo slot.",
     texture: "icon_slingshot_pellets",
-    maxStack: 50,
+    maxStack: 99,
     hotbarable: false,
     armorSlot: "ammo",
   },
@@ -372,7 +372,10 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     texture: "icon_bramble_boar_skewer",
     maxStack: 99,
     hotbarable: true,
-    edible: { hpPerSec: 3, durationMs: 30000 },
+    // Heals faster per second than Cooked Boar Meat but over the SAME
+    // duration, so its total heal is only ~25% higher (50 vs 40) — a Lvl 2
+    // dish should feel like a real upgrade, not a 2x+ jump (playtest).
+    edible: { hpPerSec: 2.5, durationMs: 20000 },
   },
   cooked_snake_meat: {
     key: "cooked_snake_meat",
@@ -390,7 +393,8 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     texture: "icon_blood_snake_skewer",
     maxStack: 99,
     hotbarable: true,
-    edible: { hpPerSec: 3, durationMs: 35000 },
+    // Same +25%-over-Lvl-1-total rule as the boar skewer above (55 vs 44).
+    edible: { hpPerSec: 2.5, durationMs: 22000 },
   },
 
   // --- processed goods (Drying Rack outputs) ---

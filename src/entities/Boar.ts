@@ -95,6 +95,20 @@ export class Boar extends Enemy {
     return this.mode === "chasing";
   }
 
+  // Getting hit while idle should snap it into the fight instead of tanking
+  // hits passively — mirrors RangedGremlin/Hexling's own takeHit override
+  // (this is what a ranged weapon's out-of-aggro-range shot needs to
+  // actually wake the boar; the base Enemy's forceAggro() flips the shared
+  // `state` field, which Boar's own `mode`-driven update() never reads).
+  takeHit(damage: number): boolean {
+    const depleted = super.takeHit(damage);
+    if (!depleted && this.mode === "idle") {
+      this.mode = "chasing";
+      this.startPursuit(this.scene.time.now);
+    }
+    return depleted;
+  }
+
   update(delta: number, playerX: number, playerY: number, now: number): boolean {
     if (this.depleted) return false;
     const body = this.body as Phaser.Physics.Arcade.Body;

@@ -9,6 +9,12 @@ export interface LogEntry {
   kind: LogKind;
   message: string;
   icon?: string; // texture key, shown on the recipe-unlock toast
+  // Skips the popup toast (recipe/material queue or center stack) — the
+  // entry still lands in the persistent scrollable log. Used where a
+  // separate, dedicated visual already covers the same event (e.g. the
+  // Player-Level-Up banner), so the generic toast would just be a redundant
+  // duplicate competing for the same screen space.
+  silent?: boolean;
 }
 
 export class EventLog {
@@ -16,8 +22,8 @@ export class EventLog {
   private seq = 0;
   private listeners: ((entry: LogEntry) => void)[] = [];
 
-  add(kind: LogKind, message: string, icon?: string): LogEntry {
-    const entry: LogEntry = { id: this.seq++, kind, message, icon };
+  add(kind: LogKind, message: string, icon?: string, silent?: boolean): LogEntry {
+    const entry: LogEntry = { id: this.seq++, kind, message, icon, silent };
     this.entries.push(entry);
     for (const cb of this.listeners) cb(entry);
     return entry;

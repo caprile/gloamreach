@@ -7,7 +7,7 @@ export interface PauseMenuDeps {
   onToggleSfx: () => void;
   onResume: () => void;
   onNewRun: () => void;
-  onHowToPlay: () => void;
+  onTips: () => void;
 }
 
 // Pause overlay (Esc). Freezes the run (MainScene pauses physics + the scene
@@ -86,7 +86,7 @@ export class PauseMenuUI {
     });
     y += 52;
 
-    this.button(cx, y, "How to Play", () => deps.onHowToPlay());
+    this.button(cx, y, "Tips", () => deps.onTips());
     y += 52;
 
     this.button(cx, y, "New Run", () => deps.onNewRun());

@@ -127,6 +127,10 @@ export class ResourceNode extends Phaser.GameObjects.Sprite {
   // magnet loop skips it so it isn't fighting the scatter tween over x/y.
   exploding = false;
   private countLabel: Phaser.GameObjects.Text | null = null;
+  // Persistent pulsing halo, used by crack() so a mineable Gloaming Vein
+  // node is obvious at a glance (playtest: players consistently missed
+  // that it could be mined once cracked open).
+  private glowImage: Phaser.GameObjects.Image | null = null;
 
   constructor(scene: Phaser.Scene, cfg: ResourceNodeConfig) {
     super(scene, cfg.x, cfg.y, cfg.texture);
@@ -244,6 +248,15 @@ export class ResourceNode extends Phaser.GameObjects.Sprite {
     this.depleted = true;
     this.scene.tweens.killTweensOf(this);
     this.countLabel?.destroy();
+    // A Gloaming Vein node's glow (startGlow) only ever exists while it's
+    // still mineable — cleaning it up here means it stops the moment this
+    // specific node is fully mined out, without any separate "is it mined"
+    // check elsewhere (the user: "vein should only glow if not mined").
+    if (this.glowImage) {
+      this.scene.tweens.killTweensOf(this.glowImage);
+      this.glowImage.destroy();
+      this.glowImage = null;
+    }
     this.destroy();
   }
 
@@ -266,10 +279,39 @@ export class ResourceNode extends Phaser.GameObjects.Sprite {
   }
 
   // Break the seal on a shielded (Gloaming Vein) node — swaps to its mineable
-  // texture and makes it interactable. Called when the vein's guardian dies.
+  // texture, makes it interactable, and starts a constant pulsing glow so
+  // it's obviously mineable (playtest: it was easy to miss). Called when the
+  // vein's guardian dies.
   crack(mineableTexture: string): void {
     if (!this.shielded) return;
     this.shielded = false;
     this.setTexture(mineableTexture);
+    this.startGlow(0xb266ff);
+  }
+
+  // Reuses the light_soft gradient (same additive-glow idiom as the Gloam
+  // Shard drop pop and the vein/torch night lighting) as a constant,
+  // day-and-night pulsing halo — not just a night-only light point. Same
+  // scale as GremlinShack's chest glow (0.14-0.2) — an earlier, bigger pass
+  // read as "huge" (the user), and this should match that fix 1:1.
+  private startGlow(tint: number): void {
+    if (this.glowImage) return;
+    const glow = this.scene.add
+      .image(this.x, this.y, "light_soft")
+      .setTint(tint)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setScale(0.14)
+      .setAlpha(0.4)
+      .setDepth(this.depth - 1);
+    this.glowImage = glow;
+    this.scene.tweens.add({
+      targets: glow,
+      alpha: 0.8,
+      scale: 0.2,
+      duration: 900,
+      yoyo: true,
+      repeat: -1,
+      ease: "Sine.easeInOut",
+    });
   }
 }

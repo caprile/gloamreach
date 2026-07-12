@@ -125,6 +125,12 @@ export class SfxPlayer {
   }
 
   // Low ominous swell sweeping downward.
+  // Playtest request: a wolf-howl cue alongside this on nightfall. Left
+  // un-built — every cue here is a raw oscillator/gain envelope synthesized
+  // at call time (no asset files, see the class comment), and a convincing
+  // howl (pitch bend + formant-ish timbre) isn't a good fit for that same
+  // simple-envelope approach. Revisit once real audio assets are in scope
+  // (audio/art are deliberately last on the roadmap — see CLAUDE.md).
   nightfall(): void {
     this.tone(140, 900, "sawtooth", { toFreq: 70, gain: 0.06 });
   }

@@ -59,6 +59,11 @@ export class EventLogUI {
   // (playtest: rapid cooking made "Cooked X" toasts collide). Mirrors the
   // `activeRecipeToasts` pattern already used below for the side toasts.
   private activeCenterToasts: { height: number }[] = [];
+  // Extra vertical offset for the center-toast stack, set by MainScene while
+  // the (separately-drawn) Player-Level-Up banner is on screen — that banner
+  // sits at a fixed y regardless of this stack's height, so without this a
+  // "Defeated X" combat toast could land right on top of it (playtest).
+  private topOffset = 0;
   private leftX: number;
   private topY: number;
   private recipeToastQueue: LogEntry[] = [];
@@ -84,10 +89,18 @@ export class EventLogUI {
     this.render();
   }
 
+  // See `topOffset` above — MainScene calls this while its Level-Up banner
+  // is visible, and resets it to 0 once the banner fades.
+  setTopOffset(px: number): void {
+    this.topOffset = px;
+  }
+
   private onNewEntry(entry: LogEntry): void {
     this.scrollOffset = 0; // jump to newest
-    if (entry.kind === "recipe" || entry.kind === "material") this.enqueueRecipeToast(entry);
-    else this.showToast(entry);
+    if (!entry.silent) {
+      if (entry.kind === "recipe" || entry.kind === "material") this.enqueueRecipeToast(entry);
+      else this.showToast(entry);
+    }
     this.render();
   }
 
@@ -221,7 +234,7 @@ export class EventLogUI {
       .setDepth(6001);
 
     const slotH = text.height + 18; // box padding + gap to the next toast
-    const y = 72 + this.activeCenterToasts.reduce((sum, t) => sum + t.height, 0);
+    const y = 72 + this.topOffset + this.activeCenterToasts.reduce((sum, t) => sum + t.height, 0);
     const stackEntry = { height: slotH };
     this.activeCenterToasts.push(stackEntry);
     text.setPosition(cx, y);

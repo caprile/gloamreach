@@ -6,11 +6,12 @@ import Phaser from "phaser";
 // + hover prompt (bottom), and the log/keybinds column (top-left).
 //
 // Flat scrollFactor(0) GameObjects (no Container — same input/hit-test
-// constraint the other menus document). Depth sits above the live world
-// (fixed-HUD depths must clear WORLD_H, per the post-boss batch) but below the
-// menus (3000+) and the pause overlay (3500).
-const DEPTH_BOX = 2860;
-const DEPTH_TEXT = 2861;
+// constraint the other menus document). Depth sits above every menu (the
+// crafting/inventory panels top out at 3001) so a tip firing while a menu is
+// open is never hidden behind it (playtest) — but below the pause overlay
+// (3500), the one screen where a tip popping up would be truly out of place.
+const DEPTH_BOX = 3200;
+const DEPTH_TEXT = 3201;
 const CARD_W = 264;
 const RIGHT_MARGIN = 16;
 const PAD = 12;

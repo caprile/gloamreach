@@ -436,4 +436,16 @@ export class MeleeGremling extends Enemy {
   isAggro(): boolean {
     return this.mode === "chasing";
   }
+
+  // Same "getting hit while idle wakes it" fix as Boar/RangedGremlin/Hexling
+  // — the base Enemy.forceAggro() called from resolveWeaponHit only flips
+  // the shared `state` field, which this `mode`-driven update() never reads.
+  takeHit(damage: number): boolean {
+    const depleted = super.takeHit(damage);
+    if (!depleted && this.mode === "idle") {
+      this.mode = "chasing";
+      this.startPursuit(this.scene.time.now);
+    }
+    return depleted;
+  }
 }

@@ -4548,3 +4548,153 @@ before starting a fresh session).
 >500kB warning is pre-existing/unrelated). Extensive live `preview_eval` verification per
 item above (console error-free throughout). `RECIPES.md` updated (Shishkabob output x2,
 Javelin tier 1 + Pierce 5, Slingshot Pellets discovery-gate footnote).
+
+### Enemy respawn — fog top-up (playtest food-economy fix)
+
+Off the master-plan build order, built on **Opus** (a new spawn subsystem with its own
+timing/state, not just a tuning change). Playtesters were burning through food far faster
+than expected because the enemy roster was **one-shot and finite** — only wild (non-camp)
+Gremlin Shack guards ever came back (their own 6-min pair timer). Meat sources (Boar/Snake)
+drained to empty over a run. Now the world keeps itself huntable.
+
+**Model (locked with the user via `AskUserQuestion`): fog top-up**, chosen over per-kill
+replacement and full-world repopulation. A periodic check (`MainScene.updateRespawns`, every
+`RESPAWN_TICK_MS` = **30s**, called from `update()`'s **alive branch only**) keeps the live
+non-boss enemy count within `RESPAWN_NEARBY_RADIUS` (1500px) of the player topped up toward
+`RESPAWN_NEARBY_TARGET` (10), spawning at most `RESPAWN_PER_TICK` (1) replacement per tick. At
+1/30s that repopulates a fully cleared area in **~5 min** — the locked pace (an initial 7s/
+~1-2 min tick felt way too fast in playtest; the user wanted ~5 min/area max). Bounded both
+locally (the target) and globally (`RESPAWN_MAX_LIVE` 160) so camping can't build a swarm and
+a long run can't run away.
+
+**Off-screen spawns.** Reuses the nightfall-surge spawner: `pickNightSpawnPoint` gained
+optional `ringMin`/`ringMax` params (default to the night constants), and respawns call it
+with `RESPAWN_RING_MIN`/`_MAX` = **1150–1600px** — just past the camera's ~1102px
+half-diagonal, so a replacement never materializes on-screen. Verified live via
+`preview_eval`: at every realistic in-biome player position (center out to the ~1800px biome
+edge) **100% of 200 sampled spawns landed >1102px away**; the only close spawns occur way out
+in the empty outer grass (2800+px from center) where ring points clip the world edge and get
+clamped — a spot players never hunt.
+
+**Species mix.** `makeRespawnEnemy` weights by the baseline `spawnEnemies()` counts
+(Boar 24 / Snake 28 / RangedGremlin 22 / MeleeGremling 8 = 82), so meat sources (~63%)
+dominate — respawns fix the food shortage directly while keeping variety. Elite rolls at the
+standard `rollElite` chance, night-boosted (`NIGHT_ELITE_CHANCE_MULT`) like every other spawn
+path, so trophies stay renewable too.
+
+**Excluded:** Gremlin King / Gloamwarden (one-shot win/mini-boss — filtered from both the
+count and the spawn table), and the Gremlin Shack guards keep their own timer untouched.
+`respawnAccumMs` resets in `create()` per the `scene.restart()` field-init gotcha. Verified:
+tsc clean; the top-up paces exactly 1/tick up to the target of 10 then stops; no console
+errors. No `RECIPES.md`/dashboard change (no recipe or enemy-stat change). One bounded
+tradeoff, noted in-code: enemies you kite far away and abandon still count toward
+`RESPAWN_MAX_LIVE`, so a very long roaming run could eventually park at the cap — the cap is
+generous enough that this stays theoretical.
+
+### M-SS — Stats & Skills depth pass (crit + distinct-axis effects + relic synergy)
+
+Plan: `.claude/plans/crit-tempering-lodestar.md`. Built on **Opus** (crit is a new combat
+mechanic + the relic change is a data-model change). Fixes the "Stats/Skills feel
+negligible next to Relics" problem via the locked three-layer split: Relics = raw-% stat
+layer, crafted gear = uniqueness/procs (M-TE, later), and **Stats/Skills = the reliable,
+player-steered layer on axes relics don't touch** — plus making relics *synergize with*
+stats instead of dwarfing them.
+
+**Crit system (the headline).** Split by AXIS, not weapon class: **Strength = crit
+multiplier** (+0.04×/pt, retired the old melee stamina-cost knob), **Agility = crit
+chance** (+0.5%/pt, retired the ranged one), both **all-weapon**, multiplying together so a
+crit build wants both. **Per-weapon base crit** lives in `Weapons.ts`
+(`WEAPON_BASE_CRIT_CHANCE`/`_MULT` + getters) — slow/heavy weapons get higher base
+(primal_spear 8%/1.6×, fast bone_knife 4%/1.5×), doubling as an attack-speed lever. The
+locked pipeline is `weaponBase × (1+skill%) × (1+relic dmg%) × staggerMult ×
+(critRoll?critMult:1)` — crit is the final multiplicative step. `MainScene.applyCrit()`
+rolls it (chance/mult = weapon base + stat + relic, soft-capped `CRIT_CHANCE_CAP` 0.60 /
+`CRIT_MULT_CAP` 3.0, `Math.random` — combat crit isn't seeded), called from both
+`tryMeleeAttack` (rolled at hit) and `tryRangedAttack` (rolled at fire, baked into the
+projectile via a new `Projectile.isCrit` — no weapon context at impact). A crit tints the
+floating damage number orange-yellow + "!" and plays a new `Sfx.crit()` cue. The inventory
+Combat column + the weapon Tooltip both surface crit (base + live stat/relic rollup).
+
+**Stat rework (`Progression.ts`).** Every stat now has a live effect: **Endurance** +3 max
+stam **and** +2% stamina-regen rate/pt; **Vitality** +4 max HP **and** +1.5%
+healing-received/pt (amplifies food/Comfort/kill-heal, NOT passive regen — there is none);
+**Intelligence** +1.5% skill-XP/pt (stacks with the Scholar's-Idol relic + is applied in
+`awardSkillXp`); **`willpower` renamed `wisdom`** = +2% buff/food duration/pt. New getters:
+`critChanceBonus`/`critMultBonus`/`healingReceivedMult`/`staminaRegenMult`/`xpMult`/
+`buffDurationMult`. `weaponStaminaCostMultiplier` **retired** — grep'd out of MainScene (×3),
+Tooltip, and CraftingMenu (their weapon "Stamina" tooltip line now shows the authored base;
+only relics discount stamina now).
+
+**Skill rework (`Skills.ts`).** Second/first real effects for one-note & dormant skills:
+**light_armor** → +5ms dash i-frame/level over the 150ms base, cap +100ms (Monster Hunter
+"Evade Window", added to `DASH_IFRAME_MS`); **running** also cuts sprint stamina drain
+−1%/level cap −40%; **chopping/mining** → +1%/level (cap 60%) chance for a bonus +1 drop on
+a depleted tree/rock (incl. cracked Gloam ore), rolled in the tool-swing path. `heavy_armor`
++ `blocking` stay deliberately dormant (biome-2 heavy gear / a real block mechanic) with an
+explicit "no effect yet" impact line. **Per-piece armor XP** — the kill loop now awards +30
+per *worn piece* (`armorTypesWornPerPiece`, replacing the old per-distinct-type
+`armorTypesWorn`), so full-light (3) gives 3 light ticks and heavy_armor will accrue
+naturally once biome-2 heavy gear ships. The 5 weapon-damage skills are unchanged (+0.5%/lvl)
+— reserved as the M-TE proc-threshold hook.
+
+**Relic synergy (`Relics.ts`).** HP/stamina relic channels went **flat → percent**
+(`maxHpPct`/`maxStaminaPct` + `maxHpPctMult`/`maxStaminaPctMult` getters): Stout 15→15%,
+Vigor 25/20→20%/18%, Titan 50/35→40%/30%. `MainScene.syncStatBonuses` now compounds
+`(100 + statBonus) × relicPctMult − 100`, so stats × relics multiply (verified: 20 Vitality
+→ base 180, +Stout+Vigor 35% → 243 max HP). New **crit relic channels** (`critChancePct`/
+`critDamagePct` + getters) with two seeds — Common **Keen Charm** (+5% crit chance),
+Uncommon **Savage Idol** (+0.30× crit dmg). `scaledEffectText` updated for all new channels;
+`allocateStat` now always re-syncs (every stat feeds a cached multiplier now).
+
+**Verified live** (`preview_eval`, console error-free): every stat getter (20 Vit → healMult
+1.3, 10 End → regenMult 1.2, 10 Str → +0.4 crit mult, 10 Agi → +0.05 crit chance, 5 Int →
+xpMult 1.075, 5 Wis → buffDurationMult 1.1); relic %-HP compounds the stat base (180×1.35=243
+HP, 130×1.18=153.4 stam); crit rolls & applies (primal_spear 18%×2.30 → 10 dmg crits to 23,
+non-crit 10) and both caps hold (mult 3.0 → 30, chance 0.60); heal 10×1.3=+13, buff 1000×1.1
+→ 1100ms, stamina regen 20×1.2 → +24/s; all four skill getters + impact strings correct
+(dash +100ms cap, drain 0.6, chop 30%, mine 60% cap); per-piece armor XP returns 3 light
+entries for 3 worn pieces; Combat column reports crit 18%×2.30. `tsc --noEmit` + full build
+clean. `RECIPES.md` relic table + dashboard weapons tab (base-crit + eff-DPS columns)
+updated. See [[survivor-rpg-stats-skills-relics-direction]].
+
+### Playtest polish batch — hints, elite tooltip, javelin, dash VFX, miniboss leash, text timings, stats display
+
+Grab-bag of 11 playtest-feedback fixes (Sonnet-class polish on existing systems, no
+new mechanic). Verified live via `preview_eval` + screenshots; `tsc --noEmit` clean.
+
+- **F11 fullscreen reminder** — folded into the `awaken` hint text and added a
+  "Fullscreen: F11" line to the Keybinds panel (F11 is the browser's own native
+  fullscreen; nothing to wire).
+- **Right-click discoverability** — new `right_click_tip` hint ("Right-click equipped
+  gear or a placed station to inspect and upgrade it") triggered the first time the
+  player places a station OR equips an armor piece, plus a "Inspect / upgrade: Right
+  Click" Keybinds line.
+- **Elite/boss red hover tooltip** — `promptForEnemy` now prefixes `Elite ` for
+  `enemy.elite`, and a new `promptColorFor()` tints the bottom-right prompt text:
+  crimson `#ff5a5a` for a boss/mini-boss (`GremlinKing`/`Gloamwarden`), orange
+  `#ff9d5c` for elites, white otherwise. Verified: "[LMB] Attack Elite Boar".
+- **Javelin art + thrown angle** — `icon_javelin` redrawn DIAGONALLY (bottom-left →
+  top-right) so it no longer reads like the vertical Primal Spear icon. The in-flight
+  javelin now flies nose-first: added `ProjectileConfig.artAngleOffset` (applied in
+  `setRotation`) + `RangedWeaponConfig.projectileArtAngleOffset` = `Math.PI/2` for the
+  javelin (its streak art points up). Verified rotation = angle+90°.
+- **Dash more obvious** — `Player.playDashFx()` spawns 3 staggered translucent
+  blue-tinted afterimage ghosts of the player sprite that fade/shrink over 260ms;
+  called from the `frame.dashStarted` branch in `update()`.
+- **Gloamwarden roams back to spawn** — its `updateIdle` deaggro branch now walks the
+  mini-boss back toward its spawn point (mirrors `GremlinKing`'s `RETURN_HOME_EPS`
+  return-home behavior) instead of idling wherever it was kited to.
+- **All text fades slower** (playtest: "text isn't fading out slow enough", gloam-shard
+  help vanished too fast) — HintUI HOLD 5200→8000 / FADE 700→1400; EventLogUI recipe/
+  material toast HOLD 3200→5500 / FADE 900→1500; center toast delay 2200→4000 /
+  duration 900→1500.
+- **Altar/win-path guidance** — two new hints so the goal is clear after clearing camps:
+  `altar_found` (fires when the War Camp altar is discovered on the map) and
+  `totem_ready` (per-frame idempotent poll — fires once the player holds a
+  `gremlin_totem`, pointing them to place it in the Boss Altar's fire). This
+  deliberately relaxes the old "never spell out the win condition" hint rule, per
+  the user's request.
+- **Stats page total effect** — new `Progression.statTotalEffect(stat, p)` returns the
+  CURRENT cumulative effect of points already spent (e.g. Vitality 5 → "+20 max HP,
+  +7.5% healing"); shown as an amber "Now: …" line under each stat in `CharacterMenu`'s
+  Stats tab (row height 44→52 to fit the third line).

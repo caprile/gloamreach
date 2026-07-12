@@ -133,6 +133,7 @@ import { SfxPlayer } from "../systems/Sfx";
 import { HintUI } from "../ui/HintUI";
 import { PauseMenuUI } from "../ui/PauseMenuUI";
 import { WelcomeUI, hasSeenWelcome } from "../ui/WelcomeUI";
+import { TipsUI } from "../ui/TipsUI";
 import { DayNight } from "../systems/DayNight";
 import { NightOverlayUI, type ScreenLight } from "../ui/NightOverlayUI";
 import {
@@ -548,13 +549,15 @@ export class MainScene extends Phaser.Scene {
   private hints = new HintManager();
   private hintUI!: HintUI;
   private pauseMenu!: PauseMenuUI;
-  // First-launch welcome + how-to-play overlay. Reuses the same isPaused
+  // First-launch welcome/how-to-play overlay. Reuses the same isPaused
   // freeze as the pause menu (see openWelcome/closeWelcome) rather than a
-  // parallel freeze flag. `howToPlayFromPause` remembers whether it was
-  // opened via the pause menu's "How to Play" button, so closing it returns
-  // to the pause menu instead of resuming play.
+  // parallel freeze flag. It's shown once automatically at the start of
+  // every run (see ALWAYS_SHOW_EACH_LOAD in WelcomeUI.ts), which is why the
+  // pause menu no longer has its own "How to Play" re-entry point — the
+  // Tips panel below is the re-readable reference instead.
   private welcomeUI!: WelcomeUI;
-  private howToPlayFromPause = false;
+  // Pause menu's "Tips" panel — re-readable list of hints discovered this run.
+  private tipsUI!: TipsUI;
   // Procedural SFX layer — deliberately NOT re-created in create() (unlike
   // `hints` above): the AudioContext + on/off preference should survive a
   // "New Run" restart, not reset with the rest of per-run state.
@@ -945,7 +948,7 @@ export class MainScene extends Phaser.Scene {
     this.hints.onShow((text) => this.hintUI.show(text));
     this.pauseMenu = new PauseMenuUI(this);
     this.welcomeUI = new WelcomeUI(this);
-    this.howToPlayFromPause = false;
+    this.tipsUI = new TipsUI(this);
     // Opening nudge: movement + goal, a beat after the world loads.
     this.time.delayedCall(1500, () => this.hints.trigger("awaken"));
     // Show the welcome/how-to-play overlay before the player can act. During
@@ -1000,6 +1003,7 @@ export class MainScene extends Phaser.Scene {
     this.input.keyboard!.on("keydown-ESC", () => {
       if (this.runOver) return;
       if (this.welcomeUI.isOpen()) return this.closeWelcome();
+      if (this.tipsUI.isOpen()) return this.closeTips();
       if (this.pauseMenu.isOpen()) return this.resumeGame();
       if (this.worldMapUI.isOpen()) return this.worldMapUI.close();
       if (this.contextMenu.isOpen()) return this.contextMenu.close();
@@ -1057,7 +1061,11 @@ export class MainScene extends Phaser.Scene {
     // Player level-ups: announce the awarded points and refresh the character
     // menu (unspent-point count/buttons) if it's open.
     this.progression.onLevelUp((level, points) => {
-      this.eventLog.add("levelup", `Level Up! You are now Level ${level} (+${points} points)`);
+      // Silent: showLevelUpBanner() below is the dedicated big "you leveled
+      // up" visual — the generic center toast would just duplicate it and
+      // compete for the same screen space (playtest). Still logged to the
+      // persistent side panel.
+      this.eventLog.add("levelup", `Level Up! You are now Level ${level} (+${points} points)`, undefined, true);
       this.characterMenu?.refresh();
       this.refreshXpBar();
       this.refreshStatPointsBadge();
@@ -1157,6 +1165,7 @@ export class MainScene extends Phaser.Scene {
     this.updateRespawns(delta);
     this.updateTreeOcclusion(delta);
     this.updateMapReveal();
+    this.updateShackGlows();
     this.bossHealthUI.update(this.gremlinKing);
     this.updateCraftingMenuWorkbenchProximity();
   }
@@ -1824,7 +1833,18 @@ export class MainScene extends Phaser.Scene {
       this.pointerOverHud(pointer) ||
       (this.inventoryMenu.isOpen() && this.inventoryMenu.containsPoint(pointer.x, pointer.y)) ||
       (this.craftingMenu.isOpen() && this.craftingMenu.containsPoint(pointer.x, pointer.y));
-    if (!overPanel) this.dropStackToWorld(src.container, src.index, stack);
+    if (overPanel) return;
+    // Dragging a placeable OUT of the hotbar (either row) reads as "place
+    // this", not "throw it away" — re-arms placement mode exactly like a
+    // click-select would, instead of dropping it as a loose pickup
+    // (playtest: dragging a station out of the processor row was dropping
+    // it on the ground). Backpack-sourced drags keep dropping to the world —
+    // that's still the deliberate "get rid of this" gesture there.
+    if (src.container === this.hotbar.container && itemDef(stack.key)?.placeable) {
+      this.setHotbarSelection(src.index);
+      return;
+    }
+    this.dropStackToWorld(src.container, src.index, stack);
   }
 
   // Resolves a drag started from an equipped paper-doll slot — the
@@ -2269,6 +2289,13 @@ export class MainScene extends Phaser.Scene {
     // the chest, then kill the (still-un-respawned) guards and get an
     // immediate re-roll before any respawn timer elapsed.
     shack.loot.rearmIfEmpty();
+    // Roll immediately (was lazily deferred to first open) so the chest's
+    // glow (syncGlow, gated on loot.isEmpty()) is accurate from the moment
+    // it exists, without requiring the player to open it first to find out.
+    // rollIfEmpty is idempotent — a no-op here if it's already rolled and
+    // still holds unclaimed loot.
+    shack.loot.rollIfEmpty(GREMLIN_SHACK_LOOT_TABLE);
+    shack.syncGlow();
     const ranged = new RangedGremlin(this, {
       x: shack.x + Phaser.Math.Between(-40, 40),
       y: shack.y + Phaser.Math.Between(-40, 40),
@@ -2284,6 +2311,15 @@ export class MainScene extends Phaser.Scene {
     this.enemies.push(ranged, melee);
     this.enemyGroup.add(ranged);
     this.enemyGroup.add(melee);
+  }
+
+  // Keeps every chest's glow in sync with whether it currently has anything
+  // in it (the user: "chest should only glow if there are items in it") —
+  // items leave a chest via several different gestures (drag, quick-move,
+  // Take All), so this polls once a frame instead of hooking each one.
+  // Cheap: a handful of shacks, one boolean check apiece.
+  private updateShackGlows(): void {
+    for (const shack of this.gremlinShacks) shack.syncGlow();
   }
 
   // Called from tryAttackEnemy()'s kill branch for every defeated enemy — a
@@ -3075,7 +3111,10 @@ export class MainScene extends Phaser.Scene {
   // standalone POIs via the normal spread-spawn pool. First-pass/tunable counts.
   private spawnGremlinShacks(): void {
     const rng = this.sessionRng();
-    const SHACK_COUNT = 5;
+    // Bumped 5 -> 8 (playtest: too sparse) — the extra 3 land in the wild
+    // standalone pool below, not the war-camp cluster, which keeps
+    // SHACK_NEAR_ALTAR_COUNT's carefully-spaced hut fan untouched.
+    const SHACK_COUNT = 8;
     const SHACK_NEAR_ALTAR_COUNT = 3;
     const SHACK_CLEAR_RADIUS = 260;
     const SHACK_MIN_SPACING = 500;
@@ -3669,10 +3708,10 @@ export class MainScene extends Phaser.Scene {
       Phaser.Math.Distance.Between(this.player.x, this.player.y, enemy.x, enemy.y) <= this.attackRangeFor(enemy);
     if (!inReach) return null;
     if (!this.equippedWeapon) return null;
-    // Flag the tougher variants right in the prompt so a player knows what
-    // they're swinging at (paired with a red prompt color in updateHover).
-    const prefix = enemy.elite ? "Elite " : "";
-    return `[LMB] Attack ${prefix}${enemy.displayName}`;
+    // displayName already carries its own "Elite " prefix for elite variants
+    // (set per-species, e.g. Snake.ts) — don't prepend a second one here
+    // (was producing "Attack Elite Elite Snake").
+    return `[LMB] Attack ${enemy.displayName}`;
   }
 
   // Prompt color for the currently hovered target: crimson for a boss/mini-boss
@@ -3989,13 +4028,31 @@ export class MainScene extends Phaser.Scene {
     const staminaCost = Math.round(weaponStaminaCost(this.equippedWeapon) * this.relics.staminaCostMult());
     if (!this.stamina.canAfford(staminaCost)) return; // exhausted — silent, same as melee's guard
 
-    // Ammo gate — silent no-op if unavailable, same "never reveal what's
-    // missing" convention the stamina guard above already follows.
+    // Ammo gate — unlike the stamina/cooldown guards above, this one DOES
+    // give feedback (playtest: firing empty silently was confusing). If the
+    // shot empties the loaded stack, auto-refill from the backpack before
+    // giving up the slot, so a full pellet pouch doesn't force a manual
+    // re-equip mid-fight.
     if (cfg.ammoItemKey) {
       const eq = this.equipment.get("ammo");
-      if (!eq || eq.key !== cfg.ammoItemKey || (eq.count ?? 0) < 1) return;
+      if (!eq || eq.key !== cfg.ammoItemKey || (eq.count ?? 0) < 1) {
+        this.spawnFeedbackText(this.player.x, this.player.y, "Out of ammo!");
+        return;
+      }
       const remaining = (eq.count ?? 0) - 1;
-      this.equipment.set("ammo", remaining > 0 ? { key: eq.key, tier: 0, count: remaining } : null);
+      if (remaining > 0) {
+        this.equipment.set("ammo", { key: eq.key, tier: 0, count: remaining });
+      } else {
+        const max = itemDef(eq.key)?.maxStack ?? 0;
+        const haveInBackpack = this.backpack.count(eq.key);
+        if (haveInBackpack > 0) {
+          const take = Math.min(max, haveInBackpack);
+          this.equipment.set("ammo", { key: eq.key, tier: 0, count: take });
+          this.backpack.removeCount(eq.key, take);
+        } else {
+          this.equipment.set("ammo", null);
+        }
+      }
     } else {
       // Self-consuming (Javelin): burn 1 from the equipped hotbar stack itself.
       const selectedIndex = this.hotbar.selected();
@@ -4042,6 +4099,11 @@ export class MainScene extends Phaser.Scene {
   // shared by melee (applied instantly) and ranged (applied on projectile
   // impact), so the two firing paths can't drift out of sync on kill logic.
   private resolveWeaponHit(enemy: Enemy, dmg: number, dmgType: DamageType, isCrit = false): void {
+    // Waking on hit is handled by takeHit() itself — the base Enemy.takeHit()
+    // flips idle->chasing for state-field enemies, and Boar/Snake/RangedGremlin/
+    // MeleeGremling/Hexling each mirror that in their own takeHit() override
+    // for their private `mode` field (a ranged weapon out-ranging an enemy's
+    // own aggro radius was leaving it un-aggro'd despite being hit — playtest).
     if (isCrit) this.sfx.crit();
     else this.sfx.hit();
     // Resist/weakness layer (Biome 2 Phase 1) — applied at the single choke point
@@ -4164,6 +4226,32 @@ export class MainScene extends Phaser.Scene {
       duration: 700,
       ease: "Cubic.easeOut",
       onComplete: () => text.destroy(),
+    });
+  }
+
+  // Small rising/fading callout at the player — an explicit deviation from
+  // the standing "never reveal what's missing" silent-guard convention,
+  // used only where a player specifically asked for feedback (e.g. firing a
+  // ranged weapon with no ammo loaded — the guard used to be a silent no-op
+  // and playtesters couldn't tell why nothing happened).
+  private spawnFeedbackText(x: number, y: number, text: string, color = "#ff9d5c"): void {
+    const t = this.add
+      .text(x, y - 20, text, {
+        fontFamily: "monospace",
+        fontSize: "13px",
+        color,
+        stroke: "#000000",
+        strokeThickness: 3,
+      })
+      .setOrigin(0.5, 0.5)
+      .setDepth(50);
+    this.tweens.add({
+      targets: t,
+      y: t.y - 22,
+      alpha: 0,
+      duration: 800,
+      ease: "Cubic.easeOut",
+      onComplete: () => t.destroy(),
     });
   }
 
@@ -4355,9 +4443,9 @@ export class MainScene extends Phaser.Scene {
   }
 
   // Shows the pause panel itself, assuming the world is already frozen
-  // (isPaused true). Split out from openPauseMenu so returning from "How to
-  // Play" (closeWelcome's howToPlayFromPause branch) can re-show the panel
-  // without re-running/being blocked by openPauseMenu's isPaused guard.
+  // (isPaused true). Split out from openPauseMenu so returning from Tips
+  // (closeTips) can re-show the panel without re-running/being blocked by
+  // openPauseMenu's isPaused guard.
   private showPauseMenuPanel(): void {
     this.pauseMenu.show({
       hintsEnabled: () => this.hints.isEnabled(),
@@ -4366,7 +4454,7 @@ export class MainScene extends Phaser.Scene {
       onToggleSfx: () => this.sfx.setEnabled(!this.sfx.isEnabled()),
       onResume: () => this.resumeGame(),
       onNewRun: () => this.scene.restart(),
-      onHowToPlay: () => this.openHowToPlay(),
+      onTips: () => this.openTips(),
     });
   }
 
@@ -4392,24 +4480,21 @@ export class MainScene extends Phaser.Scene {
 
   private closeWelcome(): void {
     this.welcomeUI.hide();
-    // Opened from the pause menu's "How to Play" button: hand back to the
-    // (still-frozen) pause menu instead of resuming play.
-    if (this.howToPlayFromPause) {
-      this.howToPlayFromPause = false;
-      this.showPauseMenuPanel();
-      return;
-    }
     this.time.paused = false;
     this.physics.world.resume();
     this.isPaused = false;
   }
 
-  // "How to Play" from the pause menu: swap the pause panel for the welcome
-  // overlay without unfreezing the world, then restore the pause menu on close.
-  private openHowToPlay(): void {
+  // "Tips" from the pause menu: swap the pause panel for the discovered-tips
+  // list without unfreezing the world, then restore the pause menu on close.
+  private openTips(): void {
     this.pauseMenu.hide();
-    this.howToPlayFromPause = true;
-    this.welcomeUI.show(() => this.closeWelcome());
+    this.tipsUI.show(this.hints.discovered(), () => this.closeTips());
+  }
+
+  private closeTips(): void {
+    this.tipsUI.hide();
+    this.showPauseMenuPanel();
   }
 
   // Finalize the run: freeze the world, post the score to the localStorage
@@ -5992,6 +6077,13 @@ export class MainScene extends Phaser.Scene {
     this.sfx.levelUp();
     const cx = this.scale.width / 2;
     const cy = this.scale.height * 0.3;
+
+    // Push the EventLog's own center-toast stack (e.g. a "Defeated X" combat
+    // toast landing the same beat as the level-up that kill just caused)
+    // below this banner instead of overlapping it (playtest). Cleared once
+    // the banner has fully faded (matches the fade tween's own timing below).
+    this.eventLogUI.setTopOffset(cy + 80);
+    this.time.delayedCall(2150, () => this.eventLogUI.setTopOffset(0));
 
     const title = this.add
       .text(cx, cy, `LEVEL UP!`, {

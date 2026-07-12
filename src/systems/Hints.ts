@@ -85,4 +85,12 @@ export class HintManager {
     this.shown.add(id);
     for (const cb of this.listeners) cb(HINT_TEXT[id], id);
   }
+
+  // Every tip discovered so far this run, in the order they first fired —
+  // Sets preserve insertion order, so no separate list is needed. Backs the
+  // Pause menu's re-readable Tips panel (playtest: right-click-to-upgrade
+  // and other non-obvious gestures needed a way to look the tip back up).
+  discovered(): string[] {
+    return Array.from(this.shown).map((id) => HINT_TEXT[id]);
+  }
 }
