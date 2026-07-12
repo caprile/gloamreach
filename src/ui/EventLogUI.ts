@@ -30,8 +30,8 @@ const RECIPE_TOAST_LEFT = INVENTORY_PANEL_X;
 const RECIPE_TOAST_TOP = INVENTORY_PANEL_Y + INVENTORY_PANEL_H + 12;
 const RECIPE_TOAST_ICON_SIZE = 24;
 const RECIPE_TOAST_SLIDE_MS = 280;
-const RECIPE_TOAST_HOLD_MS = 3200; // playtest feedback: hold/fade noticeably longer
-const RECIPE_TOAST_FADE_MS = 900;
+const RECIPE_TOAST_HOLD_MS = 5500; // playtest feedback (again): recipe/material toasts still vanished too fast
+const RECIPE_TOAST_FADE_MS = 1500;
 const RECIPE_TOAST_STAGGER_MS = 200;
 
 // Persistent event feed, anchored top-left beside KeybindsUI (not stacked
@@ -233,8 +233,8 @@ export class EventLogUI {
     this.scene.tweens.add({
       targets: [text, box],
       alpha: 0,
-      delay: 2200,
-      duration: 900,
+      delay: 4000, // playtest: center toasts (level-up etc.) lingered too briefly
+      duration: 1500,
       onComplete: () => {
         text.destroy();
         box.destroy();

@@ -109,11 +109,14 @@ export interface RangedWeaponConfig {
   maxRangePx: number; // replaces melee reach for both the attack gate + hover prompt
   ammoItemKey: string | null; // null = self-consumes from the equipped hotbar stack (Javelin)
   projectileTexture: string;
+  // Rotation offset (radians) for the in-flight sprite when its art's "forward"
+  // isn't +x — the javelin streak points up, so +90° makes it fly nose-first.
+  projectileArtAngleOffset?: number;
 }
 
 const RANGED_WEAPONS: Partial<Record<WeaponType, RangedWeaponConfig>> = {
   slingshot: { projectileSpeed: 420, maxRangePx: 260, ammoItemKey: "slingshot_pellets", projectileTexture: "pellet_projectile" },
-  javelin: { projectileSpeed: 300, maxRangePx: 220, ammoItemKey: null, projectileTexture: "javelin_projectile" },
+  javelin: { projectileSpeed: 300, maxRangePx: 220, ammoItemKey: null, projectileTexture: "javelin_projectile", projectileArtAngleOffset: Math.PI / 2 },
 };
 
 export function rangedWeaponConfig(weapon: WeaponType): RangedWeaponConfig | undefined {

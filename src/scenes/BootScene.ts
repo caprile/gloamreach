@@ -490,12 +490,17 @@ export class BootScene extends Phaser.Scene {
     g.fillRect(8, 8, 8, 2); // band
     g.generateTexture("icon_slingshot", ICON, ICON);
 
-    // Javelin: long thin shaft with a pale bone tip, slimmer than the spear.
+    // Javelin: drawn DIAGONALLY (bottom-left -> top-right) so it reads clearly
+    // apart from the vertical Primal Spear icon at a glance — a thrown weapon,
+    // not a thrusting one.
     g.clear();
-    g.fillStyle(0x7a4a22, 1);
-    g.fillRect(11, 6, 2, 16);
+    g.lineStyle(2, 0x7a4a22, 1);
+    g.beginPath();
+    g.moveTo(4, 20);
+    g.lineTo(18, 6);
+    g.strokePath();
     g.fillStyle(0xe8e0cc, 1);
-    g.fillTriangle(9, 6, 15, 6, 12, 0);
+    g.fillTriangle(15, 3, 22, 4, 18, 10); // bone tip at the top-right point
     g.generateTexture("icon_javelin", ICON, ICON);
 
     // Slingshot Pellets: a small pile of round gray stones.

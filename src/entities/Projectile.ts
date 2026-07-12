@@ -14,6 +14,11 @@ export interface ProjectileConfig {
   maxRangePx: number;
   sourceIsPlayer: boolean; // who fired it — not yet used to pick a group (only enemy-sourced projectiles exist so far), but part of describing a projectile regardless of source
   isCrit?: boolean; // player ranged crit (M-SS) — rolled at fire time, carried so the impact damage number tints
+  // Extra rotation (radians) added to the travel angle when orienting the
+  // sprite — for a texture whose "forward" isn't +x. The javelin art points UP
+  // (-y), so it needs +90° to point along its flight; symmetric art (pellets)
+  // leaves this 0.
+  artAngleOffset?: number;
 }
 
 // Whatever spawns projectiles (currently just MainScene) implements this —
@@ -46,7 +51,7 @@ export class Projectile extends Phaser.Physics.Arcade.Sprite {
     this.velY = Math.sin(cfg.angle) * cfg.speed;
     scene.add.existing(this);
     scene.physics.add.existing(this);
-    this.setRotation(cfg.angle);
+    this.setRotation(cfg.angle + (cfg.artAngleOffset ?? 0));
   }
 
   // Arcade Groups overwrite a freshly-enabled body's velocity with their own

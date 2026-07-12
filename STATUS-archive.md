@@ -4208,3 +4208,61 @@ error-free. No `RECIPES.md` change (no recipe/cost changes).
 committed at `.claude/plans/amethyst-warding-vein.md`), then **M-TE**, then **M-W1** proper
 (multi-biome content + deterministic seeded gen in this now-circular world).
 
+
+### 5x — Playtest-readiness Tier 1 (discovered-material toast + hover highlight + first-damage hint)
+
+Off the playtest-polish backlog (see the previous "Balancing dashboard" entry's triage
+notes), the three cheapest comprehension-gap fixes ahead of handing the build to outside
+playtesters. Sonnet-class fixes/UI on existing systems — no new mechanic. Passive HP regen
+(the fourth backlog item) was explicitly cut per the user: Comfort (Bedroll) + cooked-food
+buffs already own HP sustain, and a passive trickle on top would make both feel pointless.
+
+**Discovered-material toast** (`EventLog.ts`/`EventLogUI.ts`/`MainScene.ts`). New
+`LogKind: "material"` reuses the existing recipe-unlock slide-in/stack/fade toast verbatim
+(`EventLogUI`'s `enqueueRecipeToast`/`spawnRecipeToast`, which only ever hardcoded the
+`recipe` color — now reads `KIND_COLORS[entry.kind]` so both kinds share one queue/stack
+instead of colliding if they fire the same beat), in a new blue accent (`#8ac2e0`) distinct
+from recipe's amber. New `MainScene.discoverMaterial(key)` centralizes every
+`discovered.add()` call site (world pickup via `collectNode`, `addToBackpack` — crafting/
+cooking/processing output included — and `reconcileBackpackDiscovery` for chest/rack loot)
+so the toast fires exactly once, wherever a key is first obtained, regardless of path. A
+new module-level `CRAFTED_OUTPUT_KEYS` (unioned from `RECIPES`/`PROCESS_RECIPES`/
+`COOK_RECIPES`/`REFINE_RECIPES` output keys) excludes crafted/cooked/processed/refined
+goods from the toast — those already get their own "New Recipe Unlocked!" toast the moment
+they become craftable, so a second "Discovered: X" on first craft would be redundant.
+*Verified live: first `wood` pickup → "Discovered: Wood" material toast + its recipe
+unlocks; a second `wood` pickup → no new entries (dedup); adding a crafted `stone_axe` →
+no material toast.*
+
+**Hover highlight** (`MainScene.ts`). A world-space `Graphics` outline (`hoverHighlight`,
+mirrors `attackRangeRing`'s idiom) redrawn each frame in `updateHover()`, strictly gated on
+the SAME `prompt` string the bottom-right text already uses — so a no-tool-equipped or
+out-of-reach hover shows no highlight either, preserving the prompt-gating design's
+"reveal nothing" rule. Depth = `ysortDepth(target.y) + 0.5` (mirrors GremlinKing's
+telegraph-graphics depth convention), so it draws just above whatever's hovered — works
+uniformly across nodes/enemies/racks/shacks/altars/workbench/campfire/forge since they all
+expose `x`/`y`/`displayWidth`/`displayHeight`. *Verified live: `commandBuffer.length` is 0
+with a null prompt, 14 (a drawn circle) with a hovered node + non-null prompt; depth
+computed correctly for the target's y.*
+
+**First-damage hint, not 30%-HP-threshold hint.** The `low_hp` hint used to poll
+`health/max <= 0.3` every frame; renamed to `took_damage` and moved to fire once, right
+when `applyDamageToPlayer()` actually lands a hit — a fresh player doesn't need to bleed
+down to 30% before learning food/rest heal over time, and the old poll could also fire
+well into a fight rather than at the actually-informative moment (first hit ever). Text
+updated to mention both cooked food and Comfort/campfire resting. *Verified live: one hit
+→ hint fires once with the new text; a second hit → no re-fire (idempotent, matches every
+other `HintManager.trigger()` call).*
+
+**Verification:** `tsc --noEmit` clean; preview boots console-error-free (driven via
+`preview_eval` — the preview tab loaded backgrounded/hidden this session, the documented
+quirk in `CLAUDE.md`'s verification workflow; `window.__game.scene.start('MainScene')`
+force-advanced the stalled scene transition so live state could still be exercised).
+`RECIPES.md` unchanged (no recipe/cost changes).
+
+**Still queued:** inventory auto-sort, a ranged starter weapon, then a minimal
+code-generated SFX layer (hit/pickup/craft/level-up/nightfall/death — same placeholder
+ethos as the generated textures, swappable later) before a second/wider playtest round.
+Real pixel art + animations stay deferred until content/balance settle further (last, per
+`CLAUDE.md` roadmap item 8). Then the master-plan tail: **M-TE** (trophy gear), **M-W1**
+(multi-biome world).

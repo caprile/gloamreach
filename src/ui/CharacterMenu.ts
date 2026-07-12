@@ -14,6 +14,7 @@ import {
   STAT_TYPES,
   statDisplayName,
   statDescription,
+  statTotalEffect,
   xpToNextPlayerLevel,
   type PlayerProgression,
   type StatType,
@@ -268,7 +269,7 @@ export class CharacterMenu {
 
     for (const stat of STAT_TYPES) {
       this.renderStatRow(stat, x0, y);
-      y += 44;
+      y += 52;
     }
   }
 
@@ -277,7 +278,10 @@ export class CharacterMenu {
     const canSpend = p.unspentPoints > 0;
 
     this.text(x0, y, `${statDisplayName(stat)}: ${p.statValue(stat)}`, 13, "#ffffff");
-    this.text(x0, y + 18, statDescription(stat), 10, "#5b6472");
+    this.text(x0, y + 17, statDescription(stat), 10, "#5b6472");
+    // Current cumulative effect of the points already spent (playtest ask) —
+    // amber to set it apart from the grey per-point rate above it.
+    this.text(x0, y + 31, `Now: ${statTotalEffect(stat, p)}`, 11, "#e3b25a");
 
     // "+" button, right-aligned. Greyed/no-op when no points are unspent.
     const btn = this.scene.add

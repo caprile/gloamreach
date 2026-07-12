@@ -14,8 +14,8 @@ const DEPTH_TEXT = 2861;
 const CARD_W = 264;
 const RIGHT_MARGIN = 16;
 const PAD = 12;
-const HOLD_MS = 5200;
-const FADE_MS = 700;
+const HOLD_MS = 8000; // playtest: tips (esp. gloam-shard/material help) vanished too fast
+const FADE_MS = 1400;
 const SLIDE_MS = 300;
 
 export class HintUI {

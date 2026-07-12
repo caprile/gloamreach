@@ -17,12 +17,15 @@ export type HintId =
   | "stamina_empty"
   | "took_damage"
   | "nightfall"
-  | "elite_trophy";
+  | "elite_trophy"
+  | "right_click_tip"
+  | "altar_found"
+  | "totem_ready";
 
 // Plain, terse tip text — no mascot voice, no cryptic flavor. Each nudges the
 // mechanic just enough to unblock a cold player without solving anything.
 const HINT_TEXT: Record<HintId, string> = {
-  awaken: "Move with WASD. Explore and gather to grow stronger.",
+  awaken: "Move with WASD. Press F11 for fullscreen. Explore and gather to grow stronger.",
   pickup_reach: "Left-click things within reach to interact.",
   tool_locked: "You'll need the right tool equipped for that.",
   open_menu: "Press Tab to open your pack and craft what you've learned.",
@@ -30,6 +33,9 @@ const HINT_TEXT: Record<HintId, string> = {
   took_damage: "Hurt? Cooked food and resting near a lit campfire both heal you over time.",
   nightfall: "Night falls. Enemies grow bolder in the dark — a torch lights the way.",
   elite_trophy: "That was an elite — it dropped a trophy. A Relic Forge can turn trophies into power.",
+  right_click_tip: "Right-click equipped gear or a placed station to inspect and upgrade it.",
+  altar_found: "You found the Gremlin War Camp. Its altar can summon a mighty foe — you'll need a totem to call it.",
+  totem_ready: "You hold a Gremlin Totem. Take it to the Boss Altar and place it in the fire to summon the boss.",
 };
 
 const STORAGE_KEY = "survivor-rpg:hints-enabled:v1";

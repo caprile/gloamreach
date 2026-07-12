@@ -61,6 +61,9 @@ const ERUPT_MAX_RANGE = 420; // won't target the player further than this (clamp
 
 const MELEE_STOP_RANGE = 150; // both attacks reach from here; stops approaching inside it
 const ATTACK_COOLDOWN_MS = 850;
+// How close to spawn counts as "home" while wandering back deaggro'd — below
+// this it just idles instead of endlessly micro-adjusting (mirrors GremlinKing).
+const RETURN_HOME_EPS = 20;
 
 function telegraphMsFor(attack: WardenAttackType): number {
   return attack === "smash" ? SMASH_TELEGRAPH_MS : ERUPT_TELEGRAPH_MS;
@@ -187,9 +190,21 @@ export class Gloamwarden extends Enemy {
 
     const dist = Phaser.Math.Distance.Between(this.x, this.y, playerX, playerY);
     if (!this.aggroed) {
-      if (dist <= AGGRO_RADIUS) this.aggroed = true;
-      else {
-        body.setVelocity(0, 0);
+      if (dist <= AGGRO_RADIUS) {
+        this.aggroed = true;
+      } else {
+        // Deaggro'd (kited past the leash) — wander back toward its own spawn
+        // instead of idling wherever it ended up, so it doesn't get stranded
+        // far from the vein (same behavior as the Gremlin King).
+        if (distFromSpawn > RETURN_HOME_EPS) {
+          const angle = Phaser.Math.Angle.Between(this.x, this.y, this.spawnX, this.spawnY);
+          const vx = Math.cos(angle) * MOVE_SPEED;
+          const vy = Math.sin(angle) * MOVE_SPEED;
+          body.setVelocity(vx, vy);
+          this.applyFacing(vx, vy);
+        } else {
+          body.setVelocity(0, 0);
+        }
         return;
       }
     }

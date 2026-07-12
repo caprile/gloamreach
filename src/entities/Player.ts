@@ -139,6 +139,32 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     return this.facing;
   }
 
+  // Visual "whoosh" for a dash — a few translucent afterimages of the player
+  // sprite that linger at the spots it just passed through and fade out, so the
+  // dash burst reads as a deliberate movement tech, not just a speed blip.
+  // Staggered captures over the dash's ~105ms window trace the path.
+  playDashFx(): void {
+    const spawnGhost = () => {
+      const ghost = this.scene.add
+        .image(this.x, this.y, "player")
+        .setScale(this.scaleX, this.scaleY)
+        .setAlpha(0.5)
+        .setTint(0x9fd8ff)
+        .setDepth(this.depth - 1);
+      this.scene.tweens.add({
+        targets: ghost,
+        alpha: 0,
+        scale: this.scaleX * 0.8,
+        duration: 260,
+        ease: "Quad.easeOut",
+        onComplete: () => ghost.destroy(),
+      });
+    };
+    spawnGhost();
+    this.scene.time.delayedCall(35, spawnGhost);
+    this.scene.time.delayedCall(70, spawnGhost);
+  }
+
   // Called by MainScene whenever the equipped tool/weapon changes (hotbar
   // select/cycle/drag/craft). Pass null to hide (nothing equipped).
   setEquippedIcon(texture: string | null): void {

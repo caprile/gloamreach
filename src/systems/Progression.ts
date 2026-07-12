@@ -49,6 +49,28 @@ export function statDescription(stat: StatType): string {
   return STAT_DESCRIPTIONS[stat];
 }
 
+// The CURRENT cumulative effect of every point already spent on `stat` — shown
+// on the Character menu's Stats tab so a player can see "how much +HP am I
+// actually getting" rather than just the per-point rate (playtest request).
+export function statTotalEffect(stat: StatType, p: PlayerProgression): string {
+  const n = p.statValue(stat);
+  const pct = (v: number, dp = 0) => `${(v * 100).toFixed(dp)}%`;
+  switch (stat) {
+    case "endurance":
+      return `+${n * ENDURANCE_STAMINA_PER_POINT} max Stamina, +${pct(n * ENDURANCE_STAMINA_REGEN_PCT_PER_POINT)} regen`;
+    case "vitality":
+      return `+${n * VITALITY_HP_PER_POINT} max HP, +${pct(n * VITALITY_HEALING_PCT_PER_POINT, 1)} healing`;
+    case "strength":
+      return `+${(n * STRENGTH_CRIT_MULT_PER_POINT).toFixed(2)}x crit damage`;
+    case "agility":
+      return `+${pct(n * AGILITY_CRIT_CHANCE_PER_POINT, 1)} crit chance`;
+    case "intelligence":
+      return `+${pct(n * INT_XP_PCT_PER_POINT, 1)} skill XP`;
+    case "wisdom":
+      return `+${pct(n * WISDOM_BUFF_DURATION_PCT_PER_POINT)} buff duration`;
+  }
+}
+
 // --- tunable constants ---
 // XP to advance from `level` to `level+1`. Steeper than skills' linear curve so
 // leveling feels fast early (fed by many skills leveling in parallel) and

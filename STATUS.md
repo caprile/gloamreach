@@ -2,11 +2,11 @@
 
 ## Current State
 
-_Living snapshot — edit in place, never append. Last shipped: **Enemy respawn —
-fog top-up: the enemy roster is no longer one-shot/finite; a periodic check keeps
-the live non-boss count near the player topped up (spawning off-screen in the fog
-ring at a ~5 min/area pace, meat-weighted), so food/loot stay renewable
-over a run. Bosses + shack guards excluded**, **2026-07-11**. Prior: M-SS (stats/
+_Living snapshot — edit in place, never append. Last shipped: **Playtest polish batch
+(11 fixes) — F11/right-click hints, elite red hover tooltip, diagonal javelin icon +
+nose-first thrown angle, dash afterimage VFX, Gloamwarden return-to-spawn leash, slower
+text fades, altar/totem win-path guidance hints, and a "Now:" total-effect line per stat
+on the Character menu**, **2026-07-12**. Prior: Enemy respawn (fog top-up); M-SS (stats/
 skills depth pass — crit + distinct-axis effects + relic synergy)._
 
 **The game.** Top-down 2D pixel survival-ARPG (Phaser 3 + TypeScript + Vite; all
@@ -36,9 +36,11 @@ death ends a run and posts a `localStorage` high score; killing the Gremlin King
 win. The world is now circular + much larger (M-W1 geometry prep, above); deterministic
 seeded world-gen and actual multi-biome content are still deferred to M-W1 proper.
 
-**In progress / next.** Enemy respawn (fog top-up — see the top entry below) shipped this
-session, off the build order, so the enemy roster is renewable and food/loot no longer drain
-to empty over a run. Before that, M-SS gave Stats + Skills each a distinct, always-live axis
+**In progress / next.** A playtest polish batch (11 fixes — see the top entry below) shipped
+this session off the build order (discoverability hints, elite/boss hover tooltip, javelin
+art + throw angle, dash VFX, mini-boss leash, slower text fades, altar/totem guidance, stat
+total-effect display). Before that, enemy respawn (fog top-up) made the roster renewable, and
+M-SS gave Stats + Skills each a distinct, always-live axis
 relics don't touch (crit, regen/healing, XP/buff-duration, gather bonuses, dash-window), and
 converted HP/stamina relics flat→percent so they multiply a stats build instead of dwarfing it.
 Real pixel art/animations stay deliberately deferred until content/balance settle further
@@ -67,6 +69,48 @@ now that crit is a player-driven damage ramp).
 ## Recent Entries
 
 > Older entries in STATUS-archive.md.
+
+### Playtest polish batch — hints, elite tooltip, javelin, dash VFX, miniboss leash, text timings, stats display
+
+Grab-bag of 11 playtest-feedback fixes (Sonnet-class polish on existing systems, no
+new mechanic). Verified live via `preview_eval` + screenshots; `tsc --noEmit` clean.
+
+- **F11 fullscreen reminder** — folded into the `awaken` hint text and added a
+  "Fullscreen: F11" line to the Keybinds panel (F11 is the browser's own native
+  fullscreen; nothing to wire).
+- **Right-click discoverability** — new `right_click_tip` hint ("Right-click equipped
+  gear or a placed station to inspect and upgrade it") triggered the first time the
+  player places a station OR equips an armor piece, plus a "Inspect / upgrade: Right
+  Click" Keybinds line.
+- **Elite/boss red hover tooltip** — `promptForEnemy` now prefixes `Elite ` for
+  `enemy.elite`, and a new `promptColorFor()` tints the bottom-right prompt text:
+  crimson `#ff5a5a` for a boss/mini-boss (`GremlinKing`/`Gloamwarden`), orange
+  `#ff9d5c` for elites, white otherwise. Verified: "[LMB] Attack Elite Boar".
+- **Javelin art + thrown angle** — `icon_javelin` redrawn DIAGONALLY (bottom-left →
+  top-right) so it no longer reads like the vertical Primal Spear icon. The in-flight
+  javelin now flies nose-first: added `ProjectileConfig.artAngleOffset` (applied in
+  `setRotation`) + `RangedWeaponConfig.projectileArtAngleOffset` = `Math.PI/2` for the
+  javelin (its streak art points up). Verified rotation = angle+90°.
+- **Dash more obvious** — `Player.playDashFx()` spawns 3 staggered translucent
+  blue-tinted afterimage ghosts of the player sprite that fade/shrink over 260ms;
+  called from the `frame.dashStarted` branch in `update()`.
+- **Gloamwarden roams back to spawn** — its `updateIdle` deaggro branch now walks the
+  mini-boss back toward its spawn point (mirrors `GremlinKing`'s `RETURN_HOME_EPS`
+  return-home behavior) instead of idling wherever it was kited to.
+- **All text fades slower** (playtest: "text isn't fading out slow enough", gloam-shard
+  help vanished too fast) — HintUI HOLD 5200→8000 / FADE 700→1400; EventLogUI recipe/
+  material toast HOLD 3200→5500 / FADE 900→1500; center toast delay 2200→4000 /
+  duration 900→1500.
+- **Altar/win-path guidance** — two new hints so the goal is clear after clearing camps:
+  `altar_found` (fires when the War Camp altar is discovered on the map) and
+  `totem_ready` (per-frame idempotent poll — fires once the player holds a
+  `gremlin_totem`, pointing them to place it in the Boss Altar's fire). This
+  deliberately relaxes the old "never spell out the win condition" hint rule, per
+  the user's request.
+- **Stats page total effect** — new `Progression.statTotalEffect(stat, p)` returns the
+  CURRENT cumulative effect of points already spent (e.g. Vitality 5 → "+20 max HP,
+  +7.5% healing"); shown as an amber "Now: …" line under each stat in `CharacterMenu`'s
+  Stats tab (row height 44→52 to fit the third line).
 
 ### Enemy respawn — fog top-up (playtest food-economy fix)
 
@@ -457,61 +501,3 @@ Auto-sort merges+front-packs (wood 5+10→15, alphabetical); Shift-split 11→6+
 next slot, null fallback when the container is full. All 6 SFX cues fire with no console
 errors. The inventory panel renders the Sort button, the Ammo equipment slot (with count
 badge), and the "Ammo: N …" Combat-column line.
-
-### 5x — Playtest-readiness Tier 1 (discovered-material toast + hover highlight + first-damage hint)
-
-Off the playtest-polish backlog (see the previous "Balancing dashboard" entry's triage
-notes), the three cheapest comprehension-gap fixes ahead of handing the build to outside
-playtesters. Sonnet-class fixes/UI on existing systems — no new mechanic. Passive HP regen
-(the fourth backlog item) was explicitly cut per the user: Comfort (Bedroll) + cooked-food
-buffs already own HP sustain, and a passive trickle on top would make both feel pointless.
-
-**Discovered-material toast** (`EventLog.ts`/`EventLogUI.ts`/`MainScene.ts`). New
-`LogKind: "material"` reuses the existing recipe-unlock slide-in/stack/fade toast verbatim
-(`EventLogUI`'s `enqueueRecipeToast`/`spawnRecipeToast`, which only ever hardcoded the
-`recipe` color — now reads `KIND_COLORS[entry.kind]` so both kinds share one queue/stack
-instead of colliding if they fire the same beat), in a new blue accent (`#8ac2e0`) distinct
-from recipe's amber. New `MainScene.discoverMaterial(key)` centralizes every
-`discovered.add()` call site (world pickup via `collectNode`, `addToBackpack` — crafting/
-cooking/processing output included — and `reconcileBackpackDiscovery` for chest/rack loot)
-so the toast fires exactly once, wherever a key is first obtained, regardless of path. A
-new module-level `CRAFTED_OUTPUT_KEYS` (unioned from `RECIPES`/`PROCESS_RECIPES`/
-`COOK_RECIPES`/`REFINE_RECIPES` output keys) excludes crafted/cooked/processed/refined
-goods from the toast — those already get their own "New Recipe Unlocked!" toast the moment
-they become craftable, so a second "Discovered: X" on first craft would be redundant.
-*Verified live: first `wood` pickup → "Discovered: Wood" material toast + its recipe
-unlocks; a second `wood` pickup → no new entries (dedup); adding a crafted `stone_axe` →
-no material toast.*
-
-**Hover highlight** (`MainScene.ts`). A world-space `Graphics` outline (`hoverHighlight`,
-mirrors `attackRangeRing`'s idiom) redrawn each frame in `updateHover()`, strictly gated on
-the SAME `prompt` string the bottom-right text already uses — so a no-tool-equipped or
-out-of-reach hover shows no highlight either, preserving the prompt-gating design's
-"reveal nothing" rule. Depth = `ysortDepth(target.y) + 0.5` (mirrors GremlinKing's
-telegraph-graphics depth convention), so it draws just above whatever's hovered — works
-uniformly across nodes/enemies/racks/shacks/altars/workbench/campfire/forge since they all
-expose `x`/`y`/`displayWidth`/`displayHeight`. *Verified live: `commandBuffer.length` is 0
-with a null prompt, 14 (a drawn circle) with a hovered node + non-null prompt; depth
-computed correctly for the target's y.*
-
-**First-damage hint, not 30%-HP-threshold hint.** The `low_hp` hint used to poll
-`health/max <= 0.3` every frame; renamed to `took_damage` and moved to fire once, right
-when `applyDamageToPlayer()` actually lands a hit — a fresh player doesn't need to bleed
-down to 30% before learning food/rest heal over time, and the old poll could also fire
-well into a fight rather than at the actually-informative moment (first hit ever). Text
-updated to mention both cooked food and Comfort/campfire resting. *Verified live: one hit
-→ hint fires once with the new text; a second hit → no re-fire (idempotent, matches every
-other `HintManager.trigger()` call).*
-
-**Verification:** `tsc --noEmit` clean; preview boots console-error-free (driven via
-`preview_eval` — the preview tab loaded backgrounded/hidden this session, the documented
-quirk in `CLAUDE.md`'s verification workflow; `window.__game.scene.start('MainScene')`
-force-advanced the stalled scene transition so live state could still be exercised).
-`RECIPES.md` unchanged (no recipe/cost changes).
-
-**Still queued:** inventory auto-sort, a ranged starter weapon, then a minimal
-code-generated SFX layer (hit/pickup/craft/level-up/nightfall/death — same placeholder
-ethos as the generated textures, swappable later) before a second/wider playtest round.
-Real pixel art + animations stay deferred until content/balance settle further (last, per
-`CLAUDE.md` roadmap item 8). Then the master-plan tail: **M-TE** (trophy gear), **M-W1**
-(multi-biome world).

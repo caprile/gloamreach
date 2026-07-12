@@ -986,6 +986,7 @@ export class MainScene extends Phaser.Scene {
       this.stamina.spend(DASH_STAMINA_COST);
       // light_armor extends the dodge window (M-SS "Evade Window").
       this.invulnerableUntil = this.time.now + DASH_IFRAME_MS + dashIframeBonusMs(this.skills);
+      this.player.playDashFx();
     }
     this.run.tick(delta);
     this.updateDayNight(delta);
@@ -2916,6 +2917,9 @@ export class MainScene extends Phaser.Scene {
         label: "Gremlin War Camp",
         tint: 0xd6483a,
       });
+      // Point the player at the win path now that they've found the camp — the
+      // altar + totem loop is otherwise easy to miss after clearing the guards.
+      this.hints.trigger("altar_found");
     }
     // Gremlin Shacks (M-WC backlog item) — same discovered-landmark treatment,
     // in a distinct wood-brown so they read differently from the war camp.
@@ -2947,6 +2951,11 @@ export class MainScene extends Phaser.Scene {
         label: "Gloaming Vein",
         tint: 0x9a5ee8,
       });
+    }
+    // Once the player is actually holding a Totem, spell out what to do with it
+    // (trigger is once-per-run idempotent, so a per-frame poll here is fine).
+    if (this.backpack.count("gremlin_totem") + this.hotbar.container.count("gremlin_totem") > 0) {
+      this.hints.trigger("totem_ready");
     }
   }
 
@@ -3227,7 +3236,7 @@ export class MainScene extends Phaser.Scene {
                     ? this.promptForForge(hoveredForge)
                     : null;
     if (prompt) {
-      this.promptText.setText(prompt).setVisible(true);
+      this.promptText.setText(prompt).setColor(this.promptColorFor()).setVisible(true);
       this.input.setDefaultCursor("pointer");
     } else {
       this.promptText.setVisible(false);
@@ -3313,7 +3322,20 @@ export class MainScene extends Phaser.Scene {
       Phaser.Math.Distance.Between(this.player.x, this.player.y, enemy.x, enemy.y) <= this.attackRangeFor(enemy);
     if (!inReach) return null;
     if (!this.equippedWeapon) return null;
-    return `[LMB] Attack ${enemy.displayName}`;
+    // Flag the tougher variants right in the prompt so a player knows what
+    // they're swinging at (paired with a red prompt color in updateHover).
+    const prefix = enemy.elite ? "Elite " : "";
+    return `[LMB] Attack ${prefix}${enemy.displayName}`;
+  }
+
+  // Prompt color for the currently hovered target: crimson for a boss/mini-boss
+  // or an elite (a "this one's dangerous" tell), plain white otherwise.
+  private promptColorFor(): string {
+    const e = this.hoveredEnemy;
+    if (!e) return "#ffffff";
+    if (e instanceof GremlinKing || e instanceof Gloamwarden) return "#ff5a5a";
+    if (e.elite) return "#ff9d5c";
+    return "#ffffff";
   }
 
   // A placed Drying Rack: prompt to open its processing menu when in reach.
@@ -3619,6 +3641,7 @@ export class MainScene extends Phaser.Scene {
       maxRangePx: cfg.maxRangePx,
       sourceIsPlayer: true,
       isCrit: critResult.crit,
+      artAngleOffset: cfg.projectileArtAngleOffset,
     });
 
     // Refreshes hotbar/ammo-slot UI counts and — critically for Javelin —
@@ -4362,6 +4385,9 @@ export class MainScene extends Phaser.Scene {
     }
     this.placedObjects.push(image);
     this.refreshStationLabel(image);
+    // First time they put a station down, teach the right-click inspect/upgrade
+    // gesture (also covered for equipped gear at the armor-equip site).
+    this.hints.trigger("right_click_tip");
     // Placing a Workbench for the first time can newly unlock tier 1+
     // recipes' visibility (see Crafting.refresh's workbenchPlaced gate) —
     // re-run discovery so that happens immediately, not just on next pickup.
@@ -4953,6 +4979,9 @@ export class MainScene extends Phaser.Scene {
     container.set(index, null);
     if (previous) this.returnArmorToBackpack(previous);
     this.eventLog.add("info", `Equipped ${def.name}`);
+    // Teach right-click inspect/upgrade the first time they wear a piece (also
+    // covered at the station-placement site).
+    this.hints.trigger("right_click_tip");
     this.afterItemMove();
   }
 
@@ -5054,6 +5083,7 @@ export class MainScene extends Phaser.Scene {
         "Sprint: Hold Shift",
         "Dash: Space (while moving)",
         "Interact: Left Click",
+        "Inspect / upgrade: Right Click",
         "Inventory: Tab",
         "Character: K",
         "World map: M",
@@ -5063,6 +5093,7 @@ export class MainScene extends Phaser.Scene {
         "Row2 scroll toggle: H",
         "Take all (chest): R",
         "Run info toggle: J",
+        "Fullscreen: F11",
         "Pause / close: Esc",
       ],
     );
