@@ -23,7 +23,13 @@ export class HintUI {
   private restX: number;
   private centerY: number;
   private objects: Phaser.GameObjects.GameObject[] = [];
-  // Only one hint is on screen at a time; a new one replaces the current.
+  // Only one hint is on screen at a time. A hint that arrives while one is
+  // already showing used to replace it immediately, so back-to-back triggers
+  // (e.g. two hints firing within the same second) could bump a tip off
+  // screen before the player ever read it. Now it queues instead, and the
+  // next one only appears once the current tip has had its full HOLD_MS.
+  private queue: string[] = [];
+  private displaying = false;
   private hideEvent?: Phaser.Time.TimerEvent;
   private slideTween?: Phaser.Tweens.Tween;
 
@@ -34,7 +40,21 @@ export class HintUI {
   }
 
   show(text: string): void {
-    // Replace any hint currently showing so two never stack/overlap.
+    this.queue.push(text);
+    if (!this.displaying) this.advance();
+  }
+
+  private advance(): void {
+    const text = this.queue.shift();
+    if (text === undefined) {
+      this.displaying = false;
+      return;
+    }
+    this.displaying = true;
+    this.display(text);
+  }
+
+  private display(text: string): void {
     this.clear();
 
     const wrapWidth = CARD_W - PAD * 2;
@@ -103,12 +123,18 @@ export class HintUI {
   }
 
   private fadeOut(): void {
-    if (this.objects.length === 0) return;
+    if (this.objects.length === 0) {
+      this.advance();
+      return;
+    }
     this.scene.tweens.add({
       targets: this.objects,
       alpha: 0,
       duration: FADE_MS,
-      onComplete: () => this.clear(),
+      onComplete: () => {
+        this.clear();
+        this.advance();
+      },
     });
   }
 

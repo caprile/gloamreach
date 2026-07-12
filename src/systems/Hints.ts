@@ -34,7 +34,7 @@ const HINT_TEXT: Record<HintId, string> = {
   nightfall: "Night falls. Enemies grow bolder in the dark — a torch lights the way.",
   elite_trophy: "That was an elite — it dropped a trophy. A Relic Forge can turn trophies into power.",
   right_click_tip: "Right-click equipped gear or a placed station to inspect and upgrade it.",
-  altar_found: "You found the Gremlin War Camp. Its altar can summon a mighty foe — you'll need a totem to call it.",
+  altar_found: "You found the Gremlin War Camp — a heavily-defended stronghold. Worth exploring further once you're strong enough.",
   totem_ready: "You hold a Gremlin Totem. Take it to the Boss Altar and place it in the fire to summon the boss.",
 };
 

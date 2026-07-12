@@ -195,6 +195,12 @@ const ALTAR_CLEAR_RADIUS = 1400;
 // land a bush/tree inside the wall.
 const WAR_CAMP_RADIUS = 230; // palisade wall radius
 const WAR_CAMP_CLEAR_RADIUS = 300; // resource-node/enemy spawn exclusion edge
+// The camp is a big, deliberately-clumped POI (breadcrumb prop trail runs
+// 500-1050px out) — using fog's plain REVEAL_RADIUS (260px) for "discovered"
+// meant the player had to walk almost up to the palisade before it registered.
+// This wider radius fires discovery while still approaching through the
+// clutter trail, matching how visually obvious the camp already is by then.
+const ALTAR_DISCOVERY_RADIUS = 900;
 // Gloaming Vein POI (rare mineable rarity-ore, gated behind the Gloamwarden).
 // Placed a notable distance from both world center and the war camp so it reads
 // as its own destination. VEIN_CLEAR_RADIUS is the no-spawn zone kept clear of
@@ -2923,7 +2929,8 @@ export class MainScene extends Phaser.Scene {
     // landmark on the minimap.
     for (const altar of this.bossAltars) {
       if (altar.discoveredOnMap) continue;
-      if (!inReveal(altar.x, altar.y)) continue;
+      if (Phaser.Math.Distance.Between(this.player.x, this.player.y, altar.x, altar.y) > ALTAR_DISCOVERY_RADIUS)
+        continue;
       altar.discoveredOnMap = true;
       this.exploredMap.addLandmark({
         worldX: altar.x,
