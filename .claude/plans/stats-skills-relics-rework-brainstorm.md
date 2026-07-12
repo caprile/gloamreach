@@ -1,92 +1,109 @@
-# Stats / Skills / Relics rework — brainstorm & design direction
+# Stats / Skills / Relics rework — brainstorm (PROMOTED — superseded by the locked plan)
 
-**Status: BRAINSTORM IN PROGRESS — not locked, not built.** Started 2026-07-11 after the
-third playtest fix batch (STATUS.md `### 5aa`). Captured here so the direction survives
-across sessions. Do NOT start implementing until this is turned into a locked plan with
-the user.
+**Status: PROMOTED 2026-07-11 → `.claude/plans/crit-tempering-lodestar.md`** (milestone
+**M-SS**). That file is the locked, step-by-step implementation plan with final numbers;
+build from it (on **Opus**). This file is kept as the brainstorm/decision trail only —
+don't build from it.
 
 ## The problem (the user's words)
 
 Stats (Endurance/Vitality/Strength/Agility/Intelligence/Willpower) and Skills
 (slash/blunt/pierce/ranged/magic, heavy/light armor, running/blocking/chopping/mining)
-"all feel pretty negligible now compared to relics." Relics (M-RL) hand out big
-percentage stat boosts (e.g. +8–40% damage, +8–25% move speed, flat max-HP, kill-heal)
-that dwarf what a stat point or a skill level does today.
+"all feel pretty negligible now compared to relics." Two root causes confirmed in code:
 
-Current per-point / per-level payoffs, for reference:
-- **Stats** (`Progression.ts`): Endurance +1 max Stamina/pt, Vitality +1 max HP/pt,
-  Strength/Agility −0.5% melee/ranged stamina cost/pt, Intelligence/Willpower are dead
-  placeholders (spell cast time / mana — neither system exists).
-- **Skills** (`Skills.ts`): weapon skills +0.5% damage/level; Running +0.5% sprint
-  speed/level; the other 6 skills (armor/chopping/mining/blocking) have **no mechanical
-  effect at all — they only gate recipe discovery**.
-- **Relics** (`Relics.ts`): whole-percent buffs across damage/move/stamina-cost/
-  damage-taken/kill-heal/maxHP/maxStamina/xp, stacking additively, scaled by power tier.
+1. **Half the sheet does nothing.** 6 of 11 skills (heavy_armor, light_armor, blocking,
+   chopping, mining) only gate recipe discovery — zero mechanical effect. 2 of 6 stats
+   (Intelligence, Willpower) are pure placeholders for a magic system that doesn't exist.
+2. **The 5 that work compete with relics on relics' own axis and lose.** Weapon skills
+   +0.5% dmg/level and stats like +1 HP/point are a rounding error next to a relic's
+   +8–40%.
 
-So relics own the "numbers go up" fantasy and stats/skills are a rounding error on top.
+## The three layers (locked)
 
-## the user's locked direction (the load-bearing decision)
-
-> "Relics will be the core 'stats boosting' stuff, and recipes will be the 'uniqueness'
-> part. For example a recipe for a special sword that has a 20% chance to do a double
-> attack or something, while relics assist with stats/buffs in general stats/skills."
-
-Reframed as three distinct layers, each with its own job:
-
-1. **Relics = the raw-stat layer.** Keep them as the primary source of "+X% damage /
-   speed / HP / etc." This is already how they work — don't fight it. Percentage stat
-   growth is *supposed* to come from relics.
+1. **Relics = the raw-stat layer.** Primary source of "+X% damage / speed / HP / etc."
+   Per-run, RNG. Already how they work — don't fight it.
 2. **Recipes/gear = the uniqueness layer.** Special crafted weapons/armor with
-   *qualitative* effects, not just bigger numbers — procs (20% double-attack), on-hit
-   effects (bleed/stun/lifesteal), conditional bonuses (+dmg vs staggered, +dmg at
-   night), unique actives. This is the ARPG "build-defining item" fantasy and is
-   **new** — nothing in the game does this today.
-3. **Stats/Skills = ???** This is the actual open question. If relics own raw stats and
-   recipes own uniqueness, what is left for the character-progression sheet to do that
-   feels worth investing in? Options below — NOT yet decided.
+   *qualitative* effects — procs ("20% chance to double-attack"), on-hit (bleed/stun/
+   lifesteal), conditional (+dmg vs staggered / at night), unique actives. NEW; lands in
+   **M-TE** (trophy-gated special gear).
+3. **Stats/Skills = the reliable, player-steered layer on axes relics DON'T touch.** Not
+   a weaker copy of relics — the deterministic build you control, filling gaps relics
+   can't (crit, flat mitigation, mobility windows, gather/utility), plus the *key* that
+   powers your M-TE gear (weapon-skill thresholds gate/scale procs).
 
-## Open question: what do Stats & Skills become?
+## Locked decisions (the user, 2026-07-11)
 
-Candidate roles (brainstorm, unranked, not locked — need to pick with the user):
+- **Sheet role = "Distinct-axis effects + M-TE gating"** (the B+D+A mix). Every dead
+  skill/stat gets a REAL effect on an axis relics don't cover; weapon-skill thresholds
+  gate/scale M-TE weapon procs. Stays per-run (rejected the cross-run meta layer C — keep
+  the hardcore one-life model intact; revisit meta-progression as its own milestone later
+  if ever).
+- **Add a crit system** as the flagship new axis. Strength → melee crit chance, Agility →
+  ranged crit chance. Strength/Agility drop the weak stamina-cost knob. Crit is a new
+  combat mechanic (Opus when built) and also opens design space for future crit relics /
+  "on-crit" procs.
+- **Repurpose the dead magic stats and rename them DnD-style:** **Willpower → Wisdom**;
+  keep **Intelligence**. Both get real non-magic effects now (a future magic system can
+  reclaim its own stats later). DnD framing: Intelligence = knowledge/efficiency, Wisdom =
+  perception/insight/resilience.
 
-- **A. Unlockers, not multipliers.** Skills/stats gate *access* to the uniqueness layer:
-  a skill threshold unlocks a special recipe or a weapon's proc, a stat threshold enables
-  an item's conditional effect. Fits "recipes = uniqueness" — the sheet decides *which*
-  unique things you can build, relics tune *how strong* everything is. (Skills already
-  gate recipe discovery, so this extends an existing mechanic rather than inventing one.)
-- **B. Meaningfully bigger, distinct-axis payoffs.** Stop competing with relics on the
-  same axes. Give stats/skills effects relics *don't* touch: e.g. skills grant utility
-  (chopping/mining → faster gather or extra yield — real effects for the 6 dead skills),
-  crit chance, stamina *regen* rate, dodge i-frame window, block/parry (the dormant
-  `blocking` skill), armor skill → flat damage reduction. Percentages could also just be
-  bumped so a leveled skill is felt, but the risk is re-creating the "just another relic"
-  feel.
-- **C. Persistent/meta layer.** In a hardcore roguelike run, relics are per-run and reset;
-  if skills/stats also reset each run they're weak by design (no time to grow). A
-  meta-progression angle: skills/stats (or a subset) persist across runs as the slow
-  account-level power that makes relics reachable. Big design shift — touches the
-  run/hardcore model — so only if the user wants a meta layer.
-- **D. Wire up the dead content first, decide scale after.** Six skills have no effect and
-  two stats (Int/Willpower) are pure placeholders. Regardless of the bigger question,
-  giving each a *real* effect (even small) is the concrete first step; the "negligible"
-  complaint is partly just that half the sheet does literally nothing.
+## Concrete effect table (first-pass numbers, tunable)
 
-## Concrete sub-items surfaced (independent of the big decision)
+### Stats (spent from Player Level points, `Progression.ts`)
 
-- **Dead skills need effects:** heavy_armor, light_armor, blocking, chopping, mining have
-  zero mechanical payoff. chopping/mining → gather speed or yield is the obvious cheap win.
-- **Dead stats:** Intelligence/Willpower gate magic systems that don't exist. Either
-  repurpose them for something real or hide them until magic exists.
-- **The uniqueness layer is a NEW system.** "20% chance to double-attack" style procs
-  need: a place on `ItemDef`/`Weapons.ts` for qualitative effect data, a hook in the
-  attack resolution path (`resolveWeaponHit`), and probably a small effect-registry
-  pattern. This is Opus-territory (new mechanic/data model) when it's built.
+| Stat | Effect (per point) | Axis / notes |
+|---|---|---|
+| **Endurance** | +1 max Stamina (keep) | flat pool |
+| **Vitality** | +1 max HP (keep) | flat pool |
+| **Strength** | **+melee crit chance** (NEW — replaces −stamina cost) | crit (new axis) |
+| **Agility** | **+ranged crit chance** (NEW — replaces −stamina cost) | crit (new axis) |
+| **Intelligence** | **+gather yield &/or +XP gain** (NEW) | utility relics don't touch |
+| **Wisdom** (was Willpower) | **+buff/food duration &/or knockback/debuff resist** (NEW) | utility/resilience |
 
-## Next step
+- Base crit chance ~5%; per-point crit is small (proposal ~+1%/pt, floor/cap TBD). Crit
+  damage default ~1.5× (tunable). Crit is a multiplicative factor in `resolveWeaponHit`,
+  stacking with the stagger multiplier and relic `damageMult`.
+- Removing Strength/Agility's stamina-cost effect means `weaponStaminaCostMultiplier`
+  (Progression.ts) is retired or repointed — Endurance's +max stamina remains the stamina
+  answer. Confirm we're OK dropping stamina-cost reduction entirely.
+- Int/Wis: pick a single clean effect each first (avoid two-effect bloat). Leading
+  proposal: **Intelligence → +gather yield** (chance for +1 drop, pairs with chopping/
+  mining), **Wisdom → +buff duration** (makes cooking/Comfort investments feel better).
+  Alt axes noted above if the user prefers.
 
-Resume the brainstorm with the user to lock: (1) the role Stats/Skills take (A/B/C/D or a
-mix), (2) whether the uniqueness/proc layer ships as its own milestone (likely **M-TE**,
-"trophy-gated special gear," which was already next in the build order and is a natural
-home for build-defining items), and (3) scope of any stat/skill number rebalance. Then
-this file becomes a locked implementation plan. Relates to
-[[survivor-rpg-progression-system]] and [[survivor-rpg-relics]].
+### Skills (leveled by activity, `Skills.ts`)
+
+| Skill | Effect | Notes |
+|---|---|---|
+| slash / blunt / pierce / ranged / magic | keep +0.5%/lvl damage **+ threshold gates/scales M-TE weapon procs of that type** | the A tie-in — the sheet powers your unique gear |
+| **heavy_armor** | **flat** damage reduction per level | distinct from relics' *percent* damage-taken; strong vs chip damage; gives heavy armor an identity |
+| **light_armor** | **+dodge/dash i-frame window** (and/or reduced move penalty) | mobility axis; reuses the existing `DASH_IFRAME_MS` guard |
+| **running** | keep sprint speed **+ reduced sprint stamina drain** | second real effect for a currently one-note skill |
+| **chopping** | gather yield or fewer hits-to-break on trees | cheap obvious win |
+| **mining** | gather yield or fewer hits-to-break on rocks/ore | cheap obvious win |
+| **blocking** | **DEFER** — needs a real block/parry mechanic first | leave gate-only for now; build alongside a future block system, not faked |
+
+## Milestone shape
+
+- **This rework = its own milestone (Opus — crit is a new combat mechanic + touches
+  damage resolution and half the character sheet).** Scope: crit system, real effects for
+  all dead skills/stats, Int→utility, Willpower→Wisdom rename. Does NOT build the M-TE
+  proc gear — only leaves the weapon-skill *threshold hook* those procs will read.
+- **M-TE (later, its own milestone)** builds the trophy-gated proc/uniqueness gear that
+  consumes the threshold hook. Crit built here means M-TE can offer "on-crit" procs for
+  free.
+- **Keep `RECIPES.md` / dashboard in sync** if any recipe skill-gates change; the
+  dashboard's Balance Overview should probably grow a crit/effective-DPS view.
+
+## Remaining micro-decisions to confirm before promoting to an implementation plan
+
+1. Crit numbers: base %, per-point %, crit multiplier, and whether Strength/Agility get a
+   soft cap.
+2. Int vs Wis single-effect assignment (gather-yield / XP / buff-duration / resist — pick
+   one each).
+3. OK to fully drop stamina-cost reduction (Strength/Agility → crit) rather than keep a
+   token amount?
+4. heavy_armor flat-reduction and light_armor i-frame numbers.
+5. Confirm `blocking` stays deferred (no fake effect) until a block/parry mechanic exists.
+
+Relates to [[survivor-rpg-progression-system]] and [[survivor-rpg-relics]].

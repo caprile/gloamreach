@@ -41,10 +41,17 @@ session's batch (see below) is a further round of playtest fixes on top of 5z. A
 brainstorm/plan is also in flight (not yet built): reworking Stats + Skills, which feel
 negligible next to Relics now — the user's own direction is relics = the stats/buffs
 layer, recipes = the uniqueness layer (e.g. a weapon recipe with a proc chance), with
-Skills/Stats needing their own distinct reason to invest. See the plan doc once
-committed. Real pixel art/animations stay deliberately deferred until content/balance
+Skills/Stats needing their own distinct reason to invest. **This is now a LOCKED plan
+(milestone M-SS): `.claude/plans/crit-tempering-lodestar.md`** — a new crit system
+(Strength = crit multiplier / Agility = crit chance, all-weapon; base crit per-weapon),
+Vitality/Endurance get a flat bump + a distinct secondary axis (healing received / stamina
+regen), relics reworked to synergize (flat HP/stam relics -> percent so they multiply the
+stat-built base; new crit relic channels), light_armor -> dash i-frame window,
+running/chopping/mining wired up, per-piece armor XP, Willpower->Wisdom rename; heavy_armor
+deferred to biome 2, blocking deferred. Build on Opus. Real pixel art/animations stay
+deliberately deferred until content/balance
 settle further (the whole texture pipeline is built to swap late — see `CLAUDE.md`
-roadmap item 8). Next: finish the Stats/Skills rework brainstorm + plan, then resume the
+roadmap item 8). Next: build **M-SS**, then resume the
 locked build order — **M-TE** (trophy-gated special gear), then **M-W1** (multi-biome
 content in the now-circular world) last.
 
