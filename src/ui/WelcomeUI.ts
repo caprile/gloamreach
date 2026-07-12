@@ -2,10 +2,22 @@ import Phaser from "phaser";
 
 const STORAGE_KEY = "survivor-rpg:welcome-seen:v1";
 
-// Has the player ever dismissed the welcome/how-to-play screen? Persisted like
-// Hints' on/off pref (Hints.ts) — survives a "New Run" scene.restart(), only
-// resets if localStorage is cleared.
+// Early-access: re-show the welcome on every fresh page load so playtesters (and
+// the dev on re-visits) reliably see it, instead of once-ever per browser. Flip
+// to false to restore the permanent "once ever" localStorage gate below.
+const ALWAYS_SHOW_EACH_LOAD = true;
+
+// Per-page-load memory: resets on a full reload (the module is re-evaluated),
+// but survives a "New Run" scene.restart() (the module is not re-imported) — so
+// the welcome shows once per session without re-spamming on every death/restart.
+let shownThisLoad = false;
+
+// Has the player already dismissed the welcome/how-to-play screen this session?
+// In early-access mode (ALWAYS_SHOW_EACH_LOAD) that's tracked per page load;
+// otherwise it's the permanent localStorage gate (survives everything until
+// storage is cleared).
 export function hasSeenWelcome(): boolean {
+  if (ALWAYS_SHOW_EACH_LOAD) return shownThisLoad;
   try {
     return localStorage.getItem(STORAGE_KEY) === "1";
   } catch {
@@ -14,6 +26,8 @@ export function hasSeenWelcome(): boolean {
 }
 
 function markWelcomeSeen(): void {
+  shownThisLoad = true;
+  if (ALWAYS_SHOW_EACH_LOAD) return;
   try {
     localStorage.setItem(STORAGE_KEY, "1");
   } catch {

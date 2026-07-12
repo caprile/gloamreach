@@ -4266,3 +4266,77 @@ ethos as the generated textures, swappable later) before a second/wider playtest
 Real pixel art + animations stay deferred until content/balance settle further (last, per
 `CLAUDE.md` roadmap item 8). Then the master-plan tail: **M-TE** (trophy gear), **M-W1**
 (multi-biome world).
+
+### 5y — Inventory sort/split + ranged starter weapons (Slingshot + Javelin) + minimal SFX
+
+Closes out the rest of the playtest-polish backlog from 5x/5q/5r. Plan:
+`.claude/plans/twinkly-orbiting-backus.md`. Two Sonnet-class quick fixes plus one new
+mechanic (ranged weapons + a new Equipment slot) built on Opus per the model-switch
+convention, plus a small standalone SFX addition.
+
+**Inventory auto-sort + Shift-Click split-stack.** `ItemContainer.sortAndStack()` (new)
+re-flows a container into merged, sorted, re-packed stacks — a "Sort" text button next to
+the Backpack header in `InventoryMenu.ts` calls it. Shift+Left-Click on any stack of >1
+(backpack/hotbar/chest/drying-rack — anywhere `beginItemDrag` is the entry point) now
+splits it roughly in half into another empty slot in the same container, then drags the
+split-off half — reuses 100% of the existing drag/drop/merge machinery
+(`MainScene.trySplitStack` + `beginItemDrag`), no new resolve-time logic needed. Falls back
+to a normal whole-stack drag if the container has no empty slot to split into.
+
+**Ranged weapons (Slingshot + Javelin) + Ammo equipment slot.** Locked via
+`AskUserQuestion` + a side-chat balance discussion: ranged aiming reuses the existing
+click-a-hovered-enemy-in-reach model (NOT free-aim); Slingshot uses a new **`"ammo"`**
+`EquipSlot` (paper-doll grid, now 10 slots — `ARMOR_ROWS_MAX` is computed, not a literal);
+Javelin is a self-contained disposable hotbar weapon (no ammo slot — throwing depletes its
+own stack). **`EquippedItem` gained a `count?: number`** field so the ammo slot could reuse
+the *existing* armor-equip machinery (`equipArmorFromContainer`/`unequipArmorSlot`/
+`armorSlotAt`/right-click context menu) almost verbatim — it branches on `slot === "ammo"`
+for merge-not-swap semantics (topping up a matching key vs. swapping a different one out),
+rather than building a parallel ammo system. `slingshot_pellets`'s `ItemDef.armorSlot` is
+literally `"ammo"`, so `quickMoveItem`'s existing `armorSlot` branch covered double-click
+equip for free with zero new code there.
+`tryAttackEnemy` is now a thin dispatcher (`isRangedWeapon` check) over `tryMeleeAttack`
+(the old body, unchanged) and new `tryRangedAttack`; both funnel into a new shared
+`resolveWeaponHit(enemy, dmg, dmgType)` extracted from the old kill-resolution tail (skill
+XP/loot/armor-XP/run-scoring), so melee and ranged can't drift out of sync on kill logic.
+Ranged damage (incl. any stagger multiplier) is computed once at fire time and carried by
+the `Projectile` — reused verbatim, it was already built anticipating this (`sourceIsPlayer`
+was defined but unused). New `playerProjectiles` group + overlap-vs-`enemyGroup` (mirrors
+the enemy-projectile-vs-player overlap exactly, including the arg-order gotcha). A new
+`RANGED_WEAPONS` config in `Weapons.ts` (`maxRangePx` replaces melee `enemyReach()` for both
+the attack gate and the hover prompt/reach-ring). **Balance is deliberately weak per
+the user's locked side-chat direction — an opener/softener, not a solo tool:** Slingshot 2
+dmg/650ms/6 stam (below even Wood Club's 3 dmg), Javelin 5 dmg/900ms/16 stam, both slow
+projectiles (420/300 px/s) and bounded range (260/220px) — stamina cost + slow travel +
+bounded range are the anti-kite governor this batch; **no enemy-AI changes**. Both use
+`"ranged"` as their primary damage type, finally giving the long-dormant Ranged weapon skill
+a real XP source (`weaponSkillDamageMultiplier` already generic over `DamageType` — zero
+`Skills.ts` changes needed). `Recipe.output` gained an optional `count` field (defaults 1)
+so Slingshot Pellets (5 Stone → 25) and Javelin (3 Wood + 1 Stone → 2) can batch-output —
+`craftRecipe` now grants `output.count ?? 1` instead of a hardcoded 1.
+
+**Minimal SFX layer.** `src/systems/Sfx.ts` (`SfxPlayer`) — raw Web Audio
+`OscillatorNode`/`GainNode` envelopes synthesized at call time, no asset files, same
+"generate in code, swap for real assets later" ethos `BootScene` established for textures.
+Six cues (`hit`/`pickup`/`craft`/`levelUp`/`nightfall`/`death`) wired into existing hook
+points (`resolveWeaponHit`, `applyDamageToPlayer`, `collectNode`, `craftRecipe`/
+`processRackAmount`/`cookAtCampfire`/`refineTrophies`, `showLevelUpBanner`, the day→night
+edge in `updateDayNight`, `onPlayerDeath`). A persisted on/off toggle
+(`survivor-rpg:sfx-enabled:v1`, same pattern as Hints') lives in `PauseMenuUI` next to the
+Hints toggle. `sfx` is deliberately **not** re-created in `create()` (unlike `hints`) so the
+`AudioContext` + preference survive a "New Run" restart instead of resetting with the rest
+of per-run state.
+
+**Verification:** `tsc --noEmit` clean; full `npm run build` succeeds. **Live-verified via
+`preview_eval`** (after clearing 5 orphaned Vite processes from closed chats that were
+holding the per-folder server cap): Slingshot fires a player projectile at a 150px enemy
+(out of melee reach) → 2 dmg on impact, projectile despawns, ammo 30→29, stamina −6,
+cooldown stamped; firing at 0 ammo is a clean silent no-op (no projectile/stamina/
+cooldown); out-of-range (400 > 260) doesn't fire or consume ammo; the hover prompt +
+`attackRangeFor` correctly report the 260px ranged radius. Javelin self-consumes 1/throw
+and auto-unequips (weapon→null, slot→null) at 0. Melee is unaffected (Wood Club still hits
+at 50px for 3 dmg, reach stays 64, does NOT inherit the ranged radius; no-ops at 200px).
+Auto-sort merges+front-packs (wood 5+10→15, alphabetical); Shift-split 11→6+5 into the
+next slot, null fallback when the container is full. All 6 SFX cues fire with no console
+errors. The inventory panel renders the Sort button, the Ammo equipment slot (with count
+badge), and the "Ammo: N …" Combat-column line.

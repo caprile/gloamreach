@@ -845,9 +845,9 @@ export class MainScene extends Phaser.Scene {
     this.howToPlayFromPause = false;
     // Opening nudge: movement + goal, a beat after the world loads.
     this.time.delayedCall(1500, () => this.hints.trigger("awaken"));
-    // First-ever launch (per browser, localStorage-backed): show the
-    // welcome/how-to-play overlay before the player can act. Skipped on every
-    // later run/session once dismissed once.
+    // Show the welcome/how-to-play overlay before the player can act. During
+    // early access it surfaces once per page load (see WelcomeUI's
+    // ALWAYS_SHOW_EACH_LOAD) — not re-shown on an in-session New Run restart.
     if (!hasSeenWelcome()) this.openWelcome();
 
     // Scene-level drag: a slot starts it, the pointer drags a ghost icon, and
