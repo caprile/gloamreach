@@ -2,12 +2,14 @@
 
 ## Current State
 
-_Living snapshot — edit in place, never append. Last shipped: **Playtest polish batch
-(11 fixes) — F11/right-click hints, elite red hover tooltip, diagonal javelin icon +
-nose-first thrown angle, dash afterimage VFX, Gloamwarden return-to-spawn leash, slower
-text fades, altar/totem win-path guidance hints, and a "Now:" total-effect line per stat
-on the Character menu**, **2026-07-12**. Prior: Enemy respawn (fog top-up); M-SS (stats/
-skills depth pass — crit + distinct-axis effects + relic synergy)._
+_Living snapshot — edit in place, never append. Last shipped: **first-launch Welcome +
+How to Play overlay, plus Ctrl+Click/Shift+Click keybind lines**, **2026-07-12**. Prior:
+Playtest polish batch (11 fixes) — F11/right-click hints, elite red hover tooltip,
+diagonal javelin icon + nose-first thrown angle, dash afterimage VFX, Gloamwarden
+return-to-spawn leash, slower text fades, altar/totem win-path guidance hints, and a
+"Now:" total-effect line per stat on the Character menu. Before that: Enemy respawn
+(fog top-up); M-SS (stats/skills depth pass — crit + distinct-axis effects + relic
+synergy)._
 
 **The game.** Top-down 2D pixel survival-ARPG (Phaser 3 + TypeScript + Vite; all
 textures are placeholders generated in `BootScene`). One forest biome sitting in the
@@ -67,6 +69,43 @@ now that crit is a player-driven damage ramp).
   draw over the HUD. Fixed-HUD depths (2600–6000) are unchanged and still clear it.
 
 ## Recent Entries
+
+### Welcome + How to Play overlay, keybind clarity fix
+
+Off the playtest-readiness backlog, built on Sonnet (new UI on existing freeze/menu
+patterns, no new core mechanic). the user flagged two gaps: Ctrl+Click and Shift+Click
+(quick-move / split-stack) had no in-game callout anywhere, and there was no cold-start
+"what is this game" moment for new playtesters.
+
+- **Keybinds panel** (`MainScene.ts`'s `KeybindsUI` bind list) gained two lines:
+  `"Quick-move item: Ctrl+Click"` / `"Split stack in half: Shift+Click"`, next to the
+  existing Left/Right Click lines.
+- **`src/ui/WelcomeUI.ts`** (new) — a 2-page modal (Welcome / How to Play), styled after
+  `PauseMenuUI`/`RunEndUI` (flat scrollFactor(0) GameObjects, depth 3600-3602, above
+  every other menu). Page 1: early-access framing (placeholder art/sound, balance still
+  tuning) + a thank-you for playtesting alongside development. Page 2: the
+  Explore→Gather→Craft→Level→Fight loop at a high level, "play at your own pace but the
+  score rewards speed," core controls (LMB/Tab/K/Esc), and the two click-modifier
+  shortcuts above. **Deliberately spoiler-free**, matching `Hints.ts`'s standing rule —
+  never names the totem/altar/boss win condition.
+  - `hasSeenWelcome()`/`markWelcomeSeen()` persist a `localStorage` flag
+    (`survivor-rpg:welcome-seen:v1`), same pattern as `HintManager`'s on/off pref — shows
+    once per browser, not once per run.
+- **`MainScene.ts` wiring**: `openWelcome()` reuses the exact `isPaused` freeze
+  `openPauseMenu()` already establishes (`physics.world.pause()` + `time.paused = true`)
+  rather than a second parallel freeze flag; `create()` calls it once if
+  `!hasSeenWelcome()`. The pause menu (`PauseMenuUI`) gained a **"How to Play"** button
+  (`onHowToPlay` dep) that re-shows the same overlay on demand — `openPauseMenu()` was
+  split into itself (freeze + guard) and a new `showPauseMenuPanel()` (just the
+  `.show()` call, no guard), so closing "How to Play" opened *from* the pause menu can
+  re-invoke `showPauseMenuPanel()` without tripping `openPauseMenu()`'s
+  `if (this.isPaused) return` guard (confirmed via `preview_eval` — the naive first
+  version silently no-op'd on that exact path). Esc closes the welcome overlay first
+  (before the pause-menu/menu-close checks), acting as "Start Playing."
+- Verified via `preview_eval`: first-load overlay renders (both pages, Back/Next/Start
+  Playing), `finish()` unfreezes + sets the localStorage flag, and the pause-menu →
+  "How to Play" → close → back-to-pause-menu round-trip restores the correct frozen
+  state. No console errors. No `RECIPES.md` change (no recipe/cost changes).
 
 > Older entries in STATUS-archive.md.
 

@@ -116,6 +116,7 @@ import { HintManager } from "../systems/Hints";
 import { SfxPlayer } from "../systems/Sfx";
 import { HintUI } from "../ui/HintUI";
 import { PauseMenuUI } from "../ui/PauseMenuUI";
+import { WelcomeUI, hasSeenWelcome } from "../ui/WelcomeUI";
 import { DayNight } from "../systems/DayNight";
 import { NightOverlayUI, type ScreenLight } from "../ui/NightOverlayUI";
 import {
@@ -495,6 +496,13 @@ export class MainScene extends Phaser.Scene {
   private hints = new HintManager();
   private hintUI!: HintUI;
   private pauseMenu!: PauseMenuUI;
+  // First-launch welcome + how-to-play overlay. Reuses the same isPaused
+  // freeze as the pause menu (see openWelcome/closeWelcome) rather than a
+  // parallel freeze flag. `howToPlayFromPause` remembers whether it was
+  // opened via the pause menu's "How to Play" button, so closing it returns
+  // to the pause menu instead of resuming play.
+  private welcomeUI!: WelcomeUI;
+  private howToPlayFromPause = false;
   // Procedural SFX layer — deliberately NOT re-created in create() (unlike
   // `hints` above): the AudioContext + on/off preference should survive a
   // "New Run" restart, not reset with the rest of per-run state.
@@ -823,8 +831,14 @@ export class MainScene extends Phaser.Scene {
     this.hintUI = new HintUI(this);
     this.hints.onShow((text) => this.hintUI.show(text));
     this.pauseMenu = new PauseMenuUI(this);
+    this.welcomeUI = new WelcomeUI(this);
+    this.howToPlayFromPause = false;
     // Opening nudge: movement + goal, a beat after the world loads.
     this.time.delayedCall(1500, () => this.hints.trigger("awaken"));
+    // First-ever launch (per browser, localStorage-backed): show the
+    // welcome/how-to-play overlay before the player can act. Skipped on every
+    // later run/session once dismissed once.
+    if (!hasSeenWelcome()) this.openWelcome();
 
     // Scene-level drag: a slot starts it, the pointer drags a ghost icon, and
     // release resolves the move against whichever container is under the
@@ -872,6 +886,7 @@ export class MainScene extends Phaser.Scene {
     });
     this.input.keyboard!.on("keydown-ESC", () => {
       if (this.runOver) return;
+      if (this.welcomeUI.isOpen()) return this.closeWelcome();
       if (this.pauseMenu.isOpen()) return this.resumeGame();
       if (this.worldMapUI.isOpen()) return this.worldMapUI.close();
       if (this.contextMenu.isOpen()) return this.contextMenu.close();
@@ -3884,6 +3899,14 @@ export class MainScene extends Phaser.Scene {
     this.player.setVelocity(0, 0);
     this.physics.world.pause();
     this.time.paused = true;
+    this.showPauseMenuPanel();
+  }
+
+  // Shows the pause panel itself, assuming the world is already frozen
+  // (isPaused true). Split out from openPauseMenu so returning from "How to
+  // Play" (closeWelcome's howToPlayFromPause branch) can re-show the panel
+  // without re-running/being blocked by openPauseMenu's isPaused guard.
+  private showPauseMenuPanel(): void {
     this.pauseMenu.show({
       hintsEnabled: () => this.hints.isEnabled(),
       onToggleHints: () => this.hints.setEnabled(!this.hints.isEnabled()),
@@ -3891,6 +3914,7 @@ export class MainScene extends Phaser.Scene {
       onToggleSfx: () => this.sfx.setEnabled(!this.sfx.isEnabled()),
       onResume: () => this.resumeGame(),
       onNewRun: () => this.scene.restart(),
+      onHowToPlay: () => this.openHowToPlay(),
     });
   }
 
@@ -3900,6 +3924,40 @@ export class MainScene extends Phaser.Scene {
     this.time.paused = false;
     this.physics.world.resume();
     this.isPaused = false;
+  }
+
+  // First-launch welcome/how-to-play overlay. Shares the pause menu's
+  // isPaused freeze (see openPauseMenu) so the world can't be interacted with
+  // while it's up, without a second parallel freeze flag.
+  private openWelcome(): void {
+    if (this.isPaused || this.runOver || this.isDead) return;
+    this.isPaused = true;
+    this.player.setVelocity(0, 0);
+    this.physics.world.pause();
+    this.time.paused = true;
+    this.welcomeUI.show(() => this.closeWelcome());
+  }
+
+  private closeWelcome(): void {
+    this.welcomeUI.hide();
+    // Opened from the pause menu's "How to Play" button: hand back to the
+    // (still-frozen) pause menu instead of resuming play.
+    if (this.howToPlayFromPause) {
+      this.howToPlayFromPause = false;
+      this.showPauseMenuPanel();
+      return;
+    }
+    this.time.paused = false;
+    this.physics.world.resume();
+    this.isPaused = false;
+  }
+
+  // "How to Play" from the pause menu: swap the pause panel for the welcome
+  // overlay without unfreezing the world, then restore the pause menu on close.
+  private openHowToPlay(): void {
+    this.pauseMenu.hide();
+    this.howToPlayFromPause = true;
+    this.welcomeUI.show(() => this.closeWelcome());
   }
 
   // Finalize the run: freeze the world, post the score to the localStorage
@@ -5084,6 +5142,8 @@ export class MainScene extends Phaser.Scene {
         "Dash: Space (while moving)",
         "Interact: Left Click",
         "Inspect / upgrade: Right Click",
+        "Quick-move item: Ctrl+Click",
+        "Split stack in half: Shift+Click",
         "Inventory: Tab",
         "Character: K",
         "World map: M",

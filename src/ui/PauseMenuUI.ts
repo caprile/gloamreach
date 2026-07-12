@@ -7,6 +7,7 @@ export interface PauseMenuDeps {
   onToggleSfx: () => void;
   onResume: () => void;
   onNewRun: () => void;
+  onHowToPlay: () => void;
 }
 
 // Pause overlay (Esc). Freezes the run (MainScene pauses physics + the scene
@@ -19,7 +20,7 @@ const DEPTH_SCRIM = 3500;
 const DEPTH_PANEL = 3501;
 const DEPTH_TEXT = 3502;
 const PANEL_W = 360;
-const PANEL_H = 332;
+const PANEL_H = 384;
 
 export class PauseMenuUI {
   private scene: Phaser.Scene;
@@ -83,6 +84,9 @@ export class PauseMenuUI {
       deps.onToggleSfx();
       this.sfxToggle?.setText(this.sfxLabel());
     });
+    y += 52;
+
+    this.button(cx, y, "How to Play", () => deps.onHowToPlay());
     y += 52;
 
     this.button(cx, y, "New Run", () => deps.onNewRun());
