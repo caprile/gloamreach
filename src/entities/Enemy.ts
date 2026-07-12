@@ -97,6 +97,12 @@ export interface EnemyConfig {
   // purely as data — the resist math lives in MainScene.resolveWeaponHit. Empty
   // for every biome-1 enemy, so their combat is unchanged.
   resistances?: Partial<Record<DamageType, number>>;
+  // True for a humanoid/upright sprite (Hexling) — skips the random full-360°
+  // spawn rotation below and makes applyFacing (see applyUprightFacing) mirror
+  // left/right via flipX with only a slight up/down tilt, never rotating past
+  // horizontal. Default false = the nose-first full-rotation facing every other
+  // enemy (Boar/Snake/Duskrunner/...) already uses.
+  upright?: boolean;
 }
 
 // A simple melee enemy (currently only "Boar"). Ranged attacks, ambush AI,
@@ -168,6 +174,9 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   // Handle to the current wind-up pulse tween so it can be stopped/reset
   // cleanly without killTweensOf() clobbering the HP-bar hit-feedback shake.
   private windupTween?: Phaser.Tweens.Tween;
+  // True for a humanoid sprite (see EnemyConfig.upright) — applyFacing mirrors
+  // via flipX instead of rotating.
+  private upright = false;
 
   // Thin world-space HP bar (no number, just a bar) — separate GameObjects
   // rather than a Container, gone glued to position every frame via
@@ -200,8 +209,14 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     // Randomized initial facing — without this every enemy defaults to the
     // same unrotated orientation and only ever rotates once it moves, which
     // reads as "always facing the same direction" for anything that spends
-    // most of its life stationary (Snake hidden, Gremlin idle).
-    this.setRotation(Phaser.Math.FloatBetween(0, Math.PI * 2));
+    // most of its life stationary (Snake hidden, Gremlin idle). An upright
+    // humanoid (Hexling) never rotates at all — it only randomizes its mirror.
+    this.upright = cfg.upright ?? false;
+    if (this.upright) {
+      this.setFlipX(Phaser.Math.Between(0, 1) === 1);
+    } else {
+      this.setRotation(Phaser.Math.FloatBetween(0, Math.PI * 2));
+    }
 
     const barX = cfg.x - Enemy.BAR_W / 2;
     const barY = cfg.y - Enemy.BAR_OFFSET_Y;
@@ -391,7 +406,22 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   // snapping to an arbitrary angle from a near-zero velocity.
   protected applyFacing(vx: number, vy: number): void {
     if (Math.abs(vx) < 3 && Math.abs(vy) < 3) return;
+    if (this.upright) {
+      this.applyUprightFacing(vx, vy);
+      return;
+    }
     this.setRotation(Math.atan2(vy, vx) + Math.PI);
+  }
+
+  // Upright/humanoid facing (Hexling): the sprite is drawn standing, front-on —
+  // rotating it to point along travel (like the nose-first Boar) would flip it
+  // upside-down whenever it moves up/down. Instead mirror left/right via flipX
+  // and only lean a few degrees toward up/down, never near horizontal.
+  private static readonly UPRIGHT_MAX_TILT = 0.22; // ~12.6°, well short of 90°
+  private applyUprightFacing(vx: number, vy: number): void {
+    if (Math.abs(vx) > 3) this.setFlipX(vx < 0);
+    const tilt = Phaser.Math.Clamp(vy / 260, -Enemy.UPRIGHT_MAX_TILT, Enemy.UPRIGHT_MAX_TILT);
+    this.setRotation(tilt);
   }
 
   // Face an explicit direction (radians), bypassing applyFacing's
@@ -400,6 +430,10 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   // a unit vector to applyFacing silently no-ops (magnitude < 3), which is why
   // those tells previously didn't rotate the sprite. Same nose-first PI offset.
   protected faceAngle(angle: number): void {
+    if (this.upright) {
+      this.applyUprightFacing(Math.cos(angle), Math.sin(angle));
+      return;
+    }
     this.setRotation(angle + Math.PI);
   }
 

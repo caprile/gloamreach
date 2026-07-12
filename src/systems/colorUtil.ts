@@ -45,3 +45,20 @@ export function valueNoise2D(x: number, y: number, scale: number): number {
   const bot = c + (d - c) * sx;
   return top + (bot - top) * sy;
 }
+
+// Generic per-point brightness mottle — a cheap way to make an otherwise flat
+// placeholder ground color read as "textured" (small light/dark variation)
+// without needing a bespoke palette per biome. Two octaves (a broad patch +
+// a finer grain) so it survives a coarse/stretched bake instead of aliasing
+// away. `strength` ~0.08-0.16 is a subtle speckle; real tilesets replace this
+// pass entirely once pixel-art assets exist (see CLAUDE.md's art-asset note).
+export function mottleColor(color: number, x: number, y: number, strength: number): number {
+  const broad = valueNoise2D(x, y, 150);
+  const fine = valueNoise2D(x + 500, y - 500, 55);
+  const n = broad * 0.65 + fine * 0.35 - 0.5; // -0.5..0.5
+  const factor = 1 + n * strength * 2;
+  const r = Math.min(255, Math.max(0, Math.round(((color >> 16) & 0xff) * factor)));
+  const g = Math.min(255, Math.max(0, Math.round(((color >> 8) & 0xff) * factor)));
+  const b = Math.min(255, Math.max(0, Math.round((color & 0xff) * factor)));
+  return (r << 16) | (g << 8) | b;
+}

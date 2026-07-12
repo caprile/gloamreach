@@ -1,6 +1,6 @@
 import Phaser from "phaser";
 import { Biome } from "./Biome";
-import { blendColors } from "./colorUtil";
+import { blendColors, mottleColor } from "./colorUtil";
 import { forestTerrainColorAt } from "./ExploredMap";
 import { badlandsGroundColorAt } from "./Badlands";
 import { dunesGroundColorAt } from "./Dunes";
@@ -254,6 +254,13 @@ export class WorldBiomes {
     const blobC = this.coverageAt(x, y, "forest");
     if (discC > 0.01) color = blendColors(color, forestTerrainColorAt(this.forest, x, y), discC);
     if (blobC > discC + 0.01) color = blendColors(color, this.forestBlobColorAt(x, y), blobC);
+    // Finishing mottle pass so EVERY outer ground reads as textured, not a flat
+    // fill — badlands already has its own richer noise (barely touched by this
+    // subtle a pass), but the base layer (open wilds between blobs) and Dunes
+    // had none at all (the user: "loses the speckled texture" outside spawn).
+    // Skipped inside the protected forest core, which keeps its real crisp bake
+    // + tiled grass sprite untouched.
+    if (discC <= 0.5) color = mottleColor(color, x, y, 0.1);
     return color;
   }
 

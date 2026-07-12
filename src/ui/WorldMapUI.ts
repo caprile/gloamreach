@@ -281,7 +281,7 @@ export class WorldMapUI {
       const maxGy = Math.min(this.map.rows - 1, Math.ceil((this.iy + this.ih - originY) / scale));
       for (let gy = minGy; gy <= maxGy; gy++) {
         for (let gx = minGx; gx <= maxGx; gx++) {
-          const color = this.map.colorAt(gx, gy);
+          const color = this.map.colorAtSmoothed(gx, gy);
           if (color < 0) continue;
           this.fillClipped(originX + gx * scale, originY + gy * scale, scale + 1, scale + 1, color);
         }

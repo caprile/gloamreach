@@ -27,7 +27,11 @@ const WANDER_SPEED = 16;
 const WANDER_RADIUS = 60;
 
 const MAX_HEALTH = 55; // was 30 — a squishy caster still, but not 1-2-shot the instant you reach it
-const BOLT_DAMAGE = 14; // magic — modest since it ignores armor
+// 22, not 14 — badlands-rebalance pass: magic bypasses armor entirely, so a
+// Hexling's raw number IS the net damage. the user: "base hexlings should kill
+// you in like 3 hits" — bolt + flame (below) are both bumped to make that true
+// even at full HP/Vitality, not just against an unarmored player.
+const BOLT_DAMAGE = 22; // magic — bypasses armor
 const CAST_COOLDOWN_MS = 1700;
 const BOLT_SPEED = 210;
 const BOLT_MAX_RANGE = 250;
@@ -41,7 +45,7 @@ const FLAME_TRIGGER = 150; // player within this (and flame ready) → flame str
 const FLAME_TELEGRAPH_MS = 820; // growing-circle tell (the dodge window)
 const FLAME_IMPACT_MS = 240; // detonation window checkPlayerHit fires in
 const FLAME_COOLDOWN_MS = 4600;
-const FLAME_DAMAGE = 18; // magic — bypasses armor
+const FLAME_DAMAGE = 34; // magic, bypasses armor — the close-range punish, ~3-hit-kills a base player
 const FLAME_RADIUS = 48; // each circle's damage radius
 const FLAME_SPREAD = 62; // gap between the 3 clustered circles
 
@@ -70,6 +74,10 @@ export class Hexling extends Enemy {
   private flameHit = false;
   private flameCircles: { x: number; y: number }[] = [];
   private telegraphGfx: Phaser.GameObjects.Graphics;
+  // Elite-scaled damage (the base BOLT/FLAME_DAMAGE consts were previously used
+  // unscaled for elites too — every other elite gets +50% dmg, this closes the gap).
+  private readonly boltDamage: number;
+  private readonly flameDamage: number;
 
   constructor(scene: Phaser.Scene, cfg: { x: number; y: number; elite?: boolean }) {
     const elite = cfg.elite ?? false;
@@ -88,7 +96,10 @@ export class Hexling extends Enemy {
       // "Resists magic, weak to physical" — all three melee types shred it, its
       // own element barely dents it. ranged left neutral.
       resistances: { magic: 0.4, slash: 1.4, blunt: 1.4, pierce: 1.4 },
+      upright: true, // humanoid mage — mirror left/right, never rotate upside-down
     });
+    this.boltDamage = elite ? Math.round(BOLT_DAMAGE * 1.5) : BOLT_DAMAGE;
+    this.flameDamage = elite ? Math.round(FLAME_DAMAGE * 1.5) : FLAME_DAMAGE;
     this.spawnX = cfg.x;
     this.spawnY = cfg.y;
     this.telegraphGfx = scene.add.graphics();
@@ -263,7 +274,7 @@ export class Hexling extends Enemy {
     for (const c of this.flameCircles) {
       if (Phaser.Math.Distance.Between(c.x, c.y, playerX, playerY) <= FLAME_RADIUS) {
         this.flameHit = true;
-        return { damage: FLAME_DAMAGE, dmgType: "magic" };
+        return { damage: this.flameDamage, dmgType: "magic" };
       }
     }
     return null;
@@ -306,7 +317,7 @@ export class Hexling extends Enemy {
       y: this.y,
       angle,
       speed: BOLT_SPEED,
-      damage: BOLT_DAMAGE,
+      damage: this.boltDamage,
       texture: "hex_bolt",
       maxRangePx: BOLT_MAX_RANGE,
       sourceIsPlayer: false,

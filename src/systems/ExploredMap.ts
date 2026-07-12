@@ -125,6 +125,37 @@ export class ExploredMap {
     return this.colors[cy * this.cols + cx];
   }
 
+  // Smoothed variant of colorAt — center-weighted average with the cell's
+  // revealed 3x3 neighbors, so adjacent flat-color cells (biome-blob
+  // boundaries, badlands vs base grass) blend into each other instead of
+  // reading as hard rectangular edges — most visible on WorldMapUI's higher
+  // zoom levels where one 40px cell can fill many screen px (the user: "map
+  // still has sharp edges, flat lines"). Still -1 (fog) if the cell itself is
+  // unrevealed — never bleeds color INTO unexplored fog.
+  colorAtSmoothed(cx: number, cy: number): number {
+    const center = this.colorAt(cx, cy);
+    if (center < 0) return -1;
+    let rSum = ((center >> 16) & 0xff) * 2;
+    let gSum = ((center >> 8) & 0xff) * 2;
+    let bSum = (center & 0xff) * 2;
+    let n = 2;
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        if (dx === 0 && dy === 0) continue;
+        const c = this.colorAt(cx + dx, cy + dy);
+        if (c < 0) continue;
+        rSum += (c >> 16) & 0xff;
+        gSum += (c >> 8) & 0xff;
+        bSum += c & 0xff;
+        n++;
+      }
+    }
+    const r = Math.round(rSum / n);
+    const g = Math.round(gSum / n);
+    const b = Math.round(bSum / n);
+    return (r << 16) | (g << 8) | b;
+  }
+
   addLandmark(landmark: MapLandmark): void {
     this.landmarks.push(landmark);
   }

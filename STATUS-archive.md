@@ -1,5 +1,120 @@
 # STATUS Archive — older milestone entries (grep by id; never Read in full)
 
+### Biome 2 — Phase 0: Patchwork worldgen (bigger world + base-layer + biome blobs)
+
+Plan: `.claude/plans/biome-2-phase-0-world-ring.md` (Phase 0 of the
+`biome-2-sunscorch-badlands.md` umbrella). Built on **Opus** (world-gen rework). **Note:** an
+initial concentric-**rings** version shipped and was **reworked same session** — the user found
+rings too uniform and wanted Valheim-style diversity. This is the patchwork rebuild.
+
+**Locked model (this session's brainstorm):** biome 1 = a solid **protected forest disc**
+(unchanged, safe tutorial); *beyond* it a **universal base layer** (grades grass→dusty outward)
+with biome **blobs** on top, each blob's biome drawn weighted by `danger = radialTier(r) + noise`
+(moderate variance). Biome types repeat; blobs blend at seams with base-layer gaps between. World
+grows **~2×** for ~5 biomes. Map centers on the player.
+
+- **World grown to `WORLD_RADIUS` 14000 (28000px).** `depth.ts` `WORLD_DEPTH_SCALE` 0.3→**0.09**
+  (28000×0.09 = 2520 < 2600 HUD floor; all Y-sort sites already use `ysortDepth`).
+- **`src/systems/WorldBiomes.ts` (new, framework-light).** The level-1 biome-TYPE map: a
+  jittered-grid **blob seed scatter** (which also serves as the spatial bucket for O(3×3)
+  `coverageAt`), each seed's biome picked by `dangerAt(seed)` (nearest tier: badlands=2,
+  dunes=3). `coverageAt` = metaball smoothstep falloff w/ noisy edges; `forestCoverage(r)`
+  forces a solid disc ≤2000. **`worldBiomeColorAt`** is the single terrain-color source (base
+  graded + badlands + dunes + forest-on-top) used by BOTH the bake and the map → no drift.
+- **Palettes:** `Badlands.ts` (dusty red-brown `0x8f5a42` clay + mesa + ravine) and new
+  `Dunes.ts` (pale sand) — a **placeholder terrain-only** biome so the patchwork reads with >1
+  outer biome. Both reuse **one tiled `Biome`** for feature detail (new `Biome` `tiled` mode
+  wraps coords, so a small cheap Biome repeats across the huge world vs a 28000px Voronoi).
+  `colorUtil.ts` holds the shared `blendColors`.
+- **Rendering (bounded, GPU-safe at any world size).** Forest keeps its crisp 4000² bake (now
+  faded by `forestCoverage` so it never paints past the edge) — biome 1 pixel-identical. The
+  outer ground is ONE `bakeOuterOverlay` RenderTexture (`OVERLAY_TEX` 4096², ~64MB,
+  LINEAR-filtered, stretched over the world; skips the forest core). **A world-sized
+  `tileSprite` OOMs** (28000²≈3GB — the boot bug this session, found via a stack trap since the
+  uncaught error wasn't in the console filter); grass is now forest-region-sized only.
+- **Map.** `ExploredMap.terrainColorFn = worldBiomeColorAt`; `WorldMapUI.openMap(px,py)` now
+  **centers on the player** (new `centerOn`), framed to a ~5000px nearby view (wheel zooms out).
+
+**Verified** (`tsc --noEmit` clean; `preview_eval` + screenshots, console error-free): boot OK;
+forest core pixel-identical; coverage gradient forest→badlands→dunes with `dangerAt` rising
+2.1→4.4 outward; badlands = dusty red-brown, dunes = pale sand, base-layer gaps between blobs,
+all smoothly blended; world map shows the patchwork centered on the player; **all 401 nodes +
+103 enemies stayed in the forest disc** (no leak into the empty patchwork). No `RECIPES.md`/
+dashboard change. See [[survivor-rpg-biome-2-plan]], [[survivor-rpg-circular-world]].
+
+**Same-session refinements (the user's feedback):**
+- **Biome ordering → radius sets a danger CEILING** (`WorldBiomes.ceilingTier`/`pickBiome`), not
+  a fixed tier. A blob may be any biome with `tier ≤ ceiling(r)`, weighted toward the ceiling —
+  higher biomes gated behind an unlock radius (no out-of-order danger), lower biomes appear
+  anywhere. **Forest is now a blob biome too** (spawns beyond the disc); the center chunk stays
+  biome-1-only via `forestCoverage`. Verified across 600 samples/band: **dunes = 0 in every band
+  before ~6500**; forest present at all radii (307→136→186→69→74).
+- **Current-biome HUD label** on the minimap + a **first-entry discovery toast** (new `"biome"`
+  `LogKind`, gold center toast; forest pre-marked so the first toast is genuinely new). Verified:
+  entering badlands/dunes updated the label + fired one toast each. `BIOME_NAMES` = placeholder
+  flavor (Verdant Woods / Sunscorch Badlands / Windswept Dunes / The Wilds).
+- **Dev command `Ctrl+Shift+M`** (`revealEntireMap`) clears all fog + opens the world map for
+  worldgen inspection (undocumented — not in the Keybinds panel). Verified: 490k cells revealed.
+
+### Welcome overlay — show once per page load during early access
+
+Off the build order, built on Sonnet (gating tweak on an existing system, no new
+mechanic). the user reopened the deployed playtest link and didn't get the welcome — not a
+deploy bug: the overlay's `localStorage` flag (`survivor-rpg:welcome-seen:v1`) is
+once-ever-per-browser, and his browser had already dismissed it. Locked direction: for an
+early-access playtest, show it **every session** (once per fresh page load) without
+re-spamming on in-session New Run restarts.
+
+- **`src/ui/WelcomeUI.ts`** — added `ALWAYS_SHOW_EACH_LOAD` (const, `true`) + a
+  module-scoped `shownThisLoad` flag. `hasSeenWelcome()` returns `shownThisLoad` in
+  early-access mode (falls back to the untouched localStorage gate when the const is
+  flipped off); `markWelcomeSeen()` always sets `shownThisLoad`, and only writes
+  localStorage in the non-early-access path. The module re-evaluates on a full page reload
+  (→ shows again) but persists across `scene.restart()` (→ New Run does NOT re-show) —
+  exactly the wanted granularity. Reverting to permanent "once ever" is a one-line flip.
+- **`MainScene.ts`** — comment-only: the first-launch note by the `openWelcome()` trigger
+  now describes the per-page-load behavior. No logic change (the `!hasSeenWelcome()` guard
+  is unchanged; only its return value semantics moved).
+- Note: playtesters get this only after the next push to `main` triggers the Pages deploy.
+  No `RECIPES.md` change.
+
+### Welcome + How to Play overlay, keybind clarity fix
+
+Off the playtest-readiness backlog, built on Sonnet (new UI on existing freeze/menu
+patterns, no new core mechanic). the user flagged two gaps: Ctrl+Click and Shift+Click
+(quick-move / split-stack) had no in-game callout anywhere, and there was no cold-start
+"what is this game" moment for new playtesters.
+
+- **Keybinds panel** (`MainScene.ts`'s `KeybindsUI` bind list) gained two lines:
+  `"Quick-move item: Ctrl+Click"` / `"Split stack in half: Shift+Click"`, next to the
+  existing Left/Right Click lines.
+- **`src/ui/WelcomeUI.ts`** (new) — a 2-page modal (Welcome / How to Play), styled after
+  `PauseMenuUI`/`RunEndUI` (flat scrollFactor(0) GameObjects, depth 3600-3602, above
+  every other menu). Page 1: early-access framing (placeholder art/sound, balance still
+  tuning) + a thank-you for playtesting alongside development. Page 2: the
+  Explore→Gather→Craft→Level→Fight loop at a high level, "play at your own pace but the
+  score rewards speed," core controls (LMB/Tab/K/Esc), and the two click-modifier
+  shortcuts above. **Deliberately spoiler-free**, matching `Hints.ts`'s standing rule —
+  never names the totem/altar/boss win condition.
+  - `hasSeenWelcome()`/`markWelcomeSeen()` persist a `localStorage` flag
+    (`survivor-rpg:welcome-seen:v1`), same pattern as `HintManager`'s on/off pref — shows
+    once per browser, not once per run.
+- **`MainScene.ts` wiring**: `openWelcome()` reuses the exact `isPaused` freeze
+  `openPauseMenu()` already establishes (`physics.world.pause()` + `time.paused = true`)
+  rather than a second parallel freeze flag; `create()` calls it once if
+  `!hasSeenWelcome()`. The pause menu (`PauseMenuUI`) gained a **"How to Play"** button
+  (`onHowToPlay` dep) that re-shows the same overlay on demand — `openPauseMenu()` was
+  split into itself (freeze + guard) and a new `showPauseMenuPanel()` (just the
+  `.show()` call, no guard), so closing "How to Play" opened *from* the pause menu can
+  re-invoke `showPauseMenuPanel()` without tripping `openPauseMenu()`'s
+  `if (this.isPaused) return` guard (confirmed via `preview_eval` — the naive first
+  version silently no-op'd on that exact path). Esc closes the welcome overlay first
+  (before the pause-menu/menu-close checks), acting as "Start Playing."
+- Verified via `preview_eval`: first-load overlay renders (both pages, Back/Next/Start
+  Playing), `finish()` unfreezes + sets the localStorage flag, and the pause-menu →
+  "How to Play" → close → back-to-pause-menu round-trip restores the correct frozen
+  state. No console errors. No `RECIPES.md` change (no recipe/cost changes).
+
 ### Previously: 40-min playtest fix batch (12 items) + relic rarity/tier rework
 
 A grab-bag off the user's 40-min "almost died a lot, feels harder — good" session. Built on

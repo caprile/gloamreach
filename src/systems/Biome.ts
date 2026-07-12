@@ -115,6 +115,13 @@ export class Biome {
   // Assign each cell to its nearest random seed point's zone type. Naive
   // O(cells * seeds) nearest lookup — ~24k squared-distance checks, trivially
   // fast, no k-d tree warranted.
+  // Toroidal (shortest-way-around) delta for a tiled grid — e.g. cell 0 and
+  // cell (n-1) are 1 apart, not (n-1) apart. Plain difference for non-tiled.
+  private wrapDelta(d: number, n: number): number {
+    if (!this.tiled) return d;
+    return ((d + n / 2) % n + n) % n - n / 2;
+  }
+
   private buildVoronoiZones(rng: Phaser.Math.RandomDataGenerator): ZoneType[] {
     const seedCount = rng.between(SEED_MIN, SEED_MAX);
     const seeds: { cx: number; cy: number; zone: ZoneType }[] = [];
@@ -132,8 +139,8 @@ export class Biome {
         let best = Infinity;
         let bestZone: ZoneType = "grassy";
         for (const s of seeds) {
-          const dx = x - s.cx;
-          const dy = y - s.cy;
+          const dx = this.wrapDelta(x - s.cx, this.cols);
+          const dy = this.wrapDelta(y - s.cy, this.rows);
           const d2 = dx * dx + dy * dy;
           if (d2 < best) {
             best = d2;
@@ -159,11 +166,20 @@ export class Biome {
         for (let dy = -1; dy <= 1; dy++) {
           for (let dx = -1; dx <= 1; dx++) {
             if (dx === 0 && dy === 0) continue;
-            const nx = x + dx;
-            const ny = y + dy;
-            // Out-of-bounds neighbors count as agreeing (same as self), so map
-            // edges aren't eroded toward one type.
-            if (nx < 0 || ny < 0 || nx >= this.cols || ny >= this.rows) continue;
+            let nx = x + dx;
+            let ny = y + dy;
+            if (this.tiled) {
+              // Wrap so a tiled biome's zone grid is genuinely toroidal —
+              // otherwise the bilinear sampler's wrap (see bilinear()) blends
+              // two UNRELATED edges together, baking a hard seam every
+              // regionW/H world px (the user: "flat lines" on the map/ground).
+              nx = Biome.wrapCell(nx, this.cols);
+              ny = Biome.wrapCell(ny, this.rows);
+            } else if (nx < 0 || ny < 0 || nx >= this.cols || ny >= this.rows) {
+              // Out-of-bounds neighbors count as agreeing (same as self), so
+              // map edges aren't eroded toward one type.
+              continue;
+            }
             if (src[ny * this.cols + nx] !== self) disagree++;
           }
         }
@@ -191,11 +207,25 @@ export class Biome {
     const mainLen = horizontal ? this.cols : this.rows;
     const crossMax = (horizontal ? this.rows : this.cols) - 1;
     let cross = rng.between(0, crossMax); // lateral position, wobbles as we walk
+    // Tiled biomes need the ribbon's start/end lateral position to MATCH (it
+    // wraps into itself) or the bilinear sampler blends two unrelated ends
+    // into a visible kink at the seam — a sine-based periodic wobble (always
+    // wobble(0) === wobble(mainLen)) instead of a free random walk guarantees
+    // that for exactly the same reason the zone grid was made toroidal above.
+    const wobbleAmp = Math.min(crossMax / 2, rng.between(2, 5));
+    const wobbleHarmonics = rng.between(1, 3);
+    const wobblePhase = rng.frac() * Math.PI * 2;
+    const centerCross = crossMax / 2;
 
     for (let main = 0; main < mainLen; main++) {
-      const r = rng.frac();
-      if (r < CREEK_TURN_CHANCE / 2) cross = Math.max(0, cross - 1);
-      else if (r < CREEK_TURN_CHANCE) cross = Math.min(crossMax, cross + 1);
+      if (this.tiled) {
+        const t = (main / mainLen) * Math.PI * 2 * wobbleHarmonics;
+        cross = Math.round(Phaser.Math.Clamp(centerCross + wobbleAmp * Math.sin(t + wobblePhase), 0, crossMax));
+      } else {
+        const r = rng.frac();
+        if (r < CREEK_TURN_CHANCE / 2) cross = Math.max(0, cross - 1);
+        else if (r < CREEK_TURN_CHANCE) cross = Math.min(crossMax, cross + 1);
+      }
 
       const width = rng.between(CREEK_WIDTH_MIN, CREEK_WIDTH_MAX);
       for (let w = -width; w <= width; w++) {

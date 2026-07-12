@@ -86,7 +86,7 @@ export class MinimapUI {
     const maxCy = Math.ceil(pcy + halfRows) + 1;
     for (let gy = minCy; gy <= maxCy; gy++) {
       for (let gx = minCx; gx <= maxCx; gx++) {
-        const color = this.map.colorAt(gx, gy);
+        const color = this.map.colorAtSmoothed(gx, gy);
         if (color < 0) continue; // unexplored — leave the void backdrop
         const sx = this.cx + (gx - pcx) * CELL_PX;
         const sy = this.cy + (gy - pcy) * CELL_PX;

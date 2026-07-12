@@ -22,7 +22,10 @@ const WANDER_SPEED = 14;
 const MELEE_RANGE = 30; // its big body needs a slightly longer basher threshold
 
 const MAX_HEALTH = 60; // "noticeably tougher" = a real damage sponge vs the forest roster
-const BITE_DAMAGE = 22; // shared "hit" value for both the basher and the roll
+// 40, not 22: badlands-rebalance pass — the tank of the trio should hit
+// significantly harder than any biome-1 enemy through max (Lvl-3, 13 flat)
+// armor (40 - 13 = 27 net), on top of its resist-slash/weak-pierce gimmick.
+const BITE_DAMAGE = 40; // shared "hit" value for both the basher and the roll
 
 // Heavy basher — a long, readable wind-up + long recovery (the punish window),
 // with a solid shove on connect.

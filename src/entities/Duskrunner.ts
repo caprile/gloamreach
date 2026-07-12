@@ -28,10 +28,11 @@ const WANDER_SPEED = 22;
 const MELEE_RANGE = 30;
 
 const MAX_HEALTH = 20; // noticeably tougher than a Gremling (12), still low for a swarm unit
-// 20, not 14: in a full Tier-2 Gremlin set (13 flat armor) a 14-dmg bite floored
-// to 1 (the user: "duskrunner does 1dmg per hit... not enough"). 20 → ~7 through
-// max armor, and a pack of 3-4 landing that together is real pressure.
-const BITE_DAMAGE = 20;
+// 34, not 20: the user's badlands-rebalance call — biome-2 enemies must hurt
+// SIGNIFICANTLY more than the biome-1 roster even through max (Lvl-3, 13 flat)
+// armor. 34 - 13 = 21 net per bite, and a pack of 3-4 landing that together
+// forces real dodging instead of face-tanking.
+const BITE_DAMAGE = 34;
 
 const PACK_AGGRO_RADIUS = 260; // a woken packmate within this range also engages
 
