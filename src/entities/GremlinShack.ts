@@ -6,6 +6,12 @@ import { ysortDepth } from "../systems/depth";
 export interface GremlinShackConfig {
   x: number;
   y: number;
+  // True for the 3 huts fanned inside the Gremlin War Camp (see
+  // MainScene.spawnGremlinShacks) — they're treated as part of the boss camp
+  // POI, not a standalone one: their guards don't auto-respawn (a respawn
+  // mid-boss-fight was jarring) and they don't get their own minimap
+  // landmark (the camp's single "Gremlin War Camp" marker covers them).
+  nearCamp?: boolean;
 }
 
 export const SHACK_GUARD_RESPAWN_MS = 6 * 60 * 1000; // 6 min — 2x blackberry's 3min regrow
@@ -22,6 +28,7 @@ export class GremlinShack {
   readonly x: number;
   readonly y: number;
   readonly loot: LootContainer;
+  readonly nearCamp: boolean;
   guards: Enemy[] = [];
   respawnAt: number | null = null;
   // True once the player has explored close enough to reveal this shack's
@@ -32,6 +39,7 @@ export class GremlinShack {
   constructor(scene: Phaser.Scene, cfg: GremlinShackConfig) {
     this.x = cfg.x;
     this.y = cfg.y;
+    this.nearCamp = cfg.nearCamp ?? false;
     this.image = scene.add.image(cfg.x, cfg.y, "gremlin_shack").setDepth(ysortDepth(cfg.y));
     this.chestImage = scene.add
       .image(cfg.x + 18, cfg.y + 12, "gremlin_shack_chest")

@@ -217,10 +217,11 @@ const WORKBENCH_RANGE = 100; // px — looser than REACH; "am I near it," not a 
 const BLACKBERRY_REGROW_MS = 3 * 60 * 1000; // a picked bush regrows berries after 3 in-game minutes
 // Comfort (Bedroll) HP regen: player must be near a placed Bedroll, that
 // Bedroll must be near a placed Campfire (hard requirement, not optional),
-// and no live enemy may be within COMFORT_SAFE_RADIUS of the player.
+// and no live enemy may currently be aggro'd on the player (see
+// isAnyEnemyAggro — not a proximity radius, so a sleeping/wandering enemy
+// nearby doesn't block resting).
 const COMFORT_RANGE = 80; // px, player <-> Bedroll
 const COMFORT_CAMPFIRE_RANGE = 120; // px, Bedroll <-> Campfire
-const COMFORT_SAFE_RADIUS = 350; // px, nearest live enemy <-> player
 // A player-dropped or destroyed-station item pickup ignores the magnet for
 // this long so it doesn't instantly fly back into the inventory/station that
 // just released it. Manual click-pickup is unaffected.
@@ -698,6 +699,9 @@ export class MainScene extends Phaser.Scene {
     // Right-click on a placed object (Workbench/Campfire/Drying Rack) opens a
     // generic Upgrade/Destroy context menu.
     this.input.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
+      // Run over (victory/death screen up) — RunEndUI owns all input then;
+      // don't let a click fall through to craft/gather/attack/place behind it.
+      if (this.runOver) return;
       // The context menu's own rows have their own pointerdown handlers (which
       // already ran by the time this global listener fires — Phaser processes
       // hit-tested game objects before the input plugin's own event). Any
@@ -815,6 +819,7 @@ export class MainScene extends Phaser.Scene {
     // Mouse wheel cycles the hotbar selection (looping), unless the pointer is
     // over the event log (which scrolls its own history).
     this.input.on("wheel", (p: Phaser.Input.Pointer, _o: unknown, _dx: number, dy: number) => {
+      if (this.runOver) return;
       // Full map open: the wheel zooms it instead of cycling the hotbar.
       if (this.worldMapUI.isOpen()) {
         this.worldMapUI.handleWheel(dy);
@@ -827,10 +832,12 @@ export class MainScene extends Phaser.Scene {
     // Tab is captured so the browser doesn't shift focus off the canvas.
     this.input.keyboard!.addCapture("TAB");
     this.input.keyboard!.on("keydown-TAB", () => {
+      if (this.runOver) return;
       if (this.placementMode) return this.cancelPlacement();
       this.toggleCombinedMenu();
     });
     this.input.keyboard!.on("keydown-ESC", () => {
+      if (this.runOver) return;
       if (this.pauseMenu.isOpen()) return this.resumeGame();
       if (this.worldMapUI.isOpen()) return this.worldMapUI.close();
       if (this.contextMenu.isOpen()) return this.contextMenu.close();
@@ -854,16 +861,17 @@ export class MainScene extends Phaser.Scene {
       // stations/processors row, see Hotbar.ts) instead of row 1 — same
       // single selectHotbarSlot entry point either way.
       this.input.keyboard!.on(`keydown-${key}`, (event: KeyboardEvent) => {
+        if (this.runOver) return;
         this.selectHotbarSlot(event.altKey ? ROW1_COUNT + i : i);
       });
     });
-    this.input.keyboard!.on("keydown-V", () => this.toggleMagnet());
-    this.input.keyboard!.on("keydown-O", () => this.toggleRangeRing());
-    this.input.keyboard!.on("keydown-K", () => this.characterMenu.toggle());
-    this.input.keyboard!.on("keydown-R", () => this.takeAllFromChest());
-    this.input.keyboard!.on("keydown-H", () => this.toggleWheelSpansBothRows());
+    this.input.keyboard!.on("keydown-V", () => !this.runOver && this.toggleMagnet());
+    this.input.keyboard!.on("keydown-O", () => !this.runOver && this.toggleRangeRing());
+    this.input.keyboard!.on("keydown-K", () => !this.runOver && this.characterMenu.toggle());
+    this.input.keyboard!.on("keydown-R", () => !this.runOver && this.takeAllFromChest());
+    this.input.keyboard!.on("keydown-H", () => !this.runOver && this.toggleWheelSpansBothRows());
     this.input.keyboard!.on("keydown-J", () => this.runHudUI.toggleMinimized());
-    this.input.keyboard!.on("keydown-M", () => this.toggleWorldMap());
+    this.input.keyboard!.on("keydown-M", () => !this.runOver && this.toggleWorldMap());
 
     // Skill level-ups: announce, feed the overall Player Level the same XP the
     // skill level cost (Progression.ts), and re-run recipe discovery/crafting
@@ -2027,6 +2035,12 @@ export class MainScene extends Phaser.Scene {
     if (!shack) return;
     shack.guards = shack.guards.filter((g) => g !== enemy);
     if (shack.guards.length > 0) return;
+    // War Camp huts never respawn their guards — a respawn firing mid-boss-
+    // fight (their 6-min timer has no idea a Gremlin King engagement is in
+    // progress nearby) was disruptive. The camp's own density
+    // (spawnAltarDensity) covers ongoing camp danger instead; standalone wild
+    // shacks are unaffected and keep respawning as before.
+    if (shack.nearCamp) return;
     shack.respawnAt = this.time.now + SHACK_GUARD_RESPAWN_MS;
     this.time.delayedCall(SHACK_GUARD_RESPAWN_MS, () => this.respawnShackGuards(shack));
   }
@@ -2644,7 +2658,8 @@ export class MainScene extends Phaser.Scene {
         );
       }
       shackPoints.push(point);
-      const shack = new GremlinShack(this, point);
+      const nearCamp = i < SHACK_NEAR_ALTAR_COUNT && !!this.altarPosition;
+      const shack = new GremlinShack(this, { ...point, nearCamp });
       this.gremlinShacks.push(shack);
       this.respawnShackGuards(shack);
     }
@@ -2803,7 +2818,12 @@ export class MainScene extends Phaser.Scene {
     }
     // Gremlin Shacks (M-WC backlog item) — same discovered-landmark treatment,
     // in a distinct wood-brown so they read differently from the war camp.
+    // The 3 War Camp huts (nearCamp) are folded into the camp's own "Gremlin
+    // War Camp" marker above instead of getting their own — they're part of
+    // that POI, not separate ones, so the map wouldn't show 4 markers stacked
+    // on top of each other.
     for (const shack of this.gremlinShacks) {
+      if (shack.nearCamp) continue;
       if (shack.discoveredOnMap) continue;
       if (!inReveal(shack.x, shack.y)) continue;
       shack.discoveredOnMap = true;
@@ -3866,11 +3886,18 @@ export class MainScene extends Phaser.Scene {
     this.nodes = this.nodes.filter((n) => !n.depleted);
   }
 
-  // Add an item to the backpack and record it as discovered (which may unlock
-  // recipes). Returns any amount that didn't fit. (M1 backpack is roomy;
-  // overflow handling — dropping — arrives with the loot-drop milestone.)
+  // Add an item to the backpack — but top up a MATCHING stack already sitting
+  // in the hotbar first (e.g. crafting/cooking more of a food you already
+  // have equipped in a hotbar slot should stack there, not silently land in
+  // the backpack instead). Only tops up an EXISTING hotbar stack — never
+  // places a brand-new item into an empty hotbar slot, which would be a
+  // surprising side effect of crafting. Records discovery and returns any
+  // amount that didn't fit anywhere. (M1 backpack is roomy; overflow handling
+  // — dropping — arrives with the loot-drop milestone.)
   private addToBackpack(key: string, amount: number): number {
-    const leftover = this.backpack.add(key, amount);
+    const afterHotbar = this.topUpExistingHotbarStack(key, amount);
+    const leftover = this.backpack.add(key, afterHotbar);
+    if (afterHotbar !== amount) this.hotbarUI?.refresh();
     this.discoverMaterial(key);
     // First elite trophy in hand -> nudge toward the Relic Forge (not the boss
     // fang, which is a win-state drop, not a forge input the player farms).
@@ -3879,6 +3906,23 @@ export class MainScene extends Phaser.Scene {
     }
     this.refreshDiscovery();
     return leftover;
+  }
+
+  // Tops up any hotbar slot already holding `key` (up to its max stack size),
+  // across as many existing stacks as needed — never touches empty slots.
+  // Returns whatever amount is still left to place elsewhere.
+  private topUpExistingHotbarStack(key: string, amount: number): number {
+    const max = itemDef(key)?.maxStack ?? 99;
+    let remaining = amount;
+    for (let i = 0; i < this.hotbar.container.size && remaining > 0; i++) {
+      const s = this.hotbar.container.slot(i);
+      if (s && s.key === key && s.count < max) {
+        const take = Math.min(max - s.count, remaining);
+        s.count += take;
+        remaining -= take;
+      }
+    }
+    return remaining;
   }
 
   // Mark a key discovered; if it's a genuinely NEW raw material (not a
@@ -4200,16 +4244,12 @@ export class MainScene extends Phaser.Scene {
     this.craftingMenu.refresh();
     // Placing from an owned stack changed a count — keep the hotbar display in
     // sync too (refreshHud only touches the crafting/inventory menus).
-    if (itemSource) {
-      this.hotbarUI.refresh();
-      // That was the last one owned — exit placement mode immediately rather
-      // than leaving a faded ghost armed on the cursor until the next click
-      // notices the stack is empty (the old "ghost workbench" bug).
-      if (itemSource.container.count(itemSource.key) < 1) {
-        this.cancelPlacement();
-        return;
-      }
-    }
+    if (itemSource) this.hotbarUI.refresh();
+    // A single placement exits placement mode — per playtest feedback, "place
+    // another one" auto-re-arming wasn't wanted (was built anticipating a
+    // different use case that never landed). Explicit re-entry (a fresh Place
+    // click, or selecting the item again) is one extra click, which is fine.
+    this.cancelPlacement();
   }
 
   // First slot holding `key` — the one an item-source placement consumes.
@@ -4254,13 +4294,15 @@ export class MainScene extends Phaser.Scene {
     );
   }
 
-  // "Is any live (non-depleted) enemy within `radius` of (x, y)" — any enemy
-  // counts, aggro'd or not (Comfort's "safe area" check is deliberately the
-  // simplest possible read, not per-enemy aggro-state aware).
-  private isEnemyNearby(x: number, y: number, radius: number): boolean {
+  // Is any live (non-depleted) enemy currently AGGRO'd on the player. Used by
+  // Comfort's "safe to rest" check — per playtest feedback, a flat proximity
+  // radius (COMFORT_SAFE_RADIUS) was too easily tripped by enemies that
+  // weren't even a threat (asleep/wandering nearby); "safe" now means
+  // literally nobody is hunting you, regardless of how close they idle.
+  private isAnyEnemyAggro(): boolean {
     for (const enemy of this.enemies) {
       if (enemy.depleted) continue;
-      if (Phaser.Math.Distance.Between(x, y, enemy.x, enemy.y) <= radius) return true;
+      if (enemy.isAggro()) return true;
     }
     return false;
   }
@@ -4278,7 +4320,7 @@ export class MainScene extends Phaser.Scene {
         Phaser.Math.Distance.Between(this.player.x, this.player.y, obj.x, obj.y) <= COMFORT_RANGE &&
         this.isNearCampfire(obj.x, obj.y, COMFORT_CAMPFIRE_RANGE),
     );
-    if (resting && !this.isEnemyNearby(this.player.x, this.player.y, COMFORT_SAFE_RADIUS)) {
+    if (resting && !this.isAnyEnemyAggro()) {
       this.buffs.apply({ id: "comfort_rest", name: "Resting", icon: "icon_comfort", hpPerSec: 1, durationMs: 400 });
     }
   }
@@ -4469,6 +4511,12 @@ export class MainScene extends Phaser.Scene {
         padding: { x: 3, y: 1 },
       })
       .setOrigin(0.5, 1)
+      // A world-space label had no explicit depth (default 0), so a nearby
+      // placed object's own y-sorted depth (up to ~2400) could render right
+      // over it — "hover a bench, the text is hidden behind other benches".
+      // Pin it above every world object but still below the fixed HUD
+      // (2600+), like the hover-highlight outline's own depth convention.
+      .setDepth(2500)
       .setVisible(false);
     this.placedLabels.set(obj, label);
   }
@@ -5174,11 +5222,23 @@ export class MainScene extends Phaser.Scene {
       .setDepth(6000)
       .setAlpha(0);
 
-    // A barely-there warm pulse, not a jumpscare — the punch-in banner below
-    // is the "big deal" part. Dialed down again per playtest feedback ("full
-    // screen flash is too much") — was 300ms @ 48,36,12, now a much shorter,
-    // dimmer nudge. Deliberately no camera shake.
-    this.cameras.main.flash(150, 20, 15, 5);
+    // A whole-screen camera.flash was here for two prior tuning passes and
+    // stayed "annoying" even dialed way down — per playtest feedback it's cut
+    // entirely. The punch-in banner + a local glow behind it below carries all
+    // the "big deal" feedback now; no more full-screen flash, no camera shake.
+    const glow = this.add
+      .circle(cx, cy + 10, 90, 0xffe08a, 0.35)
+      .setScrollFactor(0)
+      .setDepth(5999)
+      .setScale(0.4);
+    this.tweens.add({
+      targets: glow,
+      alpha: 0,
+      scale: 1.6,
+      duration: 420,
+      ease: "Sine.easeOut",
+      onComplete: () => glow.destroy(),
+    });
 
     this.tweens.add({
       targets: title,

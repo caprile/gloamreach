@@ -185,32 +185,34 @@ export class CookingMenu {
 
     if (this.selected && !recipes.includes(this.selected)) this.selected = null;
 
+    // The intro blurb wraps to the panel width now (see below) — measure its
+    // real height first (its width doesn't depend on panelY) so the panel can
+    // be sized/centered around the actual number of lines, not a fixed guess.
+    const descStr = "Cook meat and vegetables into food. Right-click a dish in your bag to eat it.";
+    const measure = this.scene.add
+      .text(0, 0, descStr, { fontFamily: "monospace", fontSize: "11px", wordWrap: { width: this.panelW - 32 } })
+      .setVisible(false);
+    const descH = measure.height;
+    measure.destroy();
+    const introH = 40 + descH + 16;
+
     // Size + center the panel to the visible rows (1 at Lvl 1, 2 at Lvl 2).
-    this.panelH = 70 + Math.max(1, recipes.length) * (ROW_H + ROW_GAP) + FOOTER_H;
+    this.panelH = introH + Math.max(1, recipes.length) * (ROW_H + ROW_GAP) + FOOTER_H;
     this.panelY = this.scene.scale.height / 2 - this.panelH / 2;
     this.bg.setPosition(this.panelX, this.panelY).setSize(this.panelW, this.panelH);
 
+    // Title + the wrapped blurb, both pinned at the very top of the panel.
+    // The blurb used to render as one unwrapped line that could run past the
+    // panel's right edge ("overflows with the menu itself").
     this.addText(this.panelX + 16, this.panelY + 14, stationDisplayName("campfire", tier), 16, "#ffffff");
-    this.addText(
-      this.panelX + 16,
-      this.panelY + 40,
-      "Cook meat and vegetables into food. Right-click a dish in your bag to eat it.",
-      11,
-      "#8a93a3",
-    );
+    this.addText(this.panelX + 16, this.panelY + 40, descStr, 11, "#8a93a3", 0, 0, this.panelW - 32);
+    let y = this.panelY + introH;
 
     if (recipes.length === 0) {
-      this.addText(
-        this.panelX + 16,
-        this.panelY + 74,
-        "No dishes known yet — gather their ingredients first.",
-        12,
-        "#8a93a3",
-      );
+      this.addText(this.panelX + 16, y, "No dishes known yet — gather their ingredients first.", 12, "#8a93a3");
       return;
     }
 
-    let y = this.panelY + 70;
     for (const recipe of recipes) {
       this.renderRow(recipe, y);
       y += ROW_H + ROW_GAP;
@@ -326,7 +328,12 @@ export class CookingMenu {
         return `${name} ${have}/${need * batch}`;
       })
       .join("   ");
-    this.addText(x + 12, y + 8, `${recipe.name} — ${costParts}`, 12, "#c8d0dc");
+    // The dish's own name already shows on its row above (highlighted while
+    // selected) — repeating it here (`${recipe.name} — ${costParts}`) was
+    // what pushed a 3-ingredient dish's cost line wide enough to run under
+    // the Cook button on the right. Cost-only, wrapped short of the button
+    // column as a safety net either way.
+    this.addText(x + 12, y + 8, costParts, 12, "#c8d0dc", 0, 0, rowW - 110);
 
     if (stackable) {
       this.addText(x + 12, y + 28, `Qty: ${batch} / ${maxBatch}`, 12, "#e8ecf2");
@@ -399,12 +406,19 @@ export class CookingMenu {
     color: string,
     originX = 0,
     originY = 0,
-  ): void {
+    wrapWidth?: number,
+  ): Phaser.GameObjects.Text {
     const t = this.scene.add
-      .text(x, y, str, { fontFamily: "monospace", fontSize: `${size}px`, color })
+      .text(x, y, str, {
+        fontFamily: "monospace",
+        fontSize: `${size}px`,
+        color,
+        wordWrap: wrapWidth ? { width: wrapWidth } : undefined,
+      })
       .setOrigin(originX, originY)
       .setScrollFactor(0)
       .setDepth(DEPTH_TEXT);
     this.rows.push(t);
+    return t;
   }
 }

@@ -4020,3 +4020,42 @@ unrelated to these changes.)
 "both" rebalance (armor nerf + enemy-dmg buff), the boss damage bump + GremlinKing cleave
 replacement, and 2 small features (Workbench-placement hint, in-game relic compendium). Then the
 master-plan tail: **M-TE** (trophy gear), **M-W1** (multi-biome world).
+### Previously: Elite melee reach fix + Gloaming Vein design
+
+Two things this session: a live combat bug fix, and the locked design + committed plan for
+the next feature (the Gloaming Vein — not built yet). The bug fix is Sonnet-class (a fix on
+an existing system); it was done on Opus alongside the new-mechanic brainstorm.
+
+**Elite Gremling "runs up but never attacks" — fixed.** Root cause: an elite's
+`setScale(1.4)` also grows its **Arcade physics body** (verified live: a Gremling's 14px
+body → 19.6px), and the player↔enemy collider then holds their centers ~19.8px apart —
+right at the flat 20px swing-*start* threshold. On any diagonal approach the Euclidean
+center distance exceeds 20, so `dist <= MELEE_RANGE` never fires and it never winds up
+(hence "sometimes"). This is the **mirror** of the earlier `MainScene.enemyReach()` fix
+(which scales the *player's* reach vs big enemies) — nobody had scaled the *enemy's own*
+reach vs its own scaled body. Fix: a principled `Enemy.reachBonus()` =
+`(baseScale-1) * max(width,height)/2` (the exact body-half the scaling added; **0 for
+non-elites**, uses `baseScale` not the live wind-up-pulsed scale), added to **every** melee
+reach check across the roster: `tickMeleeSwing`'s strike + the base/Gremling `MELEE_RANGE`
+starts, RangedGremlin's enter/exit-melee thresholds, Boar's gore-start + gore-strike +
+charge-hit, and Snake's lunge bite. Any future scaled/elite enemy gets it for free.
+*Verified live against a real elite Gremling: a 22px swing that whiffed at the flat 20px
+reach now walks windup→strike and lands (`observedHit: true`); `reachBonus` = 3.2px
+(gremling texture is 14×16, so it uses the 16px dimension), restoring the same ~3px reach
+margin a normal Gremling has. `tsc --noEmit` clean; console clean.*
+
+**Gloaming Vein — designed + locked, plan committed, NOT yet built.** Brainstormed with
+the user and locked via `AskUserQuestion`; full plan at
+`.claude/plans/amethyst-warding-vein.md`. A mineable, rare, finite **purple ore POI** (glows
+at night) guarded by a **mini-boss** (the "Gloamwarden"); mining it yields a magical
+resource ("Gloam Shard") used at the **Relic Forge (new "Refine" tab)** to **climb trophy
+rarity** — turning crumble-prone raw Common trophies into guaranteed-roll Refined Uncommons.
+Locked rules: refine happens on the existing forge (not a new station); refined trophies are
+**species-agnostic**; the vein is **hard-gated** (un-mineable until the guardian dies);
+refinement is **single-step + terminal** (raw→one-up, refined trophies are roll-only, no
+refined→refined) — so biome 1 naturally caps at Refined Uncommon while the system already
+supports raw-Uncommon→Refined-Rare for deeper biomes. This **deliberately overrides M-RL's
+"rarity not climbable / no manual combine" lock** — but as a *gated* climb (rare resource +
+mini-boss), consistent with "nothing free." First-pass numbers in the plan; relic-strength
+retune is a separate later pass. New-mechanic build is Opus territory.
+

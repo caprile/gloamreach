@@ -2,10 +2,12 @@
 
 ## Current State
 
-_Living snapshot — edit in place, never append. Last shipped: **second playtest polish
-batch — SFX/level-up feel tuning, a toast-stacking bug fix, batch-quantity sliders for
-crafting + cooking, crafting-menu-stays-open placement, Javelin/Pellets recipe gating,
-and a consolidated Relic Forge roll button**, **2026-07-11**._
+_Living snapshot — edit in place, never append. Last shipped: **third playtest fix
+batch — one-shot placement, no more full-screen level-up flash, station-label depth
+fix, aggro-based Comfort resting, output-based craft slider, Cook menu overflow fix,
+craft-into-hotbar stacking, boss return-to-spawn on deaggro, War Camp guards no longer
+respawn (or map-clutter) mid-fight, and a Victory/Death-screen input lock**,
+**2026-07-11**._
 
 **The game.** Top-down 2D pixel survival-ARPG (Phaser 3 + TypeScript + Vite; all
 textures are placeholders generated in `BootScene`). One forest biome sitting in the
@@ -35,17 +37,16 @@ win. The world is now circular + much larger (M-W1 geometry prep, above); determ
 seeded world-gen and actual multi-biome content are still deferred to M-W1 proper.
 
 **In progress / next.** the user is prepping for the first outside playtesters. This
-session's batch (see below) works through a fresh round of playtest feedback on top of
-5y's ranged-weapons/SFX ship — SFX felt too loud/jarring, a UI toast-overlap bug, and
-several crafting/cooking UX asks (batch sliders, placement-menu flow). Real pixel
-art/animations stay deliberately deferred until content/balance settle further (the whole
-texture pipeline is built to swap late — see `CLAUDE.md` roadmap item 8). One open
-discussion item (NOT changed, deliberately left for the user): whether to generalize
-species trophies (Boar/Snake/Gremlin) into one "Tier 1 Common Trophy" — recommended
-against for now (M-W1 per-source-rarity scaffolding), but the Relic Forge UI was
-consolidated to a single roll-by-rarity button either way (see below). Next: a wider
-playtest round, then locked build order resumes — **M-TE** (trophy-gated special gear),
-then **M-W1** (multi-biome content in the now-circular world) last.
+session's batch (see below) is a further round of playtest fixes on top of 5z. A
+brainstorm/plan is also in flight (not yet built): reworking Stats + Skills, which feel
+negligible next to Relics now — the user's own direction is relics = the stats/buffs
+layer, recipes = the uniqueness layer (e.g. a weapon recipe with a proc chance), with
+Skills/Stats needing their own distinct reason to invest. See the plan doc once
+committed. Real pixel art/animations stay deliberately deferred until content/balance
+settle further (the whole texture pipeline is built to swap late — see `CLAUDE.md`
+roadmap item 8). Next: finish the Stats/Skills rework brainstorm + plan, then resume the
+locked build order — **M-TE** (trophy-gated special gear), then **M-W1** (multi-biome
+content in the now-circular world) last.
 
 **Known issues / open.**
 - Boss may be slightly overtuned after the 5s damage bump (the user's "TBD" — left as-is
@@ -64,6 +65,101 @@ then **M-W1** (multi-biome content in the now-circular world) last.
 ## Recent Entries
 
 > Older entries in STATUS-archive.md.
+
+### 5aa — Third playtest fix batch (placement, level-up flash, resting, sliders, boss/camp fixes, victory-screen lock)
+
+An 11-item feedback batch off the user's continued playtesting (post-5z). Sonnet-class
+fixes/tuning on already-designed systems — no new mechanic.
+
+**Placement mode no longer re-arms after one placement (`MainScene.attemptPlaceObject`).**
+The "stays armed so you can place several in a row" behavior (shipped in 5z) was built
+anticipating a workflow the user doesn't want — a successful placement now always calls
+`cancelPlacement()` immediately, both for crafted placements and re-placing an owned
+stack (previously that path only exited once the very last owned copy was placed).
+Placing another requires a fresh Place click / hotbar selection, matching how every
+other equip-and-act flow already works.
+
+**Level-up feedback drops the whole-screen `camera.flash` entirely
+(`MainScene.showLevelUpBanner`).** Two prior tuning passes (5z included) dialed it down
+and it still read as "annoying" — cut outright, replaced with a small local glow circle
+behind the punch-in banner text (a growing, fading `Graphics` circle, screen-space,
+scoped to the banner's own area) so there's still a "big deal" beat without washing the
+whole screen.
+
+**Station label depth fix — "hover a bench, the text is hidden behind other benches"
+(`MainScene.refreshStationLabel`).** The per-station upgrade-tier label
+(`this.placedLabels`) was a world-space `Text` with no explicit depth (default 0), so
+any nearby placed object's own y-sorted depth (up to ~2400) could render right over it.
+Now pinned to depth 2500 — above every world object, still below the fixed HUD
+(2600+), same convention the hover-highlight outline already uses.
+
+**Comfort resting is now aggro-gated, not radius-gated
+(`MainScene.isAnyEnemyAggro`, replaces `isEnemyNearby`).** "As long as no enemies are
+aggro'd on you, you should be able to rest" — the flat `COMFORT_SAFE_RADIUS` (350px)
+blocked resting even when nearby enemies were just idling/wandering, not a real threat.
+"Safe" is now `enemy.isAggro()` across all live enemies, regardless of distance.
+
+**Crafting-menu batch slider now reads in OUTPUT units, not craft-repetitions
+(`CraftingMenu.ts`).** Most recipes are 1:1 so this was invisible, but Shishkabob (x2),
+Slingshot Pellets (x25), and Javelin (x2) all grant more than one item per craft — the
+"Qty: N / max" readout and the "Craft xN" button now show `batch * recipe.output.count`
+instead of the raw batch count, so the slider reads as "how many items," matching the
+Drying Rack's existing output-based slider (4f).
+
+**Cook menu intro blurb no longer overflows the panel, and is confirmed pinned at the
+top (`CookingMenu.ts`).** The "Cook meat and vegetables..." blurb rendered as one
+unwrapped line that could run past the panel's right edge; now wrapped to the panel
+width with its real (possibly 2-line) height measured up front so the panel is sized/
+centered around it correctly, right under the title. Also fixed a second, worse overflow
+in the footer's selected-dish cost line: it repeated the dish's own name
+(`"${recipe.name} — ${costParts}"`, already shown on the row above) which was wide
+enough on 3-ingredient dishes to run under the Cook button — now cost-only, plus a
+wordWrap safety net stopping short of the button column either way.
+
+**Crafting a stackable item you already have in the hotbar now tops that stack up
+first (`MainScene.addToBackpack`/`topUpExistingHotbarStack`).** Previously EVERY craft/
+cook/process/refine output landed straight in the backpack regardless of what was
+already equipped in the hotbar. `addToBackpack` now tops up a matching hotbar stack
+(any slot, up to its max) before falling back to `backpack.add()` — but only tops up an
+EXISTING stack, never places a new item into an empty hotbar slot (that would be a
+surprising side effect of crafting).
+
+**Boss wanders back to its spawn point once deaggro'd (`GremlinKing.updateIdle`).**
+Getting kited past the leash mid-charge used to leave the King standing wherever it
+ended up, fully idle. The deaggro'd branch now walks it back toward `spawnX/spawnY` at
+`BOSS_MOVE_SPEED` (re-aggroing normally if the player wanders back within
+`BOSS_AGGRO_RADIUS` along the way) instead of freezing in place.
+
+**Gremlin Shack guards near the War Camp never respawn, and the huts are folded into
+one map POI (`GremlinShack.nearCamp`, `MainScene`).** The 3 shacks fanned inside the War
+Camp (vs. the 2 wild standalone ones) had their guards firing the same 6-min respawn
+timer as every other shack — with no idea a Gremlin King fight might be in progress,
+guards could pop mid-boss-fight. `onShackGuardKilled` now no-ops the respawn schedule
+entirely for `nearCamp` shacks (the camp's own density — `spawnAltarDensity` — covers
+ongoing camp danger instead); wild shacks are unaffected. `updateAltarDiscovery` also
+now skips adding a separate "Gremlin Shack" landmark for `nearCamp` shacks — they're
+part of the "Gremlin War Camp" POI, not their own, so the map doesn't show 4 markers
+stacked on top of each other.
+
+**Victory/Death screen now actually freezes input (`MainScene.create`'s global
+listeners).** `update()` already early-returned on `runOver`, but the global
+`pointerdown` handler and several `keydown-*` listeners (TAB, K, M, R, V, O, H, the
+hotbar-select keys, mouse wheel) had no `runOver` guard at all — a player could still
+craft, gather, attack, or open menus behind the RunEndUI. All now short-circuit on
+`this.runOver`.
+
+**Verification:** `tsc --noEmit` clean; full build unaffected. Extensive live
+`preview_eval` verification (console error-free throughout): placement exits after one
+object; hotbar stack topped 2→4 on a matching craft; `isAnyEnemyAggro` replaces the old
+radius check; crafting-menu Qty/button read output units (Shishkabob batch 5 → "Qty: 10
+/ 238", `output.count` 2); station labels report depth 2500; boss walked back toward
+spawn (velocity pointed home, x decreasing) once forced deaggro'd from 700px out; a
+War-Camp shack's guards left `respawnAt: null` after both were killed; the explored-map
+landmark list held exactly one "Gremlin War Camp" entry near 3 discovered huts; TAB
+opened the crafting menu normally but was a no-op once `runOver` was set (verified via
+real `keyboard.emit('keydown-TAB')` dispatches); Cook menu blurb wrapped to 2 lines
+within the panel; footer cost line for a 3-ingredient dish rendered without running
+under the Cook button.
 
 ### 5z — Second playtest polish batch (SFX feel, toast fix, batch sliders, gating, forge UI)
 
@@ -457,43 +553,4 @@ error-free. No `RECIPES.md` change (no recipe/cost changes).
 **Next:** the **Gloaming Vein** (mineable rarity-ore POI + trophy refinement, plan
 committed at `.claude/plans/amethyst-warding-vein.md`), then **M-TE**, then **M-W1** proper
 (multi-biome content + deterministic seeded gen in this now-circular world).
-
-### Previously: Elite melee reach fix + Gloaming Vein design
-
-Two things this session: a live combat bug fix, and the locked design + committed plan for
-the next feature (the Gloaming Vein — not built yet). The bug fix is Sonnet-class (a fix on
-an existing system); it was done on Opus alongside the new-mechanic brainstorm.
-
-**Elite Gremling "runs up but never attacks" — fixed.** Root cause: an elite's
-`setScale(1.4)` also grows its **Arcade physics body** (verified live: a Gremling's 14px
-body → 19.6px), and the player↔enemy collider then holds their centers ~19.8px apart —
-right at the flat 20px swing-*start* threshold. On any diagonal approach the Euclidean
-center distance exceeds 20, so `dist <= MELEE_RANGE` never fires and it never winds up
-(hence "sometimes"). This is the **mirror** of the earlier `MainScene.enemyReach()` fix
-(which scales the *player's* reach vs big enemies) — nobody had scaled the *enemy's own*
-reach vs its own scaled body. Fix: a principled `Enemy.reachBonus()` =
-`(baseScale-1) * max(width,height)/2` (the exact body-half the scaling added; **0 for
-non-elites**, uses `baseScale` not the live wind-up-pulsed scale), added to **every** melee
-reach check across the roster: `tickMeleeSwing`'s strike + the base/Gremling `MELEE_RANGE`
-starts, RangedGremlin's enter/exit-melee thresholds, Boar's gore-start + gore-strike +
-charge-hit, and Snake's lunge bite. Any future scaled/elite enemy gets it for free.
-*Verified live against a real elite Gremling: a 22px swing that whiffed at the flat 20px
-reach now walks windup→strike and lands (`observedHit: true`); `reachBonus` = 3.2px
-(gremling texture is 14×16, so it uses the 16px dimension), restoring the same ~3px reach
-margin a normal Gremling has. `tsc --noEmit` clean; console clean.*
-
-**Gloaming Vein — designed + locked, plan committed, NOT yet built.** Brainstormed with
-the user and locked via `AskUserQuestion`; full plan at
-`.claude/plans/amethyst-warding-vein.md`. A mineable, rare, finite **purple ore POI** (glows
-at night) guarded by a **mini-boss** (the "Gloamwarden"); mining it yields a magical
-resource ("Gloam Shard") used at the **Relic Forge (new "Refine" tab)** to **climb trophy
-rarity** — turning crumble-prone raw Common trophies into guaranteed-roll Refined Uncommons.
-Locked rules: refine happens on the existing forge (not a new station); refined trophies are
-**species-agnostic**; the vein is **hard-gated** (un-mineable until the guardian dies);
-refinement is **single-step + terminal** (raw→one-up, refined trophies are roll-only, no
-refined→refined) — so biome 1 naturally caps at Refined Uncommon while the system already
-supports raw-Uncommon→Refined-Rare for deeper biomes. This **deliberately overrides M-RL's
-"rarity not climbable / no manual combine" lock** — but as a *gated* climb (rare resource +
-mini-boss), consistent with "nothing free." First-pass numbers in the plan; relic-strength
-retune is a separate later pass. New-mechanic build is Opus territory.
 

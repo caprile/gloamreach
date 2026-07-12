@@ -325,6 +325,13 @@ export class CraftingMenu {
     const stackable = maxBatch > 1;
     if (stackable) this.batchAmount = Phaser.Math.Clamp(this.batchAmount, 1, maxBatch);
     const batch = stackable ? this.batchAmount : 1;
+    // The slider is expressed in OUTPUT units, not craft repetitions — most
+    // recipes are 1:1 so this is a no-op, but a few (Shishkabob x2, Slingshot
+    // Pellets x25, Javelin x2) grant more than one item per craft, and the
+    // slider should read as "how many items", not "how many times to craft".
+    const outputCount = recipe.output.kind === "item" ? (recipe.output.count ?? 1) : 1;
+    const qty = batch * outputCount;
+    const maxQty = maxBatch * outputCount;
 
     for (const [resource, amount] of Object.entries(recipe.costs) as [ResourceType, number][]) {
       const have = this.deps.backpack.count(resource);
@@ -367,7 +374,7 @@ export class CraftingMenu {
     }
 
     if (stackable) {
-      const t = this.scene.add.text(x0, y, `Qty: ${batch} / ${maxBatch}`, {
+      const t = this.scene.add.text(x0, y, `Qty: ${qty} / ${maxQty}`, {
         fontFamily: "monospace",
         fontSize: "12px",
         color: "#e8ecf2",
@@ -409,7 +416,7 @@ export class CraftingMenu {
     // While a craft bar is filling the button greys out (and the bar covers
     // it); placeable recipes never use the bar so they stay live.
     const clickable = isCraftable(this.deps, recipe) && (placeable || !this.busy);
-    const btnLabel = placeable ? "Place" : this.busy ? "Crafting…" : stackable ? `Craft x${batch}` : "Craft";
+    const btnLabel = placeable ? "Place" : this.busy ? "Crafting…" : stackable ? `Craft x${qty}` : "Craft";
     const btn = this.scene.add
       .text(x0, btnY, btnLabel, {
         fontFamily: "monospace",

@@ -87,6 +87,9 @@ const ENRAGE_MOVE_MULTIPLIER = 1.3;
 
 const ATTACK_COOLDOWN_MS = 950; // was 1200 — playtest: boss was too passive between attacks
 const POISE_BAR_OFFSET_Y = 10; // px below the inherited HP bar's own line
+// How close to spawn counts as "home" while wandering back deaggro'd — below
+// this it just idles instead of endlessly micro-adjusting position.
+const RETURN_HOME_EPS = 20;
 
 function telegraphMsFor(attack: BossAttackType): number {
   if (attack === "smash") return SMASH_TELEGRAPH_MS;
@@ -242,9 +245,21 @@ export class GremlinKing extends Enemy {
 
     const dist = Phaser.Math.Distance.Between(this.x, this.y, playerX, playerY);
     if (!this.aggroed) {
-      if (dist <= BOSS_AGGRO_RADIUS) this.aggroed = true;
-      else {
-        body.setVelocity(0, 0);
+      if (dist <= BOSS_AGGRO_RADIUS) {
+        this.aggroed = true;
+      } else {
+        // Deaggro'd (e.g. kited past the leash mid-charge) — wander back
+        // toward its own spawn point instead of idling wherever it ended up,
+        // so the boss doesn't get permanently stranded far from the boss area.
+        if (distFromSpawn > RETURN_HOME_EPS) {
+          const angle = Phaser.Math.Angle.Between(this.x, this.y, this.spawnX, this.spawnY);
+          const vx = Math.cos(angle) * BOSS_MOVE_SPEED;
+          const vy = Math.sin(angle) * BOSS_MOVE_SPEED;
+          body.setVelocity(vx, vy);
+          this.applyFacing(vx, vy);
+        } else {
+          body.setVelocity(0, 0);
+        }
         return;
       }
     }
