@@ -39,17 +39,26 @@ const ERUPT_KNOCKBACK = 220; // a strong sand-blast shove (near-cosmetic today �
 // BURST_RADIUS (95) with a beat of reaction — greedy/advancing players eat it,
 // reactive ones (or a dash, which also grants i-frames) escape.
 const SURFACE_WINDUP_MS = 560;
-const ERUPT_STRIKE_MS = 200; // detonation window checkPlayerHit fires in (long enough for the per-frame query)
+const ERUPT_STRIKE_MS = 340; // detonation window (long enough for the spikes to visibly shoot up + the per-frame hit query)
 const EXPOSED_MS = 1100; // fully surfaced + planted after erupting — the vulnerable punish window
 const BURROW_MS = 350; // dive-back-under animation
 const RESUBMERGE_COOLDOWN_MS = 2600; // after re-burrowing, before it can ambush again
 const SUBMERGED_ALPHA = 0.18; // near-invisible but a keen eye can spot the mound (subtler than Snake's 0.35)
+
+// S-curve stalk: while creeping toward the player it weaves side-to-side instead
+// of tracking in a dead-straight line, so the approaching mound reads as a
+// snaking predator and is harder to read a fixed offset off of. The heading is
+// the true player-angle plus a sine wobble; WEAVE_MAX_ANGLE is the peak swing
+// off-axis (~52°) and WEAVE_ANGULAR_SPEED sets the weave period (~1.5s/cycle).
+const WEAVE_MAX_ANGLE = 0.9; // radians of peak deflection to either side of the player-heading
+const WEAVE_ANGULAR_SPEED = 0.0042; // radians/ms of sine phase (2π/~1500ms → one full S per ~1.5s)
 
 export class Sandmaw extends Enemy {
   private mode: SandmawMode = "submerged";
   private stateStartAt = 0;
   private resubmergeAt = 0;
   private eruptHit = false;
+  private weavePhase = 0; // S-curve stalk sine accumulator (advanced by delta)
   // Elite-scaled burst damage (mirrors Hexling's per-instance boltDamage — the
   // base ERUPT_DAMAGE const would otherwise be used unscaled for elites too).
   private readonly eruptDamage: number;
@@ -86,7 +95,7 @@ export class Sandmaw extends Enemy {
     }
   }
 
-  update(_delta: number, playerX: number, playerY: number, now: number): boolean {
+  update(delta: number, playerX: number, playerY: number, now: number): boolean {
     if (this.depleted) return false;
     const body = this.body as Phaser.Physics.Arcade.Body;
     const dist = Phaser.Math.Distance.Between(this.x, this.y, playerX, playerY);
@@ -103,10 +112,14 @@ export class Sandmaw extends Enemy {
         // once you walk past. Holds still otherwise (an invisible shove would
         // feel bad — kept slow for the same reason).
         if (dist <= STALK_RADIUS && dist > AMBUSH_RADIUS) {
-          const angle = Phaser.Math.Angle.Between(this.x, this.y, playerX, playerY);
+          // Weave toward the player in an S-curve rather than a straight line:
+          // heading = true player-angle + a sine wobble that swings ±WEAVE_MAX_ANGLE.
+          this.weavePhase += delta * WEAVE_ANGULAR_SPEED;
+          const base = Phaser.Math.Angle.Between(this.x, this.y, playerX, playerY);
+          const heading = base + Math.sin(this.weavePhase) * WEAVE_MAX_ANGLE;
           const spd = SUBMERGED_DRIFT * this.speedMult * this.envSpeedMult;
-          const vx = Math.cos(angle) * spd;
-          const vy = Math.sin(angle) * spd;
+          const vx = Math.cos(heading) * spd;
+          const vy = Math.sin(heading) * spd;
           body.setVelocity(vx, vy);
           this.applyFacing(vx, vy);
         } else {
@@ -124,15 +137,16 @@ export class Sandmaw extends Enemy {
           this.stateStartAt = now;
           this.eruptHit = false;
           this.endWindupTell(); // snap the load-up scale back — reads as the burst releasing
-          this.drawBurst();
         }
         return false;
       }
 
       case "erupting": {
         body.setVelocity(0, 0);
-        // The AoE hit itself is dealt via checkPlayerHit(), queried by the scene
-        // this same window. Just hold and time out into the punish window.
+        // Animate the sand/stone spikes shooting up over the strike window. The
+        // AoE hit itself is dealt via checkPlayerHit(), queried by the scene this
+        // same window. Just hold and time out into the punish window.
+        this.drawEruptionSpikes(elapsed / ERUPT_STRIKE_MS);
         if (elapsed >= ERUPT_STRIKE_MS) {
           this.mode = "exposed";
           this.stateStartAt = now;
@@ -200,14 +214,37 @@ export class Sandmaw extends Enemy {
     g.strokeCircle(this.x, this.y, BURST_RADIUS);
   }
 
-  private drawBurst(): void {
+  // The eruption's execute-phase visual: a ring of sand/stone spikes violently
+  // bursting up around the Sandmaw (mirrors the Gloamwarden's crystal-spike
+  // eruption, but sand/stone-colored + centered on itself rather than a locked
+  // ground spot). frac01 ramps 0→1 over ERUPT_STRIKE_MS; spikes shoot up fast
+  // (rise clamps early) then hold for the rest of the window.
+  private drawEruptionSpikes(frac01: number): void {
     const g = this.telegraphGfx;
     g.clear();
     g.setDepth(this.depth + 0.5);
-    g.fillStyle(0xf0d27a, 0.8);
-    g.fillCircle(this.x, this.y, BURST_RADIUS * 0.6);
-    g.fillStyle(0xc9a24a, 0.45);
+    const f = Phaser.Math.Clamp(frac01, 0, 1);
+    const rise = Math.min(1, f * 2.4); // spikes snap up in the first ~40% of the window
+    // Lingering dust wash under the spikes, fading as they settle.
+    g.fillStyle(0xc9a24a, 0.3 * (1 - f * 0.55));
     g.fillCircle(this.x, this.y, BURST_RADIUS);
+    // Ring of jagged sand/stone spikes around the burst edge.
+    const count = 9;
+    for (let i = 0; i < count; i++) {
+      const a = (i / count) * Math.PI * 2 + (i % 2) * 0.36;
+      const dd = BURST_RADIUS * (0.45 + 0.5 * ((i % 3) / 2));
+      const sx = this.x + Math.cos(a) * dd;
+      const sy = this.y + Math.sin(a) * dd;
+      const hgt = (15 + (i % 3) * 9) * rise;
+      const w = 5 + (i % 2) * 2;
+      g.fillStyle(0x8a6a45, 0.92); // dark stone base
+      g.fillTriangle(sx - w, sy + 4, sx + w, sy + 4, sx, sy - hgt);
+      g.fillStyle(0xe8d6a8, 0.85); // pale sand highlight sliver
+      g.fillTriangle(sx - w * 0.4, sy + 2, sx + w * 0.4, sy + 2, sx, sy - hgt * 0.9);
+    }
+    // Central plume erupting straight out of the mound.
+    g.fillStyle(0xcbb488, 0.95);
+    g.fillTriangle(this.x - 7, this.y + 5, this.x + 7, this.y + 5, this.x, this.y - 28 * rise);
   }
 
   // Queried each frame by MainScene.updateEnemies() (like the bosses / Hexling

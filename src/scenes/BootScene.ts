@@ -27,6 +27,39 @@ export class BootScene extends Phaser.Scene {
     g.fillRect(24, 5, 2, 2);
     g.generateTexture("grass", 32, 32);
 
+    // Generic ground SPECKLE tile (32x32, mostly transparent) — a few low-alpha
+    // dark + light pixels that read as fine grain over ANY ground color. The
+    // forest gets its texture from the opaque `grass` tile above; the outer world
+    // (badlands/dunes/base) is a single smooth stretched overlay with no detail,
+    // so this is tiled crisply (NEAREST) over the whole world via a camera-locked
+    // TileSprite in MainScene to give it the same speckled look. Neutral b/w
+    // specks so one tile works on dusty clay, sand, and grass alike.
+    g.clear();
+    const darkSpecks: Array<[number, number, number]> = [
+      [3, 5, 2],
+      [17, 3, 2],
+      [26, 12, 2],
+      [9, 20, 3],
+      [21, 25, 2],
+      [13, 29, 2],
+    ];
+    for (const [x, y, s] of darkSpecks) {
+      g.fillStyle(0x000000, 0.16);
+      g.fillRect(x, y, s, s);
+    }
+    const lightSpecks: Array<[number, number, number]> = [
+      [7, 9, 2],
+      [24, 6, 2],
+      [15, 16, 2],
+      [29, 22, 2],
+      [4, 27, 2],
+    ];
+    for (const [x, y, s] of lightSpecks) {
+      g.fillStyle(0xffffff, 0.13);
+      g.fillRect(x, y, s, s);
+    }
+    g.generateTexture("ground_speckle", 32, 32);
+
     // Player (20x20) — a front-facing little adventurer in a blue tunic. The
     // sprite orientation is static (facing is tracked only to offset the equipped
     // item icon), so a symmetric front view reads best. Detailed to the Hexling bar.

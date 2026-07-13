@@ -580,6 +580,11 @@ export class MainScene extends Phaser.Scene {
   // the current held-light-source radius (Torch, future Lantern) in world px.
   private dayNight!: DayNight;
   private nightOverlay!: NightOverlayUI;
+  // Camera-locked speckle overlay: a viewport-sized TileSprite (constant memory —
+  // a world-sized one OOMs) tiling `ground_speckle`, its tilePosition synced to
+  // the camera scroll each frame so the specks read as world-locked ground grain
+  // over the smooth outer overlay. See buildSpeckleLayer / syncSpeckleLayer.
+  private speckleLayer!: Phaser.GameObjects.TileSprite;
   private wasNight = false;
   private nightSpawns: Enemy[] = [];
   private equippedLightRadius = 0;
@@ -782,6 +787,14 @@ export class MainScene extends Phaser.Scene {
     // Circular world edge: a dark "void" ring beyond WORLD_RADIUS so the
     // playable area reads as a round island, not an invisible wall in open grass.
     this.drawWorldBoundary();
+
+    // Fine ground grain over the WHOLE world (the outer badlands/dunes overlay is
+    // a single smooth stretched texture with no detail; this gives it the same
+    // speckle the forest gets from its `grass` tile). A camera-locked, viewport-
+    // sized TileSprite — its tilePosition follows the camera scroll so the specks
+    // sit still in world space, at constant GPU cost (a world-sized tilesprite
+    // would OOM). Subtle enough to layer harmlessly over the forest + void too.
+    this.buildSpeckleLayer();
 
     // Physics/camera bounds are the bounding square; the player is additionally
     // clamped to the world CIRCLE each frame (clampPlayerToWorld).
@@ -1115,6 +1128,7 @@ export class MainScene extends Phaser.Scene {
       this.updateTreeOcclusion(delta);
       this.updateMapReveal();
       this.bossHealthUI.update(this.gremlinKing);
+      this.syncSpeckleLayer();
       return;
     }
 
@@ -1178,6 +1192,7 @@ export class MainScene extends Phaser.Scene {
     this.updateShackGlows();
     this.bossHealthUI.update(this.gremlinKing);
     this.updateCraftingMenuWorkbenchProximity();
+    this.syncSpeckleLayer();
   }
 
   // Advance fog-of-war + both map views. ExploredMap is the single consumer of
@@ -2696,6 +2711,28 @@ export class MainScene extends Phaser.Scene {
   // reads as a smooth gradient rather than blocky. Soft is fine for placeholder.
   private static readonly OVERLAY_TEX = 4096; // texture resolution
   private static readonly OVERLAY_STEP = 4; // texel block size baked per fill
+
+  // Camera-locked ground-grain overlay (see the speckleLayer field note). Sized to
+  // the camera viewport and pinned with scrollFactor(0), so its canvas stays
+  // small no matter how big the world is; syncSpeckleLayer() offsets tilePosition
+  // by the camera scroll each frame so the specks appear fixed to the ground.
+  // Depth -8.8 sits above every ground layer (overlay -9.5 / grass -9.4 / forest
+  // bake -9 / void ring) and below all Y-sorted world entities (positive depths).
+  private buildSpeckleLayer(): void {
+    const cam = this.cameras.main;
+    this.speckleLayer = this.add
+      .tileSprite(0, 0, cam.width, cam.height, "ground_speckle")
+      .setOrigin(0, 0)
+      .setScrollFactor(0)
+      .setDepth(-8.8);
+    this.syncSpeckleLayer();
+  }
+
+  private syncSpeckleLayer(): void {
+    const cam = this.cameras.main;
+    // Specks stay locked to world coords: shift the tiling by the camera scroll.
+    this.speckleLayer.setTilePosition(cam.scrollX, cam.scrollY);
+  }
 
   private bakeOuterOverlay(): void {
     const TEX = MainScene.OVERLAY_TEX;
