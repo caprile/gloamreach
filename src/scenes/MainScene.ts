@@ -204,6 +204,12 @@ const WORLD_CY = WORLD_RADIUS;
 // a centered square.
 const WORLD_W = WORLD_SIZE;
 const WORLD_H = WORLD_SIZE;
+// World camera zoom. 1.25 pulls the view in so the leftmost/rightmost 1/10th of
+// the OLD viewport is now off-screen (visible width = 0.8x, 1/0.8 = 1.25) — a
+// modest zoom-in requested after the bigger character sprites made things read
+// small. Only the WORLD camera zooms; a separate zoom-1 UI camera keeps the HUD
+// pixel-perfect (see setupCameras/syncCameras).
+const WORLD_ZOOM = 1.25;
 // The terrain-baked biome region: a centered square inscribing the biome
 // circle. Kept well under the GPU max-texture-size so the one-shot bake stays a
 // single RenderTexture (BIOME_SIZE x BIOME_SIZE).
@@ -613,6 +619,8 @@ export class MainScene extends Phaser.Scene {
   // the camera scroll each frame so the specks read as world-locked ground grain
   // over the smooth outer overlay. See buildSpeckleLayer / syncSpeckleLayer.
   private speckleLayer!: Phaser.GameObjects.TileSprite;
+  // Zoom-1 HUD camera paired with the zoomed main/world camera (see setupCameras).
+  private uiCam!: Phaser.Cameras.Scene2D.Camera;
   private wasNight = false;
   private nightSpawns: Enemy[] = [];
   private equippedLightRadius = 0;
@@ -835,6 +843,14 @@ export class MainScene extends Phaser.Scene {
     // Spawn the player in the middle and follow it smoothly.
     this.player = new Player(this, WORLD_W / 2, WORLD_H / 2);
     this.cameras.main.startFollow(this.player, true, 0.1, 0.1);
+    this.cameras.main.setZoom(WORLD_ZOOM);
+
+    // Two-camera split so the world can zoom without dragging the HUD with it:
+    // the main camera renders (and zooms) the world; a second, zoom-1 UI camera
+    // renders the screen-locked HUD at native pixel scale. syncCameras() routes
+    // every object to exactly one of them each frame (see its note).
+    this.uiCam = this.cameras.add(0, 0, this.cameras.main.width, this.cameras.main.height);
+    this.uiCam.setName("ui");
 
     // Reach preview ring — only drawn while a tool/weapon is equipped, kept
     // just above the ground and below entities (Milestone F).
@@ -1011,6 +1027,10 @@ export class MainScene extends Phaser.Scene {
     // ALWAYS_SHOW_EACH_LOAD) — not re-shown on an in-session New Run restart.
     if (!hasSeenWelcome()) this.openWelcome();
 
+    // Classify every object built above onto the world/ui camera before the
+    // first render (update() also does this each frame for later-created ones).
+    this.syncCameras();
+
     // Scene-level drag: a slot starts it, the pointer drags a ghost icon, and
     // release resolves the move against whichever container is under the
     // pointer (backpack grid or hotbar). The Drying Rack/Crafting/Cooking
@@ -1137,6 +1157,11 @@ export class MainScene extends Phaser.Scene {
   }
 
   update(_time: number, delta: number): void {
+    // Keep the world/HUD camera split in sync every frame, BEFORE any early
+    // return — menus (pause/run-end) can be opened while the sim is frozen and
+    // still need routing to the zoom-1 uiCam so they don't render zoomed.
+    this.syncCameras();
+
     // Run ended (death/win screen up) — freeze the whole world sim + input. The
     // RunEndUI is tween/pointer-driven, so it stays live regardless.
     if (this.runOver) return;
@@ -1263,37 +1288,48 @@ export class MainScene extends Phaser.Scene {
 
   // Screen-space light holes for the night overlay: the player (only while a
   // light item is held) plus any on-screen lit POI (Gremlin Shacks, Boss
-  // Altar). World -> screen is a plain scroll subtract since the camera zoom
-  // is 1. Off-screen POIs are skipped so the erase list stays short.
+  // Altar). The overlay renders on the zoom-1 uiCam, so world coords are mapped
+  // to actual screen pixels through the WORLD camera's zoom (midPoint transform)
+  // and every radius is scaled by that zoom too. Off-screen POIs are skipped so
+  // the erase list stays short.
   private collectLights(): ScreenLight[] {
     const lights: ScreenLight[] = [];
     const cam = this.cameras.main;
-    const toScreen = (wx: number, wy: number) => ({ x: wx - cam.scrollX, y: wy - cam.scrollY });
+    const z = cam.zoom;
+    const halfW = cam.width * 0.5;
+    const halfH = cam.height * 0.5;
+    const toScreen = (wx: number, wy: number) => ({
+      x: (wx - cam.midPoint.x) * z + halfW,
+      y: (wy - cam.midPoint.y) * z + halfH,
+    });
     if (this.equippedLightRadius > 0) {
       const p = toScreen(this.player.x, this.player.y);
-      lights.push({ x: p.x, y: p.y, radius: this.equippedLightRadius });
+      lights.push({ x: p.x, y: p.y, radius: this.equippedLightRadius * z });
     }
+    // Cull against the zoomed visible world rect (worldView) plus a world-space
+    // margin, so the erase list only holds POIs actually near the viewport.
+    const view = cam.worldView;
     const margin = POI_LIGHT_RADIUS;
     const onScreen = (wx: number, wy: number) =>
-      wx >= cam.scrollX - margin &&
-      wx <= cam.scrollX + cam.width + margin &&
-      wy >= cam.scrollY - margin &&
-      wy <= cam.scrollY + cam.height + margin;
+      wx >= view.x - margin &&
+      wx <= view.right + margin &&
+      wy >= view.y - margin &&
+      wy <= view.bottom + margin;
     for (const shack of this.gremlinShacks) {
       if (!onScreen(shack.x, shack.y)) continue;
       const s = toScreen(shack.x, shack.y);
-      lights.push({ x: s.x, y: s.y, radius: POI_LIGHT_RADIUS });
+      lights.push({ x: s.x, y: s.y, radius: POI_LIGHT_RADIUS * z });
     }
     for (const altar of this.bossAltars) {
       if (!onScreen(altar.x, altar.y)) continue;
       const s = toScreen(altar.x, altar.y);
-      lights.push({ x: s.x, y: s.y, radius: POI_LIGHT_RADIUS });
+      lights.push({ x: s.x, y: s.y, radius: POI_LIGHT_RADIUS * z });
     }
     // War Camp braziers (M-WC) glow like any other POI light.
     for (const b of this.campLightPoints) {
       if (!onScreen(b.x, b.y)) continue;
       const s = toScreen(b.x, b.y);
-      lights.push({ x: s.x, y: s.y, radius: POI_LIGHT_RADIUS });
+      lights.push({ x: s.x, y: s.y, radius: POI_LIGHT_RADIUS * z });
     }
     // Gloaming Vein crystals glow at night (a purple beacon that doubles as a
     // navigation hint — the vein's own amethyst color shows through the erased
@@ -1301,14 +1337,14 @@ export class MainScene extends Phaser.Scene {
     for (const v of this.veinLightPoints) {
       if (!onScreen(v.x, v.y)) continue;
       const s = toScreen(v.x, v.y);
-      lights.push({ x: s.x, y: s.y, radius: 110 });
+      lights.push({ x: s.x, y: s.y, radius: 110 * z });
     }
     // Duskrunner Warren dens glow a faint gloam-ember at night — a subtler
     // beacon than the full POIs, marking a den's location from a distance.
     for (const d of this.denLightPoints) {
       if (!onScreen(d.x, d.y)) continue;
       const s = toScreen(d.x, d.y);
-      lights.push({ x: s.x, y: s.y, radius: 90 });
+      lights.push({ x: s.x, y: s.y, radius: 90 * z });
     }
     return lights;
   }
@@ -2782,6 +2818,36 @@ export class MainScene extends Phaser.Scene {
     const cam = this.cameras.main;
     // Specks stay locked to world coords: shift the tiling by the camera scroll.
     this.speckleLayer.setTilePosition(cam.scrollX, cam.scrollY);
+  }
+
+  // Route every display object to exactly one camera each frame: screen-locked
+  // HUD (scrollFactor 0) renders ONLY on the zoom-1 uiCam; everything else (the
+  // world, entities, projectiles, floating text) renders ONLY on the zoomed
+  // world camera. Done via each object's `cameraFilter` bitmask (an object is
+  // hidden from a camera when that camera's id-bit is set), which Phaser's input
+  // hit-testing also respects, so clicks land on the right camera automatically.
+  // Run every frame (not once) so dynamically-created objects — menus, tooltips,
+  // damage numbers — are classified as soon as they appear.
+  // Exception: the speckle ground-grain tilesprite is scrollFactor 0 but is a
+  // world UNDERLAY (depth < 0) that must zoom with and sit beneath the world, so
+  // it stays on the world camera.
+  private syncCameras(): void {
+    if (!this.uiCam) return;
+    const wBit = this.cameras.main.id;
+    const uBit = this.uiCam.id;
+    const list = this.children.list;
+    for (let i = 0; i < list.length; i++) {
+      const o = list[i] as Phaser.GameObjects.GameObject & {
+        scrollFactorX?: number;
+        cameraFilter: number;
+      };
+      const isUI = o.scrollFactorX === 0 && o !== this.speckleLayer;
+      if (isUI) {
+        o.cameraFilter = (o.cameraFilter | wBit) & ~uBit; // hide from world cam
+      } else {
+        o.cameraFilter = (o.cameraFilter | uBit) & ~wBit; // hide from ui cam
+      }
+    }
   }
 
   private bakeOuterOverlay(): void {
