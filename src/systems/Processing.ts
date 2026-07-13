@@ -14,6 +14,15 @@ export interface ProcessRecipe {
   input: ResourceType;
   output: ResourceType;
   inputPerOutput: number; // input units consumed per one output unit produced
+  // Optional secondary consumable ("A + B = output"), pulled from the backpack
+  // (NOT the station's input slot) at process time — the Smelter's fuel. The
+  // station only advertises the requirement via recipeForLoaded(); the scene
+  // checks/deducts it (see MainScene.processSmelterAmount). Absent for the
+  // Drying Rack's plain single-input recipes.
+  fuel?: { key: ResourceType; per: number }; // `per` = fuel units per output unit
+  // Minimum station tier required before this recipe is available (an upgraded
+  // Smelter unlocks rare ore). Defaults to 0 = available on a fresh station.
+  minStationTier?: number;
 }
 
 // Ratios locked in the plan: 2:1 cattail->twine, 1:1 skin->leather,
@@ -22,6 +31,13 @@ export const PROCESS_RECIPES: ProcessRecipe[] = [
   { input: "cattail", output: "twine", inputPerOutput: 2 },
   { input: "gremlin_skin", output: "gremlin_leather", inputPerOutput: 1 },
   { input: "gremlin_blood", output: "gremlin_guck", inputPerOutput: 2 },
+];
+
+// Smelter recipes (biome 2 Phase 4): ore + Hex Essence fuel = ingot. The rare
+// ore needs a tier-1 Smelter (unlocked with the Gremlin King's Heart).
+export const SMELT_RECIPES: ProcessRecipe[] = [
+  { input: "sunscorch_ore", output: "sunsteel_ingot", inputPerOutput: 2, fuel: { key: "hex_essence", per: 1 } },
+  { input: "ember_ore", output: "embersteel_ingot", inputPerOutput: 2, fuel: { key: "hex_essence", per: 2 }, minStationTier: 1 },
 ];
 
 export function processRecipeFor(inputKey: string): ProcessRecipe | undefined {
@@ -51,12 +67,32 @@ export interface ProcessResult {
 // deposit into the backpack (or drop on the floor if it doesn't fit).
 export class ProcessingStation {
   input: ProcSlot | null = null;
+  // Which recipe table this station runs (Drying Rack = PROCESS_RECIPES, Smelter
+  // = SMELT_RECIPES) and its upgrade tier (an upgraded Smelter unlocks rare-ore
+  // recipes gated on minStationTier). Both are per-placed-instance, so the same
+  // class serves multiple station kinds without a shared global recipe table.
+  private readonly recipes: ProcessRecipe[];
+  private tier = 0;
 
-  // Can this station accept `key` right now? Only a valid input, and only
-  // while it isn't already loaded with a different input type.
+  constructor(recipes: ProcessRecipe[] = PROCESS_RECIPES) {
+    this.recipes = recipes;
+  }
+
+  // Reflect the placed object's upgrade tier (read from its image data by the
+  // scene when the menu opens) so tier-gated recipes unlock.
+  setTier(tier: number): void {
+    this.tier = tier;
+  }
+
+  // The recipe for `inputKey` available at this station's current tier, if any.
+  private recipeFor(inputKey: string): ProcessRecipe | undefined {
+    return this.recipes.find((r) => r.input === inputKey && (r.minStationTier ?? 0) <= this.tier);
+  }
+
+  // Can this station accept `key` right now? Only a valid (tier-available) input,
+  // and only while it isn't already loaded with a different input type.
   canAccept(key: string): boolean {
-    const recipe = processRecipeFor(key);
-    if (!recipe) return false;
+    if (!this.recipeFor(key)) return false;
     return !this.input || this.input.key === key;
   }
 
@@ -75,7 +111,7 @@ export class ProcessingStation {
   // (the rack UI) read the output key/ratio without re-deriving it from a
   // hardcoded input-key switch.
   recipeForLoaded(): ProcessRecipe | undefined {
-    return this.input ? processRecipeFor(this.input.key) : undefined;
+    return this.input ? this.recipeFor(this.input.key) : undefined;
   }
 
   // How many whole output units the loaded input could ever produce — the
@@ -93,7 +129,7 @@ export class ProcessingStation {
   // the output units produced. Used for the live preview as the slider moves.
   previewFor(amount: number): { consumed: number; output: number } {
     if (!this.input) return { consumed: 0, output: 0 };
-    const recipe = processRecipeFor(this.input.key);
+    const recipe = this.recipeFor(this.input.key);
     if (!recipe) return { consumed: 0, output: 0 };
     const clamped = Math.max(0, Math.min(Math.floor(amount), this.input.count));
     const consumed = clamped - (clamped % recipe.inputPerOutput);
@@ -105,7 +141,7 @@ export class ProcessingStation {
   // down to 0). Draining the input slot to 0 clears it.
   process(amount: number): ProcessResult | null {
     if (!this.input) return null;
-    const recipe = processRecipeFor(this.input.key);
+    const recipe = this.recipeFor(this.input.key);
     if (!recipe) return null;
     const { consumed, output } = this.previewFor(amount);
     if (output <= 0) return null;

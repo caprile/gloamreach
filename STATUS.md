@@ -2,27 +2,28 @@
 
 ## Current State
 
-_Living snapshot — edit in place, never append. Last shipped: **Badlands playtest batch (19 items)**
-(2026-07-13, Opus). A broad polish/tuning pass off a badlands playtest. **HUD:** fixed the "Defeated X"
-vs skill/level-up center-toast overlap (a freed front slot was reused under a still-visible toast — now a
-monotonic cursor that only resets when the stack empties). **Combat/enemies:** added a **fire** damage type
-(`IncomingDamageType`) that bypasses flat armor like magic + a player-facing floating damage number tinted
-by type (fire orange / magic violet / physical red) so incoming type reads clearly; **Cinderwrought** now
-deals FIRE (cone 30→46, hammer 44→58) and on death cracks open **mineable Cinderforged Ore** (a smelting/
-metal material — Phase-4 hook); badlands damage bumped across the board (Duskrunner 34→42, Cragscale 40→48,
-Hexling bolt 22→26 / flame 34→40, Sandmaw 38→46); **Duskrunner** is now very hard to deaggro (leash 280→620),
-attacks faster (pounce cd 850→560, bite cd 220→140), and den guards are **anchored** (no idle wander);
-**Cragscale** roll radius 40→58; **Sandmaw** is **un-targetable while submerged** (new `Enemy.isTargetable()`).
-**Density:** more of everything — **5 Sunken Forges** (was 1), 16 dens (was 10), 46 Sandmaws (was 24), more
-packs/cragscales/hexlings, ~200 more badlands flora + **2 new harvestables** (Gloamcap, Dustbloom).
-**POIs:** every POI now gets a **distinct floor decal + a ring of marker props** (`decoratePoi`); the
-**Duneshaper altars** are a big gloam-blighted arena guarded by **elite Hexlings**, and there's now **one
-per quadrant** (4). **Map/discovery:** POI detection radius widened (~260→760px so they appear on the map
-sooner); the dev reveal-map now drops **all** POI landmarks; the Gloaming Vein reliably lands on the map.
-**Naming:** "Gloam-Bone Fetish" → "Gloam-Bone Totem". Decorative immersion props scattered across BOTH biomes
-(ferns/flowers/mushrooms/logs in the forest; skulls/dead bushes/mesa boulders/bones in the badlands). Verified
-live via `preview_eval` (counts/quadrants/textures/fire-bypass/Cinderwrought fire returns/Sandmaw untargetable/
-den anchor/reveal-map landmarks) + a demo screenshot; `tsc` clean. See the batch entry below. [[survivor-rpg-biome-2-plan]]_
+_Living snapshot — edit in place, never append. Last shipped: **Biome 2 — Phase 4a: Smelting economy +
+Gremlin King gate + base forged gear** (2026-07-13, Opus; **Session 1 of a 2-session Phase 4**). The forged
+gear tier + the deferred **Gremlin King critical-drop rework** (locked decision 10). New progression: mine
+**Clay** → build the **Smelter**; smelt **ore + Hex Essence = ingot** (common **Sunscorch Ore → Sunsteel
+Ingot**); upgrade the **Workbench to Lvl 3** (Forge Anvil) → unlocks base forged recipes; kill the **Gremlin
+King → Heart** (replaces the fang) → upgrade the **Smelter** (Ember Crucible) → smelt rare **Cinderforged Ore
+→ Embersteel Ingot** (the T2 metal for Session 2). Base gear: a **Sunsteel heavy set** (14 armor, wires the
+dormant `heavy_armor` skill — its effect is **magic/fire mitigation**, the counterpart to light's dodge
+i-frames) + a **Duskhide light set** (10) + **three weapons** covering blunt/slash/pierce. The Smelter reuses
+the Drying Rack's menu/`ProcessingStation` (fuel- + tier-aware); a new `Recipe.requiresWorkbenchTier` gates
+the forged tier on a Lvl-3 bench; benches now change texture per tier. All ingredients drop from normal
+badlands enemies. Verified live via `preview_eval` (smelt ratios/fuel/tier-gate end-to-end, King→Heart,
+heavy mitigation 40-vs-50, bench swaps); `tsc` clean; no console errors. See the Phase 4a entry below.
+[[survivor-rpg-biome-2-plan]]_
+
+_Prior: **Badlands playtest batch (19 items)** (2026-07-13, Opus). A broad polish/tuning pass off a
+badlands playtest: a **fire** damage type (`IncomingDamageType`, bypasses flat armor like magic) + a
+player-facing type-tinted damage number; **Cinderwrought** deals fire + on death cracks open mineable
+Cinderforged Ore (the Phase-4 hook); badlands damage bumped across the board; **5 Sunken Forges** (was 1);
+denser everything + 2 new harvestables (Gloamcap, Dustbloom); every POI gets a floor decal + marker ring;
+**one Duneshaper altar per quadrant** (4); POI map-detection radius widened (~260→760px); decorative
+immersion props across both biomes. See the batch entry below._
 
 _Prior: **Biome 2 — Phase 3: The Duneshaper
 (badlands final boss + win-con swap)** (2026-07-13, Opus). The **new win-condition final boss**,
@@ -218,12 +219,19 @@ complete 4-enemy roster**. **Phase 3 is underway** — the user chose "two POIs 
 Duneshaper** (`src/entities/Duneshaper.ts`), the **new win-condition** (a Duneshaper kill wins the
 run; the Gremlin King is demoted to a mid-boss). Summoned via **3 scattered badlands Tyrant Altars**
 + an **Effigy of the Duneshaper** crafted from **Warren-cache fetishes**, with a **clue system**
-(reveal-all-altars-on-craft + night glow + map landmarks). **Remaining Phase 3 work:** the **Gremlin
-King critical-drop rework** (deferred — it must gate the not-yet-built Phase 4 gear). Then Phase 4
-smelting/forging gear tier; Phase 5 tier-2 relics + biome-1 trim + family-replace-with-refund. The
-master-plan tail **M-TE** (trophy-gated gear) is folded into this biome-2 work. Real pixel art/animations stay deliberately deferred until content/balance
-settle (roadmap item 8). Phase 2/2b badlands stats/counts + Phase 1's arc/resist/pack numbers are
-all first-pass — expect a tuning pass as the biome fills out.
+(reveal-all-altars-on-craft + night glow + map landmarks). **Phase 3 is complete** (the King
+critical-drop rework, its one deferred item, shipped as part of Phase 4a below). **Phase 4
+(smelting/forging gear tier) is underway, sliced into two sessions.** **Session 1 has shipped
+(Phase 4a):** the Smelter station (ore + Hex Essence = ingot), Clay + scattered ore mining, the
+**Gremlin King's Heart** (replaces the fang — it upgrades the Smelter to melt rare ore), Workbench
+Lvl 3 + a new `requiresWorkbenchTier` recipe gate, and the **base forged gear** (Sunsteel heavy set
+wiring the dormant `heavy_armor` skill w/ magic-fire mitigation; Duskhide light set; blunt/slash/pierce
+weapons). **Session 2 (next):** Workbench Lvl 4 + the T2 **enhanced** reforge recipes (base piece +
+Embersteel → new item, both sets + weapons) + the first **magic weapon** (rare-ore-exclusive melee
+fire brand). Then Phase 5 tier-2 relics + biome-1 trim + family-replace-with-refund. The master-plan
+tail **M-TE** (trophy-gated gear) is folded into this biome-2 work. Real pixel art/animations stay
+deliberately deferred until content/balance settle (roadmap item 8). Badlands stats/counts + the
+forged-tier numbers are all first-pass — expect a tuning pass as the biome fills out.
 
 **Known issues / open.**
 - Boss may be slightly overtuned after the 5s damage bump (the user's "TBD" — left as-is
@@ -258,6 +266,60 @@ all first-pass — expect a tuning pass as the biome fills out.
 ## Recent Entries
 
 > Older entries in STATUS-archive.md.
+
+### Biome 2 — Phase 4a: Smelting economy + Gremlin King gate + base forged gear (2026-07-13, Opus)
+
+Plan: `.claude/plans/biome-2-phase-4-forging.md` (Phase 4 of the biome-2 umbrella, **sliced into two
+sessions** — this is **Session 1**). Built on **Opus** (new mechanic: smelting station + a new gear
+tier + new gating). The deferred **Gremlin King critical-drop rework** (locked decision 10) finally
+lands here, gating the forged tier. All verified live via `preview_eval` (module-level + end-to-end
+scene flow); `tsc --noEmit` clean; no console errors.
+
+**The forged progression (Session 1):** Mine **Clay** → build the **Smelter**; smelt **ore + Hex
+Essence = ingot** (A+B); common **Sunscorch Ore → Sunsteel Ingot**; upgrade **Workbench to Lvl 3**
+(Forge Anvil, costs Sunsteel Ingots) → unlocks the base forged recipes; kill the **Gremlin King →
+Heart** → upgrade the **Smelter** (Ember Crucible) → smelt rare **Cinderforged Ore → Embersteel
+Ingot** (the T2 metal Session 2's enhanced recipes will consume).
+
+- **Smelter** (`Items`/`Recipes`, tier-1 placeable, `{clay:10, stone:15}`) — a new station that
+  **reuses the Drying Rack's menu + `ProcessingStation`** (both are processing stations). `Processing.ts`:
+  new `SMELT_RECIPES` + `ProcessRecipe.fuel`/`minStationTier`; `ProcessingStation` parameterized with a
+  `recipes` list + `setTier()`. `DryingRackMenu` gained optional `title/descKey/actionLabel/busyLabel`
+  (functions) + a **fuel readout/gate** dep, so ONE menu instance serves both (switched by
+  `openStationKind`). MainScene: `smelters[]` array, `openSmelterMenu`, `processSmelterAmount` (deducts
+  Hex Essence fuel from the backpack), hover via the shared `placedObjects` loop (`hoveredSmelter`,
+  `promptForSmelter` → "[LMB] Use Smelter"), placement/destroy (refunds loaded ore).
+- **Gremlin King rework:** now drops **`gremlin_king_heart`** (was `gremlin_king_fang`, retired to a
+  plain trophy). The Heart is the **`ember_crucible`** Smelter upgrade's ingredient (`StationUpgrades.ts`,
+  Smelter tier 0→1) → unlocks rare-ore smelting. Skipping the King costs the whole rare/T2 tier.
+- **Workbench Lvl 3:** new `forge_anvil` StationUpgrade (workbench tier 1→2). New
+  **`Recipe.requiresWorkbenchTier`** field (enforced in `craftRecipe`/placement + a live "Requires
+  Workbench Lvl 3" line in `CraftingMenu` via a new `isNearWorkbenchAtTier` dep). All 9 forged recipes
+  gate on tier 2.
+- **Base forged gear** (all `requiresWorkbenchTier: 2`): **Sunsteel heavy set** (Helm/Cuirass/Greaves,
+  4/6/4 = 14 armor, `armorType: heavy_armor`) + **Duskhide light set** (Hood/Vest/Leggings, 3/4/3 = 10,
+  `light_armor`) + three weapons covering each melee type (**Sunsteel Warhammer** blunt wide-AOE /
+  **Longsword** slash / **Pike** pierce). Ingredients all drop from **normal** badlands enemies
+  (Cragscale Plate / Duskrunner Pelt / Sandmaw Chitin) + Sunsteel Ingots — verified not over-gated.
+- **`heavy_armor` skill wired + given an identity:** XP accrues per worn piece (free, existing kill
+  path); its effect is **partial magic/fire mitigation** (`Skills.heavyArmorMagicMitigation`, −0.4%/lvl
+  cap −30%) applied in `applyDamageToPlayer`'s bypass branch while wearing ≥1 heavy piece (the
+  counterpart to light armor's dash i-frames). Verified: 50 magic → 40 in heavy@Lvl50 vs 50 in light.
+- **Mineable minerals** (`spawnBadlandsMinerals`): Clay (~40), Sunscorch Ore (~44), rare Cinderforged
+  veins (~8, plus the ~20 Sunken Forge POI deposits) scattered via `pickBadlandsPoint` (POI exclusions
+  honored), all confirmed in the badlands. **Bench visuals per tier:** `applyTierVisual` now swaps
+  Workbench/Smelter textures (`icon_workbench_t1/t2`, `icon_smelter_t1`) instead of only tinting.
+- **BootScene:** 19 new textures (2 ore/clay nodes, ingots, Heart, Smelter + tier, Workbench Lvl 2/3,
+  3 weapons, 6 armor). Weapons reuse their icon as the equipped-on-sprite visual.
+- **Verified live:** smelt ratio 2:1 + fuel-per-recipe + rare-ore tier-gate; end-to-end fuel deduction
+  + fuel-short no-op; King → Heart drop; Ember Crucible/Forge Anvil upgrades; heavy mitigation; bench
+  texture-swap on a real placed object; Smelter menu opens with the right title/verb. Files:
+  `Processing.ts`, `DryingRackMenu.ts`, `CraftingMenu.ts`, `Recipes.ts`, `Items.ts`, `Inventory.ts`,
+  `Weapons.ts`, `Skills.ts`, `StationUpgrades.ts`, `GremlinKing.ts`, `MainScene.ts`, `BootScene.ts`,
+  `RECIPES.md`, `dashboard/main.ts`.
+- **Deferred to Session 2:** Workbench Lvl 4 (Emberforge Anvil); the T2 **enhanced** reforge recipes
+  (base piece + Embersteel → new item, both sets + weapons); the first **magic weapon** (melee-range
+  fire brand, rare-ore-exclusive). Also deferred: forged tool tier, a forged ranged weapon.
 
 ### Badlands playtest batch (19 items, 2026-07-13, Opus)
 
@@ -449,63 +511,6 @@ throttles rAF); cone hits the fan / misses at 90° sidestep / misses beyond 210p
 landmark + fires the `"poi"` toast; the Cinderwrought + forge structure + slag render in the
 badlands. **Next: the badlands final boss (new win-con) + the Gremlin King critical-drop rework.**
 
-### Biome 2 — Phase 3: Duskrunner Warren POI (two-wave destructible den)
-
-Plan: `.claude/plans/biome-2-sunscorch-badlands.md` (Phase 3, umbrella). Built on **Opus** (new
-POI mechanic). the user scoped Phase 3 to **"two POIs first"** (the badlands boss + Gremlin King
-critical-drop rework stay deferred), then specced POI 1 in detail — it is deliberately NOT a
-Gremlin-Shack clone.
-
-**The Warren** (`src/entities/BadlandsDen.ts`) — a plain data class (not a GameObject subclass;
-MainScene owns the wave/smash scheduling), a burrow-mound `image` + a lazily-created cache
-`image` + `LootContainer`. Its lifecycle is a state machine (`DenPhase`):
-- **wave1** — 3 normal Duskrunners guard the den; the mound is inert (not hoverable/interactable).
-- **wave2** — clearing wave 1 spawns **3 ELITE Duskrunners** (`onDenGuardKilled` → `spawnDenWave`).
-- **attackable** — with both waves dead the den is exposed; smash it with a **melee weapon** (it
-  has HP `DEN_HEALTH` 42; ranged doesn't apply to a structure). `tryAttackDen` mirrors
-  `tryMeleeAttack`'s cooldown/stamina/reach guards + a size-scaled `denReach` (mirrors
-  `enemyReach`), deals `(weaponDamage+tier)×skill×relic` dmg, spawns a damage number.
-- **looted** — on the killing hit the mound swaps to `duskrunner_den_wrecked`, a `warren_cache`
-  sprite + warm pulsing glow appear, and the cache loot rolls. Opening reuses the shared
-  `ChestMenu` (`openChestMenu` was generalized from `(shack)` to `(loot, table)`).
-
-So **loot is gated behind destruction** (both waves must die first, automatically) and the Warren
-**does NOT respawn** — you destroy it. **Spawn: 10 dens** (the user: dens should be **fairly common**,
-~one per sizable badlands chunk — bumped 3→10) spread ≥`DEN_MIN_SPACING` (950px) apart via
-`pickBadlandsPoint`, picked **before** the wild badlands packs so a new `DEN_CLEAR_RADIUS` (200)
-exclusion in `pickBadlandsPoint` keeps ordinary spawns out of a den's clearing (the standing
-"POI busy = missing exclusion zone" lesson). **Cache loot** (`DUSKRUNNER_WARREN_LOOT_TABLE`):
-guaranteed pelts, likely meat/bones, chances at `sandmaw_chitin`/`gloam_shard` + a
-`duskrunner_trophy` — richer than a shack (a two-wave elite fight earns it).
-
-**Duskrunners are now a badlands food source** (the user): every Duskrunner (den *and* wild) drops
-raw **`duskrunner_meat`** alongside its pelt (elite 2×). New `ResourceType` + `ItemDef` +
-`icon_duskrunner_meat`; the cook/eat specifics are **deferred** — it's a "future cooking
-ingredient" like sunfruit/emberbloom, so the food exists in the world without over-designing it.
-
-**Map + night:** a discovered Warren fires a prominent **discovery popup toast** (new `"poi"`
-`LogKind` in `EventLog`/`EventLogUI`, routed through `showToast` like a biome-discovery toast, in a
-warm orange matching the map marker) **and** adds a `map_den` minimap/world-map landmark ("Duskrunner
-Warren", dusty orange-brown `0xc06a34`) via the generalized `updateAltarDiscovery` pass; dens glow
-a faint gloam-ember at night (`denLightPoints` in `collectLights`, radius 90 — subtler than a full
-POI). Hover/prompt/interact reuse the exact existing chain (new `hoveredDen`, `promptForDen`,
-`tryInteract` branch, hover-highlight target = `den.target`), interactable only while
-attackable/looted so the mound doesn't block enemy hovers during the fight.
-
-Files: new `BadlandsDen.ts`; `Inventory.ts` + `Items.ts` (`duskrunner_meat`); `Duskrunner.ts`
-(meat loot); `BootScene.ts` (`duskrunner_den`/`_wrecked`/`warren_cache`/`map_den`/
-`icon_duskrunner_meat` textures); `MainScene.ts` (den fields/reset, `spawnBadlandsDens`/
-`spawnDenWave`/`onDenGuardKilled`/`tryAttackDen`/`denReach`, `pickBadlandsPoint` exclusion, hover/
-prompt/interact/discovery/lights wiring, `openChestMenu` generalized); `dashboard/main.ts` (Enemies
-tab Duskrunner loot row). No `RECIPES.md` change (no recipes — cache is a loot table, meat has no
-recipe yet). **Verified:** `tsc --noEmit` clean; `preview_start` boots with no console errors;
-`preview_eval` — 10 dens spread across r 2505–5004 (minGap 1214px), wave1(normal)→wave2(elite)→
-attackable→wrecked+cache→loot, prompt gating (guarded=null / attackable-no-weapon=null /
-melee="Smash" / ranged=null / looted="Search the remains" / out-of-reach=null), Duskrunner rollLoot
-yields pelt+meat, discovery fires the "poi" popup toast + adds the `map_den` landmark; screenshots
-confirm the den mound + guards render and the discovery toast pops. **Next: POI 2 — the Sunken
-Forge mini-boss.**
-
-> Older entries (Biome 2 Phase 2b Sandmaw, 4-item playtest fix batch, Placeholder art pass, Biome 2
-> playtest fix batch #2, 16-item playtest fix batch, Biome 2 Phase 2/1/0, Welcome overlay, and earlier)
-> are in STATUS-archive.md.
+> Older entries (Biome 2 Phase 3 Duskrunner Warren POI, Phase 2b Sandmaw, 4-item playtest fix batch,
+> Placeholder art pass, Biome 2 playtest fix batch #2, 16-item playtest fix batch, Biome 2 Phase 2/1/0,
+> Welcome overlay, and earlier) are in STATUS-archive.md.

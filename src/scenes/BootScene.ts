@@ -879,6 +879,34 @@ export class BootScene extends Phaser.Scene {
     g.fillRect(13, 14, 1, 4);
     g.generateTexture("ember_ore_node", 26, 30);
 
+    // Clay deposit (biome 2 Phase 4) — a low mound of red-brown clay.
+    g.clear();
+    g.fillStyle(0x8a4f2e, 1);
+    g.fillEllipse(13, 20, 22, 12);
+    g.fillStyle(0xa4623a, 1);
+    g.fillEllipse(13, 16, 18, 12);
+    g.fillStyle(0xbd7a4c, 1);
+    g.fillEllipse(10, 13, 8, 5);
+    g.fillStyle(0x6f3d22, 1);
+    g.fillRect(15, 15, 3, 4); // cracked seam
+    g.generateTexture("clay_deposit", 26, 28);
+
+    // Sunscorch Ore node (biome 2 Phase 4) — grey rock studded with warm ore flecks.
+    g.clear();
+    g.fillStyle(0x5a534a, 1);
+    g.fillRect(3, 10, 20, 16);
+    g.fillRect(6, 6, 14, 8);
+    g.fillStyle(0x726960, 1);
+    g.fillRect(6, 12, 11, 7);
+    g.fillStyle(0xe0982c, 1); // ore flecks
+    g.fillRect(8, 13, 3, 3);
+    g.fillRect(14, 11, 3, 3);
+    g.fillRect(12, 18, 2, 2);
+    g.fillStyle(0xffc860, 1);
+    g.fillRect(9, 14, 1, 1);
+    g.fillRect(15, 12, 1, 1);
+    g.generateTexture("sunscorch_ore_node", 26, 30);
+
     this.makeDecorProps(g);
     this.makeItemIcons(g);
 
@@ -2015,6 +2043,218 @@ export class BootScene extends Phaser.Scene {
     g.fillStyle(0x3f7a4a, 1);
     g.fillRect(10, 3, 4, 4); // stem nub
     g.generateTexture("icon_sunfruit", ICON, ICON);
+
+    // === biome 2 Phase 4 — smelting economy + forged gear ===
+
+    g.clear(); // Clay — a red-brown lump
+    g.fillStyle(0xa4623a, 1);
+    g.fillEllipse(12, 14, 16, 12);
+    g.fillStyle(0xbd7a4c, 1);
+    g.fillEllipse(10, 11, 8, 6);
+    g.fillStyle(0x7a4326, 1);
+    g.fillRect(14, 13, 3, 4);
+    g.generateTexture("icon_clay", ICON, ICON);
+
+    g.clear(); // Sunscorch Ore — grey rock with warm ore flecks
+    g.fillStyle(0x5a534a, 1);
+    g.fillRect(4, 8, 16, 12);
+    g.fillRect(7, 5, 10, 5);
+    g.fillStyle(0x726960, 1);
+    g.fillRect(6, 10, 9, 6);
+    g.fillStyle(0xe0982c, 1);
+    g.fillRect(8, 11, 3, 3);
+    g.fillRect(14, 9, 3, 3);
+    g.fillStyle(0xffc860, 1);
+    g.fillRect(9, 12, 1, 1);
+    g.generateTexture("icon_sunscorch_ore", ICON, ICON);
+
+    g.clear(); // Sunsteel Ingot — a warm gold bar
+    g.fillStyle(0xcaa24a, 1);
+    g.fillRect(3, 12, 18, 7);
+    g.fillStyle(0xe6c56a, 1);
+    g.fillRect(5, 9, 14, 4);
+    g.fillStyle(0xfff0b0, 1);
+    g.fillRect(6, 10, 6, 1);
+    g.fillStyle(0x9a7a2e, 1);
+    g.fillRect(3, 18, 18, 1);
+    g.generateTexture("icon_sunsteel_ingot", ICON, ICON);
+
+    g.clear(); // Embersteel Ingot — a dark bar with ember veins
+    g.fillStyle(0x3a2e34, 1);
+    g.fillRect(3, 12, 18, 7);
+    g.fillStyle(0x554450, 1);
+    g.fillRect(5, 9, 14, 4);
+    g.fillStyle(0xff7a2a, 1);
+    g.fillRect(6, 10, 4, 1);
+    g.fillRect(12, 15, 5, 1);
+    g.fillStyle(0xffd070, 1);
+    g.fillRect(7, 10, 1, 1);
+    g.generateTexture("icon_embersteel_ingot", ICON, ICON);
+
+    g.clear(); // Gremlin King's Heart — a dark-red heart wreathed in gloamfire
+    g.fillStyle(0x8a1f2a, 1);
+    g.fillCircle(9, 10, 4);
+    g.fillCircle(15, 10, 4);
+    g.fillTriangle(5, 12, 19, 12, 12, 20);
+    g.fillStyle(0xc23a44, 1);
+    g.fillCircle(9, 9, 1.5);
+    g.fillStyle(0x9a5ee8, 1); // gloamfire wisps
+    g.fillRect(11, 3, 2, 3);
+    g.fillRect(6, 6, 1, 2);
+    g.fillRect(17, 6, 1, 2);
+    g.generateTexture("icon_gremlin_king_heart", ICON, ICON);
+
+    // Smelter (world sprite + icon) — a stone kiln with a glowing mouth.
+    g.clear();
+    g.fillStyle(0x5a5048, 1);
+    g.fillRect(4, 6, 16, 15);
+    g.fillStyle(0x6e635a, 1);
+    g.fillRect(4, 6, 16, 3); // rim
+    g.fillStyle(0x2a2420, 1);
+    g.fillRect(8, 12, 8, 8); // mouth
+    g.fillStyle(0xff7a2a, 1);
+    g.fillRect(9, 15, 6, 5); // fire glow
+    g.fillStyle(0xffd070, 1);
+    g.fillRect(11, 17, 2, 3);
+    g.generateTexture("icon_smelter", ICON, ICON);
+
+    // Smelter Lvl 2 (Ember Crucible) — same kiln, violet-hot core + a heart-set rim.
+    g.clear();
+    g.fillStyle(0x554a52, 1);
+    g.fillRect(4, 6, 16, 15);
+    g.fillStyle(0x6e5a68, 1);
+    g.fillRect(4, 6, 16, 3);
+    g.fillStyle(0x2a2028, 1);
+    g.fillRect(8, 12, 8, 8);
+    g.fillStyle(0xb266ff, 1); // violet gloamfire core
+    g.fillRect(9, 14, 6, 6);
+    g.fillStyle(0xe0b0ff, 1);
+    g.fillRect(11, 16, 2, 3);
+    g.fillStyle(0xff5a4a, 1);
+    g.fillCircle(12, 8, 2); // the King's heart set in the rim
+    g.generateTexture("icon_smelter_t1", ICON, ICON);
+
+    // Workbench Lvl 2 (Tool Sharpener) — the table with a whetstone block.
+    g.clear();
+    g.fillStyle(0x8a5a2e, 1);
+    g.fillRect(2, 6, 20, 4);
+    g.fillStyle(0x5c3a1c, 1);
+    g.fillRect(3, 10, 3, 10);
+    g.fillRect(18, 10, 3, 10);
+    g.fillStyle(0x9aa0a8, 1);
+    g.fillRect(9, 2, 8, 4); // whetstone
+    g.generateTexture("icon_workbench_t1", ICON, ICON);
+
+    // Workbench Lvl 3 (Forge Anvil) — the table with an anvil on top.
+    g.clear();
+    g.fillStyle(0x8a5a2e, 1);
+    g.fillRect(2, 8, 20, 4);
+    g.fillStyle(0x5c3a1c, 1);
+    g.fillRect(3, 12, 3, 8);
+    g.fillRect(18, 12, 3, 8);
+    g.fillStyle(0x44484e, 1); // anvil
+    g.fillRect(7, 3, 10, 3);
+    g.fillRect(10, 6, 4, 2);
+    g.fillRect(8, 6, 8, 1);
+    g.fillStyle(0x2c2f34, 1);
+    g.fillRect(7, 3, 3, 1);
+    g.generateTexture("icon_workbench_t2", ICON, ICON);
+
+    // --- forged weapons ---
+    g.clear(); // Sunsteel Warhammer — big steel head on a haft
+    g.fillStyle(0x6b4a26, 1);
+    g.fillRect(11, 4, 2, 18); // haft
+    g.fillStyle(0x8a9098, 1);
+    g.fillRect(5, 4, 14, 6); // head
+    g.fillStyle(0xb0b6be, 1);
+    g.fillRect(5, 5, 4, 4);
+    g.fillStyle(0x5a5f66, 1);
+    g.fillRect(15, 4, 4, 6);
+    g.generateTexture("icon_sunsteel_warhammer", ICON, ICON);
+
+    g.clear(); // Sunsteel Longsword — a bright blade
+    g.fillStyle(0xc0c6ce, 1);
+    g.fillRect(11, 3, 3, 14); // blade
+    g.fillStyle(0xe6ecf2, 1);
+    g.fillRect(12, 4, 1, 12);
+    g.fillStyle(0x8a5a2e, 1);
+    g.fillRect(8, 17, 9, 2); // guard
+    g.fillStyle(0x5c3a1c, 1);
+    g.fillRect(11, 19, 3, 4); // grip
+    g.generateTexture("icon_sunsteel_sword", ICON, ICON);
+
+    g.clear(); // Sunsteel Pike — a long spear with a steel tip
+    g.fillStyle(0x6b4a26, 1);
+    g.fillRect(11, 8, 2, 15); // shaft
+    g.fillStyle(0xc0c6ce, 1);
+    g.fillTriangle(12, 2, 8, 10, 16, 10); // tip
+    g.fillStyle(0xe6ecf2, 1);
+    g.fillTriangle(12, 4, 10, 9, 12, 9);
+    g.generateTexture("icon_sunsteel_pike", ICON, ICON);
+
+    // --- forged HEAVY armor (Sunsteel — steel-grey) ---
+    g.clear(); // Sunsteel Helm
+    g.fillStyle(0x8a9098, 1);
+    g.fillRect(5, 8, 14, 10);
+    g.fillCircle(12, 8, 7);
+    g.fillStyle(0x2a2e34, 1);
+    g.fillRect(7, 11, 10, 3); // visor slit
+    g.fillStyle(0xb0b6be, 1);
+    g.fillRect(4, 15, 16, 3);
+    g.generateTexture("icon_sunsteel_helm", ICON, ICON);
+
+    g.clear(); // Sunsteel Cuirass
+    g.fillStyle(0x8a9098, 1);
+    g.fillRect(5, 5, 14, 15);
+    g.fillStyle(0x6b7178, 1);
+    g.fillRect(2, 5, 4, 7);
+    g.fillRect(18, 5, 4, 7);
+    g.fillStyle(0xb0b6be, 1);
+    g.fillRect(11, 6, 2, 12); // sternum ridge
+    g.generateTexture("icon_sunsteel_cuirass", ICON, ICON);
+
+    g.clear(); // Sunsteel Greaves
+    g.fillStyle(0x8a9098, 1);
+    g.fillRect(6, 4, 5, 16);
+    g.fillRect(13, 4, 5, 16);
+    g.fillStyle(0xb0b6be, 1);
+    g.fillRect(7, 5, 2, 12);
+    g.fillRect(14, 5, 2, 12);
+    g.generateTexture("icon_sunsteel_greaves", ICON, ICON);
+
+    // --- forged LIGHT armor (Duskhide — tan/brown leather with steel bands) ---
+    g.clear(); // Duskhide Hood
+    g.fillStyle(0x7a5a3a, 1);
+    g.fillRect(5, 8, 14, 10);
+    g.fillCircle(12, 8, 7);
+    g.fillStyle(0x9a7a52, 1);
+    g.fillRect(4, 15, 16, 3);
+    g.fillStyle(0x8a9098, 1);
+    g.fillRect(6, 10, 12, 1); // steel band
+    g.generateTexture("icon_duskhide_hood", ICON, ICON);
+
+    g.clear(); // Duskhide Vest
+    g.fillStyle(0x7a5a3a, 1);
+    g.fillRect(5, 5, 14, 15);
+    g.fillStyle(0x5c4328, 1);
+    g.fillRect(2, 5, 4, 7);
+    g.fillRect(18, 5, 4, 7);
+    g.fillStyle(0x8a9098, 1);
+    g.fillRect(6, 9, 12, 1); // buckle strap
+    g.fillRect(6, 14, 12, 1);
+    g.generateTexture("icon_duskhide_vest", ICON, ICON);
+
+    g.clear(); // Duskhide Leggings
+    g.fillStyle(0x7a5a3a, 1);
+    g.fillRect(6, 4, 5, 16);
+    g.fillRect(13, 4, 5, 16);
+    g.fillStyle(0x9a7a52, 1);
+    g.fillRect(7, 5, 3, 3);
+    g.fillRect(14, 5, 3, 3);
+    g.fillStyle(0x8a9098, 1);
+    g.fillRect(6, 12, 5, 1); // chitin plate band
+    g.fillRect(13, 12, 5, 1);
+    g.generateTexture("icon_duskhide_leggings", ICON, ICON);
 
     // Badlands elite trophies — crimson/gold to echo the elite palette (matches
     // the boar/snake/gremlin trophies), each with a species tell.

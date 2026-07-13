@@ -42,6 +42,9 @@ export interface CraftingMenuDeps {
   maxBatches: (recipe: Recipe) => number;
   startPlacement: (recipe: Recipe) => void;
   isNearWorkbench: () => boolean;
+  // Whether a placed Workbench at >= `tier` is nearby (biome 2 Phase 4) — gates
+  // forged recipes that need an upgraded bench (recipe.requiresWorkbenchTier).
+  isNearWorkbenchAtTier: (tier: number) => boolean;
   skills: Skills;
   progression: PlayerProgression;
 }
@@ -50,7 +53,11 @@ export interface CraftingMenuDeps {
 // (for tier 1+) Workbench proximity. Composed here at the call site rather
 // than inside Crafting.canAfford, which stays pure resource-math.
 function isCraftable(deps: CraftingMenuDeps, recipe: Recipe): boolean {
-  return deps.crafting.canAfford(recipe, deps.backpack) && (recipe.tier === 0 || deps.isNearWorkbench());
+  return (
+    deps.crafting.canAfford(recipe, deps.backpack) &&
+    (recipe.tier === 0 || deps.isNearWorkbench()) &&
+    (recipe.requiresWorkbenchTier === undefined || deps.isNearWorkbenchAtTier(recipe.requiresWorkbenchTier))
+  );
 }
 
 // Right-side crafting panel. Opens/closes together with InventoryMenu as one
@@ -346,6 +353,19 @@ export class CraftingMenu {
 
     if (recipe.tier >= 1 && !this.deps.isNearWorkbench()) {
       const t = this.scene.add.text(x0, y, "Requires a nearby Workbench", {
+        fontFamily: "monospace",
+        fontSize: "12px",
+        color: "#e3b25a",
+      });
+      t.setScrollFactor(0).setDepth(3001);
+      this.rows.push(t);
+      y += 18;
+    } else if (
+      recipe.requiresWorkbenchTier !== undefined &&
+      !this.deps.isNearWorkbenchAtTier(recipe.requiresWorkbenchTier)
+    ) {
+      // Near a Workbench, but not an upgraded-enough one (forged gear needs Lvl 3).
+      const t = this.scene.add.text(x0, y, `Requires Workbench Lvl ${recipe.requiresWorkbenchTier + 1}`, {
         fontFamily: "monospace",
         fontSize: "12px",
         color: "#e3b25a",

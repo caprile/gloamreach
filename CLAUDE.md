@@ -1170,8 +1170,12 @@ core enemies & flora (5ae) + Phase 2b 4th native creature — the Sandmaw burrow
 Warren (two-wave destructible den → lootable cache) — done (5ag); POI 2 — the Sunken Forge
 (the Cinderwrought fire/forge mini-boss) — done (5ah); the **badlands final boss — the
 Duneshaper** (new win-con, demotes the Gremlin King) — done (5ai); then a **19-item badlands
-playtest batch** (5aj) — done; still to do: the **Gremlin King critical-drop rework** (deferred —
-gates the not-yet-built Phase 4 gear). See the biome-2 umbrella plan below.**
+playtest batch** (5aj) — done. **Phase 3 complete.** **Phase 4 (smelting/forging gear tier),
+sliced into two sessions: Session 1 — Phase 4a — done (5ak):** the Smelter + Clay/ore mining +
+the **Gremlin King's Heart** (the deferred critical-drop rework — it gates smelting rare ore) +
+Workbench Lvl 3 + base forged gear (Sunsteel heavy set / Duskhide light set / blunt-slash-pierce
+weapons). **Session 2 (next): T2 enhanced reforge recipes + the first magic weapon + Workbench
+Lvl 4.** Then Phase 5 tier-2 relics. See the biome-2 umbrella plan below.**
 
 5ac. **Biome 2 (Sunscorch Badlands) — Phase 0: Patchwork worldgen.** Plan:
    `.claude/plans/biome-2-phase-0-world-ring.md` (Phase 0 of the
@@ -1432,6 +1436,42 @@ gates the not-yet-built Phase 4 gear). See the biome-2 umbrella plan below.**
    badlands). `tsc` clean; verified live via `preview_eval` + a demo screenshot; dashboard Enemies tab +
    `RECIPES.md` updated. **Next: the Gremlin King critical-drop rework** (Phase 4 gear gate). See
    `STATUS.md` + [[survivor-rpg-biome-2-plan]].
+
+5ak. **Biome 2 — Phase 4a: Smelting economy + Gremlin King gate + base forged gear.** Plan:
+   `.claude/plans/biome-2-phase-4-forging.md` (Phase 4 of the biome-2 umbrella, **sliced into two
+   sessions per the user — this is Session 1**). Built on **Opus** (new mechanic: smelting station +
+   a new gear tier + new gating). The forged gear tier, into which the long-deferred **Gremlin King
+   critical-drop rework** (locked decision 10) finally lands. **Progression:** mine **Clay** (new
+   scattered badlands `mine` node) → build the **Smelter** (`{clay:10, stone:15}`, tier-1 placeable);
+   smelt **ore + Hex Essence = ingot** ("A+B", fuel pulled from the backpack); common **Sunscorch
+   Ore** (new scattered node) → **Sunsteel Ingot**; upgrade the **Workbench to Lvl 3** (`forge_anvil`
+   StationUpgrade, costs Sunsteel Ingots) → unlocks the base forged recipes; kill the **Gremlin King
+   → Gremlin King's Heart** (replaces the retired `gremlin_king_fang` drop) → apply the **Ember
+   Crucible** Smelter upgrade → smelt the **rare Cinderforged Ore** (`ember_ore`, scattered veins +
+   the Sunken Forge POI) → **Embersteel Ingot** (the T2 metal Session 2 will consume). **The Smelter
+   REUSES the Drying Rack's menu + `ProcessingStation`** (both are processing stations): `Processing.ts`
+   gained `SMELT_RECIPES` + `ProcessRecipe.fuel`/`minStationTier` + a `recipes`-list/`setTier()`-
+   parameterized `ProcessingStation`; `DryingRackMenu` gained optional function deps
+   (`title`/`descKey`/`actionLabel`/`busyLabel`) + a **fuel readout/gate**, so ONE menu instance serves
+   both (switched by `MainScene.openStationKind`). New **`Recipe.requiresWorkbenchTier`** field
+   (enforced in `craftRecipe`/placement + a live "Requires Workbench Lvl 3" line in `CraftingMenu` via
+   a new `isNearWorkbenchAtTier` dep); all 9 forged recipes gate on tier 2. **Base gear:** a **Sunsteel
+   heavy set** (Helm/Cuirass/Greaves 4/6/4 = 14 armor, `armorType: heavy_armor`) + a **Duskhide light
+   set** (Hood/Vest/Leggings 3/4/3 = 10) + **three weapons** covering blunt (**Sunsteel Warhammer**,
+   wide AOE arc)/slash (**Longsword**)/pierce (**Pike**) — all ingredients drop from **normal** badlands
+   enemies (Cragscale Plate / Duskrunner Pelt / Sandmaw Chitin) + Sunsteel Ingots. The **`heavy_armor`
+   skill is now wired** (XP accrues per worn piece via the existing kill path) and given a real
+   identity: **partial magic/fire mitigation** (`Skills.heavyArmorMagicMitigation`, −0.4%/lvl cap
+   −30%, applied in `applyDamageToPlayer`'s bypass branch while wearing ≥1 heavy piece — the
+   counterpart to light armor's dash i-frames). **Bench visuals change per tier** (`applyTierVisual`
+   now swaps Workbench/Smelter textures, not just tint). Verified live via `preview_eval` (smelt
+   ratio 2:1 + per-recipe fuel + rare-ore tier-gate; end-to-end fuel deduction + fuel-short no-op;
+   King→Heart; Ember Crucible/Forge Anvil upgrades; heavy mitigation 40-vs-50 magic; bench texture
+   swap on a real placed object; Smelter menu title/verb); `tsc` clean. **Deferred to Session 2:**
+   Workbench Lvl 4 (Emberforge Anvil), the T2 **enhanced** reforge recipes (`base piece + Embersteel
+   Ingot → new item`, both sets + weapons, consuming the base piece), and the **first magic weapon**
+   (a rare-ore-exclusive melee fire brand). Also deferred: a forged tool tier, a forged ranged weapon.
+   See `STATUS.md` + [[survivor-rpg-biome-2-plan]].
 
 **Not yet built — next up in rough order:**
 6. **World & discovery** — much bigger generated world, biomes, map, a single giant

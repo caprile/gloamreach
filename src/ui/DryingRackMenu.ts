@@ -28,6 +28,16 @@ export interface DryingRackMenuDeps {
   // the result into the backpack (or drops it on the floor if there's no
   // room) — this menu only picks the amount and asks for it to happen.
   processAmount: (amount: number) => void;
+  // --- optional overrides so the same menu serves the Smelter (biome 2 Phase 4).
+  // Functions (not static strings) so ONE menu instance can switch between the
+  // Drying Rack and the Smelter based on which station the player opened. ---
+  title?: () => string; // panel title (default "Drying Rack")
+  descKey?: () => string; // itemDef key for the description line (default "drying_rack")
+  actionLabel?: () => string; // process-button verb (default "Process")
+  busyLabel?: () => string; // button label while the bar fills (default "Drying…")
+  // Secondary consumable ("A + B = output") pulled from the backpack — the
+  // Smelter's Hex Essence fuel. Absent for the Drying Rack (no fuel line/gate).
+  fuelInfo?: () => { name: string; texture: string; have: number; needPerOutput: number } | null;
 }
 
 const SLOT = 46;
@@ -228,8 +238,8 @@ export class DryingRackMenu {
     const max = station.maxPossibleOutput();
     this.selectedAmount = Phaser.Math.Clamp(this.selectedAmount, 0, max);
 
-    this.addText(this.panelX + 16, this.panelY + 14, "Drying Rack", 16, "#ffffff");
-    const desc = itemDef("drying_rack")?.description ?? "";
+    this.addText(this.panelX + 16, this.panelY + 14, this.deps.title?.() ?? "Drying Rack", 16, "#ffffff");
+    const desc = itemDef(this.deps.descKey?.() ?? "drying_rack")?.description ?? "";
     const descText = this.scene.add
       .text(this.panelX + 16, this.panelY + 38, desc, {
         fontFamily: "monospace",
@@ -397,10 +407,28 @@ export class DryingRackMenu {
       preview.output > 0 ? "#8fe38f" : "#5b6472",
     );
 
-    const btnY = previewY + 26;
-    const canProcess = preview.output > 0 && !this.busy;
+    // Optional fuel line ("A + B = output") — the Smelter needs Hex Essence per
+    // ingot. Draw the requirement + gate the button when the backpack is short.
+    let fuelOk = true;
+    let btnY = previewY + 26;
+    const fuel = this.deps.fuelInfo?.();
+    if (fuel) {
+      const need = preview.output * fuel.needPerOutput;
+      fuelOk = fuel.have >= need;
+      const fuelY = previewY + 20;
+      const fuelIcon = this.scene.add
+        .image(px + 8, fuelY + 8, fuel.texture)
+        .setDisplaySize(16, 16)
+        .setScrollFactor(0)
+        .setDepth(DEPTH_TEXT);
+      this.rows.push(fuelIcon);
+      this.addText(px + 20, fuelY, `${fuel.name}: ${fuel.have}/${need}`, 12, fuelOk ? "#c8d0dc" : "#e38f8f");
+      btnY = previewY + 46;
+    }
+
+    const canProcess = preview.output > 0 && fuelOk && !this.busy;
     const btn = this.scene.add
-      .text(px, btnY, this.busy ? "Drying…" : "Process", {
+      .text(px, btnY, this.busy ? (this.deps.busyLabel?.() ?? "Drying…") : (this.deps.actionLabel?.() ?? "Process"), {
         fontFamily: "monospace",
         fontSize: "14px",
         color: canProcess ? "#0a0a0a" : "#4a4a4a",

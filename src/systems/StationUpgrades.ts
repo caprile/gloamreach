@@ -49,6 +49,24 @@ export const STATION_UPGRADES: StationUpgradeDef[] = [
     costs: { stone: 15, gloam_shard: 1 },
     deltaLabel: "Unlocks the Refine tab",
   },
+  {
+    id: "forge_anvil",
+    name: "Forge Anvil",
+    description: "A proper forge and anvil bolted to the bench. Lets you work metal ingots into gear.",
+    appliesToItemKey: "workbench",
+    resultTier: 2,
+    costs: { sunsteel_ingot: 5, stone: 10 },
+    deltaLabel: "Unlocks forged gear",
+  },
+  {
+    id: "ember_crucible",
+    name: "Ember Crucible",
+    description: "The Gremlin King's still-burning heart set into the kiln — hot enough to melt the rarest ore.",
+    appliesToItemKey: "smelter",
+    resultTier: 1,
+    costs: { gremlin_king_heart: 1, stone: 10 },
+    deltaLabel: "Smelt rare ore",
+  },
 ];
 
 // The upgrades that could apply to a given placed object, ordered by the tier

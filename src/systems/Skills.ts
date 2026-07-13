@@ -93,6 +93,17 @@ export function sprintStaminaDrainMult(skills: Skills): number {
   return 1 - Math.min(RUNNING_DRAIN_REDUCTION_CAP, skills.get("running") * RUNNING_DRAIN_REDUCTION_PER_LEVEL);
 }
 
+// heavy_armor: partial mitigation of magic/FIRE damage (which bypasses the flat
+// armor term — see MainScene.applyDamageToPlayer). This is heavy armor's
+// identity vs light's dodge i-frames: it EATS elemental hits. -0.4%/level,
+// capped at -30%. Only applied while wearing at least one heavy piece (gated in
+// MainScene, not here). First-pass numbers.
+const HEAVY_ARMOR_MAGIC_MIT_PER_LEVEL = 0.004;
+const HEAVY_ARMOR_MAGIC_MIT_CAP = 0.3;
+export function heavyArmorMagicMitigation(skills: Skills): number {
+  return Math.min(HEAVY_ARMOR_MAGIC_MIT_CAP, skills.get("heavy_armor") * HEAVY_ARMOR_MAGIC_MIT_PER_LEVEL);
+}
+
 // chopping/mining: chance for a bonus +1 drop on a depleted tree / rock (incl.
 // Gloam ore). +1%/level, soft-capped at 60%.
 const GATHER_BONUS_CHANCE_PER_LEVEL = 0.01;
@@ -136,7 +147,9 @@ export function skillImpactDescription(skill: SkillType, skills: Skills): string
     return `+1% bonus-drop chance on rocks/ore per level (cap 60%) — currently ${pct}% for +1`;
   }
   if (skill === "heavy_armor") {
-    return "No effect yet — heavy gear & magic resist arrive in biome 2";
+    const level = skills.get("heavy_armor");
+    const pct = Math.round(heavyArmorMagicMitigation(skills) * 100);
+    return `While wearing heavy armor: -0.4% magic/fire damage per level (cap -30%) — currently -${pct}% at Lvl ${level}`;
   }
   if (skill === "blocking") {
     return "No effect yet — needs a block/parry mechanic first";

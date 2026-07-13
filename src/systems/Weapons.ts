@@ -1,4 +1,14 @@
-export type WeaponType = "wood_club" | "stone_club" | "bone_knife" | "primal_spear" | "slingshot" | "javelin";
+export type WeaponType =
+  | "wood_club"
+  | "stone_club"
+  | "bone_knife"
+  | "primal_spear"
+  | "slingshot"
+  | "javelin"
+  // forged tier (biome 2 Phase 4) — one per melee damage type
+  | "sunsteel_warhammer"
+  | "sunsteel_sword"
+  | "sunsteel_pike";
 
 // Damage types double as the 5 weapon Skill types (Skills.ts) — a weapon's
 // primary (first) type routes its on-hit skill XP. Multiple types are
@@ -25,6 +35,9 @@ const WEAPON_DAMAGE_TYPES: Record<WeaponType, DamageType[]> = {
   primal_spear: ["pierce"],
   slingshot: ["ranged"],
   javelin: ["ranged"],
+  sunsteel_warhammer: ["blunt"],
+  sunsteel_sword: ["slash"],
+  sunsteel_pike: ["pierce"],
 };
 export function weaponDamageTypes(weapon: WeaponType): DamageType[] {
   return WEAPON_DAMAGE_TYPES[weapon];
@@ -46,6 +59,9 @@ const WEAPON_DAMAGE: Record<WeaponType, number> = {
   primal_spear: 8,
   slingshot: 2,
   javelin: 5,
+  sunsteel_warhammer: 14,
+  sunsteel_sword: 10,
+  sunsteel_pike: 12,
 };
 export function weaponDamage(weapon: WeaponType): number {
   return WEAPON_DAMAGE[weapon];
@@ -58,6 +74,9 @@ const WEAPON_COOLDOWN_MS: Record<WeaponType, number> = {
   primal_spear: 650,
   slingshot: 650,
   javelin: 900,
+  sunsteel_warhammer: 800,
+  sunsteel_sword: 480,
+  sunsteel_pike: 620,
 };
 export function weaponCooldownMs(weapon: WeaponType): number {
   return WEAPON_COOLDOWN_MS[weapon];
@@ -70,6 +89,9 @@ const WEAPON_STAMINA_COST: Record<WeaponType, number> = {
   primal_spear: 16,
   slingshot: 6,
   javelin: 16,
+  sunsteel_warhammer: 20,
+  sunsteel_sword: 12,
+  sunsteel_pike: 15,
 };
 export function weaponStaminaCost(weapon: WeaponType): number {
   return WEAPON_STAMINA_COST[weapon];
@@ -96,6 +118,9 @@ const WEAPON_BASE_CRIT_CHANCE: Record<WeaponType, number> = {
   slingshot: 0.05,
   javelin: 0.05,
   primal_spear: 0.08, // slow (650ms)
+  sunsteel_warhammer: 0.08, // slow, heavy
+  sunsteel_sword: 0.05,
+  sunsteel_pike: 0.07,
 };
 const WEAPON_BASE_CRIT_MULT: Record<WeaponType, number> = {
   bone_knife: 1.5,
@@ -104,6 +129,9 @@ const WEAPON_BASE_CRIT_MULT: Record<WeaponType, number> = {
   slingshot: 1.5,
   javelin: 1.5,
   primal_spear: 1.6,
+  sunsteel_warhammer: 1.6,
+  sunsteel_sword: 1.5,
+  sunsteel_pike: 1.55,
 };
 export function weaponBaseCritChance(weapon: WeaponType): number {
   return WEAPON_BASE_CRIT_CHANCE[weapon];
@@ -159,6 +187,9 @@ const WEAPON_ARC: Record<WeaponType, WeaponArc> = {
   primal_spear: { halfAngleDeg: 50, range: 58, falloff: 0.7 }, // the wide sweeper
   slingshot: { halfAngleDeg: 0, range: 0, falloff: 0 },
   javelin: { halfAngleDeg: 0, range: 0, falloff: 0 },
+  sunsteel_warhammer: { halfAngleDeg: 55, range: 62, falloff: 0.75 }, // the widest sweeper
+  sunsteel_sword: { halfAngleDeg: 30, range: 40, falloff: 0.55 },
+  sunsteel_pike: { halfAngleDeg: 40, range: 56, falloff: 0.65 },
 };
 export function weaponArc(weapon: WeaponType): WeaponArc {
   return WEAPON_ARC[weapon];

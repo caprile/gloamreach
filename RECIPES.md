@@ -41,6 +41,21 @@ requires standing near a placed Workbench (`MainScene.isNearWorkbench`).
 | Gremlin Pants | Armor | 1 | Yes | 2 Gremlin Leather, 2 Leather Scraps, 1 Blackberry | Light Armor 0 | Item (armor, legs) |
 | Gremlin Totem | Misc | 1 | Yes | 3 Gremlin Trophy, 1 Wood, 1 Gremlin Guck | — | Item (ritual — summons the Gremlin King at the Boss Altar) |
 | Effigy of the Duneshaper | Misc | 1 | Yes | 3 Gloam-Bone Totem, 2 Gloam Shard, 8 Bones | — | Item (ritual — summons the Duneshaper at a badlands altar; crafting it reveals the altars on the map) |
+| Smelter | Crafting | 1 | Yes | 10 Clay, 15 Stone | — | Item (placeable, station — smelts ore into ingots) |
+| Sunsteel Helm | Armor | 1 | Yes (Lvl 3) | 2 Sunsteel Ingot, 2 Cragscale Plate | Heavy Armor 0 | Item (armor, helmet, **heavy**) |
+| Sunsteel Cuirass | Armor | 1 | Yes (Lvl 3) | 4 Sunsteel Ingot, 4 Cragscale Plate, 5 Bones | Heavy Armor 0 | Item (armor, chest, **heavy**) |
+| Sunsteel Greaves | Armor | 1 | Yes (Lvl 3) | 2 Sunsteel Ingot, 2 Cragscale Plate, 2 Sandmaw Chitin | Heavy Armor 0 | Item (armor, legs, **heavy**) |
+| Duskhide Hood | Armor | 1 | Yes (Lvl 3) | 3 Duskrunner Pelt, 1 Sunsteel Ingot | Light Armor 0 | Item (armor, helmet, light) |
+| Duskhide Vest | Armor | 1 | Yes (Lvl 3) | 5 Duskrunner Pelt, 2 Sunsteel Ingot, 3 Bones | Light Armor 0 | Item (armor, chest, light) |
+| Duskhide Leggings | Armor | 1 | Yes (Lvl 3) | 3 Duskrunner Pelt, 1 Sunsteel Ingot, 1 Sandmaw Chitin | Light Armor 0 | Item (armor, legs, light) |
+| Sunsteel Warhammer | Weapons | 1 | Yes (Lvl 3) | 4 Sunsteel Ingot, 2 Cragscale Plate, 4 Wood | Blunt 3 | Item (weapon, blunt — wide AOE sweep) |
+| Sunsteel Longsword | Weapons | 1 | Yes (Lvl 3) | 3 Sunsteel Ingot, 2 Wood | Slash 3 | Item (weapon, slash) |
+| Sunsteel Pike | Weapons | 1 | Yes (Lvl 3) | 3 Sunsteel Ingot, 3 Wood | Pierce 3 | Item (weapon, pierce) |
+
+The forged gear (Sunsteel/Duskhide) is **"Yes (Lvl 3)"** — tier 1 (any Workbench)
+**plus** `requiresWorkbenchTier: 2` (a Forge-Anvil-upgraded **Workbench Lvl 3**,
+see Station Upgrades). Its ingredients come from the Smelter (Sunsteel Ingot) +
+normal badlands enemies (Cragscale Plate / Duskrunner Pelt / Sandmaw Chitin).
 
 \* Slingshot Pellets is tier 0 (no Workbench needed) but has an extra discovery
 gate beyond tier/ingredients: it stays hidden until the player has crafted a
@@ -52,8 +67,15 @@ ammo before there's a launcher to load it into.
 | Applies To | Result Tier | Name | Costs | Delta |
 |---|---|---|---|---|
 | Workbench | 1 ("Lvl 2") | Tool Sharpener | 3 Twine, 5 Wood, 2 Stone | — (unlocks gates only) |
+| Workbench | 2 ("Lvl 3") | Forge Anvil | 5 Sunsteel Ingot, 10 Stone | Unlocks forged gear (`requiresWorkbenchTier: 2`) |
 | Campfire | 1 ("Lvl 2") | Stone Hearth | 4 Twine, 20 Stone | Unlocks Lvl 2 campfire dishes |
 | Relic Forge | 1 ("Lvl 2") | Gloam Conduit | 15 Stone, 1 Gloam Shard | Unlocks the Refine tab |
+| Smelter | 1 ("Lvl 2") | Ember Crucible | 1 Gremlin King's Heart, 10 Stone | Smelt rare Cinderforged Ore → Embersteel Ingot |
+
+Bench visuals now change per tier (Workbench Lvl 2/3, Smelter Lvl 2 each get a
+distinct placeholder sprite). Workbench Lvl 4 (Emberforge Anvil, gates the T2
+"enhanced" reforge recipes) + the enhanced gear + the rare-ore-exclusive magic
+weapon are the deferred **Session 2** of Phase 4.
 
 ## Armor Upgrades (`src/systems/ArmorUpgrades.ts`)
 
@@ -77,6 +99,20 @@ Full-set totals: **Lvl 1 = 7 armor**, **Lvl 2 = 10 armor**, **Lvl 3 = 13
 armor**. Applied as a flat deduction from incoming physical damage, floored at
 1 (`MainScene.applyDamageToPlayer`).
 
+### Forged armor sets (biome 2 Phase 4) — base defense (`ItemDef.armorDefense`)
+
+No right-click ArmorUpgrades — these are enhanced via **standalone T2 reforge
+recipes** (Session 2, deferred). **Heavy armor** now has a real effect: the
+`heavy_armor` skill gives partial **magic/fire mitigation** (−0.4%/level, cap
+−30%) while wearing ≥1 heavy piece (`Skills.heavyArmorMagicMitigation`) — its
+identity vs light armor's dash i-frames. `heavy_armor` XP accrues per worn piece
+on a kill.
+
+| Set | Type | Helm | Chest | Legs | Full-set armor |
+|---|---|---|---|---|---|
+| Sunsteel | Heavy | 4 | 6 | 4 | 14 |
+| Duskhide | Light | 3 | 4 | 3 | 10 |
+
 ## Weapon Upgrades (`src/systems/WeaponUpgrades.ts`)
 
 Base damage/cooldown/stamina live in `src/systems/Weapons.ts`. "Lvl 1" is the
@@ -91,6 +127,17 @@ the weapon (backpack or hotbar).
 
 Max damage at Lvl 3: Stone Club 9, Bone Knife 7, Primal Spear 12 (before the
 weapon-skill damage multiplier, `Skills.weaponSkillDamageMultiplier`).
+
+### Forged weapons (biome 2 Phase 4) — one per melee damage type
+
+No upgrade path yet (their T2 "enhanced" reforge is Session 2). AOE arc widths in
+`Weapons.ts` `WEAPON_ARC`.
+
+| Weapon | Dmg / Cooldown / Stamina | Damage Type | Arc (½angle / range / falloff) |
+|---|---|---|---|
+| Sunsteel Warhammer | 14 / 800ms / 20 | Blunt | 55° / 62 / 0.75 (widest sweeper) |
+| Sunsteel Longsword | 10 / 480ms / 12 | Slash | 30° / 40 / 0.55 |
+| Sunsteel Pike | 12 / 620ms / 15 | Pierce | 40° / 56 / 0.65 |
 
 ## Ranged weapons (`src/systems/Weapons.ts` `RANGED_WEAPONS`)
 
@@ -118,6 +165,22 @@ just with `maxRangePx` above replacing melee's reach.
 
 Conversion is instant, not over time — the player loads raw input and picks
 how much to run via a slider (output-amount based, see `DryingRackMenu.ts`).
+
+## Smelting — Smelter (`src/systems/Processing.ts` `SMELT_RECIPES`) — biome 2 Phase 4
+
+`A + B = Ingot`: ore (loaded into the Smelter's input slot) **plus Hex Essence
+fuel** consumed from the backpack. Reuses the Drying Rack's menu (same
+`ProcessingStation`, tier- and fuel-aware). The rare recipe needs an **Ember
+Crucible**–upgraded **Smelter Lvl 2** (`minStationTier: 1`, gated on the Gremlin
+King's Heart — see Station Upgrades).
+
+| Ore | Fuel (per ingot) | Output | Ratio | Smelter Tier |
+|---|---|---|---|---|
+| Sunscorch Ore (common, scattered badlands) | 1 Hex Essence | Sunsteel Ingot | 2 : 1 | Any (Lvl 1) |
+| Cinderforged Ore (rare veins + Sunken Forge POI) | 2 Hex Essence | Embersteel Ingot | 2 : 1 | Lvl 2 (Ember Crucible) |
+
+Clay (Smelter build material), Sunscorch Ore, and rare Cinderforged veins are
+mineable `mine` nodes scattered in the badlands (Stone Pickaxe, non-respawning).
 
 ## Cooking — Campfire (`src/systems/Cooking.ts`)
 
@@ -169,7 +232,7 @@ means more attempts.
 | Gremlin Trophy | Elite Gremlin/Gremling | Common | 1 |
 | Boar Trophy | Elite Boar | Common | 1 |
 | Snake Trophy | Elite Snake | Common | 1 |
-| Gremlin King Fang | Gremlin King | Rare | 1 (dormant: boss = win) |
+| ~~Gremlin King Fang~~ | — | — | Retired — the King now drops the **Gremlin King's Heart** (a Phase-4 smelting material that upgrades a Smelter to melt rare ore), NOT a relic trophy |
 | Refined Trophy | Refinement (Gloaming Vein) | Uncommon | 1 (roll-only — never dropped/refined; **capped at Rare, no Mythic**) |
 | Radiant Trophy | Refinement (scaffold) | Rare | 1 (roll-only — deeper biomes) |
 

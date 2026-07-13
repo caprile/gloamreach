@@ -38,7 +38,12 @@ export type ResourceType =
   | "cragscale_plate" // dropped by Cragscales — a future heavy-armor/smithing ingredient
   | "hex_essence" // dropped by Hexlings — a future magic-weapon/alchemy reagent
   | "sandmaw_chitin" // dropped by Sandmaws — a light-but-tough plating shard (future armor/tool material)
-  | "ember_ore" // mined from a Sunken Forge's ember deposits (after killing the Cinderwrought) — a smelting/metalworking material (Phase 4)
+  | "ember_ore" // mined from a Sunken Forge's ember deposits (after killing the Cinderwrought) — the RARE smelting ore (Phase 4): Cinderforged Ore → Embersteel Ingot
+  | "clay" // mined from scattered badlands Clay Deposits — the build material for the Smelter (Phase 4)
+  | "sunscorch_ore" // the COMMON badlands smelting ore (Phase 4): Sunscorch Ore → Sunsteel Ingot
+  | "sunsteel_ingot" // basic forged ingot (Smelter output) — the base forged-gear tier + Workbench Lvl 3 (Phase 4)
+  | "embersteel_ingot" // rare/T2 forged ingot (Smelter Lvl 2, gated on the Gremlin King's Heart) — feeds the Session-2 enhanced tier
+  | "gremlin_king_heart" // the Gremlin King's guaranteed drop — upgrades the Smelter to smelt rare ore (Phase 4 gate)
   | "warren_fetish" // looted from Duskrunner Warren caches — the Effigy of the Duneshaper (badlands boss summon) ingredient
   | "emberbloom" // arid desert-herb harvestable — a future alchemy ingredient
   | "sunfruit" // cactus-fruit harvestable — a future food ingredient

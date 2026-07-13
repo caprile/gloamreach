@@ -23,6 +23,12 @@ export interface Recipe {
   // Tier 0 recipes are craftable anywhere. Tier 1+ requires proximity to a
   // placed Workbench — see MainScene.isNearWorkbench / CraftingMenuDeps.
   tier: number;
+  // Extra proximity gate (biome 2 Phase 4): the nearby Workbench must itself
+  // have reached at least this upgrade tier (0-based, matching
+  // StationUpgradeDef.resultTier). Forged gear needs a Lvl 3 Workbench
+  // (requiresWorkbenchTier: 2); the enhanced/T2 tier needs Lvl 4 (tier 3).
+  // Absent = any placed Workbench satisfies a tier-1 recipe as before.
+  requiresWorkbenchTier?: number;
   costs: Partial<Record<ResourceType, number>>;
   // ALL entries must be met to craft. Multiple allowed for future weapons
   // gated on more than one skill (e.g. "5 Slash + 5 Pierce").
@@ -186,6 +192,17 @@ export const RECIPES: Recipe[] = [
     output: { kind: "item", itemId: "drying_rack", itemName: "Drying Rack" },
   },
   {
+    id: "smelter",
+    name: "Smelter",
+    description: "A clay kiln for melting ore into ingots. Needs ore plus a Hexling's hex essence for the heat.",
+    category: "crafting",
+    // Tier 1 (Workbench-gated) like the Drying Rack. No King drop — basic
+    // smelting is available without ever fighting the Gremlin King (locked).
+    tier: 1,
+    costs: { clay: 10, stone: 15 },
+    output: { kind: "item", itemId: "smelter", itemName: "Smelter" },
+  },
+  {
     id: "gremlin_cap",
     name: "Gremlin Cap",
     description: "A light cap stitched from cured gremlin leather.",
@@ -247,6 +264,111 @@ export const RECIPES: Recipe[] = [
     costs: { warren_fetish: 3, gloam_shard: 2, bones: 8 },
     requiredSkills: [],
     output: { kind: "item", itemId: "tyrant_totem", itemName: "Effigy of the Duneshaper" },
+  },
+
+  // --- forged HEAVY armor: Sunsteel set (biome 2 Phase 4, Workbench Lvl 3) ---
+  {
+    id: "sunsteel_helm",
+    name: "Sunsteel Helm",
+    description: "A forged steel helm. Heavy protection, forged at an upgraded Workbench.",
+    category: "armor",
+    tier: 1,
+    requiresWorkbenchTier: 2,
+    costs: { sunsteel_ingot: 2, cragscale_plate: 2 },
+    requiredSkills: [{ skill: "heavy_armor", level: 0 }],
+    output: { kind: "item", itemId: "sunsteel_helm", itemName: "Sunsteel Helm" },
+  },
+  {
+    id: "sunsteel_cuirass",
+    name: "Sunsteel Cuirass",
+    description: "A forged steel breastplate — the sturdiest Sunsteel armor.",
+    category: "armor",
+    tier: 1,
+    requiresWorkbenchTier: 2,
+    costs: { sunsteel_ingot: 4, cragscale_plate: 4, bones: 5 },
+    requiredSkills: [{ skill: "heavy_armor", level: 0 }],
+    output: { kind: "item", itemId: "sunsteel_cuirass", itemName: "Sunsteel Cuirass" },
+  },
+  {
+    id: "sunsteel_greaves",
+    name: "Sunsteel Greaves",
+    description: "Forged steel leg plates lined with sandmaw chitin.",
+    category: "armor",
+    tier: 1,
+    requiresWorkbenchTier: 2,
+    costs: { sunsteel_ingot: 2, cragscale_plate: 2, sandmaw_chitin: 2 },
+    requiredSkills: [{ skill: "heavy_armor", level: 0 }],
+    output: { kind: "item", itemId: "sunsteel_greaves", itemName: "Sunsteel Greaves" },
+  },
+
+  // --- forged LIGHT armor: Duskhide set (biome 2 Phase 4, Workbench Lvl 3) ---
+  {
+    id: "duskhide_hood",
+    name: "Duskhide Hood",
+    description: "A light hood of tanned duskrunner hide with a steel band.",
+    category: "armor",
+    tier: 1,
+    requiresWorkbenchTier: 2,
+    costs: { duskrunner_pelt: 3, sunsteel_ingot: 1 },
+    requiredSkills: [{ skill: "light_armor", level: 0 }],
+    output: { kind: "item", itemId: "duskhide_hood", itemName: "Duskhide Hood" },
+  },
+  {
+    id: "duskhide_vest",
+    name: "Duskhide Vest",
+    description: "A layered duskrunner-hide vest with steel-buckled seams.",
+    category: "armor",
+    tier: 1,
+    requiresWorkbenchTier: 2,
+    costs: { duskrunner_pelt: 5, sunsteel_ingot: 2, bones: 3 },
+    requiredSkills: [{ skill: "light_armor", level: 0 }],
+    output: { kind: "item", itemId: "duskhide_vest", itemName: "Duskhide Vest" },
+  },
+  {
+    id: "duskhide_leggings",
+    name: "Duskhide Leggings",
+    description: "Duskrunner-hide leggings reinforced with sandmaw chitin.",
+    category: "armor",
+    tier: 1,
+    requiresWorkbenchTier: 2,
+    costs: { duskrunner_pelt: 3, sunsteel_ingot: 1, sandmaw_chitin: 1 },
+    requiredSkills: [{ skill: "light_armor", level: 0 }],
+    output: { kind: "item", itemId: "duskhide_leggings", itemName: "Duskhide Leggings" },
+  },
+
+  // --- forged weapons: one per melee damage type (biome 2 Phase 4, Workbench Lvl 3) ---
+  {
+    id: "sunsteel_warhammer",
+    name: "Sunsteel Warhammer",
+    description: "A massive forged maul with a wide, crushing arc.",
+    category: "weapons",
+    tier: 1,
+    requiresWorkbenchTier: 2,
+    costs: { sunsteel_ingot: 4, cragscale_plate: 2, wood: 4 },
+    requiredSkills: [{ skill: "blunt", level: 3 }],
+    output: { kind: "item", itemId: "sunsteel_warhammer", itemName: "Sunsteel Warhammer" },
+  },
+  {
+    id: "sunsteel_sword",
+    name: "Sunsteel Longsword",
+    description: "A keen forged blade for quick, cutting strikes.",
+    category: "weapons",
+    tier: 1,
+    requiresWorkbenchTier: 2,
+    costs: { sunsteel_ingot: 3, wood: 2 },
+    requiredSkills: [{ skill: "slash", level: 3 }],
+    output: { kind: "item", itemId: "sunsteel_sword", itemName: "Sunsteel Longsword" },
+  },
+  {
+    id: "sunsteel_pike",
+    name: "Sunsteel Pike",
+    description: "A long forged spear with reach and a punishing thrust.",
+    category: "weapons",
+    tier: 1,
+    requiresWorkbenchTier: 2,
+    costs: { sunsteel_ingot: 3, wood: 3 },
+    requiredSkills: [{ skill: "pierce", level: 3 }],
+    output: { kind: "item", itemId: "sunsteel_pike", itemName: "Sunsteel Pike" },
   },
 ];
 

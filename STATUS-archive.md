@@ -1,4 +1,61 @@
 # STATUS Archive — older milestone entries (grep by id; never Read in full)
+### Biome 2 — Phase 3: Duskrunner Warren POI (two-wave destructible den)
+
+Plan: `.claude/plans/biome-2-sunscorch-badlands.md` (Phase 3, umbrella). Built on **Opus** (new
+POI mechanic). the user scoped Phase 3 to **"two POIs first"** (the badlands boss + Gremlin King
+critical-drop rework stay deferred), then specced POI 1 in detail — it is deliberately NOT a
+Gremlin-Shack clone.
+
+**The Warren** (`src/entities/BadlandsDen.ts`) — a plain data class (not a GameObject subclass;
+MainScene owns the wave/smash scheduling), a burrow-mound `image` + a lazily-created cache
+`image` + `LootContainer`. Its lifecycle is a state machine (`DenPhase`):
+- **wave1** — 3 normal Duskrunners guard the den; the mound is inert (not hoverable/interactable).
+- **wave2** — clearing wave 1 spawns **3 ELITE Duskrunners** (`onDenGuardKilled` → `spawnDenWave`).
+- **attackable** — with both waves dead the den is exposed; smash it with a **melee weapon** (it
+  has HP `DEN_HEALTH` 42; ranged doesn't apply to a structure). `tryAttackDen` mirrors
+  `tryMeleeAttack`'s cooldown/stamina/reach guards + a size-scaled `denReach` (mirrors
+  `enemyReach`), deals `(weaponDamage+tier)×skill×relic` dmg, spawns a damage number.
+- **looted** — on the killing hit the mound swaps to `duskrunner_den_wrecked`, a `warren_cache`
+  sprite + warm pulsing glow appear, and the cache loot rolls. Opening reuses the shared
+  `ChestMenu` (`openChestMenu` was generalized from `(shack)` to `(loot, table)`).
+
+So **loot is gated behind destruction** (both waves must die first, automatically) and the Warren
+**does NOT respawn** — you destroy it. **Spawn: 10 dens** (the user: dens should be **fairly common**,
+~one per sizable badlands chunk — bumped 3→10) spread ≥`DEN_MIN_SPACING` (950px) apart via
+`pickBadlandsPoint`, picked **before** the wild badlands packs so a new `DEN_CLEAR_RADIUS` (200)
+exclusion in `pickBadlandsPoint` keeps ordinary spawns out of a den's clearing (the standing
+"POI busy = missing exclusion zone" lesson). **Cache loot** (`DUSKRUNNER_WARREN_LOOT_TABLE`):
+guaranteed pelts, likely meat/bones, chances at `sandmaw_chitin`/`gloam_shard` + a
+`duskrunner_trophy` — richer than a shack (a two-wave elite fight earns it).
+
+**Duskrunners are now a badlands food source** (the user): every Duskrunner (den *and* wild) drops
+raw **`duskrunner_meat`** alongside its pelt (elite 2×). New `ResourceType` + `ItemDef` +
+`icon_duskrunner_meat`; the cook/eat specifics are **deferred** — it's a "future cooking
+ingredient" like sunfruit/emberbloom, so the food exists in the world without over-designing it.
+
+**Map + night:** a discovered Warren fires a prominent **discovery popup toast** (new `"poi"`
+`LogKind` in `EventLog`/`EventLogUI`, routed through `showToast` like a biome-discovery toast, in a
+warm orange matching the map marker) **and** adds a `map_den` minimap/world-map landmark ("Duskrunner
+Warren", dusty orange-brown `0xc06a34`) via the generalized `updateAltarDiscovery` pass; dens glow
+a faint gloam-ember at night (`denLightPoints` in `collectLights`, radius 90 — subtler than a full
+POI). Hover/prompt/interact reuse the exact existing chain (new `hoveredDen`, `promptForDen`,
+`tryInteract` branch, hover-highlight target = `den.target`), interactable only while
+attackable/looted so the mound doesn't block enemy hovers during the fight.
+
+Files: new `BadlandsDen.ts`; `Inventory.ts` + `Items.ts` (`duskrunner_meat`); `Duskrunner.ts`
+(meat loot); `BootScene.ts` (`duskrunner_den`/`_wrecked`/`warren_cache`/`map_den`/
+`icon_duskrunner_meat` textures); `MainScene.ts` (den fields/reset, `spawnBadlandsDens`/
+`spawnDenWave`/`onDenGuardKilled`/`tryAttackDen`/`denReach`, `pickBadlandsPoint` exclusion, hover/
+prompt/interact/discovery/lights wiring, `openChestMenu` generalized); `dashboard/main.ts` (Enemies
+tab Duskrunner loot row). No `RECIPES.md` change (no recipes — cache is a loot table, meat has no
+recipe yet). **Verified:** `tsc --noEmit` clean; `preview_start` boots with no console errors;
+`preview_eval` — 10 dens spread across r 2505–5004 (minGap 1214px), wave1(normal)→wave2(elite)→
+attackable→wrecked+cache→loot, prompt gating (guarded=null / attackable-no-weapon=null /
+melee="Smash" / ranged=null / looted="Search the remains" / out-of-reach=null), Duskrunner rollLoot
+yields pelt+meat, discovery fires the "poi" popup toast + adds the `map_den` landmark; screenshots
+confirm the den mound + guards render and the discovery toast pops. **Next: POI 2 — the Sunken
+Forge mini-boss.**
+
 
 ### Biome 2 — Phase 0: Patchwork worldgen (bigger world + base-layer + biome blobs)
 

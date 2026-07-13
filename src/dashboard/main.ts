@@ -220,7 +220,7 @@ const ENEMIES: EnemyStat[] = [
       { label: "Charge (line, dodgeable)", damage: 55, telegraphMs: 850 },
       { label: "Ground Slam (AoE 150px + knockback)", damage: 55, telegraphMs: 950 },
     ],
-    loot: "Gremlin King Fang (unique)",
+    loot: "Gremlin King's Heart (unique — upgrades a Smelter to melt rare ore, Phase 4)",
     notes:
       "Poise 100 (stagger → 1.5× dmg for 3s). Enrages <50% HP: shorter telegraphs, faster — not more damage. The only enemy with real telegraph/dodge windows today.",
   },
@@ -503,7 +503,7 @@ function renderRelics(): string {
     cragscale_trophy: "Elite Cragscale (badlands)",
     hexling_trophy: "Elite Hexling (badlands)",
     sandmaw_trophy: "Elite Sandmaw (badlands)",
-    gremlin_king_fang: "Gremlin King (dormant — boss = win)",
+    gremlin_king_fang: "Retired — the King now drops the Gremlin King's Heart (a Phase-4 smelting material), not this trophy",
     refined_trophy_uncommon: "Refinement (Gloaming Vein) — roll-only",
     refined_trophy_rare: "Refinement (scaffold) — roll-only",
   };

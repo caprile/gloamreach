@@ -37,6 +37,7 @@ import {
   sprintStaminaDrainMult,
   choppingBonusChance,
   miningBonusChance,
+  heavyArmorMagicMitigation,
   type SkillType,
 } from "../systems/Skills";
 import {
@@ -87,7 +88,7 @@ import { EventLog } from "../systems/EventLog";
 import { Biome, type ZoneType } from "../systems/Biome";
 import { Equipment, EQUIP_SLOTS, type EquipSlot, type EquippedItem } from "../systems/Equipment";
 import { Hotbar, ROW1_COUNT } from "../systems/Hotbar";
-import { ProcessingStation, PROCESS_RECIPES } from "../systems/Processing";
+import { ProcessingStation, PROCESS_RECIPES, SMELT_RECIPES } from "../systems/Processing";
 import { BuffManager } from "../systems/Buffs";
 import { BleedManager } from "../systems/Bleed";
 import { COOK_RECIPES, type CookRecipe } from "../systems/Cooking";
@@ -469,8 +470,14 @@ export class MainScene extends Phaser.Scene {
   // but paired with a ProcessingStation each so update() can tick them and the
   // menu can bind to whichever one the player opened.
   private dryingRacks: { image: Phaser.GameObjects.Image; station: ProcessingStation }[] = [];
-  private openRack: ProcessingStation | null = null; // the rack the menu is bound to
+  private openRack: ProcessingStation | null = null; // the rack/smelter the menu is bound to
   private hoveredRack: Phaser.GameObjects.Image | null = null;
+  // Smelter (biome 2 Phase 4) — same "image + ProcessingStation" pairing as the
+  // Drying Rack. Reuses the SAME dryingRackMenu instance (both are processing
+  // stations); openStationKind switches its title/verb/fuel + process behavior.
+  private smelters: { image: Phaser.GameObjects.Image; station: ProcessingStation }[] = [];
+  private hoveredSmelter: Phaser.GameObjects.Image | null = null;
+  private openStationKind: "rack" | "smelter" = "rack";
   // A placed Workbench, hovered — clicking it opens the combined crafting
   // menu directly (mirrors the Drying Rack's click-to-open, per playtest
   // feedback). No dedicated array like dryingRacks/gremlinShacks since a
@@ -778,6 +785,9 @@ export class MainScene extends Phaser.Scene {
     this.dryingRacks = [];
     this.openRack = null;
     this.hoveredRack = null;
+    this.smelters = [];
+    this.hoveredSmelter = null;
+    this.openStationKind = "rack";
     this.hoveredWorkbench = null;
     this.hoveredCampfire = null;
     this.openCampfire = null;
@@ -949,6 +959,7 @@ export class MainScene extends Phaser.Scene {
     const solids = this.physics.add.staticGroup();
     this.spawnNodes(solids);
     this.spawnBadlandsFlora(); // biome 2 Phase 2 arid harvestables (free pickups, not solid)
+    this.spawnBadlandsMinerals(); // biome 2 Phase 4 — mineable ore + clay for smelting
     this.physics.add.collider(this.player, solids);
 
     // Enemies: physical collision with solids and the player (separation
@@ -2194,7 +2205,25 @@ export class MainScene extends Phaser.Scene {
       quickLoad: (i) => this.loadRackInput(this.backpack, i),
       isDragging: () => this.dragSource !== null,
       retrieveInput: () => this.retrieveRackInput(),
-      processAmount: (amount) => this.processRackAmount(amount),
+      processAmount: (amount) =>
+        this.openStationKind === "smelter" ? this.processSmelterAmount(amount) : this.processRackAmount(amount),
+      // The same menu serves the Smelter — switch title/verb/fuel by kind.
+      title: () => (this.openStationKind === "smelter" ? "Smelter" : "Drying Rack"),
+      descKey: () => (this.openStationKind === "smelter" ? "smelter" : "drying_rack"),
+      actionLabel: () => (this.openStationKind === "smelter" ? "Smelt" : "Process"),
+      busyLabel: () => (this.openStationKind === "smelter" ? "Smelting…" : "Drying…"),
+      fuelInfo: () => {
+        if (this.openStationKind !== "smelter") return null;
+        const recipe = this.openRack?.recipeForLoaded();
+        if (!recipe?.fuel) return null;
+        const def = itemDef(recipe.fuel.key);
+        return {
+          name: def?.name ?? recipe.fuel.key,
+          texture: def?.texture ?? "",
+          have: this.backpack.count(recipe.fuel.key),
+          needPerOutput: recipe.fuel.per,
+        };
+      },
     });
   }
 
@@ -2205,13 +2234,34 @@ export class MainScene extends Phaser.Scene {
     this.inventoryMenu.close();
     this.closeUpgradeMenu();
     this.closeRelicForgeMenu();
+    this.openStationKind = "rack";
     this.openRack = rack.station;
+    this.dryingRackMenu.openMenu();
+  }
+
+  // A placed Smelter reuses the Drying Rack's processing menu (both are
+  // ProcessingStations) — openStationKind flips the menu's title/verb/fuel and
+  // routes the process call to processSmelterAmount (which deducts fuel).
+  private openSmelterMenu(image: Phaser.GameObjects.Image): void {
+    const smelter = this.smelters.find((s) => s.image === image);
+    if (!smelter) return;
+    this.craftingMenu.close();
+    this.inventoryMenu.close();
+    this.closeUpgradeMenu();
+    this.closeRelicForgeMenu();
+    this.closeCookingMenu();
+    this.closeChestMenu();
+    // Reflect the placed Smelter's upgrade tier so rare-ore recipes unlock.
+    smelter.station.setTier((image.getData("tier") as number | undefined) ?? 0);
+    this.openStationKind = "smelter";
+    this.openRack = smelter.station;
     this.dryingRackMenu.openMenu();
   }
 
   private closeDryingRackMenu(): void {
     this.dryingRackMenu.close();
     this.openRack = null;
+    this.openStationKind = "rack";
   }
 
   // --- Campfire cooking + food buffs ---
@@ -2633,6 +2683,36 @@ export class MainScene extends Phaser.Scene {
   private processRackAmount(amount: number): void {
     const station = this.openRack;
     if (!station) return;
+    const result = station.process(amount);
+    if (!result) return;
+    const leftover = this.addToBackpack(result.key, result.count);
+    if (leftover > 0) {
+      this.spawnLooseDrop(result.key, leftover, this.player.x, this.player.y, DROPPED_ITEM_MAGNET_COOLDOWN_MS);
+      this.eventLog.add("info", "Backpack full — some output landed on the floor");
+    }
+    this.sfx.craft();
+    this.afterItemMove();
+  }
+
+  // Smelt `amount` output units of the loaded ore — like processRackAmount, but
+  // first checks/deducts the recipe's Hex Essence fuel from the backpack ("A + B
+  // = ingot"). A short fuel supply is a no-op with a message (the menu already
+  // greys the button, but re-guard since fuel could change between click and
+  // the bar completing).
+  private processSmelterAmount(amount: number): void {
+    const station = this.openRack;
+    if (!station) return;
+    const recipe = station.recipeForLoaded();
+    const preview = station.previewFor(amount);
+    if (preview.output <= 0) return;
+    if (recipe?.fuel) {
+      const needFuel = preview.output * recipe.fuel.per;
+      if (this.backpack.count(recipe.fuel.key) < needFuel) {
+        this.eventLog.add("info", `Not enough ${itemDef(recipe.fuel.key)?.name ?? "fuel"} to smelt`);
+        return;
+      }
+      this.backpack.removeCount(recipe.fuel.key, needFuel);
+    }
     const result = station.process(amount);
     if (!result) return;
     const leftover = this.addToBackpack(result.key, result.count);
@@ -3550,6 +3630,44 @@ export class MainScene extends Phaser.Scene {
     scatterFlora("dustbloom", "dustbloom_picked", "dustbloom", "Dustbloom", 52);
   }
 
+  // Mineable badlands minerals (biome 2 Phase 4) — the smelting economy's raw
+  // ore + the Smelter's clay, scattered OUT in the badlands (not just the Sunken
+  // Forge POI) so they're a renewable-ish source. Stone-Pickaxe `mine` nodes,
+  // finite (non-respawning). Common Sunscorch Ore is plentiful; rare Cinderforged
+  // veins are scarce (they smelt to the T2 ingot, so kept rare on top of the POI
+  // deposits). Routed through pickBadlandsPoint so every POI exclusion is honored.
+  private spawnBadlandsMinerals(): void {
+    const rng = this.sessionRng();
+    const scatterOre = (
+      texture: string,
+      resource: ResourceType,
+      displayName: string,
+      count: number,
+      health: number,
+    ) => {
+      for (let i = 0; i < count; i++) {
+        const pt = this.pickBadlandsPoint(rng);
+        if (!pt) break;
+        const node = new ResourceNode(this, {
+          x: pt.x,
+          y: pt.y,
+          texture,
+          resource,
+          amount: rng.between(1, 2),
+          action: "mine",
+          displayName,
+          loose: false,
+          health,
+        });
+        this.nodes.push(node);
+        this.obstacleNodes.push(node);
+      }
+    };
+    scatterOre("clay_deposit", "clay", "Clay Deposit", 40, 2);
+    scatterOre("sunscorch_ore_node", "sunscorch_ore", "Sunscorch Ore", 44, 3);
+    scatterOre("ember_ore_node", "ember_ore", "Cinderforged Vein", 8, 3);
+  }
+
   // Purely-decorative, non-interactive immersion props scattered through both
   // biomes (the user: "for both biomes add a bunch of decorative textures so it's
   // more immersive"). Not tracked (auto-destroyed on scene.restart), Y-sorted
@@ -4246,6 +4364,7 @@ export class MainScene extends Phaser.Scene {
     let hoveredWorkbench: Phaser.GameObjects.Image | null = null;
     let hoveredCampfire: Phaser.GameObjects.Image | null = null;
     let hoveredForge: Phaser.GameObjects.Image | null = null;
+    let hoveredSmelter: Phaser.GameObjects.Image | null = null;
     let best = Infinity;
 
     for (const node of this.nodes) {
@@ -4261,6 +4380,7 @@ export class MainScene extends Phaser.Scene {
         hoveredWorkbench = null;
         hoveredCampfire = null;
         hoveredForge = null;
+        hoveredSmelter = null;
         best = d;
       }
     }
@@ -4277,6 +4397,7 @@ export class MainScene extends Phaser.Scene {
         hoveredWorkbench = null;
         hoveredCampfire = null;
         hoveredForge = null;
+        hoveredSmelter = null;
         best = d;
       }
     }
@@ -4293,6 +4414,7 @@ export class MainScene extends Phaser.Scene {
         hoveredWorkbench = null;
         hoveredCampfire = null;
         hoveredForge = null;
+        hoveredSmelter = null;
         best = d;
       }
     }
@@ -4309,6 +4431,7 @@ export class MainScene extends Phaser.Scene {
         hoveredWorkbench = null;
         hoveredCampfire = null;
         hoveredForge = null;
+        hoveredSmelter = null;
         best = d;
       }
     }
@@ -4325,6 +4448,7 @@ export class MainScene extends Phaser.Scene {
         hoveredWorkbench = null;
         hoveredCampfire = null;
         hoveredForge = null;
+        hoveredSmelter = null;
         best = d;
       }
     }
@@ -4333,13 +4457,14 @@ export class MainScene extends Phaser.Scene {
     // one loop since they share the same hover/reach/interact shape.
     for (const obj of this.placedObjects) {
       const key = obj.getData("itemKey");
-      if (key !== "workbench" && key !== "campfire" && key !== "relic_forge") continue;
+      if (key !== "workbench" && key !== "campfire" && key !== "relic_forge" && key !== "smelter") continue;
       const radius = Math.max(obj.displayWidth, obj.displayHeight) / 2 + 6;
       const d = Phaser.Math.Distance.Between(world.x, world.y, obj.x, obj.y);
       if (d <= radius && d < best) {
         hoveredWorkbench = key === "workbench" ? obj : null;
         hoveredCampfire = key === "campfire" ? obj : null;
         hoveredForge = key === "relic_forge" ? obj : null;
+        hoveredSmelter = key === "smelter" ? obj : null;
         hoveredNode = null;
         hoveredEnemy = null;
         hoveredRack = null;
@@ -4367,6 +4492,7 @@ export class MainScene extends Phaser.Scene {
         hoveredWorkbench = null;
         hoveredCampfire = null;
         hoveredForge = null;
+        hoveredSmelter = null;
         best = d;
       }
     }
@@ -4380,6 +4506,7 @@ export class MainScene extends Phaser.Scene {
     this.hoveredWorkbench = hoveredWorkbench;
     this.hoveredCampfire = hoveredCampfire;
     this.hoveredForge = hoveredForge;
+    this.hoveredSmelter = hoveredSmelter;
 
     // Station level labels are passive flavor, not part of the interact/
     // prompt system above — shown purely on hover, independent of the
@@ -4406,9 +4533,11 @@ export class MainScene extends Phaser.Scene {
                   ? this.promptForCampfire(hoveredCampfire)
                   : hoveredForge
                     ? this.promptForForge(hoveredForge)
-                    : hoveredDen
-                      ? this.promptForDen(hoveredDen)
-                      : null;
+                    : hoveredSmelter
+                      ? this.promptForSmelter(hoveredSmelter)
+                      : hoveredDen
+                        ? this.promptForDen(hoveredDen)
+                        : null;
     if (prompt) {
       this.promptText.setText(prompt).setColor(this.promptColorFor()).setVisible(true);
       this.input.setDefaultCursor("pointer");
@@ -4570,6 +4699,11 @@ export class MainScene extends Phaser.Scene {
     return inReach ? "[LMB] Use Relic Forge" : null;
   }
 
+  private promptForSmelter(image: Phaser.GameObjects.Image): string | null {
+    const inReach = Phaser.Math.Distance.Between(this.player.x, this.player.y, image.x, image.y) <= REACH;
+    return inReach ? "[LMB] Use Smelter" : null;
+  }
+
   // Mirrors the tool-kind gating philosophy exactly: no Gremlin Totem
   // selected in the hotbar -> show nothing, never reveal what's required
   // (same "no tool of the right kind -> show nothing" rule as promptFor()).
@@ -4642,6 +4776,10 @@ export class MainScene extends Phaser.Scene {
     }
     if (this.hoveredForge) {
       if (this.promptForForge(this.hoveredForge)) this.openRelicForgeMenu(this.hoveredForge);
+      return;
+    }
+    if (this.hoveredSmelter) {
+      if (this.promptForSmelter(this.hoveredSmelter)) this.openSmelterMenu(this.hoveredSmelter);
       return;
     }
     // Holding (selected) a food item in the hotbar: a left-click on open ground
@@ -5256,6 +5394,13 @@ export class MainScene extends Phaser.Scene {
     }
   }
 
+  // True if the player has at least one heavy-armor piece equipped — gates the
+  // heavy_armor skill's magic/fire mitigation (biome 2 Phase 4) so a light build
+  // that once leveled heavy_armor doesn't get free elemental resist.
+  private wearsHeavyArmor(): boolean {
+    return armorTypesWornPerPiece(EQUIP_SLOTS.map((s) => this.equipment.get(s.id))).includes("heavy_armor");
+  }
+
   // `knockback` is optional so every existing call site (Boar bite, Snake
   // bite, Gremlin claw/projectile) is untouched — only the Gremlin King's
   // slam attack passes one.
@@ -5278,8 +5423,17 @@ export class MainScene extends Phaser.Scene {
     // Every biome-1 source deals physical, so the default path is unchanged.
     // Floored at 1 so no relic/armor combination grants full immunity.
     const relicAdjusted = amount * this.relics.damageTakenMult();
-    const armor = dmgType && bypassesArmor(dmgType) ? 0 : totalPlayerDefense(this.equipment);
-    const reduced = Math.max(1, Math.round(relicAdjusted - armor));
+    let reduced: number;
+    if (dmgType && bypassesArmor(dmgType)) {
+      // Magic/fire bypass the flat-armor term. Heavy armor's skill gives partial
+      // elemental mitigation instead (its identity vs light's dodge i-frames) —
+      // a % reduction, only while wearing at least one heavy piece (biome 2
+      // Phase 4). Light-armor players take the hit undiminished, as before.
+      const mit = this.wearsHeavyArmor() ? heavyArmorMagicMitigation(this.skills) : 0;
+      reduced = Math.max(1, Math.round(relicAdjusted * (1 - mit)));
+    } else {
+      reduced = Math.max(1, Math.round(relicAdjusted - totalPlayerDefense(this.equipment)));
+    }
     // Floating number over the player, tinted by incoming type, so it's clear
     // when you're being hit by fire/magic (the user: "fire damage should be
     // clear") vs a physical bite.
@@ -5717,6 +5871,7 @@ export class MainScene extends Phaser.Scene {
       maxBatches: (recipe) => this.maxCraftBatches(recipe),
       startPlacement: (recipe) => this.startPlacement(recipe),
       isNearWorkbench: () => this.isNearWorkbench(this.player.x, this.player.y),
+      isNearWorkbenchAtTier: (tier) => this.isNearWorkbenchAtTier(tier, this.player.x, this.player.y),
       skills: this.skills,
       progression: this.progression,
     });
@@ -5754,6 +5909,11 @@ export class MainScene extends Phaser.Scene {
     // item(s) — a 2nd tool now makes a new stack instead of a silent no-op.
     if (!this.canAffordBatch(recipe, batches)) return;
     if (recipe.tier > 0 && !this.isNearWorkbench(this.player.x, this.player.y)) return;
+    if (
+      recipe.requiresWorkbenchTier !== undefined &&
+      !this.isNearWorkbenchAtTier(recipe.requiresWorkbenchTier, this.player.x, this.player.y)
+    )
+      return;
     if (!this.backpack.hasRoomFor(key, totalOut)) {
       this.eventLog.add("info", "Inventory full");
       return;
@@ -5952,6 +6112,13 @@ export class MainScene extends Phaser.Scene {
       this.eventLog.add("info", "Requires a nearby Workbench");
       return;
     }
+    if (
+      recipe.requiresWorkbenchTier !== undefined &&
+      !this.isNearWorkbenchAtTier(recipe.requiresWorkbenchTier, this.player.x, this.player.y)
+    ) {
+      this.eventLog.add("info", `Requires a nearby ${stationDisplayName("workbench", recipe.requiresWorkbenchTier)}`);
+      return;
+    }
     // An owned placeable carries its per-instance upgrade tier on the stack;
     // consume that exact slot (not removeCount, which could eat a different
     // tier's stack) so the tier travels onto the placed image. Crafted
@@ -5992,6 +6159,14 @@ export class MainScene extends Phaser.Scene {
     // A placed Drying Rack gets its own processing state, ticked in update()
     // and bound to the menu when the player interacts with this image.
     if (key === "drying_rack") this.dryingRacks.push({ image, station: new ProcessingStation() });
+    // A placed Smelter gets its own smelt-recipe ProcessingStation; seed its
+    // tier from the placed stack (a re-placed upgraded Smelter keeps rare-ore
+    // smelting) so it works even before the menu is opened.
+    if (key === "smelter") {
+      const station = new ProcessingStation(SMELT_RECIPES);
+      station.setTier(placedTier);
+      this.smelters.push({ image, station });
+    }
     // Placing a Campfire discovers the cook recipes its tier can make (tier-0
     // dishes for a fresh one; also tier-1 if this is a re-placed Lvl 2 campfire).
     if (key === "campfire") this.discoverCookRecipes(placedTier);
@@ -6377,8 +6552,29 @@ export class MainScene extends Phaser.Scene {
   // render point (live upgrade AND re-placement from a tiered stack) so the two
   // paths never diverge. Tier 0 clears the tint; higher tiers get a gold cast.
   private applyTierVisual(image: Phaser.GameObjects.Image, tier: number): void {
+    // Benches (Workbench/Smelter) get a distinct texture per upgrade tier so an
+    // upgraded station visibly reflects its latest level (biome 2 Phase 4,
+    // the user). The tier already survives Destroy -> pickup -> re-Place, so the
+    // look follows it for free. Other placeables keep the amber-tint tell.
+    const key = image.getData("itemKey") as string | undefined;
+    const tex = key ? this.tieredStationTexture(key, tier) : null;
+    if (tex && this.textures.exists(tex)) {
+      image.setTexture(tex);
+      image.clearTint();
+      return;
+    }
     if (tier <= 0) image.clearTint();
     else image.setTint(0xffe08a);
+  }
+
+  // The world texture for a Workbench/Smelter at `tier` — base at tier 0, then
+  // `<icon>_t1`, `_t2`, ... (defined in BootScene). Null for stations without a
+  // per-tier look (they keep the tint).
+  private tieredStationTexture(key: string, tier: number): string | null {
+    if (key !== "workbench" && key !== "smelter") return null;
+    const base = itemDef(key)?.texture;
+    if (!base) return null;
+    return tier <= 0 ? base : `${base}_t${tier}`;
   }
 
   // Minecraft-style destroy: the object vanishes and drops as a recoverable
@@ -6410,6 +6606,23 @@ export class MainScene extends Phaser.Scene {
       }
       if (this.openRack === station) this.closeDryingRackMenu();
       this.dryingRacks.splice(rackIndex, 1);
+    }
+
+    // Same refund + cleanup for a placed Smelter's loaded ore.
+    const smelterIndex = this.smelters.findIndex((s) => s.image === obj);
+    if (smelterIndex !== -1) {
+      const station = this.smelters[smelterIndex].station;
+      if (station.input) {
+        this.spawnLooseDrop(
+          station.input.key,
+          station.input.count,
+          obj.x,
+          obj.y,
+          DROPPED_ITEM_MAGNET_COOLDOWN_MS,
+        );
+      }
+      if (this.openRack === station) this.closeDryingRackMenu();
+      this.smelters.splice(smelterIndex, 1);
     }
 
     // Destroying the campfire whose cooking menu is open closes it too.
