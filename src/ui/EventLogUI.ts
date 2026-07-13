@@ -16,6 +16,9 @@ const KIND_COLORS: Record<LogKind, { text: string; border: number; fill: number 
   // Biome discovery — a prominent warm-gold center toast (routed to showToast, not
   // the side recipe/material queue), for the "you've entered a new region" beat.
   biome: { text: "#ffd27a", border: 0xffd27a, fill: 0x3a2a10 },
+  // POI discovery (a found structure — e.g. a Duskrunner Warren) — a prominent
+  // center toast like biome, tinted to match the POI's own map-marker color.
+  poi: { text: "#e0a060", border: 0xe0a060, fill: 0x3a2612 },
 };
 
 // Recipe-unlock / material-discovery toast: a small card (icon + text) that

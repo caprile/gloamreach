@@ -2,19 +2,33 @@
 
 ## Current State
 
-_Living snapshot — edit in place, never append. Last shipped: **Biome 2 — Phase 2b: Sandmaw**
-(2026-07-12, Opus). The deferred 4th native badlands creature — a **burrowing ambusher** (locked
-with the user over an aerial diver / stealth flanker). The **Sandmaw** (`src/entities/Sandmaw.ts`)
-lurks submerged (near-invisible) until you enter its 62px ambush ring, then ERUPTS in a
-telegraphed radial sand-burst (95px, 38 physical + 220 knockback, via `checkPlayerHit` like the
-bosses/Hexling flame), stays surfaced + vulnerable for a punish window, then burrows and
-slow-stalks to re-ambush. Own bespoke state machine (submerged→surfacing→erupting→exposed→
-burrowing). Resist profile `{ pierce: 0.6, blunt: 1.4 }` — the **inverse of Cragscale**, so
-clubs/warhammer shine here where the spear shines on Cragscale. 24 scattered lone spawns (no pack)
-via `pickBadlandsPoint`; elite + `sandmaw_trophy` (Common/tier1) + `sandmaw_chitin` loot. New
-threat vector = "watch the ground." Verified live (full state cycle, erupt hit/dodge, resists,
-retaliate-while-submerged, sprites). Next: **Phase 3** (badlands boss = new win-con + Gremlin King
-critical-drop + 2 POIs). See "Biome 2 — Phase 2b: Sandmaw" below. [[survivor-rpg-biome-2-plan]]_
+_Living snapshot — edit in place, never append. Last shipped: **Biome 2 — Phase 3: Duskrunner
+Warren POI** (2026-07-12, Opus). The **first of Phase 3's two POIs** (the user chose "two POIs
+first"; the badlands boss + Gremlin King rework stay deferred). A **two-wave destructible den**,
+NOT a shack clone: `src/entities/BadlandsDen.ts` is a burrow mound guarded by **3 Duskrunners →
+(on clear) 3 ELITE Duskrunners**; only once both waves fall does the den become **attackable with a
+melee weapon** (its own HP), and smashing it collapses it into a **lootable cache** (a heap of the
+fallen — reuses `LootContainer`/`ChestMenu`). Loot is thus gated behind destruction; the Warren
+does **NOT respawn** (you destroy it). **10 dens (fairly common — ~one per sizable badlands chunk,
+per the user)** spread ≥950px apart via `pickBadlandsPoint` (+ a `DEN_CLEAR_RADIUS` exclusion).
+**Duskrunners are now a badlands food source** — every one drops raw `duskrunner_meat` (cook/eat
+specifics deferred, like sunfruit/emberbloom). Discovering one fires a prominent **discovery popup
+toast** (new `"poi"` `LogKind`) + a `map_den` minimap/world landmark; faint gloam-ember night glow.
+Verified live via `preview_eval`: 10 dens spread across r 2505–5004, wave
+1 (normal) → wave 2 (elite) → attackable → wrecked+cache → loot; prompt gating (nothing during
+waves, "Smash" only with a melee weapon, "Search the remains" when looted, out-of-reach null); meat
+drop; landmark; sprites render. Next: **Phase 3 POI 2 — the Sunken Forge mini-boss** (then the
+badlands boss + King rework). See "Biome 2 — Phase 3: Duskrunner Warren POI" below.
+[[survivor-rpg-biome-2-plan]]_
+
+_Prior: **Biome 2 — Phase 2b: Sandmaw** (2026-07-12, Opus). The deferred 4th native badlands
+creature — a **burrowing ambusher**. The **Sandmaw** (`src/entities/Sandmaw.ts`) lurks submerged
+(near-invisible) until you enter its 62px ambush ring, then ERUPTS in a telegraphed radial
+sand-burst (95px, 38 physical + 220 knockback, via `checkPlayerHit` like the bosses/Hexling flame),
+stays surfaced + vulnerable for a punish window, then burrows and slow-stalks to re-ambush. Own
+bespoke state machine. Resist `{ pierce: 0.6, blunt: 1.4 }` — the **inverse of Cragscale**. 24
+scattered lone spawns; elite + `sandmaw_trophy` + `sandmaw_chitin`. See "Biome 2 — Phase 2b:
+Sandmaw" below._
 
 _Prior: **4-item playtest fix batch**
 (2026-07-12, Sonnet-class fixes on existing systems). (1) **Cragscale re-toned** to a cool
@@ -154,9 +168,11 @@ layer — resist/weak, AOE arcs, pack-aggro, magic-bypass, all dormant hooks), *
 light up those hooks; plan `.claude/plans/biome-2-phase-2-enemies.md`), and **Phase 2b**
 (the 4th native creature — the **Sandmaw** burrowing ambusher; plan
 `.claude/plans/biome-2-phase-2b-sandmaw.md`). The badlands is now **walkable + populated with a
-complete 4-enemy roster**. Remaining phases (own Opus sessions each, own plan files): **Phase 3
-— next** (badlands boss = new win-con, demotes Gremlin King, + King critical-drop rework + 2
-POIs); Phase 4 smelting/forging gear tier; Phase 5 tier-2 relics + biome-1 trim +
+complete 4-enemy roster**. **Phase 3 is underway** — the user chose "two POIs first," and **POI 1,
+the Duskrunner Warren, has shipped** (two-wave destructible den → lootable cache; see below).
+Remaining Phase 3 work (own sessions): **POI 2 — the Sunken Forge mini-boss (next)**, then the
+**badlands boss** (new win-con, demotes the Gremlin King) + the **Gremlin King critical-drop
+rework**. Then Phase 4 smelting/forging gear tier; Phase 5 tier-2 relics + biome-1 trim +
 family-replace-with-refund. The master-plan tail **M-TE** (trophy-gated gear) is folded into
 this biome-2 work. Real pixel art/animations stay deliberately deferred until content/balance
 settle (roadmap item 8). Phase 2/2b badlands stats/counts + Phase 1's arc/resist/pack numbers are
@@ -195,6 +211,63 @@ all first-pass — expect a tuning pass as the biome fills out.
 ## Recent Entries
 
 > Older entries in STATUS-archive.md.
+
+### Biome 2 — Phase 3: Duskrunner Warren POI (two-wave destructible den)
+
+Plan: `.claude/plans/biome-2-sunscorch-badlands.md` (Phase 3, umbrella). Built on **Opus** (new
+POI mechanic). the user scoped Phase 3 to **"two POIs first"** (the badlands boss + Gremlin King
+critical-drop rework stay deferred), then specced POI 1 in detail — it is deliberately NOT a
+Gremlin-Shack clone.
+
+**The Warren** (`src/entities/BadlandsDen.ts`) — a plain data class (not a GameObject subclass;
+MainScene owns the wave/smash scheduling), a burrow-mound `image` + a lazily-created cache
+`image` + `LootContainer`. Its lifecycle is a state machine (`DenPhase`):
+- **wave1** — 3 normal Duskrunners guard the den; the mound is inert (not hoverable/interactable).
+- **wave2** — clearing wave 1 spawns **3 ELITE Duskrunners** (`onDenGuardKilled` → `spawnDenWave`).
+- **attackable** — with both waves dead the den is exposed; smash it with a **melee weapon** (it
+  has HP `DEN_HEALTH` 42; ranged doesn't apply to a structure). `tryAttackDen` mirrors
+  `tryMeleeAttack`'s cooldown/stamina/reach guards + a size-scaled `denReach` (mirrors
+  `enemyReach`), deals `(weaponDamage+tier)×skill×relic` dmg, spawns a damage number.
+- **looted** — on the killing hit the mound swaps to `duskrunner_den_wrecked`, a `warren_cache`
+  sprite + warm pulsing glow appear, and the cache loot rolls. Opening reuses the shared
+  `ChestMenu` (`openChestMenu` was generalized from `(shack)` to `(loot, table)`).
+
+So **loot is gated behind destruction** (both waves must die first, automatically) and the Warren
+**does NOT respawn** — you destroy it. **Spawn: 10 dens** (the user: dens should be **fairly common**,
+~one per sizable badlands chunk — bumped 3→10) spread ≥`DEN_MIN_SPACING` (950px) apart via
+`pickBadlandsPoint`, picked **before** the wild badlands packs so a new `DEN_CLEAR_RADIUS` (200)
+exclusion in `pickBadlandsPoint` keeps ordinary spawns out of a den's clearing (the standing
+"POI busy = missing exclusion zone" lesson). **Cache loot** (`DUSKRUNNER_WARREN_LOOT_TABLE`):
+guaranteed pelts, likely meat/bones, chances at `sandmaw_chitin`/`gloam_shard` + a
+`duskrunner_trophy` — richer than a shack (a two-wave elite fight earns it).
+
+**Duskrunners are now a badlands food source** (the user): every Duskrunner (den *and* wild) drops
+raw **`duskrunner_meat`** alongside its pelt (elite 2×). New `ResourceType` + `ItemDef` +
+`icon_duskrunner_meat`; the cook/eat specifics are **deferred** — it's a "future cooking
+ingredient" like sunfruit/emberbloom, so the food exists in the world without over-designing it.
+
+**Map + night:** a discovered Warren fires a prominent **discovery popup toast** (new `"poi"`
+`LogKind` in `EventLog`/`EventLogUI`, routed through `showToast` like a biome-discovery toast, in a
+warm orange matching the map marker) **and** adds a `map_den` minimap/world-map landmark ("Duskrunner
+Warren", dusty orange-brown `0xc06a34`) via the generalized `updateAltarDiscovery` pass; dens glow
+a faint gloam-ember at night (`denLightPoints` in `collectLights`, radius 90 — subtler than a full
+POI). Hover/prompt/interact reuse the exact existing chain (new `hoveredDen`, `promptForDen`,
+`tryInteract` branch, hover-highlight target = `den.target`), interactable only while
+attackable/looted so the mound doesn't block enemy hovers during the fight.
+
+Files: new `BadlandsDen.ts`; `Inventory.ts` + `Items.ts` (`duskrunner_meat`); `Duskrunner.ts`
+(meat loot); `BootScene.ts` (`duskrunner_den`/`_wrecked`/`warren_cache`/`map_den`/
+`icon_duskrunner_meat` textures); `MainScene.ts` (den fields/reset, `spawnBadlandsDens`/
+`spawnDenWave`/`onDenGuardKilled`/`tryAttackDen`/`denReach`, `pickBadlandsPoint` exclusion, hover/
+prompt/interact/discovery/lights wiring, `openChestMenu` generalized); `dashboard/main.ts` (Enemies
+tab Duskrunner loot row). No `RECIPES.md` change (no recipes — cache is a loot table, meat has no
+recipe yet). **Verified:** `tsc --noEmit` clean; `preview_start` boots with no console errors;
+`preview_eval` — 10 dens spread across r 2505–5004 (minGap 1214px), wave1(normal)→wave2(elite)→
+attackable→wrecked+cache→loot, prompt gating (guarded=null / attackable-no-weapon=null /
+melee="Smash" / ranged=null / looted="Search the remains" / out-of-reach=null), Duskrunner rollLoot
+yields pelt+meat, discovery fires the "poi" popup toast + adds the `map_den` landmark; screenshots
+confirm the den mound + guards render and the discovery toast pops. **Next: POI 2 — the Sunken
+Forge mini-boss.**
 
 ### Biome 2 — Phase 2b: Sandmaw (burrowing ambusher, the 4th native creature)
 
@@ -403,88 +476,5 @@ Verified: `tsc --noEmit` clean, `npm run build` clean, live `preview_eval` on al
 scan, mottle visible in a fresh screenshot, Hexling facing at 8 directions, live damage constant
 readout), no console errors. No `RECIPES.md` change (no recipe/cost changes).
 
-### 16-item playtest fix batch (naming/UI/aggro/ammo/glow/tips/food-balance)
-
-Off a fresh end-to-end playtest (the user), built on **Sonnet** — every item is a fix, tuning
-number, or UI addition on an already-shipped system; nothing here is a new mechanic. No
-`RECIPES.md` change (no recipe/cost changes).
-
-- **Woodcutter's Axe** — `stone_axe`'s display `name` changed from "Stone Axe" (the item key,
-  recipe, and every code reference stay `stone_axe`).
-- **`"Attack Elite Elite Snake"` fixed** — `MainScene.promptForEnemy` was prepending its own
-  "Elite " on top of `enemy.displayName`, which already carries the prefix per-species (e.g.
-  `Snake.ts`'s `displayName: elite ? "Elite Snake" : "Snake"`). The prompt now just reads
-  `enemy.displayName` directly.
-- **Boar/Snake outranged by the Slingshot, fixed at the root** — investigating "hitting enemies
-  should aggro them" found `Enemy.forceAggro()` (the pack-aggro wake mechanism) is only ever
-  overridden by nothing — every `mode`-driven subclass (Boar/Snake/RangedGremlin/MeleeGremling/
-  Hexling) ignores it, since it flips the base `state` field their own `update()` never reads.
-  The ACTUAL existing fix pattern is a per-subclass `takeHit()` override that flips `mode` on a
-  landed hit while idle — already present on RangedGremlin, Hexling, and (via its own bespoke
-  reveal-and-fight-back logic) Snake, but **missing on Boar and MeleeGremling**. Added matching
-  `takeHit()` overrides to both, mirroring RangedGremlin's exact idiom. (A `resolveWeaponHit()`-
-  level `forceAggro()` call was tried first but proven fully redundant — base `Enemy.takeHit()`
-  already does the same idle→chasing flip for state-field enemies — and removed.) Verified live:
-  an idle Boar/MeleeGremling's `isAggro()` flips true on `takeHit()`.
-- **"Out of ammo!" feedback** — firing a ranged weapon with no ammo loaded now spawns a small
-  rising/fading callout at the player (`MainScene.spawnFeedbackText`, an explicit, narrow
-  deviation from the standing "never reveal what's missing" silent-guard convention — used only
-  where a playtester specifically asked for feedback).
-- **Ammo auto-refill + bigger stacks** — when a shot empties the equipped ammo slot, it now
-  auto-tops-up from the backpack (same key, up to `maxStack`) instead of unequipping to `null`.
-  Slingshot Pellets' `maxStack` 50→99 (covers both the backpack stack cap and the ammo slot's own
-  cap, which reads `itemDef(key).maxStack`).
-- **Hotbar-drag-to-place** — dragging a placeable OUT of the hotbar (row 1 or row 2 — mechanically
-  one container, see the standing hotbar note) into the game world now re-arms placement mode
-  (`setHotbarSelection`) instead of dropping it as a loose pickup. Backpack-sourced drags are
-  unchanged (still an explicit "get rid of this" world-drop).
-- **Tip popup depth fix** — `HintUI`'s corner card was depth 2860/2861, below the crafting/
-  inventory panel's 3000/3001, so a tip firing while a menu was open rendered behind it. Bumped to
-  3200/3201 — above every menu, still below the pause overlay (3500).
-- **"Defeated" / "Level Up!" text overlap fixed** — two related issues: (1) the dedicated
-  `showLevelUpBanner()` callout and the EventLog's own generic center-toast stack
-  (`EventLogUI.showToast`) were BOTH firing for the same player-level-up event, competing for the
-  same screen region — the EventLog line is now passed a new `silent` flag (`EventLog.add`'s 4th
-  param) so only the dedicated banner shows (still logged to the persistent side panel). (2) Even
-  with that dedupe, a same-beat "Defeated X" combat toast could still land under the banner on a
-  short viewport — `EventLogUI.setTopOffset()` lets `showLevelUpBanner()` reserve that vertical
-  space for ~2.15s (matching the banner's own fade timing), pushing the toast stack below it.
-- **Denser Gremlin Shacks** — count 5→8. Only the wild-standalone pool grew (2→5); the War Camp's
-  3-hut fan (`SHACK_NEAR_ALTAR_COUNT`, carefully spaced opposite the gate) is untouched.
-- **Lvl-2 food rebalanced** — Bramble-Glazed Boar Skewer / Blood-Glazed Snake Skewer were ~2.3x
-  their Lvl-1 counterpart's total heal (e.g. 90 HP vs Cooked Boar Meat's 40). Per the user, a Lvl-2
-  dish should read as "faster healing, not just a straight-up bigger number" — both now heal at a
-  higher `hpPerSec` (2→2.5) over the SAME duration as their Lvl-1 counterpart (was extended
-  30s/35s), landing at a flat **+25%** total (50/55 HP). Vitality's healing-received multiplier
-  (`Health.healMult`, M-SS) applies equally to both tiers, so it doesn't change this ratio.
-- **Chest + Gloam Shard glow** — both were easy to miss as interactable/mineable. Gremlin Shack
-  chests now have a constant warm-gold pulsing halo (added in `GremlinShack`'s constructor);
-  Gloaming Vein ore nodes get a purple pulsing halo the moment they're cracked open
-  (`ResourceNode.crack()` → new private `startGlow()`, cleaned up in `deplete()`). Both reuse the
-  `light_soft` additive-glow texture already established for the Gloam Shard drop-pop/night
-  lighting — same visual language, just now a persistent day-and-night effect instead of a
-  one-shot pop or a night-only light point.
-- **Tips panel (Pause menu)** — a new `src/ui/TipsUI.ts` panel, opened via a "Tips" button on
-  `PauseMenuUI` (panel height 384→436 to fit it), lists every hint discovered so far this run
-  (`HintManager.discovered()`, new — `Set` insertion order needs no separate tracking). Modeled on
-  `WelcomeUI`'s swap-over-the-hidden-pause-panel pattern (`openTips`/`closeTips` mirror
-  `openHowToPlay`/`closeWelcome` exactly, including an Esc-key branch — a real gap in the first
-  draft, since without it Esc while Tips was open fell through to a no-op `openPauseMenu()` guard
-  rather than closing back to the pause panel). Addresses the "right-click to upgrade is not
-  obvious" feedback — it's taught once by a corner popup and otherwise gone; this is the
-  look-it-back-up escape hatch.
-- **Wolf howl SFX — noted, not built.** Every existing cue in `Sfx.ts` is a raw Web Audio
-  oscillator/gain envelope synthesized at call time (no asset files); a convincing howl doesn't
-  fit that same simple-envelope approach. Left as an in-code comment on `nightfall()` — revisit
-  once real audio assets are in scope (deliberately last on the roadmap).
-
-Verified live via `preview_eval` (own dev server instance): Elite-Boar prompt reads "Attack Elite
-Boar" (not doubled); an idle Boar/MeleeGremling's `isAggro()` flips on `takeHit()`; firing an empty
-Slingshot spawns the feedback text with no crash; a 1-round ammo stack auto-refills to the backpack's
-supply on the depleting shot; a 99-count Slingshot Pellets stack holds; `gremlinShacks.length` is 8
-post-`create()`; the full Pause→Tips→Close→Resume loop (including Esc mid-Tips) preserves
-`isPaused`/pause-panel state correctly; the Tips panel renders the two hints triggered in-test; and
-the chest's gold glow halo is visible in a full-scene screenshot. `tsc --noEmit` clean throughout.
-
-> Older entries (Biome 2 Phase 2, Biome 2 Phase 1, Biome 2 Phase 0, Welcome overlay, and
-> earlier) are in STATUS-archive.md.
+> Older entries (16-item playtest fix batch, Biome 2 Phase 2, Biome 2 Phase 1, Biome 2 Phase 0,
+> Welcome overlay, and earlier) are in STATUS-archive.md.

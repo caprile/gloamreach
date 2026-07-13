@@ -1166,8 +1166,10 @@ M-WC (Gremlin War Camp, done — see 5o) → Gloaming Vein (rarity-ore POI + tro
 done — see 5w) → M-SS (stats/skills depth pass + crit, done — see 5ab) → **Biome 2 /
 M-W1 + M-TE, IN PROGRESS — Phase 0 worldgen (5ac) + Phase 1 combat systems (5ad) + Phase 2
 core enemies & flora (5ae) + Phase 2b 4th native creature — the Sandmaw burrowing ambusher
-(5af) done; Phase 3 (badlands boss + King critical-drop + 2 POIs) next (see the biome-2
-umbrella plan below).**
+(5af) done. **Phase 3 underway** (the user chose "two POIs first"): POI 1 — the Duskrunner
+Warren (two-wave destructible den → lootable cache) — done (5ag); still to do: POI 2 (Sunken
+Forge mini-boss), then the badlands boss (new win-con) + Gremlin King critical-drop rework.
+See the biome-2 umbrella plan below.**
 
 5ac. **Biome 2 (Sunscorch Badlands) — Phase 0: Patchwork worldgen.** Plan:
    `.claude/plans/biome-2-phase-0-world-ring.md` (Phase 0 of the
@@ -1301,6 +1303,37 @@ umbrella plan below).**
    (manual mirror); no `RECIPES.md` change (no recipes). Verified live via `preview_eval` (full
    state cycle, erupt hit/dodge, resists, retaliate-while-submerged, sprites). Next: Phase 3. See
    `STATUS.md` + [[survivor-rpg-biome-2-plan]].
+
+5ag. **Biome 2 — Phase 3 POI 1: the Duskrunner Warren.** Plan:
+   `.claude/plans/biome-2-sunscorch-badlands.md` (Phase 3, umbrella). Built on **Opus** (new POI
+   mechanic). the user scoped Phase 3 to **"two POIs first"** (badlands boss + Gremlin King rework
+   deferred) then specced POI 1: deliberately **NOT** a Gremlin-Shack clone but a **two-wave
+   destructible den**. `src/entities/BadlandsDen.ts` (plain data class; MainScene owns wave/smash
+   scheduling) is a burrow mound whose lifecycle is a `DenPhase` machine:
+   **wave1** (3 Duskrunners guard, den inert) → **wave2** (clearing wave 1 spawns 3 **elite**
+   Duskrunners, via `onDenGuardKilled`→`spawnDenWave`) → **attackable** (both waves dead → smash
+   the exposed den with a **melee** weapon; it has HP `DEN_HEALTH` 42, `tryAttackDen` mirrors
+   `tryMeleeAttack`'s guards + a size-scaled `denReach`; ranged doesn't apply to a structure) →
+   **looted** (the killing hit swaps the mound to `duskrunner_den_wrecked`, spawns a `warren_cache`
+   + glow, rolls loot). **Loot is gated behind destruction** (both waves die first, automatically)
+   and the Warren **does NOT respawn** — you destroy it. **10 dens** (the user: dens are **fairly
+   common**, ~one per sizable badlands chunk — not a rare landmark) spread ≥950px apart via
+   `pickBadlandsPoint`, picked before the wild packs so a new `DEN_CLEAR_RADIUS` (200) exclusion
+   keeps ordinary spawns out of a den's clearing (the "POI busy = missing exclusion zone" lesson).
+   Cache loot (`DUSKRUNNER_WARREN_LOOT_TABLE`) reuses `LootContainer`/`ChestMenu` (`openChestMenu`
+   generalized from `(shack)` to `(loot, table)`); richer than a shack (pelts + meat/bones +
+   chances at chitin/gloam_shard + a `duskrunner_trophy`). **Duskrunners are now a badlands food
+   source** — every one (den + wild) drops raw `duskrunner_meat` (new `ResourceType`/`ItemDef`/
+   icon), cook/eat specifics **deferred** (a "future ingredient" like sunfruit/emberbloom, so the
+   food exists without over-designing it). Discovering a Warren fires a prominent **discovery popup
+   toast** (new `"poi"` `LogKind`, warm-orange center toast like a biome-discovery) + a `map_den`
+   minimap/world landmark; faint gloam-ember night glow (`denLightPoints`). Hover/prompt/interact
+   reuse the existing chain (new
+   `hoveredDen`/`promptForDen`/`tryInteract` branch; interactable only while attackable/looted so
+   the mound doesn't block enemy hovers during the fight). Dashboard Enemies tab Duskrunner loot
+   row updated; no `RECIPES.md` change. Verified live via `preview_eval` (spawn/spread, full
+   wave→smash→loot cycle, prompt gating, meat drop, landmark, sprites). **Next: POI 2 — the Sunken
+   Forge mini-boss.** See `STATUS.md` + [[survivor-rpg-biome-2-plan]].
 
 **Not yet built — next up in rough order:**
 6. **World & discovery** — much bigger generated world, biomes, map, a single giant

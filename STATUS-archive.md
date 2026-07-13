@@ -4994,3 +4994,86 @@ Files: `Duskrunner.ts`, `Cragscale.ts`, `Hexling.ts` (rewrite), `Enemy.ts` (`pen
 gate, pack sync, bleed wiring, area-hit `dmgType`, overlay continuity + feather mask). Dashboard
 Enemies tab updated (manual mirror). No `RECIPES.md` change. See [[survivor-rpg-biome-2-plan]].
 
+
+### 16-item playtest fix batch (naming/UI/aggro/ammo/glow/tips/food-balance)
+
+Off a fresh end-to-end playtest (the user), built on **Sonnet** — every item is a fix, tuning
+number, or UI addition on an already-shipped system; nothing here is a new mechanic. No
+`RECIPES.md` change (no recipe/cost changes).
+
+- **Woodcutter's Axe** — `stone_axe`'s display `name` changed from "Stone Axe" (the item key,
+  recipe, and every code reference stay `stone_axe`).
+- **`"Attack Elite Elite Snake"` fixed** — `MainScene.promptForEnemy` was prepending its own
+  "Elite " on top of `enemy.displayName`, which already carries the prefix per-species (e.g.
+  `Snake.ts`'s `displayName: elite ? "Elite Snake" : "Snake"`). The prompt now just reads
+  `enemy.displayName` directly.
+- **Boar/Snake outranged by the Slingshot, fixed at the root** — investigating "hitting enemies
+  should aggro them" found `Enemy.forceAggro()` (the pack-aggro wake mechanism) is only ever
+  overridden by nothing — every `mode`-driven subclass (Boar/Snake/RangedGremlin/MeleeGremling/
+  Hexling) ignores it, since it flips the base `state` field their own `update()` never reads.
+  The ACTUAL existing fix pattern is a per-subclass `takeHit()` override that flips `mode` on a
+  landed hit while idle — already present on RangedGremlin, Hexling, and (via its own bespoke
+  reveal-and-fight-back logic) Snake, but **missing on Boar and MeleeGremling**. Added matching
+  `takeHit()` overrides to both, mirroring RangedGremlin's exact idiom. (A `resolveWeaponHit()`-
+  level `forceAggro()` call was tried first but proven fully redundant — base `Enemy.takeHit()`
+  already does the same idle→chasing flip for state-field enemies — and removed.) Verified live:
+  an idle Boar/MeleeGremling's `isAggro()` flips true on `takeHit()`.
+- **"Out of ammo!" feedback** — firing a ranged weapon with no ammo loaded now spawns a small
+  rising/fading callout at the player (`MainScene.spawnFeedbackText`, an explicit, narrow
+  deviation from the standing "never reveal what's missing" silent-guard convention — used only
+  where a playtester specifically asked for feedback).
+- **Ammo auto-refill + bigger stacks** — when a shot empties the equipped ammo slot, it now
+  auto-tops-up from the backpack (same key, up to `maxStack`) instead of unequipping to `null`.
+  Slingshot Pellets' `maxStack` 50→99 (covers both the backpack stack cap and the ammo slot's own
+  cap, which reads `itemDef(key).maxStack`).
+- **Hotbar-drag-to-place** — dragging a placeable OUT of the hotbar (row 1 or row 2 — mechanically
+  one container, see the standing hotbar note) into the game world now re-arms placement mode
+  (`setHotbarSelection`) instead of dropping it as a loose pickup. Backpack-sourced drags are
+  unchanged (still an explicit "get rid of this" world-drop).
+- **Tip popup depth fix** — `HintUI`'s corner card was depth 2860/2861, below the crafting/
+  inventory panel's 3000/3001, so a tip firing while a menu was open rendered behind it. Bumped to
+  3200/3201 — above every menu, still below the pause overlay (3500).
+- **"Defeated" / "Level Up!" text overlap fixed** — two related issues: (1) the dedicated
+  `showLevelUpBanner()` callout and the EventLog's own generic center-toast stack
+  (`EventLogUI.showToast`) were BOTH firing for the same player-level-up event, competing for the
+  same screen region — the EventLog line is now passed a new `silent` flag (`EventLog.add`'s 4th
+  param) so only the dedicated banner shows (still logged to the persistent side panel). (2) Even
+  with that dedupe, a same-beat "Defeated X" combat toast could still land under the banner on a
+  short viewport — `EventLogUI.setTopOffset()` lets `showLevelUpBanner()` reserve that vertical
+  space for ~2.15s (matching the banner's own fade timing), pushing the toast stack below it.
+- **Denser Gremlin Shacks** — count 5→8. Only the wild-standalone pool grew (2→5); the War Camp's
+  3-hut fan (`SHACK_NEAR_ALTAR_COUNT`, carefully spaced opposite the gate) is untouched.
+- **Lvl-2 food rebalanced** — Bramble-Glazed Boar Skewer / Blood-Glazed Snake Skewer were ~2.3x
+  their Lvl-1 counterpart's total heal (e.g. 90 HP vs Cooked Boar Meat's 40). Per the user, a Lvl-2
+  dish should read as "faster healing, not just a straight-up bigger number" — both now heal at a
+  higher `hpPerSec` (2→2.5) over the SAME duration as their Lvl-1 counterpart (was extended
+  30s/35s), landing at a flat **+25%** total (50/55 HP). Vitality's healing-received multiplier
+  (`Health.healMult`, M-SS) applies equally to both tiers, so it doesn't change this ratio.
+- **Chest + Gloam Shard glow** — both were easy to miss as interactable/mineable. Gremlin Shack
+  chests now have a constant warm-gold pulsing halo (added in `GremlinShack`'s constructor);
+  Gloaming Vein ore nodes get a purple pulsing halo the moment they're cracked open
+  (`ResourceNode.crack()` → new private `startGlow()`, cleaned up in `deplete()`). Both reuse the
+  `light_soft` additive-glow texture already established for the Gloam Shard drop-pop/night
+  lighting — same visual language, just now a persistent day-and-night effect instead of a
+  one-shot pop or a night-only light point.
+- **Tips panel (Pause menu)** — a new `src/ui/TipsUI.ts` panel, opened via a "Tips" button on
+  `PauseMenuUI` (panel height 384→436 to fit it), lists every hint discovered so far this run
+  (`HintManager.discovered()`, new — `Set` insertion order needs no separate tracking). Modeled on
+  `WelcomeUI`'s swap-over-the-hidden-pause-panel pattern (`openTips`/`closeTips` mirror
+  `openHowToPlay`/`closeWelcome` exactly, including an Esc-key branch — a real gap in the first
+  draft, since without it Esc while Tips was open fell through to a no-op `openPauseMenu()` guard
+  rather than closing back to the pause panel). Addresses the "right-click to upgrade is not
+  obvious" feedback — it's taught once by a corner popup and otherwise gone; this is the
+  look-it-back-up escape hatch.
+- **Wolf howl SFX — noted, not built.** Every existing cue in `Sfx.ts` is a raw Web Audio
+  oscillator/gain envelope synthesized at call time (no asset files); a convincing howl doesn't
+  fit that same simple-envelope approach. Left as an in-code comment on `nightfall()` — revisit
+  once real audio assets are in scope (deliberately last on the roadmap).
+
+Verified live via `preview_eval` (own dev server instance): Elite-Boar prompt reads "Attack Elite
+Boar" (not doubled); an idle Boar/MeleeGremling's `isAggro()` flips on `takeHit()`; firing an empty
+Slingshot spawns the feedback text with no crash; a 1-round ammo stack auto-refills to the backpack's
+supply on the depleting shot; a 99-count Slingshot Pellets stack holds; `gremlinShacks.length` is 8
+post-`create()`; the full Pause→Tips→Close→Resume loop (including Esc mid-Tips) preserves
+`isPaused`/pause-panel state correctly; the Tips panel renders the two hints triggered in-test; and
+the chest's gold glow halo is visible in a full-scene screenshot. `tsc --noEmit` clean throughout.

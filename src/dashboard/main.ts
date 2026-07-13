@@ -168,9 +168,9 @@ const ENEMIES: EnemyStat[] = [
       { label: "Pounce (locked leap, 190px band, 32px hit)", damage: 20, telegraphMs: 260 },
       { label: "Bite (point-blank fallback, 30px reach)", damage: 20, telegraphMs: 200 },
     ],
-    loot: "1 Duskrunner Pelt",
+    loot: "1 Duskrunner Pelt + 1 Duskrunner Meat (elite 2x each)",
     trophy: "Duskrunner Trophy (elite)",
-    notes: "Biome 2 canid swarm. Fast, low-HP. Signature POUNCE gap-closer (sidestep-dodgeable) + point-blank bite. Pack-aggro (radius 260) — an aggro'd runner wakes packmates; spawns in packs of 3-4 AND rallies packmates to pounce together (attack-sync). Neutral resists (the AOE-arc payoff enemy). Reach/damage bumped 2026-07-12 (bite was whiffing on diagonals + doing 1 dmg in max armor).",
+    notes: "Biome 2 canid swarm. Fast, low-HP. Signature POUNCE gap-closer (sidestep-dodgeable) + point-blank bite. Pack-aggro (radius 260) — an aggro'd runner wakes packmates; spawns in packs of 3-4 AND rallies packmates to pounce together (attack-sync). Neutral resists (the AOE-arc payoff enemy). Now also a badlands FOOD SOURCE — drops raw Duskrunner Meat (Phase 3; cook/eat specifics deferred). Guards the Duskrunner Warren POI in two waves (3 normal, then 3 elite). Reach/damage bumped 2026-07-12.",
   },
   {
     name: "Cragscale (BADLANDS)",

@@ -77,9 +77,18 @@ export class Duskrunner extends Enemy {
       y: cfg.y,
       texture: elite ? "duskrunner_elite" : "duskrunner",
       displayName: elite ? "Elite Duskrunner" : "Duskrunner",
+      // Duskrunners double as a badlands food source (the user): every one drops
+      // raw Duskrunner Meat alongside its pelt. Cooking/eat specifics are deferred
+      // (the item is a future ingredient for now — like sunfruit/emberbloom).
       loot: elite
-        ? [{ resource: "duskrunner_pelt", min: 2, max: 2 }]
-        : [{ resource: "duskrunner_pelt", min: 1, max: 1 }],
+        ? [
+            { resource: "duskrunner_pelt", min: 2, max: 2 },
+            { resource: "duskrunner_meat", min: 2, max: 2 },
+          ]
+        : [
+            { resource: "duskrunner_pelt", min: 1, max: 1 },
+            { resource: "duskrunner_meat", min: 1, max: 1 },
+          ],
       maxHealth: elite ? Math.round(MAX_HEALTH * 1.5) : MAX_HEALTH,
       biteDamage: elite ? Math.round(BITE_DAMAGE * 1.5) : BITE_DAMAGE,
       elite,

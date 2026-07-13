@@ -322,6 +322,14 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     maxStack: 99,
     hotbarable: false,
   },
+  duskrunner_meat: {
+    key: "duskrunner_meat",
+    name: "Duskrunner Meat",
+    description: "Stringy raw meat from a badlands jackal. A future cooking ingredient — best not eaten raw.",
+    texture: "icon_duskrunner_meat",
+    maxStack: 99,
+    hotbarable: false,
+  },
   cragscale_plate: {
     key: "cragscale_plate",
     name: "Cragscale Plate",

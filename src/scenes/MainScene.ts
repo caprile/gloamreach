@@ -20,10 +20,11 @@ import { Hexling } from "../entities/Hexling";
 import { Sandmaw } from "../entities/Sandmaw";
 import { Projectile, type ProjectileConfig } from "../entities/Projectile";
 import { GremlinShack, SHACK_GUARD_RESPAWN_MS } from "../entities/GremlinShack";
+import { BadlandsDen } from "../entities/BadlandsDen";
 import { BossAltar } from "../entities/BossAltar";
 import { GremlinKing, STAGGER_DAMAGE_MULTIPLIER } from "../entities/GremlinKing";
 import { Gloamwarden, WARDEN_STAGGER_DAMAGE_MULTIPLIER } from "../entities/Gloamwarden";
-import type { LootRollEntry } from "../systems/LootContainer";
+import type { LootContainer, LootRollEntry } from "../systems/LootContainer";
 import type { ResourceType } from "../systems/Inventory";
 import {
   Skills,
@@ -333,6 +334,28 @@ const GREMLIN_SHACK_LOOT_TABLE: LootRollEntry[] = [
   { key: "leather", min: 1, max: 1, chance: 0.25 },
 ];
 
+// Duskrunner Warren cache loot (biome 2 Phase 3) — a heap of the fallen,
+// revealed only once the den is smashed. Rolled once (LootContainer), no
+// respawn. Richer than the shack (a two-wave elite fight earns it): guaranteed
+// pelts, likely meat/bones, and chances at chitin/shards + a trophy.
+const DUSKRUNNER_WARREN_LOOT_TABLE: LootRollEntry[] = [
+  { key: "duskrunner_pelt", min: 2, max: 4, chance: 1.0 },
+  { key: "duskrunner_meat", min: 2, max: 4, chance: 0.9 },
+  { key: "bones", min: 1, max: 3, chance: 0.8 },
+  { key: "sandmaw_chitin", min: 1, max: 2, chance: 0.35 },
+  { key: "gloam_shard", min: 1, max: 2, chance: 0.4 },
+  { key: "duskrunner_trophy", min: 1, max: 1, chance: 0.5 },
+];
+
+// Warren placement (biome 2 Phase 3): dens should be FAIRLY COMMON — roughly one
+// per sizable badlands chunk (the user), not a rare landmark. DEN_CLEAR_RADIUS
+// keeps ordinary wild badlands packs out of a den's own clearing (the "POI busy
+// = missing exclusion zone" lesson); DEN_MIN_SPACING spreads them so they land
+// in different chunks rather than clustering.
+const DEN_COUNT = 10;
+const DEN_MIN_SPACING = 950; // spread across chunks, but common enough that most areas have one
+const DEN_CLEAR_RADIUS = 200;
+
 // The main gameplay scene: build the world, spawn the player and resources,
 // follow the camera, and run the mouse-driven interaction + HUD.
 export class MainScene extends Phaser.Scene {
@@ -449,6 +472,11 @@ export class MainScene extends Phaser.Scene {
   private veinCracked = false;
   private veinDiscoveredOnMap = false;
   private veinLightPoints: { x: number; y: number }[] = [];
+
+  // Duskrunner Warrens (biome 2 Phase 3) — two-wave destructible den POIs.
+  private badlandsDens: BadlandsDen[] = [];
+  private hoveredDen: BadlandsDen | null = null;
+  private denLightPoints: { x: number; y: number }[] = [];
   // Right-click "Upgrade / Destroy" popup for any placed object (Workbench,
   // Campfire, Drying Rack, ...) — a single generic system, not per-type.
   private contextMenu!: ContextMenu;
@@ -691,6 +719,9 @@ export class MainScene extends Phaser.Scene {
     this.veinCracked = false;
     this.veinDiscoveredOnMap = false;
     this.veinLightPoints = [];
+    this.badlandsDens = [];
+    this.hoveredDen = null;
+    this.denLightPoints = [];
     this.upgradeTarget = null;
     this.placedLabels = new Map();
     this.dragSource = null;
@@ -832,6 +863,7 @@ export class MainScene extends Phaser.Scene {
     this.spawnWarCamp();
     this.spawnBossAltar();
     this.spawnGloamingVein();
+    this.spawnBadlandsDens(); // biome 2 Phase 3 POI — before wild packs so den clearings stay clear
     this.spawnBadlandsEnemies(); // biome 2 Phase 2 — out in the badlands patchwork
     this.physics.add.collider(this.enemyGroup, solids);
     this.physics.add.collider(this.player, this.enemyGroup);
@@ -1270,6 +1302,13 @@ export class MainScene extends Phaser.Scene {
       if (!onScreen(v.x, v.y)) continue;
       const s = toScreen(v.x, v.y);
       lights.push({ x: s.x, y: s.y, radius: 110 });
+    }
+    // Duskrunner Warren dens glow a faint gloam-ember at night — a subtler
+    // beacon than the full POIs, marking a den's location from a distance.
+    for (const d of this.denLightPoints) {
+      if (!onScreen(d.x, d.y)) continue;
+      const s = toScreen(d.x, d.y);
+      lights.push({ x: s.x, y: s.y, radius: 90 });
     }
     return lights;
   }
@@ -2263,13 +2302,15 @@ export class MainScene extends Phaser.Scene {
     });
   }
 
-  private openChestMenu(shack: GremlinShack): void {
+  // Opens the shared ChestMenu bound to any LootContainer (Gremlin Shack chest
+  // or Duskrunner Warren cache) — rolls its table lazily on first open.
+  private openChestMenu(loot: LootContainer, table: LootRollEntry[]): void {
     this.craftingMenu.close();
     this.inventoryMenu.close();
     this.closeUpgradeMenu();
     this.closeRelicForgeMenu();
-    shack.loot.rollIfEmpty(GREMLIN_SHACK_LOOT_TABLE);
-    this.openChest = shack.loot.items;
+    loot.rollIfEmpty(table);
+    this.openChest = loot.items;
     this.chestMenu.openMenu();
   }
 
@@ -2345,6 +2386,7 @@ export class MainScene extends Phaser.Scene {
   // Cheap: a handful of shacks, one boolean check apiece.
   private updateShackGlows(): void {
     for (const shack of this.gremlinShacks) shack.syncGlow();
+    for (const den of this.badlandsDens) den.syncGlow();
   }
 
   // Called from tryAttackEnemy()'s kill branch for every defeated enemy — a
@@ -2563,6 +2605,14 @@ export class MainScene extends Phaser.Scene {
       if (
         this.veinPosition &&
         Phaser.Math.Distance.Between(x, y, this.veinPosition.x, this.veinPosition.y) < VEIN_CLEAR_RADIUS
+      )
+        continue;
+      // Duskrunner Warrens (Phase 3): keep wild badlands packs out of a den's
+      // own clearing (it has its own two-wave guard fight).
+      if (
+        this.badlandsDens.some(
+          (d) => Phaser.Math.Distance.Between(x, y, d.x, d.y) < DEN_CLEAR_RADIUS,
+        )
       )
         continue;
       // Badlands must be the DOMINANT biome here, not merely present: near the
@@ -3123,6 +3173,114 @@ export class MainScene extends Phaser.Scene {
     }
   }
 
+  // Duskrunner Warrens (biome 2 Phase 3 POI) — a few dens spread widely across
+  // the accessible badlands. Each starts guarded by a wave of 3 Duskrunners;
+  // the den is inert until both waves fall, then it's smashable for its cache.
+  // No respawn (the den is destroyed). Picked before the wild packs so their
+  // clearings are excluded from ordinary spawns (DEN_CLEAR_RADIUS).
+  private spawnBadlandsDens(): void {
+    const rng = this.sessionRng();
+    for (let i = 0; i < DEN_COUNT; i++) {
+      let pt: { x: number; y: number } | null = null;
+      let fallback: { x: number; y: number } | null = null;
+      for (let a = 0; a < 80; a++) {
+        const cand = this.pickBadlandsPoint(rng);
+        if (!cand) break;
+        fallback = cand;
+        if (
+          this.badlandsDens.every(
+            (d) => Phaser.Math.Distance.Between(d.x, d.y, cand.x, cand.y) >= DEN_MIN_SPACING,
+          )
+        ) {
+          pt = cand;
+          break;
+        }
+      }
+      pt = pt ?? fallback;
+      if (!pt) break;
+      const den = new BadlandsDen(this, { x: pt.x, y: pt.y });
+      this.badlandsDens.push(den);
+      this.denLightPoints.push({ x: pt.x, y: pt.y });
+      this.spawnDenWave(den, false); // wave 1: 3 normal Duskrunners
+    }
+  }
+
+  // Spawn one wave of 3 Duskrunners clustered on a den, tracked as its guards.
+  // Wave 1 (elite=false) at world-gen; wave 2 (elite=true) when wave 1 falls.
+  private spawnDenWave(den: BadlandsDen, elite: boolean): void {
+    const rng = this.sessionRng();
+    const JITTER = 46;
+    const guards: Enemy[] = [];
+    for (let i = 0; i < 3; i++) {
+      const x = Phaser.Math.Clamp(den.x + rng.between(-JITTER, JITTER), 60, WORLD_W - 60);
+      const y = Phaser.Math.Clamp(den.y + rng.between(-JITTER, JITTER), 60, WORLD_H - 60);
+      const d = new Duskrunner(this, { x, y, elite });
+      guards.push(d);
+      this.enemies.push(d);
+      this.enemyGroup.add(d);
+    }
+    den.guards = guards;
+  }
+
+  // Called from resolveWeaponHit()'s kill branch for every defeated enemy — a
+  // no-op unless `enemy` was a Warren guard. Once a wave is fully cleared:
+  // wave1 -> spawn the elite wave2; wave2 -> the den becomes smashable.
+  private onDenGuardKilled(enemy: Enemy): void {
+    const den = this.badlandsDens.find((d) => d.guards.includes(enemy));
+    if (!den) return;
+    den.guards = den.guards.filter((g) => g !== enemy);
+    if (den.guards.length > 0) return;
+    if (den.phase === "wave1") {
+      den.phase = "wave2";
+      this.spawnDenWave(den, true);
+      this.eventLog.add("combat", "The warren stirs — elite Duskrunners burst out!");
+    } else if (den.phase === "wave2") {
+      den.phase = "attackable";
+      this.eventLog.add("info", "The warren stands undefended — smash it to loot the den");
+    }
+  }
+
+  // Reach for smashing a den — REACH plus however much the den's own footprint
+  // exceeds the baseline sprite radius (mirrors enemyReach() for big enemies).
+  private denReach(den: BadlandsDen): number {
+    const radius = Math.max(den.image.displayWidth, den.image.displayHeight) / 2;
+    return REACH + Math.max(0, radius - MainScene.BASELINE_ENEMY_RADIUS);
+  }
+
+  // Smash an exposed den with the equipped MELEE weapon (a Warren is a physical
+  // structure — ranged weapons don't apply). Mirrors tryMeleeAttack's cooldown/
+  // stamina/reach guards; on collapse it rolls + reveals the cache.
+  private tryAttackDen(den: BadlandsDen): void {
+    if (den.phase !== "attackable") return;
+    if (!this.equippedWeapon || isRangedWeapon(this.equippedWeapon)) return;
+    const inReach =
+      Phaser.Math.Distance.Between(this.player.x, this.player.y, den.x, den.y) <= this.denReach(den);
+    if (!inReach) return;
+
+    const cooldownMs = weaponCooldownMs(this.equippedWeapon);
+    if (this.time.now - this.lastWeaponHitAt < cooldownMs) return;
+    const staminaCost = Math.round(weaponStaminaCost(this.equippedWeapon) * this.relics.staminaCostMult());
+    if (!this.stamina.canAfford(staminaCost)) return;
+
+    this.lastWeaponHitAt = this.time.now;
+    this.stamina.spend(staminaCost);
+    this.player.playSwing();
+    this.player.playEquippedSwing();
+
+    const dmgType = weaponPrimaryDamageType(this.equippedWeapon);
+    const dmg =
+      (weaponDamage(this.equippedWeapon) + weaponTierDamageBonus(this.equippedWeapon, this.equippedWeaponTier)) *
+      weaponSkillDamageMultiplier(dmgType, this.skills) *
+      this.relics.damageMult();
+    this.sfx.hit();
+    this.spawnDamageNumber(den.x, den.y, Math.round(dmg), false, "normal");
+    if (den.takeHit(dmg)) {
+      den.loot.rollIfEmpty(DUSKRUNNER_WARREN_LOOT_TABLE);
+      den.syncGlow();
+      this.eventLog.add("info", "The warren collapses — search the remains");
+    }
+  }
+
   // Arid harvestables (biome 2 Phase 2) — free pickups scattered through the
   // badlands, reusing the persistent + regrow pattern (like Blackberry): harvest
   // yields the resource and swaps to a "picked" look, regrowing after a timer.
@@ -3397,6 +3555,22 @@ export class MainScene extends Phaser.Scene {
         tint: 0x9a5ee8,
       });
     }
+    // Duskrunner Warrens (Phase 3) — discovered fixed structures, dusty
+    // orange-brown markers, same one-shot treatment as the shacks.
+    for (const den of this.badlandsDens) {
+      if (den.discoveredOnMap) continue;
+      if (!inReveal(den.x, den.y)) continue;
+      den.discoveredOnMap = true;
+      this.exploredMap.addLandmark({
+        worldX: den.x,
+        worldY: den.y,
+        iconKey: "map_den",
+        label: "Duskrunner Warren",
+        tint: 0xc06a34,
+      });
+      // A prominent discovery popup, same beat as finding a new biome.
+      this.eventLog.add("poi", "Discovered: Duskrunner Warren");
+    }
     // Once the player is actually holding a Totem, spell out what to do with it
     // (trigger is once-per-run idempotent, so a per-frame poll here is fine).
     if (this.backpack.count("gremlin_totem") + this.hotbar.container.count("gremlin_totem") > 0) {
@@ -3538,6 +3712,7 @@ export class MainScene extends Phaser.Scene {
     let hoveredEnemy: Enemy | null = null;
     let hoveredRack: Phaser.GameObjects.Image | null = null;
     let hoveredShack: GremlinShack | null = null;
+    let hoveredDen: BadlandsDen | null = null;
     let hoveredAltar: BossAltar | null = null;
     let hoveredWorkbench: Phaser.GameObjects.Image | null = null;
     let hoveredCampfire: Phaser.GameObjects.Image | null = null;
@@ -3645,10 +3820,33 @@ export class MainScene extends Phaser.Scene {
       }
     }
 
+    // Duskrunner Warren dens — interactable only once exposed (attackable) or
+    // looted; during the wave fight the mound isn't a target. Runs last so it
+    // respects `best`; wins by nulling the others.
+    for (const den of this.badlandsDens) {
+      if (den.phase !== "attackable" && den.phase !== "looted") continue;
+      const image = den.target;
+      const radius = Math.max(image.displayWidth, image.displayHeight) / 2 + 6;
+      const d = Phaser.Math.Distance.Between(world.x, world.y, image.x, image.y);
+      if (d <= radius && d < best) {
+        hoveredDen = den;
+        hoveredNode = null;
+        hoveredEnemy = null;
+        hoveredRack = null;
+        hoveredShack = null;
+        hoveredAltar = null;
+        hoveredWorkbench = null;
+        hoveredCampfire = null;
+        hoveredForge = null;
+        best = d;
+      }
+    }
+
     this.hoveredNode = hoveredNode;
     this.hoveredEnemy = hoveredEnemy;
     this.hoveredRack = hoveredRack;
     this.hoveredShack = hoveredShack;
+    this.hoveredDen = hoveredDen;
     this.hoveredAltar = hoveredAltar;
     this.hoveredWorkbench = hoveredWorkbench;
     this.hoveredCampfire = hoveredCampfire;
@@ -3679,7 +3877,9 @@ export class MainScene extends Phaser.Scene {
                   ? this.promptForCampfire(hoveredCampfire)
                   : hoveredForge
                     ? this.promptForForge(hoveredForge)
-                    : null;
+                    : hoveredDen
+                      ? this.promptForDen(hoveredDen)
+                      : null;
     if (prompt) {
       this.promptText.setText(prompt).setColor(this.promptColorFor()).setVisible(true);
       this.input.setDefaultCursor("pointer");
@@ -3701,6 +3901,7 @@ export class MainScene extends Phaser.Scene {
       this.hoveredEnemy ??
       this.hoveredRack ??
       this.hoveredShack?.chestImage ??
+      this.hoveredDen?.target ??
       this.hoveredAltar?.image ??
       this.hoveredWorkbench ??
       this.hoveredCampfire ??
@@ -3797,6 +3998,24 @@ export class MainScene extends Phaser.Scene {
     return inReach ? "[LMB] Open" : null;
   }
 
+  // A Duskrunner Warren, once its guards are cleared:
+  // - looted: reach-only prompt to open the exposed cache.
+  // - attackable: the smash verb, but ONLY with a melee weapon equipped
+  //   (ranged doesn't apply to a structure) — mirrors the enemy-attack gating
+  //   of showing nothing without a weapon.
+  private promptForDen(den: BadlandsDen): string | null {
+    if (den.phase === "looted") {
+      const inReach =
+        Phaser.Math.Distance.Between(this.player.x, this.player.y, den.target.x, den.target.y) <= REACH;
+      return inReach ? "[LMB] Search the remains" : null;
+    }
+    if (den.phase !== "attackable") return null;
+    const inReach = Phaser.Math.Distance.Between(this.player.x, this.player.y, den.x, den.y) <= this.denReach(den);
+    if (!inReach) return null;
+    if (!this.equippedWeapon || isRangedWeapon(this.equippedWeapon)) return null;
+    return "[LMB] Smash the warren";
+  }
+
   // A placed Workbench: prompt to open the combined crafting menu when in
   // reach — no gating (reach-only), same as the Drying Rack/Shack.
   private promptForWorkbench(image: Phaser.GameObjects.Image): string | null {
@@ -3854,7 +4073,17 @@ export class MainScene extends Phaser.Scene {
       const inReach =
         Phaser.Math.Distance.Between(this.player.x, this.player.y, this.hoveredShack.x, this.hoveredShack.y) <=
         REACH;
-      if (inReach) this.openChestMenu(this.hoveredShack);
+      if (inReach) this.openChestMenu(this.hoveredShack.loot, GREMLIN_SHACK_LOOT_TABLE);
+      return;
+    }
+    if (this.hoveredDen) {
+      const den = this.hoveredDen;
+      if (den.phase === "looted") {
+        const inReach = Phaser.Math.Distance.Between(this.player.x, this.player.y, den.target.x, den.target.y) <= REACH;
+        if (inReach) this.openChestMenu(den.loot, DUSKRUNNER_WARREN_LOOT_TABLE);
+      } else if (den.phase === "attackable") {
+        this.tryAttackDen(den);
+      }
       return;
     }
     if (this.hoveredAltar) {
@@ -4200,6 +4429,7 @@ export class MainScene extends Phaser.Scene {
     });
     this.enemies = this.enemies.filter((e) => e !== enemy);
     this.onShackGuardKilled(enemy);
+    this.onDenGuardKilled(enemy);
     if (enemy instanceof Gloamwarden) this.onGloamwardenKilled();
     this.eventLog.add("combat", `Defeated ${enemy.displayName}`);
     this.hoveredEnemy = null;

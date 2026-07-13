@@ -34,6 +34,7 @@ export type ResourceType =
   | "gremlin_king_fang" // Gremlin King's guaranteed unique trophy drop
   // --- badlands (biome 2 Phase 2) raw materials + flora ---
   | "duskrunner_pelt" // dropped by Duskrunners — a future badlands leather-tier hide (no recipe yet)
+  | "duskrunner_meat" // dropped by Duskrunners — a raw food-source drop (future cooking ingredient, no recipe yet)
   | "cragscale_plate" // dropped by Cragscales — a future heavy-armor/smithing ingredient
   | "hex_essence" // dropped by Hexlings — a future magic-weapon/alchemy reagent
   | "sandmaw_chitin" // dropped by Sandmaws — a light-but-tough plating shard (future armor/tool material)

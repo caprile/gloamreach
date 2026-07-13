@@ -889,6 +889,17 @@ export class BootScene extends Phaser.Scene {
     g.fillRect(5, 7, 14, 2); // greenish skin edge
     g.generateTexture("icon_snake_meat", ICON, ICON);
 
+    // Duskrunner Meat: a lean, dusty raw cut — darker/ruddier than boar, with a
+    // sandy-brown edge to read as "badlands game meat."
+    g.clear();
+    g.fillStyle(0x8a3a2a, 1);
+    g.fillRect(5, 7, 14, 10);
+    g.fillStyle(0xba5a3a, 1);
+    g.fillRect(7, 9, 8, 5);
+    g.fillStyle(0x8a6a44, 1);
+    g.fillRect(5, 7, 14, 2); // sandy skin edge
+    g.generateTexture("icon_duskrunner_meat", ICON, ICON);
+
     // Bones: two crossed off-white bone shapes.
     g.clear();
     g.fillStyle(0xe8e0cc, 1);
@@ -1160,6 +1171,7 @@ export class BootScene extends Phaser.Scene {
     mapMarker("map_altar", 0xf0c040, 0xd6483a); // Gremlin War Camp — the standout red/gold marker
     mapMarker("map_shack", 0xd8c090, 0x8a6a3a); // Gremlin Shack — wood-brown
     mapMarker("map_vein", 0xc79cf0, 0x7a3ec8); // Gloaming Vein — purple amethyst
+    mapMarker("map_den", 0xe0a060, 0xc06a34); // Duskrunner Warren — dusty orange-brown
 
     // ===== Badlands (biome 2 Phase 2) content =====
 
@@ -1210,6 +1222,64 @@ export class BootScene extends Phaser.Scene {
     };
     drawDuskrunner("duskrunner", 0x8a7a6a, 0x5a4a5a, 0x5f5044, 0xa89684, 0xff8a3a, 0xffd24a);
     drawDuskrunner("duskrunner_elite", 0x6a1f2a, 0x3f1020, 0x3f1020, 0xf0c040, 0xf0c040, 0xffe8a0);
+
+    // Duskrunner Warren (44x36) — a burrow mound of packed red-dust earth with a
+    // dark maw, bleg-bones jutting from the spoil, and a faint ember glow in the
+    // throat (gloam-touched). The badlands' first structural POI. Non-interactive
+    // backdrop while guarded; the smash target once its waves fall.
+    g.clear();
+    g.fillStyle(0x6e4a30, 1);
+    g.fillEllipse(22, 24, 44, 22); // mound base
+    g.fillStyle(0x855a38, 1);
+    g.fillEllipse(22, 20, 36, 16); // sunlit upper mound
+    g.fillStyle(0x9a6a44, 1);
+    g.fillEllipse(20, 16, 22, 9); // crest highlight
+    g.fillStyle(0x1e1410, 1);
+    g.fillEllipse(22, 25, 18, 12); // dark den maw
+    g.fillStyle(0x3a1f14, 1);
+    g.fillEllipse(22, 23, 12, 7); // maw inner rim
+    g.fillStyle(0xff7a2a, 0.6);
+    g.fillEllipse(22, 27, 6, 3); // ember glow in the throat
+    // scattered bones in the spoil
+    g.fillStyle(0xe8e0cc, 1);
+    g.fillRect(6, 28, 6, 2);
+    g.fillRect(34, 30, 6, 2);
+    g.fillRect(9, 31, 2, 3);
+    g.generateTexture("duskrunner_den", 44, 36);
+
+    // Wrecked Warren (44x30) — the same mound caved in: the maw collapsed to a
+    // shallow scar, ember gone, more bone rubble strewn about.
+    g.clear();
+    g.fillStyle(0x5e3f2a, 1);
+    g.fillEllipse(22, 22, 44, 16); // caved, flatter mound
+    g.fillStyle(0x744e32, 1);
+    g.fillEllipse(20, 20, 30, 10);
+    g.fillStyle(0x2a1c14, 1);
+    g.fillEllipse(22, 22, 20, 6); // collapsed scar
+    g.fillStyle(0xe8e0cc, 1);
+    g.fillRect(7, 24, 7, 2);
+    g.fillRect(30, 25, 7, 2);
+    g.fillRect(16, 26, 3, 2);
+    g.fillRect(26, 20, 2, 4);
+    g.generateTexture("duskrunner_den_wrecked", 44, 30);
+
+    // Warren Cache (24x18) — the fallen's spoils heaped in the wrecked den's
+    // mouth: stacked pelts, a bone or two, and a glint. The interactable loot
+    // pile the collapsed Warren yields.
+    g.clear();
+    g.fillStyle(0x7a5038, 1);
+    g.fillEllipse(12, 13, 24, 10); // pelt heap base
+    g.fillStyle(0x8f6142, 1);
+    g.fillEllipse(11, 10, 18, 8);
+    g.fillStyle(0x5f3f2c, 1);
+    g.fillRect(4, 9, 7, 2); // rolled pelt edges
+    g.fillRect(14, 11, 7, 2);
+    g.fillStyle(0xe8e0cc, 1);
+    g.fillRect(15, 4, 6, 2); // bone across the top
+    g.fillRect(18, 3, 2, 4);
+    g.fillStyle(0xffe08a, 1);
+    g.fillRect(7, 7, 2, 2); // a glint of spoils
+    g.generateTexture("warren_cache", 24, 18);
 
     // Cragscale (28x18) — an armored rock reptile drawn facing RIGHT. A ridged,
     // spiked stone-plated back (the "slash bounces" tell), stubby legs, a thick
