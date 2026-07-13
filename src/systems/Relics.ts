@@ -227,6 +227,7 @@ export const TROPHY_ROLL: Record<string, TrophyRoll> = {
   duskrunner_trophy: { rarity: "common", powerTier: 1 },
   cragscale_trophy: { rarity: "common", powerTier: 1 },
   hexling_trophy: { rarity: "common", powerTier: 1 },
+  sandmaw_trophy: { rarity: "common", powerTier: 1 },
   // Dormant this milestone — killing the King wins the run, so a fang can't be
   // spent yet. Correct + ready for M-W1's mid-bosses.
   gremlin_king_fang: { rarity: "rare", powerTier: 1 },

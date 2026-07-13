@@ -4932,3 +4932,65 @@ four (the render loop was throttled/backgrounded — pumped `game.loop.step` to 
 CLAUDE.md's "assert against scene state, not screenshots" guidance). No `RECIPES.md`/dashboard
 change (no recipe or enemy-stat data change — resist values arrive with Phase 2 enemies). See
 [[survivor-rpg-biome-2-plan]].
+### Biome 2 — Phase 2 playtest fix batch (spawn/reach/damage/Hexling-mage/Cragscale-bleed/worldgen)
+
+Off the phase order — a feedback pass off the user's first badlands playtest. Built on **Opus**
+(the Hexling redesign + the new bleed DoT are new mechanics). Fixes + two enemy-identity reworks:
+
+- **Spawn leak (badlands enemies + Emberbloom "in the woods")** — `MainScene.pickBadlandsPoint`
+  gated on `coverageAt(badlands) >= 0.4`, but near the forest transition a point can carry >=0.4
+  badlands coverage while forest (disc or an overlapping forest blob) still WINS the blend, so a
+  Duskrunner/Emberbloom placed there read as "in the forest." Now gates on
+  `worldBiomes.dominantBiomeAt(x,y) === "badlands"` (which already resolves the winner incl. the
+  forest disc). Verified live: **0** badlands enemies + **0** flora inside the forest disc
+  (nearest at r≈2385/2500, just past the forest edge 2300).
+- **Duskrunner melee "doesn't hit at some angles"** — a flat 20px bite/22px pounce reach whiffed
+  on diagonal approaches (the player↔enemy collider holds centers ~24px apart on the diagonal).
+  Bumped `MELEE_RANGE` 20→30 + `POUNCE_HIT_RADIUS` 22→32. Verified: a bite at 25px now connects.
+- **"Duskrunner does 1 dmg in max armor"** — flat armor (full Tier-2 Gremlin set = 13) floored a
+  14-dmg bite to 1. Per the user (locked via `AskUserQuestion`) kept the flat-armor model and
+  **raised badlands damage** instead of reworking the formula: Duskrunner bite 14→20 (~7 through
+  max armor; a pack landing that together is real pressure).
+- **Duskrunner pack-attack sync** — packs of 3-4 already spawned, but attacked one at a time. New
+  `Duskrunner.isPounceWindup()`/`joinPounce()` + `MainScene.updateDuskrunnerPacks`: a pouncing
+  dog rallies chasing packmates within 210px to leap in the same beat (no-ops for anything out of
+  band / on cooldown, so it's cheap and self-limiting).
+- **Hexling → a real MAGE** (the user: "make it FEEL like a mage"). Was a recolored gremlin
+  silhouette that kited + teleported (uncatchable) and threw one rock. Rewritten:
+  (1) **distinct texture** — a taller 20×30 hooded/robed staff-caster (was the 18×22 squat
+  gremlin body); (2) **stand-and-cast** — it no longer kites/back-pedals, only repositions via
+  blink; (3) a second attack, **Flame Strike** — when the player closes to 150px it plants and
+  calls down a cluster of 3 delayed fire circles at the player's LOCKED position (walk out to
+  dodge), which detonate as **magic** AoE (18, bypasses armor) after an 820ms telegraph, then it
+  **blinks away** to resume casting (blink is also the cornered-fallback when flame's on
+  cooldown); (4) HP 30→55 so it's not 1-2-shot the instant you reach it. Routed through the same
+  `checkPlayerHit()` area-damage path the bosses use (Hexling added to that instanceof union; the
+  return shape widened to carry the magic `dmgType`). Verified live via a deterministic
+  update-loop trace: telegraph→impact→`{damage:18,dmgType:"magic"}`→blink-to-~220px.
+- **Cragscale roll "too easy to sidestep / feels the same as Duskrunner"** — the roll was a
+  slow-ish locked charge you could stroll around. Now `ROLL_SPEED` 240→300 + `ROLL_HIT_RADIUS`
+  30→40 (a casual sidestep no longer clears the shell — you need a dash/committed move), and a
+  connect opens a **BLEED** wound on top of the big shove. First DoT in the game:
+  `src/systems/Bleed.ts` (`BleedManager`, framework-free like Buffs) — stacking
+  {dmgPerSec, remainingMs}, ticked in `update()`, applied via a new optional `bleed` param on
+  `applyDamageToPlayer` (so it rides the **same i-frame guard** — a dashed-through roll opens no
+  wound) carried by a new `Enemy.pendingBleed` hook (parallel to `pendingAttackKnockback`).
+  Cragscale roll = 5/s for 4s (~20, stacks). Cleared on death. This is the heavy "must-dodge"
+  threat that separates the tank from the Duskrunner's quick light pounce. Verified: roll connect
+  sets `pendingBleed{5,4000}` + kb 230; the manager ticks whole points.
+- **Worldgen "huge straight vertical/horizontal lines that don't blend"** — the crisp grass
+  tilesprite + forest bake are a 4000px **square** (`BIOME_SIZE`) centered on spawn, so their
+  edges met the blurry outer overlay as hard axis-aligned lines at ±2000 from center (plus a
+  blocky core-skip circle sampled at the coarse overlay resolution). Fix: (1) the outer overlay
+  now bakes **continuously** (dropped the `forestCoverage>=0.999` skip) as a smooth base under
+  everything; (2) the grass tilesprite moved ABOVE it (depth -9.5→-9.4) and both crisp layers get
+  a **soft-disc bitmap mask** (`forest_feather`, a canvas radial gradient — opaque across the
+  play area, fading to 0 by the square edge), so the crisp core dissolves into the overlay as a
+  circle instead of a square. Verified live from the west-edge midpoint: the straight line is
+  gone, replaced by a soft blend; the forest core is still crisp; no console errors.
+
+Files: `Duskrunner.ts`, `Cragscale.ts`, `Hexling.ts` (rewrite), `Enemy.ts` (`pendingBleed`), new
+`systems/Bleed.ts`, `BootScene.ts` (hexling texture + `forest_feather`), `MainScene.ts` (spawn
+gate, pack sync, bleed wiring, area-hit `dmgType`, overlay continuity + feather mask). Dashboard
+Enemies tab updated (manual mirror). No `RECIPES.md` change. See [[survivor-rpg-biome-2-plan]].
+

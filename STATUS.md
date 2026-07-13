@@ -2,7 +2,21 @@
 
 ## Current State
 
-_Living snapshot — edit in place, never append. Last shipped: **4-item playtest fix batch**
+_Living snapshot — edit in place, never append. Last shipped: **Biome 2 — Phase 2b: Sandmaw**
+(2026-07-12, Opus). The deferred 4th native badlands creature — a **burrowing ambusher** (locked
+with the user over an aerial diver / stealth flanker). The **Sandmaw** (`src/entities/Sandmaw.ts`)
+lurks submerged (near-invisible) until you enter its 62px ambush ring, then ERUPTS in a
+telegraphed radial sand-burst (95px, 38 physical + 220 knockback, via `checkPlayerHit` like the
+bosses/Hexling flame), stays surfaced + vulnerable for a punish window, then burrows and
+slow-stalks to re-ambush. Own bespoke state machine (submerged→surfacing→erupting→exposed→
+burrowing). Resist profile `{ pierce: 0.6, blunt: 1.4 }` — the **inverse of Cragscale**, so
+clubs/warhammer shine here where the spear shines on Cragscale. 24 scattered lone spawns (no pack)
+via `pickBadlandsPoint`; elite + `sandmaw_trophy` (Common/tier1) + `sandmaw_chitin` loot. New
+threat vector = "watch the ground." Verified live (full state cycle, erupt hit/dodge, resists,
+retaliate-while-submerged, sprites). Next: **Phase 3** (badlands boss = new win-con + Gremlin King
+critical-drop + 2 POIs). See "Biome 2 — Phase 2b: Sandmaw" below. [[survivor-rpg-biome-2-plan]]_
+
+_Prior: **4-item playtest fix batch**
 (2026-07-12, Sonnet-class fixes on existing systems). (1) **Cragscale re-toned** to a cool
 slate-grey hide (was warm brown `0x7a5040`, too close to the Boar) so the rock reptile no longer
 reads as a second boar — Boar stays warm-brown, Cragscale is grey-stone (`BootScene.ts` normal
@@ -133,18 +147,19 @@ win. The world is now circular + much larger (M-W1 geometry prep, above); determ
 seeded world-gen and actual multi-biome content are still deferred to M-W1 proper.
 
 **In progress / next.** **Biome 2 (Sunscorch Badlands) is underway** — a phased umbrella
-plan (`.claude/plans/biome-2-sunscorch-badlands.md`) drives it. **Phases 0–2 have shipped:**
+plan (`.claude/plans/biome-2-sunscorch-badlands.md`) drives it. **Phases 0–2b have shipped:**
 Phase 0 (patchwork worldgen — world grew to 28000px for ~5 biomes), Phase 1 (combat systems
-layer — resist/weak, AOE arcs, pack-aggro, magic-bypass, all dormant hooks), and **Phase 2**
+layer — resist/weak, AOE arcs, pack-aggro, magic-bypass, all dormant hooks), **Phase 2**
 (the core badlands roster — Duskrunner/Cragscale/Hexling + Emberbloom/Sunfruit flora, which
-light up those hooks; plan `.claude/plans/biome-2-phase-2-enemies.md`). The badlands is now
-**walkable + populated**. Remaining phases (own Opus sessions each, own plan files): **Phase 2b**
-— the deferred 4th bespoke Gloamreach native creature (scoped out of Phase 2 with the user),
-**next**; Phase 3 badlands boss (new win-con, demotes Gremlin King) + King critical-drop rework
-+ 2 POIs; Phase 4 smelting/forging gear tier; Phase 5 tier-2 relics + biome-1 trim +
+light up those hooks; plan `.claude/plans/biome-2-phase-2-enemies.md`), and **Phase 2b**
+(the 4th native creature — the **Sandmaw** burrowing ambusher; plan
+`.claude/plans/biome-2-phase-2b-sandmaw.md`). The badlands is now **walkable + populated with a
+complete 4-enemy roster**. Remaining phases (own Opus sessions each, own plan files): **Phase 3
+— next** (badlands boss = new win-con, demotes Gremlin King, + King critical-drop rework + 2
+POIs); Phase 4 smelting/forging gear tier; Phase 5 tier-2 relics + biome-1 trim +
 family-replace-with-refund. The master-plan tail **M-TE** (trophy-gated gear) is folded into
 this biome-2 work. Real pixel art/animations stay deliberately deferred until content/balance
-settle (roadmap item 8). Phase 2's badlands stats/counts + Phase 1's arc/resist/pack numbers are
+settle (roadmap item 8). Phase 2/2b badlands stats/counts + Phase 1's arc/resist/pack numbers are
 all first-pass — expect a tuning pass as the biome fills out.
 
 **Known issues / open.**
@@ -167,10 +182,10 @@ all first-pass — expect a tuning pass as the biome fills out.
   outer ground is a single bounded `bakeOuterOverlay` RenderTexture (`OVERLAY_TEX` 4096²,
   LINEAR-filtered, stretched over the world — constant GPU cost at any world size). Never size
   a tilesprite/RenderTexture to the whole world.
-- **Badlands has content now (Phase 2); dunes + deep ring are still empty.** The forest disc
+- **Badlands has content now (Phase 2/2b); dunes + deep ring are still empty.** The forest disc
   holds the biome-1 roster/POIs; the **badlands patchwork now holds the Duskrunner/Cragscale/
-  Hexling roster + Emberbloom/Sunfruit flora** (via `pickBadlandsPoint`). Everything past the
-  badlands band (dunes, the empty outer ring) is still terrain only until later phases.
+  Hexling/Sandmaw roster + Emberbloom/Sunfruit flora** (via `pickBadlandsPoint`). Everything past
+  the badlands band (dunes, the empty outer ring) is still terrain only until later phases.
 - **Enemy respawn top-up is forest-species-only, biome-agnostic.** `makeRespawnEnemy` weights
   by the biome-1 `spawnEnemies()` counts and spawns near the player regardless of which biome
   they're standing in — so a player camping in the badlands gets forest enemies topped up
@@ -180,6 +195,57 @@ all first-pass — expect a tuning pass as the biome fills out.
 ## Recent Entries
 
 > Older entries in STATUS-archive.md.
+
+### Biome 2 — Phase 2b: Sandmaw (burrowing ambusher, the 4th native creature)
+
+Plan: `.claude/plans/biome-2-phase-2b-sandmaw.md`. Built on **Opus** (new enemy AI / state
+machine). The "+1 native creature" deferred out of Phase 2's core-3 scope. Creature identity
+locked with the user via `AskUserQuestion`: **a burrowing ambusher** (over an aerial diver or a
+stealth flanker).
+
+**The Sandmaw** (`src/entities/Sandmaw.ts`) — a gloam-touched burrowing ambush predator, the
+badlands roster's 4th and most distinct threat vector. The existing trio is swarm-pounce
+(Duskrunner) / armored roll-tank (Cragscale) / stationary flame-mage (Hexling); the Sandmaw adds
+**"watch the ground / don't stand still near a lurker."** Own bespoke state machine, fully
+overrides `update()` (does NOT call super — same precedent as Snake/Hexling):
+`submerged → surfacing → erupting → exposed → burrowing → submerged`.
+- **submerged** — near-invisible (alpha 0.18, a subtler Snake), slow-stalks (30px/s) toward a
+  player within `STALK_RADIUS` 240px but outside the ambush ring to reposition (holds still
+  otherwise — a slow drift so it isn't an invisible shove). Triggers on `AMBUSH_RADIUS` 62px.
+- **surfacing** — pops to full alpha + `playWindupTell` load-up + a growing dust-ring telegraph
+  previewing the exact burst radius. `SURFACE_WINDUP_MS` 560ms = the dodge window.
+- **erupting** — a radial **sand-burst** (`BURST_RADIUS` 95px, 38 physical + 220 knockback), one
+  hit per eruption, dealt via `checkPlayerHit()` (queried by the scene like the bosses / Hexling
+  flame — NOT a melee bite; `biteDamage: 0`). Added `Sandmaw` to that `instanceof` union.
+- **exposed** — fully surfaced + planted 1100ms: the vulnerable punish window.
+- **burrowing** — dives back under (350ms), then a 2600ms re-ambush cooldown.
+
+Numbers first-pass: HP 45 (between Duskrunner 20 / Cragscale 60), erupt 38 (~25 net through the
+13-flat Lvl-3 armor cap, badlands-rebalance tier). Elite ×1.5 HP/dmg, ×1.1 speed, ×1.3 scale, 2×
+loot, crimson/gold recolor. **Dodge math:** a walking player (95px/s) covers ~52px in the 560ms
+wind-up; from 62px in they just clear the 95px burst with a beat of reaction — greedy/advancing
+players eat it, reactive ones (or a dash + its i-frames) escape (same movement-dodgeable
+principle as 5t's smash fix). **Resist profile (locked):** `{ pierce: 0.6, blunt: 1.4 }` — the
+**inverse of Cragscale** (resist-slash/weak-pierce), so clubs/warhammer shine on Sandmaws where
+the Primal Spear shines on Cragscales; the damage-type layer now rewards carrying more than one
+weapon. **Reveal-and-retaliate:** attacked while submerged → surfaces + erupts (Snake/Hexling
+`takeHit` precedent). `isAggro()` hidden while submerged (HP bar shows only once surfaced).
+**Spawn:** scattered **lone** ambushers (no pack — a lurker is a solo trap), 24 via
+`pickBadlandsPoint` in `spawnBadlandsEnemies()`, elite via `rollElite`. **Loot:**
+`sandmaw_chitin` ×1 (×2 elite; a light-but-tough plating shard, no recipe yet); elite +
+`sandmaw_trophy` (Common/tier1 in `TROPHY_ROLL`, like the other badlands trophies — Phase 5
+retiers to tier-2 + Ember).
+
+Files: new `Sandmaw.ts`; `Inventory.ts` + `Items.ts` (2 resources); `Relics.ts` (`TROPHY_ROLL`);
+`BootScene.ts` (`drawSandmaw` normal + elite 26×18 plated burrower facing right, + chitin/trophy
+icons); `MainScene.ts` (import, spawn 24, area-hit union); `dashboard/main.ts` (Enemies-tab entry
++ trophy-source row). No `RECIPES.md` change (no recipes). **Verified:** `tsc --noEmit` clean;
+`preview_start` boots with no console errors; `preview_eval` — 24 Sandmaws spawn, all 4 textures
+load, full state cycle submerged→surfacing(α1)→erupting→hit `{38, kb220}`→single-hit-per-erupt→
+exposed→burrowing→submerged(α0.18); a player 300px out at erupt = no hit (dodge); resists
+pierce×0.6/blunt×1.4/slash×1.0; takeHit-while-submerged flips to surfacing; `isAggro()` false
+while submerged; sprite + elite recolor render correctly. **Next: Phase 3** (badlands boss = new
+win-con + Gremlin King critical-drop rework + 2 POIs).
 
 ### 4-item playtest fix batch (Cragscale art, axe name, boss-continue, refined-relic cap)
 
@@ -419,68 +485,6 @@ supply on the depleting shot; a 99-count Slingshot Pellets stack holds; `gremlin
 post-`create()`; the full Pause→Tips→Close→Resume loop (including Esc mid-Tips) preserves
 `isPaused`/pause-panel state correctly; the Tips panel renders the two hints triggered in-test; and
 the chest's gold glow halo is visible in a full-scene screenshot. `tsc --noEmit` clean throughout.
-
-### Biome 2 — Phase 2 playtest fix batch (spawn/reach/damage/Hexling-mage/Cragscale-bleed/worldgen)
-
-Off the phase order — a feedback pass off the user's first badlands playtest. Built on **Opus**
-(the Hexling redesign + the new bleed DoT are new mechanics). Fixes + two enemy-identity reworks:
-
-- **Spawn leak (badlands enemies + Emberbloom "in the woods")** — `MainScene.pickBadlandsPoint`
-  gated on `coverageAt(badlands) >= 0.4`, but near the forest transition a point can carry >=0.4
-  badlands coverage while forest (disc or an overlapping forest blob) still WINS the blend, so a
-  Duskrunner/Emberbloom placed there read as "in the forest." Now gates on
-  `worldBiomes.dominantBiomeAt(x,y) === "badlands"` (which already resolves the winner incl. the
-  forest disc). Verified live: **0** badlands enemies + **0** flora inside the forest disc
-  (nearest at r≈2385/2500, just past the forest edge 2300).
-- **Duskrunner melee "doesn't hit at some angles"** — a flat 20px bite/22px pounce reach whiffed
-  on diagonal approaches (the player↔enemy collider holds centers ~24px apart on the diagonal).
-  Bumped `MELEE_RANGE` 20→30 + `POUNCE_HIT_RADIUS` 22→32. Verified: a bite at 25px now connects.
-- **"Duskrunner does 1 dmg in max armor"** — flat armor (full Tier-2 Gremlin set = 13) floored a
-  14-dmg bite to 1. Per the user (locked via `AskUserQuestion`) kept the flat-armor model and
-  **raised badlands damage** instead of reworking the formula: Duskrunner bite 14→20 (~7 through
-  max armor; a pack landing that together is real pressure).
-- **Duskrunner pack-attack sync** — packs of 3-4 already spawned, but attacked one at a time. New
-  `Duskrunner.isPounceWindup()`/`joinPounce()` + `MainScene.updateDuskrunnerPacks`: a pouncing
-  dog rallies chasing packmates within 210px to leap in the same beat (no-ops for anything out of
-  band / on cooldown, so it's cheap and self-limiting).
-- **Hexling → a real MAGE** (the user: "make it FEEL like a mage"). Was a recolored gremlin
-  silhouette that kited + teleported (uncatchable) and threw one rock. Rewritten:
-  (1) **distinct texture** — a taller 20×30 hooded/robed staff-caster (was the 18×22 squat
-  gremlin body); (2) **stand-and-cast** — it no longer kites/back-pedals, only repositions via
-  blink; (3) a second attack, **Flame Strike** — when the player closes to 150px it plants and
-  calls down a cluster of 3 delayed fire circles at the player's LOCKED position (walk out to
-  dodge), which detonate as **magic** AoE (18, bypasses armor) after an 820ms telegraph, then it
-  **blinks away** to resume casting (blink is also the cornered-fallback when flame's on
-  cooldown); (4) HP 30→55 so it's not 1-2-shot the instant you reach it. Routed through the same
-  `checkPlayerHit()` area-damage path the bosses use (Hexling added to that instanceof union; the
-  return shape widened to carry the magic `dmgType`). Verified live via a deterministic
-  update-loop trace: telegraph→impact→`{damage:18,dmgType:"magic"}`→blink-to-~220px.
-- **Cragscale roll "too easy to sidestep / feels the same as Duskrunner"** — the roll was a
-  slow-ish locked charge you could stroll around. Now `ROLL_SPEED` 240→300 + `ROLL_HIT_RADIUS`
-  30→40 (a casual sidestep no longer clears the shell — you need a dash/committed move), and a
-  connect opens a **BLEED** wound on top of the big shove. First DoT in the game:
-  `src/systems/Bleed.ts` (`BleedManager`, framework-free like Buffs) — stacking
-  {dmgPerSec, remainingMs}, ticked in `update()`, applied via a new optional `bleed` param on
-  `applyDamageToPlayer` (so it rides the **same i-frame guard** — a dashed-through roll opens no
-  wound) carried by a new `Enemy.pendingBleed` hook (parallel to `pendingAttackKnockback`).
-  Cragscale roll = 5/s for 4s (~20, stacks). Cleared on death. This is the heavy "must-dodge"
-  threat that separates the tank from the Duskrunner's quick light pounce. Verified: roll connect
-  sets `pendingBleed{5,4000}` + kb 230; the manager ticks whole points.
-- **Worldgen "huge straight vertical/horizontal lines that don't blend"** — the crisp grass
-  tilesprite + forest bake are a 4000px **square** (`BIOME_SIZE`) centered on spawn, so their
-  edges met the blurry outer overlay as hard axis-aligned lines at ±2000 from center (plus a
-  blocky core-skip circle sampled at the coarse overlay resolution). Fix: (1) the outer overlay
-  now bakes **continuously** (dropped the `forestCoverage>=0.999` skip) as a smooth base under
-  everything; (2) the grass tilesprite moved ABOVE it (depth -9.5→-9.4) and both crisp layers get
-  a **soft-disc bitmap mask** (`forest_feather`, a canvas radial gradient — opaque across the
-  play area, fading to 0 by the square edge), so the crisp core dissolves into the overlay as a
-  circle instead of a square. Verified live from the west-edge midpoint: the straight line is
-  gone, replaced by a soft blend; the forest core is still crisp; no console errors.
-
-Files: `Duskrunner.ts`, `Cragscale.ts`, `Hexling.ts` (rewrite), `Enemy.ts` (`pendingBleed`), new
-`systems/Bleed.ts`, `BootScene.ts` (hexling texture + `forest_feather`), `MainScene.ts` (spawn
-gate, pack sync, bleed wiring, area-hit `dmgType`, overlay continuity + feather mask). Dashboard
-Enemies tab updated (manual mirror). No `RECIPES.md` change. See [[survivor-rpg-biome-2-plan]].
 
 > Older entries (Biome 2 Phase 2, Biome 2 Phase 1, Biome 2 Phase 0, Welcome overlay, and
 > earlier) are in STATUS-archive.md.

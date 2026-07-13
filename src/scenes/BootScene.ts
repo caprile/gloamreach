@@ -1284,6 +1284,64 @@ export class BootScene extends Phaser.Scene {
     drawHexling("hexling", 0x4a2d6e, 0x33204d, 0x5f3d88, 0xc86ef0); // violet caster, magenta magic
     drawHexling("hexling_elite", 0x6a1f3a, 0x3f1030, 0x8a2a4a, 0xf0c040); // crimson/gold elite
 
+    // Sandmaw (26x18) — the badlands BURROWING AMBUSHER (Phase 2b), drawn facing
+    // RIGHT. A broad, low, plated carapace (the part that breaches the sand) with
+    // a segmented shell, a gaping fanged MAW + hooked mandibles at the front, twin
+    // amber eyes, and a dark gloam-shadowed underside. Reads as "a maw erupting
+    // from the ground," distinct from the upright/quadruped roster. Elite =
+    // crimson shell / gold plates.
+    const drawSandmaw = (
+      key: string,
+      shell: number,
+      shellDark: number,
+      plate: number,
+      maw: number,
+      mandible: number,
+      eye: number,
+    ) => {
+      g.clear();
+      // legs / gloam-shadowed underside
+      g.fillStyle(0x2a1e2e, 1);
+      g.fillRect(5, 13, 2, 4);
+      g.fillRect(10, 14, 2, 3);
+      g.fillRect(15, 13, 2, 4);
+      // belly shadow
+      g.fillStyle(shellDark, 1);
+      g.fillRect(2, 12, 19, 3);
+      // carapace body + rounded rear (left)
+      g.fillStyle(shell, 1);
+      g.fillRect(2, 4, 19, 9);
+      g.fillTriangle(0, 8, 3, 4, 3, 12);
+      // segmented back plates
+      g.fillStyle(plate, 1);
+      g.fillRect(4, 3, 5, 3);
+      g.fillRect(10, 2, 5, 4);
+      g.fillRect(16, 3, 4, 3);
+      // plate ridge separators
+      g.fillStyle(shellDark, 1);
+      g.fillRect(9, 3, 1, 3);
+      g.fillRect(15, 3, 1, 3);
+      // maw (right) — dark opening + hooked mandibles jutting out
+      g.fillStyle(maw, 1);
+      g.fillRect(20, 6, 6, 6);
+      g.fillStyle(mandible, 1);
+      g.fillTriangle(20, 6, 26, 3, 24, 8); // upper mandible
+      g.fillTriangle(20, 12, 26, 15, 24, 10); // lower mandible
+      // inner teeth
+      g.fillStyle(0xf0e0c0, 1);
+      g.fillRect(22, 8, 1, 2);
+      g.fillRect(24, 8, 1, 2);
+      // twin amber eyes + glint
+      g.fillStyle(eye, 1);
+      g.fillRect(17, 6, 2, 2);
+      g.fillRect(17, 10, 2, 2);
+      g.fillStyle(0xffffff, 0.8);
+      g.fillRect(17, 6, 1, 1);
+      g.generateTexture(key, 26, 18);
+    };
+    drawSandmaw("sandmaw", 0x9a8258, 0x6a583a, 0xb59a6a, 0x241826, 0xcfc0a0, 0xffa93a);
+    drawSandmaw("sandmaw_elite", 0x6a1f2a, 0x3f1020, 0xf0c040, 0x3f1020, 0xffe8a0, 0xffe08a);
+
     // Hexling's magic bolt — small violet orb with a bright core (contrasts the
     // grey gremlin rock so a "this one eats armor" bolt reads differently).
     g.clear();
@@ -1364,6 +1422,15 @@ export class BootScene extends Phaser.Scene {
     g.fillRect(10, 13, 2, 5); // glow
     g.generateTexture("icon_hex_essence", ICON, ICON);
 
+    g.clear(); // Sandmaw Chitin — an angular sandy plate shard with a ridge highlight
+    g.fillStyle(0x6a583a, 1);
+    g.fillTriangle(4, 19, 12, 3, 20, 19);
+    g.fillStyle(0x9a8258, 1);
+    g.fillTriangle(6, 18, 12, 7, 18, 18);
+    g.fillStyle(0xb59a6a, 1);
+    g.fillRect(11, 9, 2, 7); // ridge highlight
+    g.generateTexture("icon_sandmaw_chitin", ICON, ICON);
+
     g.clear(); // Emberbloom icon — a herb sprig with an ember bloom
     g.fillStyle(0x5a7a4a, 1);
     g.fillRect(11, 10, 2, 11);
@@ -1418,6 +1485,17 @@ export class BootScene extends Phaser.Scene {
     g.fillStyle(0xf0c040, 1);
     g.fillRect(7, 16, 10, 2);
     g.generateTexture("icon_hexling_trophy", ICON, ICON);
+
+    g.clear(); // Sandmaw Trophy — a hooked bone mandible on a gold cord
+    g.fillStyle(0x6a1f3a, 1);
+    g.fillTriangle(6, 4, 17, 7, 9, 16);
+    g.fillStyle(0xe8e0cc, 1);
+    g.fillTriangle(6, 4, 11, 5, 8, 10); // bone hook tip
+    g.fillStyle(0xffa93a, 1);
+    g.fillRect(12, 9, 2, 2); // amber fleck
+    g.fillStyle(0xf0c040, 1);
+    g.fillRect(7, 16, 10, 2); // gold cord
+    g.generateTexture("icon_sandmaw_trophy", ICON, ICON);
 
     g.destroy();
     this.makeLightTexture();

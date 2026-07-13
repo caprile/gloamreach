@@ -1165,8 +1165,9 @@ M-SB/Sleep-Bed, done — see 5j) → M-EL2 (generalized elite spawning, done —
 M-WC (Gremlin War Camp, done — see 5o) → Gloaming Vein (rarity-ore POI + trophy refinement,
 done — see 5w) → M-SS (stats/skills depth pass + crit, done — see 5ab) → **Biome 2 /
 M-W1 + M-TE, IN PROGRESS — Phase 0 worldgen (5ac) + Phase 1 combat systems (5ad) + Phase 2
-core enemies & flora (5ae) done; Phase 2b (4th native creature) next (see the biome-2 umbrella
-plan below).**
+core enemies & flora (5ae) + Phase 2b 4th native creature — the Sandmaw burrowing ambusher
+(5af) done; Phase 3 (badlands boss + King critical-drop + 2 POIs) next (see the biome-2
+umbrella plan below).**
 
 5ac. **Biome 2 (Sunscorch Badlands) — Phase 0: Patchwork worldgen.** Plan:
    `.claude/plans/biome-2-phase-0-world-ring.md` (Phase 0 of the
@@ -1266,6 +1267,40 @@ plan below).**
    enemy-respawn top-up spawns forest species near the player regardless of biome (the badlands
    roster doesn't replenish) — a Phase 2b/M-W1 follow-up. See `STATUS.md` +
    [[survivor-rpg-biome-2-plan]].
+
+5af. **Biome 2 — Phase 2b: Sandmaw (the 4th native badlands creature).** Plan:
+   `.claude/plans/biome-2-phase-2b-sandmaw.md` (Phase 2b of the biome-2 umbrella). Built on
+   **Opus** (new enemy AI/state machine). The "+1 native creature" deferred out of Phase 2's
+   core-3 scope. Creature identity locked with the user via `AskUserQuestion`: **a burrowing
+   ambusher** (over an aerial diver or a stealth flanker). The **Sandmaw**
+   (`src/entities/Sandmaw.ts`) is a gloam-touched burrowing ambush predator — the badlands
+   roster's 4th and most distinct threat vector (the trio was swarm-pounce Duskrunner / armored
+   roll-tank Cragscale / stationary flame-mage Hexling; the Sandmaw adds **"watch the ground /
+   don't stand still near a lurker"**). Own bespoke state machine, fully overrides `update()` (no
+   super — Snake/Hexling precedent): `submerged → surfacing → erupting → exposed → burrowing →
+   submerged`. **submerged** = near-invisible (alpha 0.18), slow-stalks (30px/s) toward a player
+   within `STALK_RADIUS` 240px but outside the 62px ambush ring to reposition; **surfacing** =
+   pops to full alpha + `playWindupTell` + a growing dust-ring telegraph previewing the exact
+   burst radius (`SURFACE_WINDUP_MS` 560ms dodge window); **erupting** = a radial sand-burst
+   (`BURST_RADIUS` 95px, 38 physical + 220 knockback, one hit/eruption) dealt via `checkPlayerHit`
+   (queried by the scene like the bosses/Hexling flame — NOT a melee bite; `biteDamage:0`; Sandmaw
+   added to that `instanceof` union); **exposed** = fully surfaced + planted 1100ms punish window;
+   **burrowing** = dives under (350ms) + a 2600ms re-ambush cooldown. Movement-dodgeable (a
+   walking player just clears the burst in the wind-up; dash i-frames negate it — same principle
+   as 5t's smash fix). **Resist profile (locked)** `{ pierce: 0.6, blunt: 1.4 }` — the **inverse
+   of Cragscale** (resist-slash/weak-pierce), so clubs/warhammer shine on Sandmaws where the
+   Primal Spear shines on Cragscales; the damage-type layer now rewards carrying more than one
+   weapon into the badlands. **Reveal-and-retaliate:** attacked while submerged → surfaces + erupts
+   (Snake/Hexling `takeHit` precedent); `isAggro()` hidden while submerged (HP bar shows only once
+   surfaced). **Spawn:** 24 scattered **lone** ambushers (no pack — a lurker is a solo trap) via
+   `pickBadlandsPoint` in `spawnBadlandsEnemies()`, elite via `rollElite`. **Loot:**
+   `sandmaw_chitin` ×1 (×2 elite; a light-but-tough plating shard, no recipe yet); elite +
+   `sandmaw_trophy` (Common/tier1 in `TROPHY_ROLL`, like the other badlands trophies — Phase 5
+   retiers to tier-2 + Ember). New `drawSandmaw` (normal + crimson/gold elite, 26×18 plated
+   burrower facing right) + chitin/trophy icons in `BootScene.ts`. Dashboard Enemies tab updated
+   (manual mirror); no `RECIPES.md` change (no recipes). Verified live via `preview_eval` (full
+   state cycle, erupt hit/dodge, resists, retaliate-while-submerged, sprites). Next: Phase 3. See
+   `STATUS.md` + [[survivor-rpg-biome-2-plan]].
 
 **Not yet built — next up in rough order:**
 6. **World & discovery** — much bigger generated world, biomes, map, a single giant

@@ -199,6 +199,18 @@ const ENEMIES: EnemyStat[] = [
     notes: "Biome 2 MAGE (redesigned 2026-07-12 — was a reskinned gremlin kiter). Distinct taller robed/staff texture. STANDS AND CASTS (no kite — only repositions via blink). Close-range punish: FLAME STRIKE calls down 3 delayed fire circles at your locked position (walk out to dodge) that detonate as magic AoE (18, bypasses armor), then it BLINKS ~220px away. Blink is also the cornered fallback. HP 30→55 so it's not 1-2-shot on reach. Resist: magic ×0.4, slash/blunt/pierce ×1.4 (weak to physical).",
   },
   {
+    name: "Sandmaw (BADLANDS)",
+    hp: 45,
+    speed: 30,
+    aggro: 62,
+    attacks: [
+      { label: "Sand Erupt (radial AoE, 95px burst, +220 knockback)", damage: 38, telegraphMs: 560 },
+    ],
+    loot: "1-2 Sandmaw Chitin",
+    trophy: "Sandmaw Trophy (elite)",
+    notes: "Biome 2 Phase 2b BURROWING AMBUSHER — the 4th native creature. Lurks submerged (near-invisible, alpha 0.18) until you enter its 62px ambush ring, then ERUPTS: a 560ms tremor telegraph (growing dust ring previews the 95px burst) → radial sand-burst (38 physical + 220 knockback, dodge by clearing the ring — movement/dash-dodgeable, i-frames negate) → planted 'exposed' punish window → burrows back under (2.6s re-ambush cooldown) and slow-stalks toward you (30px/s) to re-ambush. AoE routed through checkPlayerHit (like the bosses/Hexling flame), not a melee bite. Resist profile: pierce ×0.6, blunt ×1.4 — inverse of Cragscale, so clubs/warhammer shine here where the spear shines there. Attacked while submerged → surfaces & retaliates (like Snake). No pack.",
+  },
+  {
     name: "Gremlin King (BOSS)",
     hp: 600,
     speed: 45,
@@ -461,6 +473,7 @@ function renderRelics(): string {
     duskrunner_trophy: "Elite Duskrunner (badlands)",
     cragscale_trophy: "Elite Cragscale (badlands)",
     hexling_trophy: "Elite Hexling (badlands)",
+    sandmaw_trophy: "Elite Sandmaw (badlands)",
     gremlin_king_fang: "Gremlin King (dormant — boss = win)",
     refined_trophy_uncommon: "Refinement (Gloaming Vein) — roll-only",
     refined_trophy_rare: "Refinement (scaffold) — roll-only",

@@ -17,6 +17,7 @@ import { RangedGremlin, MeleeGremling } from "../entities/Gremlin";
 import { Duskrunner } from "../entities/Duskrunner";
 import { Cragscale } from "../entities/Cragscale";
 import { Hexling } from "../entities/Hexling";
+import { Sandmaw } from "../entities/Sandmaw";
 import { Projectile, type ProjectileConfig } from "../entities/Projectile";
 import { GremlinShack, SHACK_GUARD_RESPAWN_MS } from "../entities/GremlinShack";
 import { BossAltar } from "../entities/BossAltar";
@@ -3071,6 +3072,18 @@ export class MainScene extends Phaser.Scene {
       this.enemies.push(h);
       this.enemyGroup.add(h);
     }
+
+    // Sandmaws — scattered LONE burrowing ambushers (Phase 2b, the 4th native).
+    // Not packed (a lurker is a solo trap), and moderate count — the threat is
+    // the surprise erupt, not density. They lie submerged until you wander close.
+    const SANDMAW_COUNT = 24;
+    for (let i = 0; i < SANDMAW_COUNT; i++) {
+      const pt = this.pickBadlandsPoint(rng);
+      if (!pt) break;
+      const s = new Sandmaw(this, { x: pt.x, y: pt.y, elite: this.rollElite(rng) });
+      this.enemies.push(s);
+      this.enemyGroup.add(s);
+    }
   }
 
   // Arid harvestables (biome 2 Phase 2) — free pickups scattered through the
@@ -4293,7 +4306,12 @@ export class MainScene extends Phaser.Scene {
       // (knockback, magic dmgType) than Enemy.update()'s plain boolean contract.
       // The cast widens the three subclasses' return shapes to their common
       // superset so both knockback + dmgType read cleanly (each only sets its own).
-      if (enemy instanceof GremlinKing || enemy instanceof Gloamwarden || enemy instanceof Hexling) {
+      if (
+        enemy instanceof GremlinKing ||
+        enemy instanceof Gloamwarden ||
+        enemy instanceof Hexling ||
+        enemy instanceof Sandmaw
+      ) {
         const areaHit = enemy.checkPlayerHit(this.player.x, this.player.y) as
           | { damage: number; knockback?: number; dmgType?: DamageType }
           | null;
