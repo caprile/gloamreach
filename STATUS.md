@@ -286,6 +286,17 @@ forged-tier + relic numbers are all first-pass — expect a tuning pass once out
 **Next up:** no locked next milestone — likely a broader playtest/tuning pass, or a new biome-3 scoping
 session per the master roadmap's "at least 5 total biomes" note.
 
+**Dev tooling (2026-07-13, Sonnet):** `window.__dev` browser-console commands for playtesting without a
+full playthrough — `god()` (still takes damage/knockback/shows real damage numbers, just floors HP at 1
+and never dies), `heal()`, `nobuildcost()`, `setstat(name|"all", value)`, `spawn(name, elite?)`,
+`killall(radius?)`, `exploremap()`, `list()` (dumps valid skill/stat/enemy names), plus a
+`run("spawn duneshaper")`-style one-line parser. DEV-build-gated (`import.meta.env.DEV`, new
+`src/vite-env.d.ts`) — unreachable in a production build. `nobuildcost` also fixed a real latent bug: the
+Crafting/Cooking/Upgrade menus each computed their own greyed-out/affordability state independently of
+MainScene's cost gates, so the first ship only fixed the click-to-craft path, not the menu display —
+the user hit this immediately (craft button stayed greyed with nobuildcost on). See the Recent Entries
+below + [[survivor-rpg-dev-console]].
+
 **Known issues / open.**
 - Boss may be slightly overtuned after the 5s damage bump (the user's "TBD" — left as-is
   since the harder feel was wanted). 5t cut the smash AoE 120→95 so it's movement-dodgeable;
@@ -319,6 +330,63 @@ session per the master roadmap's "at least 5 total biomes" note.
 ## Recent Entries
 
 > Older entries in STATUS-archive.md.
+
+### Dev console commands for playtesting (2026-07-13, Sonnet)
+
+Off-roadmap dev tooling, not a game milestone — the user flagged that testing a change deep in a build
+(e.g. a badlands weapon) meant playing through a full run to reach it. `window.__dev`, installed once
+from `MainScene.create()` via `installDevConsole()`, gated on `import.meta.env.DEV` (new
+`src/vite-env.d.ts` referencing `vite/client` types — never reachable in a production build, unlike the
+pre-existing unconditional `Ctrl+Shift+M` reveal-map cheat). Eight commands + a one-line parser (shipped
+in two passes this session — the second off the user's own testing of the first):
+- **`god(on?)`** — **still takes damage/knockback and shows the true computed damage number** (the user
+  wanted to keep testing damage numbers), but floors the applied amount at `current HP - 1` so it never
+  drops below 1 or dies. First ship blocked damage entirely via an early-return; reworked same-session
+  once the user said he still wanted to see numbers/feedback.
+- **`heal()`** (new) — `Health.reset()` (refill to current max, bypassing the Vitality heal-mult food/
+  Comfort uses) + HUD refresh. The natural pair to `god()`.
+- **`nobuildcost(on?)`** — when ON, calls `Crafting.unlockAll()` (marks every recipe discovered) and
+  makes `isNearWorkbench`/`isNearWorkbenchAtTier` unconditionally return true. **Bug found + fixed
+  same-session:** the first ship only patched the actual craft/place/upgrade *execution* paths
+  (`craftRecipe`, the placement confirm handler, `applyStationUpgrade`/`applyArmorUpgrade`/
+  `applyWeaponUpgrade`, `cookAtCampfire`) — but `CraftingMenu.isCraftable()`, `CookingMenu`'s inline
+  `canAffordCook` check, and `MainScene.maxCraftBatches`/`maxCookBatches` each independently recomputed
+  affordability straight from `Crafting.canAfford`/backpack counts for **display** (grey-out + the
+  batch-quantity slider), completely bypassing the flag. the user hit this immediately: nobuildcost ON,
+  craft button still greyed out. Fixed by adding a `noBuildCost: () => boolean` dep to both
+  `CraftingMenuDeps` and `CookingMenuDeps` (short-circuits `isCraftable`/`canCook` to true) and making
+  `maxCraftBatches`/`maxCookBatches` skip their cost-cap loop (room cap stays) when the flag is set.
+  Also extended to the Upgrade menu chain (`canAffordUpgrade` + the three `apply*Upgrade` deduction
+  loops) — same bug shape, would've hit the same wall next. Drying Rack/Smelter untouched — that menu
+  loads raw input first then slides a fraction, a different paradigm the bug doesn't apply to.
+  Deliberately does NOT skip the placement-mode "consume one owned stack" step — placing an item you
+  already have isn't a build cost.
+- **`setstat(name|"all", value)`** — routes by name: a `SkillType` (e.g. `"blunt"`) calls
+  `Skills.setLevel()` (clamped [0,100], resets XP, skips level-up listeners); a `StatType` (e.g.
+  `"vitality"`) calls `PlayerProgression.setStat()` (bypasses `unspentPoints`) then `syncStatBonuses()`.
+  **`"all"`** (added same-session) loops every `SkillType` and every `StatType` to the same value in one
+  call. Unknown name → `console.warn`, no throw.
+- **`spawn(name, elite?)`** — `src/systems/DevSpawnTable.ts` (`DEV_ENEMY_SPAWN_TABLE`, standalone
+  name→factory map covering the full roster incl. all 4 bosses/mini-bosses) scatters the enemy ~100px
+  around the player at a random angle and pushes it through normal `enemies`/`enemyGroup` registration.
+- **`killall(radius = 2000)`** — mirrors `resolveWeaponHit`'s death-cleanup path but **scoped to
+  non-boss enemies only** and skips loot/score recording — clearing trash to test in peace, not sniping
+  a boss encounter.
+- **`exploremap()`** — thin wrapper over `revealEntireMap()`.
+- **`list()`** (new) — returns `{ skills, stats, enemies }` (the valid names for `setstat`/`spawn`) and
+  logs each as a console line, so the names don't have to be memorized or looked up in source.
+- **`run("spawn duneshaper")`** — single-string convenience parser dispatching to all of the above.
+
+Verified live via `preview_eval` against the real running scene (not just type-checked), across both
+passes: god mode takes a real 30-dmg hit normally (100→70), floors a 9999-dmg hit at 1 HP without dying,
+stays at 1 HP on a further hit, and `heal()` restores to full; `setstat` confirmed on a skill, a stat
+(with `health.max` recompute), and `"all"` (all 11 skills + 6 stats set in one call, via both direct call
+and `run(...)`); `nobuildcost` unlocked all 41 recipes, crafted with backpack counts unchanged, and —
+**after the fix** — `maxCraftBatches`/`maxCookBatches`/`canAffordUpgrade` all confirmed to ignore a
+monkey-patched always-false `canAfford`, and a live-rendered `CraftingMenu` panel showed zero recipe rows
+in the disabled grey color even with `canAfford` forced to fail; `spawn`/`killall`/`exploremap`/`list()`
+all confirmed as in the first pass. `tsc --noEmit` clean; zero console errors throughout. No `RECIPES.md`
+change (no recipe/cost changes — these are bypasses, not new content).
 
 ### Biome 2 — Phase 5: Relics rework (2026-07-13, Opus)
 
@@ -395,54 +463,7 @@ verified live via `preview_eval` (see below) — caught and fixed one real layou
   `dashboard/main.ts`. **This completes the biome-2 umbrella plan
   (`.claude/plans/biome-2-sunscorch-badlands.md`) — all 6 phases (0–5) are shipped.**
 
-### Biome 2 — Phase 4b: enhanced (T2) gear tier + first magic weapon (2026-07-13, Opus)
-
-Plan: `.claude/plans/biome-2-phase-4-forging.md` (**Session 2**, completing Phase 4). Built on **Opus**
-(new gear tier + first magic weapon). **No new MainScene logic** — everything routes through generic
-machinery Session 1 (5ak) and earlier phases already built. `tsc --noEmit` clean; verified live via
-`preview_eval`; no console errors.
-
-- **Workbench Lvl 4 (Emberforge Anvil):** new `StationUpgrades.ts` row (`emberforge_anvil`, workbench
-  tier 2→3, `{embersteel_ingot:5, stone:15}`, "Unlocks enhanced gear"). Only **discoverable** once an
-  Embersteel Ingot has been smelted (`canDiscoverUpgrade` gates on cost keys being discovered — no new
-  wiring). The upgrade chain reads `tool_sharpener@t1 → forge_anvil@t2 → emberforge_anvil@t3` (verified).
-  `applyTierVisual` swaps the placed bench to a new `icon_workbench_t3` (ember-fed-anvil sprite) via the
-  existing `tieredStationTexture` — confirmed live on a real placed bench.
-- **`Recipe.costs` widened** `Partial<Record<ResourceType, number>>` → `Partial<Record<string, number>>`
-  so a **crafted base piece** (e.g. `sunsteel_helm`) works as an ingredient — the enhanced tier's core
-  mechanic. All cost lookups already go through the backpack's string-keyed count/removeCount + the
-  discovered set, so nothing else changed; the base piece just has to be **unequipped/in the backpack**
-  to reforge.
-- **9 enhanced recipes** (all `requiresWorkbenchTier: 3`, each **consumes its base forged piece**):
-  **Embersteel heavy set** (Helm 7 / Cuirass 9 / Greaves 7 = 23 armor) + **Emberhide light set** (Hood 5 /
-  Vest 6 / Leggings 5 = 16) + three enhanced weapons (**Embersteel Warhammer** 20 blunt / **Longsword** 15
-  slash / **Pike** 17 pierce). Armor keeps the base sets' `heavy_armor`/`light_armor` categorization gate
-  (level 0) + `armorType`, so heavy XP + magic/fire mitigation carry over free. No right-click ArmorUpgrades
-  (the reforge IS the progression).
-- **First MAGIC weapon — the Ember Brand** (`{embersteel_ingot:3, hex_essence:4}`, rare-ore-exclusive,
-  `requiresWorkbenchTier: 3`, `magic` type, 14 dmg / 520ms / 15 stam / 45° arc). Its DPS ≈ the Embersteel
-  Pike on a **neutral** target; `magic` is **resisted** (~×0.4–0.5) by the gloam-casters (Hexlings 0.4, the
-  Duneshaper 0.5) and neutral (×1.0) vs Duskrunner/Cragscale/Sandmaw — a sidegrade, not flatly best, and
-  the **only `magic` weapon-skill XP source**. Routes through the existing `resolveWeaponHit` resist +
-  `awardSkillXp(dmgType)` path with zero new code. **Note:** no badlands enemy is *weak* to magic, so it
-  never lands super-effective — a hook for a future magic-vulnerable foe (flagged in `RECIPES.md`).
-- **`Weapons.ts`:** 4 new `WeaponType` keys (`embersteel_warhammer`/`_sword`/`_pike`, `ember_brand`) —
-  TS forced entries in every `Record<WeaponType,…>` table (damage/cooldown/stamina/types/base-crit/arc).
-- **BootScene:** 11 new textures (3 enhanced-weapon icons, 6 enhanced-armor icons, Ember Brand icon,
-  `icon_workbench_t3`) — all confirmed present, drawn without error. Enhanced gear recasts the base
-  silhouettes in dark ember-veined steel; the Ember Brand is a fire-brand rod with a gloamfire wisp.
-- **Verified live** (`preview_eval`): all 10 new recipes present w/ correct costs & tier 3; all 10 items
-  defined; Emberforge upgrade @t3 in the chain; `isNearWorkbenchAtTier(3)=true / (4)=false`; a **Lvl-2
-  bench blocks** an enhanced craft while a **Lvl-3 bench allows** it (base `sunsteel_helm` + ingots
-  consumed → `embersteel_helm` produced); bench t3 texture swap; weapon stats/arc; badlands magic resists.
-- **Dashboard/RECIPES.md:** dashboard weapon arrays (previously stuck at the biome-1 four) extended to a
-  shared `MELEE_WEAPONS` covering base forged + enhanced + magic; `RECIPES.md` crafting/upgrade/armor/weapon
-  tables updated. Files: `Weapons.ts`, `Items.ts`, `Recipes.ts`, `StationUpgrades.ts`, `BootScene.ts`,
-  `dashboard/main.ts`, `RECIPES.md`. **Phase 4 complete.**
-- **Deferred beyond Phase 4** (unchanged): forged **tool** tier, a forged **ranged** weapon. The
-  Gloam→Ember-Shard conversion + tier-2 relics both shipped in **Phase 5** — see that entry above.
-
-> Older entries (Phase 4a Smelting economy, Badlands playtest batch, Biome 2 Phase 3 The Duneshaper,
-> Phase 3 POI 2 Sunken Forge, Phase 3 Duskrunner Warren POI, Phase 2b Sandmaw, 4-item playtest fix batch,
-> Placeholder art pass, Biome 2 playtest fix batch #2, 16-item playtest fix batch, Biome 2 Phase 2/1/0,
-> Welcome overlay, and earlier) are in STATUS-archive.md.
+> Older entries (Phase 4b enhanced gear tier, Phase 4a Smelting economy, Badlands playtest batch, Biome 2
+> Phase 3 The Duneshaper, Phase 3 POI 2 Sunken Forge, Phase 3 Duskrunner Warren POI, Phase 2b Sandmaw,
+> 4-item playtest fix batch, Placeholder art pass, Biome 2 playtest fix batch #2, 16-item playtest fix
+> batch, Biome 2 Phase 2/1/0, Welcome overlay, and earlier) are in STATUS-archive.md.

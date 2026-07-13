@@ -204,4 +204,11 @@ export class Skills {
     // At the cap, park leftover XP at 0 so a maxed bar reads full-not-partial.
     if (this.levels[skill] >= MAX_SKILL_LEVEL) this.xp[skill] = 0;
   }
+
+  // DEV-only direct set (the `setstat` console command) — skips listeners so
+  // jumping straight to a high level doesn't replay dozens of level-up toasts.
+  setLevel(skill: SkillType, level: number): void {
+    this.levels[skill] = Math.max(0, Math.min(MAX_SKILL_LEVEL, Math.round(level)));
+    this.xp[skill] = 0;
+  }
 }

@@ -41,6 +41,13 @@ export class Crafting {
     return RECIPES.filter((r) => this.discoveredIds.has(r.id));
   }
 
+  // DEV-only (the `nobuildcost` console command): mark every recipe
+  // discovered immediately, skipping the ingredient/skill/workbench-placed
+  // gates refresh() normally requires.
+  unlockAll(): void {
+    for (const recipe of RECIPES) this.discoveredIds.add(recipe.id);
+  }
+
   canAfford(recipe: Recipe, backpack: ItemContainer): boolean {
     return (Object.entries(recipe.costs) as [ResourceType, number][]).every(
       ([resource, amount]) => backpack.count(resource) >= amount,
@@ -49,8 +56,10 @@ export class Crafting {
 
   // Deducts the ingredient cost from the backpack. Returns whether it ran.
   // The caller is responsible for checking output room first and adding the
-  // crafted item.
-  craft(recipe: Recipe, backpack: ItemContainer): boolean {
+  // crafted item. `free` (the DEV `nobuildcost` command) skips both the
+  // affordability check and the deduction.
+  craft(recipe: Recipe, backpack: ItemContainer, free = false): boolean {
+    if (free) return true;
     if (!this.canAfford(recipe, backpack)) return false;
     for (const [resource, amount] of Object.entries(recipe.costs) as [ResourceType, number][]) {
       backpack.removeCount(resource, amount);

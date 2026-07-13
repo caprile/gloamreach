@@ -38,14 +38,17 @@ import {
   choppingBonusChance,
   miningBonusChance,
   heavyArmorMagicMitigation,
+  SKILL_TYPES,
   type SkillType,
 } from "../systems/Skills";
 import {
   PlayerProgression,
   xpToNextPlayerLevel,
+  STAT_TYPES,
   type StatType,
 } from "../systems/Progression";
 import { Crafting } from "../systems/Crafting";
+import { DEV_ENEMY_SPAWN_TABLE } from "../systems/DevSpawnTable";
 import { Stamina } from "../systems/Stamina";
 import { Health } from "../systems/Health";
 import {
@@ -729,6 +732,11 @@ export class MainScene extends Phaser.Scene {
   // should never re-lock on destroy, only current-proximity checks
   // (isNearWorkbench/isNearWorkbenchAtTier) should track the live placedObjects state.
   private everPlacedWorkbench = false;
+  // DEV-only playtest cheats, toggled via the window.__dev console commands
+  // (installDevConsole) — gated to DEV builds only, never reachable in prod.
+  private devGodMode = false;
+  private devNoBuildCost = false;
+  private devConsoleInstalled = false;
   private placementHintText!: Phaser.GameObjects.Text; // bottom-right, stacked above promptText
   // The "Place" button click that enters placement mode fires through to the
   // scene's global pointerdown too (same underlying click) — swallow that one
@@ -1263,6 +1271,8 @@ export class MainScene extends Phaser.Scene {
     // Seed recipe discovery (no-op at a fresh start, but keeps state correct
     // if the initial inventory ever changes).
     this.refreshDiscovery();
+
+    this.installDevConsole();
   }
 
   update(_time: number, delta: number): void {
@@ -2282,6 +2292,7 @@ export class MainScene extends Phaser.Scene {
         this.openCampfire ? ((this.openCampfire.getData("tier") as number | undefined) ?? 0) : null,
       cook: (recipeId, batches) => this.cookAtCampfire(recipeId, batches),
       maxBatches: (recipe) => this.maxCookBatches(recipe),
+      noBuildCost: () => this.devNoBuildCost,
     });
   }
 
@@ -2501,11 +2512,15 @@ export class MainScene extends Phaser.Scene {
     const recipe = COOK_RECIPES.find((r) => r.id === recipeId);
     if (!recipe || !this.openCampfire) return;
     const tier = (this.openCampfire.getData("tier") as number | undefined) ?? 0;
-    if (tier < recipe.requiredCampfireTier) return;
-    const affordable = Object.entries(recipe.inputs).every(([key, n]) => this.backpack.count(key) >= n * batches);
+    if (!this.devNoBuildCost && tier < recipe.requiredCampfireTier) return;
+    const affordable =
+      this.devNoBuildCost ||
+      Object.entries(recipe.inputs).every(([key, n]) => this.backpack.count(key) >= n * batches);
     if (!affordable) return;
     for (let i = 0; i < batches; i++) {
-      for (const [key, n] of Object.entries(recipe.inputs)) this.backpack.removeCount(key, n);
+      if (!this.devNoBuildCost) {
+        for (const [key, n] of Object.entries(recipe.inputs)) this.backpack.removeCount(key, n);
+      }
       const leftover = this.addToBackpack(recipe.output, 1);
       if (leftover > 0) {
         this.spawnLooseDrop(recipe.output, leftover, this.player.x, this.player.y, DROPPED_ITEM_MAGNET_COOLDOWN_MS);
@@ -2520,13 +2535,15 @@ export class MainScene extends Phaser.Scene {
   // Max number of times a cook recipe could run right now — the lower of
   // "can afford N batches" and "backpack has room for N dishes".
   private maxCookBatches(recipe: CookRecipe): number {
+    const roomBatches = this.backpack.roomFor(recipe.output);
+    // DEV nobuildcost: ingredients are free, but backpack room still caps it.
+    if (this.devNoBuildCost) return Math.max(0, roomBatches);
     let costBatches = Infinity;
     for (const [key, n] of Object.entries(recipe.inputs)) {
       if (n <= 0) continue;
       costBatches = Math.min(costBatches, Math.floor(this.backpack.count(key) / n));
     }
     if (!Number.isFinite(costBatches)) costBatches = 0;
-    const roomBatches = this.backpack.roomFor(recipe.output);
     return Math.max(0, Math.min(costBatches, roomBatches));
   }
 
@@ -5502,9 +5519,13 @@ export class MainScene extends Phaser.Scene {
     }
     // Floating number over the player, tinted by incoming type, so it's clear
     // when you're being hit by fire/magic (the user: "fire damage should be
-    // clear") vs a physical bite.
+    // clear") vs a physical bite. Shown at the true computed value even under
+    // god mode, so damage numbers stay testable.
     this.spawnPlayerDamageNumber(reduced, dmgType);
-    const died = this.health.takeDamage(reduced);
+    // DEV god mode: still take the hit (sfx/knockback/damage number all play
+    // out normally above/below) but never drop below 1 HP or die.
+    const appliedDamage = this.devGodMode ? Math.min(reduced, Math.max(0, this.health.value() - 1)) : reduced;
+    const died = this.health.takeDamage(appliedDamage);
     this.refreshHealthBar();
     this.hints.trigger("took_damage"); // first hit taken this run -> nudge toward healing
     if (knockback) {
@@ -5514,7 +5535,7 @@ export class MainScene extends Phaser.Scene {
       // Brief impulse, not a sustained shove — matches dash's own short-burst feel.
       this.time.delayedCall(150, () => body.setVelocity(0, 0));
     }
-    if (died) this.onPlayerDeath();
+    if (died && !this.devGodMode) this.onPlayerDeath();
   }
 
   private onPlayerDeath(): void {
@@ -5940,6 +5961,7 @@ export class MainScene extends Phaser.Scene {
       isNearWorkbenchAtTier: (tier) => this.isNearWorkbenchAtTier(tier, this.player.x, this.player.y),
       skills: this.skills,
       progression: this.progression,
+      noBuildCost: () => this.devNoBuildCost,
     });
   }
 
@@ -5985,7 +6007,7 @@ export class MainScene extends Phaser.Scene {
       return;
     }
     for (let i = 0; i < batches; i++) {
-      this.crafting.craft(recipe, this.backpack);
+      this.crafting.craft(recipe, this.backpack, this.devNoBuildCost);
       this.addToBackpack(key, outCount);
     }
     this.sfx.craft();
@@ -6040,6 +6062,7 @@ export class MainScene extends Phaser.Scene {
   }
 
   private canAffordBatch(recipe: Recipe, batches: number): boolean {
+    if (this.devNoBuildCost) return true;
     return (Object.entries(recipe.costs) as [ResourceType, number][]).every(
       ([resource, amount]) => this.backpack.count(resource) >= amount * batches,
     );
@@ -6052,13 +6075,16 @@ export class MainScene extends Phaser.Scene {
   private maxCraftBatches(recipe: Recipe): number {
     const key = outputKey(recipe);
     const outCount = recipe.output.kind === "item" ? recipe.output.count ?? 1 : 1;
+    const roomBatches = Math.floor(this.backpack.roomFor(key) / outCount);
+    // DEV nobuildcost: ingredients are free, but backpack room still caps it —
+    // you can't hold infinite items.
+    if (this.devNoBuildCost) return Math.max(0, roomBatches);
     let costBatches = Infinity;
     for (const [resource, amount] of Object.entries(recipe.costs) as [ResourceType, number][]) {
       if (amount <= 0) continue;
       costBatches = Math.min(costBatches, Math.floor(this.backpack.count(resource) / amount));
     }
     if (!Number.isFinite(costBatches)) costBatches = 0;
-    const roomBatches = Math.floor(this.backpack.roomFor(key) / outCount);
     return Math.max(0, Math.min(costBatches, roomBatches));
   }
 
@@ -6162,7 +6188,7 @@ export class MainScene extends Phaser.Scene {
         this.cancelPlacement();
         return;
       }
-    } else if (!this.crafting.canAfford(recipe, this.backpack)) {
+    } else if (!this.devNoBuildCost && !this.crafting.canAfford(recipe, this.backpack)) {
       const name = itemDef(outputKey(recipe))?.name ?? "item";
       this.eventLog.add("info", `Out of materials for ${name}`);
       this.cancelPlacement();
@@ -6199,7 +6225,7 @@ export class MainScene extends Phaser.Scene {
       placedTier = itemSource.container.slot(idx)?.tier ?? 0;
       itemSource.container.set(idx, null);
     } else {
-      this.crafting.craft(recipe, this.backpack);
+      this.crafting.craft(recipe, this.backpack, this.devNoBuildCost);
     }
     const pos = this.clampedPlacementPoint();
     const key = outputKey(recipe);
@@ -6266,6 +6292,7 @@ export class MainScene extends Phaser.Scene {
   // an already-discovered tier-1+ recipe. Loose proximity, not a precise
   // click, so it's a bigger radius than REACH.
   private isNearWorkbench(x: number, y: number, radius: number = WORKBENCH_RANGE): boolean {
+    if (this.devNoBuildCost) return true;
     return this.placedObjects.some(
       (obj) =>
         obj.getData("itemKey") === "workbench" &&
@@ -6277,6 +6304,7 @@ export class MainScene extends Phaser.Scene {
   // have reached at least `minTier` itself (e.g. Gremlin Pants' lvl-2 upgrade
   // needing a Tool-Sharpener-upgraded Workbench, not just any Workbench).
   private isNearWorkbenchAtTier(minTier: number, x: number, y: number, radius: number = WORKBENCH_RANGE): boolean {
+    if (this.devNoBuildCost) return true;
     return this.placedObjects.some(
       (obj) =>
         obj.getData("itemKey") === "workbench" &&
@@ -6526,6 +6554,7 @@ export class MainScene extends Phaser.Scene {
   }
 
   private canAffordUpgrade(upg: UpgradeDef): boolean {
+    if (this.devNoBuildCost) return true;
     return Object.entries(upg.costs).every(([r, n]) => this.backpack.count(r) >= (n ?? 0));
   }
 
@@ -6569,7 +6598,7 @@ export class MainScene extends Phaser.Scene {
   // pickup on Destroy). Generic across stations — the visual tell is shared.
   private applyStationUpgrade(obj: Phaser.GameObjects.Image, upg: StationUpgradeDef): void {
     if (!this.canAffordUpgrade(upg) || this.upgradeBlockReason(upg)) return;
-    for (const [r, n] of Object.entries(upg.costs)) this.backpack.removeCount(r, n ?? 0);
+    if (!this.devNoBuildCost) for (const [r, n] of Object.entries(upg.costs)) this.backpack.removeCount(r, n ?? 0);
     obj.setData("tier", upg.resultTier);
     this.applyTierVisual(obj, upg.resultTier);
     this.refreshStationLabel(obj);
@@ -6589,7 +6618,7 @@ export class MainScene extends Phaser.Scene {
   private applyArmorUpgrade(slot: EquipSlot, upg: ArmorUpgradeDef): void {
     const eq = this.equipment.get(slot);
     if (!eq || !this.canAffordUpgrade(upg) || this.upgradeBlockReason(upg)) return;
-    for (const [r, n] of Object.entries(upg.costs)) this.backpack.removeCount(r, n ?? 0);
+    if (!this.devNoBuildCost) for (const [r, n] of Object.entries(upg.costs)) this.backpack.removeCount(r, n ?? 0);
     this.equipment.set(slot, { key: eq.key, tier: upg.resultTier });
     // Left-anchored "recipe" toast, not the top-center "info" one — the
     // Upgrade panel for a paper-doll slot opens right beside/over where the
@@ -6604,7 +6633,7 @@ export class MainScene extends Phaser.Scene {
   private applyWeaponUpgrade(container: ItemContainer, index: number, upg: WeaponUpgradeDef): void {
     const stack = container.slot(index);
     if (!stack || !this.canAffordUpgrade(upg) || this.upgradeBlockReason(upg)) return;
-    for (const [r, n] of Object.entries(upg.costs)) this.backpack.removeCount(r, n ?? 0);
+    if (!this.devNoBuildCost) for (const [r, n] of Object.entries(upg.costs)) this.backpack.removeCount(r, n ?? 0);
     container.set(index, { ...stack, tier: upg.resultTier });
     this.eventLog.add("recipe", `${stationDisplayName(stack.key, upg.resultTier)} upgraded: ${upg.name}`, itemDef(stack.key)?.texture);
     // The upgraded weapon may be the currently-equipped hotbar item — refresh
@@ -7281,6 +7310,161 @@ export class MainScene extends Phaser.Scene {
     this.worldMapUI.markDirty();
     if (!this.worldMapUI.isOpen()) this.worldMapUI.openMap(this.player.x, this.player.y);
     this.eventLog.add("info", "[DEV] Whole map revealed");
+  }
+
+  // DEV: window.__dev console commands for fast playtesting — bypasses
+  // grinding/farming so a change deep in a build (e.g. a badlands weapon) can
+  // be tested without a full playthrough. Installed once per scene instance
+  // (survives scene.restart(), since the flag lives on `this`); gated to DEV
+  // builds via import.meta.env.DEV so it's never reachable in a prod build.
+  private installDevConsole(): void {
+    if (this.devConsoleInstalled || !import.meta.env.DEV) return;
+    this.devConsoleInstalled = true;
+    const dev = {
+      god: (on?: boolean) => {
+        this.devGodMode = on ?? !this.devGodMode;
+        this.eventLog.add("info", `[DEV] God mode ${this.devGodMode ? "ON" : "OFF"}`);
+      },
+      heal: () => {
+        this.health.reset();
+        this.refreshHealthBar();
+        this.eventLog.add("info", "[DEV] Healed to full");
+      },
+      // Bypasses ingredient cost AND the workbench-tier/skill discovery gates
+      // for every recipe (via Crafting.unlockAll()) — a placed item still
+      // consumes one owned stack from the backpack like normal, since that's
+      // "place an owned item," not a build cost.
+      nobuildcost: (on?: boolean) => {
+        this.devNoBuildCost = on ?? !this.devNoBuildCost;
+        if (this.devNoBuildCost) this.crafting.unlockAll();
+        this.refreshDiscovery();
+        this.craftingMenu?.refresh();
+        this.eventLog.add("info", `[DEV] Free craft ${this.devNoBuildCost ? "ON" : "OFF"}`);
+      },
+      // name = a SkillType (e.g. "blunt", "light_armor") or a StatType (e.g.
+      // "vitality"). Skills are levels [0,100]; stats are raw allocated points.
+      setstat: (name: string, value: number) => {
+        const key = name.toLowerCase().trim();
+        if (key === "all") {
+          for (const s of SKILL_TYPES) this.skills.setLevel(s, value);
+          for (const s of STAT_TYPES) this.progression.setStat(s, value);
+          this.syncStatBonuses();
+          this.characterMenu?.refresh();
+          this.refreshStatPointsBadge();
+          this.eventLog.add("info", `[DEV] All skills and stats set to ${value}`);
+          return;
+        }
+        if ((SKILL_TYPES as string[]).includes(key)) {
+          this.skills.setLevel(key as SkillType, value);
+          this.characterMenu?.refresh();
+          this.eventLog.add("info", `[DEV] Skill ${key} set to ${value}`);
+          return;
+        }
+        if ((STAT_TYPES as string[]).includes(key)) {
+          this.progression.setStat(key as StatType, value);
+          this.syncStatBonuses();
+          this.characterMenu?.refresh();
+          this.refreshStatPointsBadge();
+          this.eventLog.add("info", `[DEV] Stat ${key} set to ${value}`);
+          return;
+        }
+        console.warn(
+          `[DEV] Unknown stat/skill "${name}". Use __dev.list() to see valid names, or "all" to set ` +
+            "every skill and stat at once.",
+        );
+      },
+      spawn: (name: string, elite?: boolean) => {
+        const key = name.toLowerCase().trim();
+        const factory = DEV_ENEMY_SPAWN_TABLE[key];
+        if (!factory) {
+          console.warn(`[DEV] Unknown enemy "${name}". Valid: ${Object.keys(DEV_ENEMY_SPAWN_TABLE).join(", ")}.`);
+          return;
+        }
+        // Scatter around the player rather than on top of them, so repeated
+        // spawns don't stack exactly and immediately melee the player.
+        const angle = Math.random() * Math.PI * 2;
+        const x = this.player.x + Math.cos(angle) * 100;
+        const y = this.player.y + Math.sin(angle) * 100;
+        const enemy = factory(this, x, y, elite ?? false);
+        this.enemies.push(enemy);
+        this.enemyGroup.add(enemy);
+        this.eventLog.add("info", `[DEV] Spawned ${elite ? "elite " : ""}${key}`);
+      },
+      // Scoped to non-boss enemies only (GremlinKing/Gloamwarden/Cinderwrought/
+      // Duneshaper excluded) — this is for clearing trash to test in peace, not
+      // for sniping a boss fight/altar state.
+      killall: (radius: number = 2000) => {
+        const isBossEnemy = (e: Enemy): boolean =>
+          e instanceof GremlinKing ||
+          e instanceof Gloamwarden ||
+          e instanceof Cinderwrought ||
+          e instanceof Duneshaper;
+        const targets = this.enemies.filter(
+          (e) => !isBossEnemy(e) && Phaser.Math.Distance.Between(this.player.x, this.player.y, e.x, e.y) <= radius,
+        );
+        for (const enemy of targets) {
+          enemy.playDeathFeedback(() => {});
+          this.onShackGuardKilled(enemy);
+          this.onDenGuardKilled(enemy);
+        }
+        this.enemies = this.enemies.filter((e) => !targets.includes(e));
+        this.hoveredEnemy = null;
+        this.promptText.setVisible(false);
+        this.eventLog.add("info", `[DEV] Killed ${targets.length} enemies within ${radius}px`);
+      },
+      exploremap: () => this.revealEntireMap(),
+      // Reference dictionary for setstat()/spawn() names — logs as tables (for
+      // a quick glance) and returns the raw arrays (for programmatic use).
+      list: () => {
+        const skills = [...SKILL_TYPES];
+        const stats = [...STAT_TYPES];
+        const enemies = Object.keys(DEV_ENEMY_SPAWN_TABLE);
+        console.log("[DEV] setstat skill names:", skills);
+        console.log('[DEV] setstat stat names (or "all"):', stats);
+        console.log("[DEV] spawn enemy names:", enemies);
+        return { skills, stats, enemies };
+      },
+      // Convenience one-liner parser, e.g. __dev.run("spawn duneshaper") or
+      // __dev.run("setstat vitality 20"), so console typing doesn't need
+      // separate quoted/comma args for the common case.
+      run: (cmd: string) => {
+        const [name, ...args] = cmd.trim().split(/\s+/);
+        switch (name) {
+          case "god":
+            dev.god(args[0] === undefined ? undefined : args[0] === "true");
+            break;
+          case "heal":
+            dev.heal();
+            break;
+          case "nobuildcost":
+            dev.nobuildcost(args[0] === undefined ? undefined : args[0] === "true");
+            break;
+          case "setstat":
+            dev.setstat(args[0], Number(args[1]));
+            break;
+          case "spawn":
+            dev.spawn(args[0], args[1] === "elite");
+            break;
+          case "killall":
+            dev.killall(args[0] === undefined ? undefined : Number(args[0]));
+            break;
+          case "exploremap":
+            dev.exploremap();
+            break;
+          case "list":
+            dev.list();
+            break;
+          default:
+            console.warn(`[DEV] Unknown command "${name}".`);
+        }
+      },
+    };
+    (window as unknown as { __dev: typeof dev }).__dev = dev;
+    console.log(
+      '[DEV] Console commands ready: __dev.god() / __dev.heal() / __dev.nobuildcost() / ' +
+        '__dev.setstat(name|"all", value) / __dev.spawn(name, elite?) / __dev.killall(radius?) / ' +
+        '__dev.exploremap() / __dev.list() -- or __dev.run("...") for one-liners.',
+    );
   }
 
   private createStatPointsBadge(): void {

@@ -141,6 +141,12 @@ export class PlayerProgression {
     return true;
   }
 
+  // DEV-only direct set (the `setstat` console command) — bypasses unspentPoints
+  // entirely, unlike allocate().
+  setStat(stat: StatType, value: number): void {
+    this.stats[stat] = Math.max(0, Math.round(value));
+  }
+
   enduranceStaminaBonus(): number {
     return this.stats.endurance * ENDURANCE_STAMINA_PER_POINT;
   }

@@ -47,12 +47,16 @@ export interface CraftingMenuDeps {
   isNearWorkbenchAtTier: (tier: number) => boolean;
   skills: Skills;
   progression: PlayerProgression;
+  // DEV `nobuildcost` cheat — when true, every recipe reads as craftable
+  // regardless of ingredients/proximity (see isCraftable below).
+  noBuildCost: () => boolean;
 }
 
 // A recipe is affordable to craft/place right now — resource cost AND
 // (for tier 1+) Workbench proximity. Composed here at the call site rather
 // than inside Crafting.canAfford, which stays pure resource-math.
 function isCraftable(deps: CraftingMenuDeps, recipe: Recipe): boolean {
+  if (deps.noBuildCost()) return true;
   return (
     deps.crafting.canAfford(recipe, deps.backpack) &&
     (recipe.tier === 0 || deps.isNearWorkbench()) &&

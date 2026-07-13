@@ -5587,3 +5587,50 @@ Ingot** (the T2 metal Session 2's enhanced recipes will consume).
   fire brand, rare-ore-exclusive). Also deferred: forged tool tier, a forged ranged weapon.
 
 
+
+### Biome 2 — Phase 4b: enhanced (T2) gear tier + first magic weapon (2026-07-13, Opus)
+
+Plan: `.claude/plans/biome-2-phase-4-forging.md` (**Session 2**, completing Phase 4). Built on **Opus**
+(new gear tier + first magic weapon). **No new MainScene logic** — everything routes through generic
+machinery Session 1 (5ak) and earlier phases already built. `tsc --noEmit` clean; verified live via
+`preview_eval`; no console errors.
+
+- **Workbench Lvl 4 (Emberforge Anvil):** new `StationUpgrades.ts` row (`emberforge_anvil`, workbench
+  tier 2→3, `{embersteel_ingot:5, stone:15}`, "Unlocks enhanced gear"). Only **discoverable** once an
+  Embersteel Ingot has been smelted (`canDiscoverUpgrade` gates on cost keys being discovered — no new
+  wiring). The upgrade chain reads `tool_sharpener@t1 → forge_anvil@t2 → emberforge_anvil@t3` (verified).
+  `applyTierVisual` swaps the placed bench to a new `icon_workbench_t3` (ember-fed-anvil sprite) via the
+  existing `tieredStationTexture` — confirmed live on a real placed bench.
+- **`Recipe.costs` widened** `Partial<Record<ResourceType, number>>` → `Partial<Record<string, number>>`
+  so a **crafted base piece** (e.g. `sunsteel_helm`) works as an ingredient — the enhanced tier's core
+  mechanic. All cost lookups already go through the backpack's string-keyed count/removeCount + the
+  discovered set, so nothing else changed; the base piece just has to be **unequipped/in the backpack**
+  to reforge.
+- **9 enhanced recipes** (all `requiresWorkbenchTier: 3`, each **consumes its base forged piece**):
+  **Embersteel heavy set** (Helm 7 / Cuirass 9 / Greaves 7 = 23 armor) + **Emberhide light set** (Hood 5 /
+  Vest 6 / Leggings 5 = 16) + three enhanced weapons (**Embersteel Warhammer** 20 blunt / **Longsword** 15
+  slash / **Pike** 17 pierce). Armor keeps the base sets' `heavy_armor`/`light_armor` categorization gate
+  (level 0) + `armorType`, so heavy XP + magic/fire mitigation carry over free. No right-click ArmorUpgrades
+  (the reforge IS the progression).
+- **First MAGIC weapon — the Ember Brand** (`{embersteel_ingot:3, hex_essence:4}`, rare-ore-exclusive,
+  `requiresWorkbenchTier: 3`, `magic` type, 14 dmg / 520ms / 15 stam / 45° arc). Its DPS ≈ the Embersteel
+  Pike on a **neutral** target; `magic` is **resisted** (~×0.4–0.5) by the gloam-casters (Hexlings 0.4, the
+  Duneshaper 0.5) and neutral (×1.0) vs Duskrunner/Cragscale/Sandmaw — a sidegrade, not flatly best, and
+  the **only `magic` weapon-skill XP source**. Routes through the existing `resolveWeaponHit` resist +
+  `awardSkillXp(dmgType)` path with zero new code. **Note:** no badlands enemy is *weak* to magic, so it
+  never lands super-effective — a hook for a future magic-vulnerable foe (flagged in `RECIPES.md`).
+- **`Weapons.ts`:** 4 new `WeaponType` keys (`embersteel_warhammer`/`_sword`/`_pike`, `ember_brand`) —
+  TS forced entries in every `Record<WeaponType,…>` table (damage/cooldown/stamina/types/base-crit/arc).
+- **BootScene:** 11 new textures (3 enhanced-weapon icons, 6 enhanced-armor icons, Ember Brand icon,
+  `icon_workbench_t3`) — all confirmed present, drawn without error. Enhanced gear recasts the base
+  silhouettes in dark ember-veined steel; the Ember Brand is a fire-brand rod with a gloamfire wisp.
+- **Verified live** (`preview_eval`): all 10 new recipes present w/ correct costs & tier 3; all 10 items
+  defined; Emberforge upgrade @t3 in the chain; `isNearWorkbenchAtTier(3)=true / (4)=false`; a **Lvl-2
+  bench blocks** an enhanced craft while a **Lvl-3 bench allows** it (base `sunsteel_helm` + ingots
+  consumed → `embersteel_helm` produced); bench t3 texture swap; weapon stats/arc; badlands magic resists.
+- **Dashboard/RECIPES.md:** dashboard weapon arrays (previously stuck at the biome-1 four) extended to a
+  shared `MELEE_WEAPONS` covering base forged + enhanced + magic; `RECIPES.md` crafting/upgrade/armor/weapon
+  tables updated. Files: `Weapons.ts`, `Items.ts`, `Recipes.ts`, `StationUpgrades.ts`, `BootScene.ts`,
+  `dashboard/main.ts`, `RECIPES.md`. **Phase 4 complete.**
+- **Deferred beyond Phase 4** (unchanged): forged **tool** tier, a forged **ranged** weapon. The
+  Gloam→Ember-Shard conversion + tier-2 relics both shipped in **Phase 5** — see that entry above.

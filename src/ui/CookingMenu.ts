@@ -31,6 +31,9 @@ export interface CookingMenuDeps {
   // Max times `recipe` could be cooked right now (cost- and room-limited) —
   // backs the batch-quantity slider.
   maxBatches: (recipe: CookRecipe) => number;
+  // DEV `nobuildcost` cheat — when true, every dish reads as cookable
+  // regardless of ingredients.
+  noBuildCost: () => boolean;
 }
 
 const DEPTH_BG = 3000;
@@ -224,7 +227,7 @@ export class CookingMenu {
   private renderRow(recipe: CookRecipe, y: number): void {
     const x = this.panelX + 16;
     const rowW = this.panelW - 32;
-    const canCook = canAffordCook(recipe, this.deps.backpack);
+    const canCook = this.deps.noBuildCost() || canAffordCook(recipe, this.deps.backpack);
     const isSelected = this.selected?.id === recipe.id;
 
     const box = this.scene.add
