@@ -8,6 +8,7 @@ export interface RunEndDeps {
   entries: ScoreEntry[];
   rank: number; // 1-based rank of this run in the table (0 if off-table)
   onNewRun: () => void;
+  onContinue: () => void; // only wired to a button on a win (keep exploring)
   onClearScores: () => void;
 }
 
@@ -133,21 +134,42 @@ export class RunEndUI {
       y += 20;
     });
 
-    // New Run button.
-    const btn = this.scene.add
-      .text(cx, this.panelY + PANEL_H - 34, "[ New Run ]", {
-        fontFamily: "monospace",
-        fontSize: "18px",
-        color: "#0a0a0a",
-        backgroundColor: "#e3b25a",
-        padding: { x: 16, y: 8 },
-      })
-      .setOrigin(0.5, 0.5)
-      .setScrollFactor(0)
-      .setDepth(DEPTH_TEXT)
-      .setInteractive({ useHandCursor: true })
-      .on("pointerdown", () => deps.onNewRun());
-    this.objects.push(btn);
+    // Buttons. On a win, offer "Continue" (keep exploring for end-to-end play)
+    // alongside "New Run"; on a death (hardcore) only "New Run" is offered.
+    const btnY = this.panelY + PANEL_H - 34;
+    const mkButton = (bx: number, label: string, bg: string, onClick: () => void) =>
+      this.objects.push(
+        this.scene.add
+          .text(bx, btnY, label, {
+            fontFamily: "monospace",
+            fontSize: "18px",
+            color: "#0a0a0a",
+            backgroundColor: bg,
+            padding: { x: 16, y: 8 },
+          })
+          .setOrigin(0.5, 0.5)
+          .setScrollFactor(0)
+          .setDepth(DEPTH_TEXT)
+          .setInteractive({ useHandCursor: true })
+          .on("pointerdown", onClick),
+      );
+
+    if (won) {
+      // Caveat: Continue steps past the current end-game target into unfinished
+      // content — the run is already scored; death still ends it.
+      this.text(
+        cx,
+        btnY - 24,
+        "Continue = explore in-progress content past this boss (run already scored)",
+        10,
+        "#8a93a3",
+        0.5,
+      );
+      mkButton(cx - 96, "[ Continue ]", "#7ac27a", () => deps.onContinue());
+      mkButton(cx + 96, "[ New Run ]", "#e3b25a", () => deps.onNewRun());
+    } else {
+      mkButton(cx, "[ New Run ]", "#e3b25a", () => deps.onNewRun());
+    }
   }
 
   hide(): void {

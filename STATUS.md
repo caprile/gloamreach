@@ -2,26 +2,31 @@
 
 ## Current State
 
-_Living snapshot — edit in place, never append. Last shipped: **Placeholder art pass — all
-creatures + non-rotating facing** (2026-07-12, Opus). Every enemy and the player were still flat
-colored blocks except the recently-loved Hexling; this brings the whole roster up to the Hexling's
-detail bar (layered silhouette, shading, feature details, glow) while keeping every texture's exact
-dimensions so no combat/reach/scale tuning changes. Redrawn in `BootScene.ts`: **player** (front-
-facing blue-tunic adventurer), **Boar**, **Snake**, **Gremlin**, **Gremling**, **Duskrunner**,
-**Cragscale**, **Gremlin King**, **Gloamwarden** — each normal + elite via a parameterized draw
-helper (crimson/gold elite recolor of the identical silhouette, matching the Hexling's
-`drawHexling` pattern). **Non-rotating facing is now the DEFAULT for every enemy**, not just the
-Hexling: `EnemyConfig.upright` flips to `?? true` in `Enemy.ts`, so all creatures use
-`applyUprightFacing` (mirror left/right via `flipX`, ≤~11° up/down tilt, never rotating
-off-vertical) instead of the old full-360° rotation — which had been literally flipping the
-vertically-drawn bosses upside-down when they walked. Every creature texture is redrawn facing
-RIGHT so the flip reads correctly. This is **purely visual** — attack direction/hit-checks use x/y
-distance math and are untouched (an enemy can still hit you while its sprite faces a slightly
-different way, as requested). The Cragscale roll-spin (a deliberate rolling-ball attack tell that
-sets `rotation` directly) is preserved. World props (trees/rocks/stations) and item icons were left
-as-is — out of scope for a creature pass. Verified live via a `preview_eval` texture-showcase
-overlay + confirming all 233 live enemies report `upright:true` with near-zero rotation. Type-check
-clean, no console errors. See "Placeholder art pass" below. [[survivor-rpg-enemy-art-facing]]_
+_Living snapshot — edit in place, never append. Last shipped: **4-item playtest fix batch**
+(2026-07-12, Sonnet-class fixes on existing systems). (1) **Cragscale re-toned** to a cool
+slate-grey hide (was warm brown `0x7a5040`, too close to the Boar) so the rock reptile no longer
+reads as a second boar — Boar stays warm-brown, Cragscale is grey-stone (`BootScene.ts` normal
+variant only; elite crimson/gold unchanged). (2) **Woodcutter's Axe crafting-menu name** — the
+`stone_axe` RECIPE still read "Stone Axe" (only the item's inventory `name` was renamed in the
+prior batch); the recipe `name` now matches. (3) **Continue past the win (playtesting)** —
+winning (Gremlin King kill) now offers a green **[ Continue ]** button on the run-end screen beside
+[ New Run ]: it un-freezes the world (`resumeAfterWin` clears `runOver`, sets `inProgressMode`) and
+raises a persistent top-center **"⚠ IN-PROGRESS CONTENT"** caveat banner so live/testing builds can
+be pushed before a biome is done. Score is posted at the win; **death still always ends the run**
+(no respawn during playtesting — `endRun` forces the "died" outcome via `Run.setOutcome` so a
+continued-then-died run reads YOU DIED). (4) **Refined-Uncommon relic cap** — a Refined
+(Uncommon) trophy rolls the Uncommon outcome table (which has a 1% Mythic band) but is now
+**capped at Rare** via a new optional `TrophyRoll.maxRarity` — refinement is a gated climb, not a
+Mythic gamba; a would-be Mythic clamps to Rare (Rare-refined stays uncapped). Verified live:
+30k refined-Uncommon rolls → 0 Mythic (~6% Rare); Continue button un-freezes the run; axe recipe
+name + Cragscale/Boar tints distinct; no console errors. Dashboard Relics tab + RECIPES.md updated.
+See "4-item playtest fix batch" below. [[survivor-rpg-relics]]_
+
+_Prior: **Placeholder art pass — all creatures + non-rotating facing** (2026-07-12, Opus). Every
+enemy + the player brought up to the Hexling's detail bar (layered silhouette/shading/features/
+glow) in `BootScene.ts`, exact dimensions preserved; **non-rotating facing** (`applyUprightFacing`,
+`EnemyConfig.upright` default `?? true`) is now the roster default — purely visual, attack
+hit-checks use distance math. See "Placeholder art pass" below. [[survivor-rpg-enemy-art-facing]]_
 
 _Prior: **Biome 2 playtest fix batch #2**
 (2026-07-12, Sonnet). Fixed the REAL cause of the map's "flat lines"/hard seams: the tiled
@@ -175,6 +180,55 @@ all first-pass — expect a tuning pass as the biome fills out.
 ## Recent Entries
 
 > Older entries in STATUS-archive.md.
+
+### 4-item playtest fix batch (Cragscale art, axe name, boss-continue, refined-relic cap)
+
+Off the user's latest playtest notes. Sonnet-class fixes/tuning on already-shipped systems, no new
+mechanic. Four items:
+
+1. **Boar/Cragscale too similar.** Both were warm-brown quadrupeds facing right — the Cragscale
+   hide `0x7a5040` was nearly the Boar body `0x6b4a2a`. Re-toned the **normal** Cragscale to a cool
+   slate-grey palette (hide `0x69726c`, cooler belly/head, lighter stone plates) so the rock
+   reptile reads as stony, not a second boar. Elite (crimson/gold) unchanged. Verified via texture
+   pixel sample: Boar body `#6b4a2a` vs Cragscale body `#69726c`.
+2. **Woodcutter's Axe name in the crafting menu.** The prior batch renamed only the item's inventory
+   `name` (`Items.ts`); the `stone_axe` RECIPE in `Recipes.ts` still read "Stone Axe", and the
+   crafting menu shows the recipe name. Changed `Recipes.ts` recipe `name` → "Woodcutter's Axe"
+   (id/key/output all stay `stone_axe`). RECIPES.md table row updated.
+3. **Continue past the win (in-progress playtesting).** Beating the current end-game boss (Gremlin
+   King) fires `endRun("won")` which froze the world at the run-end screen, blocking end-to-end
+   testing into biome 2. `RunEndUI` now shows a green **[ Continue ]** button beside [ New Run ]
+   **only on a win** (`RunEndDeps.onContinue`, two-button layout; death shows only New Run), plus a
+   caption ("Continue = explore in-progress content past this boss"). `MainScene.resumeAfterWin()`
+   hides the screen, clears `runOver`, sets `inProgressMode`, and raises a **persistent top-center
+   caveat banner** ("⚠ IN-PROGRESS CONTENT — past the current end-game target") so it's clear you're
+   past finished content — this sets the precedent for pushing live builds before a biome is done, as
+   the end-game target moves outward with future bosses. The win's score is posted at the kill.
+   **Death is UNaffected** — a hardcore death always ends the run, even after Continuing (the user: no
+   respawn during playtesting): `onPlayerDeath`'s `endRun("died")` no longer gates on the continue
+   flag, and `endRun` calls a new `Run.setOutcome()` when `inProgressMode` so a continued-then-died
+   run's end screen correctly reads **YOU DIED** (the win's `end()` had already locked the outcome to
+   "won"; `setOutcome` overrides it) and hides the banner. New fields reset in `create()` per the
+   `scene.restart()` field-init gotcha. Verified live: win screen carries both buttons + caption;
+   Continue sets `runOver=false`/`inProgressMode=true` + shows the banner (screenshot, top-center,
+   clear of HUD); a death after Continue forces outcome "died", hides the banner, and shows the YOU
+   DIED screen (no completion bonus). Phase 3 of the biome-2 plan properly demotes the Gremlin King
+   from win-con to a mid-boss with a critical drop.
+4. **No Mythic from a Refined (Uncommon) trophy.** A `refined_trophy_uncommon` has rarity `uncommon`
+   and rolls the Uncommon outcome table, which has a 1% Mythic band — so a gated refinement could
+   still gamba a Mythic. Added an optional `TrophyRoll.maxRarity`; `refined_trophy_uncommon` now sets
+   `maxRarity: "rare"`, and `RelicManager.roll()` clamps any rolled-up result above the cap down to
+   it (the 1% Mythic band merges into Rare → ~6% Rare, rest Uncommon). Raw Common trophies and the
+   deeper-biome-scaffold `refined_trophy_rare` are uncapped (Rare-refined can still hit Mythic — a
+   Phase-5 concern, unreachable in biome 1). The dashboard "Trophy → outcome odds" breakdown now
+   merges capped bands so its display matches the roll clamp; RECIPES.md refined-trophy row notes the
+   cap. Verified live: 30k refined-Uncommon rolls → **0 Mythic** (1782 Rare ≈ 6%, rest Uncommon);
+   30k rare-refined rolls → ~10% Mythic (uncapped, confirming the cap is trophy-specific).
+
+Files: `BootScene.ts` (Cragscale tint), `Recipes.ts` (axe name), `RunEndUI.ts` + `MainScene.ts`
+(continue button + resume + death gate), `Relics.ts` (`maxRarity` + clamp), `dashboard/main.ts`
+(capped breakdown), `RECIPES.md`. `tsc --noEmit` clean; verified live via `preview_eval` +
+screenshot; no console errors.
 
 ### Placeholder art pass — all creatures + non-rotating facing (2026-07-12, Opus)
 
@@ -428,124 +482,5 @@ Files: `Duskrunner.ts`, `Cragscale.ts`, `Hexling.ts` (rewrite), `Enemy.ts` (`pen
 gate, pack sync, bleed wiring, area-hit `dmgType`, overlay continuity + feather mask). Dashboard
 Enemies tab updated (manual mirror). No `RECIPES.md` change. See [[survivor-rpg-biome-2-plan]].
 
-### Biome 2 — Phase 2: Badlands enemies & wildlife (core 3 + flora)
-
-Plan: `.claude/plans/biome-2-phase-2-enemies.md` (Phase 2 of the
-`biome-2-sunscorch-badlands.md` umbrella). Built on **Opus** (new content/AI). Scope locked
-with the user via `AskUserQuestion`: **the core 3 enemies + arid flora** (the 4th native creature
-deferred to Phase 2b); difficulty **noticeably tougher** than the forest roster; Cragscale
-resist = **resist slash, neutral blunt, weak pierce**. First *content* in the badlands — three
-bespoke enemies that each light up a Phase 1 dormant hook, spawned out in the badlands
-patchwork, never the forest disc.
-
-**1. Duskrunner** (`src/entities/Duskrunner.ts`) — gloam-touched canid swarm. Fast (92), low-HP
-(20), short 220ms telegraphed bite. Deliberately drives the **base `state` field** (not a
-private `mode`), so the inherited `Enemy.forceAggro()`/`isAggro()` work with **zero override** —
-the reference `packAggro` user (radius 260). The AOE-arc payoff enemy (neutral resists). Spawns
-in **packs of 3-4** so `updatePackAggro` visibly converges them. Loot: Duskrunner Pelt (+
-Duskrunner Trophy elite).
-
-**2. Cragscale** (`src/entities/Cragscale.ts`) — slow (40) armored bruiser, tanky (HP 60), one
-heavy telegraphed basher (520ms tell + 180 knockback). **Teaches the damage-type layer** via
-`resistances: { slash: 0.5, blunt: 1.0, pierce: 1.6 }` — the resist math + damage-number tint
-already live in `resolveWeaponHit` (Phase 1), so this just declares data. Loot: Cragscale Plate
-(+ trophy).
-
-**3. Hexling** (`src/entities/Hexling.ts`) — compact **stand-and-cast magic kiter** (its own
-subclass, NOT extending RangedGremlin — tracks a private `mode`, overrides `isAggro()`). Casts a
-single **`hex_bolt`** per 2s with `damageType: "magic"` → **bypasses the player's flat armor**
-(the dormant Phase 1 `applyDamageToPlayer` hook goes live). `Projectile` gained an optional
-`damageType`; the enemy-projectile→player overlap now forwards it (physical Gremlin rocks leave
-it undefined = unchanged). Resists `{ magic: 0.4, slash/blunt/pierce: 1.4 }` (resists magic,
-weak to physical). Loot: Hex Essence (+ trophy).
-
-**Flora** — Emberbloom (desert herb) + Sunfruit (cactus fruit), both persistent free-pickups
-reusing the Blackberry `persistent`/`pickedTexture`/`regrowMs` path. **No recipes wired** —
-future alchemy/food ingredients, surfaced only via the discovered-material toast.
-
-**Integration** — new `MainScene.pickBadlandsPoint(rng, minCoverage=0.5)` sweeps a polar annulus
-in the badlands radius band (2600-6400) and requires real `worldBiomes.coverageAt(..,"badlands")`
-there, honoring the War-Camp/Vein exclusions. `spawnBadlandsEnemies()` (6 packs + 10 Cragscale +
-10 Hexling, each `rollElite`) + `spawnBadlandsFlora()` (24 Emberbloom + 20 Sunfruit). 8 new
-`ResourceType`s + `Items.ts` defs (Gloamreach flavor) + `TROPHY_ROLL` entries (Common/tier1 for
-now — Phase 5 retiers to tier-2 + Ember refinement) + ~17 `BootScene` textures.
-
-**Verified live** (`preview_eval`, console error-free; `tsc` clean): 39 badlands enemies
-(Duskrunner ×19 / Cragscale ×10 / Hexling ×10) + 44 flora, all at r∈[2657, 6279] — **none in the
-forest disc** (forest roster capped at r=2001, unchanged). Cragscale resist damage: 10 slash →
-5, 10 pierce → 16. Hexling bolt spawns with `damageType:"magic"`; pack-aggro leader +
-`updatePackAggro` woke both packmates (class-gated). Biome discovery toast + "Sunscorch
-Badlands" minimap label confirmed. **Dashboard Enemies tab + trophy-source map updated** (manual
-mirror); no `RECIPES.md` change (no new recipes). See [[survivor-rpg-biome-2-plan]].
-
-**Same-session feedback pass (the user playtested):** four fixes. (1) **Density** — the badlands
-was ~22× sparser than the forest (39 enemies over the whole huge ring), so the user walked into a
-badlands area and found **0 enemies**. `pickBadlandsPoint` now concentrates in the **accessible
-inner band** (r 2500-5200, inner-weighted `frac^1.7`) with a lower coverage threshold (0.5→0.4),
-and counts jumped: Duskrunner **16 packs (~56)** / Cragscale **34** / Hexling **34** (~124 total,
-was 39) + flora 40/32. Verified: ~5-9 badlands enemies near a typical r≈3000 entry point.
-(2) **Terrain too red/pink** — `badlandsGroundColorAt` was a near-flat clay fill that the coarse
-LINEAR-stretched overlay washed into solid color. Rewrote it with **multi-scale value-noise
-mottling** (new `colorUtil.valueNoise2D`) across a dustier warm-earth palette (clay/ochre/sand/
-taupe/rust, browner + a cooler taupe drift to kill the pink); verified 47 distinct tones across a
-patch (channel spread R 74-166). (3) **Jagged straight borders** — `WorldBiomes.seedCoverage` now
-uses a **3-harmonic angular wobble** (was a single sine) + bigger lobes (`wAmp` 0.18-0.36) + wider
-soft falloff, so blob edges read as organic curves. (4) **Distinctive enemy kits** (the user: give
-the new enemies unique attacks) — **Duskrunner** gained a **pounce** (locked-direction leap
-gap-closer, built on Boar's charge mechanism); **Cragscale** a **rolling charge** (shell-roll to
-catch kiters, spins during the roll) on top of its basher; **Hexling** a **blink** (teleports
-~215px when the player closes inside 96px — a magical evade with a fading ghost VFX). All three
-verified firing (state machines progress through every phase; blink teleports 164px). `tsc` clean,
-no console errors. Dashboard Enemies tab updated for the new attacks.
-
-### Biome 2 — Phase 1: Combat systems layer (damage types, resist/weak, AOE arcs, swarm base)
-
-Plan: `.claude/plans/biome-2-phase-1-combat-systems.md` (Phase 1 of the
-`biome-2-sunscorch-badlands.md` umbrella). Built on **Opus** (new combat mechanics). Three
-reusable mechanics built *before* the biome-2 content so Phase 2 enemies / Phase 4 weapons can
-declare them as data — all dormant until then, so biome-1 combat is unchanged. No new
-enemies/weapons/content; verified by temporarily flagging existing enemies/weapons via eval.
-
-**1. Damage-type resist/weakness.** `magic` already existed in `DamageType`; this adds the
-multiplier layer. `EnemyConfig.resistances?: Partial<Record<DamageType, number>>` (`<1` resist,
-`>1` weak, absent = 1) → stored on `Enemy`, exposed via `resistMultiplier(type)`. Applied at
-the single choke point `resolveWeaponHit` (so it covers **both** melee and ranged and can't
-drift), which also derives an effectiveness (`weak`/`resist`/`normal`) and passes it to
-`spawnDamageNumber` — a non-crit number tints bright orange-red (weak) / dim blue (resisted);
-crit's yellow still wins. Empty for every biome-1 enemy.
-
-**2. Player-side magic-armor bypass (dormant hook).** `applyDamageToPlayer` gained an optional
-`dmgType?: DamageType`; when `"magic"` it **skips the flat-armor term** (relic %-reduction
-still applies, still floored at 1). No enemy deals magic until Phase 2's magical gremlin, so
-every current caller uses the unchanged physical path. Verified live: 30 magic vs 30 blunt in
-10-armor gremlin set → 30 taken (bypassed) vs 20 taken (30−10).
-
-**3. Per-weapon AOE arc** (locked decision 6). `WEAPON_ARC: Record<WeaponType, {halfAngleDeg;
-range; falloff}>` + `weaponArc()` in `Weapons.ts` — knife 25°/34px/0.5 (near single-target),
-clubs medium, **primal_spear 50°/58px/0.7 (wide sweeper)**, ranged `range: 0`. `tryMeleeAttack`
-now computes a shared pre-stagger/pre-crit `raw`, resolves the primary, then (if `arc.range > 0`)
-sweeps other live enemies within `range` and `±halfAngle` of the swing direction (player →
-primary target), each taking `raw × staggerMult × falloff` with **its own per-target crit**
-through the same `resolveWeaponHit` (own resist, kill/loot/XP). Extracted
-`staggerMultiplierFor(enemy)` (the GremlinKing/Gloamwarden `isStaggered()` checks) so
-primary/secondary/ranged share it. `enemyRadiusBonus()` lets the cone still catch a big
-elite/boss at its edge. Verified live: spear hit primary + in-cone neighbor (falloff) but not
-the out-of-cone one; knife hit only the primary (neighbor beyond its 34px range).
-
-**4. Swarm pack-aggro base** (opt-in). Public `Enemy.packAggro`/`packAggroRadius` (220) +
-`forceAggro(now)` (wakes idle→chasing without damage; clears post-giveup immunity).
-`MainScene.updatePackAggro(now)` (called each frame from `updateEnemies`) wakes idle **same-class**
-`packAggro` neighbors of any aggro'd `packAggro` member — O(k·n) with k = packAggro count (0
-today → effectively free). `forceAggro` drives the base `state` machine; a subclass tracking
-aggro via its own field (Boar/Snake/Gremlin's private `mode`) must **override** it, exactly as
-they already override `isAggro()` — documented in-code for Phase 2's swarm author. Verified live:
-leader woke a 120px neighbor, not a 600px one, and not a different-class enemy 10px away.
-
-**Verification.** `tsc --noEmit` clean. Live `preview_eval` against `MainScene` confirmed all
-four (the render loop was throttled/backgrounded — pumped `game.loop.step` to reach RUNNING, per
-CLAUDE.md's "assert against scene state, not screenshots" guidance). No `RECIPES.md`/dashboard
-change (no recipe or enemy-stat data change — resist values arrive with Phase 2 enemies). See
-[[survivor-rpg-biome-2-plan]].
-
-> Older entries (Biome 2 Phase 0, Welcome overlay, Welcome + How to Play + keybind clarity, and
+> Older entries (Biome 2 Phase 2, Biome 2 Phase 1, Biome 2 Phase 0, Welcome overlay, and
 > earlier) are in STATUS-archive.md.

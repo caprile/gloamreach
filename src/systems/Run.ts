@@ -95,4 +95,11 @@ export class Run {
     this.outcome = outcome;
     this.state = "ended";
   }
+
+  // Force the recorded outcome even if the run already ended. Used only for the
+  // playtest "Continue past the win" path: a won run that's later ended by death
+  // must read as a death on the end screen (end() no-ops once ended).
+  setOutcome(outcome: RunOutcome): void {
+    this.outcome = outcome;
+  }
 }

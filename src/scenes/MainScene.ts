@@ -542,6 +542,13 @@ export class MainScene extends Phaser.Scene {
   private runHudUI!: RunHudUI;
   private runEndUI!: RunEndUI;
   private runOver = false;
+  // Playtest escape hatch: after winning (the current end-game boss kill), the
+  // run-end screen offers "Continue" so the player can keep exploring past the
+  // finished target into in-progress content. `inProgressMode` drives a persistent
+  // on-screen caveat while active. Death is UNAFFECTED — a hardcore death still
+  // ends the run (see onPlayerDeath); Continue only skips the forced New Run.
+  private inProgressMode = false;
+  private inProgressBanner: Phaser.GameObjects.Text | null = null;
 
   // Contextual hint system (tip popups) + pause overlay. `hints` resets each
   // run (fresh instance in create()); its on/off preference persists. `isPaused`
@@ -618,6 +625,8 @@ export class MainScene extends Phaser.Scene {
     // "New Run" is the clean full reset the design always intended.
     this.runOver = false;
     this.isDead = false;
+    this.inProgressMode = false;
+    this.inProgressBanner = null;
     // Hints: fresh per-run "already shown" state (the on/off pref persists in
     // localStorage inside HintManager). Pause: clear the flag + defensively
     // un-freeze physics/clock in case New Run was clicked from the pause menu.
@@ -4420,8 +4429,9 @@ export class MainScene extends Phaser.Scene {
     this.bleed.clear();
     this.buffBarUI.sync(this.buffs.active());
     this.eventLog.add("combat", "You died...");
-    // Hardcore: death is terminal — end the run and post the score after a
-    // beat. Non-hardcore keeps the legacy respawn (documented easy-mode hook).
+    // Hardcore: death is terminal — end the run and post the score after a beat.
+    // This holds even after a "Continue" into in-progress content: death always
+    // ends the run. Non-hardcore keeps the legacy respawn (documented easy-mode hook).
     if (HARDCORE) {
       this.time.delayedCall(this.RESPAWN_DELAY_MS, () => this.endRun("died"));
     } else {
@@ -4503,6 +4513,10 @@ export class MainScene extends Phaser.Scene {
   private endRun(outcome: RunOutcome): void {
     if (this.runOver) return;
     this.run.end(outcome);
+    // If the run was already ended by a win and then Continued, end() no-ops, so
+    // force the real (death) outcome for the end screen + high-score entry.
+    if (this.inProgressMode) this.run.setOutcome(outcome);
+    this.inProgressBanner?.setVisible(false);
     this.runOver = true;
     this.player.setVelocity(0, 0);
     const { entries, rank } = recordHighScore({
@@ -4526,12 +4540,44 @@ export class MainScene extends Phaser.Scene {
       entries,
       rank,
       onNewRun: () => this.scene.restart(),
+      // Only surfaced on a win (RunEndUI hides it on "died"): dismiss the end
+      // screen and un-freeze the world so the player can keep exploring.
+      onContinue: () => this.resumeAfterWin(),
       onClearScores: () => {
         clearHighScores();
         this.runEndUI.hide();
         this.showRunEndUI([], 0);
       },
     });
+  }
+
+  // Continue a won run into in-progress content (playtest end-to-end testing).
+  // The win's score is already posted; this just un-freezes the world and raises
+  // a persistent caveat so it's clear you're past the current end-game target.
+  // Death is NOT affected — a hardcore death still ends the run.
+  private resumeAfterWin(): void {
+    this.runEndUI.hide();
+    this.runOver = false;
+    this.inProgressMode = true;
+    if (!this.inProgressBanner) {
+      this.inProgressBanner = this.add
+        .text(
+          this.scale.width / 2,
+          8,
+          "⚠ IN-PROGRESS CONTENT — past the current end-game target (work in progress)",
+          {
+            fontFamily: "monospace",
+            fontSize: "12px",
+            color: "#ffd24a",
+            backgroundColor: "#1a1408",
+            padding: { x: 10, y: 4 },
+          },
+        )
+        .setOrigin(0.5, 0)
+        .setScrollFactor(0)
+        .setDepth(2850); // fixed-HUD band (above WORLD_H, below menus)
+    }
+    this.inProgressBanner.setVisible(true);
   }
 
   private respawnPlayer(): void {

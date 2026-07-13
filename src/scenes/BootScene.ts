@@ -1235,7 +1235,9 @@ export class BootScene extends Phaser.Scene {
       g.fillTriangle(19, 3, 21, 3, 20, 0);
       g.generateTexture(key, 28, 18);
     };
-    drawCragscale("cragscale", 0x7a5040, 0x5a3c30, 0x8a8078, 0xa39a90, 0x4a3228, 0xd8a83a);
+    // Cool slate-stone hide (was warm brown 0x7a5040) so it reads as a rocky
+    // reptile, not a second boar — Boar is warm-brown, Cragscale is grey-stone.
+    drawCragscale("cragscale", 0x69726c, 0x474e49, 0x9fa7a2, 0xc4ccc6, 0x545c56, 0xe0b43a);
     drawCragscale("cragscale_elite", 0x6a1f2a, 0x3f1020, 0xf0c040, 0xffe8a0, 0x3f1020, 0xffe08a);
 
     // Hexling — the badlands MAGE. A deliberately DISTINCT silhouette from the

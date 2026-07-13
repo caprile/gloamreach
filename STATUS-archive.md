@@ -4813,3 +4813,122 @@ new mechanic). Verified live via `preview_eval` + screenshots; `tsc --noEmit` cl
   CURRENT cumulative effect of points already spent (e.g. Vitality 5 → "+20 max HP,
   +7.5% healing"); shown as an amber "Now: …" line under each stat in `CharacterMenu`'s
   Stats tab (row height 44→52 to fit the third line).
+
+### Biome 2 — Phase 2: Badlands enemies & wildlife (core 3 + flora)
+
+Plan: `.claude/plans/biome-2-phase-2-enemies.md` (Phase 2 of the
+`biome-2-sunscorch-badlands.md` umbrella). Built on **Opus** (new content/AI). Scope locked
+with the user via `AskUserQuestion`: **the core 3 enemies + arid flora** (the 4th native creature
+deferred to Phase 2b); difficulty **noticeably tougher** than the forest roster; Cragscale
+resist = **resist slash, neutral blunt, weak pierce**. First *content* in the badlands — three
+bespoke enemies that each light up a Phase 1 dormant hook, spawned out in the badlands
+patchwork, never the forest disc.
+
+**1. Duskrunner** (`src/entities/Duskrunner.ts`) — gloam-touched canid swarm. Fast (92), low-HP
+(20), short 220ms telegraphed bite. Deliberately drives the **base `state` field** (not a
+private `mode`), so the inherited `Enemy.forceAggro()`/`isAggro()` work with **zero override** —
+the reference `packAggro` user (radius 260). The AOE-arc payoff enemy (neutral resists). Spawns
+in **packs of 3-4** so `updatePackAggro` visibly converges them. Loot: Duskrunner Pelt (+
+Duskrunner Trophy elite).
+
+**2. Cragscale** (`src/entities/Cragscale.ts`) — slow (40) armored bruiser, tanky (HP 60), one
+heavy telegraphed basher (520ms tell + 180 knockback). **Teaches the damage-type layer** via
+`resistances: { slash: 0.5, blunt: 1.0, pierce: 1.6 }` — the resist math + damage-number tint
+already live in `resolveWeaponHit` (Phase 1), so this just declares data. Loot: Cragscale Plate
+(+ trophy).
+
+**3. Hexling** (`src/entities/Hexling.ts`) — compact **stand-and-cast magic kiter** (its own
+subclass, NOT extending RangedGremlin — tracks a private `mode`, overrides `isAggro()`). Casts a
+single **`hex_bolt`** per 2s with `damageType: "magic"` → **bypasses the player's flat armor**
+(the dormant Phase 1 `applyDamageToPlayer` hook goes live). `Projectile` gained an optional
+`damageType`; the enemy-projectile→player overlap now forwards it (physical Gremlin rocks leave
+it undefined = unchanged). Resists `{ magic: 0.4, slash/blunt/pierce: 1.4 }` (resists magic,
+weak to physical). Loot: Hex Essence (+ trophy).
+
+**Flora** — Emberbloom (desert herb) + Sunfruit (cactus fruit), both persistent free-pickups
+reusing the Blackberry `persistent`/`pickedTexture`/`regrowMs` path. **No recipes wired** —
+future alchemy/food ingredients, surfaced only via the discovered-material toast.
+
+**Integration** — new `MainScene.pickBadlandsPoint(rng, minCoverage=0.5)` sweeps a polar annulus
+in the badlands radius band (2600-6400) and requires real `worldBiomes.coverageAt(..,"badlands")`
+there, honoring the War-Camp/Vein exclusions. `spawnBadlandsEnemies()` (6 packs + 10 Cragscale +
+10 Hexling, each `rollElite`) + `spawnBadlandsFlora()` (24 Emberbloom + 20 Sunfruit). 8 new
+`ResourceType`s + `Items.ts` defs (Gloamreach flavor) + `TROPHY_ROLL` entries (Common/tier1 for
+now — Phase 5 retiers to tier-2 + Ember refinement) + ~17 `BootScene` textures.
+
+**Verified live** (`preview_eval`, console error-free; `tsc` clean): 39 badlands enemies
+(Duskrunner ×19 / Cragscale ×10 / Hexling ×10) + 44 flora, all at r∈[2657, 6279] — **none in the
+forest disc** (forest roster capped at r=2001, unchanged). Cragscale resist damage: 10 slash →
+5, 10 pierce → 16. Hexling bolt spawns with `damageType:"magic"`; pack-aggro leader +
+`updatePackAggro` woke both packmates (class-gated). Biome discovery toast + "Sunscorch
+Badlands" minimap label confirmed. **Dashboard Enemies tab + trophy-source map updated** (manual
+mirror); no `RECIPES.md` change (no new recipes). See [[survivor-rpg-biome-2-plan]].
+
+**Same-session feedback pass (the user playtested):** four fixes. (1) **Density** — the badlands
+was ~22× sparser than the forest (39 enemies over the whole huge ring), so the user walked into a
+badlands area and found **0 enemies**. `pickBadlandsPoint` now concentrates in the **accessible
+inner band** (r 2500-5200, inner-weighted `frac^1.7`) with a lower coverage threshold (0.5→0.4),
+and counts jumped: Duskrunner **16 packs (~56)** / Cragscale **34** / Hexling **34** (~124 total,
+was 39) + flora 40/32. Verified: ~5-9 badlands enemies near a typical r≈3000 entry point.
+(2) **Terrain too red/pink** — `badlandsGroundColorAt` was a near-flat clay fill that the coarse
+LINEAR-stretched overlay washed into solid color. Rewrote it with **multi-scale value-noise
+mottling** (new `colorUtil.valueNoise2D`) across a dustier warm-earth palette (clay/ochre/sand/
+taupe/rust, browner + a cooler taupe drift to kill the pink); verified 47 distinct tones across a
+patch (channel spread R 74-166). (3) **Jagged straight borders** — `WorldBiomes.seedCoverage` now
+uses a **3-harmonic angular wobble** (was a single sine) + bigger lobes (`wAmp` 0.18-0.36) + wider
+soft falloff, so blob edges read as organic curves. (4) **Distinctive enemy kits** (the user: give
+the new enemies unique attacks) — **Duskrunner** gained a **pounce** (locked-direction leap
+gap-closer, built on Boar's charge mechanism); **Cragscale** a **rolling charge** (shell-roll to
+catch kiters, spins during the roll) on top of its basher; **Hexling** a **blink** (teleports
+~215px when the player closes inside 96px — a magical evade with a fading ghost VFX). All three
+verified firing (state machines progress through every phase; blink teleports 164px). `tsc` clean,
+no console errors. Dashboard Enemies tab updated for the new attacks.
+
+### Biome 2 — Phase 1: Combat systems layer (damage types, resist/weak, AOE arcs, swarm base)
+
+Plan: `.claude/plans/biome-2-phase-1-combat-systems.md` (Phase 1 of the
+`biome-2-sunscorch-badlands.md` umbrella). Built on **Opus** (new combat mechanics). Three
+reusable mechanics built *before* the biome-2 content so Phase 2 enemies / Phase 4 weapons can
+declare them as data — all dormant until then, so biome-1 combat is unchanged. No new
+enemies/weapons/content; verified by temporarily flagging existing enemies/weapons via eval.
+
+**1. Damage-type resist/weakness.** `magic` already existed in `DamageType`; this adds the
+multiplier layer. `EnemyConfig.resistances?: Partial<Record<DamageType, number>>` (`<1` resist,
+`>1` weak, absent = 1) → stored on `Enemy`, exposed via `resistMultiplier(type)`. Applied at
+the single choke point `resolveWeaponHit` (so it covers **both** melee and ranged and can't
+drift), which also derives an effectiveness (`weak`/`resist`/`normal`) and passes it to
+`spawnDamageNumber` — a non-crit number tints bright orange-red (weak) / dim blue (resisted);
+crit's yellow still wins. Empty for every biome-1 enemy.
+
+**2. Player-side magic-armor bypass (dormant hook).** `applyDamageToPlayer` gained an optional
+`dmgType?: DamageType`; when `"magic"` it **skips the flat-armor term** (relic %-reduction
+still applies, still floored at 1). No enemy deals magic until Phase 2's magical gremlin, so
+every current caller uses the unchanged physical path. Verified live: 30 magic vs 30 blunt in
+10-armor gremlin set → 30 taken (bypassed) vs 20 taken (30−10).
+
+**3. Per-weapon AOE arc** (locked decision 6). `WEAPON_ARC: Record<WeaponType, {halfAngleDeg;
+range; falloff}>` + `weaponArc()` in `Weapons.ts` — knife 25°/34px/0.5 (near single-target),
+clubs medium, **primal_spear 50°/58px/0.7 (wide sweeper)**, ranged `range: 0`. `tryMeleeAttack`
+now computes a shared pre-stagger/pre-crit `raw`, resolves the primary, then (if `arc.range > 0`)
+sweeps other live enemies within `range` and `±halfAngle` of the swing direction (player →
+primary target), each taking `raw × staggerMult × falloff` with **its own per-target crit**
+through the same `resolveWeaponHit` (own resist, kill/loot/XP). Extracted
+`staggerMultiplierFor(enemy)` (the GremlinKing/Gloamwarden `isStaggered()` checks) so
+primary/secondary/ranged share it. `enemyRadiusBonus()` lets the cone still catch a big
+elite/boss at its edge. Verified live: spear hit primary + in-cone neighbor (falloff) but not
+the out-of-cone one; knife hit only the primary (neighbor beyond its 34px range).
+
+**4. Swarm pack-aggro base** (opt-in). Public `Enemy.packAggro`/`packAggroRadius` (220) +
+`forceAggro(now)` (wakes idle→chasing without damage; clears post-giveup immunity).
+`MainScene.updatePackAggro(now)` (called each frame from `updateEnemies`) wakes idle **same-class**
+`packAggro` neighbors of any aggro'd `packAggro` member — O(k·n) with k = packAggro count (0
+today → effectively free). `forceAggro` drives the base `state` machine; a subclass tracking
+aggro via its own field (Boar/Snake/Gremlin's private `mode`) must **override** it, exactly as
+they already override `isAggro()` — documented in-code for Phase 2's swarm author. Verified live:
+leader woke a 120px neighbor, not a 600px one, and not a different-class enemy 10px away.
+
+**Verification.** `tsc --noEmit` clean. Live `preview_eval` against `MainScene` confirmed all
+four (the render loop was throttled/backgrounded — pumped `game.loop.step` to reach RUNNING, per
+CLAUDE.md's "assert against scene state, not screenshots" guidance). No `RECIPES.md`/dashboard
+change (no recipe or enemy-stat data change — resist values arrive with Phase 2 enemies). See
+[[survivor-rpg-biome-2-plan]].

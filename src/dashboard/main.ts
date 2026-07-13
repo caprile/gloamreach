@@ -466,7 +466,17 @@ function renderRelics(): string {
     refined_trophy_rare: "Refinement (scaffold) — roll-only",
   };
   for (const [key, roll] of Object.entries(TROPHY_ROLL)) {
-    const bands = TROPHY_OUTCOME_ODDS[roll.rarity];
+    // A trophy's maxRarity caps its produced rarity (refined trophies can't roll
+    // Mythic) — merge any capped-out band down into the cap rarity so the shown
+    // odds match Relics.roll()'s clamp.
+    const capIdx = roll.maxRarity ? RELIC_RARITIES.indexOf(roll.maxRarity) : Infinity;
+    const bands: { rarity: typeof RELIC_RARITIES[number]; chance: number }[] = [];
+    for (const b of TROPHY_OUTCOME_ODDS[roll.rarity]) {
+      const eff = RELIC_RARITIES.indexOf(b.rarity) > capIdx ? roll.maxRarity! : b.rarity;
+      const existing = bands.find((x) => x.rarity === eff);
+      if (existing) existing.chance += b.chance;
+      else bands.push({ rarity: eff, chance: b.chance });
+    }
     // Bands are sequential ranges; a Rare/Uncommon floor band (100%) shows as
     // "rest", others as their exact chance.
     let used = 0;

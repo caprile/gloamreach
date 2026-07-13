@@ -205,6 +205,12 @@ export const RELIC_POOLS: Record<RelicRarity, string[]> = (() => {
 export interface TrophyRoll {
   rarity: RelicRarity;
   powerTier: number;
+  // Optional hard cap on the PRODUCED relic rarity. Refined trophies use this:
+  // a Refined (Uncommon) trophy rolls the Uncommon outcome table (which has a 1%
+  // Mythic band), but refinement is already a gated climb — it shouldn't ALSO
+  // gamba into the top rarity. A would-be result above this cap clamps down to
+  // it. Absent = no cap (raw drops roll up freely to their table's max).
+  maxRarity?: RelicRarity;
 }
 export const TROPHY_ROLL: Record<string, TrophyRoll> = {
   // Every first-biome elite trophy is Common / Tier 1 — they share the Common
@@ -227,8 +233,10 @@ export const TROPHY_ROLL: Record<string, TrophyRoll> = {
   // Refined trophies (Gloaming Vein loop). Roll-only keys — produced ONLY by
   // refinement (never dropped, never a refine input themselves), so they climb
   // trophies one rarity up into a guaranteed-success roll. A Refined (Uncommon)
-  // trophy rolls the Uncommon outcome table (100% floor + chances to roll up).
-  refined_trophy_uncommon: { rarity: "uncommon", powerTier: 1 },
+  // trophy rolls the Uncommon outcome table (100% floor + a chance to roll up to
+  // Rare) but is CAPPED at Rare — refinement is a gated climb, not a Mythic
+  // gamba (the user, 2026-07-12), so its 1% Mythic band clamps down to Rare.
+  refined_trophy_uncommon: { rarity: "uncommon", powerTier: 1, maxRarity: "rare" },
   refined_trophy_rare: { rarity: "rare", powerTier: 1 },
 };
 
@@ -373,6 +381,12 @@ export class RelicManager {
     const pityHit = !resultRarity && this.misses[t.rarity] + 1 >= PITY_THRESHOLD[t.rarity];
     if (!resultRarity && (firstRollHit || pityHit)) resultRarity = t.rarity;
     this.firstRollDone = true;
+
+    // Clamp a rolled-up result to the trophy's cap (refined trophies cap below
+    // Mythic). A pity/first-roll floor sets t.rarity, which is always <= cap.
+    if (resultRarity && t.maxRarity && RELIC_RARITIES.indexOf(resultRarity) > RELIC_RARITIES.indexOf(t.maxRarity)) {
+      resultRarity = t.maxRarity;
+    }
 
     if (!resultRarity) {
       this.misses[t.rarity] += 1;

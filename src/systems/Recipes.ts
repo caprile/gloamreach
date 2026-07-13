@@ -39,7 +39,7 @@ export interface Recipe {
 export const RECIPES: Recipe[] = [
   {
     id: "stone_axe",
-    name: "Stone Axe",
+    name: "Woodcutter's Axe",
     description: "A crude axe for chopping trees.",
     category: "tools",
     tier: 0,

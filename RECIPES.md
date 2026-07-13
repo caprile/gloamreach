@@ -20,7 +20,7 @@ requires standing near a placed Workbench (`MainScene.isNearWorkbench`).
 
 | Name | Category | Tier | Workbench? | Costs | Required Skills | Output |
 |---|---|---|---|---|---|---|
-| Stone Axe | Tools | 0 | No | 4 Wood, 4 Stone | Chopping 0 | Tool |
+| Woodcutter's Axe | Tools | 0 | No | 4 Wood, 4 Stone | Chopping 0 | Tool |
 | Stone Pickaxe | Tools | 1 | Yes | 3 Wood, 4 Stone, 1 Leather Scraps | Mining 0 | Tool |
 | Torch | Tools | 0 | No | 1 Wood | — | Item |
 | Wood Club | Weapons | 0 | No | 4 Wood | — | Item (weapon, blunt) |
@@ -169,7 +169,7 @@ means more attempts.
 | Boar Trophy | Elite Boar | Common | 1 |
 | Snake Trophy | Elite Snake | Common | 1 |
 | Gremlin King Fang | Gremlin King | Rare | 1 (dormant: boss = win) |
-| Refined Trophy | Refinement (Gloaming Vein) | Uncommon | 1 (roll-only — never dropped/refined) |
+| Refined Trophy | Refinement (Gloaming Vein) | Uncommon | 1 (roll-only — never dropped/refined; **capped at Rare, no Mythic**) |
 | Radiant Trophy | Refinement (scaffold) | Rare | 1 (roll-only — deeper biomes) |
 
 Uncommon/Rare-*raw*-trophy sources + power tiers ≥2 are scaffolding — no raw
