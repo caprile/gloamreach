@@ -27,6 +27,12 @@ export interface UpgradeMenuDeps {
   upgradesFor: (itemKey: string) => UpgradeDef[];
   isDiscovered: (upg: UpgradeDef) => boolean;
   canAfford: (upg: UpgradeDef) => boolean;
+  // Non-null when the target is a placed station/processor: the set of upgrade
+  // ids it has already applied. Its presence switches the panel into the
+  // no-ladder model — every discovered, not-yet-applied upgrade is offerable
+  // (no "requires previous tier"), and applying any one is +1 level. Null (or
+  // absent) for worn weapon/armor, which keep the resultTier ladder.
+  appliedUpgradeIds?: () => Set<string> | null;
   // Extra non-material gate beyond canAfford (e.g. armor upgrades that also
   // require a nearby Workbench at a given tier) — returns a short blocking
   // reason to display, or null when unblocked. Optional: station upgrades
@@ -158,12 +164,16 @@ export class UpgradeMenu {
     }
 
     this.panelX = this.anchor ? this.anchor.x : this.scene.scale.width / 2 - PANEL_W / 2;
-    // Only show tiers not yet unlocked (the next one clickable, any further
-    // ones locked) — already-applied tiers are hidden, not greyed, for a
-    // cleaner panel.
-    const upgrades = this.deps
-      .upgradesFor(target.itemKey)
-      .filter((u) => u.resultTier > target.tier && this.deps.isDiscovered(u));
+    // Stations/processors run the no-ladder model (applied set drives the menu);
+    // worn weapon/armor keep the resultTier ladder. A non-null applied set is
+    // the discriminator.
+    const applied = this.deps.appliedUpgradeIds?.() ?? null;
+    const all = this.deps.upgradesFor(target.itemKey);
+    // Station: every discovered, not-yet-applied upgrade is offerable (no order
+    // gate). Weapon/armor: only tiers above the current one, discovered.
+    const upgrades = applied
+      ? all.filter((u) => !applied.has(u.id) && this.deps.isDiscovered(u))
+      : all.filter((u) => u.resultTier > target.tier && this.deps.isDiscovered(u));
 
     let cursor = 0;
     this.addText(this.panelX + 16, cursor + 14, this.deps.displayName(target.itemKey, target.tier), 16, "#ffffff");
@@ -174,14 +184,14 @@ export class UpgradeMenu {
     if (upgrades.length === 0) {
       // Distinguish "everything is already applied" from "higher tiers exist
       // but aren't discovered yet" — the former should read as maxed, not empty.
-      const higherExists = this.deps
-        .upgradesFor(target.itemKey)
-        .some((u) => u.resultTier > target.tier);
+      const higherExists = applied
+        ? all.some((u) => !applied.has(u.id))
+        : all.some((u) => u.resultTier > target.tier);
       const msg = higherExists ? "No upgrades discovered yet." : "Fully upgraded.";
       this.addText(this.panelX + 16, cursor + 6, msg, 12, "#8a93a3");
       cursor += 36;
     } else {
-      for (const upg of upgrades) cursor += this.renderUpgradeRow(upg, target, cursor);
+      for (const upg of upgrades) cursor += this.renderUpgradeRow(upg, target, applied !== null, cursor);
     }
     cursor += 12;
 
@@ -205,9 +215,11 @@ export class UpgradeMenu {
 
   // Returns this row's total height so the caller can advance its cursor.
   // Only not-yet-applied tiers reach here (render() filters applied ones out).
-  private renderUpgradeRow(upg: UpgradeDef, target: UpgradeTarget, rowY: number): number {
+  private renderUpgradeRow(upg: UpgradeDef, target: UpgradeTarget, stationMode: boolean, rowY: number): number {
     const filling = this.busyUpgradeId === upg.id;
-    const locked = upg.resultTier > target.tier + 1; // requires an earlier tier first
+    // No ladder for stations/processors — any offered upgrade is applyable.
+    // Worn weapon/armor still require the previous tier first.
+    const locked = !stationMode && upg.resultTier > target.tier + 1;
     const affordable = this.deps.canAfford(upg);
     const blockReason = !locked ? (this.deps.extraBlockReason?.(upg) ?? null) : null;
     // While any row's bar is filling, every row is inert (the bar covers the

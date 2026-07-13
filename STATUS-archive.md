@@ -5634,3 +5634,60 @@ machinery Session 1 (5ak) and earlier phases already built. `tsc --noEmit` clean
   `dashboard/main.ts`, `RECIPES.md`. **Phase 4 complete.**
 - **Deferred beyond Phase 4** (unchanged): forged **tool** tier, a forged **ranged** weapon. The
   Gloam→Ember-Shard conversion + tier-2 relics both shipped in **Phase 5** — see that entry above.
+
+### Dev console commands for playtesting (2026-07-13, Sonnet)
+
+Off-roadmap dev tooling, not a game milestone — the user flagged that testing a change deep in a build
+(e.g. a badlands weapon) meant playing through a full run to reach it. `window.__dev`, installed once
+from `MainScene.create()` via `installDevConsole()`, gated on `import.meta.env.DEV` (new
+`src/vite-env.d.ts` referencing `vite/client` types — never reachable in a production build, unlike the
+pre-existing unconditional `Ctrl+Shift+M` reveal-map cheat). Eight commands + a one-line parser (shipped
+in two passes this session — the second off the user's own testing of the first):
+- **`god(on?)`** — **still takes damage/knockback and shows the true computed damage number** (the user
+  wanted to keep testing damage numbers), but floors the applied amount at `current HP - 1` so it never
+  drops below 1 or dies. First ship blocked damage entirely via an early-return; reworked same-session
+  once the user said he still wanted to see numbers/feedback.
+- **`heal()`** (new) — `Health.reset()` (refill to current max, bypassing the Vitality heal-mult food/
+  Comfort uses) + HUD refresh. The natural pair to `god()`.
+- **`nobuildcost(on?)`** — when ON, calls `Crafting.unlockAll()` (marks every recipe discovered) and
+  makes `isNearWorkbench`/`isNearWorkbenchAtTier` unconditionally return true. **Bug found + fixed
+  same-session:** the first ship only patched the actual craft/place/upgrade *execution* paths
+  (`craftRecipe`, the placement confirm handler, `applyStationUpgrade`/`applyArmorUpgrade`/
+  `applyWeaponUpgrade`, `cookAtCampfire`) — but `CraftingMenu.isCraftable()`, `CookingMenu`'s inline
+  `canAffordCook` check, and `MainScene.maxCraftBatches`/`maxCookBatches` each independently recomputed
+  affordability straight from `Crafting.canAfford`/backpack counts for **display** (grey-out + the
+  batch-quantity slider), completely bypassing the flag. the user hit this immediately: nobuildcost ON,
+  craft button still greyed out. Fixed by adding a `noBuildCost: () => boolean` dep to both
+  `CraftingMenuDeps` and `CookingMenuDeps` (short-circuits `isCraftable`/`canCook` to true) and making
+  `maxCraftBatches`/`maxCookBatches` skip their cost-cap loop (room cap stays) when the flag is set.
+  Also extended to the Upgrade menu chain (`canAffordUpgrade` + the three `apply*Upgrade` deduction
+  loops) — same bug shape, would've hit the same wall next. Drying Rack/Smelter untouched — that menu
+  loads raw input first then slides a fraction, a different paradigm the bug doesn't apply to.
+  Deliberately does NOT skip the placement-mode "consume one owned stack" step — placing an item you
+  already have isn't a build cost.
+- **`setstat(name|"all", value)`** — routes by name: a `SkillType` (e.g. `"blunt"`) calls
+  `Skills.setLevel()` (clamped [0,100], resets XP, skips level-up listeners); a `StatType` (e.g.
+  `"vitality"`) calls `PlayerProgression.setStat()` (bypasses `unspentPoints`) then `syncStatBonuses()`.
+  **`"all"`** (added same-session) loops every `SkillType` and every `StatType` to the same value in one
+  call. Unknown name → `console.warn`, no throw.
+- **`spawn(name, elite?)`** — `src/systems/DevSpawnTable.ts` (`DEV_ENEMY_SPAWN_TABLE`, standalone
+  name→factory map covering the full roster incl. all 4 bosses/mini-bosses) scatters the enemy ~100px
+  around the player at a random angle and pushes it through normal `enemies`/`enemyGroup` registration.
+- **`killall(radius = 2000)`** — mirrors `resolveWeaponHit`'s death-cleanup path but **scoped to
+  non-boss enemies only** and skips loot/score recording — clearing trash to test in peace, not sniping
+  a boss encounter.
+- **`exploremap()`** — thin wrapper over `revealEntireMap()`.
+- **`list()`** (new) — returns `{ skills, stats, enemies }` (the valid names for `setstat`/`spawn`) and
+  logs each as a console line, so the names don't have to be memorized or looked up in source.
+- **`run("spawn duneshaper")`** — single-string convenience parser dispatching to all of the above.
+
+Verified live via `preview_eval` against the real running scene (not just type-checked), across both
+passes: god mode takes a real 30-dmg hit normally (100→70), floors a 9999-dmg hit at 1 HP without dying,
+stays at 1 HP on a further hit, and `heal()` restores to full; `setstat` confirmed on a skill, a stat
+(with `health.max` recompute), and `"all"` (all 11 skills + 6 stats set in one call, via both direct call
+and `run(...)`); `nobuildcost` unlocked all 41 recipes, crafted with backpack counts unchanged, and —
+**after the fix** — `maxCraftBatches`/`maxCookBatches`/`canAffordUpgrade` all confirmed to ignore a
+monkey-patched always-false `canAfford`, and a live-rendered `CraftingMenu` panel showed zero recipe rows
+in the disabled grey color even with `canAfford` forced to fail; `spawn`/`killall`/`exploremap`/`list()`
+all confirmed as in the first pass. `tsc --noEmit` clean; zero console errors throughout. No `RECIPES.md`
+change (no recipe/cost changes — these are bypasses, not new content).

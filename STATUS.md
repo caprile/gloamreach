@@ -2,7 +2,25 @@
 
 ## Current State
 
-_Living snapshot — edit in place, never append. Last shipped: **Biome 2 — Phase 5: Relics rework**
+_Living snapshot — edit in place, never append. Last shipped: **Campfire tiers + cross-biome cooking +
+no-ladder station upgrades** (2026-07-13, Opus). Off the master-plan build order. Foundation change:
+**station/processor upgrades are now no-ladder** — any *discovered* upgrade for a station can be applied
+in any order and applying it bumps the station's level by exactly **+1** (level = count of upgrades
+applied, tracked as a per-instance applied-id set that survives Destroy→pickup→re-Place). `resultTier`
+is demoted to a sort hint; recipes/dishes gate on the level count, with material-specificity coming from
+recipe ingredient discovery. Scope = stations/processors only — worn **weapon/armor upgrades keep their
+ladder** (the shared UpgradeMenu branches on a new `appliedUpgradeIds()` dep). On top of that: **Campfire
+Lvl 3/4** (Sunsteel Grill / Emberforge Hearth, ingot-gated with distinct costs; per-level tint tell),
+**5 new HP-regen dishes** (each level has a badlands-native "best" dish needing no backtracking + optional
+mixed dishes that spend leftover boar_meat), and a **cooking-menu rework**: collapsible per-level sections
+(best on top), scrollable via windowed rendering + a viewport geometry mask, an amber "● N ready"
+cookable-count badge per section (visible even when collapsed) + a "Show only cookable" filter, and a
+matching amber "has-craftable" dot on the CraftingMenu category tabs. Verified live via `preview_eval`
+(no-ladder apply/order/dup/persistence, weapon-armor ladder intact, cook+eat, menu scroll/collapse/mask/
+filter); `tsc` clean; dashboard + `RECIPES.md` updated. See the entry below.
+[[survivor-rpg-crafting-inventory-ui]] [[survivor-rpg-placed-object-management]]_
+
+_Prior: **Biome 2 — Phase 5: Relics rework**
 (2026-07-13, Opus). The relic economy for biome 2 + the requested rebalance, closing out the biome-2
 umbrella plan's final milestone. Three parts, all locked via `AskUserQuestion`: **(1) Family loadout,
 not stacking.** Every relic now has a `family` (damage/move/defense/stamina/lifesteal/vitality/crit/xp,
@@ -31,219 +49,10 @@ choice-button block could overlap the relic grid below it). See the Phase 5 entr
 below. **This completes the biome-2 umbrella plan (`.claude/plans/biome-2-sunscorch-badlands.md`).**
 [[survivor-rpg-relics]]_
 
-_Prior: **Biome 2 — Phase 4b: enhanced (T2) gear
-tier + the first magic weapon** (2026-07-13, Opus; **Session 2 of Phase 4**, completing it). Adds the
-**Workbench Lvl 4** upgrade (**Emberforge Anvil**, `{embersteel_ingot:5, stone:15}`, only discoverable once
-an Embersteel Ingot has been smelted) which unlocks a new `requiresWorkbenchTier:3` recipe gate. **9
-enhanced recipes** each **reforge their base forged piece** (the base item is consumed as an ingredient —
-must be **unequipped/in the backpack**) + Embersteel Ingot: an **Embersteel heavy set** (7/9/7 = 23 armor)
-+ an **Emberhide light set** (5/6/5 = 16) + three enhanced weapons (Embersteel Warhammer 20 blunt / Longsword
-15 slash / Pike 17 pierce). The **first MAGIC weapon** — the **Ember Brand** (`{embersteel_ingot:3,
-hex_essence:4}`, rare-ore-exclusive), 14 dmg / 520ms, `magic` type: DPS ≈ the Embersteel Pike on a neutral
-target, but resisted (~×0.4–0.5) by the gloam-casters (Hexlings, the Duneshaper) — a sidegrade that finally
-gives the `magic` weapon skill a real XP source (no badlands enemy is *weak* to magic yet — a hook for a
-future magic-vulnerable foe). **Zero new MainScene logic** — the Emberforge upgrade, tier-3 gate, item-key
-costs (Recipe.costs widened to `Partial<Record<string,number>>`), bench-texture swap, and magic damage-type
-routing all flow through existing generic machinery. Verified live via `preview_eval` (all 10 recipes/items,
-Emberforge chain t1→t2→t3, tier-4 gate blocks/allows, enhanced craft consumes base piece, bench t3 texture
-swap, badlands magic resists); `tsc` clean; no console errors. **Phase 4 complete.** See the Phase 4b entry
-below. [[survivor-rpg-biome-2-plan]]_
-
-_Prior: **Biome 2 — Phase 4a: Smelting economy +
-Gremlin King gate + base forged gear** (2026-07-13, Opus; **Session 1 of a 2-session Phase 4**). The forged
-gear tier + the deferred **Gremlin King critical-drop rework** (locked decision 10). New progression: mine
-**Clay** → build the **Smelter**; smelt **ore + Hex Essence = ingot** (common **Sunscorch Ore → Sunsteel
-Ingot**); upgrade the **Workbench to Lvl 3** (Forge Anvil) → unlocks base forged recipes; kill the **Gremlin
-King → Heart** (replaces the fang) → upgrade the **Smelter** (Ember Crucible) → smelt rare **Cinderforged Ore
-→ Embersteel Ingot** (the T2 metal for Session 2). Base gear: a **Sunsteel heavy set** (14 armor, wires the
-dormant `heavy_armor` skill — its effect is **magic/fire mitigation**, the counterpart to light's dodge
-i-frames) + a **Duskhide light set** (10) + **three weapons** covering blunt/slash/pierce. The Smelter reuses
-the Drying Rack's menu/`ProcessingStation` (fuel- + tier-aware); a new `Recipe.requiresWorkbenchTier` gates
-the forged tier on a Lvl-3 bench; benches now change texture per tier. All ingredients drop from normal
-badlands enemies. See the Phase 4a entry below. [[survivor-rpg-biome-2-plan]]_
-
-_Prior: **Badlands playtest batch (19 items)** (2026-07-13, Opus). A broad polish/tuning pass off a
-badlands playtest: a **fire** damage type (`IncomingDamageType`, bypasses flat armor like magic) + a
-player-facing type-tinted damage number; **Cinderwrought** deals fire + on death cracks open mineable
-Cinderforged Ore (the Phase-4 hook); badlands damage bumped across the board; **5 Sunken Forges** (was 1);
-denser everything + 2 new harvestables (Gloamcap, Dustbloom); every POI gets a floor decal + marker ring;
-**one Duneshaper altar per quadrant** (4); POI map-detection radius widened (~260→760px); decorative
-immersion props across both biomes. See the batch entry below._
-
-_Prior: **Biome 2 — Phase 3: The Duneshaper
-(badlands final boss + win-con swap)** (2026-07-13, Opus). The **new win-condition final boss**,
-demoting the Gremlin King to a mid-boss. `src/entities/Duneshaper.ts` — a gloam-warped apex
-sorcerer, bespoke telegraph/poise AI (GremlinKing/Gloamwarden precedent, NOT a shared framework).
-HP **900**, poise 120 (stagger → ×1.5 for 3s), scale 2.3; resists magic ×0.5, weak to melee ×1.3;
-regens 14 HP/s deaggro'd. **Phase-gated ESCALATION** (locked with the user): 3 attacks at full HP —
-**Gloam Volley** (3 magic bolts), **Sand Spikes** (3 PHYSICAL-pierce circles — armor applies),
-**Blink Nova** (teleport + radial magic burst); **+Gloamfire Lance** (locked-direction magic beam)
-at **70% HP**; **+Sunscorch Barrage** (7-circle magic carpet) **and enrage timing** at **50% HP**.
-Magic attacks bypass flat armor (Phase-1 hook); only the spikes are physical. All area attacks
-funnel through `checkPlayerHit` → `applyDamageToPlayer` (dash i-frames/armor just work); the volley
-self-resolves as projectiles. Loot: **2 Refined Trophy (Uncommon) + 5-8 Gloam Shards**. **Summon
-(the user):** its own badlands **Boss Altar(s)** — **3 scattered Tyrant Altars** — but the summon
-item (**Effigy of the Duneshaper**, tier-1 recipe) is crafted from **Gloam-Bone Fetishes looted
-from Duskrunner Warren caches** (guaranteed 1/cache). **Clue system (the user):** several altars so
-one's reachable + they glow at night + auto-discover as violet `map_tyrant_altar` landmarks +
-**crafting the effigy reveals ALL altars on the map** with a directional nudge to the nearest.
-**Win-con swap:** a Duneshaper kill fires `endRun("won")`; the Gremlin King no longer wins (still
-"boss" score, still drops its fang — its critical-drop rework is deferred to Phase 4). BossHealthUI
-generalized to a `BossBarTarget` interface (shows whichever big boss is engaged). Verified live via
-`preview_eval`: 3 spread altars + all 6 textures load; summon consumes the effigy + prompt gating;
-boss stats/resists/loot; phase pool 3→4→5; state-machine cycle; all 5 attacks' `checkPlayerHit`
-(physical-vs-magic + knockback + one-hit-per-instance + miss); volley = 3 magic bolts; **Duneshaper
-kill → `endRun("won")` (VICTORY screen rendered), Gremlin King kill → no win**; effigy craft reveals
-all altars + "tugs toward the north-west" nudge; boss renders (visible/alpha/onScreen). Next:
-**Gremlin King critical-drop rework** (Phase 4 gear gate); then Phase 4 smelting/forging + Phase 5
-tier-2 relics. See "Biome 2 — Phase 3: The Duneshaper" below. [[survivor-rpg-biome-2-plan]]_
-
-_Prior: **Biome 2 — Phase 3 POI 2: the Sunken Forge** (2026-07-12, Opus). A **bespoke fire/forge
-mini-boss** (`src/entities/Cinderwrought.ts`) guarding a themed badlands landmark — a Cinder Cone
-(locked-direction fire fan, the game's only cone) + a Forge Hammer (wide-but-short front-arc smash).
-HP 300, poise 70, resists blunt ×0.8 / weak pierce ×1.25. Loot: 1 Refined Trophy (Uncommon) + 3-5
-Gloam Shards. `map_forge` landmark + `"poi"` toast on discovery. See its entry below._
-
-_Prior: **Biome 2 — Phase 3: Duskrunner Warren POI** (2026-07-12, Opus). The first of Phase 3's two
-POIs — a **two-wave destructible den**, NOT a shack clone: `src/entities/BadlandsDen.ts` is a burrow
-mound guarded by **3 Duskrunners → (on clear) 3 ELITE Duskrunners**; only once both waves fall does
-the den become **attackable with a melee weapon**, and smashing it collapses it into a **lootable
-cache** (reuses `LootContainer`/`ChestMenu`). Loot gated behind destruction; no respawn. 10 dens
-spread ≥950px apart; Duskrunners now drop raw `duskrunner_meat`. `map_den` landmark + `"poi"` toast
-on discovery. See "Biome 2 — Phase 3: Duskrunner Warren POI" below._
-
-_Prior: **Biome 2 — Phase 2b: Sandmaw** (2026-07-12, Opus). The deferred 4th native badlands
-creature — a **burrowing ambusher**. The **Sandmaw** (`src/entities/Sandmaw.ts`) lurks submerged
-(near-invisible) until you enter its 62px ambush ring, then ERUPTS in a telegraphed radial
-sand-burst (95px, 38 physical + 220 knockback, via `checkPlayerHit` like the bosses/Hexling flame),
-stays surfaced + vulnerable for a punish window, then burrows and slow-stalks to re-ambush. Own
-bespoke state machine. Resist `{ pierce: 0.6, blunt: 1.4 }` — the **inverse of Cragscale**. 24
-scattered lone spawns; elite + `sandmaw_trophy` + `sandmaw_chitin`. See "Biome 2 — Phase 2b:
-Sandmaw" below._
-
-_Prior: **4-item playtest fix batch**
-(2026-07-12, Sonnet-class fixes on existing systems). (1) **Cragscale re-toned** to a cool
-slate-grey hide (was warm brown `0x7a5040`, too close to the Boar) so the rock reptile no longer
-reads as a second boar — Boar stays warm-brown, Cragscale is grey-stone (`BootScene.ts` normal
-variant only; elite crimson/gold unchanged). (2) **Woodcutter's Axe crafting-menu name** — the
-`stone_axe` RECIPE still read "Stone Axe" (only the item's inventory `name` was renamed in the
-prior batch); the recipe `name` now matches. (3) **Continue past the win (playtesting)** —
-winning (Gremlin King kill) now offers a green **[ Continue ]** button on the run-end screen beside
-[ New Run ]: it un-freezes the world (`resumeAfterWin` clears `runOver`, sets `inProgressMode`) and
-raises a persistent top-center **"⚠ IN-PROGRESS CONTENT"** caveat banner so live/testing builds can
-be pushed before a biome is done. Score is posted at the win; **death still always ends the run**
-(no respawn during playtesting — `endRun` forces the "died" outcome via `Run.setOutcome` so a
-continued-then-died run reads YOU DIED). (4) **Refined-Uncommon relic cap** — a Refined
-(Uncommon) trophy rolls the Uncommon outcome table (which has a 1% Mythic band) but is now
-**capped at Rare** via a new optional `TrophyRoll.maxRarity` — refinement is a gated climb, not a
-Mythic gamba; a would-be Mythic clamps to Rare (Rare-refined stays uncapped). Verified live:
-30k refined-Uncommon rolls → 0 Mythic (~6% Rare); Continue button un-freezes the run; axe recipe
-name + Cragscale/Boar tints distinct; no console errors. Dashboard Relics tab + RECIPES.md updated.
-See "4-item playtest fix batch" below. [[survivor-rpg-relics]]_
-
-_Prior: **Placeholder art pass — all creatures + non-rotating facing** (2026-07-12, Opus). Every
-enemy + the player brought up to the Hexling's detail bar (layered silhouette/shading/features/
-glow) in `BootScene.ts`, exact dimensions preserved; **non-rotating facing** (`applyUprightFacing`,
-`EnemyConfig.upright` default `?? true`) is now the roster default — purely visual, attack
-hit-checks use distance math. See "Placeholder art pass" below. [[survivor-rpg-enemy-art-facing]]_
-
-_Prior: **Biome 2 playtest fix batch #2**
-(2026-07-12, Sonnet). Fixed the REAL cause of the map's "flat lines"/hard seams: the tiled
-`outerFeatureBiome`'s Voronoi/CA zone generation + creek carve were never toroidal-aware, but
-`Biome.bilinear()` wrapped it anyway for tiled sampling — bilinearly blending two UNRELATED grid
-edges together, baking a hard seam every `OUTER_FEATURE_SIZE` (4000px) world px in both x and y
-(the prior fix below only addressed the *forest-disc-edge* line, a different source). Now
-`buildVoronoiZones`/`smooth()`/`carveCreek` are genuinely toroidal when `tiled` (wrap-around
-Voronoi distance, wrapped CA neighbors, a periodic sine wobble for the creek ribbon instead of a
-free random walk) — verified live via `preview_eval` (0 big forestWeight jumps scanned across 5
-tile boundaries). Also added a generic `mottleColor()` brightness-noise pass
-(`colorUtil.ts`) applied to `WorldBiomes`' base-layer + outer-forest-blob color (outside the
-protected forest core) so the "light green" open wilds outside spawn read as textured instead of
-flat (the user: "loses the speckled texture"; Dunes/badlands already had their own noise, base
-layer didn't) — an explicit placeholder pass, real tilesets replace it later. **Hexling no longer
-rotates upside-down**: new `EnemyConfig.upright` flag (only Hexling opts in) skips the base
-`Enemy`'s random-360°-spawn-rotation + `applyFacing`'s full-rotation-toward-travel, replaced by
-`applyUprightFacing()` — mirrors left/right via `flipX`, tilts at most ~11° up/down, never near
-horizontal. **Biome-2 damage bumped significantly** per the user ("should hurt even with lvl-3
-armor... make the game hard"): Duskrunner bite 20→34, Cragscale basher/roll 22→40 (both net well
-above biome-1's Boar-25/Snake-20 through the 13-flat Lvl-3-armor cap), Hexling bolt 14→22 / flame
-18→34 (both `magic`, bypass armor entirely — 3 flame hits ≈ 102 now kills a 100-HP player, per
-the user's "should kill you in like 3 hits" ask); also fixed a latent bug where Elite Hexling dealt
-the SAME bolt/flame damage as a base Hexling (every other elite gets +50% dmg, Hexling's magic
-damage was never scaled) — now `boltDamage`/`flameDamage` instance fields scale with `elite` like
-every other enemy. `ExploredMap` gained `colorAtSmoothed()` (center-weighted 3x3 average of
-revealed neighbor cells, still -1/fog if the cell itself is unrevealed) wired into both
-`WorldMapUI` and `MinimapUI`'s cell fill, softening the visible per-cell rectangular edges at
-higher map zoom on top of the seam fix. No new mechanic — Sonnet-class fixes/tuning throughout.
-
-Prior: **16-item playtest fix batch** (2026-07-12, Sonnet — fixes/UI/tuning on existing systems,
-no new mechanic) off a fresh end-to-end playtest. Highlights: Stone Axe renamed **Woodcutter's Axe** (display only); fixed
-`"Attack Elite Elite Snake"` (prompt no longer double-prepends "Elite " — `displayName` already
-carries it); **Boar and MeleeGremling now wake on a hit taken while idle** (added `takeHit()`
-overrides mirroring the existing RangedGremlin/Hexling/Snake precedent — this was the real cause
-of "the slingshot outranges Snake/Boar's aggro," not a missing `forceAggro()` call); ranged
-attacks with no ammo now show a floating "Out of ammo!" instead of a silent no-op, and firing the
-last loaded round **auto-refills the ammo slot from the backpack** if more is carried (Slingshot
-Pellets stack cap 50→99); dragging a placeable OUT of the hotbar (either row) now re-arms
-placement mode instead of dropping it on the ground; the corner tip popup (`HintUI`) now renders
-above every menu (was hidden behind the crafting/inventory panel, depth 2860→3200); the
-Player-Level-Up banner and the EventLog's center-toast stack (e.g. "Defeated X") no longer
-overlap (`EventLogUI.setTopOffset`, + the redundant duplicate "Level Up!" toast is now silent —
-the banner already covers it); Gremlin Shack count 5→8 (denser, only the 5 wild-standalone slots
-grew — the War Camp's 3-hut cluster geometry is untouched); Lvl-2 cooked dishes rebalanced from
-~2.3x a Lvl-1 dish's total heal down to a flat **+25%** (`hpPerSec` up, `durationMs` matched to
-the Lvl-1 dish instead of extended); Gremlin Shack chests and cracked-open Gloaming Vein ore nodes
-now have a constant pulsing glow halo (reuses the `light_soft` additive-glow idiom) so both read
-as obviously interactable — previously only the Gloam Shard *drop* popped, the ore node itself
-was static; new **Tips** button on the Pause menu (`TipsUI.ts`) lists every hint discovered this
-run, re-readable, since right-click-to-upgrade and other non-obvious gestures are otherwise taught
-once and gone. Not built: a wolf-howl SFX on nightfall — noted in `Sfx.ts` as a poor fit for the
-current raw-oscillator-envelope synth approach; revisit once real audio assets are in scope.
-See "16-item playtest fix batch" below for full detail.
-
-Prior: **Biome 2 — Phase 2 playtest fix batch** (2026-07-12) — off the user's first badlands
-playtest. Fixed the badlands-enemies/Emberbloom
-"in the woods" spawn leak (`pickBadlandsPoint` now gates on the DOMINANT biome, not >=0.4
-coverage); Duskrunner bite/pounce reach (whiffed on diagonals) + damage (1-dmg-in-max-armor →
-raised, flat-armor model kept per the user); added Duskrunner pack-attack sync. **Reworked two
-enemy identities:** **Hexling** is now a real MAGE — distinct taller robed 20×30 texture,
-stand-and-cast (no kite), a **Flame Strike** (3 delayed magic AoE circles at your locked spot →
-blink away) as its close-range punish, HP 30→55; **Cragscale**'s roll is faster+wider and opens a
-**BLEED** wound (new `systems/Bleed.ts` DoT), the heavy must-dodge threat distinct from the
-Duskrunner pounce. And killed the worldgen "straight vertical/horizontal lines" (the crisp forest
-SQUARE edge) by feathering it into the now-continuous outer overlay with a soft-disc bitmap mask.
-Prior: Biome 2 Phase 2 (badlands core 3 enemies — Duskrunner/Cragscale/Hexling + Emberbloom/
-Sunfruit flora, spawned out in the patchwork via `pickBadlandsPoint`, each with elite variants +
-per-species trophies); Phase 1 (combat systems layer); Phase 0 (patchwork worldgen)._
-
-**The game.** Top-down 2D pixel survival-ARPG (Phaser 3 + TypeScript + Vite; all
-textures are placeholders generated in `BootScene`). A forest biome (biome 1) in the center of a
-large **circular** world (now **28000px, `WORLD_RADIUS` 14000**, grown for ~5 biomes). Biome 1
-is a solid **protected forest disc** (`BIOME_RADIUS` 2000, unchanged); everything beyond it is a
-**Valheim-style patchwork** (`src/systems/WorldBiomes.ts`): a universal base layer that grades
-grass→dusty outward, with biome **blobs** painted on top (metaball coverage). **Radius sets a
-danger CEILING** — a blob may be any biome with `tier ≤ ceiling(r)`, weighted toward the ceiling,
-so a higher-tier biome never appears below its unlock radius (no out-of-order danger) while lower
-biomes (forest, badlands) can appear anywhere out in later-biome territory; forest also spawns as
-blobs beyond the disc. Two outer biomes exist as **terrain only, no content**: the **Sunscorch
-Badlands** (dusty red-brown) and a placeholder **Windswept Dunes** (pale sand). A **current-biome
-label** sits on the minimap and a **discovery toast** fires on first entry to each biome
-(`Ctrl+Shift+M` = dev reveal-whole-map). Day/night cycle and a hardcore
-run/score meta-loop (seed is display-only for now). Shipped systems: gather/craft with
-tool-KIND gating + a Workbench tier gate;
-souls-like telegraphed combat on **every** enemy (Boar charge, Snake coil-lunge,
-Gremlin/Gremling claws) plus the first boss (Gremlin King — poise/stagger + leaping
-smash / charge / ground slam, enrage <50% HP); stamina/sprint/dash with dash i-frames;
-Skills + Player Level progression; placeable stations (Campfire, Drying Rack, Relic
-Forge, Bedroll); cooking → timed HP-regen food buffs; wearable 3-tier Gremlin armor +
-weapon/station upgrades; elites (chance-based rolls + forced-elite shack guards)
-dropping per-species trophies; a probabilistic trophy→Relic economy with a gated
-**trophy-refinement** loop (the Gloaming Vein ore POI + Gloamwarden mini-boss →
-Gloam Shards → the Relic Forge's Refine tab); a **nearby-view
-minimap + full-screen zoomable/pannable world map** (M / Map button) with fog of war and
-discovered-POI icons; the Gremlin War Camp + Gloaming Vein POIs; contextual hints + a
-pause menu; and a drift-free balancing dashboard at `/dashboard.html` (second Vite entry,
-imports live data modules).
+_Earlier milestones (full writeups in STATUS-archive.md): Biome 2 Phase 4a/4b (smelting + base/enhanced
+forged gear + Gremlin King's Heart + Ember Brand), the 19-item badlands playtest batch, Phase 3
+(Duneshaper boss + win-swap, Sunken Forge, Duskrunner Warren), Phase 2b Sandmaw, Phase 2 badlands roster,
+Phase 0/1 patchwork worldgen + combat-systems layer, and the whole roguelike meta-loop._
 
 **Meta-loop** (`.claude/plans/roguelike-metaloop-master-plan.md`): M-FX / M-R1 /
 M-DN / Comfort(M-SB) / M-EL2 / M-RL / M-WC all shipped; M-FA cut. Hardcore one-life
@@ -331,63 +140,6 @@ below + [[survivor-rpg-dev-console]].
 
 > Older entries in STATUS-archive.md.
 
-### Dev console commands for playtesting (2026-07-13, Sonnet)
-
-Off-roadmap dev tooling, not a game milestone — the user flagged that testing a change deep in a build
-(e.g. a badlands weapon) meant playing through a full run to reach it. `window.__dev`, installed once
-from `MainScene.create()` via `installDevConsole()`, gated on `import.meta.env.DEV` (new
-`src/vite-env.d.ts` referencing `vite/client` types — never reachable in a production build, unlike the
-pre-existing unconditional `Ctrl+Shift+M` reveal-map cheat). Eight commands + a one-line parser (shipped
-in two passes this session — the second off the user's own testing of the first):
-- **`god(on?)`** — **still takes damage/knockback and shows the true computed damage number** (the user
-  wanted to keep testing damage numbers), but floors the applied amount at `current HP - 1` so it never
-  drops below 1 or dies. First ship blocked damage entirely via an early-return; reworked same-session
-  once the user said he still wanted to see numbers/feedback.
-- **`heal()`** (new) — `Health.reset()` (refill to current max, bypassing the Vitality heal-mult food/
-  Comfort uses) + HUD refresh. The natural pair to `god()`.
-- **`nobuildcost(on?)`** — when ON, calls `Crafting.unlockAll()` (marks every recipe discovered) and
-  makes `isNearWorkbench`/`isNearWorkbenchAtTier` unconditionally return true. **Bug found + fixed
-  same-session:** the first ship only patched the actual craft/place/upgrade *execution* paths
-  (`craftRecipe`, the placement confirm handler, `applyStationUpgrade`/`applyArmorUpgrade`/
-  `applyWeaponUpgrade`, `cookAtCampfire`) — but `CraftingMenu.isCraftable()`, `CookingMenu`'s inline
-  `canAffordCook` check, and `MainScene.maxCraftBatches`/`maxCookBatches` each independently recomputed
-  affordability straight from `Crafting.canAfford`/backpack counts for **display** (grey-out + the
-  batch-quantity slider), completely bypassing the flag. the user hit this immediately: nobuildcost ON,
-  craft button still greyed out. Fixed by adding a `noBuildCost: () => boolean` dep to both
-  `CraftingMenuDeps` and `CookingMenuDeps` (short-circuits `isCraftable`/`canCook` to true) and making
-  `maxCraftBatches`/`maxCookBatches` skip their cost-cap loop (room cap stays) when the flag is set.
-  Also extended to the Upgrade menu chain (`canAffordUpgrade` + the three `apply*Upgrade` deduction
-  loops) — same bug shape, would've hit the same wall next. Drying Rack/Smelter untouched — that menu
-  loads raw input first then slides a fraction, a different paradigm the bug doesn't apply to.
-  Deliberately does NOT skip the placement-mode "consume one owned stack" step — placing an item you
-  already have isn't a build cost.
-- **`setstat(name|"all", value)`** — routes by name: a `SkillType` (e.g. `"blunt"`) calls
-  `Skills.setLevel()` (clamped [0,100], resets XP, skips level-up listeners); a `StatType` (e.g.
-  `"vitality"`) calls `PlayerProgression.setStat()` (bypasses `unspentPoints`) then `syncStatBonuses()`.
-  **`"all"`** (added same-session) loops every `SkillType` and every `StatType` to the same value in one
-  call. Unknown name → `console.warn`, no throw.
-- **`spawn(name, elite?)`** — `src/systems/DevSpawnTable.ts` (`DEV_ENEMY_SPAWN_TABLE`, standalone
-  name→factory map covering the full roster incl. all 4 bosses/mini-bosses) scatters the enemy ~100px
-  around the player at a random angle and pushes it through normal `enemies`/`enemyGroup` registration.
-- **`killall(radius = 2000)`** — mirrors `resolveWeaponHit`'s death-cleanup path but **scoped to
-  non-boss enemies only** and skips loot/score recording — clearing trash to test in peace, not sniping
-  a boss encounter.
-- **`exploremap()`** — thin wrapper over `revealEntireMap()`.
-- **`list()`** (new) — returns `{ skills, stats, enemies }` (the valid names for `setstat`/`spawn`) and
-  logs each as a console line, so the names don't have to be memorized or looked up in source.
-- **`run("spawn duneshaper")`** — single-string convenience parser dispatching to all of the above.
-
-Verified live via `preview_eval` against the real running scene (not just type-checked), across both
-passes: god mode takes a real 30-dmg hit normally (100→70), floors a 9999-dmg hit at 1 HP without dying,
-stays at 1 HP on a further hit, and `heal()` restores to full; `setstat` confirmed on a skill, a stat
-(with `health.max` recompute), and `"all"` (all 11 skills + 6 stats set in one call, via both direct call
-and `run(...)`); `nobuildcost` unlocked all 41 recipes, crafted with backpack counts unchanged, and —
-**after the fix** — `maxCraftBatches`/`maxCookBatches`/`canAffordUpgrade` all confirmed to ignore a
-monkey-patched always-false `canAfford`, and a live-rendered `CraftingMenu` panel showed zero recipe rows
-in the disabled grey color even with `canAfford` forced to fail; `spawn`/`killall`/`exploremap`/`list()`
-all confirmed as in the first pass. `tsc --noEmit` clean; zero console errors throughout. No `RECIPES.md`
-change (no recipe/cost changes — these are bypasses, not new content).
-
 ### Biome 2 — Phase 5: Relics rework (2026-07-13, Opus)
 
 Plan: `.claude/plans/biome-2-sunscorch-badlands.md` (Phase 5, the umbrella's final milestone —
@@ -463,7 +215,63 @@ verified live via `preview_eval` (see below) — caught and fixed one real layou
   `dashboard/main.ts`. **This completes the biome-2 umbrella plan
   (`.claude/plans/biome-2-sunscorch-badlands.md`) — all 6 phases (0–5) are shipped.**
 
-> Older entries (Phase 4b enhanced gear tier, Phase 4a Smelting economy, Badlands playtest batch, Biome 2
+### Campfire tiers + cross-biome cooking + no-ladder station upgrades (2026-07-13, Opus)
+
+Plan: `.claude/plans/zany-whistling-flurry.md`. Off the master-plan build order — the user
+wanted higher campfire tiers to cook the badlands food drops (which shipped with no recipes),
+cross-biome dishes, and a cooking-menu rework. Designing it surfaced that the whole station-upgrade
+model needed fixing first, so that became the foundation.
+
+- **Station/processor upgrades are now NO-LADDER, apply = +1, level = count (the user, locked).**
+  Previously each `StationUpgradeDef.resultTier` was a hardcoded destination and the shared Upgrade
+  panel locked every upgrade except `resultTier === currentTier + 1` ("Requires previous tier"). Now:
+  any *discovered* upgrade for a station shows immediately (any order), and applying it bumps the
+  station's level by exactly **+1** — **level = count of upgrades applied**, tracked as a per-instance
+  applied-id set. So a Lvl 1 Workbench carried into the badlands takes the badlands upgrade straight
+  to Lvl 2 (not Lvl 3). Recipes/dishes gate on the level *count*; material-specificity comes from a
+  recipe's own ingredient discovery, so "any 2 workbench upgrades → forged-gear level" is intended.
+  `resultTier` is demoted to a sort hint. **Scope = stations/processors only** — worn weapon/armor
+  upgrades keep their `resultTier` ladder (the shared `UpgradeMenu` branches on a new
+  `appliedUpgradeIds()` dep: non-null for a placed station → no-ladder/set path, null for weapon/armor
+  → old ladder). The applied-id set is a new `ItemStack.upgrades?: string[]` + `ResourceNode.upgrades`,
+  threaded through `spawnLooseDrop`/`collectNode`/placement so it **survives Destroy → pickup →
+  re-Place** alongside `tier` (without it, a re-placed station could re-apply the cheapest upgrade to
+  max its level for free). `applyStationUpgrade` appends the id, sets `tier = set.size`;
+  `sortAndStack` preserves the set (unique per instance).
+- **Campfire Lvl 3/4** (`StationUpgrades.ts`): two more (non-ladder) campfire upgrades — **Sunsteel
+  Grill** (`{sunsteel_ingot:3, clay:8, stone:10}`) and **Emberforge Hearth** (`{embersteel_ingot:3,
+  stone:20}`), reusing the ingot economy with distinct costs. `applyTierVisual` now tints non-textured
+  stations (campfire) warmer per level (Lvl2 amber → Lvl3 → Lvl4 ember) via `CAMPFIRE_TIER_TINT`.
+- **5 new dishes** (`Cooking.ts`/`Items.ts`/`BootScene.ts`), HP-regen only, gentle ramp matching the
+  existing "not a 2x jump" philosophy (Lvl3 ≈ +3 HP/s, Lvl4 ≈ +3.5). Design rule (the user): each level
+  has a **biome-native best** dish craftable entirely from current-biome ingredients (no backtracking
+  to farm) — Seared Duskrunner Steak (Lvl3), Sunscorch Feast (Lvl4), plus a meatless Emberbloom Broth —
+  and **optional mixed** dishes that only spend a plentiful leftover (boar_meat) — Sunfruit-Glazed Ribs,
+  Ember-Glazed Skewer. `requiredCampfireTier` (already existed) = the level count.
+- **Cooking-menu rework** (`CookingMenu.ts`): the flat list is now **collapsible per-level sections,
+  descending (best on top)**, sorted within a tier by total heal, in a **scrollable** viewport (fixed
+  intro + fixed footer, scrollable middle). Scrolling uses **windowed rendering** — only rows/headers
+  intersecting the viewport are created (off-window rows never exist, so no phantom clicks) — plus a
+  geometry mask that clips the partial edge rows (mask clips rendering only, not input; both mask and
+  masked objects are `scrollFactor(0)` at fixed screen coords). Its own wheel handler scrolls only when
+  the pointer is over the panel; MainScene's global wheel handler gained a guard so the hotbar doesn't
+  cycle while scrolling the menu. **Cookable indicators** (the user's ask): each section header shows an
+  amber `● N ready` badge (recipes you can make now, even when collapsed), and a **"Show only cookable"**
+  filter checkbox. `CraftingMenu` category tabs gained a matching amber dot when a category has a
+  currently-craftable recipe. All amber (`#ffe08a`), never green (reserve red/green for buff deltas).
+- **Verified live** (`preview_eval`, tsc clean, no console errors): no-ladder apply=+1 + count level +
+  order-independence + duplicate-guard + correct offered set; weapon/armor keep the ladder
+  (`appliedUpgradeIds` null); applied-set survives destroy→pickup; campfire tint distinct per level; new
+  dishes visible/grouped tier-descending/heal-sorted; cook consumes correctly + eating applies a buff;
+  menu scrollable (wheel-over-panel-only, collapse re-clamps scroll, mask present, filter drops
+  non-cookable), panel stays fixed with camera far from origin; crafting tab-dots render. Dashboard
+  station-upgrade rows dropped the misleading "Lvl N" tag (now "+1 level" + a no-ladder note); campfire
+  cooking tier tag fixed for Lvl 3/4. `RECIPES.md` cooking + station-upgrade tables updated.
+  (Screenshot capture was unavailable — the preview tab stayed backgrounded — so the pixel-level mask
+  clip is visually unconfirmed, but per the plan the windowed render makes input correct regardless and
+  the mask/objects share fixed `scrollFactor(0)` screen coords.)
+
+> Older entries (Dev console commands, Phase 4b enhanced gear tier, Phase 4a Smelting economy, Badlands playtest batch, Biome 2
 > Phase 3 The Duneshaper, Phase 3 POI 2 Sunken Forge, Phase 3 Duskrunner Warren POI, Phase 2b Sandmaw,
 > 4-item playtest fix batch, Placeholder art pass, Biome 2 playtest fix batch #2, 16-item playtest fix
 > batch, Biome 2 Phase 2/1/0, Welcome overlay, and earlier) are in STATUS-archive.md.

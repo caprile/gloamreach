@@ -11,6 +11,13 @@ export interface ItemStack {
   // items force maxStack 1 (see maxStackOf) so two different-tier instances
   // never merge into one count and silently lose a tier.
   tier?: number;
+  // Which station-upgrade ids a placed station has applied (level == length,
+  // any order — see StationUpgrades' no-ladder model). Only present on
+  // placeable stations that have been upgraded; carried across Destroy ->
+  // pickup -> re-Place alongside `tier` so the applied set survives (without
+  // it, a re-placed station couldn't tell which upgrades remain and the
+  // cheapest one could be spammed to max the level).
+  upgrades?: string[];
 }
 
 function maxStackOf(key: string): number {
@@ -137,13 +144,16 @@ export class ItemContainer {
 // size, splitting overflow into additional stacks, and repacks front-to-back
 // — the rest of the container's now-empty tail slots are just left null.
 export function sortAndStack(container: ItemContainer): void {
-  const totals = new Map<string, { key: string; tier?: number; count: number }>();
+  const totals = new Map<string, { key: string; tier?: number; upgrades?: string[]; count: number }>();
+  let uniqueSeq = 0;
   for (const s of container.all()) {
     if (!s) continue;
-    const groupKey = `${s.key}#${s.tier ?? ""}`;
+    // A stack carrying per-instance upgrade state must never be merged away —
+    // give each its own group so its `upgrades` array survives the re-flow.
+    const groupKey = s.upgrades ? `${s.key}#u${uniqueSeq++}` : `${s.key}#${s.tier ?? ""}`;
     const existing = totals.get(groupKey);
     if (existing) existing.count += s.count;
-    else totals.set(groupKey, { key: s.key, tier: s.tier, count: s.count });
+    else totals.set(groupKey, { key: s.key, tier: s.tier, upgrades: s.upgrades, count: s.count });
   }
 
   const packed: ItemStack[] = [];
@@ -156,7 +166,7 @@ export function sortAndStack(container: ItemContainer): void {
     let remaining = group.count;
     while (remaining > 0) {
       const take = Math.min(max, remaining);
-      packed.push({ key: group.key, count: take, tier: group.tier });
+      packed.push({ key: group.key, count: take, tier: group.tier, upgrades: group.upgrades });
       remaining -= take;
     }
   }

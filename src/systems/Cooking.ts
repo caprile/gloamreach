@@ -9,10 +9,16 @@ import type { ItemContainer } from "./ItemContainer";
 // consumes inputs straight from the backpack via ItemContainer.removeCount, the
 // same primitive Crafting.craft() uses.
 //
-// `requiredCampfireTier` gates a dish on the campfire's own upgrade tier (0 = any
-// campfire; 1 = a Lvl 2 / "Stone Hearth"-upgraded campfire — see
-// StationUpgrades.ts). Higher-tier dishes stay visible-but-locked so the player
-// can see what upgrading unlocks.
+// `requiredCampfireTier` gates a dish on the campfire's own level, which is now
+// the COUNT of upgrades applied to it (0 = any campfire; 1 = a campfire with one
+// upgrade / "Lvl 2"; 2 = "Lvl 3"; 3 = "Lvl 4" — see StationUpgrades' no-ladder
+// model). The CookingMenu only lists dishes at or below the open campfire's tier
+// (grouped into collapsible per-tier sections, best on top).
+//
+// Recipe design (the user): each tier has a biome-NATIVE "best" dish craftable
+// entirely from the current biome's ingredients (so a player never has to
+// backtrack a biome just to cook), plus optional MIXED dishes that spend a
+// plentiful leftover from an earlier biome (boar_meat) as a minor component.
 export interface CookRecipe {
   id: string;
   name: string;
@@ -49,6 +55,45 @@ export const COOK_RECIPES: CookRecipe[] = [
     output: "blood_snake_skewer",
     inputs: { shishkabob: 1, snake_meat: 1, gremlin_blood: 1 },
     requiredCampfireTier: 1,
+  },
+
+  // --- Lvl 3 campfire (tier 2) — badlands dishes ---
+  {
+    id: "seared_duskrunner_steak",
+    name: "Seared Duskrunner Steak",
+    output: "seared_duskrunner_steak",
+    inputs: { shishkabob: 1, duskrunner_meat: 1, dustbloom: 1 }, // badlands-native best
+    requiredCampfireTier: 2,
+  },
+  {
+    id: "emberbloom_broth",
+    name: "Emberbloom Broth",
+    output: "emberbloom_broth",
+    inputs: { emberbloom: 2, sunfruit: 1, gloamcap: 1 }, // badlands-native, meatless (no skewer)
+    requiredCampfireTier: 2,
+  },
+  {
+    id: "sunfruit_glazed_ribs",
+    name: "Sunfruit-Glazed Ribs",
+    output: "sunfruit_glazed_ribs",
+    inputs: { shishkabob: 1, sunfruit: 2, boar_meat: 1 }, // mixed — burns leftover boar_meat
+    requiredCampfireTier: 2,
+  },
+
+  // --- Lvl 4 campfire (tier 3) — richest badlands dishes ---
+  {
+    id: "sunscorch_feast",
+    name: "Sunscorch Feast",
+    output: "sunscorch_feast",
+    inputs: { shishkabob: 1, duskrunner_meat: 2, gloamcap: 1, sunfruit: 1 }, // badlands-native best
+    requiredCampfireTier: 3,
+  },
+  {
+    id: "emberglazed_skewer",
+    name: "Ember-Glazed Skewer",
+    output: "emberglazed_skewer",
+    inputs: { shishkabob: 1, duskrunner_meat: 1, emberbloom: 1, boar_meat: 1 }, // mixed — leftover boar_meat
+    requiredCampfireTier: 3,
   },
 ];
 

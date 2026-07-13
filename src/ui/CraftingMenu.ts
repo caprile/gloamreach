@@ -192,6 +192,14 @@ export class CraftingMenu {
 
     let x = x0;
     const tabY = this.panelY + 12;
+    // Which categories have at least one discovered recipe the player can make
+    // right now (ingredients + proximity) — drives a small amber dot on the tab
+    // so a collapsed (unselected) tab still signals "there's something makeable
+    // in here." Amber, NOT green (reserve red/green for buff/debuff deltas).
+    const discovered = this.deps.crafting.discoveredRecipes();
+    const craftableCats = new Set(
+      discovered.filter((r) => isCraftable(this.deps, r)).map((r) => r.category),
+    );
     for (const cat of CATEGORIES) {
       const active = cat.id === this.activeCategory;
       const t = this.scene.add
@@ -211,6 +219,13 @@ export class CraftingMenu {
           this.render();
         });
       this.rows.push(t);
+      if (craftableCats.has(cat.id)) {
+        const dot = this.scene.add
+          .circle(x + t.width + 3, tabY + 2, 3, 0xffe08a)
+          .setScrollFactor(0)
+          .setDepth(3002);
+        this.rows.push(dot);
+      }
       x += t.width + 8;
     }
 

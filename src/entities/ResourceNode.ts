@@ -86,6 +86,10 @@ export interface ResourceNodeConfig {
   // tier survives into the inventory stack when picked back up. Undefined for
   // ordinary drops.
   tier?: number;
+  // The applied station-upgrade ids carried alongside `tier` from a destroyed
+  // placed station (see ItemStack.upgrades), so the applied set survives the
+  // pickup. Undefined for ordinary drops.
+  upgrades?: string[];
   // When true, harvesting this (pickup-only) node yields its resource but
   // leaves the sprite in the world instead of destroying it — swaps to
   // pickedTexture and, if regrowMs is set, reverts back to harvestable after
@@ -113,6 +117,7 @@ export class ResourceNode extends Phaser.GameObjects.Sprite {
   depleted = false;
   readonly magnetReadyAt: number;
   readonly tier?: number;
+  readonly upgrades?: string[];
   readonly persistent: boolean;
   readonly pickedTexture?: string;
   readonly regrowMs?: number;
@@ -144,6 +149,7 @@ export class ResourceNode extends Phaser.GameObjects.Sprite {
     this.health = cfg.health;
     this.magnetReadyAt = cfg.magnetReadyAt ?? 0;
     this.tier = cfg.tier;
+    this.upgrades = cfg.upgrades;
     this.persistent = cfg.persistent ?? false;
     this.pickedTexture = cfg.pickedTexture;
     this.regrowMs = cfg.regrowMs;

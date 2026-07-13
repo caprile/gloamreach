@@ -587,6 +587,55 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     // Same +25%-over-Lvl-1-total rule as the boar skewer above (55 vs 44).
     edible: { hpPerSec: 2.5, durationMs: 22000 },
   },
+  // --- Lvl 3 campfire dishes (badlands). A gentle step above the Lvl 2 dishes
+  // (~78 total heal vs ~55), matching the deliberate "not a 2x jump" ramp. ---
+  seared_duskrunner_steak: {
+    key: "seared_duskrunner_steak",
+    name: "Seared Duskrunner Steak",
+    description: "Badlands game seared over a forged grill, crusted with dustbloom. Right-click to eat.",
+    texture: "icon_seared_duskrunner_steak",
+    maxStack: 99,
+    hotbarable: true,
+    edible: { hpPerSec: 3, durationMs: 26000 },
+  },
+  emberbloom_broth: {
+    key: "emberbloom_broth",
+    name: "Emberbloom Broth",
+    description: "A simmered desert-herb broth. Heals gently but for a long while. Right-click to eat.",
+    texture: "icon_emberbloom_broth",
+    maxStack: 99,
+    hotbarable: true,
+    edible: { hpPerSec: 2.5, durationMs: 34000 },
+  },
+  sunfruit_glazed_ribs: {
+    key: "sunfruit_glazed_ribs",
+    name: "Sunfruit-Glazed Ribs",
+    description: "Boar ribs glazed with sweet sunfruit pulp. Right-click to eat.",
+    texture: "icon_sunfruit_glazed_ribs",
+    maxStack: 99,
+    hotbarable: true,
+    edible: { hpPerSec: 3, durationMs: 26000 },
+  },
+  // --- Lvl 4 campfire dishes (badlands). The richest dishes so far (~98-105
+  // total), still a measured step over Lvl 3 rather than a leap. ---
+  sunscorch_feast: {
+    key: "sunscorch_feast",
+    name: "Sunscorch Feast",
+    description: "A heaping platter of seared game, gloamcap, and sunfruit. Right-click to eat.",
+    texture: "icon_sunscorch_feast",
+    maxStack: 99,
+    hotbarable: true,
+    edible: { hpPerSec: 3.5, durationMs: 30000 },
+  },
+  emberglazed_skewer: {
+    key: "emberglazed_skewer",
+    name: "Ember-Glazed Skewer",
+    description: "Badlands and forest meat charred together and glazed with emberbloom. Right-click to eat.",
+    texture: "icon_emberglazed_skewer",
+    maxStack: 99,
+    hotbarable: true,
+    edible: { hpPerSec: 3.5, durationMs: 28000 },
+  },
 
   // --- processed goods (Drying Rack outputs) ---
   twine: {

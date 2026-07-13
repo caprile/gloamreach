@@ -287,6 +287,10 @@ const CRIT_MULT_CAP = 3.0;
 // Phase 1) — drives the floating-damage-number tint. "normal" = neutral (×1).
 type DamageEffectiveness = "normal" | "weak" | "resist";
 const WORKBENCH_RANGE = 100; // px — looser than REACH; "am I near it," not a precise click
+// Tint per station level for non-textured placeables (Campfire etc.) — warmer
+// the higher the level, so a Lvl 3/4 campfire reads distinctly from a Lvl 2 one
+// (index 0 = tier 1). Textured stations (Workbench/Smelter) swap art instead.
+const CAMPFIRE_TIER_TINT = [0xffe08a, 0xffb066, 0xff8c5a];
 const BLACKBERRY_REGROW_MS = 3 * 60 * 1000; // a picked bush regrows berries after 3 in-game minutes
 // Comfort (Bedroll) HP regen: player must be near a placed Bedroll, that
 // Bedroll must be near a placed Campfire (hard requirement, not optional),
@@ -1190,6 +1194,9 @@ export class MainScene extends Phaser.Scene {
         return;
       }
       if (this.eventLogUI.isPointerOver(p) || this.keybindsUI.isPointerOver(p)) return;
+      // The cooking menu scrolls its own recipe list on wheel — don't also
+      // cycle the hotbar when the pointer is over it.
+      if (this.cookingMenu.isOpen() && this.cookingMenu.containsPoint(p.x, p.y)) return;
       this.cycleHotbar(dy > 0 ? 1 : -1);
     });
 
@@ -4990,17 +4997,17 @@ export class MainScene extends Phaser.Scene {
     if (itemDef(node.resource)?.placeable) {
       const row2Slot = this.hotbarRow2Assignable(node.resource);
       if (row2Slot !== null) {
-        this.hotbar.container.set(row2Slot, { key: node.resource, count: node.amount, tier: node.tier });
+        this.hotbar.container.set(row2Slot, { key: node.resource, count: node.amount, tier: node.tier, upgrades: node.upgrades });
         this.hotbarUI.refresh();
         this.discoverMaterial(node.resource);
         this.refreshDiscovery();
         return;
       }
     }
-    if (node.tier !== undefined) {
-      const stack: ItemStack = { key: node.resource, count: node.amount, tier: node.tier };
+    if (node.tier !== undefined || node.upgrades !== undefined) {
+      const stack: ItemStack = { key: node.resource, count: node.amount, tier: node.tier, upgrades: node.upgrades };
       if (!this.backpack.addStack(stack)) {
-        this.spawnLooseDrop(node.resource, node.amount, node.x, node.y, DROPPED_ITEM_MAGNET_COOLDOWN_MS, node.tier);
+        this.spawnLooseDrop(node.resource, node.amount, node.x, node.y, DROPPED_ITEM_MAGNET_COOLDOWN_MS, node.tier, node.upgrades);
         return;
       }
       this.discoverMaterial(node.resource);
@@ -5765,6 +5772,7 @@ export class MainScene extends Phaser.Scene {
     y: number,
     magnetCooldownMs = 0,
     tier?: number,
+    upgrades?: string[],
   ): void {
     const pieceCount = amount > 1 ? Phaser.Math.Between(2, Math.min(4, amount)) : 1;
     const base = Math.floor(amount / pieceCount);
@@ -5789,6 +5797,7 @@ export class MainScene extends Phaser.Scene {
         health: 1,
         magnetReadyAt,
         tier,
+        upgrades,
       });
       node.exploding = true;
       node.setAmount(pieceAmount);
@@ -6260,13 +6269,16 @@ export class MainScene extends Phaser.Scene {
     // tier's stack) so the tier travels onto the placed image. Crafted
     // placements always start at tier 0.
     let placedTier = 0;
+    let placedUpgrades: string[] | undefined;
     if (itemSource) {
       const idx = this.findConsumableStack(itemSource.container, itemSource.key);
       if (idx === null) {
         this.cancelPlacement();
         return;
       }
-      placedTier = itemSource.container.slot(idx)?.tier ?? 0;
+      const src = itemSource.container.slot(idx);
+      placedTier = src?.tier ?? 0;
+      placedUpgrades = src?.upgrades;
       itemSource.container.set(idx, null);
     } else {
       this.crafting.craft(recipe, this.backpack, this.devNoBuildCost);
@@ -6276,6 +6288,9 @@ export class MainScene extends Phaser.Scene {
     const texture = itemDef(key)?.texture;
     const image = this.add.image(pos.x, pos.y, texture ?? "");
     image.setData("itemKey", key);
+    if (placedUpgrades && placedUpgrades.length > 0) {
+      image.setData("upgrades", [...placedUpgrades]);
+    }
     if (placedTier > 0) {
       image.setData("tier", placedTier);
       this.applyTierVisual(image, placedTier);
@@ -6492,6 +6507,15 @@ export class MainScene extends Phaser.Scene {
       ],
       isDiscovered: (upg) => this.upgradeIngredientsKnown(upg),
       canAfford: (upg) => this.canAffordUpgrade(upg),
+      // Non-null for a placed station/processor (its applied-upgrade set drives
+      // the no-ladder menu: any discovered, not-yet-applied upgrade is
+      // offerable and applying it is +1 level). Null for worn weapon/armor,
+      // which keep the resultTier ladder.
+      appliedUpgradeIds: () => {
+        const t = this.upgradeTarget;
+        if (!t || this.isArmorUpgradeTarget(t) || this.isWeaponUpgradeTarget(t)) return null;
+        return new Set((t.getData("upgrades") as string[] | undefined) ?? []);
+      },
       extraBlockReason: (upg) => this.upgradeBlockReason(upg),
       formatCost: (upg) => this.formatUpgradeCost(upg),
       displayName: (itemKey, tier) => stationDisplayName(itemKey, tier),
@@ -6649,17 +6673,30 @@ export class MainScene extends Phaser.Scene {
   // pickup on Destroy). Generic across stations — the visual tell is shared.
   private applyStationUpgrade(obj: Phaser.GameObjects.Image, upg: StationUpgradeDef): void {
     if (!this.canAffordUpgrade(upg) || this.upgradeBlockReason(upg)) return;
+    const applied = (obj.getData("upgrades") as string[] | undefined) ?? [];
+    // No-ladder model: applying any not-yet-applied upgrade bumps the level by
+    // exactly +1 (level == count of applied upgrades). The specific upgrade
+    // determines cost/effect; the tier number is just the count. Guard against
+    // a double-apply of the same id (the menu already filters applied ones).
+    if (applied.includes(upg.id)) return;
     if (!this.devNoBuildCost) for (const [r, n] of Object.entries(upg.costs)) this.backpack.removeCount(r, n ?? 0);
-    obj.setData("tier", upg.resultTier);
-    this.applyTierVisual(obj, upg.resultTier);
+    applied.push(upg.id);
+    const tier = applied.length;
+    obj.setData("upgrades", applied);
+    obj.setData("tier", tier);
+    this.applyTierVisual(obj, tier);
     this.refreshStationLabel(obj);
     const itemKey = obj.getData("itemKey") as string;
+    // A placed Smelter's ProcessingStation re-reads its tier from this image's
+    // data when its menu opens (see openSmelter), so obj.setData("tier") above
+    // is enough — no separate station sync needed here.
     // "recipe" kind (not "info") so this uses the left-anchored, under-
     // inventory toast lane instead of the top-center one — the top-center
     // toast used to render right over the just-opened Upgrade panel.
-    this.eventLog.add("recipe", `${stationDisplayName(itemKey, upg.resultTier)} upgraded: ${upg.name}`, itemDef(itemKey)?.texture);
-    // Upgrading a Campfire to Lvl 2 unlocks (and announces) its tier-1 dishes.
-    if (itemKey === "campfire") this.discoverCookRecipes(upg.resultTier);
+    this.eventLog.add("recipe", `${stationDisplayName(itemKey, tier)} upgraded: ${upg.name}`, itemDef(itemKey)?.texture);
+    // Upgrading a Campfire raises its level, unlocking (and announcing) the
+    // dishes that level can cook.
+    if (itemKey === "campfire") this.discoverCookRecipes(tier);
     this.upgradeMenu.refresh();
     this.afterItemMove();
   }
@@ -6709,8 +6746,11 @@ export class MainScene extends Phaser.Scene {
       image.clearTint();
       return;
     }
+    // Non-textured stations (Campfire, Drying Rack, Relic Forge) get a warmer
+    // tint the higher their level, so a Lvl 3/4 campfire reads distinctly from a
+    // Lvl 2 one without needing per-tier art.
     if (tier <= 0) image.clearTint();
-    else image.setTint(0xffe08a);
+    else image.setTint(CAMPFIRE_TIER_TINT[Math.min(tier, CAMPFIRE_TIER_TINT.length) - 1]);
   }
 
   // The world texture for a Workbench/Smelter at `tier` — base at tier 0, then
@@ -6776,10 +6816,21 @@ export class MainScene extends Phaser.Scene {
     // Same for the Relic Forge.
     if (this.openForge === obj) this.closeRelicForgeMenu();
 
-    // Carry the placed instance's upgrade tier into the pickup so re-placing
-    // it restores the same tier (fixes the old bug where Destroy silently
-    // discarded an upgraded Workbench's tier).
-    this.spawnLooseDrop(itemKey, 1, obj.x, obj.y, DROPPED_ITEM_MAGNET_COOLDOWN_MS, tier || undefined);
+    // Carry the placed instance's upgrade tier AND applied-upgrade set into the
+    // pickup so re-placing restores both (fixes the old bug where Destroy
+    // discarded an upgraded station's tier; the id set is what stops a re-placed
+    // station from re-offering — and cheaply re-applying — an already-applied
+    // upgrade to climb the level for free).
+    const applied = obj.getData("upgrades") as string[] | undefined;
+    this.spawnLooseDrop(
+      itemKey,
+      1,
+      obj.x,
+      obj.y,
+      DROPPED_ITEM_MAGNET_COOLDOWN_MS,
+      tier || undefined,
+      applied && applied.length > 0 ? [...applied] : undefined,
+    );
     this.placedObjects = this.placedObjects.filter((o) => o !== obj);
     obj.destroy();
     this.eventLog.add("info", `Picked up ${name}`);

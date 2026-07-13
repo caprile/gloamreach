@@ -14,7 +14,13 @@ export interface StationUpgradeDef {
   name: string;
   description: string;
   appliesToItemKey: string; // which placed object this upgrade targets
-  resultTier: number; // the tier the station reaches after applying it
+  // Display/sort order only — NOT the level the station reaches. Station
+  // upgrades are a no-ladder set: applying ANY discovered, not-yet-applied
+  // upgrade bumps the station's level by exactly +1 (level == count of
+  // upgrades applied, any order). See MainScene.applyStationUpgrade and
+  // UpgradeMenu's station branch. (Worn weapon/armor upgrades still read
+  // resultTier as a real destination tier — that path is unchanged.)
+  resultTier: number;
   costs: Partial<Record<ResourceType, number>>;
   // Short player-facing summary shown in UpgradeMenu (e.g. "+2 Armor") — left
   // unset for upgrades like Tool Sharpener that only unlock a gate rather
@@ -38,7 +44,25 @@ export const STATION_UPGRADES: StationUpgradeDef[] = [
     appliesToItemKey: "campfire",
     resultTier: 1,
     costs: { twine: 4, stone: 20 },
-    deltaLabel: "Unlocks Lvl 2 dishes",
+    deltaLabel: "Better campfire dishes",
+  },
+  {
+    id: "sunsteel_grill",
+    name: "Sunsteel Grill",
+    description: "A forged grill plate over the coals. Sears badlands game and desert flora.",
+    appliesToItemKey: "campfire",
+    resultTier: 2,
+    costs: { sunsteel_ingot: 3, clay: 8, stone: 10 },
+    deltaLabel: "Better campfire dishes",
+  },
+  {
+    id: "emberforge_hearth",
+    name: "Emberforge Hearth",
+    description: "An ember-fed hearth that never dies down. Cooks the richest cross-biome feasts.",
+    appliesToItemKey: "campfire",
+    resultTier: 3,
+    costs: { embersteel_ingot: 3, stone: 20 },
+    deltaLabel: "Best campfire dishes",
   },
   {
     id: "gloam_conduit",

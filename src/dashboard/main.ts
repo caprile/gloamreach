@@ -449,16 +449,19 @@ function renderStations(): string {
   let html = `<h2>Stations & Processing</h2>
     <p class="note">Station upgrades from <code>StationUpgrades.ts</code>; Drying Rack
     conversions from <code>Processing.ts</code>; campfire cooking from
-    <code>Cooking.ts</code>.</p>`;
+    <code>Cooking.ts</code>. <b>No ladder:</b> any discovered station upgrade can be
+    applied in any order — each just bumps the station's level by <b>+1</b> (level =
+    count of upgrades applied). Recipes/dishes gate on that level count; material
+    requirements come from a recipe's own ingredient discovery.</p>`;
 
   html += `<h3>Station upgrades</h3><table><thead><tr>
-    <th>Station</th><th>Upgrade</th><th>Result</th><th>Effect</th><th>Cost</th>
+    <th>Station</th><th>Upgrade</th><th>Grants</th><th>Effect</th><th>Cost</th>
     </tr></thead><tbody>`;
   for (const u of STATION_UPGRADES) {
     html += `<tr>
       <td>${esc(name(u.appliesToItemKey))}</td>
       <td>${esc(u.name)}</td>
-      <td><span class="tag tier1">Lvl ${u.resultTier + 1}</span></td>
+      <td><span class="tag tier1">+1 level</span></td>
       <td class="muted">${esc(u.deltaLabel ?? u.description)}</td>
       <td class="cost">${esc(costsText(u.costs))}</td>
     </tr>`;
@@ -487,7 +490,7 @@ function renderStations(): string {
       : "—";
     html += `<tr>
       <td><b>${esc(c.name)}</b></td>
-      <td>${c.requiredCampfireTier >= 1 ? '<span class="tag tier1">Lvl 2</span>' : '<span class="tag">any</span>'}</td>
+      <td>${c.requiredCampfireTier >= 1 ? `<span class="tag tier1">Lvl ${c.requiredCampfireTier + 1}</span>` : '<span class="tag">any</span>'}</td>
       <td class="cost">${esc(costsText(c.inputs))}</td>
       <td class="pos">${esc(buff)}</td>
     </tr>`;

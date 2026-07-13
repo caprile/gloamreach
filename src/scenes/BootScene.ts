@@ -1232,6 +1232,78 @@ export class BootScene extends Phaser.Scene {
     g.fillRect(14, 10, 2, 2);
     g.generateTexture("icon_blood_snake_skewer", ICON, ICON);
 
+    // --- Lvl 3/4 campfire dishes (badlands) ---
+
+    // Seared Duskrunner Steak: a thick browned steak with a pale dustbloom crust.
+    g.clear();
+    g.fillStyle(0xc0a060, 1);
+    g.fillRect(3, 12, 18, 2); // skewer
+    g.fillStyle(0x5a2f1a, 1);
+    g.fillRect(5, 6, 14, 8); // steak
+    g.fillStyle(0x7a4326, 1);
+    g.fillRect(7, 8, 9, 4);
+    g.fillStyle(0xd8cfa8, 1); // dustbloom crust flecks
+    g.fillRect(6, 6, 2, 2);
+    g.fillRect(14, 7, 2, 2);
+    g.fillRect(10, 12, 2, 2);
+    g.generateTexture("icon_seared_duskrunner_steak", ICON, ICON);
+
+    // Emberbloom Broth: a dark bowl of glowing amber broth (no skewer — a soup).
+    g.clear();
+    g.fillStyle(0x3a2a20, 1);
+    g.fillRect(4, 12, 16, 7); // bowl
+    g.fillRect(6, 19, 12, 2);
+    g.fillStyle(0xe08a2c, 1); // ember broth
+    g.fillRect(6, 10, 12, 4);
+    g.fillStyle(0xf0c040, 1); // glow highlight
+    g.fillRect(8, 10, 4, 2);
+    g.fillRect(13, 11, 2, 2);
+    g.generateTexture("icon_emberbloom_broth", ICON, ICON);
+
+    // Sunfruit-Glazed Ribs: roasted rib rack with a bright orange sunfruit glaze.
+    g.clear();
+    g.fillStyle(0xc0a060, 1);
+    g.fillRect(3, 12, 18, 2); // skewer
+    g.fillStyle(0x6e3b1f, 1);
+    g.fillRect(5, 7, 14, 6); // rib meat
+    g.fillStyle(0xf0902c, 1); // sunfruit glaze
+    g.fillRect(5, 6, 14, 2);
+    g.fillStyle(0xffc25a, 1);
+    g.fillRect(7, 9, 2, 2);
+    g.fillRect(13, 10, 2, 2);
+    g.generateTexture("icon_sunfruit_glazed_ribs", ICON, ICON);
+
+    // Sunscorch Feast: a loaded platter — seared meat, violet gloamcap, sunfruit.
+    g.clear();
+    g.fillStyle(0x8a7a52, 1);
+    g.fillRect(3, 15, 18, 4); // platter
+    g.fillStyle(0x5a2f1a, 1); // meat
+    g.fillRect(4, 8, 8, 7);
+    g.fillStyle(0x7a4326, 1);
+    g.fillRect(6, 10, 4, 3);
+    g.fillStyle(0x6a4a8a, 1); // gloamcap
+    g.fillRect(13, 7, 6, 5);
+    g.fillStyle(0x9a7ac0, 1);
+    g.fillRect(14, 8, 2, 2);
+    g.fillStyle(0xf0902c, 1); // sunfruit wedge
+    g.fillRect(14, 12, 5, 3);
+    g.generateTexture("icon_sunscorch_feast", ICON, ICON);
+
+    // Ember-Glazed Skewer: two-tone (badlands + forest) meat with an ember glaze.
+    g.clear();
+    g.fillStyle(0xc0a060, 1);
+    g.fillRect(3, 11, 18, 2); // skewer
+    g.fillStyle(0x5a2f1a, 1); // badlands meat chunk
+    g.fillRect(6, 7, 6, 6);
+    g.fillStyle(0x8a4e2a, 1); // forest meat chunk
+    g.fillRect(13, 7, 5, 6);
+    g.fillStyle(0xe0662c, 1); // ember glaze
+    g.fillRect(6, 6, 12, 2);
+    g.fillStyle(0xffa050, 1);
+    g.fillRect(8, 9, 2, 2);
+    g.fillRect(14, 10, 2, 2);
+    g.generateTexture("icon_emberglazed_skewer", ICON, ICON);
+
     // Campfire: stacked logs + flame.
     g.clear();
     g.fillStyle(0x7a4a22, 1);

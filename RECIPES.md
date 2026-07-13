@@ -84,15 +84,26 @@ ammo before there's a launcher to load it into.
 
 ## Station Upgrades (`src/systems/StationUpgrades.ts`)
 
-| Applies To | Result Tier | Name | Costs | Delta |
+**No ladder (stations/processors only):** any *discovered* upgrade for a station shows in
+its Upgrade panel immediately, in any order — applying one just bumps the station's level
+by **+1** (level = count of upgrades applied). Recipes/dishes gate on that level *count*;
+material-specificity comes from a recipe's own ingredient discovery (you had to discover
+Sunsteel/Embersteel to have the recipe), not from which upgrade was applied. So "any 2
+workbench upgrades → forged-gear level" is intended. Worn weapon/armor upgrades keep their
+strict ladder. The "toward" column below is a rough guide to the cost tier, **not** a
+fixed destination level.
+
+| Applies To | Toward | Name | Costs | Delta |
 |---|---|---|---|---|
-| Workbench | 1 ("Lvl 2") | Tool Sharpener | 3 Twine, 5 Wood, 2 Stone | — (unlocks gates only) |
-| Workbench | 2 ("Lvl 3") | Forge Anvil | 5 Sunsteel Ingot, 10 Stone | Unlocks base forged gear (`requiresWorkbenchTier: 2`) |
-| Workbench | 3 ("Lvl 4") | Emberforge Anvil | 5 Embersteel Ingot, 15 Stone | Unlocks enhanced/T2 gear (`requiresWorkbenchTier: 3`) |
-| Campfire | 1 ("Lvl 2") | Stone Hearth | 4 Twine, 20 Stone | Unlocks Lvl 2 campfire dishes |
-| Relic Forge | 1 ("Lvl 2") | Gloam Conduit | 15 Stone, 1 Gloam Shard | Unlocks the Refine tab |
-| Relic Forge | 2 ("Lvl 3") | Ember Kiln | 3 Embersteel Ingot, 20 Stone | Unlocks Gloam → Ember conversion (Convert tab) |
-| Smelter | 1 ("Lvl 2") | Ember Crucible | 1 Gremlin King's Heart, 10 Stone | Smelt rare Cinderforged Ore → Embersteel Ingot |
+| Workbench | Lvl 2 | Tool Sharpener | 3 Twine, 5 Wood, 2 Stone | — (unlocks gates only) |
+| Workbench | Lvl 3 | Forge Anvil | 5 Sunsteel Ingot, 10 Stone | Unlocks base forged gear (`requiresWorkbenchTier: 2`) |
+| Workbench | Lvl 4 | Emberforge Anvil | 5 Embersteel Ingot, 15 Stone | Unlocks enhanced/T2 gear (`requiresWorkbenchTier: 3`) |
+| Campfire | Lvl 2 | Stone Hearth | 4 Twine, 20 Stone | Better campfire dishes |
+| Campfire | Lvl 3 | Sunsteel Grill | 3 Sunsteel Ingot, 8 Clay, 10 Stone | Better campfire dishes |
+| Campfire | Lvl 4 | Emberforge Hearth | 3 Embersteel Ingot, 20 Stone | Best campfire dishes |
+| Relic Forge | Lvl 2 | Gloam Conduit | 15 Stone, 1 Gloam Shard | Unlocks the Refine tab |
+| Relic Forge | Lvl 3 | Ember Kiln | 3 Embersteel Ingot, 20 Stone | Unlocks Gloam → Ember conversion (Convert tab) |
+| Smelter | Lvl 2 | Ember Crucible | 1 Gremlin King's Heart, 10 Stone | Smelt rare Cinderforged Ore → Embersteel Ingot |
 
 Bench visuals change per tier (Workbench Lvl 2/3/4, Smelter Lvl 2 each get a
 distinct placeholder sprite). The Emberforge Anvil and Ember Kiln are only
@@ -223,17 +234,25 @@ mineable `mine` nodes scattered in the badlands (Stone Pickaxe, non-respawning).
 
 Multi-ingredient dishes made by interacting with a placed Campfire
 (`CookingMenu.ts`). Cooking is instant. A dish's `requiredCampfireTier` gates it
-on the campfire's own upgrade tier (0 = any campfire; 1 = a "Stone Hearth"–
-upgraded Lvl 2 campfire). Foods are eaten by right-clicking them in the
-backpack/hotbar, applying a heal-over-time buff (`Buffs.ts`, shown in the buff
-strip above the HP bar).
+on the campfire's own level (= count of upgrades applied: 0 = any campfire;
+1 = Lvl 2; 2 = Lvl 3; 3 = Lvl 4 — see Station Upgrades). The menu groups dishes
+into collapsible per-level sections (best on top) and scrolls. Foods are eaten by
+right-clicking them in the backpack/hotbar, applying a heal-over-time buff
+(`Buffs.ts`, shown in the buff strip above the HP bar). Design rule: each level has
+a biome-native "best" dish (no backtracking to farm) plus optional mixed dishes
+that spend a plentiful earlier-biome leftover (boar_meat).
 
-| Dish | Campfire Tier | Inputs | Output | Buff |
+| Dish | Campfire | Inputs | Output | Buff |
 |---|---|---|---|---|
-| Cooked Boar Meat | 0 (any) | 1 Shishkabob, 1 Boar Meat | Cooked Boar Meat | +2 HP/s for 20s |
-| Bramble-Glazed Boar Skewer | 1 (Lvl 2) | 1 Shishkabob, 1 Boar Meat, 2 Blackberries | Bramble-Glazed Boar Skewer | +3 HP/s for 30s |
-| Cooked Snake Meat | 0 (any) | 1 Shishkabob, 1 Snake Meat | Cooked Snake Meat | +2 HP/s for 22s |
-| Blood-Glazed Snake Skewer | 1 (Lvl 2) | 1 Shishkabob, 1 Snake Meat, 1 Gremlin Blood | Blood-Glazed Snake Skewer | +3 HP/s for 35s |
+| Cooked Boar Meat | any | 1 Shishkabob, 1 Boar Meat | Cooked Boar Meat | +2 HP/s for 20s |
+| Cooked Snake Meat | any | 1 Shishkabob, 1 Snake Meat | Cooked Snake Meat | +2 HP/s for 22s |
+| Bramble-Glazed Boar Skewer | Lvl 2 | 1 Shishkabob, 1 Boar Meat, 2 Blackberries | Bramble-Glazed Boar Skewer | +2.5 HP/s for 20s |
+| Blood-Glazed Snake Skewer | Lvl 2 | 1 Shishkabob, 1 Snake Meat, 1 Gremlin Blood | Blood-Glazed Snake Skewer | +2.5 HP/s for 22s |
+| Seared Duskrunner Steak | Lvl 3 | 1 Shishkabob, 1 Duskrunner Meat, 1 Dustbloom | Seared Duskrunner Steak | +3 HP/s for 26s |
+| Sunfruit-Glazed Ribs | Lvl 3 | 1 Shishkabob, 2 Sunfruit, 1 Boar Meat | Sunfruit-Glazed Ribs | +3 HP/s for 26s |
+| Emberbloom Broth | Lvl 3 | 2 Emberbloom, 1 Sunfruit, 1 Gloamcap | Emberbloom Broth | +2.5 HP/s for 34s |
+| Sunscorch Feast | Lvl 4 | 1 Shishkabob, 2 Duskrunner Meat, 1 Gloamcap, 1 Sunfruit | Sunscorch Feast | +3.5 HP/s for 30s |
+| Ember-Glazed Skewer | Lvl 4 | 1 Shishkabob, 1 Duskrunner Meat, 1 Emberbloom, 1 Boar Meat | Ember-Glazed Skewer | +3.5 HP/s for 28s |
 
 ## Relics (`src/systems/Relics.ts`) — M-RL, reworked in Phase 5
 
