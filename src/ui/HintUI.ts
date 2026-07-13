@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import type { HintKind } from "../systems/Hints";
 
 // Corner popup card for contextual hints (Hints.ts). A single card slides in
 // from the right edge, holds, then fades; click to dismiss early. Anchored on
@@ -19,6 +20,14 @@ const HOLD_MS = 8000; // playtest: tips (esp. gloam-shard/material help) vanishe
 const FADE_MS = 1400;
 const SLIDE_MS = 300;
 
+// Two visual flavors: a warm amber TIP (direct control/mechanic teaching) and a
+// cool cyan HINT (in-character objective nudge) — so a mysterious "go check that
+// out" reads differently from a "here's how the controls work" at a glance.
+const KIND_STYLE: Record<HintKind, { label: string; hex: number; css: string }> = {
+  tutorial: { label: "TIP", hex: 0xe3b25a, css: "#e3b25a" },
+  hint: { label: "HINT", hex: 0x5ec8d6, css: "#5ec8d6" },
+};
+
 export class HintUI {
   private scene: Phaser.Scene;
   private restX: number;
@@ -29,7 +38,7 @@ export class HintUI {
   // (e.g. two hints firing within the same second) could bump a tip off
   // screen before the player ever read it. Now it queues instead, and the
   // next one only appears once the current tip has had its full HOLD_MS.
-  private queue: string[] = [];
+  private queue: { text: string; kind: HintKind }[] = [];
   private displaying = false;
   private hideEvent?: Phaser.Time.TimerEvent;
   private slideTween?: Phaser.Tweens.Tween;
@@ -40,31 +49,32 @@ export class HintUI {
     this.centerY = Math.round(scene.scale.height * 0.42);
   }
 
-  show(text: string): void {
-    this.queue.push(text);
+  show(text: string, kind: HintKind = "tutorial"): void {
+    this.queue.push({ text, kind });
     if (!this.displaying) this.advance();
   }
 
   private advance(): void {
-    const text = this.queue.shift();
-    if (text === undefined) {
+    const next = this.queue.shift();
+    if (next === undefined) {
       this.displaying = false;
       return;
     }
     this.displaying = true;
-    this.display(text);
+    this.display(next.text, next.kind);
   }
 
-  private display(text: string): void {
+  private display(text: string, kind: HintKind): void {
     this.clear();
 
+    const style = KIND_STYLE[kind];
     const wrapWidth = CARD_W - PAD * 2;
 
     const header = this.scene.add
-      .text(0, 0, "TIP", {
+      .text(0, 0, style.label, {
         fontFamily: "monospace",
         fontSize: "11px",
-        color: "#e3b25a",
+        color: style.css,
       })
       .setScrollFactor(0);
 
@@ -90,9 +100,9 @@ export class HintUI {
       .setInteractive({ useHandCursor: true })
       .on("pointerdown", () => this.dismiss());
     // A slim accent stripe down the left edge so it reads as a "tip" card,
-    // not a system toast.
+    // not a system toast — colored by kind (amber tip / cyan hint).
     const accent = this.scene.add
-      .rectangle(startX, topY, 3, cardH, 0xe3b25a, 1)
+      .rectangle(startX, topY, 3, cardH, style.hex, 1)
       .setOrigin(0, 0)
       .setScrollFactor(0)
       .setDepth(DEPTH_TEXT);

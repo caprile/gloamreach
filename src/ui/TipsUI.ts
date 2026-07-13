@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import type { HintEntry } from "../systems/Hints";
 
 // Re-readable list of every contextual hint (Hints.ts) discovered so far
 // this run — opened from the Pause menu's "Tips" button (the pause menu's
@@ -33,7 +34,7 @@ export class TipsUI {
     return this.open;
   }
 
-  show(tips: string[], onClose: () => void): void {
+  show(tips: HintEntry[], onClose: () => void): void {
     this.open = true;
     this.render(tips, onClose);
   }
@@ -49,7 +50,7 @@ export class TipsUI {
     this.objects = [];
   }
 
-  private render(tips: string[], onClose: () => void): void {
+  private render(tips: HintEntry[], onClose: () => void): void {
     this.clear();
     const cx = this.panelX + PANEL_W / 2;
 
@@ -71,13 +72,15 @@ export class TipsUI {
     );
 
     let y = this.panelY + 24;
-    this.text(cx, y, "Tips Discovered", 22, "#ffffff", 0.5);
+    this.text(cx, y, "Tips & Hints Discovered", 22, "#ffffff", 0.5);
     y += 42;
 
     const wrapWidth = PANEL_W - 56;
     const body =
       tips.length > 0
-        ? tips.map((t, i) => `${i + 1}. ${t}`).join("\n\n")
+        ? tips
+            .map((t) => `${t.kind === "hint" ? "[HINT]" : "[TIP] "} ${t.text}`)
+            .join("\n\n")
         : "Nothing discovered yet this run — tips appear the first time you run into a new situation.";
     this.text(this.panelX + 28, y, body, 13, "#c8d0dc", 0, wrapWidth);
 

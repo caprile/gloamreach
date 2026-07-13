@@ -1150,7 +1150,7 @@ export class MainScene extends Phaser.Scene {
     // Contextual hints (tip popups) + pause menu (Esc). The hint UI just
     // renders whatever HintManager decides to surface.
     this.hintUI = new HintUI(this);
-    this.hints.onShow((text) => this.hintUI.show(text));
+    this.hints.onShow((text, _id, kind) => this.hintUI.show(text, kind));
     this.pauseMenu = new PauseMenuUI(this);
     this.welcomeUI = new WelcomeUI(this);
     this.tipsUI = new TipsUI(this);

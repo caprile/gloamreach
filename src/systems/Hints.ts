@@ -1,7 +1,14 @@
-// Contextual "tip" system — a Valheim-hint-style nudge that fires the FIRST
+// Contextual nudge system — a Valheim-hint-style prompt that fires the FIRST
 // time the player hits a given situation each run, then never again that run.
-// Deliberately sparse and non-hand-holdy: it teaches controls and points at
-// mechanics, but never spells out the win condition (totem -> altar -> boss).
+//
+// Two flavors (the user's call, so nudges don't over-explain):
+//   - "tutorial" (shown as TIP): teaches a control or a mechanic the player
+//     can't otherwise discover — direct and explicit is GOOD here (WASD,
+//     stamina drain, right-click-to-upgrade, bleed/magic ignoring armor).
+//   - "hint" (shown as HINT): an in-character, deliberately vague nudge toward
+//     an objective or a place. Points the player at something to go DO without
+//     walking them through it — never spells out wave counts, the exact ritual,
+//     or the win condition. First-person "journal" voice.
 //
 // Framework-free (no Phaser import), like Run/Buffs/Health — MainScene owns an
 // instance, calls trigger(id) at the relevant hook points, and the HintUI
@@ -25,23 +32,67 @@ export type HintId =
   | "bled"
   | "magic_damage";
 
-// Plain, terse tip text — no mascot voice, no cryptic flavor. Each nudges the
-// mechanic just enough to unblock a cold player without solving anything.
-const HINT_TEXT: Record<HintId, string> = {
-  awaken: "Move with WASD. Press F11 for fullscreen. Explore and gather to grow stronger.",
-  pickup_reach: "Left-click things within reach to interact.",
-  tool_locked: "You'll need the right tool equipped for that.",
-  open_menu: "Press Tab to open your pack and craft what you've learned.",
-  stamina_empty: "Out of stamina. Sprinting, dashing, and attacking all drain it — let it recover.",
-  took_damage: "Hurt? Cooked food and resting near a lit campfire both heal you over time.",
-  nightfall: "Night falls. Enemies grow bolder in the dark — a torch lights the way.",
-  elite_trophy: "That was an elite — it dropped a trophy. A Relic Forge can turn trophies into power.",
-  right_click_tip: "Right-click equipped gear or a placed station to inspect and upgrade it.",
-  altar_found: "You found the Gremlin War Camp — a heavily-defended stronghold. Worth exploring further once you're strong enough.",
-  totem_ready: "You hold a Gremlin Totem. Take it to the Boss Altar and place it in the fire to summon the boss.",
-  den_found: "A Duskrunner Warren — clear both guard waves, then hit the exposed den itself to smash it open for loot.",
-  bled: "You're bleeding — it ticks damage over time and ignores armor. Some badlands attacks open wounds like this on hit.",
-  magic_damage: "That hit came through your armor. Magic and fire damage bypass flat armor entirely — mind the badlands casters.",
+export type HintKind = "tutorial" | "hint";
+
+export interface HintEntry {
+  kind: HintKind;
+  text: string;
+}
+
+// tutorial = explicit teaching (fine to be direct); hint = vague in-character
+// nudge toward an objective/place (must not spoil the solution).
+const HINT_DEFS: Record<HintId, HintEntry> = {
+  awaken: {
+    kind: "tutorial",
+    text: "Move with WASD. Press F11 for fullscreen. Explore and gather to grow stronger.",
+  },
+  pickup_reach: { kind: "tutorial", text: "Left-click things within reach to interact." },
+  tool_locked: { kind: "tutorial", text: "You'll need the right tool equipped for that." },
+  open_menu: {
+    kind: "tutorial",
+    text: "Press Tab to open your pack and craft what you've learned.",
+  },
+  stamina_empty: {
+    kind: "tutorial",
+    text: "Out of stamina. Sprinting, dashing, and attacking all drain it — let it recover.",
+  },
+  took_damage: {
+    kind: "tutorial",
+    text: "Hurt? Cooked food and resting near a lit campfire both heal you over time.",
+  },
+  nightfall: {
+    kind: "tutorial",
+    text: "Night falls. Enemies grow bolder in the dark — a torch lights the way.",
+  },
+  elite_trophy: {
+    kind: "tutorial",
+    text: "That was an elite — it dropped a trophy. A Relic Forge can turn trophies into power.",
+  },
+  right_click_tip: {
+    kind: "tutorial",
+    text: "Right-click equipped gear or a placed station to inspect and upgrade it.",
+  },
+  bled: {
+    kind: "tutorial",
+    text: "You're bleeding — it ticks damage over time and ignores armor. Some badlands attacks open wounds like this on hit.",
+  },
+  magic_damage: {
+    kind: "tutorial",
+    text: "That hit came through your armor. Magic and fire damage bypass flat armor entirely — mind the badlands casters.",
+  },
+  // Objective/place nudges — vague, in-character, no walkthrough.
+  altar_found: {
+    kind: "hint",
+    text: "A war camp — walls, watch-fires, the lot. Whatever they've dug in to guard must be worth taking. I'm not strong enough to find out yet.",
+  },
+  totem_ready: {
+    kind: "hint",
+    text: "This totem is heavy with old menace. It's meant for something — some kind of altar, I'd wager. I should keep an eye out for one.",
+  },
+  den_found: {
+    kind: "hint",
+    text: "I've found a Duskrunner warren. Something's denned up in there — if I can deal with whatever's guarding it, it might be worth cracking open.",
+  },
 };
 
 const STORAGE_KEY = "survivor-rpg:hints-enabled:v1";
@@ -59,13 +110,13 @@ function loadEnabled(): boolean {
 export class HintManager {
   private shown = new Set<HintId>(); // per-run; a fresh instance clears it
   private enabled: boolean;
-  private listeners: ((text: string, id: HintId) => void)[] = [];
+  private listeners: ((text: string, id: HintId, kind: HintKind) => void)[] = [];
 
   constructor() {
     this.enabled = loadEnabled();
   }
 
-  onShow(cb: (text: string, id: HintId) => void): void {
+  onShow(cb: (text: string, id: HintId, kind: HintKind) => void): void {
     this.listeners.push(cb);
   }
 
@@ -89,14 +140,15 @@ export class HintManager {
   trigger(id: HintId): void {
     if (!this.enabled || this.shown.has(id)) return;
     this.shown.add(id);
-    for (const cb of this.listeners) cb(HINT_TEXT[id], id);
+    const def = HINT_DEFS[id];
+    for (const cb of this.listeners) cb(def.text, id, def.kind);
   }
 
-  // Every tip discovered so far this run, in the order they first fired —
+  // Every nudge discovered so far this run, in the order they first fired —
   // Sets preserve insertion order, so no separate list is needed. Backs the
   // Pause menu's re-readable Tips panel (playtest: right-click-to-upgrade
   // and other non-obvious gestures needed a way to look the tip back up).
-  discovered(): string[] {
-    return Array.from(this.shown).map((id) => HINT_TEXT[id]);
+  discovered(): HintEntry[] {
+    return Array.from(this.shown).map((id) => HINT_DEFS[id]);
   }
 }
