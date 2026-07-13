@@ -38,6 +38,7 @@ export type ResourceType =
   | "cragscale_plate" // dropped by Cragscales — a future heavy-armor/smithing ingredient
   | "hex_essence" // dropped by Hexlings — a future magic-weapon/alchemy reagent
   | "sandmaw_chitin" // dropped by Sandmaws — a light-but-tough plating shard (future armor/tool material)
+  | "ironbark" // chopped from badlands Ironbark trees (needs an upgraded/Ironshod axe) — a hard wood feeding select badlands recipes/upgrades
   | "ember_ore" // mined from a Sunken Forge's ember deposits (after killing the Cinderwrought) — the RARE smelting ore (Phase 4): Cinderforged Ore → Embersteel Ingot
   | "clay" // mined from scattered badlands Clay Deposits — the build material for the Smelter (Phase 4)
   | "sunscorch_ore" // the COMMON badlands smelting ore (Phase 4): Sunscorch Ore → Sunsteel Ingot

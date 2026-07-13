@@ -57,9 +57,9 @@ requires standing near a placed Workbench (`MainScene.isNearWorkbench`).
 | Emberhide Hood | Armor | 1 | Yes (Lvl 4) | 1 Duskhide Hood, 1 Embersteel Ingot, 2 Duskrunner Pelt | Light Armor 0 | Item (armor, helmet, light — reforge) |
 | Emberhide Vest | Armor | 1 | Yes (Lvl 4) | 1 Duskhide Vest, 2 Embersteel Ingot, 3 Duskrunner Pelt | Light Armor 0 | Item (armor, chest, light — reforge) |
 | Emberhide Leggings | Armor | 1 | Yes (Lvl 4) | 1 Duskhide Leggings, 1 Embersteel Ingot, 1 Sandmaw Chitin | Light Armor 0 | Item (armor, legs, light — reforge) |
-| Embersteel Warhammer | Weapons | 1 | Yes (Lvl 4) | 1 Sunsteel Warhammer, 3 Embersteel Ingot, 2 Cragscale Plate | Blunt 3 | Item (weapon, blunt — reforge) |
+| Embersteel Warhammer | Weapons | 1 | Yes (Lvl 4) | 1 Sunsteel Warhammer, 3 Embersteel Ingot, 4 Ironbark, 2 Cragscale Plate | Blunt 3 | Item (weapon, blunt — reforge) |
 | Embersteel Longsword | Weapons | 1 | Yes (Lvl 4) | 1 Sunsteel Longsword, 2 Embersteel Ingot, 2 Wood | Slash 3 | Item (weapon, slash — reforge) |
-| Embersteel Pike | Weapons | 1 | Yes (Lvl 4) | 1 Sunsteel Pike, 2 Embersteel Ingot, 2 Wood | Pierce 3 | Item (weapon, pierce — reforge) |
+| Embersteel Pike | Weapons | 1 | Yes (Lvl 4) | 1 Sunsteel Pike, 2 Embersteel Ingot, 3 Ironbark | Pierce 3 | Item (weapon, pierce — reforge) |
 | Ember Brand | Weapons | 1 | Yes (Lvl 4) | 3 Embersteel Ingot, 4 Hex Essence | Magic 0 | Item (weapon, **magic** — first magic weapon) |
 
 The base forged gear (Sunsteel/Duskhide) is **"Yes (Lvl 3)"** — tier 1 (any
@@ -96,8 +96,8 @@ fixed destination level.
 | Applies To | Toward | Name | Costs | Delta |
 |---|---|---|---|---|
 | Workbench | Lvl 2 | Tool Sharpener | 3 Twine, 5 Wood, 2 Stone | — (unlocks gates only) |
-| Workbench | Lvl 3 | Forge Anvil | 5 Sunsteel Ingot, 10 Stone | Unlocks base forged gear (`requiresWorkbenchTier: 2`) |
-| Workbench | Lvl 4 | Emberforge Anvil | 5 Embersteel Ingot, 15 Stone | Unlocks enhanced/T2 gear (`requiresWorkbenchTier: 3`) |
+| Workbench | Lvl 3 | Forge Anvil | 5 Sunsteel Ingot, 5 Ironbark, 10 Stone | Unlocks base forged gear (`requiresWorkbenchTier: 2`) |
+| Workbench | Lvl 4 | Emberforge Anvil | 5 Embersteel Ingot, 8 Ironbark, 15 Stone | Unlocks enhanced/T2 gear (`requiresWorkbenchTier: 3`) |
 | Campfire | Lvl 2 | Stone Hearth | 4 Twine, 20 Stone | Better campfire dishes |
 | Campfire | Lvl 3 | Sunsteel Grill | 3 Sunsteel Ingot, 8 Clay, 10 Stone | Better campfire dishes |
 | Campfire | Lvl 4 | Emberforge Hearth | 3 Embersteel Ingot, 20 Stone | Best campfire dishes |
@@ -186,6 +186,24 @@ through enemy resistances — **neutral** vs most badlands beasts, **resisted**
 upside, not flatly best — and it finally gives the `magic` weapon skill a real XP
 source. (No current badlands enemy is *weak* to magic, so it never crits the
 resist layer super-effective — a hook for a future magic-vulnerable enemy.)
+
+## Tool Upgrades (`src/systems/ToolUpgrades.ts`)
+
+Tools upgrade in place exactly like weapons — right-click the tool (backpack or
+hotbar) → Upgrade panel. The upgrade bumps the tool stack's `tier`, which gates
+felling higher-hardness nodes (a node's `ResourceNode.minToolTier` vs the
+equipped tool's `tier`). The world prompt still shows `[LMB] Chop` with any
+correct-**kind** tool (never reveals the tier) — a too-weak axe just bounces off.
+
+| Tool | Toward | Name | Costs | Delta |
+|---|---|---|---|---|
+| Woodcutter's Axe | Lvl 2 (tier 1) | Ironshod Woodcutter's Axe | 2 Sunsteel Ingot, 6 Stone | Fells Ironbark trees |
+
+Discoverable once **Sunsteel Ingot** is known (i.e. the badlands' basic ore has
+been smelted), so the axe upgrade is the bridge from smelting into the Ironbark
+supply. Ironbark then feeds the **Forge Anvil** / **Emberforge Anvil** Workbench
+upgrades and the **Embersteel Warhammer / Pike** reforges (see those tables) —
+making the axe upgrade a genuine prerequisite for the forged tier, not optional.
 
 ## Ranged weapons (`src/systems/Weapons.ts` `RANGED_WEAPONS`)
 

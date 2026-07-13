@@ -142,11 +142,11 @@ export class HotbarUI {
         .on("pointerdown", (pointer: Phaser.Input.Pointer) => {
           // Right-click is a no-op now — quick-move-to-backpack moved to a
           // double-left-click-in-place, detected scene-side (see
-          // MainScene.resolveItemDrag) — except on a weapon, which opens its
-          // Upgrade panel instead.
+          // MainScene.resolveItemDrag) — except on a weapon/tool, which opens
+          // its Upgrade panel instead.
           if (pointer.rightButtonDown()) {
             if (stack && itemDef(stack.key)?.edible) this.deps.eatItem(this.hotbar.container, i);
-            else if (stack && itemDef(stack.key)?.weapon) this.deps.openWeaponUpgrade(this.hotbar.container, i);
+            else if (stack && (itemDef(stack.key)?.weapon || itemDef(stack.key)?.tool)) this.deps.openWeaponUpgrade(this.hotbar.container, i);
             return;
           }
           this.deps.beginDrag(this.hotbar.container, i, pointer);

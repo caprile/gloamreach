@@ -2,6 +2,7 @@ import Phaser from "phaser";
 import type { StationUpgradeDef } from "../systems/StationUpgrades";
 import type { ArmorUpgradeDef } from "../systems/ArmorUpgrades";
 import type { WeaponUpgradeDef } from "../systems/WeaponUpgrades";
+import type { ToolUpgradeDef } from "../systems/ToolUpgrades";
 import { ProgressBar } from "./ProgressBar";
 
 // A short "upgrading…" bar plays over the clicked row before the tier lands —
@@ -12,7 +13,7 @@ const UPGRADE_BAR_MS = 500;
 // weapon's upgrade — all three share the same shape the UI actually reads
 // (name/description/resultTier/costs), so one panel serves all of them
 // without a generic type parameter.
-export type UpgradeDef = StationUpgradeDef | ArmorUpgradeDef | WeaponUpgradeDef;
+export type UpgradeDef = StationUpgradeDef | ArmorUpgradeDef | WeaponUpgradeDef | ToolUpgradeDef;
 
 export interface UpgradeTarget {
   itemKey: string;

@@ -907,6 +907,69 @@ export class BootScene extends Phaser.Scene {
     g.fillRect(15, 12, 1, 1);
     g.generateTexture("sunscorch_ore_node", 26, 30);
 
+    // --- Badlands gatherable nodes (every biome needs wood + stone) ---
+    // Dead tree — chop for WOOD (any axe). 30x40: bare grey-brown trunk with a
+    // few dry limbs, no green canopy (sun-killed).
+    g.clear();
+    g.fillStyle(0x6b4a30, 1);
+    g.fillRect(13, 16, 5, 24); // trunk
+    g.fillStyle(0x7c5a3c, 1);
+    g.fillRect(6, 20, 8, 3); // left limb
+    g.fillRect(17, 12, 8, 3); // right limb
+    g.fillRect(11, 8, 3, 10); // upper trunk
+    g.fillStyle(0x8a7a44, 1);
+    g.fillRect(4, 18, 4, 2); // dry twig ends
+    g.fillRect(23, 10, 4, 2);
+    g.generateTexture("badlands_deadtree", 30, 40);
+
+    // Ironbark tree — chop for IRONBARK (needs an upgraded/Ironshod axe). 32x46,
+    // visibly bigger/tougher: near-black rust trunk with grey iron-bark streaks
+    // and a sparse dark canopy tinged rust-red.
+    g.clear();
+    g.fillStyle(0x3a2418, 1);
+    g.fillRect(13, 22, 7, 24); // thick dark trunk
+    g.fillStyle(0x6a6258, 1);
+    g.fillRect(14, 24, 2, 20); // iron-bark streak
+    g.fillStyle(0x2a1a10, 1);
+    g.fillRect(6, 20, 9, 4); // gnarled left limb
+    g.fillRect(18, 16, 9, 4); // right limb
+    g.fillStyle(0x3f4a28, 1);
+    g.fillRect(4, 4, 24, 18); // dark canopy
+    g.fillStyle(0x5a3a24, 1);
+    g.fillRect(8, 7, 7, 6); // rust-red foliage clump
+    g.fillRect(18, 9, 6, 5);
+    g.generateTexture("ironbark_tree", 32, 46);
+
+    // Badlands boulder — mine for STONE (needs a pickaxe). 30x26 layered red mesa rock.
+    g.clear();
+    g.fillStyle(0x5f3826, 1);
+    g.fillRect(2, 12, 26, 14);
+    g.fillRect(6, 6, 18, 18);
+    g.fillStyle(0x7a4a2e, 1);
+    g.fillRect(4, 14, 22, 5); // strata band
+    g.fillStyle(0x8a5a38, 1);
+    g.fillRect(8, 8, 12, 5);
+    g.fillStyle(0xa4623a, 1);
+    g.fillRect(10, 9, 5, 3); // highlight
+    g.generateTexture("badlands_boulder", 30, 26);
+
+    // Badlands dry branch — free WOOD pickup (18x8), a pale sun-bleached stick.
+    g.clear();
+    g.fillStyle(0x9a7a4a, 1);
+    g.fillRect(0, 2, 18, 4);
+    g.fillStyle(0xb69c66, 1);
+    g.fillRect(2, 3, 14, 2);
+    g.generateTexture("badlands_branch", 18, 8);
+
+    // Badlands scrap rock — free STONE pickup (14x10), a rusty red pebble.
+    g.clear();
+    g.fillStyle(0x7a4a2e, 1);
+    g.fillRect(1, 3, 12, 6);
+    g.fillRect(3, 1, 8, 8);
+    g.fillStyle(0x9a5a38, 1);
+    g.fillRect(4, 3, 4, 3);
+    g.generateTexture("badlands_scraprock", 14, 10);
+
     this.makeDecorProps(g);
     this.makeItemIcons(g);
 
@@ -2178,6 +2241,18 @@ export class BootScene extends Phaser.Scene {
     g.fillStyle(0xffc860, 1);
     g.fillRect(9, 12, 1, 1);
     g.generateTexture("icon_sunscorch_ore", ICON, ICON);
+
+    g.clear(); // Ironbark — stacked dark hardwood planks with rust-red grain
+    g.fillStyle(0x4a3220, 1);
+    g.fillRect(3, 6, 18, 4);
+    g.fillRect(3, 12, 18, 4);
+    g.fillStyle(0x5f4028, 1);
+    g.fillRect(5, 7, 14, 1);
+    g.fillRect(5, 13, 14, 1);
+    g.fillStyle(0x7a3a24, 1);
+    g.fillRect(6, 8, 5, 1); // rust grain streak
+    g.fillRect(12, 14, 6, 1);
+    g.generateTexture("icon_ironbark", ICON, ICON);
 
     g.clear(); // Sunsteel Ingot — a warm gold bar
     g.fillStyle(0xcaa24a, 1);

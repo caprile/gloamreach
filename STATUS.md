@@ -2,23 +2,27 @@
 
 ## Current State
 
-_Living snapshot — edit in place, never append. Last shipped: **Campfire tiers + cross-biome cooking +
-no-ladder station upgrades** (2026-07-13, Opus). Off the master-plan build order. Foundation change:
-**station/processor upgrades are now no-ladder** — any *discovered* upgrade for a station can be applied
-in any order and applying it bumps the station's level by exactly **+1** (level = count of upgrades
-applied, tracked as a per-instance applied-id set that survives Destroy→pickup→re-Place). `resultTier`
-is demoted to a sort hint; recipes/dishes gate on the level count, with material-specificity coming from
-recipe ingredient discovery. Scope = stations/processors only — worn **weapon/armor upgrades keep their
-ladder** (the shared UpgradeMenu branches on a new `appliedUpgradeIds()` dep). On top of that: **Campfire
-Lvl 3/4** (Sunsteel Grill / Emberforge Hearth, ingot-gated with distinct costs; per-level tint tell),
-**5 new HP-regen dishes** (each level has a badlands-native "best" dish needing no backtracking + optional
-mixed dishes that spend leftover boar_meat), and a **cooking-menu rework**: collapsible per-level sections
-(best on top), scrollable via windowed rendering + a viewport geometry mask, an amber "● N ready"
-cookable-count badge per section (visible even when collapsed) + a "Show only cookable" filter, and a
-matching amber "has-craftable" dot on the CraftingMenu category tabs. Verified live via `preview_eval`
-(no-ladder apply/order/dup/persistence, weapon-armor ladder intact, cook+eat, menu scroll/collapse/mask/
-filter); `tsc` clean; dashboard + `RECIPES.md` updated. See the entry below.
-[[survivor-rpg-crafting-inventory-ui]] [[survivor-rpg-placed-object-management]]_
+_Living snapshot — edit in place, never append. Last shipped: **Biome-wide wood/stone + Ironbark
+axe-upgrade chain + relic-UI fixes** (2026-07-13, Opus). Off the master-plan build order — a mixed
+batch. **Relic-UI fixes:** the Character menu (K) and Tab combined menu are now mutually exclusive
+(they z-fought over the new Relics column), and the relic hover tooltip shows the relic's family/class.
+**Every biome now supplies wood + stone:** new badlands dead-tree/boulder/branch/scrap-rock gatherables
+(`spawnBadlandsNodes`) drop the same universal `wood`/`stone` keys. **Tool tiers are finally implemented**
+(the long-reserved hook): `ResourceNode.minToolTier` + a tracked `equippedToolTier` mean a too-weak tool
+bounces off (prompt still shows the verb — never reveals the tier). A new **Ironbark tree** (new `ironbark`
+wood, `minToolTier: 1`) needs an upgraded axe; the **Woodcutter's Axe now upgrades in place** via a new
+`ToolUpgrades.ts` (Ironshod Axe, `2 Sunsteel Ingot + 6 Stone`) that reuses the entire weapon-upgrade path.
+Ironbark feeds the **Forge Anvil / Emberforge Anvil** Workbench upgrades + the **Embersteel Warhammer/Pike**
+reforges (so the axe upgrade gates the forged tier). **Deferred to its own session (the user):** Ember-tier
+uniqueness + armor **set bonuses**, ungated ore-gear upgrades, and a **QERT activated-ability** system.
+Verified live; `tsc` clean; `RECIPES.md` + dashboard updated. See the entry below.
+[[survivor-rpg-biome-2-plan]] [[survivor-rpg-placed-object-management]]_
+
+_Prior: **Campfire tiers + cross-biome cooking +
+no-ladder station upgrades** (2026-07-13, Opus). **Station/processor upgrades are now no-ladder** (any
+discovered upgrade applies in any order; applying = +1 level; weapon/armor keep their ladder), plus
+Campfire Lvl 3/4, 5 new HP-regen dishes, and a collapsible/scrollable cooking-menu rework. Full detail
+in Recent Entries + [[survivor-rpg-no-ladder-station-upgrades]] [[survivor-rpg-cooking-food-buffs]]._
 
 _Prior: **Biome 2 — Phase 5: Relics rework**
 (2026-07-13, Opus). The relic economy for biome 2 + the requested rebalance, closing out the biome-2
@@ -139,6 +143,57 @@ below + [[survivor-rpg-dev-console]].
 ## Recent Entries
 
 > Older entries in STATUS-archive.md.
+
+### Biome-wide wood/stone + Ironbark axe-upgrade chain + relic-UI fixes (2026-07-13, Opus)
+
+Off the master-plan build order — a mixed batch (two small fixes + two content adds). Locked
+via `AskUserQuestion`: menus **mutually exclusive**, axe **upgrades in place**, Ironbark feeds
+**Workbench Lvl 3/4 upgrades + the enhanced (T2) weapon reforges**.
+
+- **Relic UI fixes.** (1) The Character menu (K) and the Tab combined menu are now **mutually
+  exclusive** — opening one closes the other (both were depth-3000 and z-fought over the new
+  Relics column). `toggleCombinedMenu()` closes `characterMenu`; the K handler closes the
+  inventory/crafting menus first. (2) The relic hover tooltip in the Inventory panel now shows
+  the relic's **family/class** (`relicFamilyName(group.family)` — "Damage", "Move Speed", …),
+  inserted next to the rarity line.
+- **Wood + stone in EVERY biome (item 3).** New `MainScene.spawnBadlandsNodes()` scatters
+  badlands-themed gatherables via `pickBadlandsPoint` that drop the **same universal `wood`/`stone`
+  keys** (so all recipes work anywhere): **Dead Tree** (chop→wood, 54), **Badlands Boulder**
+  (mine→stone, 46), **Dry Branch** (pickup→wood, 40), **Scrap Rock** (pickup→stone, 40). New
+  `badlands_deadtree`/`badlands_boulder`/`badlands_branch`/`badlands_scraprock` placeholder
+  textures in `BootScene`.
+- **Tool tiers, finally implemented (item 4).** The codebase reserved a tool-tier hook for a year
+  ("a stone axe shows [LMB] Chop but fails on a hardwood tree; a better axe succeeds") — now live.
+  New `ResourceNode.minToolTier`; `MainScene` tracks `equippedToolTier` (the equipped tool stack's
+  tier, mirroring `equippedWeaponTier`); `tryInteract` bounces a too-weak tool off (shake + tint +
+  a throttled event-log line, **no XP/stamina spent, prompt still shows the verb** — never reveals
+  the tier). New **Ironbark tree** (`ironbark_tree`, chop→new `ironbark` resource, `minToolTier: 1`,
+  34 spawned) needs the upgraded axe. **Axe upgrades IN PLACE** via a new `src/systems/ToolUpgrades.ts`
+  (mirrors `WeaponUpgrades`) — **Ironshod Woodcutter's Axe** (tier 0→1, `2 Sunsteel Ingot + 6 Stone`,
+  "Fells Ironbark trees"), discoverable once Sunsteel Ingot is known. Reuses the **entire** weapon-
+  upgrade path with near-zero new plumbing: right-click a tool → `openWeaponUpgradeMenu` (added a
+  `def?.tool` branch in InventoryMenu/HotbarUI), `ToolUpgradeDef` added to the `UpgradeMenu` union +
+  the `upgradesFor` concat, and `applyWeaponUpgrade` (generic — just bumps the stack tier) handles it;
+  `stationDisplayName` now checks the tool table too so an upgraded axe reads "Woodcutter's Axe Lvl 2".
+- **Ironbark sinks (item 4 proposal, locked).** Ironbark feeds the **Forge Anvil** (Workbench Lvl 3,
+  +5) and **Emberforge Anvil** (Lvl 4, +8) station upgrades, and the **Embersteel Warhammer** (+4)
+  and **Embersteel Pike** (+3, replacing its 2 Wood) reforges — the two haft/shaft weapons ("some,
+  not all": the mostly-metal Longsword and the magic Ember Brand are untouched). Because Forge Anvil
+  gates all forged gear, this makes the axe upgrade a **genuine prerequisite** for the forged tier —
+  intended, and thematically the hardwood reinforces the bench.
+- **Deferred to their own session (the user's call, captured for follow-up):** Ember-tier uniqueness +
+  **heavy/light armor set bonuses**; **ungated** upgrades for basic/T2 ore gear (no workbench gate);
+  and a **QERT activated-ability** system (armor/weapon actives with cooldowns) — biome-2 keeps a
+  simple passive/static special, saving QERT actives for biome 3 to avoid piling too many new
+  mechanics into one biome. See [[survivor-rpg-biome-2-plan]].
+
+Verified live (`preview_eval` + screenshots): all node types spawn (chop:wood 158→212, mine:stone→80,
+34 Ironbark trees w/ minToolTier 1) and render; base axe **bounces off** Ironbark (health unchanged)
+while the upgraded axe fells it in 4 swings + drops ironbark; base axe fells a badlands dead tree
+(ungated); the upgrade apply path deducts `2 Sunsteel`, bumps tier, updates `equippedToolTier`; menu
+mutual exclusion (Tab↔K); relic family names correct; recipe/upgrade costs updated. `tsc` clean, no
+console errors. `RECIPES.md` (new Tool Upgrades section + updated station/weapon costs) + dashboard
+(new Tool-upgrade table) updated.
 
 ### Biome 2 — Phase 5: Relics rework (2026-07-13, Opus)
 

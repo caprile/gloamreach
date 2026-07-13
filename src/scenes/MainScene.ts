@@ -87,6 +87,7 @@ import {
   weaponTierDamageBonus,
   type WeaponUpgradeDef,
 } from "../systems/WeaponUpgrades";
+import { toolUpgradesForItem } from "../systems/ToolUpgrades";
 import { EventLog } from "../systems/EventLog";
 import { Biome, type ZoneType } from "../systems/Biome";
 import { Equipment, EQUIP_SLOTS, type EquipSlot, type EquippedItem } from "../systems/Equipment";
@@ -454,6 +455,9 @@ export class MainScene extends Phaser.Scene {
   // The single tool the player currently has "out". Driven by the selected
   // hotbar slot.
   private equippedTool: ToolType | null = null;
+  // Upgrade tier of the equipped tool's hotbar stack (0 = base). Gates felling
+  // higher-hardness nodes like the badlands Ironbark tree (needs an upgraded axe).
+  private equippedToolTier = 0;
   private equippedWeapon: WeaponType | null = null;
   private equippedWeaponName: string | null = null;
   private equippedWeaponTier = 0;
@@ -979,6 +983,7 @@ export class MainScene extends Phaser.Scene {
     this.spawnNodes(solids);
     this.spawnBadlandsFlora(); // biome 2 Phase 2 arid harvestables (free pickups, not solid)
     this.spawnBadlandsMinerals(); // biome 2 Phase 4 — mineable ore + clay for smelting
+    this.spawnBadlandsNodes(); // wood/stone gatherables + gated Ironbark tree (every biome supplies the basics)
     this.physics.add.collider(this.player, solids);
 
     // Enemies: physical collision with solids and the player (separation
@@ -1240,7 +1245,16 @@ export class MainScene extends Phaser.Scene {
     });
     this.input.keyboard!.on("keydown-V", () => !this.runOver && this.toggleMagnet());
     this.input.keyboard!.on("keydown-O", () => !this.runOver && this.toggleRangeRing());
-    this.input.keyboard!.on("keydown-K", () => !this.runOver && this.characterMenu.toggle());
+    this.input.keyboard!.on("keydown-K", () => {
+      if (this.runOver) return;
+      // Mutually exclusive with the Tab combined menu — one full-screen panel
+      // at a time, so they can't overlap (the Relics column vs. the K panel).
+      if (!this.characterMenu.isOpen() && this.inventoryMenu.isOpen()) {
+        this.inventoryMenu.close();
+        this.craftingMenu.close();
+      }
+      this.characterMenu.toggle();
+    });
     this.input.keyboard!.on("keydown-R", () => !this.runOver && this.takeAllFromChest());
     this.input.keyboard!.on("keydown-H", () => !this.runOver && this.toggleWheelSpansBothRows());
     this.input.keyboard!.on("keydown-J", () => this.runHudUI.toggleMinimized());
@@ -1771,6 +1785,7 @@ export class MainScene extends Phaser.Scene {
     const stack = this.hotbar.get(this.hotbar.selected());
     const def = stack ? itemDef(stack.key) : undefined;
     this.equippedTool = def?.tool ?? null;
+    this.equippedToolTier = def?.tool ? stack?.tier ?? 0 : 0;
     this.equippedWeapon = def?.weapon ?? null;
     this.equippedWeaponName = def?.weapon ? def.name : null;
     this.equippedWeaponTier = def?.weapon ? stack?.tier ?? 0 : 0;
@@ -3772,6 +3787,52 @@ export class MainScene extends Phaser.Scene {
     scatterOre("ember_ore_node", "ember_ore", "Cinderforged Vein", 8, 3);
   }
 
+  // Every biome needs a supply of the basics — wood and stone. The forest disc
+  // has trees/rocks; the badlands gets its own themed gatherables that drop the
+  // SAME universal `wood`/`stone` keys (so all recipes work anywhere), plus the
+  // Ironbark hardwood tree — a tool-tier-gated new wood source (needs an
+  // Ironshod axe; a base axe just bounces off, see ResourceNode.minToolTier).
+  private spawnBadlandsNodes(): void {
+    const rng = this.sessionRng();
+    const scatter = (cfg: {
+      texture: string;
+      resource: ResourceType;
+      displayName: string;
+      action: NodeAction;
+      amount: number;
+      health: number;
+      count: number;
+      minToolTier?: number;
+    }) => {
+      for (let i = 0; i < cfg.count; i++) {
+        const pt = this.pickBadlandsPoint(rng);
+        if (!pt) break;
+        const node = new ResourceNode(this, {
+          x: pt.x,
+          y: pt.y,
+          texture: cfg.texture,
+          resource: cfg.resource,
+          amount: cfg.amount,
+          action: cfg.action,
+          displayName: cfg.displayName,
+          loose: false,
+          health: cfg.health,
+          minToolTier: cfg.minToolTier,
+        });
+        this.nodes.push(node);
+        // Chop/mine nodes are tall enough to Y-sort/occlude; free pickups stay
+        // at ground depth (mirrors the forest branch/rock convention).
+        if (cfg.action !== "pickup") this.obstacleNodes.push(node);
+      }
+    };
+    scatter({ texture: "badlands_deadtree", resource: "wood", displayName: "Dead Tree", action: "chop", amount: 5, health: 3, count: 54 });
+    scatter({ texture: "badlands_boulder", resource: "stone", displayName: "Badlands Boulder", action: "mine", amount: 5, health: 3, count: 46 });
+    scatter({ texture: "badlands_branch", resource: "wood", displayName: "Dry Branch", action: "pickup", amount: 1, health: 1, count: 40 });
+    scatter({ texture: "badlands_scraprock", resource: "stone", displayName: "Scrap Rock", action: "pickup", amount: 1, health: 1, count: 40 });
+    // Ironbark — the gated hardwood. Rarer than the basics; needs the Ironshod axe.
+    scatter({ texture: "ironbark_tree", resource: "ironbark", displayName: "Ironbark Tree", action: "chop", amount: 3, health: 4, count: 34, minToolTier: 1 });
+  }
+
   // Purely-decorative, non-interactive immersion props scattered through both
   // biomes (the user: "for both biomes add a bunch of decorative textures so it's
   // more immersive"). Not tracked (auto-destroyed on scene.restart), Y-sorted
@@ -4939,8 +5000,20 @@ export class MainScene extends Phaser.Scene {
         this.hints.trigger("tool_locked");
         return;
       }
-      // (Future: also gate success on tool TIER here — a stone axe may be too
-      // weak for a hardwood tree, which would show "[LMB] Chop" but fail.)
+      // Tool-TIER gate: the right KIND still shows "[LMB] Chop" (we never reveal
+      // the tier), but a too-weak tool just bounces off. First used by the
+      // badlands Ironbark tree, which needs an upgraded (tier 1) axe. Throttled
+      // to the swing cooldown so spamming LMB doesn't flood the log or shake.
+      if (node.minToolTier > this.equippedToolTier) {
+        if (this.time.now - this.lastToolHitAt >= toolCooldownMs(this.equippedTool)) {
+          this.lastToolHitAt = this.time.now;
+          this.player.playSwing();
+          node.takeHit(0); // shake/tint bounce, no damage — communicates "didn't work"
+          const toolWord = kind === "axe" ? "axe" : "pickaxe";
+          this.eventLog.add("info", `Your ${toolWord} isn't strong enough for this`);
+        }
+        return;
+      }
 
       // Cap hit rate so holding/spamming LMB can't out-farm the tool's swing.
       const cooldownMs = toolCooldownMs(this.equippedTool);
@@ -6027,6 +6100,7 @@ export class MainScene extends Phaser.Scene {
     this.closeChestMenu();
     this.closeUpgradeMenu();
     this.closeRelicForgeMenu();
+    this.characterMenu?.close(); // one full-screen menu at a time (mutually exclusive with K)
     const opening = !this.inventoryMenu.isOpen();
     if (opening) {
       this.inventoryMenu.toggle();
@@ -6504,6 +6578,7 @@ export class MainScene extends Phaser.Scene {
         ...upgradesForItem(itemKey),
         ...armorUpgradesForItem(itemKey),
         ...weaponUpgradesForItem(itemKey),
+        ...toolUpgradesForItem(itemKey),
       ],
       isDiscovered: (upg) => this.upgradeIngredientsKnown(upg),
       canAfford: (upg) => this.canAffordUpgrade(upg),

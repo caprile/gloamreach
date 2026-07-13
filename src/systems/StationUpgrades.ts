@@ -2,6 +2,7 @@ import type { ResourceType } from "./Inventory";
 import { itemDef } from "./Items";
 import { armorUpgradesForItem } from "./ArmorUpgrades";
 import { weaponUpgradesForItem } from "./WeaponUpgrades";
+import { toolUpgradesForItem } from "./ToolUpgrades";
 
 // A named upgrade a placed station can receive via its right-click Upgrade
 // popup. Replaces the old generic `workbench_upgrade` consumable: costs are
@@ -87,10 +88,10 @@ export const STATION_UPGRADES: StationUpgradeDef[] = [
   {
     id: "forge_anvil",
     name: "Forge Anvil",
-    description: "A proper forge and anvil bolted to the bench. Lets you work metal ingots into gear.",
+    description: "A proper forge and anvil bolted to an ironbark frame. Lets you work metal ingots into gear.",
     appliesToItemKey: "workbench",
     resultTier: 2,
-    costs: { sunsteel_ingot: 5, stone: 10 },
+    costs: { sunsteel_ingot: 5, ironbark: 5, stone: 10 },
     deltaLabel: "Unlocks forged gear",
   },
   {
@@ -108,10 +109,10 @@ export const STATION_UPGRADES: StationUpgradeDef[] = [
     // upgrade on every cost key being discovered.
     id: "emberforge_anvil",
     name: "Emberforge Anvil",
-    description: "An ember-fed anvil that runs hot enough to reforge finished gear. Unlocks the enhanced tier.",
+    description: "An ember-fed anvil on a heavy ironbark stand, hot enough to reforge finished gear. Unlocks the enhanced tier.",
     appliesToItemKey: "workbench",
     resultTier: 3,
-    costs: { embersteel_ingot: 5, stone: 15 },
+    costs: { embersteel_ingot: 5, ironbark: 8, stone: 15 },
     deltaLabel: "Unlocks enhanced gear",
   },
 ];
@@ -138,7 +139,8 @@ export function stationDisplayName(itemKey: string, tier: number): string {
   if (
     upgradesForItem(itemKey).length === 0 &&
     armorUpgradesForItem(itemKey).length === 0 &&
-    weaponUpgradesForItem(itemKey).length === 0
+    weaponUpgradesForItem(itemKey).length === 0 &&
+    toolUpgradesForItem(itemKey).length === 0
   ) {
     return base;
   }

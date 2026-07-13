@@ -23,6 +23,7 @@ import {
   type WeaponType,
 } from "../systems/Weapons";
 import { WEAPON_UPGRADES, weaponTierDamageBonus } from "../systems/WeaponUpgrades";
+import { TOOL_UPGRADES } from "../systems/ToolUpgrades";
 import { ARMOR_UPGRADES, armorDefenseForTier } from "../systems/ArmorUpgrades";
 import { STATION_UPGRADES } from "../systems/StationUpgrades";
 import { PROCESS_RECIPES } from "../systems/Processing";
@@ -380,6 +381,24 @@ function renderWeapons(): string {
       <td>${esc(u.name)}</td>
       <td><span class="tag tier1">Lvl ${u.resultTier + 1}</span></td>
       <td class="num pos">+${u.damageBonus}</td>
+      <td class="cost">${esc(costsText(u.costs))}</td>
+    </tr>`;
+  }
+  html += `</tbody></table>`;
+
+  html += `<h3>Tool upgrade costs</h3>
+    <p class="note">In-place tool upgrades (<code>ToolUpgrades.ts</code>) — right-click
+    the tool. The tier gates felling higher-hardness nodes (<code>ResourceNode.minToolTier</code>),
+    e.g. the badlands Ironbark tree needs the Ironshod axe.</p>
+    <table><thead><tr>
+    <th>Tool</th><th>Upgrade</th><th>Result</th><th>Effect</th><th>Cost</th>
+    </tr></thead><tbody>`;
+  for (const u of TOOL_UPGRADES) {
+    html += `<tr>
+      <td>${esc(name(u.appliesToItemKey))}</td>
+      <td>${esc(u.name)}</td>
+      <td><span class="tag tier1">Lvl ${u.resultTier + 1}</span></td>
+      <td>${esc(u.deltaLabel ?? "—")}</td>
       <td class="cost">${esc(costsText(u.costs))}</td>
     </tr>`;
   }

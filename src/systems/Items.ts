@@ -473,6 +473,14 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     maxStack: 99,
     hotbarable: false,
   },
+  ironbark: {
+    key: "ironbark",
+    name: "Ironbark",
+    description: "Dense, sun-hardened wood from the badlands' gnarled ironbark trees. Too tough for a stone axe — a metal-shod edge cuts it. Prized for forge-benches and heavy hafts.",
+    texture: "icon_ironbark",
+    maxStack: 99,
+    hotbarable: false,
+  },
   ember_ore: {
     key: "ember_ore",
     name: "Cinderforged Ore",

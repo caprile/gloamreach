@@ -4,7 +4,7 @@ import type { ItemContainer } from "../systems/ItemContainer";
 import { itemDef } from "../systems/Items";
 import type { Skills } from "../systems/Skills";
 import type { PlayerProgression } from "../systems/Progression";
-import { RARITY_COLOR, rarityIcon, rarityName, relicEffectText, type RelicFamilySlot, type RelicGroup } from "../systems/Relics";
+import { RARITY_COLOR, rarityIcon, rarityName, relicEffectText, relicFamilyName, type RelicFamilySlot, type RelicGroup } from "../systems/Relics";
 import { Tooltip } from "./Tooltip";
 
 export interface ArmorSlotView {
@@ -366,7 +366,7 @@ export class InventoryMenu {
 
   private showRelicTooltip(group: RelicGroup, slotX: number, slotY: number): void {
     const def = group.def;
-    const str = `${def.name}\n${rarityName(def.rarity)} · Power T${group.powerTier}\n${relicEffectText(def, group.powerTier)}`;
+    const str = `${def.name}\n${rarityName(def.rarity)} ${relicFamilyName(group.family)} · Power T${group.powerTier}\n${relicEffectText(def, group.powerTier)}`;
     if (!this.relicTipText) {
       this.relicTipText = this.scene.add
         .text(0, 0, str, { fontFamily: "monospace", fontSize: "11px", color: "#e8ecf2", wordWrap: { width: 220 } })
@@ -502,12 +502,12 @@ export class InventoryMenu {
           // Right-click is reserved for context-menu/upgrade actions now —
           // quick-move-to-hotbar (or quick-equip) moved to double-left-click,
           // detected by the scene via the click-in-place path (see
-          // MainScene.resolveItemDrag) — except on a weapon (opens its
+          // MainScene.resolveItemDrag) — except on a weapon/tool (opens its
           // Upgrade panel) or a placeable (opens a "Place" popup).
           if (pointer.rightButtonDown()) {
             const def = itemDef(stack.key);
             if (def?.edible) this.deps.eatItem(backpack, i);
-            else if (def?.weapon) this.deps.openWeaponUpgrade(backpack, i);
+            else if (def?.weapon || def?.tool) this.deps.openWeaponUpgrade(backpack, i);
             else if (def?.placeable) this.deps.openPlaceContextMenu(backpack, i, pointer.x, pointer.y);
             return;
           }

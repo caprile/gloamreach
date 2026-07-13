@@ -101,6 +101,12 @@ export interface ResourceNodeConfig {
   // Gloaming Vein's ore, sealed until its guardian dies). Shielded nodes are
   // skipped by hover/prompt/interact, same as `harvested`.
   shielded?: boolean;
+  // Minimum equipped-tool upgrade tier needed to actually fell this node. The
+  // hover prompt still shows the verb with any correct-KIND tool (per the
+  // prompt-gating design — never reveal the tier), but the chop/mine silently
+  // fails until the equipped tool reaches this tier. First used by the badlands
+  // Ironbark tree (needs an upgraded axe). Defaults to 0 (any tier works).
+  minToolTier?: number;
 }
 
 // A single interactable object in the world (branch, rock, tree, boulder, or
@@ -121,6 +127,7 @@ export class ResourceNode extends Phaser.GameObjects.Sprite {
   readonly persistent: boolean;
   readonly pickedTexture?: string;
   readonly regrowMs?: number;
+  readonly minToolTier: number;
   // Inert until crack()ed (Gloaming Vein ore). Not readonly — the guardian's
   // death flips it to false.
   shielded: boolean;
@@ -153,6 +160,7 @@ export class ResourceNode extends Phaser.GameObjects.Sprite {
     this.persistent = cfg.persistent ?? false;
     this.pickedTexture = cfg.pickedTexture;
     this.regrowMs = cfg.regrowMs;
+    this.minToolTier = cfg.minToolTier ?? 0;
     this.shielded = cfg.shielded ?? false;
     this.freshTexture = cfg.texture;
     scene.add.existing(this);
