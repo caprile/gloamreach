@@ -5342,3 +5342,135 @@ Files: `BootScene.ts` (Cragscale tint), `Recipes.ts` (axe name), `RunEndUI.ts` +
 (capped breakdown), `RECIPES.md`. `tsc --noEmit` clean; verified live via `preview_eval` +
 screenshot; no console errors.
 
+
+### Biome 2 — Phase 3: The Duneshaper (badlands final boss + win-con swap)
+
+Plan: `.claude/plans/biome-2-phase-3-badlands-boss.md` (Phase 3, umbrella `biome-2-sunscorch-badlands.md`).
+Built on **Opus** (new boss mechanic). The **badlands final boss** and the game's **new
+win-condition**, demoting the Gremlin King to a mid-boss. Locked with the user via `AskUserQuestion` +
+a follow-up: scope = boss + win-swap now (King's critical-drop rework deferred to Phase 4); identity
+= a gloam-warped apex sorcerer; difficulty = phase-gated attack escalation; summon = its own altars
+but the totem is gathered from a POI (the Warrens); **plus** multiple altars + a clue system.
+
+**`src/entities/Duneshaper.ts`** — bespoke telegraph/poise AI (GremlinKing/Gloamwarden precedent,
+NOT a shared framework); extends `Enemy`, fully overrides `update()`; `idle → telegraphing →
+executing → recovering → staggered`. HP **900** (final boss, above the King's 600), poise 120
+(stagger → ×1.5 for 3s), scale 2.3, aggro 300, leash 580, regens 14 HP/s deaggro'd. A **caster**:
+holds ~220px and casts. `resistances: { magic: 0.5, slash/blunt/pierce: 1.3 }` (soft caster hide).
+**Damage-type mix** so gear reads: Sand Spikes are PHYSICAL pierce (flat armor applies); Volley/Nova/
+Lance/Barrage are `magic` (bypass flat armor, Phase-1 hook).
+- **Phase-gated escalation** (`availableAttacks()` grows as HP drops; `pickAttack` never repeats):
+  - **100%→:** Gloam Volley (3 magic `gloam_bolt` projectiles, ±18°), Sand Spikes (3 physical circles
+    across the player's spot), Blink Nova (teleport to the player + radial magic burst 132px).
+  - **≤70% HP:** + Gloamfire Lance (locked-direction magic beam, 340px/±10° — sidestep the wind-up).
+  - **≤50% HP:** + Sunscorch Barrage (7-circle magic carpet — find a gap) **and** enrage timing
+    (shorter telegraph/recovery + faster move, captured per state-entry).
+- Area attacks resolve via `checkPlayerHit()` (`{damage, knockback?, dmgType?}`) → `applyDamageToPlayer`
+  (dash i-frames/armor just work); the volley self-resolves as projectiles (the enemy-projectile→
+  player overlap forwards `dmgType: "magic"`). One hit per attack instance. Loot: **2
+  `refined_trophy_uncommon` + 5-8 `gloam_shard`** (Phase 5 re-tiers the badlands trophy set).
+
+**Summon (the user: own altar, totem gathered from a POI):**
+- **`warren_fetish`** ("Gloam-Bone Fetish", new `ResourceType`) added to `DUSKRUNNER_WARREN_LOOT_TABLE`
+  (guaranteed 1/cache). **`tyrant_totem`** ("Effigy of the Duneshaper", new crafted item) — tier-1
+  recipe `{ warren_fetish: 3, gloam_shard: 2, bones: 8 }`, a consumable like `gremlin_totem`.
+- **`BossAltar.kind`** (`"gremlin" | "tyrant"`). The forest War-Camp altar stays `"gremlin"`;
+  `spawnTyrantAltars` adds **3** `"tyrant"` altars (own `tyrant_altar` texture) via
+  `pickTyrantAltarPositions` (`pickBadlandsPoint`, ≥2600px apart), pushed into `bossAltars` so hover/
+  night-light/discovery reuse. Positions picked in `create()` before spawning; a `TYRANT_ALTAR_CLEAR_
+  RADIUS` (170) exclusion keeps content off the clearings. `attemptSummonBoss` branches on kind →
+  `attemptSummonDuneshaper` (consumes the effigy, guards a global `tyrantSummoned` flag, spawns the
+  boss after the ritual delay). `promptForAltar` tyrant → "[LMB] Offer the Effigy".
+
+**Clue system (the user — the world is huge, a single altar could be across the map):** (1) all
+tyrant altars glow at night (`collectLights` already lights `bossAltars`); (2) `updateAltarDiscovery`
+gives them a distinct violet `map_tyrant_altar` landmark + "Duneshaper's Altar" label when explored
+near; (3) **the load-bearing fix** — crafting the effigy (`onTyrantTotemCrafted`, hooked in
+`craftRecipe`) reveals **ALL** tyrant altars on the map at once + an event-log directional nudge
+("The effigy tugs toward the north-west…") toward the nearest (a `compassDir` helper).
+
+**Win-con swap:** a `Duneshaper` kill fires `endRun("won")`; the `GremlinKing` win trigger was
+removed (still `classifyKill` "boss" = 500 pts, still drops `gremlin_king_fang` — Phase-4 rework).
+Wired into `classifyKill`, the `checkPlayerHit` boss union, `staggerMultiplierFor`, the boss
+prompt-color union, and the respawn `isBoss` exclusion. **BossHealthUI generalized** from a
+`GremlinKing`-typed param to a `BossBarTarget` interface (`displayName/health/maxHealth/poise/
+poiseMax/depleted/isEngaged()`); the scene passes `engagedBigBoss()` (Gremlin King or Duneshaper,
+whichever is engaged). GremlinKing got a `poiseMax` getter. Mini-bosses stay off the big HUD.
+
+**`BootScene`** — `duneshaper` (44×54 hooded gloam-tyrant w/ staff + gloam-crystal), `tyrant_altar`
+(64×56 sandstone ring + violet gloamfire), `gloam_bolt` (violet magic bolt), `icon_warren_fetish`,
+`icon_tyrant_totem`, `map_tyrant_altar` (violet marker).
+
+Files: new `Duneshaper.ts` + plan; `BossAltar.ts` (kind), `Inventory.ts` (+warren_fetish), `Items.ts`
+(+2 defs), `Recipes.ts` (+tyrant_totem), `BootScene.ts` (6 textures), `BossHealthUI.ts` (interface),
+`GremlinKing.ts` (`poiseMax`), `MainScene.ts` (fields/reset, positions, spawn, exclusion, altar
+branching, summon, win/HUD/hooks, craft-clue, warren loot), `dashboard/main.ts` (Enemies mirror),
+`RECIPES.md`. **Verified:** `tsc --noEmit` clean; `preview_start` boots with no console errors;
+`preview_eval` — 3 spread tyrant altars (r 2563–3978) + all 6 textures load; summon consumes the
+effigy + prompt gating (in-reach / summoned=null); boss HP 900 / poise 120 / scale 2.3 / resists /
+loot; phase pool 3→4→5 by HP; full state-machine cycle; **all 5 attacks' `checkPlayerHit`** — spikes
+50 physical (armor applies) / nova 42 magic kb220 / lance 46 magic / barrage 30 magic, one hit per
+instance, miss when far; volley = 3 magic gloam bolts; **Duneshaper kill → `endRun("won")` (the
+VICTORY screen rendered), Gremlin King kill → NO win**; effigy craft reveals all 3 altars + fires the
+directional nudge; `engagedBigBoss()` returns "The Duneshaper"; boss renders (visible/alpha 1/
+onScreen, night 0). Dashboard Enemies tab updated (the one manual mirror). **Next: the Gremlin King
+critical-drop rework** (Phase 4 gear gate).
+
+### Biome 2 — Phase 3 POI 2: the Sunken Forge (Cinderwrought fire/forge mini-boss)
+
+Plan: `.claude/plans/biome-2-phase-3-pois.md` (Phase 3, umbrella `biome-2-sunscorch-badlands.md`).
+Built on **Opus** (new mini-boss mechanic). The second of Phase 3's two POIs. Locked with the user
+via `AskUserQuestion`: **loot = Uncommon relic trophy + Gloam Shards** (mirror the Gloamwarden);
+**attacks = Cinder Cone + Forge Hammer**; **names = The Sunken Forge / Cinderwrought**.
+
+**`src/entities/Cinderwrought.ts`** — a bespoke fire/forge mini-boss modeled on `Gloamwarden.ts`'s
+telegraph/poise/stagger skeleton (a **trimmed sibling, NOT a shared framework** — per the "no boss
+framework" lock). Extends `Enemy` for the HP-bar/loot/death machinery, fully overrides `update()`
+(Snake/Boar/Gloamwarden precedent): `idle → telegraphing → executing → recovering → staggered`. A
+poise meter (70; `takeHit` chips 1:1 → stagger ×1.5 for 2.5s) drawn as a second amber bar below the
+HP bar. HP **300** (badlands-tough, above the forest Gloamwarden's 260), scale **1.8**, move 52,
+aggro 260, leash 520, regens 12 HP/s deaggro'd. `resistances: { blunt: 0.8, pierce: 1.25 }` — a
+molten-slag crust (the Phase-1 damage-type nudge, the inverse of a Sandmaw). Two **new-feeling**
+attacks, deliberately distinct from Gloamwarden (leap-smash/eruption) and GremlinKing (charge/slam):
+- **Cinder Cone** — the game's **only cone**: exhales a fire fan (±32°, 210px) in a direction
+  **locked at telegraph START** (820ms wind-up), so a sidestep clears it. 30 dmg / 140 kb.
+- **Forge Hammer** — a heavy **wide-but-short front-arc** smash (±70°, 155px), direction re-locked
+  at execute (tracks the player through the 720ms telegraph); the dodge is to back out of the wedge
+  (or dash). 44 dmg / 240 kb.
+Both attacks resolve via `checkPlayerHit()` (wedge geometry: dist + angular diff vs the locked
+`attackAngle`) — queried by the scene like the other area-damage bosses — funnelling through the
+same `applyDamageToPlayer` choke point, so dash i-frames/armor "just work" with no special-casing.
+Fire-colored `Graphics` telegraph + execute visuals (fan/wedge fills). Guaranteed loot: **1
+`refined_trophy_uncommon` + 3-5 `gloam_shard`** (mirrors the Gloamwarden's payoff).
+
+**`MainScene`** — `forgePosition` picked once in `create()` (after the vein) via `pickForgePosition`
+over `pickBadlandsPoint`, kept ≥1000px from the war camp / ≥900px from the Gloaming Vein so it reads
+as its own destination; picked **before** spawning so a new `FORGE_CLEAR_RADIUS` (220) exclusion in
+`pickBadlandsPoint` keeps ordinary badlands content out of the clearing (the standing exclusion-zone
+lesson). `spawnSunkenForge()` drops the `sunken_forge` structure + the Cinderwrought + 9 scattered
+`slag_chunk` props; `forgeLightPoints` glow ember at night (`collectLights`, radius 130). Discovery
+(`updateAltarDiscovery`) adds a `map_forge` minimap/world landmark ("The Sunken Forge", fiery
+`0xd6481a`) + fires the `"poi"` discovery toast. Wired into the `checkPlayerHit` boss `instanceof`
+union, `staggerMultiplierFor` (`CINDERWROUGHT_STAGGER_DAMAGE_MULTIPLIER`), `classifyKill` (**elite** —
+no dedicated mini-boss band, like the Gloamwarden), the boss prompt-color union, and the respawn
+`isBoss` exclusion. **No smelting wiring** (Phase 4 doesn't exist — the smithy theme ships as loot +
+the fight only, per the Phase-4 hook) and **no post-kill interactable** (loot is the guaranteed
+drop, unlike the vein's mineable nodes).
+
+**`BootScene`** — `cinderwrought` (34×42 charred-iron brute: molten cracks + forge-hammer fists +
+ember eyes, warm fire palette contrasting the Gloamwarden's violet), `sunken_forge` (48×38 ruined
+smithy w/ molten crucible + broken anvil), `slag_chunk` (16×14 cooled-lava rubble), `map_forge`
+marker (fiery orange-red).
+
+Files: new `Cinderwrought.ts`; `MainScene.ts` (import, constants, fields/reset, `pickForgePosition`/
+`spawnSunkenForge`, exclusion, lights, discovery, 4 combat unions); `BootScene.ts` (4 textures);
+`dashboard/main.ts` (Enemies-tab entry — the one manual mirror). No `RECIPES.md` change (no recipes).
+**Verified:** `tsc --noEmit` clean; `preview_start` boots with no console errors; `preview_eval` +
+screenshot — forge at r≈4174 (accessible badlands), 3377px from camp / 3167px from vein; all 4
+textures load; boss HP 300/poise 70/scale 1.8; aggro + poise-bar-on-aggro; full `idle→telegraph→
+execute→recover→idle` cycle for BOTH attacks (manual-clock driven, since the backgrounded preview
+throttles rAF); cone hits the fan / misses at 90° sidestep / misses beyond 210px; hammer hits front
+/ misses behind / misses beyond 155px; resists blunt 0.8 / pierce 1.25 / slash 1.0; poise→0 staggers
+(×1.5); the fight kills a full-HP player (damage path end-to-end); discovery adds the `map_forge`
+landmark + fires the `"poi"` toast; the Cinderwrought + forge structure + slag render in the
+badlands. **Next: the badlands final boss (new win-con) + the Gremlin King critical-drop rework.**

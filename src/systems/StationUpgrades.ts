@@ -67,6 +67,18 @@ export const STATION_UPGRADES: StationUpgradeDef[] = [
     costs: { gremlin_king_heart: 1, stone: 10 },
     deltaLabel: "Smelt rare ore",
   },
+  {
+    // Workbench Lvl 4. Only DISCOVERED once Embersteel Ingot is known (i.e.
+    // a rare ingot has actually been smelted) — canDiscoverUpgrade gates the
+    // upgrade on every cost key being discovered.
+    id: "emberforge_anvil",
+    name: "Emberforge Anvil",
+    description: "An ember-fed anvil that runs hot enough to reforge finished gear. Unlocks the enhanced tier.",
+    appliesToItemKey: "workbench",
+    resultTier: 3,
+    costs: { embersteel_ingot: 5, stone: 15 },
+    deltaLabel: "Unlocks enhanced gear",
+  },
 ];
 
 // The upgrades that could apply to a given placed object, ordered by the tier

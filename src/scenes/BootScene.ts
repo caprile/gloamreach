@@ -2256,6 +2256,138 @@ export class BootScene extends Phaser.Scene {
     g.fillRect(13, 12, 5, 1);
     g.generateTexture("icon_duskhide_leggings", ICON, ICON);
 
+    // === enhanced/T2 tier (biome 2 Phase 4 Session 2) — Embersteel gear ===
+    // Reforged: the base silhouettes recast in dark ember-veined steel (matches
+    // the Embersteel Ingot palette — near-black steel with molten ember cracks).
+
+    // Workbench Lvl 4 (Emberforge Anvil) — the table with an ember-fed anvil.
+    g.clear();
+    g.fillStyle(0x8a5a2e, 1);
+    g.fillRect(2, 8, 20, 4);
+    g.fillStyle(0x5c3a1c, 1);
+    g.fillRect(3, 12, 3, 8);
+    g.fillRect(18, 12, 3, 8);
+    g.fillStyle(0x3a2e34, 1); // dark anvil
+    g.fillRect(7, 3, 10, 3);
+    g.fillRect(10, 6, 4, 2);
+    g.fillRect(8, 6, 8, 1);
+    g.fillStyle(0xff7a2a, 1); // ember glow under the anvil
+    g.fillRect(8, 12, 8, 1);
+    g.fillStyle(0xffd070, 1);
+    g.fillRect(10, 4, 2, 1);
+    g.generateTexture("icon_workbench_t3", ICON, ICON);
+
+    // --- enhanced weapons ---
+    g.clear(); // Embersteel Warhammer — dark head with ember cracks
+    g.fillStyle(0x6b4a26, 1);
+    g.fillRect(11, 4, 2, 18); // haft
+    g.fillStyle(0x3a2e34, 1);
+    g.fillRect(5, 4, 14, 6); // head
+    g.fillStyle(0xff7a2a, 1);
+    g.fillRect(6, 6, 4, 1); // ember crack
+    g.fillRect(14, 5, 4, 1);
+    g.fillStyle(0xffd070, 1);
+    g.fillRect(7, 6, 1, 1);
+    g.generateTexture("icon_embersteel_warhammer", ICON, ICON);
+
+    g.clear(); // Embersteel Longsword — dark blade, glowing edge
+    g.fillStyle(0x3a2e34, 1);
+    g.fillRect(11, 3, 3, 14); // blade
+    g.fillStyle(0xff7a2a, 1);
+    g.fillRect(13, 4, 1, 12); // ember edge
+    g.fillStyle(0x8a5a2e, 1);
+    g.fillRect(8, 17, 9, 2); // guard
+    g.fillStyle(0x5c3a1c, 1);
+    g.fillRect(11, 19, 3, 4); // grip
+    g.generateTexture("icon_embersteel_sword", ICON, ICON);
+
+    g.clear(); // Embersteel Pike — dark tip with an ember core
+    g.fillStyle(0x6b4a26, 1);
+    g.fillRect(11, 8, 2, 15); // shaft
+    g.fillStyle(0x3a2e34, 1);
+    g.fillTriangle(12, 2, 8, 10, 16, 10); // tip
+    g.fillStyle(0xff7a2a, 1);
+    g.fillTriangle(12, 4, 10, 9, 14, 9); // ember core
+    g.generateTexture("icon_embersteel_pike", ICON, ICON);
+
+    // --- the first MAGIC weapon: Ember Brand (a searing fire-brand rod) ---
+    g.clear();
+    g.fillStyle(0x5c3a1c, 1);
+    g.fillRect(11, 12, 2, 11); // handle
+    g.fillStyle(0x3a2e34, 1);
+    g.fillRect(9, 9, 6, 4); // steel head
+    g.fillStyle(0xff7a2a, 1); // ember flame
+    g.fillTriangle(12, 1, 8, 9, 16, 9);
+    g.fillStyle(0xffd070, 1);
+    g.fillTriangle(12, 4, 10, 9, 14, 9);
+    g.fillStyle(0xb266ff, 1); // gloamfire wisp
+    g.fillRect(11, 3, 1, 2);
+    g.generateTexture("icon_ember_brand", ICON, ICON);
+
+    // --- enhanced HEAVY armor: Embersteel set (dark steel + ember cracks) ---
+    g.clear(); // Embersteel Helm
+    g.fillStyle(0x3a2e34, 1);
+    g.fillRect(5, 8, 14, 10);
+    g.fillCircle(12, 8, 7);
+    g.fillStyle(0xff7a2a, 1);
+    g.fillRect(7, 11, 10, 3); // ember visor slit
+    g.fillStyle(0x554450, 1);
+    g.fillRect(4, 15, 16, 3);
+    g.generateTexture("icon_embersteel_helm", ICON, ICON);
+
+    g.clear(); // Embersteel Cuirass
+    g.fillStyle(0x3a2e34, 1);
+    g.fillRect(5, 5, 14, 15);
+    g.fillStyle(0x554450, 1);
+    g.fillRect(2, 5, 4, 7);
+    g.fillRect(18, 5, 4, 7);
+    g.fillStyle(0xff7a2a, 1);
+    g.fillRect(11, 6, 2, 12); // ember sternum ridge
+    g.generateTexture("icon_embersteel_cuirass", ICON, ICON);
+
+    g.clear(); // Embersteel Greaves
+    g.fillStyle(0x3a2e34, 1);
+    g.fillRect(6, 4, 5, 16);
+    g.fillRect(13, 4, 5, 16);
+    g.fillStyle(0xff7a2a, 1);
+    g.fillRect(7, 5, 2, 12);
+    g.fillRect(14, 5, 2, 12);
+    g.generateTexture("icon_embersteel_greaves", ICON, ICON);
+
+    // --- enhanced LIGHT armor: Emberhide set (dark hide + ember-steel bands) ---
+    g.clear(); // Emberhide Hood
+    g.fillStyle(0x4a3324, 1);
+    g.fillRect(5, 8, 14, 10);
+    g.fillCircle(12, 8, 7);
+    g.fillStyle(0x5c4328, 1);
+    g.fillRect(4, 15, 16, 3);
+    g.fillStyle(0xff7a2a, 1);
+    g.fillRect(6, 10, 12, 1); // ember-steel band
+    g.generateTexture("icon_emberhide_hood", ICON, ICON);
+
+    g.clear(); // Emberhide Vest
+    g.fillStyle(0x4a3324, 1);
+    g.fillRect(5, 5, 14, 15);
+    g.fillStyle(0x3a2820, 1);
+    g.fillRect(2, 5, 4, 7);
+    g.fillRect(18, 5, 4, 7);
+    g.fillStyle(0xff7a2a, 1);
+    g.fillRect(6, 9, 12, 1); // ember straps
+    g.fillRect(6, 14, 12, 1);
+    g.generateTexture("icon_emberhide_vest", ICON, ICON);
+
+    g.clear(); // Emberhide Leggings
+    g.fillStyle(0x4a3324, 1);
+    g.fillRect(6, 4, 5, 16);
+    g.fillRect(13, 4, 5, 16);
+    g.fillStyle(0x5c4328, 1);
+    g.fillRect(7, 5, 3, 3);
+    g.fillRect(14, 5, 3, 3);
+    g.fillStyle(0xff7a2a, 1);
+    g.fillRect(6, 12, 5, 1); // ember plate band
+    g.fillRect(13, 12, 5, 1);
+    g.generateTexture("icon_emberhide_leggings", ICON, ICON);
+
     // Badlands elite trophies — crimson/gold to echo the elite palette (matches
     // the boar/snake/gremlin trophies), each with a species tell.
     g.clear(); // Duskrunner Trophy — a fanged canid skull on a gold cord

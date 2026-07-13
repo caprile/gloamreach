@@ -29,7 +29,13 @@ export interface Recipe {
   // (requiresWorkbenchTier: 2); the enhanced/T2 tier needs Lvl 4 (tier 3).
   // Absent = any placed Workbench satisfies a tier-1 recipe as before.
   requiresWorkbenchTier?: number;
-  costs: Partial<Record<ResourceType, number>>;
+  // Keyed by ANY inventory item key, not just raw ResourceType — the enhanced
+  // (T2) reforge recipes consume a crafted base piece (e.g. sunsteel_helm) as
+  // an ingredient. All cost lookups go through the backpack's string-keyed
+  // count()/removeCount() + the discovered set, so a crafted-item key works as
+  // a cost with no extra handling; a base piece must simply be UNEQUIPPED (in
+  // the backpack) to reforge.
+  costs: Partial<Record<string, number>>;
   // ALL entries must be met to craft. Multiple allowed for future weapons
   // gated on more than one skill (e.g. "5 Slash + 5 Pierce").
   requiredSkills?: { skill: SkillType; level: number }[];
@@ -369,6 +375,132 @@ export const RECIPES: Recipe[] = [
     costs: { sunsteel_ingot: 3, wood: 3 },
     requiredSkills: [{ skill: "pierce", level: 3 }],
     output: { kind: "item", itemId: "sunsteel_pike", itemName: "Sunsteel Pike" },
+  },
+
+  // === enhanced / T2 tier (biome 2 Phase 4 Session 2, Workbench Lvl 4) ===
+  // Each REFORGES its base forged piece — the base item is consumed as an
+  // ingredient (must be in the backpack, not equipped). All gate
+  // requiresWorkbenchTier: 3 (an Emberforge-Anvil Workbench) and are only
+  // DISCOVERED once both the base piece and Embersteel Ingot have been made.
+
+  // --- enhanced HEAVY armor: Embersteel set ---
+  {
+    id: "embersteel_helm",
+    name: "Embersteel Helm",
+    description: "Reforge a Sunsteel Helm with ember-steel for far heavier protection.",
+    category: "armor",
+    tier: 1,
+    requiresWorkbenchTier: 3,
+    costs: { sunsteel_helm: 1, embersteel_ingot: 2, cragscale_plate: 2 },
+    requiredSkills: [{ skill: "heavy_armor", level: 0 }],
+    output: { kind: "item", itemId: "embersteel_helm", itemName: "Embersteel Helm" },
+  },
+  {
+    id: "embersteel_cuirass",
+    name: "Embersteel Cuirass",
+    description: "Reforge a Sunsteel Cuirass with ember-steel — the sturdiest armor in the badlands.",
+    category: "armor",
+    tier: 1,
+    requiresWorkbenchTier: 3,
+    costs: { sunsteel_cuirass: 1, embersteel_ingot: 4, cragscale_plate: 3 },
+    requiredSkills: [{ skill: "heavy_armor", level: 0 }],
+    output: { kind: "item", itemId: "embersteel_cuirass", itemName: "Embersteel Cuirass" },
+  },
+  {
+    id: "embersteel_greaves",
+    name: "Embersteel Greaves",
+    description: "Reforge Sunsteel Greaves with ember-steel over a chitin lining.",
+    category: "armor",
+    tier: 1,
+    requiresWorkbenchTier: 3,
+    costs: { sunsteel_greaves: 1, embersteel_ingot: 2, sandmaw_chitin: 2 },
+    requiredSkills: [{ skill: "heavy_armor", level: 0 }],
+    output: { kind: "item", itemId: "embersteel_greaves", itemName: "Embersteel Greaves" },
+  },
+
+  // --- enhanced LIGHT armor: Emberhide set ---
+  {
+    id: "emberhide_hood",
+    name: "Emberhide Hood",
+    description: "Reforge a Duskhide Hood with ember-steel banding — light, but far tougher.",
+    category: "armor",
+    tier: 1,
+    requiresWorkbenchTier: 3,
+    costs: { duskhide_hood: 1, embersteel_ingot: 1, duskrunner_pelt: 2 },
+    requiredSkills: [{ skill: "light_armor", level: 0 }],
+    output: { kind: "item", itemId: "emberhide_hood", itemName: "Emberhide Hood" },
+  },
+  {
+    id: "emberhide_vest",
+    name: "Emberhide Vest",
+    description: "Reforge a Duskhide Vest with ember-steel seams — plate-grade protection, feather weight.",
+    category: "armor",
+    tier: 1,
+    requiresWorkbenchTier: 3,
+    costs: { duskhide_vest: 1, embersteel_ingot: 2, duskrunner_pelt: 3 },
+    requiredSkills: [{ skill: "light_armor", level: 0 }],
+    output: { kind: "item", itemId: "emberhide_vest", itemName: "Emberhide Vest" },
+  },
+  {
+    id: "emberhide_leggings",
+    name: "Emberhide Leggings",
+    description: "Reforge Duskhide Leggings with ember-steel plates.",
+    category: "armor",
+    tier: 1,
+    requiresWorkbenchTier: 3,
+    costs: { duskhide_leggings: 1, embersteel_ingot: 1, sandmaw_chitin: 1 },
+    requiredSkills: [{ skill: "light_armor", level: 0 }],
+    output: { kind: "item", itemId: "emberhide_leggings", itemName: "Emberhide Leggings" },
+  },
+
+  // --- enhanced weapons: reforge each base forged weapon ---
+  {
+    id: "embersteel_warhammer",
+    name: "Embersteel Warhammer",
+    description: "Reforge a Sunsteel Warhammer with ember-steel for a heavier, wider crush.",
+    category: "weapons",
+    tier: 1,
+    requiresWorkbenchTier: 3,
+    costs: { sunsteel_warhammer: 1, embersteel_ingot: 3, cragscale_plate: 2 },
+    requiredSkills: [{ skill: "blunt", level: 3 }],
+    output: { kind: "item", itemId: "embersteel_warhammer", itemName: "Embersteel Warhammer" },
+  },
+  {
+    id: "embersteel_sword",
+    name: "Embersteel Longsword",
+    description: "Reforge a Sunsteel Longsword with ember-steel for a keener, deadlier edge.",
+    category: "weapons",
+    tier: 1,
+    requiresWorkbenchTier: 3,
+    costs: { sunsteel_sword: 1, embersteel_ingot: 2, wood: 2 },
+    requiredSkills: [{ skill: "slash", level: 3 }],
+    output: { kind: "item", itemId: "embersteel_sword", itemName: "Embersteel Longsword" },
+  },
+  {
+    id: "embersteel_pike",
+    name: "Embersteel Pike",
+    description: "Reforge a Sunsteel Pike with ember-steel for a thrust that punches through plate.",
+    category: "weapons",
+    tier: 1,
+    requiresWorkbenchTier: 3,
+    costs: { sunsteel_pike: 1, embersteel_ingot: 2, wood: 2 },
+    requiredSkills: [{ skill: "pierce", level: 3 }],
+    output: { kind: "item", itemId: "embersteel_pike", itemName: "Embersteel Pike" },
+  },
+
+  // --- the first MAGIC weapon: Ember Brand (rare-ore exclusive) ---
+  {
+    id: "ember_brand",
+    name: "Ember Brand",
+    description: "A fire-brand forged from ember-steel and bound hex essence. Its strikes land as raw magic.",
+    category: "weapons",
+    tier: 1,
+    requiresWorkbenchTier: 3,
+    costs: { embersteel_ingot: 3, hex_essence: 4 },
+    // Categorization only (Magic 0) — you can't grind Magic XP before owning a
+    // magic weapon, so this can't gate on its own skill.
+    requiredSkills: [{ skill: "magic", level: 0 }],
+    output: { kind: "item", itemId: "ember_brand", itemName: "Ember Brand" },
   },
 ];
 

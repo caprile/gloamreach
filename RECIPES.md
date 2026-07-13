@@ -51,11 +51,31 @@ requires standing near a placed Workbench (`MainScene.isNearWorkbench`).
 | Sunsteel Warhammer | Weapons | 1 | Yes (Lvl 3) | 4 Sunsteel Ingot, 2 Cragscale Plate, 4 Wood | Blunt 3 | Item (weapon, blunt — wide AOE sweep) |
 | Sunsteel Longsword | Weapons | 1 | Yes (Lvl 3) | 3 Sunsteel Ingot, 2 Wood | Slash 3 | Item (weapon, slash) |
 | Sunsteel Pike | Weapons | 1 | Yes (Lvl 3) | 3 Sunsteel Ingot, 3 Wood | Pierce 3 | Item (weapon, pierce) |
+| Embersteel Helm | Armor | 1 | Yes (Lvl 4) | 1 Sunsteel Helm, 2 Embersteel Ingot, 2 Cragscale Plate | Heavy Armor 0 | Item (armor, helmet, **heavy** — reforge) |
+| Embersteel Cuirass | Armor | 1 | Yes (Lvl 4) | 1 Sunsteel Cuirass, 4 Embersteel Ingot, 3 Cragscale Plate | Heavy Armor 0 | Item (armor, chest, **heavy** — reforge) |
+| Embersteel Greaves | Armor | 1 | Yes (Lvl 4) | 1 Sunsteel Greaves, 2 Embersteel Ingot, 2 Sandmaw Chitin | Heavy Armor 0 | Item (armor, legs, **heavy** — reforge) |
+| Emberhide Hood | Armor | 1 | Yes (Lvl 4) | 1 Duskhide Hood, 1 Embersteel Ingot, 2 Duskrunner Pelt | Light Armor 0 | Item (armor, helmet, light — reforge) |
+| Emberhide Vest | Armor | 1 | Yes (Lvl 4) | 1 Duskhide Vest, 2 Embersteel Ingot, 3 Duskrunner Pelt | Light Armor 0 | Item (armor, chest, light — reforge) |
+| Emberhide Leggings | Armor | 1 | Yes (Lvl 4) | 1 Duskhide Leggings, 1 Embersteel Ingot, 1 Sandmaw Chitin | Light Armor 0 | Item (armor, legs, light — reforge) |
+| Embersteel Warhammer | Weapons | 1 | Yes (Lvl 4) | 1 Sunsteel Warhammer, 3 Embersteel Ingot, 2 Cragscale Plate | Blunt 3 | Item (weapon, blunt — reforge) |
+| Embersteel Longsword | Weapons | 1 | Yes (Lvl 4) | 1 Sunsteel Longsword, 2 Embersteel Ingot, 2 Wood | Slash 3 | Item (weapon, slash — reforge) |
+| Embersteel Pike | Weapons | 1 | Yes (Lvl 4) | 1 Sunsteel Pike, 2 Embersteel Ingot, 2 Wood | Pierce 3 | Item (weapon, pierce — reforge) |
+| Ember Brand | Weapons | 1 | Yes (Lvl 4) | 3 Embersteel Ingot, 4 Hex Essence | Magic 0 | Item (weapon, **magic** — first magic weapon) |
 
-The forged gear (Sunsteel/Duskhide) is **"Yes (Lvl 3)"** — tier 1 (any Workbench)
-**plus** `requiresWorkbenchTier: 2` (a Forge-Anvil-upgraded **Workbench Lvl 3**,
-see Station Upgrades). Its ingredients come from the Smelter (Sunsteel Ingot) +
-normal badlands enemies (Cragscale Plate / Duskrunner Pelt / Sandmaw Chitin).
+The base forged gear (Sunsteel/Duskhide) is **"Yes (Lvl 3)"** — tier 1 (any
+Workbench) **plus** `requiresWorkbenchTier: 2` (a Forge-Anvil-upgraded **Workbench
+Lvl 3**, see Station Upgrades). Its ingredients come from the Smelter (Sunsteel
+Ingot) + normal badlands enemies (Cragscale Plate / Duskrunner Pelt / Sandmaw
+Chitin).
+
+The **enhanced/T2 tier** (Embersteel/Emberhide + the Ember Brand) is **"Yes (Lvl
+4)"** — `requiresWorkbenchTier: 3` (an Emberforge-Anvil **Workbench Lvl 4**). Each
+enhanced piece **reforges its base piece** (the base item is consumed as an
+ingredient — it must be **unequipped / in the backpack**) plus Embersteel Ingot
+(rare-ore Smelter output). The Ember Brand is the first **magic** weapon,
+rare-ore-exclusive; its `magic` hits swing hard through the damage-type resist
+layer (super-effective vs most badlands beasts, resisted by Hexlings/the
+Duneshaper).
 
 \* Slingshot Pellets is tier 0 (no Workbench needed) but has an extra discovery
 gate beyond tier/ingredients: it stays hidden until the player has crafted a
@@ -67,15 +87,15 @@ ammo before there's a launcher to load it into.
 | Applies To | Result Tier | Name | Costs | Delta |
 |---|---|---|---|---|
 | Workbench | 1 ("Lvl 2") | Tool Sharpener | 3 Twine, 5 Wood, 2 Stone | — (unlocks gates only) |
-| Workbench | 2 ("Lvl 3") | Forge Anvil | 5 Sunsteel Ingot, 10 Stone | Unlocks forged gear (`requiresWorkbenchTier: 2`) |
+| Workbench | 2 ("Lvl 3") | Forge Anvil | 5 Sunsteel Ingot, 10 Stone | Unlocks base forged gear (`requiresWorkbenchTier: 2`) |
+| Workbench | 3 ("Lvl 4") | Emberforge Anvil | 5 Embersteel Ingot, 15 Stone | Unlocks enhanced/T2 gear (`requiresWorkbenchTier: 3`) |
 | Campfire | 1 ("Lvl 2") | Stone Hearth | 4 Twine, 20 Stone | Unlocks Lvl 2 campfire dishes |
 | Relic Forge | 1 ("Lvl 2") | Gloam Conduit | 15 Stone, 1 Gloam Shard | Unlocks the Refine tab |
 | Smelter | 1 ("Lvl 2") | Ember Crucible | 1 Gremlin King's Heart, 10 Stone | Smelt rare Cinderforged Ore → Embersteel Ingot |
 
-Bench visuals now change per tier (Workbench Lvl 2/3, Smelter Lvl 2 each get a
-distinct placeholder sprite). Workbench Lvl 4 (Emberforge Anvil, gates the T2
-"enhanced" reforge recipes) + the enhanced gear + the rare-ore-exclusive magic
-weapon are the deferred **Session 2** of Phase 4.
+Bench visuals change per tier (Workbench Lvl 2/3/4, Smelter Lvl 2 each get a
+distinct placeholder sprite). The Emberforge Anvil is only **discoverable** once
+an Embersteel Ingot has been smelted (its cost key must be discovered).
 
 ## Armor Upgrades (`src/systems/ArmorUpgrades.ts`)
 
@@ -101,17 +121,19 @@ armor**. Applied as a flat deduction from incoming physical damage, floored at
 
 ### Forged armor sets (biome 2 Phase 4) — base defense (`ItemDef.armorDefense`)
 
-No right-click ArmorUpgrades — these are enhanced via **standalone T2 reforge
-recipes** (Session 2, deferred). **Heavy armor** now has a real effect: the
-`heavy_armor` skill gives partial **magic/fire mitigation** (−0.4%/level, cap
-−30%) while wearing ≥1 heavy piece (`Skills.heavyArmorMagicMitigation`) — its
-identity vs light armor's dash i-frames. `heavy_armor` XP accrues per worn piece
-on a kill.
+No right-click ArmorUpgrades — the base sets are enhanced via **standalone T2
+reforge recipes** (the enhanced set consumes the base piece — see the crafting
+table). **Heavy armor** has a real effect: the `heavy_armor` skill gives partial
+**magic/fire mitigation** (−0.4%/level, cap −30%) while wearing ≥1 heavy piece
+(`Skills.heavyArmorMagicMitigation`) — its identity vs light armor's dash
+i-frames. `heavy_armor` XP accrues per worn piece on a kill.
 
 | Set | Type | Helm | Chest | Legs | Full-set armor |
 |---|---|---|---|---|---|
-| Sunsteel | Heavy | 4 | 6 | 4 | 14 |
-| Duskhide | Light | 3 | 4 | 3 | 10 |
+| Sunsteel (base) | Heavy | 4 | 6 | 4 | 14 |
+| Embersteel (T2) | Heavy | 7 | 9 | 7 | 23 |
+| Duskhide (base) | Light | 3 | 4 | 3 | 10 |
+| Emberhide (T2) | Light | 5 | 6 | 5 | 16 |
 
 ## Weapon Upgrades (`src/systems/WeaponUpgrades.ts`)
 
@@ -130,7 +152,8 @@ weapon-skill damage multiplier, `Skills.weaponSkillDamageMultiplier`).
 
 ### Forged weapons (biome 2 Phase 4) — one per melee damage type
 
-No upgrade path yet (their T2 "enhanced" reforge is Session 2). AOE arc widths in
+The enhanced (T2) weapons are full standalone recipes that **reforge** the base
+weapon (see the crafting table), not right-click upgrades. AOE arc widths in
 `Weapons.ts` `WEAPON_ARC`.
 
 | Weapon | Dmg / Cooldown / Stamina | Damage Type | Arc (½angle / range / falloff) |
@@ -138,6 +161,18 @@ No upgrade path yet (their T2 "enhanced" reforge is Session 2). AOE arc widths i
 | Sunsteel Warhammer | 14 / 800ms / 20 | Blunt | 55° / 62 / 0.75 (widest sweeper) |
 | Sunsteel Longsword | 10 / 480ms / 12 | Slash | 30° / 40 / 0.55 |
 | Sunsteel Pike | 12 / 620ms / 15 | Pierce | 40° / 56 / 0.65 |
+| Embersteel Warhammer | 20 / 800ms / 22 | Blunt | 58° / 66 / 0.78 |
+| Embersteel Longsword | 15 / 470ms / 13 | Slash | 32° / 42 / 0.58 |
+| Embersteel Pike | 17 / 610ms / 16 | Pierce | 42° / 58 / 0.68 |
+| Ember Brand | 14 / 520ms / 15 | **Magic** | 45° / 52 / 0.6 (fire washes over foes) |
+
+The **Ember Brand** is the first magic weapon (rare-ore-exclusive). Its raw 14 is
+mid-pack (DPS ≈ the Embersteel Pike on a neutral target), but `magic` type routes
+through enemy resistances — **neutral** vs most badlands beasts, **resisted**
+(~×0.4–0.5) by the gloam-casters (Hexlings / the Duneshaper). A sidegrade with an
+upside, not flatly best — and it finally gives the `magic` weapon skill a real XP
+source. (No current badlands enemy is *weak* to magic, so it never crits the
+resist layer super-effective — a hook for a future magic-vulnerable enemy.)
 
 ## Ranged weapons (`src/systems/Weapons.ts` `RANGED_WEAPONS`)
 

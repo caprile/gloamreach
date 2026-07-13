@@ -312,8 +312,23 @@ function recipeRow(r: Recipe): string {
   </tr>`;
 }
 
+// All melee weapons in progression order (ranged handled separately below).
+const MELEE_WEAPONS: WeaponType[] = [
+  "wood_club",
+  "stone_club",
+  "bone_knife",
+  "primal_spear",
+  "sunsteel_warhammer",
+  "sunsteel_sword",
+  "sunsteel_pike",
+  "embersteel_warhammer",
+  "embersteel_sword",
+  "embersteel_pike",
+  "ember_brand",
+];
+
 function renderWeapons(): string {
-  const weapons: WeaponType[] = ["wood_club", "stone_club", "bone_knife", "primal_spear"];
+  const weapons: WeaponType[] = MELEE_WEAPONS;
   let html = `<h2>Weapons</h2>
     <p class="note">Base stats from <code>Weapons.ts</code>; upgrade tiers from
     <code>WeaponUpgrades.ts</code>. <b>DPS</b> = damage × attacks/sec (before the
@@ -694,7 +709,7 @@ function renderBalance(): string {
     <code>PROJECTILE_DAMAGE</code>, not elite-scaled in code) — only its melee claw gets +50%.</p>`;
 
   // Weapon TTK vs each enemy, normal + elite HP (offense side — armor irrelevant).
-  const weapons: WeaponType[] = ["wood_club", "stone_club", "bone_knife", "primal_spear"];
+  const weapons: WeaponType[] = MELEE_WEAPONS;
   const ttkRow = (label: string, hp: number, elite: boolean) => {
     const tag = elite ? ` <span class="tag" style="border-color:var(--bad);color:var(--bad)">Elite</span>` : "";
     let row = `<tr><td>${esc(label)}${tag}</td><td class="num">${hp}</td>`;

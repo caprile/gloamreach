@@ -8,7 +8,13 @@ export type WeaponType =
   // forged tier (biome 2 Phase 4) — one per melee damage type
   | "sunsteel_warhammer"
   | "sunsteel_sword"
-  | "sunsteel_pike";
+  | "sunsteel_pike"
+  // enhanced/T2 tier (biome 2 Phase 4 Session 2) — reforged with Embersteel
+  | "embersteel_warhammer"
+  | "embersteel_sword"
+  | "embersteel_pike"
+  // the first MAGIC weapon — a rare-ore-exclusive melee fire brand
+  | "ember_brand";
 
 // Damage types double as the 5 weapon Skill types (Skills.ts) — a weapon's
 // primary (first) type routes its on-hit skill XP. Multiple types are
@@ -38,6 +44,10 @@ const WEAPON_DAMAGE_TYPES: Record<WeaponType, DamageType[]> = {
   sunsteel_warhammer: ["blunt"],
   sunsteel_sword: ["slash"],
   sunsteel_pike: ["pierce"],
+  embersteel_warhammer: ["blunt"],
+  embersteel_sword: ["slash"],
+  embersteel_pike: ["pierce"],
+  ember_brand: ["magic"],
 };
 export function weaponDamageTypes(weapon: WeaponType): DamageType[] {
   return WEAPON_DAMAGE_TYPES[weapon];
@@ -62,6 +72,15 @@ const WEAPON_DAMAGE: Record<WeaponType, number> = {
   sunsteel_warhammer: 14,
   sunsteel_sword: 10,
   sunsteel_pike: 12,
+  // Enhanced tier: a real step over the base forged numbers (~+40-50%).
+  embersteel_warhammer: 20,
+  embersteel_sword: 15,
+  embersteel_pike: 17,
+  // The magic brand's raw number sits mid-pack; its DPS lands near the
+  // Embersteel Pike on a NEUTRAL target, but its "magic" type is shrugged off
+  // (~x0.4-0.5) by the gloam-casters (Hexlings, the Duneshaper). It's the only
+  // `magic` weapon-skill source — a sidegrade with an upside, not flatly best.
+  ember_brand: 14,
 };
 export function weaponDamage(weapon: WeaponType): number {
   return WEAPON_DAMAGE[weapon];
@@ -77,6 +96,10 @@ const WEAPON_COOLDOWN_MS: Record<WeaponType, number> = {
   sunsteel_warhammer: 800,
   sunsteel_sword: 480,
   sunsteel_pike: 620,
+  embersteel_warhammer: 800,
+  embersteel_sword: 470,
+  embersteel_pike: 610,
+  ember_brand: 520,
 };
 export function weaponCooldownMs(weapon: WeaponType): number {
   return WEAPON_COOLDOWN_MS[weapon];
@@ -92,6 +115,10 @@ const WEAPON_STAMINA_COST: Record<WeaponType, number> = {
   sunsteel_warhammer: 20,
   sunsteel_sword: 12,
   sunsteel_pike: 15,
+  embersteel_warhammer: 22,
+  embersteel_sword: 13,
+  embersteel_pike: 16,
+  ember_brand: 15,
 };
 export function weaponStaminaCost(weapon: WeaponType): number {
   return WEAPON_STAMINA_COST[weapon];
@@ -121,6 +148,10 @@ const WEAPON_BASE_CRIT_CHANCE: Record<WeaponType, number> = {
   sunsteel_warhammer: 0.08, // slow, heavy
   sunsteel_sword: 0.05,
   sunsteel_pike: 0.07,
+  embersteel_warhammer: 0.08,
+  embersteel_sword: 0.05,
+  embersteel_pike: 0.07,
+  ember_brand: 0.06,
 };
 const WEAPON_BASE_CRIT_MULT: Record<WeaponType, number> = {
   bone_knife: 1.5,
@@ -132,6 +163,10 @@ const WEAPON_BASE_CRIT_MULT: Record<WeaponType, number> = {
   sunsteel_warhammer: 1.6,
   sunsteel_sword: 1.5,
   sunsteel_pike: 1.55,
+  embersteel_warhammer: 1.65,
+  embersteel_sword: 1.55,
+  embersteel_pike: 1.6,
+  ember_brand: 1.55,
 };
 export function weaponBaseCritChance(weapon: WeaponType): number {
   return WEAPON_BASE_CRIT_CHANCE[weapon];
@@ -190,6 +225,11 @@ const WEAPON_ARC: Record<WeaponType, WeaponArc> = {
   sunsteel_warhammer: { halfAngleDeg: 55, range: 62, falloff: 0.75 }, // the widest sweeper
   sunsteel_sword: { halfAngleDeg: 30, range: 40, falloff: 0.55 },
   sunsteel_pike: { halfAngleDeg: 40, range: 56, falloff: 0.65 },
+  embersteel_warhammer: { halfAngleDeg: 58, range: 66, falloff: 0.78 },
+  embersteel_sword: { halfAngleDeg: 32, range: 42, falloff: 0.58 },
+  embersteel_pike: { halfAngleDeg: 42, range: 58, falloff: 0.68 },
+  // Fire washes over nearby foes — a medium sweep despite its melee reach.
+  ember_brand: { halfAngleDeg: 45, range: 52, falloff: 0.6 },
 };
 export function weaponArc(weapon: WeaponType): WeaponArc {
   return WEAPON_ARC[weapon];
