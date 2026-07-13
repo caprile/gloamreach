@@ -7621,10 +7621,12 @@ export class MainScene extends Phaser.Scene {
   // DEV: window.__dev console commands for fast playtesting — bypasses
   // grinding/farming so a change deep in a build (e.g. a badlands weapon) can
   // be tested without a full playthrough. Installed once per scene instance
-  // (survives scene.restart(), since the flag lives on `this`); gated to DEV
-  // builds via import.meta.env.DEV so it's never reachable in a prod build.
+  // (survives scene.restart(), since the flag lives on `this`). Intentionally
+  // installed in prod builds too (GitHub Pages): this is a single-player game
+  // with no backend and only local high scores, so console cheats can't affect
+  // anyone else's session — the user wants them on the deployed build.
   private installDevConsole(): void {
-    if (this.devConsoleInstalled || !import.meta.env.DEV) return;
+    if (this.devConsoleInstalled) return;
     this.devConsoleInstalled = true;
     const dev = {
       god: (on?: boolean) => {
