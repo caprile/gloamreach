@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { Player, PLAYER_WALK_SPEED } from "../entities/Player";
+import { Player, PLAYER_WALK_SPEED, DASH_DURATION_MS } from "../entities/Player";
 import {
   ResourceNode,
   requiredKind,
@@ -91,6 +91,7 @@ import { toolUpgradesForItem } from "../systems/ToolUpgrades";
 import { EventLog } from "../systems/EventLog";
 import { Biome, type ZoneType } from "../systems/Biome";
 import { Equipment, EQUIP_SLOTS, type EquipSlot, type EquippedItem } from "../systems/Equipment";
+import { activeSets, setById, type SetId } from "../systems/SetBonuses";
 import { Hotbar, ROW1_COUNT } from "../systems/Hotbar";
 import { ProcessingStation, PROCESS_RECIPES, SMELT_RECIPES } from "../systems/Processing";
 import { BuffManager } from "../systems/Buffs";
@@ -280,6 +281,15 @@ const SPRINT_DRAIN_PER_SEC = 33; // stamina/sec while sprinting — full bar in 
 const RUNNING_XP_PER_SEC = 20;
 const DASH_STAMINA_COST = 25; // flat cost per dash — 4 dashes per full bar
 const DASH_IFRAME_MS = 150; // outlasts the dash burst itself (Milestone E)
+// --- Armor set-bonus magnitudes (biome 2 Phase 4 forged gear; see SetBonuses.ts) ---
+// Molten Bulwark (Embersteel heavy): a melee attacker that lands a hit is seared
+// for this much fire damage (thorns). Knockback immunity is a flag, no constant.
+const SET_THORNS_FIRE_DAMAGE = 9;
+// Emberblink (Emberhide light): dash burst distance multiplier + the fire nova
+// that erupts at the landing point.
+const SET_EMBERBLINK_DASH_MULT = 1.6;
+const SET_EMBERBLINK_BURST_RADIUS = 95;
+const SET_EMBERBLINK_BURST_DAMAGE = 16;
 // Crit (M-SS) soft caps on the COMBINED total (weapon base + Strength/Agility
 // stats + relic crit channels). Applied in applyCrit().
 const CRIT_CHANCE_CAP = 0.6;
@@ -666,6 +676,12 @@ export class MainScene extends Phaser.Scene {
   private readonly RESPAWN_DELAY_MS = 2000;
   private readonly POST_RESPAWN_INVULN_MS = 1500;
 
+  // Active full armor-set bonuses (biome 2 Phase 4 forged gear). Recomputed on
+  // every equipment change (afterItemMove) + on run reset (create). Read at the
+  // relevant combat hook points via hasSet(). Effect magnitudes are the SET_*
+  // constants below, kept next to where they apply.
+  private activeSetIds: Set<SetId> = new Set();
+
   // Run/score meta-loop (M-R1). `run` tracks elapsed time + kills + score;
   // `runOver` freezes the world once the run-end screen is up.
   private run!: Run;
@@ -862,6 +878,7 @@ export class MainScene extends Phaser.Scene {
     // simultaneous food buffs for one of only 2 slots.
     this.buffs.setMaxBuffs(3);
     this.invulnerableUntil = 0;
+    this.activeSetIds = new Set();
     this.placementMode = null;
     this.placementGhost = null;
     this.placedObjects = [];
@@ -1347,8 +1364,10 @@ export class MainScene extends Phaser.Scene {
     const canSprint = this.stamina.canAfford(sprintCost);
     const canDash = this.stamina.canAfford(DASH_STAMINA_COST);
     const sprintMultiplier = runningSprintMultiplier(this.skills);
-    // Relic move-speed bonus (M-RL) multiplies walk & sprint alike.
-    const frame = this.player.update(delta, canSprint, canDash, sprintMultiplier, this.relics.moveSpeedMult());
+    // Relic move-speed bonus (M-RL) multiplies walk & sprint alike. Emberblink
+    // set bonus (Emberhide light set) lengthens the dash burst only.
+    const dashDistMult = this.hasSet("emberhide") ? SET_EMBERBLINK_DASH_MULT : 1;
+    const frame = this.player.update(delta, canSprint, canDash, sprintMultiplier, this.relics.moveSpeedMult(), dashDistMult);
     this.clampPlayerToWorld();
 
     if (frame.sprinting) {
@@ -1360,6 +1379,12 @@ export class MainScene extends Phaser.Scene {
       // light_armor extends the dodge window (M-SS "Evade Window").
       this.invulnerableUntil = this.time.now + DASH_IFRAME_MS + dashIframeBonusMs(this.skills);
       this.player.playDashFx();
+      // Emberblink set bonus: fire erupts where the dash puts the player down.
+      // Timed to the dash's end so the nova lands at the destination, not the
+      // launch point.
+      if (this.hasSet("emberhide")) {
+        this.time.delayedCall(DASH_DURATION_MS, () => this.emberblinkBurst());
+      }
     }
     this.run.tick(delta);
     this.updateDayNight(delta);
@@ -2240,6 +2265,7 @@ export class MainScene extends Phaser.Scene {
 
   private afterItemMove(): void {
     this.recomputeEquipped();
+    this.recomputeSetBonuses();
     this.reconcileBackpackDiscovery();
     this.inventoryMenu.refresh();
     this.dryingRackMenu.refresh();
@@ -5320,7 +5346,63 @@ export class MainScene extends Phaser.Scene {
     this.awardSkillXp(dmgType, 30); // weapon-hit XP to the primary damage type's skill
     this.spawnDamageNumber(enemy.x, enemy.y, Math.round(finalDmg), isCrit, effectiveness);
     if (!depleted) return;
+    this.resolveKill(enemy);
+  }
 
+  // Fire damage dealt by an armor SET BONUS (Molten Bulwark thorns, Emberblink
+  // nova) — NOT a weapon hit, so it grants no weapon-skill XP and doesn't play
+  // the swing sfx, but it CAN kill and must run the same loot/scoring tail.
+  // Flat fire damage; no resist lookup (kept simple this first pass — noted as a
+  // future hook if a fire-immune enemy ever ships).
+  private dealSetBonusDamage(enemy: Enemy, dmg: number): void {
+    const depleted = enemy.takeHit(dmg);
+    this.spawnDamageNumber(enemy.x, enemy.y, Math.round(dmg), false, "weak");
+    if (depleted) this.resolveKill(enemy);
+  }
+
+  // Emberblink set bonus (Emberhide light set): a fire nova at the player's
+  // landing point after a dash. Damages every live enemy within the burst
+  // radius, then plays an expanding orange flash (reuses the M-DN light_soft
+  // gradient texture, tinted). Snapshots the enemy list first since
+  // dealSetBonusDamage mutates this.enemies on a kill.
+  private emberblinkBurst(): void {
+    if (this.isDead || this.isPaused || this.runOver) return;
+    const cx = this.player.x;
+    const cy = this.player.y;
+    const r = SET_EMBERBLINK_BURST_RADIUS;
+    for (const enemy of [...this.enemies]) {
+      if (!enemy.active) continue;
+      // Catch a big elite at its edge, not just its center (mirrors enemyReach's
+      // sprite-radius term).
+      const edge = Math.max(enemy.displayWidth, enemy.displayHeight) / 2;
+      if (Phaser.Math.Distance.Between(cx, cy, enemy.x, enemy.y) <= r + edge) {
+        this.dealSetBonusDamage(enemy, SET_EMBERBLINK_BURST_DAMAGE);
+      }
+    }
+    // Expanding fire flash. light_soft is a soft radial gradient (~256px) — scale
+    // it so the bright core roughly matches the damage radius, then fade out.
+    const fx = this.add
+      .image(cx, cy, "light_soft")
+      .setTint(0xff7a1e)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setDepth(ysortDepth(cy) + 1)
+      .setScale((r * 2) / 256 * 0.4)
+      .setAlpha(0.9);
+    this.tweens.add({
+      targets: fx,
+      scale: (r * 2) / 256,
+      alpha: 0,
+      duration: 260,
+      ease: "Cubic.easeOut",
+      onComplete: () => fx.destroy(),
+    });
+  }
+
+  // The shared kill-resolution tail — relic on-kill heal, per-worn-piece armor
+  // XP, loot drop + death feedback, POI/boss hooks, and run/score tracking.
+  // Extracted so both a weapon hit and set-bonus fire damage converge on ONE
+  // kill path (they can't drift on loot/scoring).
+  private resolveKill(enemy: Enemy): void {
     // Kill: relic on-kill heal (M-RL), then armor-skill XP per WORN PIECE (M-SS
     // — changed from per-distinct-type, so a mix-and-match loadout is rewarded
     // per piece and heavy_armor accrues once biome-2 heavy gear exists).
@@ -5513,6 +5595,14 @@ export class MainScene extends Phaser.Scene {
           enemy.pendingBleed ?? undefined,
         );
         enemy.pendingBleed = null; // consumed this frame
+        // Molten Bulwark (Embersteel heavy set): a melee attacker that lands a
+        // hit is seared. Only the contact-bite path (this branch) procs it —
+        // ranged projectiles never touch the plate. Note dealSetBonusDamage may
+        // remove this enemy from this.enemies on a kill; for...of holds the old
+        // array reference (filter returns a new one), so the loop stays safe.
+        if (this.hasSet("embersteel")) {
+          this.dealSetBonusDamage(enemy, SET_THORNS_FIRE_DAMAGE);
+        }
       }
       // Area-damage attacks (boss slams, the Hexling's flame strike) deal AoE,
       // not a single-point bite — queried separately since they need richer info
@@ -5623,6 +5713,17 @@ export class MainScene extends Phaser.Scene {
     return armorTypesWornPerPiece(EQUIP_SLOTS.map((s) => this.equipment.get(s.id))).includes("heavy_armor");
   }
 
+  // Recompute which full armor sets are worn — called from afterItemMove (the
+  // single equip/unequip chokepoint) and on run reset. Cached so combat hooks
+  // read a Set membership test, not a full re-scan each frame.
+  private recomputeSetBonuses(): void {
+    this.activeSetIds = activeSets(EQUIP_SLOTS.map((s) => this.equipment.get(s.id)));
+  }
+
+  private hasSet(id: SetId): boolean {
+    return this.activeSetIds.has(id);
+  }
+
   // `knockback` is optional so every existing call site (Boar bite, Snake
   // bite, Gremlin claw/projectile) is untouched — only the Gremlin King's
   // slam attack passes one.
@@ -5671,7 +5772,10 @@ export class MainScene extends Phaser.Scene {
     const died = this.health.takeDamage(appliedDamage);
     this.refreshHealthBar();
     this.hints.trigger("took_damage"); // first hit taken this run -> nudge toward healing
-    if (knockback) {
+    // Molten Bulwark (Embersteel heavy set): the tank can't be shoved — every
+    // knockback source (bite shove, boss slam) is negated while the full set is
+    // worn, so you hold your ground and keep tanking.
+    if (knockback && !this.hasSet("embersteel")) {
       const angle = Phaser.Math.Angle.Between(knockback.fromX, knockback.fromY, this.player.x, this.player.y);
       const body = this.player.body as Phaser.Physics.Arcade.Body;
       body.setVelocity(Math.cos(angle) * knockback.speed, Math.sin(angle) * knockback.speed);
@@ -6979,6 +7083,10 @@ export class MainScene extends Phaser.Scene {
   private combatStats(): CombatStatsView {
     const armor = totalPlayerDefense(this.equipment);
     const ammo = this.ammoView();
+    const setBonuses = [...this.activeSetIds].map((id) => {
+      const s = setById(id);
+      return { name: s.bonusName, desc: s.bonusDesc };
+    });
     if (!this.equippedWeapon)
       return {
         weaponName: null,
@@ -6991,6 +7099,7 @@ export class MainScene extends Phaser.Scene {
         ammo,
         critChance: 0,
         critMult: 0,
+        setBonuses,
       };
     const dmgType = weaponPrimaryDamageType(this.equippedWeapon);
     const baseDmg = weaponDamage(this.equippedWeapon) + weaponTierDamageBonus(this.equippedWeapon, this.equippedWeaponTier);
@@ -7021,6 +7130,7 @@ export class MainScene extends Phaser.Scene {
       ammo,
       critChance,
       critMult,
+      setBonuses,
     };
   }
 

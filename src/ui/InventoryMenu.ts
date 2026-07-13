@@ -30,6 +30,7 @@ export interface CombatStatsView {
   ammo: { name: string; count: number } | null; // loaded ranged ammo, if any
   critChance: number; // 0..0.6 fraction (weapon base + Agility + relics), 0 if no weapon
   critMult: number; // crit damage multiplier (weapon base + Strength + relics), 0 if no weapon
+  setBonuses: { name: string; desc: string }[]; // active full armor-set bonuses (empty = none)
 }
 
 // Live "what determines the player's move speed right now" breakdown,
@@ -323,6 +324,14 @@ export class InventoryMenu {
     y += lineGap;
     const speed = this.deps.runSpeedBreakdown();
     this.addText(x0, y, `Move Speed: ${speed.walk} / ${speed.sprint} spr`, 12, "#8a93a3");
+    // Active full-set bonuses (biome 2 forged gear payoff) — highlighted amber
+    // so the reward reads as special, with the effect on the line beneath.
+    for (const set of stats.setBonuses) {
+      y += lineGap + 6;
+      this.addText(x0, y, `◆ ${set.name}`, 12, "#f0a840");
+      y += lineGap;
+      this.addText(x0, y, set.desc, 10, "#9a8560");
+    }
   }
 
   // The 8-slot relic loadout (Phase 5) — one fixed slot per family, paper-doll

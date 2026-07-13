@@ -3,7 +3,9 @@ import { ysortDepth } from "../systems/depth";
 
 export const PLAYER_WALK_SPEED = 95; // pixels per second
 const DASH_SPEED = 450; // px/s during a dash burst — sharp snap, not a glide
-const DASH_DURATION_MS = 105; // how long the burst overrides normal movement
+// Exported so MainScene can time the Emberblink set-bonus landing burst to the
+// exact frame the dash ends (fire erupts where the dash puts the player down).
+export const DASH_DURATION_MS = 105; // how long the burst overrides normal movement
 const DASH_COOLDOWN_MS = 600; // minimum time between dashes, independent of stamina
 
 export type Facing = "up" | "down" | "left" | "right";
@@ -71,13 +73,17 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   // knowledge of its own, it just applies whatever multiplier it's handed.
   // `moveMult` is an external walk/sprint speed multiplier (relic bonuses,
   // M-RL) — 1 when nothing modifies it. Applied to normal movement only, not
-  // the fixed dash burst.
+  // the fixed dash burst. `dashDistMult` scales ONLY the dash burst speed (=
+  // distance over the fixed window) — 1 normally, >1 with the Emberblink set
+  // bonus (Emberhide light set); kept separate from moveMult so a relic move
+  // buff never quietly lengthens the dash.
   update(
     delta: number,
     canSprint: boolean,
     canDash: boolean,
     sprintMultiplier: number,
     moveMult = 1,
+    dashDistMult = 1,
   ): PlayerFrameResult {
     const now = this.scene.time.now;
     const body = this.body as Phaser.Physics.Arcade.Body;
@@ -118,7 +124,8 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
     if (wantsDash && canDash) {
       const len = Math.hypot(vx, vy);
-      body.setVelocity((vx / len) * DASH_SPEED, (vy / len) * DASH_SPEED);
+      const dashSpeed = DASH_SPEED * dashDistMult;
+      body.setVelocity((vx / len) * dashSpeed, (vy / len) * dashSpeed);
       this.lastDashAt = now;
       this.dashingUntil = now + DASH_DURATION_MS;
       return { moving: true, sprinting: false, dashStarted: true, facing: this.facing };

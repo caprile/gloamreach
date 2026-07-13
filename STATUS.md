@@ -2,13 +2,18 @@
 
 ## Current State
 
-_Living snapshot — edit in place, never append. Last shipped: **Biome-aware enemy respawn**
-(2026-07-13, Sonnet). A small correctness fix on the fog-top-up respawn system (an open Biome-2
-item): `makeRespawnEnemy` now picks the respawn roster from the biome at each spawn point
-(`worldBiomes.dominantBiomeAt`) — forest/base → the forest mix, badlands → the badlands roster
-(Duskrunner/Cragscale/Hexling/Sandmaw), dunes → nothing — so a player in the badlands stops
-getting forest enemies topped up and the badlands roster replenishes. `tsc` clean; verified live.
-See the entry below. Prior: **Biome-wide wood/stone + Ironbark
+_Living snapshot — edit in place, never append. Last shipped: **Ember-tier armor set bonuses**
+(2026-07-13, Opus). The deferred payoff for building the best-in-biome forged gear: two full-set
+(3-piece) bonuses, both **unique mechanics** (not the raw-% channels relics own). **Embersteel (heavy)
+→ Molten Bulwark**: knockback immunity + fire thorns on melee attackers. **Emberhide (light) →
+Emberblink**: +60% dash distance + a fire nova at the landing point. New `src/systems/SetBonuses.ts`
+(membership only; magnitudes = `SET_*` consts in MainScene); a `resolveKill` extraction so set-bonus
+fire shares the weapon kill path; active bonuses shown in the inventory Combat column + a `Set (3)`
+tooltip line on each Ember piece. `tsc` clean; verified live. See the entry below. Prior:
+**Biome-aware enemy respawn** (2026-07-13, Sonnet). A small correctness fix on the fog-top-up respawn
+system (an open Biome-2 item): `makeRespawnEnemy` now picks the respawn roster from the biome at each
+spawn point (`worldBiomes.dominantBiomeAt`) — forest/base → the forest mix, badlands → the badlands
+roster (Duskrunner/Cragscale/Hexling/Sandmaw), dunes → nothing. Prior: **Biome-wide wood/stone + Ironbark
 axe-upgrade chain + relic-UI fixes** (2026-07-13, Opus). Off the master-plan build order — a mixed
 batch. **Relic-UI fixes:** the Character menu (K) and Tab combined menu are now mutually exclusive
 (they z-fought over the new Relics column), and the relic hover tooltip shows the relic's family/class.
@@ -148,6 +153,37 @@ below + [[survivor-rpg-dev-console]].
 ## Recent Entries
 
 > Older entries in STATUS-archive.md.
+
+### Ember-tier armor set bonuses (2026-07-13, Opus)
+
+The deferred "Ember-tier uniqueness + armor **set bonuses**" item (a payoff for building the
+best-in-biome forged gear). Two full-set (3-piece) bonuses, both **unique mechanics, not the raw-%
+channels relics own** (the user: "really reward the player, non-relic-overlapping"), each leaning into
+its armor-skill identity. Locked via `AskUserQuestion`.
+- **`src/systems/SetBonuses.ts`** (new, framework-free) — `ARMOR_SETS` (id/pieces/bonusName/desc) +
+  `activeSets(slots)` (full-set membership by item key; no partials) + `setById`. Effect *magnitudes*
+  live in MainScene (`SET_*` consts) next to where they apply; SetBonuses.ts only owns membership.
+- **Embersteel (heavy) → Molten Bulwark:** immune to knockback + melee attackers seared for fire
+  (thorns, 9 dmg). Knockback immunity guards the `if (knockback)` block in `applyDamageToPlayer` (so
+  bite-shoves AND boss slams are negated); thorns fires in `updateEnemies`' melee-**bite** branch only
+  (ranged projectiles never touch the plate).
+- **Emberhide (light) → Emberblink:** dash burst distance ×1.6 (new `dashDistMult` param on
+  `Player.update`, scales `DASH_SPEED` only — kept separate from the relic `moveMult`) + a fire nova
+  at the landing point (`emberblinkBurst`, 16 dmg in a 95px radius, expanding orange `light_soft`
+  flash). Scheduled `delayedCall(DASH_DURATION_MS)` off `frame.dashStarted` so it lands at the
+  destination (`DASH_DURATION_MS` now exported from Player).
+- **Shared kill path:** extracted `resolveKill(enemy)` out of `resolveWeaponHit`'s tail; new
+  `dealSetBonusDamage(enemy, dmg)` (thorns/nova) runs takeHit → the SAME loot/scoring/heal tail, so
+  set-bonus fire can kill without drifting from weapon kills. No weapon-skill XP (not a weapon hit);
+  flat fire, no resist lookup this pass (noted hook if a fire-immune enemy ever ships).
+- **Surfacing:** cached `activeSetIds` (recomputed in `afterItemMove` + reset in `create()`);
+  `hasSet(id)`; active bonuses shown in the inventory **Combat column** (amber) via a new
+  `CombatStatsView.setBonuses`; each of the 6 Ember pieces got a `Set (3): <bonus>` tooltip line so the
+  set is discoverable before it's complete.
+Verified live via `preview_eval`: set detection both sets, Combat-column data, knockback velocity stays
+0 under Molten Bulwark, thorns 20→11 + clean kill, Emberblink 16 dmg in-radius + far enemy untouched +
+kills handled, no console errors. `tsc` clean. No `RECIPES.md` change (no recipes/costs). Numbers are
+first-pass/tunable. See [[survivor-rpg-biome-2-plan]].
 
 ### Biome-aware enemy respawn (2026-07-13, Sonnet)
 

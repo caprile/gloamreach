@@ -858,6 +858,7 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
       { label: "Type", value: "Armor (Head)" },
       { label: "Armor Type", value: "Heavy" },
       { label: "Armor", value: "7" },
+      { label: "Set (3)", value: "Molten Bulwark" },
     ],
   },
   embersteel_cuirass: {
@@ -874,6 +875,7 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
       { label: "Type", value: "Armor (Chest)" },
       { label: "Armor Type", value: "Heavy" },
       { label: "Armor", value: "9" },
+      { label: "Set (3)", value: "Molten Bulwark" },
     ],
   },
   embersteel_greaves: {
@@ -890,6 +892,7 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
       { label: "Type", value: "Armor (Legs)" },
       { label: "Armor Type", value: "Heavy" },
       { label: "Armor", value: "7" },
+      { label: "Set (3)", value: "Molten Bulwark" },
     ],
   },
 
@@ -908,6 +911,7 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
       { label: "Type", value: "Armor (Head)" },
       { label: "Armor Type", value: "Light" },
       { label: "Armor", value: "5" },
+      { label: "Set (3)", value: "Emberblink" },
     ],
   },
   emberhide_vest: {
@@ -924,6 +928,7 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
       { label: "Type", value: "Armor (Chest)" },
       { label: "Armor Type", value: "Light" },
       { label: "Armor", value: "6" },
+      { label: "Set (3)", value: "Emberblink" },
     ],
   },
   emberhide_leggings: {
@@ -940,6 +945,7 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
       { label: "Type", value: "Armor (Legs)" },
       { label: "Armor Type", value: "Light" },
       { label: "Armor", value: "5" },
+      { label: "Set (3)", value: "Emberblink" },
     ],
   },
 
