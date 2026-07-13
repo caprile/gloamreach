@@ -37,8 +37,10 @@ import {
   TROPHY_OUTCOME_ODDS,
   trophyOverallSuccessChance,
   relicEffectText,
+  relicFamilyName,
   TROPHY_ROLL,
   REFINE_RECIPES,
+  GLOAM_TO_EMBER_RATIO,
 } from "../systems/Relics";
 
 // ---------------------------------------------------------------------------
@@ -501,10 +503,18 @@ function renderRelics(): string {
     trophy whether it succeeds or fails. A trophy's own rarity drives an <b>outcome table</b>
     over the result rarity — a Common trophy can roll up to Uncommon/Rare (never Mythic) and
     can also fail; higher trophies guarantee at least their own rarity with a chance to roll
-    up. A relic's power tier always equals the trophy's tier. The run's <b>first roll is a
-    guaranteed success</b>; beyond that a per-rarity pity counter guarantees a base-rarity
-    success after N misses. Effect numbers shown at Power Tier 1 (×1.0, the only tier this
-    milestone). Only Common-trophy sources are live today.</p>`;
+    up. A relic's power tier always equals the trophy's tier — biome-1 trophies are Tier 1,
+    badlands elite trophies are <b>Tier 2</b> (×1.5 magnitude, Phase 5). The run's <b>first
+    roll is a guaranteed success</b>; beyond that a per-rarity pity counter guarantees a
+    base-rarity success after N misses.</p>
+    <p class="note"><b>Phase 5 — family loadout, not stacking.</b> Every relic belongs to one
+    of 8 <b>families</b> and a player holds at most one relic per family. Rolling into an
+    owned family compares the two: the new relic <b>auto-replaces</b> if it's strictly better
+    on every shared stat, <b>auto-declines</b> if the old one is, or — if neither dominates
+    (e.g. a differing secondary stat) — the Relic Forge asks the player to pick Keep New /
+    Keep Old. Whichever relic is discarded refunds Gloam/Ember Shards (Common 1 / Uncommon 2 /
+    Rare 4 / Mythic 8, × power tier). Effect numbers below were <b>trimmed to ~0.625×</b> their
+    original values this pass (a Tier-1 relic is now a modest edge with headroom above it).</p>`;
 
   html += `<h3>Trophy → outcome odds</h3><table><thead><tr>
     <th>Trophy</th><th>Trophy rarity</th><th class="num">Any relic</th><th>Outcome breakdown</th>
@@ -519,7 +529,8 @@ function renderRelics(): string {
     hexling_trophy: "Elite Hexling (badlands)",
     sandmaw_trophy: "Elite Sandmaw (badlands)",
     gremlin_king_fang: "Retired — the King now drops the Gremlin King's Heart (a Phase-4 smelting material), not this trophy",
-    refined_trophy_uncommon: "Refinement (Gloaming Vein) — roll-only",
+    refined_trophy_uncommon: "Refinement (Gloaming Vein, Gloam Shards) — roll-only",
+    refined_trophy_uncommon_t2: "Refinement (badlands, Ember Shards) — roll-only",
     refined_trophy_rare: "Refinement (scaffold) — roll-only",
   };
   for (const [key, roll] of Object.entries(TROPHY_ROLL)) {
@@ -560,24 +571,33 @@ function renderRelics(): string {
   }
   html += `</tbody></table>`;
 
-  // Trophy refinement (Gloaming Vein) — spend Gloam Shards to climb a raw
-  // trophy one rarity up into a guaranteed-roll refined trophy.
-  html += `<h3>Trophy refinement — Gloaming Vein</h3>
-    <p class="note">The Relic Forge's <b>Refine tab</b> spends <b>Gloam Shards</b> (mined
-    from the Gloaming Vein POI, gated behind the <b>Gloamwarden</b> mini-boss) to climb a
-    raw trophy one rarity up into a <b>refined trophy that never crumbles</b>. Single-step +
-    terminal (refined trophies are never a refine input); species-agnostic; requires
-    trophy tier == shard tier.</p>
+  // Trophy refinement (Gloaming Vein / Ember Kiln) — spend shards to climb a
+  // raw trophy one rarity up into a guaranteed-roll refined trophy.
+  html += `<h3>Trophy refinement — Gloaming Vein / Ember Kiln</h3>
+    <p class="note">The Relic Forge's <b>Refine tab</b> (Lvl 2, Gloam Conduit) spends shards
+    to climb a raw trophy one rarity up into a <b>refined trophy that never crumbles</b>.
+    Single-step + terminal (refined trophies are never a refine input); species-agnostic;
+    requires trophy tier == shard tier. Biome-1 (Tier 1) trophies refine with <b>Gloam
+    Shards</b>; badlands (Tier 2) trophies refine with <b>Ember Shards</b> instead — the
+    Relic Forge's <b>Convert tab</b> (Lvl 3, Ember Kiln) renders
+    <b>${GLOAM_TO_EMBER_RATIO} Gloam Shards → 1 Ember Shard</b>, one click per conversion.</p>
     <table><thead><tr>
-      <th>Input trophies</th><th class="num">Gloam Shards</th><th>Output</th><th class="muted">Notes</th>
+      <th>Input trophies</th><th class="num">Tier</th><th>Shards</th><th>Output</th><th class="muted">Notes</th>
       </tr></thead><tbody>`;
   for (const r of REFINE_RECIPES) {
-    const scaffold = r.inputRarity !== "common";
+    // "Live" if at least one currently-dropped raw trophy matches this
+    // recipe's rarity + tier (mirrors Relics.ts refinableTrophyKeys, without
+    // needing a live backpack — the dashboard just checks the static table).
+    const live = Object.keys(TROPHY_ROLL).some(
+      (k) => !k.startsWith("refined_") && TROPHY_ROLL[k].rarity === r.inputRarity && TROPHY_ROLL[k].powerTier === r.tier,
+    );
+    const shardDef = ITEM_DEFS[r.shardKey];
     html += `<tr>
-      <td>${r.inputCount} × ${rarityName(r.inputRarity)} (any species)</td>
-      <td class="num">${r.shardCount}</td>
+      <td>${r.inputCount} × ${rarityName(r.inputRarity)} T${r.tier} (any species)</td>
+      <td class="num">${r.tier}</td>
+      <td>${r.shardCount} ${esc(shardDef?.name ?? r.shardKey)}</td>
       <td><b>${esc(name(r.output))}</b></td>
-      <td class="muted">${scaffold ? "scaffold — no raw source in biome 1" : "biome 1"}</td>
+      <td class="muted">${live ? "live" : "scaffold — no raw source yet"}</td>
     </tr>`;
   }
   html += `</tbody></table>`;
@@ -593,16 +613,21 @@ function renderRelics(): string {
     html += `<h3 style="color:${rarityHex(rarity)}">${rarityName(rarity)}
       <span class="muted" style="font-size:12px;font-weight:400">
       ${live ? "· reachable from a live trophy" : "· <i>no trophy source yet (M-W1 scaffolding)</i>"}</span></h3>`;
-    html += `<table data-table="relics"><thead><tr><th>Relic</th><th>Effect</th></tr></thead><tbody>`;
+    html += `<table data-table="relics"><thead><tr><th>Relic</th><th>Family</th><th>Effect (Power Tier 1)</th></tr></thead><tbody>`;
     for (const id of ids) {
       const def = RELIC_DEFS[id];
-      html += `<tr data-search="${esc((def.name + " " + relicEffectText(def)).toLowerCase())}">
+      html += `<tr data-search="${esc((def.name + " " + def.family + " " + relicEffectText(def)).toLowerCase())}">
         <td><span class="dot" style="background:${rarityHex(rarity)}"></span><b>${esc(def.name)}</b></td>
+        <td class="muted">${esc(relicFamilyName(def.family))}</td>
         <td class="pos">${esc(relicEffectText(def))}</td>
       </tr>`;
     }
     html += `</tbody></table>`;
   }
+  html += `<p class="note">A player holds <b>at most one relic per family</b> (Phase 5) — a
+    new roll into an owned family auto-replaces if strictly better, auto-declines (refunds
+    shards) if strictly worse/equal, or prompts a Keep New / Keep Old choice if neither
+    dominates (e.g. a differing secondary stat on a dual-stat relic).</p>`;
   return html;
 }
 

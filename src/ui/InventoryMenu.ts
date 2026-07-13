@@ -4,6 +4,7 @@ import type { ItemContainer } from "../systems/ItemContainer";
 import { itemDef } from "../systems/Items";
 import type { Skills } from "../systems/Skills";
 import type { PlayerProgression } from "../systems/Progression";
+import { RARITY_COLOR, rarityIcon, rarityName, relicEffectText, type RelicFamilySlot, type RelicGroup } from "../systems/Relics";
 import { Tooltip } from "./Tooltip";
 
 export interface ArmorSlotView {
@@ -50,6 +51,10 @@ export interface InventoryMenuDeps {
   armorSlots: () => ArmorSlotView[];
   combatStats: () => CombatStatsView;
   runSpeedBreakdown: () => RunSpeedView;
+  // Phase 5: the player's owned relics, one fixed slot per family (empty or
+  // filled) — surfaced right on the Inventory panel since playtesters kept
+  // checking the Equipment column for them instead of the HUD relic bar.
+  relicFamilySlots: () => RelicFamilySlot[];
   // Left-press on a filled slot begins dragging that stack.
   beginDrag: (container: ItemContainer, index: number, pointer: Phaser.Input.Pointer) => void;
   // Left-press on an occupied equipment slot begins dragging the equipped
@@ -116,7 +121,17 @@ const STATS_X = ARMOR_X + ARMOR_W + STATS_GAP;
 const STATS_Y = ARMOR_Y;
 const STATS_W = 176;
 
-export const PANEL_W = STATS_X + STATS_W - PANEL_X + 12;
+// Relics column: a 4th side-by-side section, right of Combat — one fixed slot
+// per relic family (8 total, 2x4), paper-doll style like Equipment so owned
+// relics are visible without opening the Relic Forge menu or squinting at the
+// HUD bar.
+const RELICS_GAP = 24;
+const RELICS_X = STATS_X + STATS_W + RELICS_GAP;
+const RELICS_Y = STATS_Y;
+const RELICS_COLS = 2;
+const RELICS_W = RELICS_COLS * SLOT + (RELICS_COLS - 1) * GAP;
+
+export const PANEL_W = RELICS_X + RELICS_W - PANEL_X + 12;
 export const PANEL_H = BACKPACK_Y + BACKPACK_H - PANEL_Y + 20; // 382
 
 // Trash drop target: sits below the armor grid, in the panel's otherwise-
@@ -142,6 +157,11 @@ export class InventoryMenu {
   private open = false;
   private rows: Phaser.GameObjects.GameObject[] = [];
   private tooltipUI: Tooltip;
+  // A separate lightweight tooltip for the Relics column (relics aren't
+  // items, so the shared item Tooltip class doesn't apply — mirrors the
+  // inline tipBg/tipText pattern RelicBarUI/RelicForgeMenu already use).
+  private relicTipBg?: Phaser.GameObjects.Rectangle;
+  private relicTipText?: Phaser.GameObjects.Text;
 
   constructor(scene: Phaser.Scene, deps: InventoryMenuDeps) {
     this.scene = scene;
@@ -177,6 +197,12 @@ export class InventoryMenu {
 
   hideTooltip(): void {
     this.tooltipUI.hide();
+    this.hideRelicTooltip();
+  }
+
+  private hideRelicTooltip(): void {
+    this.relicTipBg?.setVisible(false);
+    this.relicTipText?.setVisible(false);
   }
 
   // Whether a screen point falls within the panel — see CraftingMenu's
@@ -249,10 +275,12 @@ export class InventoryMenu {
     this.renderSortButton();
     this.addText(ARMOR_X, PANEL_Y + 36, "Equipment", 12, "#8a93a3");
     this.addText(STATS_X, PANEL_Y + 36, "Combat", 12, "#8a93a3");
+    this.addText(RELICS_X, PANEL_Y + 36, "Relics", 12, "#8a93a3");
     this.renderBackpack();
     this.renderArmor(ARMOR_X, ARMOR_Y);
     this.renderTrash();
     this.renderCombatStats(STATS_X, STATS_Y);
+    this.renderRelics(RELICS_X, RELICS_Y);
   }
 
   // Live equipped-loadout summary — damage/attack speed/attack stamina cost
@@ -295,6 +323,72 @@ export class InventoryMenu {
     y += lineGap;
     const speed = this.deps.runSpeedBreakdown();
     this.addText(x0, y, `Move Speed: ${speed.walk} / ${speed.sprint} spr`, 12, "#8a93a3");
+  }
+
+  // The 8-slot relic loadout (Phase 5) — one fixed slot per family, paper-doll
+  // style like renderArmor. Empty slots show the family label; filled slots
+  // show the rarity gem icon + power-tier badge and hover for the full effect
+  // tooltip.
+  private renderRelics(x0: number, y0: number): void {
+    const slots = this.deps.relicFamilySlots();
+    slots.forEach((slot, i) => {
+      const col = i % RELICS_COLS;
+      const row = Math.floor(i / RELICS_COLS);
+      const x = x0 + col * (SLOT + GAP);
+      const y = y0 + row * (SLOT + GAP);
+      const rarity = slot.group?.def.rarity;
+
+      const box = this.scene.add
+        .rectangle(x, y, SLOT, SLOT, 0x14181f, 0.9)
+        .setOrigin(0, 0)
+        .setStrokeStyle(1, rarity ? RARITY_COLOR[rarity] : 0x3a4250)
+        .setScrollFactor(0)
+        .setDepth(3001)
+        .setInteractive({ useHandCursor: !!slot.group })
+        .on("pointerover", () => {
+          if (slot.group) this.showRelicTooltip(slot.group, x, y);
+        })
+        .on("pointerout", () => this.hideRelicTooltip());
+      this.rows.push(box);
+
+      if (slot.group) {
+        const gem = this.scene.add
+          .image(x + SLOT / 2, y + SLOT / 2 - 4, rarityIcon(slot.group.def.rarity))
+          .setScrollFactor(0)
+          .setDepth(3002);
+        this.rows.push(gem);
+        this.addText(x + 3, y + 3, `T${slot.group.powerTier}`, 9, "#9fd0ff");
+      } else {
+        this.addText(x + SLOT / 2, y + SLOT / 2, slot.label, 9, "#5b6472", 0.5, 0.5);
+      }
+    });
+  }
+
+  private showRelicTooltip(group: RelicGroup, slotX: number, slotY: number): void {
+    const def = group.def;
+    const str = `${def.name}\n${rarityName(def.rarity)} · Power T${group.powerTier}\n${relicEffectText(def, group.powerTier)}`;
+    if (!this.relicTipText) {
+      this.relicTipText = this.scene.add
+        .text(0, 0, str, { fontFamily: "monospace", fontSize: "11px", color: "#e8ecf2", wordWrap: { width: 220 } })
+        .setScrollFactor(0)
+        .setDepth(3010);
+      this.relicTipBg = this.scene.add
+        .rectangle(0, 0, 10, 10, 0x000000, 0.95)
+        .setOrigin(0, 0)
+        .setScrollFactor(0)
+        .setDepth(3009);
+    }
+    this.relicTipText.setText(str);
+    this.relicTipBg!.setStrokeStyle(1, RARITY_COLOR[def.rarity]);
+    const padX = 8;
+    const padY = 6;
+    const w = this.relicTipText.width + padX * 2;
+    const h = this.relicTipText.height + padY * 2;
+    let tx = slotX - w - 6;
+    if (tx < 4) tx = slotX + SLOT + 6;
+    const ty = Phaser.Math.Clamp(slotY, 4, this.scene.scale.height - h - 4);
+    this.relicTipBg!.setPosition(tx, ty).setSize(w, h).setVisible(true);
+    this.relicTipText.setPosition(tx + padX, ty + padY).setVisible(true);
   }
 
   // Drag a stack here to permanently delete it. Dragging a stack out of the

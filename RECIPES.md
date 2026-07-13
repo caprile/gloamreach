@@ -91,11 +91,13 @@ ammo before there's a launcher to load it into.
 | Workbench | 3 ("Lvl 4") | Emberforge Anvil | 5 Embersteel Ingot, 15 Stone | Unlocks enhanced/T2 gear (`requiresWorkbenchTier: 3`) |
 | Campfire | 1 ("Lvl 2") | Stone Hearth | 4 Twine, 20 Stone | Unlocks Lvl 2 campfire dishes |
 | Relic Forge | 1 ("Lvl 2") | Gloam Conduit | 15 Stone, 1 Gloam Shard | Unlocks the Refine tab |
+| Relic Forge | 2 ("Lvl 3") | Ember Kiln | 3 Embersteel Ingot, 20 Stone | Unlocks Gloam → Ember conversion (Convert tab) |
 | Smelter | 1 ("Lvl 2") | Ember Crucible | 1 Gremlin King's Heart, 10 Stone | Smelt rare Cinderforged Ore → Embersteel Ingot |
 
 Bench visuals change per tier (Workbench Lvl 2/3/4, Smelter Lvl 2 each get a
-distinct placeholder sprite). The Emberforge Anvil is only **discoverable** once
-an Embersteel Ingot has been smelted (its cost key must be discovered).
+distinct placeholder sprite). The Emberforge Anvil and Ember Kiln are only
+**discoverable** once an Embersteel Ingot has been smelted (their cost key must
+be discovered).
 
 ## Armor Upgrades (`src/systems/ArmorUpgrades.ts`)
 
@@ -233,7 +235,7 @@ strip above the HP bar).
 | Cooked Snake Meat | 0 (any) | 1 Shishkabob, 1 Snake Meat | Cooked Snake Meat | +2 HP/s for 22s |
 | Blood-Glazed Snake Skewer | 1 (Lvl 2) | 1 Shishkabob, 1 Snake Meat, 1 Gremlin Blood | Blood-Glazed Snake Skewer | +3 HP/s for 35s |
 
-## Relics (`src/systems/Relics.ts`) — M-RL
+## Relics (`src/systems/Relics.ts`) — M-RL, reworked in Phase 5
 
 **Probabilistic** roll at a placed **Relic Forge** (recipe above). 1 trophy per
 attempt → a random relic; a **failed attempt still consumes the trophy**. A
@@ -243,16 +245,41 @@ trophies guarantee at least their own rarity with a chance to roll up). Rarity i
 **source-determined by the trophy — not climbable, no manual combine.** The run's
 **first roll is a guaranteed success** (the hook); beyond that a per-rarity pity
 counter guarantees a base-rarity success after N misses. A separate **power tier**
-(biome depth) multiplies a relic's numbers (`POWER_TIER_MULT` ×1.0/1.5/2.25/… —
-flat ×1.0 this milestone) and **always equals the trophy's tier**. Rolling a relic
-you already own (same id + power tier) **auto-stacks** (×N, aggregated effects).
-Relics are run-length passives (reset on New Run), shown in the bottom-left HUD
-relic bar.
+(biome depth) multiplies a relic's numbers (`POWER_TIER_MULT` ×1.0/1.5/2.25/…) and
+**always equals the trophy's tier**. Relics are run-length passives (reset on New
+Run), shown in the bottom-left HUD relic bar **and** on a dedicated **Relics
+column** in the Inventory panel (Tab) — 8 fixed slots, one per family, so owned
+relics don't require opening the Relic Forge or squinting at the HUD strip.
+
+**Phase 5 — family loadout, not stacking.** Every relic belongs to one of 8
+**families** (`damage`/`move`/`defense`/`stamina`/`lifesteal`/`vitality`/`crit`/`xp`)
+and a player holds **at most one relic per family** (8 relics max). Rolling into a
+family already owned compares the two relics (direction-normalized — "lower is
+better" stats like stamina cost compare correctly) and resolves automatically
+where possible:
+- **New relic strictly better** (≥ the old on every shared stat, better on at
+  least one) → **auto-replaces**; the displaced relic refunds Gloam/Ember Shards
+  (scaled by its own rarity × power tier: Common 1 / Uncommon 2 / Rare 4 / Mythic 8,
+  × tier).
+- **Old relic strictly better or equal** → the new roll is **auto-declined**; IT
+  refunds the shards instead (a "wasted" roll still pays a dividend).
+- **Neither dominates** (e.g. a differing secondary stat — one relic wins on
+  damage, the other on stamina cost) → **ambiguous**: the Relic Forge menu shows
+  a **Keep New / Keep Old** prompt and blocks further rolls until you choose;
+  the discarded one still refunds shards.
+
+**Magnitudes were trimmed** this pass (locked decision 8) — every relic's effect
+numbers are scaled to ~0.625× their original values (e.g. Common damage
++8%→+5%, Mythic +40%→+25%) so a Tier-1 relic is a modest edge with real headroom
+above it (Tier-2 badlands relics, future biomes).
 
 Each elite drops a **unique trophy by species** (Boar → Boar Trophy, Snake →
-Snake Trophy, Gremlin/Gremling → Gremlin Trophy). All three are **Common / Tier 1**
-and share the Common outcome table + pity counter, so more elite variety just
-means more attempts.
+Snake Trophy, Gremlin/Gremling → Gremlin Trophy — all **Common / Tier 1**;
+Duskrunner/Cragscale/Hexling/Sandmaw → their own Common trophy, all **Tier 2**
+since Phase 5). Same-rarity trophies always share the Common outcome table +
+pity counter, so more elite variety just means more attempts — the badlands
+trophies' only difference is the **×1.5 power-tier multiplier** on whatever
+relic they produce.
 
 **Outcome odds by trophy rarity** (locked 2026-07-11):
 
@@ -267,38 +294,54 @@ means more attempts.
 | Gremlin Trophy | Elite Gremlin/Gremling | Common | 1 |
 | Boar Trophy | Elite Boar | Common | 1 |
 | Snake Trophy | Elite Snake | Common | 1 |
+| Duskrunner Trophy | Elite Duskrunner (badlands) | Common | **2** |
+| Cragscale Trophy | Elite Cragscale (badlands) | Common | **2** |
+| Hexling Trophy | Elite Hexling (badlands) | Common | **2** |
+| Sandmaw Trophy | Elite Sandmaw (badlands) | Common | **2** |
 | ~~Gremlin King Fang~~ | — | — | Retired — the King now drops the **Gremlin King's Heart** (a Phase-4 smelting material that upgrades a Smelter to melt rare ore), NOT a relic trophy |
-| Refined Trophy | Refinement (Gloaming Vein) | Uncommon | 1 (roll-only — never dropped/refined; **capped at Rare, no Mythic**) |
+| Refined Trophy | Refinement (Gloaming Vein, Gloam) | Uncommon | 1 (roll-only — never dropped/refined; **capped at Rare, no Mythic**) |
+| Ember-Refined Trophy | Refinement (badlands, Ember) | Uncommon | **2** (roll-only; **capped at Rare**) |
 | Radiant Trophy | Refinement (scaffold) | Rare | 1 (roll-only — deeper biomes) |
 
-Uncommon/Rare-*raw*-trophy sources + power tiers ≥2 are scaffolding — no raw
-trophy source feeds them until M-W1 (a Common trophy CAN roll up into Uncommon/
-Rare relics now). Refined trophies (roll-only) are produced by the Refine tab below.
+### Trophy refinement — Gloaming Vein / Ember Kiln (Refine tab)
 
-### Trophy refinement — Gloaming Vein (Refine tab)
+The **Relic Forge's Refine tab** (unlocked once the forge is upgraded to
+**Lvl 2** via the Gloam Conduit — see Station Upgrades) spends shards to climb a
+raw trophy one rarity up into a **refined trophy** that never crumbles.
+**Single-step + terminal**: raw → one up only; refined trophies are never a
+refine input (species-agnostic — any mix of same-rarity, same-tier raw
+trophies counts). A recipe requires `trophy tier == shard tier`.
 
-The **Relic Forge's Refine tab** (unlocked only once the forge is upgraded to
-**Lvl 2** via the Gloam Conduit — see Station Upgrades) spends **Gloam Shards**
-(mined from the Gloaming Vein POI, gated behind the **Gloamwarden** mini-boss) to
-climb a raw trophy one rarity up into a **refined trophy** that never crumbles. **Single-step
-+ terminal**: raw → one up only; refined trophies are never a refine input
-(species-agnostic — any mix of same-rarity raw trophies counts). A recipe requires
-`trophy tier == shard tier` (both Tier 1 now); deeper biomes (M-W1) add higher-tier
-ore + rows.
+Biome 1 (Tier 1) refines with **Gloam Shards** (mined at the Gloaming Vein POI).
+Badlands (Tier 2) trophies refine with **Ember Shards** instead — the **Relic
+Forge's Convert tab** (unlocked at **Lvl 3**, the **Ember Kiln** upgrade — see
+Station Upgrades) renders Gloam Shards down into Ember at a fixed ratio, one
+conversion per click, so banking Gloam Shards across the biome-1→2 transition is
+a real payoff.
 
-| Refine | Input trophies | Gloam Shards | Output | Notes |
+| Refine | Input trophies | Shards | Output | Notes |
 |---|---|---|---|---|
-| Common → Refined | 3 Common (any species) | 2 | 1 Refined Trophy (rolls Uncommon) | biome 1 |
-| Uncommon → Radiant | 3 Uncommon (any species) | 3 | 1 Radiant Trophy (rolls Rare) | scaffold — no raw Uncommon source in biome 1 |
+| Common → Refined | 3 Common Tier-1 (any species) | 2 Gloam Shard | 1 Refined Trophy (rolls Uncommon) | biome 1 |
+| Uncommon → Radiant | 3 Uncommon Tier-1 (any species) | 3 Gloam Shard | 1 Radiant Trophy (rolls Rare) | scaffold — no raw Uncommon source in biome 1 |
+| Common (T2) → Ember-Refined | 3 Common Tier-2 badlands (any species) | 2 Ember Shard | 1 Ember-Refined Trophy (rolls Uncommon) | badlands, Phase 5 |
+
+**Gloam → Ember conversion:** 3 Gloam Shards → 1 Ember Shard, at the Relic
+Forge's Convert tab.
 
 **Gloaming Vein POI:** ~5 shielded ore nodes (Stone-Pickaxe-gated, non-respawning,
 1–2 Gloam Shard each) ringed around the **Gloamwarden** guardian; the nodes stay
 un-mineable until it dies. Guardian guaranteed drop: 3–4 Gloam Shard + 1 Refined
 Trophy.
 
-| Rarity | Relics (base effect, ×power-tier mult) |
-|---|---|
-| Common | Warrior's Charm (+8% dmg) · Swift Charm (+8% move) · Stoneskin Charm (−8% dmg taken) · Tireless Charm (−12% stamina cost) · Bloodroot Charm (+2 HP/kill) · Stout Charm (+15% max HP) · Keen Charm (+5% crit chance) |
-| Uncommon | Warrior's Idol (+16% dmg) · Swift Idol (+16% move) · Ironhide Idol (−14% dmg taken) · Vigor Idol (+20% HP, +18% stam) · Sanguine Idol (+4 HP/kill) · Scholar's Idol (+25% skill XP) · Savage Idol (+0.30× crit dmg) |
-| Rare | War Totem (+26% dmg, −12% stamina) · Phantom Totem (+22% move, −12% dmg taken) · Titan Totem (+40% HP, +30% stam) · Reaper Totem (+8 HP/kill, +14% dmg) |
-| Mythic | Gremlin King's Wrath (+40% dmg, +18% move) · Undying Heart (+15 HP/kill, −22% dmg taken) · Avatar's Mantle (+30% dmg, +25% move, −20% stamina) |
+Effect numbers below are shown at **Power Tier 1** (biome 1); badlands (Tier 2)
+sources multiply every number by ×1.5.
+
+| Rarity | Relics (base effect, ×power-tier mult) | Family |
+|---|---|---|
+| Common | Warrior's Charm (+5% dmg) · Swift Charm (+5% move) · Stoneskin Charm (−5% dmg taken) · Tireless Charm (−8% stamina cost) · Bloodroot Charm (+1 HP/kill) · Stout Charm (+9% max HP) · Keen Charm (+3% crit chance) | damage · move · defense · stamina · lifesteal · vitality · crit |
+| Uncommon | Warrior's Idol (+10% dmg) · Swift Idol (+10% move) · Ironhide Idol (−9% dmg taken) · Vigor Idol (+13% HP, +11% stam) · Sanguine Idol (+3 HP/kill) · Scholar's Idol (+16% skill XP) · Savage Idol (+0.19× crit dmg) | damage · move · defense · vitality · lifesteal · xp · crit |
+| Rare | War Totem (+16% dmg, −8% stamina) · Phantom Totem (+14% move, −8% dmg taken) · Titan Totem (+25% HP, +19% stam) · Reaper Totem (+5 HP/kill, +9% dmg) | damage · move · vitality · lifesteal |
+| Mythic | Gremlin King's Wrath (+25% dmg, +11% move) · Undying Heart (+9 HP/kill, −14% dmg taken) · Avatar's Mantle (+19% dmg, +16% move, −13% stamina) | damage · defense · damage |
+
+A dual-stat relic (e.g. War Totem) claims one **primary** family; its secondary
+stat only matters when comparing against a same-family contender.

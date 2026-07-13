@@ -2,7 +2,36 @@
 
 ## Current State
 
-_Living snapshot — edit in place, never append. Last shipped: **Biome 2 — Phase 4b: enhanced (T2) gear
+_Living snapshot — edit in place, never append. Last shipped: **Biome 2 — Phase 5: Relics rework**
+(2026-07-13, Opus). The relic economy for biome 2 + the requested rebalance, closing out the biome-2
+umbrella plan's final milestone. Three parts, all locked via `AskUserQuestion`: **(1) Family loadout,
+not stacking.** Every relic now has a `family` (damage/move/defense/stamina/lifesteal/vitality/crit/xp,
+8 total) and a player holds **at most one relic per family**. Rolling into an owned family runs a
+direction-normalized **dominance comparison**: new relic strictly better on every shared stat →
+**auto-replaces** (old relic refunds Gloam/Ember Shards, scaled by its own rarity × power tier); old
+strictly better/equal → the new roll **auto-declines** (refunds itself instead); **neither dominates**
+(e.g. a differing secondary stat) → **ambiguous**, and the Relic Forge shows a **Keep New / Keep Old**
+prompt, blocking further rolls until resolved (closing the menu mid-choice defaults to declining the
+new one, so a spent trophy never yields literally nothing). **(2) Trimmed magnitudes** — every relic's
+effect numbers scaled to ~0.625× the original (Common dmg +8%→+5%, Mythic +40%→+25%) per the locked
+"Common damage +8%→~+5%, Mythic +40%→~+25%" spec. **(3) Tier-2 relics** — all four badlands elite
+trophies (Duskrunner/Cragscale/Hexling/Sandmaw) bumped from Tier 1 → **Tier 2** (×1.5 magnitude), and a
+new **Ember Shard** currency (Gloam Shards rendered down at the Relic Forge's new **Ember Kiln**
+upgrade, Lvl 3, `{embersteel_ingot:3, stone:20}`, 3 Gloam → 1 Ember) feeds a new tier-2 refine recipe
+(`refine_common_t2`: 3 Common-T2 trophies + 2 Ember → 1 Ember-Refined Trophy, rolls Uncommon capped at
+Rare). New **Relics column on the Inventory panel** (Tab) — 8 fixed paper-doll-style slots, one per
+family, filled or empty with hover tooltips — addresses playtester confusion (they were checking the
+Equipment tab for relics instead of the HUD bar). `RelicManager` internals moved from an array of
+stackable instances to `Partial<Record<RelicFamily, RelicInstance>>`; the aggregate effect getters
+(`damageMult()` etc.) are unchanged, so every `MainScene` call site kept working with zero edits.
+Verified via `tsc --noEmit` (clean) and live `preview_eval` (all three roll verdicts, tier-scaling
+dominance, refund math, Ember conversion + its tier gating, both new UI panels rendered and measured
+for overlap — caught and fixed a real layout bug where a 2-line "replaced/declined" result or the
+choice-button block could overlap the relic grid below it). See the Phase 5 entry
+below. **This completes the biome-2 umbrella plan (`.claude/plans/biome-2-sunscorch-badlands.md`).**
+[[survivor-rpg-relics]]_
+
+_Prior: **Biome 2 — Phase 4b: enhanced (T2) gear
 tier + the first magic weapon** (2026-07-13, Opus; **Session 2 of Phase 4**, completing it). Adds the
 **Workbench Lvl 4** upgrade (**Emberforge Anvil**, `{embersteel_ingot:5, stone:15}`, only discoverable once
 an Embersteel Ingot has been smelted) which unlocks a new `requiresWorkbenchTier:3` recipe gate. **9
@@ -242,14 +271,20 @@ Smelter station (ore + Hex Essence = ingot), Clay + scattered ore mining, the **
 (replaces the fang — it upgrades the Smelter to melt rare ore), Workbench Lvl 3 + a new
 `requiresWorkbenchTier` recipe gate, and the **base forged gear** (Sunsteel heavy set wiring the dormant
 `heavy_armor` skill w/ magic-fire mitigation; Duskhide light set; blunt/slash/pierce weapons).
-**Session 2 (Phase 4b, just shipped):** Workbench Lvl 4 (**Emberforge Anvil**) + the 9 T2 **enhanced**
+**Session 2 (Phase 4b):** Workbench Lvl 4 (**Emberforge Anvil**) + the 9 T2 **enhanced**
 reforge recipes (each consumes its base forged piece + Embersteel Ingot → Embersteel heavy set / Emberhide
 light set / three enhanced weapons) + the first **magic weapon** (the **Ember Brand**, rare-ore-exclusive
-melee, `magic` damage type). **Next: Phase 5** — tier-2 relics + biome-1 relic trim +
-family-replace-with-refund. The master-plan tail **M-TE** (trophy-gated gear) is folded into this biome-2
-work. Real pixel art/animations stay deliberately deferred until content/balance settle (roadmap item 8).
-Badlands stats/counts + the forged-tier numbers are all first-pass — expect a tuning pass as the biome
-fills out.
+melee, `magic` damage type). **Phase 5 (just shipped): the relic rework** — family-loadout
+(one relic per family, dominance-based auto-replace/decline/choice), trimmed biome-1 magnitudes (~0.625×),
+tier-2 badlands relics (Duskrunner/Cragscale/Hexling/Sandmaw trophies now Tier 2), and a new Ember Shard
+currency (Gloam→Ember at the Relic Forge's new Ember Kiln upgrade) feeding a tier-2 refine recipe. Also
+added a dedicated Relics column on the Inventory panel. **This completes the biome-2 umbrella plan
+(`.claude/plans/biome-2-sunscorch-badlands.md`) — all 6 phases (0–5) are shipped.** The master-plan tail
+**M-TE** (trophy-gated gear) is folded into this biome-2 work and is done. Real pixel art/animations stay
+deliberately deferred until content/balance settle (roadmap item 8). Badlands stats/counts + the
+forged-tier + relic numbers are all first-pass — expect a tuning pass once outside playtesters weigh in.
+**Next up:** no locked next milestone — likely a broader playtest/tuning pass, or a new biome-3 scoping
+session per the master roadmap's "at least 5 total biomes" note.
 
 **Known issues / open.**
 - Boss may be slightly overtuned after the 5s damage bump (the user's "TBD" — left as-is
@@ -284,6 +319,81 @@ fills out.
 ## Recent Entries
 
 > Older entries in STATUS-archive.md.
+
+### Biome 2 — Phase 5: Relics rework (2026-07-13, Opus)
+
+Plan: `.claude/plans/biome-2-sunscorch-badlands.md` (Phase 5, the umbrella's final milestone —
+**this completes it**). Built on **Opus**. Three locked deliverables (`AskUserQuestion`), plus a
+fourth request added mid-session (a dedicated Relics UI panel). `tsc --noEmit` clean throughout;
+verified live via `preview_eval` (see below) — caught and fixed one real layout bug along the way.
+
+- **Family loadout, not stacking (`src/systems/Relics.ts`).** New `RelicFamily` type (8: damage/
+  move/defense/stamina/lifesteal/vitality/crit/xp) + a `family` tag on every `RelicDef` — a
+  dual-stat relic claims one primary family (e.g. War Totem's `damagePct`+`staminaCostPct` is
+  `damage`). `RelicManager.instances` changed from an array of stackable `{id,powerTier}` to
+  `Partial<Record<RelicFamily, RelicInstance>>` — **at most one relic per family (8 max)**.
+  `roll()` now runs a new `compareInstances()` dominance check (direction-normalized per key —
+  `staminaCostPct`/`damageTakenPct` are "lower is better") whenever the produced relic's family is
+  already owned: **strictly better** (≥ on every shared stat, > on ≥1) → **auto-replaces**, old
+  relic refunds shards; **strictly worse/equal** → **auto-declines**, the new roll refunds shards
+  instead; **ambiguous** (mixed — e.g. a differing secondary stat) → `RollResult.familyConflict.
+  verdict = "choice"`, ownership left untouched until `resolveChoice(family, keepNew, newId,
+  newTier)` is called. Refund = `REFUND_BASE[rarity] * powerTier` (Common 1/Uncommon 2/Rare 4/
+  Mythic 8), in Gloam Shards (Tier 1) or Ember Shards (Tier ≥2) via `shardKeyForTier`. The
+  aggregate effect getters (`damageMult()` etc.) are **unchanged in shape** — `sumEffect()` just
+  iterates the 8 families instead of an array — so every `MainScene` call site kept working with
+  zero edits.
+- **Trimmed magnitudes (locked decision 8).** Every `RELIC_DEFS` effect scaled to exactly
+  **×0.625** the original value, matching the locked spec verbatim (Common damage 8→5%, Mythic
+  40→25%) — e.g. Stoneskin Charm −8→−5%, Tireless Charm −12→−8%, Titan Totem 40/30→25/19%.
+- **Tier-2 relics + Ember Shard currency.** All four badlands elite trophies (`duskrunner_trophy`/
+  `cragscale_trophy`/`hexling_trophy`/`sandmaw_trophy`) bumped `powerTier: 1 → 2` in `TROPHY_ROLL`
+  (still Common rarity, same odds/pity — just ×1.5 magnitude via the existing `POWER_TIER_MULT`
+  scaffold). New **Ember Shard** item (`Items.ts`/`Inventory.ts`, amber recolor of the Gloam Shard
+  texture in `BootScene.ts`) — converted from Gloam Shards at a new **Ember Kiln** Relic Forge
+  upgrade (`StationUpgrades.ts`, Lvl 2→3, `{embersteel_ingot:3, stone:20}`, discoverable once
+  Embersteel Ingot is known) via `GLOAM_TO_EMBER_RATIO = 3`. New tier-2 refine recipe
+  (`refine_common_t2`: 3 Common-T2 trophies + 2 Ember Shard → 1 `refined_trophy_uncommon_t2`,
+  new item, rolls Uncommon capped at Rare, powerTier 2) alongside the existing Tier-1 rows.
+- **Relic Forge menu (`RelicForgeMenu.ts`): new Convert tab + choice UI.** A third tab (Bind/
+  Refine/Convert), gated `forgeTier() >= 2` like Refine's `>= 1`, with a single "Convert" button
+  (commit-at-end `ProgressBar`, same pattern as Refine) that renders `GLOAM_TO_EMBER_RATIO` Gloam
+  into 1 Ember per click. The result line now branches on `familyConflict`: "replaced"/"declined"
+  show a second refund line; "choice" renders a **Keep New / Keep Old** two-button prompt (each
+  showing the relic's effect text + the shard refund the OTHER option would pay), blocking further
+  rolls/tab-switches until resolved — `resolveChoice()` mutates `lastResult` in place so the same
+  render path shows the outcome. **Closing the menu mid-choice auto-declines the new roll** (so a
+  spent trophy never yields literally nothing). Dead `×N` stacking badges removed from both this
+  menu's relic grid and `RelicBarUI.ts` (impossible now that families cap at 1).
+- **New Relics column on the Inventory panel (`InventoryMenu.ts`)** — a request added mid-session
+  after the user noted playtesters kept checking the Equipment tab for relics. A 4th side-by-side
+  section (2×4 = 8 fixed slots, one per family, paper-doll style like Equipment): empty slots show
+  the family label, filled slots show the rarity gem + a `T#` badge + a hover tooltip (name/
+  rarity/tier/effect, a small inline tipBg/tipText mirroring the existing `RelicBarUI`/
+  `RelicForgeMenu` pattern). Reads a new `RelicManager.familySlots()` (all 8 in fixed order,
+  filled or `null`) via a new `InventoryMenuDeps.relicFamilySlots` dep.
+- **Bug caught + fixed during verification:** the Bind tab's `resultBlockH` reserved layout space
+  only distinguished "no conflict" (1 line) from "choice" (buttons); it didn't account for
+  "replaced"/"declined" now being **2 lines** (a refund line was added under the "Forged:" line) —
+  the result text overlapped the "Your Relics" header and grid below it. Fixed by branching
+  `resultBlockH` on the conflict verdict (26/58/130) instead of just `choicePending()`; re-verified
+  live with exact pixel-gap assertions (`Text.y + Text.height` vs the grid header's `y`) for both
+  the 2-line and choice cases post-fix.
+- **Verified live** (`preview_eval`): all three roll verdicts via `RelicManager.roll()`/
+  `resolveChoice()` with controlled `rng` (no `Math.random` monkeypatching — that corrupts
+  Phaser's internal texture-key generation and was a red herring in an earlier pass); tier-scaling
+  dominance (an identical relic at T2 beats its own T1 copy); refund amounts match `REFUND_BASE ×
+  powerTier` exactly for all 4 rarities; `xpMult()` reflects a T2 Scholar's Idol (1.24×); Ember
+  conversion's 3-tier gating (no forge / Lvl 2 / Lvl 3) and the 6→3 gloam / +1 ember math; the
+  Relics inventory column renders with correct gem/tier-badge/empty-label states; the Relic Forge's
+  Bind/Refine/Convert tabs and the Keep New/Keep Old choice UI all render and resolve correctly
+  on-screen with no post-fix overlap; zero console errors after the fix. Dashboard `renderRelics()`
+  updated (family column + note, Ember conversion note, tier-2 trophy table rows — all read live
+  off `Relics.ts`, so magnitude/family data can't drift); `RECIPES.md` Relics section rewritten.
+  Files: `Relics.ts`, `Items.ts`, `Inventory.ts`, `BootScene.ts`, `StationUpgrades.ts`,
+  `RelicForgeMenu.ts`, `RelicBarUI.ts`, `InventoryMenu.ts`, `MainScene.ts`, `RECIPES.md`,
+  `dashboard/main.ts`. **This completes the biome-2 umbrella plan
+  (`.claude/plans/biome-2-sunscorch-badlands.md`) — all 6 phases (0–5) are shipped.**
 
 ### Biome 2 — Phase 4b: enhanced (T2) gear tier + first magic weapon (2026-07-13, Opus)
 
@@ -329,122 +439,10 @@ machinery Session 1 (5ak) and earlier phases already built. `tsc --noEmit` clean
   shared `MELEE_WEAPONS` covering base forged + enhanced + magic; `RECIPES.md` crafting/upgrade/armor/weapon
   tables updated. Files: `Weapons.ts`, `Items.ts`, `Recipes.ts`, `StationUpgrades.ts`, `BootScene.ts`,
   `dashboard/main.ts`, `RECIPES.md`. **Phase 4 complete.**
-- **Deferred beyond Phase 4** (unchanged): forged **tool** tier, a forged **ranged** weapon, Gloam→Ember-
-  Shard relic-currency conversion (Phase 5). Phase 5 (tier-2 relics + biome-1 trim + family-replace-with-
-  refund) is the next milestone.
+- **Deferred beyond Phase 4** (unchanged): forged **tool** tier, a forged **ranged** weapon. The
+  Gloam→Ember-Shard conversion + tier-2 relics both shipped in **Phase 5** — see that entry above.
 
-### Biome 2 — Phase 4a: Smelting economy + Gremlin King gate + base forged gear (2026-07-13, Opus)
-
-Plan: `.claude/plans/biome-2-phase-4-forging.md` (Phase 4 of the biome-2 umbrella, **sliced into two
-sessions** — this is **Session 1**). Built on **Opus** (new mechanic: smelting station + a new gear
-tier + new gating). The deferred **Gremlin King critical-drop rework** (locked decision 10) finally
-lands here, gating the forged tier. All verified live via `preview_eval` (module-level + end-to-end
-scene flow); `tsc --noEmit` clean; no console errors.
-
-**The forged progression (Session 1):** Mine **Clay** → build the **Smelter**; smelt **ore + Hex
-Essence = ingot** (A+B); common **Sunscorch Ore → Sunsteel Ingot**; upgrade **Workbench to Lvl 3**
-(Forge Anvil, costs Sunsteel Ingots) → unlocks the base forged recipes; kill the **Gremlin King →
-Heart** → upgrade the **Smelter** (Ember Crucible) → smelt rare **Cinderforged Ore → Embersteel
-Ingot** (the T2 metal Session 2's enhanced recipes will consume).
-
-- **Smelter** (`Items`/`Recipes`, tier-1 placeable, `{clay:10, stone:15}`) — a new station that
-  **reuses the Drying Rack's menu + `ProcessingStation`** (both are processing stations). `Processing.ts`:
-  new `SMELT_RECIPES` + `ProcessRecipe.fuel`/`minStationTier`; `ProcessingStation` parameterized with a
-  `recipes` list + `setTier()`. `DryingRackMenu` gained optional `title/descKey/actionLabel/busyLabel`
-  (functions) + a **fuel readout/gate** dep, so ONE menu instance serves both (switched by
-  `openStationKind`). MainScene: `smelters[]` array, `openSmelterMenu`, `processSmelterAmount` (deducts
-  Hex Essence fuel from the backpack), hover via the shared `placedObjects` loop (`hoveredSmelter`,
-  `promptForSmelter` → "[LMB] Use Smelter"), placement/destroy (refunds loaded ore).
-- **Gremlin King rework:** now drops **`gremlin_king_heart`** (was `gremlin_king_fang`, retired to a
-  plain trophy). The Heart is the **`ember_crucible`** Smelter upgrade's ingredient (`StationUpgrades.ts`,
-  Smelter tier 0→1) → unlocks rare-ore smelting. Skipping the King costs the whole rare/T2 tier.
-- **Workbench Lvl 3:** new `forge_anvil` StationUpgrade (workbench tier 1→2). New
-  **`Recipe.requiresWorkbenchTier`** field (enforced in `craftRecipe`/placement + a live "Requires
-  Workbench Lvl 3" line in `CraftingMenu` via a new `isNearWorkbenchAtTier` dep). All 9 forged recipes
-  gate on tier 2.
-- **Base forged gear** (all `requiresWorkbenchTier: 2`): **Sunsteel heavy set** (Helm/Cuirass/Greaves,
-  4/6/4 = 14 armor, `armorType: heavy_armor`) + **Duskhide light set** (Hood/Vest/Leggings, 3/4/3 = 10,
-  `light_armor`) + three weapons covering each melee type (**Sunsteel Warhammer** blunt wide-AOE /
-  **Longsword** slash / **Pike** pierce). Ingredients all drop from **normal** badlands enemies
-  (Cragscale Plate / Duskrunner Pelt / Sandmaw Chitin) + Sunsteel Ingots — verified not over-gated.
-- **`heavy_armor` skill wired + given an identity:** XP accrues per worn piece (free, existing kill
-  path); its effect is **partial magic/fire mitigation** (`Skills.heavyArmorMagicMitigation`, −0.4%/lvl
-  cap −30%) applied in `applyDamageToPlayer`'s bypass branch while wearing ≥1 heavy piece (the
-  counterpart to light armor's dash i-frames). Verified: 50 magic → 40 in heavy@Lvl50 vs 50 in light.
-- **Mineable minerals** (`spawnBadlandsMinerals`): Clay (~40), Sunscorch Ore (~44), rare Cinderforged
-  veins (~8, plus the ~20 Sunken Forge POI deposits) scattered via `pickBadlandsPoint` (POI exclusions
-  honored), all confirmed in the badlands. **Bench visuals per tier:** `applyTierVisual` now swaps
-  Workbench/Smelter textures (`icon_workbench_t1/t2`, `icon_smelter_t1`) instead of only tinting.
-- **BootScene:** 19 new textures (2 ore/clay nodes, ingots, Heart, Smelter + tier, Workbench Lvl 2/3,
-  3 weapons, 6 armor). Weapons reuse their icon as the equipped-on-sprite visual.
-- **Verified live:** smelt ratio 2:1 + fuel-per-recipe + rare-ore tier-gate; end-to-end fuel deduction
-  + fuel-short no-op; King → Heart drop; Ember Crucible/Forge Anvil upgrades; heavy mitigation; bench
-  texture-swap on a real placed object; Smelter menu opens with the right title/verb. Files:
-  `Processing.ts`, `DryingRackMenu.ts`, `CraftingMenu.ts`, `Recipes.ts`, `Items.ts`, `Inventory.ts`,
-  `Weapons.ts`, `Skills.ts`, `StationUpgrades.ts`, `GremlinKing.ts`, `MainScene.ts`, `BootScene.ts`,
-  `RECIPES.md`, `dashboard/main.ts`.
-- **Deferred to Session 2:** Workbench Lvl 4 (Emberforge Anvil); the T2 **enhanced** reforge recipes
-  (base piece + Embersteel → new item, both sets + weapons); the first **magic weapon** (melee-range
-  fire brand, rare-ore-exclusive). Also deferred: forged tool tier, a forged ranged weapon.
-
-### Badlands playtest batch (19 items, 2026-07-13, Opus)
-
-Broad polish/tuning pass off a badlands playtest. No new milestone letter. All verified live via
-`preview_eval` + a demo screenshot; `tsc --noEmit` clean.
-
-1. **HUD toast overlap** (`EventLogUI.ts`) — "Defeated X" (combat) and "Slash leveled up" (levelup)
-   center toasts overlapped "sometimes." Root cause: the Y was summed over live-toast heights, but the
-   earliest toast always fades first, so a freed FRONT slot got reused under a still-visible toast. Fixed
-   with a monotonic `centerStackNextY` cursor that only resets to the top when the stack is fully empty.
-2. **Fire damage type** (`Weapons.ts` + `MainScene`) — new `IncomingDamageType = DamageType | "fire"`
-   (kept OUT of `DamageType`/`SkillType` so it isn't a bogus weapon skill) + `bypassesArmor()` (magic|fire).
-   `applyDamageToPlayer` bypasses flat armor for fire like magic. New `spawnPlayerDamageNumber()` floats a
-   colored number over the player on every hit (fire orange / magic violet / physical red) so incoming type
-   is clear (the user: "fire damage should be clear").
-3. **Cinderwrought rework** (`Cinderwrought.ts`) — attacks now return `dmgType: "fire"`, damage up (cone
-   30→46, hammer 44→58). On death, `onCinderwroughtKilled` cracks its shielded Ember Deposit nodes into
-   mineable **Cinderforged Ore** (`ember_ore`, new resource + `Ember Deposit` node) — the "something mineable
-   after we kill him" for smelting/metalworking (Phase-4 hook).
-4. **More Sunken Forges** — refactored the single `forgePosition`/`cinderwrought` into `forgePositions[]` +
-   `forges[]`; **`FORGE_COUNT` = 5** (the user: "way more of the ember POIs"), spread `FORGE_MIN_SPACING` apart,
-   each with its own boss + ore ring + dressing.
-5. **Badlands damage bump** — Duskrunner 34→42, Cragscale 40→48, Hexling bolt 22→26 / flame 34→40,
-   Sandmaw 38→46.
-6. **Duskrunner tuning** — deaggro leash 280→**620** (very sticky, the user), attack cooldowns faster
-   (pounce 850→560, bite 220→140); den guards take a `wanderAnchor` and stay leashed to the den (no idle
-   wander off the POI).
-7. **Cragscale** roll hit radius 40→**58** (bigger spin lane).
-8. **Sandmaw** — new `Enemy.isTargetable()` (default `!depleted`); Sandmaw overrides it to `false` while
-   submerged, and the hover-target loop + AOE-arc sweep both honor it → can't be clicked/swept while invisible.
-9. **Density** — Sandmaws 24→46, dens 10→16, packs 16→24, cragscales 34→46, hexlings 34→44.
-10. **Badlands flora** — bumped counts + 2 new harvestables (**Gloamcap**, **Dustbloom**) with node/picked/
-    icon textures + `Items`/`Inventory` defs.
-11. **POI rings/floors/decor** — new `decoratePoi(rng, cx, cy, {floor, ring})` helper + `poi_floor_*` soft
-    radial decals (depth -7) + `poi_ring_*` marker props; wired into forges, dens, Duneshaper altars, and the
-    Gloaming Vein.
-12. **Duneshaper altar arena** — `TYRANT_ALTAR_CLEAR_RADIUS` 170→360 + a wide gloam floor + a ring of standing
-    stones + scattered gloam crystals (night-glowing via `tyrantAltarLightPoints`) + **4 elite Hexling guards**
-    each.
-13. **One altar per quadrant** — `pickTyrantAltarPositions` now places one Duneshaper altar in each of the 4
-    map quadrants (the user: "start thinking in # per quadrant") instead of 3 scattered.
-14. **POI discovery radius** — new `POI_DISCOVERY_RADIUS` (~760px, was fog's 260) so shacks/vein/dens/forges
-    land on the minimap + world map from much further out.
-15. **Reveal-map shows POIs** — `updateAltarDiscovery(forceAll)`; the dev reveal-whole-map command
-    (`Ctrl+Shift+M`) now force-adds every POI landmark, not just terrain.
-16. **Rename** — "Gloam-Bone Fetish" → "Gloam-Bone Totem" (display name; key `warren_fetish` unchanged).
-17. **Decorative immersion props** — `makeDecorProps` (8 textures) + `scatterDecor` drops ~480 non-interactive
-    props across both biomes (forest: fern/flowers/mushrooms/log; badlands: skull/dead bush/mesa boulder/bones),
-    routed through the spawn samplers so they respect every POI exclusion zone.
-
-**Verified** (`preview_eval`, single clean server after clearing a stale one): 5 forges / 16 dens / 46 Sandmaws
-/ 5 Cinderwroughts / 4 tyrant altars (quadrants EN/ES/WN/WS) / 21 elite Hexlings / 20 ember-ore nodes / 44
-Gloamcap + 52 Dustbloom; all 15 sampled textures exist; Cinderwrought cone→`{46,fire}` / hammer→`{58,fire}`;
-fire bypasses armor (40 full vs slash 36 through 4 armor); Sandmaw `isTargetable()` false while submerged; den
-guard has anchor; `updateAltarDiscovery(true)` drops 32 landmarks (1 altar + 16 den + 5 forge + 5 shack + 4
-tyrant + 1 vein). Files: `EventLogUI.ts`, `Weapons.ts`, `Enemy.ts`, `Duskrunner.ts`, `Cragscale.ts`,
-`Hexling.ts`, `Sandmaw.ts`, `Cinderwrought.ts`, `MainScene.ts`, `BootScene.ts`, `Items.ts`, `Inventory.ts`,
-`dashboard/main.ts`, `RECIPES.md`.
-
-> Older entries (Biome 2 Phase 3 The Duneshaper, Phase 3 POI 2 Sunken Forge, Phase 3 Duskrunner Warren POI, Phase 2b Sandmaw, 4-item playtest fix batch,
+> Older entries (Phase 4a Smelting economy, Badlands playtest batch, Biome 2 Phase 3 The Duneshaper,
+> Phase 3 POI 2 Sunken Forge, Phase 3 Duskrunner Warren POI, Phase 2b Sandmaw, 4-item playtest fix batch,
 > Placeholder art pass, Biome 2 playtest fix batch #2, 16-item playtest fix batch, Biome 2 Phase 2/1/0,
 > Welcome overlay, and earlier) are in STATUS-archive.md.

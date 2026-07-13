@@ -1028,6 +1028,24 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     maxStack: 99,
     hotbarable: false,
   },
+
+  // --- Phase 5: Ember Kiln (Gloam -> Ember conversion) + tier-2 refinement ---
+  ember_shard: {
+    key: "ember_shard",
+    name: "Ember Shard",
+    description: "A gloam shard rendered down over kiln-heat until it burns amber instead of violet. Used at the Relic Forge.",
+    texture: "icon_ember_shard",
+    maxStack: 99,
+    hotbarable: false,
+  },
+  refined_trophy_uncommon_t2: {
+    key: "refined_trophy_uncommon_t2",
+    name: "Ember-Refined Trophy",
+    description: "A badlands trophy hardened in ember instead of gloam. Never crumbles at the Relic Forge.",
+    texture: "icon_refined_trophy_uncommon_t2",
+    maxStack: 99,
+    hotbarable: false,
+  },
 };
 
 export function itemDef(key: string): ItemDef | undefined {

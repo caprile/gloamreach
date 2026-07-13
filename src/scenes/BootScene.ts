@@ -1513,6 +1513,31 @@ export class BootScene extends Phaser.Scene {
     refinedTrophy("icon_refined_trophy_uncommon", 0x5ad06a);
     refinedTrophy("icon_refined_trophy_rare", 0x4a9fe8);
 
+    // Ember Shard (Phase 5): a Gloam Shard rendered down at the Relic Forge's
+    // Ember Kiln — same jagged-shard silhouette, recolored amber instead of
+    // violet so the two currencies read as kin, not unrelated items.
+    g.clear();
+    g.fillStyle(0xc8641e, 1);
+    g.fillTriangle(12, 2, 5, 20, 19, 20); // shard body
+    g.fillStyle(0xe8923c, 1);
+    g.fillTriangle(12, 6, 8, 18, 12, 18); // inner facet
+    g.fillStyle(0xffce8a, 1);
+    g.fillRect(11, 8, 2, 8); // bright vein
+    g.generateTexture("icon_ember_shard", ICON, ICON);
+
+    // Ember-Refined Trophy (Phase 5): same refinedTrophy silhouette, socketed
+    // in ember instead of gloam (amber core vs violet).
+    g.clear();
+    g.fillStyle(0x522d18, 1);
+    g.fillCircle(12, 12, 10); // ember socket
+    g.fillStyle(0x5ad06a, 1); // Uncommon ring (the only rarity this produces)
+    g.fillCircle(12, 12, 8);
+    g.fillStyle(0xc8641e, 1);
+    g.fillTriangle(12, 3, 6, 15, 18, 15); // ember crystal
+    g.fillStyle(0xffce8a, 1);
+    g.fillRect(11, 6, 2, 8); // crystal highlight
+    g.generateTexture("icon_refined_trophy_uncommon_t2", ICON, ICON);
+
     // Relic gems — one per rarity (Relics.ts). A cut-gem diamond tinted by the
     // rarity color with a lighter facet highlight; reused for every relic of
     // that rarity, so rarity reads at a glance and the relic's identity comes

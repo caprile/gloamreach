@@ -12,10 +12,10 @@ const DEPTH_BADGE = 2809;
 const DEPTH_TIP = 2812;
 
 // The owned-relics HUD strip (M-RL). A bottom-left row of rarity-colored relic
-// gems, grouped by id with an "xN" count badge, growing rightward and wrapping
-// UPWARD as relics accumulate. Hover shows name/rarity/effect. Rebuilt only
-// when the owned set changes (the group signature), like BuffBarUI. Flat
-// scrollFactor(0) GameObjects, per the CraftingMenu.ts note.
+// gems (Phase 5: at most one per family — see Relics.ts), growing rightward
+// and wrapping UPWARD as relics accumulate. Hover shows name/rarity/effect.
+// Rebuilt only when the owned set changes (the group signature), like
+// BuffBarUI. Flat scrollFactor(0) GameObjects, per the CraftingMenu.ts note.
 export class RelicBarUI {
   private scene: Phaser.Scene;
   private leftX = 0;
@@ -37,7 +37,7 @@ export class RelicBarUI {
   }
 
   sync(groups: RelicGroup[]): void {
-    const sig = groups.map((g) => `${g.id}@${g.powerTier}:${g.count}`).join(",");
+    const sig = groups.map((g) => `${g.id}@${g.powerTier}`).join(",");
     if (sig === this.lastSig) return;
     this.lastSig = sig;
     this.rebuild(groups);
@@ -67,22 +67,7 @@ export class RelicBarUI {
         .setDepth(DEPTH_ICON);
       this.entries.push(bg, gem);
 
-      if (group.count > 1) {
-        const badge = this.scene.add
-          .text(x + ICON - 1, y + ICON - 1, `${group.count}`, {
-            fontFamily: "monospace",
-            fontSize: "10px",
-            color: "#ffffff",
-            stroke: "#000000",
-            strokeThickness: 3,
-          })
-          .setOrigin(1, 1)
-          .setScrollFactor(0)
-          .setDepth(DEPTH_BADGE);
-        this.entries.push(badge);
-      }
-
-      // Small power-tier indicator, top-left (T1 today; higher tiers in M-W1).
+      // Small power-tier indicator, top-left (biome 1 = T1, badlands = T2).
       const tierBadge = this.scene.add
         .text(x + 1, y + 1, `T${group.powerTier}`, {
           fontFamily: "monospace",
@@ -110,8 +95,7 @@ export class RelicBarUI {
 
   private showTooltip(group: RelicGroup, iconX: number, iconY: number): void {
     const def = group.def;
-    const countStr = group.count > 1 ? ` x${group.count}` : "";
-    const str = `${def.name}${countStr}\n${rarityName(def.rarity)} · Power T${group.powerTier}\n${relicEffectText(def, group.powerTier)}`;
+    const str = `${def.name}\n${rarityName(def.rarity)} · Power T${group.powerTier}\n${relicEffectText(def, group.powerTier)}`;
     if (!this.tipText) {
       this.tipText = this.scene.add
         .text(0, 0, str, { fontFamily: "monospace", fontSize: "11px", color: "#e8ecf2", wordWrap: { width: 220 } })

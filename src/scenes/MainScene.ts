@@ -151,7 +151,9 @@ import {
   REFINE_RECIPES,
   refinableTrophyKeys,
   canAffordRefine,
+  GLOAM_TO_EMBER_RATIO,
   type RollResult,
+  type ChoiceResolution,
 } from "../systems/Relics";
 import { RelicForgeMenu } from "../ui/RelicForgeMenu";
 import { RelicBarUI } from "../ui/RelicBarUI";
@@ -498,6 +500,10 @@ export class MainScene extends Phaser.Scene {
   private hoveredForge: Phaser.GameObjects.Image | null = null;
   private openForge: Phaser.GameObjects.Image | null = null; // the forge the relic menu is bound to
   private lastRollTrophyKey?: string; // for the deferred reveal's event-log icon
+  // Phase 5: set when a roll's family conflict is "ambiguous" (see Relics.ts)
+  // — RelicManager left ownership untouched until resolveRelicFamilyChoice
+  // resolves it via the forge menu's Keep New / Keep Old prompt.
+  private pendingRelicChoice: RollResult | null = null;
   // Gremlin Shack POI (world-gen-placed, not player-placed) — parallel array
   // to dryingRacks, same "image + live state" pairing shape.
   private gremlinShacks: GremlinShack[] = [];
@@ -794,6 +800,7 @@ export class MainScene extends Phaser.Scene {
     this.relics = new RelicManager();
     this.hoveredForge = null;
     this.openForge = null;
+    this.pendingRelicChoice = null;
     this.gremlinShacks = [];
     this.openChest = null;
     this.hoveredShack = null;
@@ -2307,6 +2314,8 @@ export class MainScene extends Phaser.Scene {
       announceRoll: (result) => this.announceRelicResult(result),
       refine: (recipeId) => this.refineTrophies(recipeId),
       forgeTier: () => (this.openForge?.getData("tier") as number | undefined) ?? 0,
+      convert: () => this.convertGloamToEmber(),
+      resolveFamilyChoice: (keepNew) => this.resolveRelicFamilyChoice(keepNew),
     });
   }
 
@@ -2350,9 +2359,66 @@ export class MainScene extends Phaser.Scene {
     if (result?.success && result.id) {
       const def = RELIC_DEFS[result.id];
       this.eventLog.add("recipe", `Relic forged: ${def.name} (${rarityName(def.rarity)})`, tex);
+      // Phase 5: the new relic contests a family slot already owned.
+      // "replaced"/"declined" are auto-resolved by RelicManager.roll() —
+      // grant the refund now. "choice" is left unresolved (ownership
+      // untouched) until the player picks via the forge menu's prompt.
+      const conflict = result.familyConflict;
+      if (conflict?.verdict === "replaced" || conflict?.verdict === "declined") {
+        this.grantRelicRefund(conflict.refundShardKey!, conflict.refundShardAmount!, RELIC_DEFS[conflict.oldId].name);
+      } else if (conflict?.verdict === "choice") {
+        this.pendingRelicChoice = result;
+      }
     } else if (result) {
       this.eventLog.add("info", "The trophy crumbled to dust — no relic this time.", tex);
     }
+    this.afterRelicChange();
+  }
+
+  // Grant a shard refund from a discarded/declined relic (Phase 5 family
+  // conflicts) — drops to the floor if the backpack is full, same pattern as
+  // refineTrophies' output grant.
+  private grantRelicRefund(shardKey: string, amount: number, discardedName: string): void {
+    const leftover = this.addToBackpack(shardKey, amount);
+    if (leftover > 0) {
+      this.spawnLooseDrop(shardKey, leftover, this.player.x, this.player.y, DROPPED_ITEM_MAGNET_COOLDOWN_MS);
+    }
+    const shardDef = itemDef(shardKey);
+    this.eventLog.add("info", `${discardedName} discarded — +${amount} ${shardDef?.name ?? shardKey}`, shardDef?.texture);
+  }
+
+  // Finalize a pending "ambiguous" family-conflict choice (Phase 5) once the
+  // player picks Keep New / Keep Old in the forge menu. Returns the refund
+  // info for the menu's own result-line rendering.
+  private resolveRelicFamilyChoice(keepNew: boolean): ChoiceResolution | null {
+    const pending = this.pendingRelicChoice;
+    if (!pending?.familyConflict || pending.familyConflict.verdict !== "choice" || !pending.id || pending.powerTier === undefined) {
+      return null;
+    }
+    const resolution = this.relics.resolveChoice(pending.familyConflict.family, keepNew, pending.id, pending.powerTier);
+    if (!resolution) return null;
+    this.pendingRelicChoice = null;
+    this.grantRelicRefund(resolution.refundShardKey, resolution.refundShardAmount, RELIC_DEFS[resolution.discardedId].name);
+    this.afterRelicChange();
+    return resolution;
+  }
+
+  // Render GLOAM_TO_EMBER_RATIO Gloam Shards down into 1 Ember Shard (Relic
+  // Forge Lvl 3, the Ember Kiln upgrade — Phase 5's tier-2 refinement
+  // currency). One conversion per call; the menu's Convert tab calls this
+  // repeatedly for a batch. Re-guards tier + affordability defensively (the
+  // menu already gates its button).
+  private convertGloamToEmber(): void {
+    if (((this.openForge?.getData("tier") as number | undefined) ?? 0) < 2) return;
+    if (this.backpack.count("gloam_shard") < GLOAM_TO_EMBER_RATIO) return;
+    this.backpack.removeCount("gloam_shard", GLOAM_TO_EMBER_RATIO);
+    const leftover = this.addToBackpack("ember_shard", 1);
+    if (leftover > 0) {
+      this.spawnLooseDrop("ember_shard", leftover, this.player.x, this.player.y, DROPPED_ITEM_MAGNET_COOLDOWN_MS);
+      this.eventLog.add("info", "Backpack full — the ember shard landed on the floor");
+    }
+    this.eventLog.add("recipe", "Rendered Gloam into Ember", itemDef("ember_shard")?.texture);
+    this.sfx.craft();
     this.afterRelicChange();
   }
 
@@ -6649,6 +6715,7 @@ export class MainScene extends Phaser.Scene {
       armorSlots: () => this.armorSlots(),
       combatStats: () => this.combatStats(),
       runSpeedBreakdown: () => this.runSpeedBreakdown(),
+      relicFamilySlots: () => this.relics.familySlots(),
       beginDrag: (c, i, p) => this.beginItemDrag(c, i, p),
       beginArmorDrag: (slot, p) => this.beginArmorDrag(slot, p),
       unequipArmorSlot: (slot) => this.unequipArmorSlot(slot),

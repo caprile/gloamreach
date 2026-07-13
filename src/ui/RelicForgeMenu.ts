@@ -15,10 +15,14 @@ import {
   REFINE_RECIPES,
   ownedRefineInput,
   canAffordRefine,
+  previewShardRefund,
+  GLOAM_TO_EMBER_RATIO,
   type RefineRecipe,
   type RollResult,
   type RelicGroup,
   type RelicRarity,
+  type RelicDef,
+  type ChoiceResolution,
 } from "../systems/Relics";
 import { RelicRevealFx } from "./RelicRevealFx";
 import { ProgressBar } from "./ProgressBar";
@@ -39,8 +43,16 @@ export interface RelicForgeMenuDeps {
   // ProgressBar's completion (commit-at-end).
   refine: (recipeId: string) => void;
   // The open forge's upgrade tier (0 = Lvl 1). The Refine tab is gated on
-  // tier >= 1 (Relic Forge Lvl 2, the Gloam Conduit upgrade).
+  // tier >= 1 (Relic Forge Lvl 2, the Gloam Conduit upgrade); the Convert tab
+  // on tier >= 2 (Relic Forge Lvl 3, the Ember Kiln upgrade).
   forgeTier: () => number;
+  // Convert GLOAM_TO_EMBER_RATIO Gloam Shards -> 1 Ember Shard. Called at the
+  // ProgressBar's completion (commit-at-end), like refine.
+  convert: () => void;
+  // Resolve a pending "ambiguous" family conflict (see Relics.ts doc comment)
+  // once the player picks Keep New / Keep Old. Returns the refund info so the
+  // menu can update its result line, or null if there's nothing pending.
+  resolveFamilyChoice: (keepNew: boolean) => ChoiceResolution | null;
 }
 
 const DEPTH_BG = 3000;
@@ -64,11 +76,13 @@ const BTN_COLS = 2;
 // Refine tab timing — a quick commit-at-end bar, same feel as craft/process/cook.
 const REFINE_BAR_MS = 650;
 
-// The Relic Forge station menu (M-RL): a probabilistic roll — 1 trophy per
-// attempt, success chance by rarity, failure consumes the trophy (with a pity
-// counter shown). No manual combine; duplicates auto-stack. Owned relics are a
-// read-only display grid. Flat scrollFactor(0) GameObjects (no Containers), per
-// the CraftingMenu.ts note.
+// The Relic Forge station menu (M-RL, reworked in Phase 5): a probabilistic
+// roll — 1 trophy per attempt, success chance by rarity, failure consumes the
+// trophy (with a pity counter shown). No manual combine. Rolling into a
+// family already owned either auto-replaces (strictly better), auto-declines
+// (strictly worse/equal, refunds the new roll), or asks the player to choose
+// (ambiguous) — see Relics.ts. Owned relics are a read-only display grid.
+// Flat scrollFactor(0) GameObjects (no Containers), per the CraftingMenu.ts note.
 export class RelicForgeMenu {
   private scene: Phaser.Scene;
   private deps: RelicForgeMenuDeps;
@@ -88,14 +102,19 @@ export class RelicForgeMenu {
   // even resolves, spoiling it.
   private preRollGroups: RelicGroup[] | null = null;
 
-  // Roll vs Refine tab (Gloaming Vein). The Refine tab spends Gloam Shards to
-  // climb a trophy's rarity into a guaranteed roll.
-  private tab: "roll" | "refine" = "roll";
+  // Roll / Refine / Convert tabs. Refine spends Gloam Shards to climb a
+  // trophy's rarity into a guaranteed roll; Convert renders Gloam Shards down
+  // into Ember Shards (Phase 5, the tier-2 refinement currency).
+  private tab: "roll" | "refine" | "convert" = "roll";
   // Refine timed-action bar (commit-at-end + cancel-on-close, same pattern as
   // craft/process/cook). Owned here, NOT in the per-render `rows`.
   private refineBar: ProgressBar;
   private refineBusy = false;
   private refineBusyId: string | null = null;
+  // Convert timed-action bar — same commit-at-end pattern, one conversion per
+  // click (the player just clicks again for more).
+  private convertBar: ProgressBar;
+  private convertBusy = false;
 
   private tipBg?: Phaser.GameObjects.Rectangle;
   private tipText?: Phaser.GameObjects.Text;
@@ -110,6 +129,7 @@ export class RelicForgeMenu {
     this.deps = deps;
     this.revealFx = new RelicRevealFx(scene);
     this.refineBar = new ProgressBar(scene, { fillColor: 0xb069e8, depth: DEPTH_TIP });
+    this.convertBar = new ProgressBar(scene, { fillColor: 0xc8641e, depth: DEPTH_TIP });
     this.panelX = scene.scale.width / 2 - this.panelW / 2;
     this.panelY = scene.scale.height / 2 - this.panelH / 2;
     this.bg = scene.add
@@ -130,20 +150,34 @@ export class RelicForgeMenu {
 
   close(): void {
     if (!this.open) return;
+    // Closing with an unresolved family-conflict choice would otherwise lose
+    // the just-rolled relic AND its refund into thin air (the trophy was
+    // already spent) — default to declining the new roll, same as if the
+    // player had clicked "Keep Old", so the spent trophy always yields
+    // something.
+    if (this.choicePending()) this.deps.resolveFamilyChoice(false);
     this.open = false;
     this.lastResult = null;
     this.busy = false;
-    // Cancel an in-flight refine cleanly — commit-at-end means nothing was
-    // consumed until the bar fills, so closing mid-bar is a no-op (same as
+    // Cancel an in-flight refine/convert cleanly — commit-at-end means nothing
+    // was consumed until the bar fills, so closing mid-bar is a no-op (same as
     // craft/process/cook).
     this.refineBusy = false;
     this.refineBusyId = null;
     this.refineBar.stop();
+    this.convertBusy = false;
+    this.convertBar.stop();
     this.tab = "roll";
     this.revealFx.stop();
     this.bg.setVisible(false);
     this.clearRows();
     this.hideTooltip();
+  }
+
+  // A successful roll landed on a family already owned, but neither instance
+  // strictly dominates the other — the player must pick Keep New / Keep Old.
+  private choicePending(): boolean {
+    return this.lastResult?.familyConflict?.verdict === "choice";
   }
 
   isOpen(): boolean {
@@ -158,7 +192,7 @@ export class RelicForgeMenu {
   // if the spin is interrupted), then play the slot-machine spin over a KNOWN
   // outcome. The reveal landing is when we announce + show the result line.
   private beginRoll(trophyKey: string): void {
-    if (this.busy || this.refineBusy) return;
+    if (this.busy || this.refineBusy || this.convertBusy || this.choicePending()) return;
     // Freeze the grid to its pre-roll contents BEFORE mutating the manager, so
     // the spin can play over a grid that doesn't already show the new relic.
     this.preRollGroups = this.deps.relics.groupedForDisplay();
@@ -228,18 +262,24 @@ export class RelicForgeMenu {
     return keys.reduce((best, k) => (this.deps.backpack.count(k) > this.deps.backpack.count(best) ? k : best));
   }
 
-  // The Refine tab only exists once the forge is Lvl 2 (Gloam Conduit upgrade).
+  // The Refine tab only exists once the forge is Lvl 2 (Gloam Conduit
+  // upgrade); Convert only exists at Lvl 3 (Ember Kiln upgrade).
   private refineUnlocked(): boolean {
     return this.deps.forgeTier() >= 1;
+  }
+  private convertUnlocked(): boolean {
+    return this.deps.forgeTier() >= 2;
   }
 
   private render(): void {
     this.clearRows();
     this.hideTooltip();
-    // Refine is hidden entirely below Lvl 2 — never leave the menu stuck on a
-    // tab that isn't shown.
+    // A tab is hidden entirely below its unlock tier — never leave the menu
+    // stuck on a tab that isn't shown.
     if (this.tab === "refine" && !this.refineUnlocked()) this.tab = "roll";
+    if (this.tab === "convert" && !this.convertUnlocked()) this.tab = "roll";
     if (this.tab === "refine") this.renderRefine();
+    else if (this.tab === "convert") this.renderConvert();
     else this.renderRoll();
   }
 
@@ -258,14 +298,17 @@ export class RelicForgeMenu {
   }
 
   private renderTabs(y: number): void {
-    // The Refine tab is hidden entirely until the forge is Lvl 2 — no locked
-    // tab, no hint.
-    const tabs: { id: "roll" | "refine"; label: string }[] = [{ id: "roll", label: "Bind" }];
+    // A tab is hidden entirely until the forge reaches its unlock tier — no
+    // locked tab, no hint.
+    const tabs: { id: "roll" | "refine" | "convert"; label: string }[] = [{ id: "roll", label: "Bind" }];
     if (this.refineUnlocked()) tabs.push({ id: "refine", label: "Refine" });
-    const TW = 90;
+    if (this.convertUnlocked()) tabs.push({ id: "convert", label: "Convert" });
+    const TW = 76;
     const TH = 22;
     const GAP = 6;
-    const locked = this.busy || this.refineBusy; // don't switch tabs mid-action
+    // Don't switch tabs mid-action, or with an unresolved family-choice
+    // pending (switching away would otherwise let the player dodge it).
+    const locked = this.busy || this.refineBusy || this.convertBusy || this.choicePending();
     tabs.forEach((t, i) => {
       const x = this.panelX + 16 + i * (TW + GAP);
       const active = this.tab === t.id;
@@ -294,12 +337,18 @@ export class RelicForgeMenu {
 
     // The roll-button block wraps with the number of rarity groups owned; the
     // result line + relic grid stack below it so nothing overlaps as variety
-    // grows. All Y values are panel-relative offsets computed up front.
+    // grows. A pending family-conflict choice needs extra room for its two
+    // buttons. All Y values are panel-relative offsets computed up front.
     const btnRows = Math.max(1, Math.ceil(this.rarityGroups().length / BTN_COLS));
     const rollTop = 96; // below title + tabs + subtitle
     const btnBlockH = 22 + btnRows * (BTN_H + BTN_GAP_Y);
     const resultY = rollTop + btnBlockH + 4;
-    const gridTop = resultY + 42;
+    // A plain result is one line; an auto-resolved family conflict adds a
+    // second (refund) line; an unresolved "choice" conflict adds the full
+    // Keep New / Keep Old button block instead of that second line.
+    const conflict = this.lastResult?.familyConflict;
+    const resultBlockH = conflict?.verdict === "choice" ? 130 : conflict ? 58 : 26;
+    const gridTop = resultY + resultBlockH;
 
     this.panelH = gridTop + gridRows * (CHIP_H + CHIP_GAP) + 16;
     this.layoutPanel();
@@ -307,6 +356,77 @@ export class RelicForgeMenu {
     this.renderRollButtons(this.panelY + rollTop);
     this.renderResultLine(this.panelY + resultY);
     this.renderRelicGrid(this.panelY + gridTop);
+  }
+
+  // The Convert tab (Phase 5, Ember Kiln): render GLOAM_TO_EMBER_RATIO Gloam
+  // Shards down into 1 Ember Shard, one click per conversion.
+  private renderConvert(): void {
+    if (!this.convertUnlocked()) {
+      this.renderRoll();
+      return;
+    }
+    const listTop = 96;
+    this.panelH = listTop + 100;
+    this.layoutPanel();
+    this.renderHeader("Render Gloam Shards down into Ember — the tier-2 refinement currency.");
+
+    const gloam = this.deps.backpack.count("gloam_shard");
+    const ember = this.deps.backpack.count("ember_shard");
+    const x = this.panelX + 16;
+    const y = this.panelY + listTop;
+    const w = this.panelW - 32;
+    const h = 72;
+
+    const box = this.scene.add
+      .rectangle(x, y, w, h, 0x14181f, 0.95)
+      .setOrigin(0, 0)
+      .setStrokeStyle(1, 0xc8641e)
+      .setScrollFactor(0)
+      .setDepth(DEPTH_ITEM);
+    this.rows.push(box);
+
+    const emberDef = itemDef("ember_shard");
+    if (emberDef) {
+      const img = this.scene.add.image(x + 22, y + h / 2, emberDef.texture).setScrollFactor(0).setDepth(DEPTH_ITEM + 1);
+      this.rows.push(img);
+    }
+    const can = gloam >= GLOAM_TO_EMBER_RATIO && !this.convertBusy;
+    this.addText(x + 44, y + 8, `${GLOAM_TO_EMBER_RATIO} Gloam Shard -> 1 Ember Shard`, 13, "#e8923c");
+    this.addText(x + 44, y + 28, `Gloam Shards  ${gloam}/${GLOAM_TO_EMBER_RATIO}`, 11, gloam >= GLOAM_TO_EMBER_RATIO ? "#c8d0da" : "#e08a8a");
+    this.addText(x + 44, y + 44, `Ember Shards owned: ${ember}`, 11, "#8a93a3");
+
+    const btnW = 110;
+    const btnH = 30;
+    const bx = x + w - btnW - 10;
+    const by = y + h / 2 - btnH / 2;
+    const btn = this.scene.add
+      .rectangle(bx, by, btnW, btnH, can ? 0x2a2333 : 0x14181f, 0.95)
+      .setOrigin(0, 0)
+      .setStrokeStyle(1, can ? 0xe8923c : 0x3a4250)
+      .setScrollFactor(0)
+      .setDepth(DEPTH_ITEM)
+      .setInteractive({ useHandCursor: can })
+      .on("pointerdown", () => {
+        if (can) this.beginConvert(bx, by, btnW, btnH);
+      });
+    this.rows.push(btn);
+    this.addText(bx + btnW / 2, by + btnH / 2, this.convertBusy ? "Rendering…" : "Convert", 12, can ? "#f0c090" : "#6a7280", 0.5, 0.5);
+    if (this.convertBusy) this.convertBar.setPosition(bx, by).setSize(btnW, btnH);
+  }
+
+  // Commit-at-end, same pattern as beginRefine.
+  private beginConvert(bx: number, by: number, bw: number, bh: number): void {
+    if (this.convertBusy || this.busy || this.refineBusy) return;
+    this.convertBusy = true;
+    this.render();
+    this.convertBar.setPosition(bx, by).setSize(bw, bh);
+    this.convertBar.start(REFINE_BAR_MS, {
+      onComplete: () => {
+        this.convertBusy = false;
+        this.deps.convert();
+        if (this.open) this.render();
+      },
+    });
   }
 
   // The Refine tab (Gloaming Vein): spend Gloam Shards to climb a trophy's
@@ -434,7 +554,7 @@ export class RelicForgeMenu {
       const by = y + 22 + rowN * (BTN_H + BTN_GAP_Y);
 
       const rarity = group.rarity;
-      const can = group.total >= 1;
+      const can = group.total >= 1 && !this.choicePending();
       const overall = trophyOverallSuccessChance(rarity);
       const pct = Math.round(overall * 100);
       const pityLeft = Math.max(0, PITY_THRESHOLD[rarity] - this.deps.relics.missStreak(rarity));
@@ -471,17 +591,91 @@ export class RelicForgeMenu {
   }
 
   // Inline feedback for the most recent roll (success = the forged relic;
-  // failure = trophy consumed). Cleared when the menu reopens.
+  // failure = trophy consumed). A family conflict extends this with either an
+  // auto-resolved refund line or, if ambiguous, a Keep New / Keep Old choice.
+  // Cleared when the menu reopens.
   private renderResultLine(y: number): void {
     const x = this.panelX + 16;
     if (!this.lastResult) return;
-    if (this.lastResult.success && this.lastResult.id) {
-      const def = RELIC_DEFS[this.lastResult.id];
-      const label = this.lastResult.pity ? " (pity)" : "";
-      this.addText(x, y, `Forged: ${def.name} [${rarityName(def.rarity)}]${label}`, 13, rarityHex(def.rarity));
-    } else {
+    if (!this.lastResult.success || !this.lastResult.id) {
       this.addText(x, y, `The trophy crumbled to dust — no relic this time.`, 13, "#c8a05a");
+      return;
     }
+    const def = RELIC_DEFS[this.lastResult.id];
+    const label = this.lastResult.pity ? " (pity)" : "";
+    this.addText(x, y, `Forged: ${def.name} [${rarityName(def.rarity)}]${label}`, 13, rarityHex(def.rarity));
+
+    const conflict = this.lastResult.familyConflict;
+    if (!conflict) return;
+    const oldDef = RELIC_DEFS[conflict.oldId];
+    if (conflict.verdict === "replaced") {
+      const shardName = itemDef(conflict.refundShardKey!)?.name ?? conflict.refundShardKey;
+      this.addText(x, y + 20, `Replaced ${oldDef.name} — +${conflict.refundShardAmount} ${shardName}`, 11, "#9fd0ff");
+    } else if (conflict.verdict === "declined") {
+      const shardName = itemDef(conflict.refundShardKey!)?.name ?? conflict.refundShardKey;
+      this.addText(x, y + 20, `${oldDef.name} was already better — +${conflict.refundShardAmount} ${shardName}`, 11, "#9fd0ff");
+    } else {
+      this.renderFamilyChoice(x, y + 20, def, oldDef, this.lastResult.id, this.lastResult.powerTier!, conflict.oldId, conflict.oldPowerTier);
+    }
+  }
+
+  // Both relics claim the same family and neither dominates (e.g. a differing
+  // secondary stat) — let the player pick which one to keep. The other is
+  // discarded and refunds shards. Blocks rolling/tab-switching until resolved
+  // (see choicePending()).
+  private renderFamilyChoice(
+    x: number,
+    y: number,
+    newDef: RelicDef,
+    oldDef: RelicDef,
+    newId: string,
+    newTier: number,
+    oldId: string,
+    oldTier: number,
+  ): void {
+    // Name the relic this would displace — "Forged: {new} [rarity]" is already
+    // on the line above, so this reads as "{new} forged … Replace {old}?".
+    this.addText(x, y, `Replace ${oldDef.name}?`, 11, "#c8a05a");
+    const newRefund = previewShardRefund(oldId, oldTier);
+    const oldRefund = previewShardRefund(newId, newTier);
+    const rowY = y + 16;
+    const btnW = (this.panelW - 32 - 10) / 2;
+    const btnH = 52;
+
+    const drawChoice = (bx: number, def: RelicDef, tier: number, refundKey: string, refundAmt: number, onPick: () => void) => {
+      const box = this.scene.add
+        .rectangle(bx, rowY, btnW, btnH, 0x14181f, 0.95)
+        .setOrigin(0, 0)
+        .setStrokeStyle(1, RARITY_COLOR[def.rarity])
+        .setScrollFactor(0)
+        .setDepth(DEPTH_ITEM)
+        .setInteractive({ useHandCursor: true })
+        .on("pointerdown", onPick);
+      this.rows.push(box);
+      this.addText(bx + 8, rowY + 6, `Keep ${def.name}`, 12, rarityHex(def.rarity));
+      this.addText(bx + 8, rowY + 22, relicEffectText(def, tier), 10, "#8a93a3");
+      const shardName = itemDef(refundKey)?.name ?? refundKey;
+      this.addText(bx + 8, rowY + 34, `discards other → +${refundAmt} ${shardName}`, 9, "#6a7280");
+    };
+
+    drawChoice(x, newDef, newTier, newRefund.refundShardKey, newRefund.refundShardAmount, () => this.resolveChoice(true));
+    drawChoice(x + btnW + 10, oldDef, oldTier, oldRefund.refundShardKey, oldRefund.refundShardAmount, () => this.resolveChoice(false));
+  }
+
+  private resolveChoice(keepNew: boolean): void {
+    if (!this.choicePending()) return;
+    const resolution = this.deps.resolveFamilyChoice(keepNew);
+    if (!resolution || !this.lastResult?.familyConflict) return;
+    this.lastResult = {
+      ...this.lastResult,
+      familyConflict: {
+        ...this.lastResult.familyConflict,
+        verdict: keepNew ? "replaced" : "declined",
+        refundShardKey: resolution.refundShardKey,
+        refundShardAmount: resolution.refundShardAmount,
+      },
+    };
+    this.render();
   }
 
   private renderRelicGrid(top: number): void {
@@ -518,10 +712,7 @@ export class RelicForgeMenu {
         .setDepth(DEPTH_ITEM + 1);
       this.rows.push(gem);
 
-      if (group.count > 1) {
-        this.addText(x + CHIP_W - 8, y + 6, `x${group.count}`, 11, "#ffffff", 1, 0);
-      }
-      // Power-tier indicator (T1 today; higher tiers arrive with M-W1).
+      // Power-tier indicator (biome 1 = T1, badlands elites = T2, see Relics.ts).
       this.addText(x + 8, y + 6, `T${group.powerTier}`, 10, "#9fd0ff", 0, 0);
       const name = group.def.name.length > 12 ? group.def.name.slice(0, 11) + "…" : group.def.name;
       this.addText(x + CHIP_W / 2, y + CHIP_H - 12, name, 10, rarityHex(rarity), 0.5, 0);

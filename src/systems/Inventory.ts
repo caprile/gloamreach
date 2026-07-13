@@ -49,11 +49,13 @@ export type ResourceType =
   | "sunfruit" // cactus-fruit harvestable — a future food ingredient
   | "gloamcap" // gloam-touched desert mushroom harvestable — a future alchemy/food ingredient
   | "dustbloom" // pale windblown desert flower harvestable — a future alchemy ingredient
-  // Badlands elite trophies (Common/tier1 for now; Phase 5 retiers them to tier-2 + Ember refinement)
+  // Badlands elite trophies — Common / Tier 2 (Phase 5 retiered them from Tier 1)
   | "duskrunner_trophy"
   | "cragscale_trophy"
   | "hexling_trophy"
   | "sandmaw_trophy"
   | "gloam_shard" // mined from the Gloaming Vein POI — spent at the Relic Forge's Refine tab
-  | "refined_trophy_uncommon" // Common trophies refined up (Gloaming Vein loop) — rolls Uncommon
-  | "refined_trophy_rare"; // scaffold for deeper biomes — rolls Rare
+  | "refined_trophy_uncommon" // Common (Tier 1) trophies refined up (Gloaming Vein loop) — rolls Uncommon
+  | "refined_trophy_rare" // scaffold for deeper biomes — rolls Rare
+  | "ember_shard" // Phase 5: Gloam Shards rendered down at the Relic Forge's Ember Kiln (Lvl 3) — the tier-2 refinement currency
+  | "refined_trophy_uncommon_t2"; // Phase 5: badlands (Tier 2) Common trophies refined via Ember Shards — rolls Uncommon

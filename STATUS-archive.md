@@ -5474,3 +5474,116 @@ throttles rAF); cone hits the fan / misses at 90° sidestep / misses beyond 210p
 (×1.5); the fight kills a full-HP player (damage path end-to-end); discovery adds the `map_forge`
 landmark + fires the `"poi"` toast; the Cinderwrought + forge structure + slag render in the
 badlands. **Next: the badlands final boss (new win-con) + the Gremlin King critical-drop rework.**
+
+### Badlands playtest batch (19 items, 2026-07-13, Opus)
+
+Broad polish/tuning pass off a badlands playtest. No new milestone letter. All verified live via
+`preview_eval` + a demo screenshot; `tsc --noEmit` clean.
+
+1. **HUD toast overlap** (`EventLogUI.ts`) — "Defeated X" (combat) and "Slash leveled up" (levelup)
+   center toasts overlapped "sometimes." Root cause: the Y was summed over live-toast heights, but the
+   earliest toast always fades first, so a freed FRONT slot got reused under a still-visible toast. Fixed
+   with a monotonic `centerStackNextY` cursor that only resets to the top when the stack is fully empty.
+2. **Fire damage type** (`Weapons.ts` + `MainScene`) — new `IncomingDamageType = DamageType | "fire"`
+   (kept OUT of `DamageType`/`SkillType` so it isn't a bogus weapon skill) + `bypassesArmor()` (magic|fire).
+   `applyDamageToPlayer` bypasses flat armor for fire like magic. New `spawnPlayerDamageNumber()` floats a
+   colored number over the player on every hit (fire orange / magic violet / physical red) so incoming type
+   is clear (the user: "fire damage should be clear").
+3. **Cinderwrought rework** (`Cinderwrought.ts`) — attacks now return `dmgType: "fire"`, damage up (cone
+   30→46, hammer 44→58). On death, `onCinderwroughtKilled` cracks its shielded Ember Deposit nodes into
+   mineable **Cinderforged Ore** (`ember_ore`, new resource + `Ember Deposit` node) — the "something mineable
+   after we kill him" for smelting/metalworking (Phase-4 hook).
+4. **More Sunken Forges** — refactored the single `forgePosition`/`cinderwrought` into `forgePositions[]` +
+   `forges[]`; **`FORGE_COUNT` = 5** (the user: "way more of the ember POIs"), spread `FORGE_MIN_SPACING` apart,
+   each with its own boss + ore ring + dressing.
+5. **Badlands damage bump** — Duskrunner 34→42, Cragscale 40→48, Hexling bolt 22→26 / flame 34→40,
+   Sandmaw 38→46.
+6. **Duskrunner tuning** — deaggro leash 280→**620** (very sticky, the user), attack cooldowns faster
+   (pounce 850→560, bite 220→140); den guards take a `wanderAnchor` and stay leashed to the den (no idle
+   wander off the POI).
+7. **Cragscale** roll hit radius 40→**58** (bigger spin lane).
+8. **Sandmaw** — new `Enemy.isTargetable()` (default `!depleted`); Sandmaw overrides it to `false` while
+   submerged, and the hover-target loop + AOE-arc sweep both honor it → can't be clicked/swept while invisible.
+9. **Density** — Sandmaws 24→46, dens 10→16, packs 16→24, cragscales 34→46, hexlings 34→44.
+10. **Badlands flora** — bumped counts + 2 new harvestables (**Gloamcap**, **Dustbloom**) with node/picked/
+    icon textures + `Items`/`Inventory` defs.
+11. **POI rings/floors/decor** — new `decoratePoi(rng, cx, cy, {floor, ring})` helper + `poi_floor_*` soft
+    radial decals (depth -7) + `poi_ring_*` marker props; wired into forges, dens, Duneshaper altars, and the
+    Gloaming Vein.
+12. **Duneshaper altar arena** — `TYRANT_ALTAR_CLEAR_RADIUS` 170→360 + a wide gloam floor + a ring of standing
+    stones + scattered gloam crystals (night-glowing via `tyrantAltarLightPoints`) + **4 elite Hexling guards**
+    each.
+13. **One altar per quadrant** — `pickTyrantAltarPositions` now places one Duneshaper altar in each of the 4
+    map quadrants (the user: "start thinking in # per quadrant") instead of 3 scattered.
+14. **POI discovery radius** — new `POI_DISCOVERY_RADIUS` (~760px, was fog's 260) so shacks/vein/dens/forges
+    land on the minimap + world map from much further out.
+15. **Reveal-map shows POIs** — `updateAltarDiscovery(forceAll)`; the dev reveal-whole-map command
+    (`Ctrl+Shift+M`) now force-adds every POI landmark, not just terrain.
+16. **Rename** — "Gloam-Bone Fetish" → "Gloam-Bone Totem" (display name; key `warren_fetish` unchanged).
+17. **Decorative immersion props** — `makeDecorProps` (8 textures) + `scatterDecor` drops ~480 non-interactive
+    props across both biomes (forest: fern/flowers/mushrooms/log; badlands: skull/dead bush/mesa boulder/bones),
+    routed through the spawn samplers so they respect every POI exclusion zone.
+
+**Verified** (`preview_eval`, single clean server after clearing a stale one): 5 forges / 16 dens / 46 Sandmaws
+/ 5 Cinderwroughts / 4 tyrant altars (quadrants EN/ES/WN/WS) / 21 elite Hexlings / 20 ember-ore nodes / 44
+Gloamcap + 52 Dustbloom; all 15 sampled textures exist; Cinderwrought cone→`{46,fire}` / hammer→`{58,fire}`;
+fire bypasses armor (40 full vs slash 36 through 4 armor); Sandmaw `isTargetable()` false while submerged; den
+guard has anchor; `updateAltarDiscovery(true)` drops 32 landmarks (1 altar + 16 den + 5 forge + 5 shack + 4
+tyrant + 1 vein). Files: `EventLogUI.ts`, `Weapons.ts`, `Enemy.ts`, `Duskrunner.ts`, `Cragscale.ts`,
+`Hexling.ts`, `Sandmaw.ts`, `Cinderwrought.ts`, `MainScene.ts`, `BootScene.ts`, `Items.ts`, `Inventory.ts`,
+`dashboard/main.ts`, `RECIPES.md`.
+### Biome 2 — Phase 4a: Smelting economy + Gremlin King gate + base forged gear (2026-07-13, Opus)
+
+Plan: `.claude/plans/biome-2-phase-4-forging.md` (Phase 4 of the biome-2 umbrella, **sliced into two
+sessions** — this is **Session 1**). Built on **Opus** (new mechanic: smelting station + a new gear
+tier + new gating). The deferred **Gremlin King critical-drop rework** (locked decision 10) finally
+lands here, gating the forged tier. All verified live via `preview_eval` (module-level + end-to-end
+scene flow); `tsc --noEmit` clean; no console errors.
+
+**The forged progression (Session 1):** Mine **Clay** → build the **Smelter**; smelt **ore + Hex
+Essence = ingot** (A+B); common **Sunscorch Ore → Sunsteel Ingot**; upgrade **Workbench to Lvl 3**
+(Forge Anvil, costs Sunsteel Ingots) → unlocks the base forged recipes; kill the **Gremlin King →
+Heart** → upgrade the **Smelter** (Ember Crucible) → smelt rare **Cinderforged Ore → Embersteel
+Ingot** (the T2 metal Session 2's enhanced recipes will consume).
+
+- **Smelter** (`Items`/`Recipes`, tier-1 placeable, `{clay:10, stone:15}`) — a new station that
+  **reuses the Drying Rack's menu + `ProcessingStation`** (both are processing stations). `Processing.ts`:
+  new `SMELT_RECIPES` + `ProcessRecipe.fuel`/`minStationTier`; `ProcessingStation` parameterized with a
+  `recipes` list + `setTier()`. `DryingRackMenu` gained optional `title/descKey/actionLabel/busyLabel`
+  (functions) + a **fuel readout/gate** dep, so ONE menu instance serves both (switched by
+  `openStationKind`). MainScene: `smelters[]` array, `openSmelterMenu`, `processSmelterAmount` (deducts
+  Hex Essence fuel from the backpack), hover via the shared `placedObjects` loop (`hoveredSmelter`,
+  `promptForSmelter` → "[LMB] Use Smelter"), placement/destroy (refunds loaded ore).
+- **Gremlin King rework:** now drops **`gremlin_king_heart`** (was `gremlin_king_fang`, retired to a
+  plain trophy). The Heart is the **`ember_crucible`** Smelter upgrade's ingredient (`StationUpgrades.ts`,
+  Smelter tier 0→1) → unlocks rare-ore smelting. Skipping the King costs the whole rare/T2 tier.
+- **Workbench Lvl 3:** new `forge_anvil` StationUpgrade (workbench tier 1→2). New
+  **`Recipe.requiresWorkbenchTier`** field (enforced in `craftRecipe`/placement + a live "Requires
+  Workbench Lvl 3" line in `CraftingMenu` via a new `isNearWorkbenchAtTier` dep). All 9 forged recipes
+  gate on tier 2.
+- **Base forged gear** (all `requiresWorkbenchTier: 2`): **Sunsteel heavy set** (Helm/Cuirass/Greaves,
+  4/6/4 = 14 armor, `armorType: heavy_armor`) + **Duskhide light set** (Hood/Vest/Leggings, 3/4/3 = 10,
+  `light_armor`) + three weapons covering each melee type (**Sunsteel Warhammer** blunt wide-AOE /
+  **Longsword** slash / **Pike** pierce). Ingredients all drop from **normal** badlands enemies
+  (Cragscale Plate / Duskrunner Pelt / Sandmaw Chitin) + Sunsteel Ingots — verified not over-gated.
+- **`heavy_armor` skill wired + given an identity:** XP accrues per worn piece (free, existing kill
+  path); its effect is **partial magic/fire mitigation** (`Skills.heavyArmorMagicMitigation`, −0.4%/lvl
+  cap −30%) applied in `applyDamageToPlayer`'s bypass branch while wearing ≥1 heavy piece (the
+  counterpart to light armor's dash i-frames). Verified: 50 magic → 40 in heavy@Lvl50 vs 50 in light.
+- **Mineable minerals** (`spawnBadlandsMinerals`): Clay (~40), Sunscorch Ore (~44), rare Cinderforged
+  veins (~8, plus the ~20 Sunken Forge POI deposits) scattered via `pickBadlandsPoint` (POI exclusions
+  honored), all confirmed in the badlands. **Bench visuals per tier:** `applyTierVisual` now swaps
+  Workbench/Smelter textures (`icon_workbench_t1/t2`, `icon_smelter_t1`) instead of only tinting.
+- **BootScene:** 19 new textures (2 ore/clay nodes, ingots, Heart, Smelter + tier, Workbench Lvl 2/3,
+  3 weapons, 6 armor). Weapons reuse their icon as the equipped-on-sprite visual.
+- **Verified live:** smelt ratio 2:1 + fuel-per-recipe + rare-ore tier-gate; end-to-end fuel deduction
+  + fuel-short no-op; King → Heart drop; Ember Crucible/Forge Anvil upgrades; heavy mitigation; bench
+  texture-swap on a real placed object; Smelter menu opens with the right title/verb. Files:
+  `Processing.ts`, `DryingRackMenu.ts`, `CraftingMenu.ts`, `Recipes.ts`, `Items.ts`, `Inventory.ts`,
+  `Weapons.ts`, `Skills.ts`, `StationUpgrades.ts`, `GremlinKing.ts`, `MainScene.ts`, `BootScene.ts`,
+  `RECIPES.md`, `dashboard/main.ts`.
+- **Deferred to Session 2:** Workbench Lvl 4 (Emberforge Anvil); the T2 **enhanced** reforge recipes
+  (base piece + Embersteel → new item, both sets + weapons); the first **magic weapon** (melee-range
+  fire brand, rare-ore-exclusive). Also deferred: forged tool tier, a forged ranged weapon.
+
+

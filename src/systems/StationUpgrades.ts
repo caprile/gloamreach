@@ -50,6 +50,17 @@ export const STATION_UPGRADES: StationUpgradeDef[] = [
     deltaLabel: "Unlocks the Refine tab",
   },
   {
+    // Relic Forge Lvl 3 (Phase 5). Only discoverable once Embersteel Ingot is
+    // known, same "you had to actually smelt this" gate as Emberforge Anvil.
+    id: "ember_kiln",
+    name: "Ember Kiln",
+    description: "A cinder-fed reduction kiln bolted to the forge. Renders Gloam Shards down into concentrated Ember.",
+    appliesToItemKey: "relic_forge",
+    resultTier: 2,
+    costs: { embersteel_ingot: 3, stone: 20 },
+    deltaLabel: "Unlocks Gloam -> Ember conversion",
+  },
+  {
     id: "forge_anvil",
     name: "Forge Anvil",
     description: "A proper forge and anvil bolted to the bench. Lets you work metal ingots into gear.",

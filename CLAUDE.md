@@ -1164,18 +1164,22 @@ M-SB/Sleep-Bed, done — see 5j) → M-EL2 (generalized elite spawning, done —
 ~~M-FA~~ (cut, see 5l) → M-RL (trophy → RNG relics, done — see 5m; playtest follow-up 5n) →
 M-WC (Gremlin War Camp, done — see 5o) → Gloaming Vein (rarity-ore POI + trophy refinement,
 done — see 5w) → M-SS (stats/skills depth pass + crit, done — see 5ab) → **Biome 2 /
-M-W1 + M-TE, IN PROGRESS — Phase 0 worldgen (5ac) + Phase 1 combat systems (5ad) + Phase 2
-core enemies & flora (5ae) + Phase 2b 4th native creature — the Sandmaw burrowing ambusher
-(5af) done. **Phase 3 underway** (the user chose "two POIs first"): POI 1 — the Duskrunner
+M-W1 + M-TE, DONE (all 6 phases shipped, see 5am below)** — Phase 0 worldgen (5ac) + Phase 1
+combat systems (5ad) + Phase 2 core enemies & flora (5ae) + Phase 2b 4th native creature — the
+Sandmaw burrowing ambusher (5af) done. **Phase 3** (the user chose "two POIs first"): POI 1 — the Duskrunner
 Warren (two-wave destructible den → lootable cache) — done (5ag); POI 2 — the Sunken Forge
 (the Cinderwrought fire/forge mini-boss) — done (5ah); the **badlands final boss — the
 Duneshaper** (new win-con, demotes the Gremlin King) — done (5ai); then a **19-item badlands
 playtest batch** (5aj) — done. **Phase 3 complete.** **Phase 4 (smelting/forging gear tier),
-sliced into two sessions: Session 1 — Phase 4a — done (5ak):** the Smelter + Clay/ore mining +
+sliced into two sessions, both done:** Session 1 — Phase 4a (5ak) — the Smelter + Clay/ore mining +
 the **Gremlin King's Heart** (the deferred critical-drop rework — it gates smelting rare ore) +
 Workbench Lvl 3 + base forged gear (Sunsteel heavy set / Duskhide light set / blunt-slash-pierce
-weapons). **Session 2 (next): T2 enhanced reforge recipes + the first magic weapon + Workbench
-Lvl 4.** Then Phase 5 tier-2 relics. See the biome-2 umbrella plan below.**
+weapons); Session 2 — Phase 4b (5al) — Workbench Lvl 4 + 9 T2 enhanced reforge recipes + the first
+magic weapon (Ember Brand). **Phase 5 (5am) — done:** the relic economy rework — family loadout
+(one relic per family, dominance-based auto-replace/decline/choice), trimmed biome-1 magnitudes,
+tier-2 badlands relics, and Gloam→Ember Shard conversion (Relic Forge Lvl 3, Ember Kiln). **This
+completes the entire biome-2 umbrella plan (all 6 phases, 0–5).** See the biome-2 umbrella plan
+below.**
 
 5ac. **Biome 2 (Sunscorch Badlands) — Phase 0: Patchwork worldgen.** Plan:
    `.claude/plans/biome-2-phase-0-world-ring.md` (Phase 0 of the
@@ -1473,6 +1477,59 @@ Lvl 4.** Then Phase 5 tier-2 relics. See the biome-2 umbrella plan below.**
    (a rare-ore-exclusive melee fire brand). Also deferred: a forged tool tier, a forged ranged weapon.
    See `STATUS.md` + [[survivor-rpg-biome-2-plan]].
 
+5al. **Biome 2 — Phase 4b: enhanced (T2) gear tier + first magic weapon.** Plan:
+   `.claude/plans/biome-2-phase-4-forging.md` (**Session 2**, completing Phase 4). Built on **Opus**
+   (new gear tier + first magic weapon). **No new MainScene logic** — everything routes through
+   generic machinery Session 1 and earlier phases already built. Adds the **Workbench Lvl 4**
+   upgrade (**Emberforge Anvil**, `{embersteel_ingot:5, stone:15}`, only discoverable once an
+   Embersteel Ingot has been smelted) which unlocks a new `requiresWorkbenchTier:3` recipe gate.
+   **9 enhanced recipes** each **reforge their base forged piece** (the base item is consumed as an
+   ingredient — must be unequipped/in the backpack) + Embersteel Ingot: an **Embersteel heavy set**
+   (7/9/7 = 23 armor) + an **Emberhide light set** (5/6/5 = 16) + three enhanced weapons (Embersteel
+   Warhammer 20 blunt / Longsword 15 slash / Pike 17 pierce). Armor keeps the base sets'
+   `heavy_armor`/`light_armor` gate + `armorType`, so heavy XP + magic/fire mitigation carry over
+   free — no right-click ArmorUpgrades (the reforge IS the progression). **First MAGIC weapon — the
+   Ember Brand** (`{embersteel_ingot:3, hex_essence:4}`, rare-ore-exclusive, `magic` type, 14 dmg /
+   520ms): DPS ≈ the Embersteel Pike on a neutral target, but resisted (~×0.4–0.5) by the
+   gloam-casters (Hexlings, the Duneshaper) — a sidegrade that finally gives the `magic` weapon
+   skill a real XP source (no badlands enemy is *weak* to magic yet — a hook for a future
+   magic-vulnerable foe). `Recipe.costs` widened `Partial<Record<ResourceType,…>>` →
+   `Partial<Record<string,…>>` so a crafted base piece works as an ingredient. Verified live via
+   `preview_eval` (all 10 recipes/items, Emberforge chain t1→t2→t3, tier-4 gate blocks/allows,
+   enhanced craft consumes base piece, bench t3 texture swap, badlands magic resists); `tsc` clean.
+   **Phase 4 complete.** See `STATUS.md` + [[survivor-rpg-biome-2-plan]].
+
+5am. **Biome 2 — Phase 5: Relics rework (family loadout + tier-2 relics + Ember Shard).** Plan:
+   `.claude/plans/biome-2-sunscorch-badlands.md` (Phase 5, the umbrella's final milestone — **this
+   completes it**). Built on **Opus**. Three parts locked via `AskUserQuestion`, plus a fourth
+   request added mid-session. **(1) Family loadout, not stacking:** every relic now has a `family`
+   (damage/move/defense/stamina/lifesteal/vitality/crit/xp, 8 total) and a player holds **at most
+   one relic per family**. Rolling into an owned family runs a direction-normalized dominance
+   comparison: the new relic **auto-replaces** if strictly better on every shared stat (the
+   displaced relic refunds Gloam/Ember Shards, scaled by its own rarity × power tier), **auto-
+   declines** if the old one dominates (the new roll refunds instead), or — if neither dominates
+   (e.g. a differing secondary stat) — the Relic Forge shows a **Keep New / Keep Old** prompt and
+   blocks further rolls until resolved (closing the menu mid-choice defaults to declining the new
+   one). `RelicManager.instances` moved from a stackable array to `Partial<Record<RelicFamily,
+   RelicInstance>>`; the aggregate effect getters are unchanged in shape, so every `MainScene` call
+   site kept working with zero edits. **(2) Trimmed magnitudes:** every relic's effect numbers
+   scaled to exactly **×0.625** the original (Common damage 8→5%, Mythic 40→25%, matching the
+   locked spec verbatim). **(3) Tier-2 relics + Ember Shard:** all four badlands elite trophies
+   bumped `powerTier: 1 → 2` (still Common rarity/odds, just ×1.5 magnitude); new **Ember Shard**
+   currency, converted from Gloam Shards at a new **Ember Kiln** Relic Forge upgrade (Lvl 2→3,
+   `{embersteel_ingot:3, stone:20}`, 3 Gloam → 1 Ember via `GLOAM_TO_EMBER_RATIO`), feeding a new
+   tier-2 refine recipe. **New Relics column on the Inventory panel** (the user: playtesters kept
+   checking the Equipment tab for relics) — 8 fixed paper-doll-style slots, one per family, filled
+   or empty with hover tooltips. `RelicForgeMenu` gained a third **Convert** tab (gated Lvl 3) and
+   the Keep New/Keep Old choice UI. **Bug caught + fixed during verification:** the result-line
+   layout only reserved extra height for the "choice" verdict, not the now-2-line "replaced"/
+   "declined" verdict, causing text to overlap the relic grid below it — fixed + re-verified with
+   exact pixel-gap assertions. Verified live via `preview_eval` (all three roll verdicts with
+   controlled `rng`, tier-scaling dominance, refund math for all 4 rarities, Ember conversion +
+   its 3-tier gating, both new UI panels rendered and measured for overlap); `tsc` clean; zero
+   console errors post-fix. **This completes the biome-2 umbrella plan — all 6 phases (0–5) are
+   shipped.** See `STATUS.md` + [[survivor-rpg-relics]].
+
 **Not yet built — next up in rough order:**
 6. **World & discovery** — much bigger generated world, biomes, map, a single giant
    circular Valheim-style map (spawn at center, danger increases outward). **The circular
@@ -1480,12 +1537,15 @@ Lvl 4.** Then Phase 5 tier-2 relics. See the biome-2 umbrella plan below.**
    now a 28000px circle (`WORLD_RADIUS` 14000) with a protected forest disc at center and a
    **patchwork** of badlands + placeholder-dunes blobs beyond (base-layer between; danger scales
    outward). **Phase 1 (combat systems layer — damage-type resist/weak, AOE arcs, swarm
-   pack-aggro) has also shipped (5ad).** **Still needed for M-W1 proper:** biome CONTENT (Phases
-   2–5 of the biome-2 umbrella — enemies, boss/POIs, forging gear tier, tier-2 relics) +
-   deterministic seeded world-gen. See **First biome — content notes** below for terrain-zone concept.
-   (Minimap + fog of war: 5a, reworked into nearby-view + full-map overlay in 5v; Gremlin Shack
-   POI: 5b.)
-7. **ARPG loot** — rarity, randomized drops/recipes, replayability.
+   pack-aggro) has also shipped (5ad), and biome 2's full content pass (Phases 2–5: enemies,
+   boss/POIs, forging gear tier, tier-2 relics) is now COMPLETE too (5ae–5am)** — badlands is a
+   fully populated second biome. **Still needed for M-W1 proper:** deterministic seeded world-gen,
+   and a 3rd+ biome (the master plan calls for "at least 5 total biomes" — biome 2 is the template
+   now). See **First biome — content notes** below for terrain-zone concept. (Minimap + fog of war:
+   5a, reworked into nearby-view + full-map overlay in 5v; Gremlin Shack POI: 5b.)
+7. **ARPG loot** — rarity, randomized drops/recipes, replayability. **Substantially shipped via the
+   relic system** (probabilistic rarity-tiered passives, M-RL 5m + Phase 5 5am's family-loadout
+   rework) — randomized recipe variants/item-affixes are still open.
 8. **Cross-cutting:** save/load (localStorage), real pixel-art tilesets.
 
 **Bosses (was item 7)** — shipped, see 5c above (Boss Altar + Gremlin King). Future
