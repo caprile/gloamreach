@@ -652,6 +652,90 @@ export class BootScene extends Phaser.Scene {
     g.fillRect(20, 7, 2, 2);
     g.generateTexture("gloamwarden", 34, 42);
 
+    // Cinderwrought (34x42 before CINDERWROUGHT_SCALE) — the Sunken Forge's
+    // guardian mini-boss (biome 2 Phase 3 POI 2): a molten-slag brute, a charred
+    // black-iron body seamed with glowing lava cracks, ember eyes, and a heavy
+    // forge-hammer fist. Warm fire palette, contrasting the Gloamwarden's violet.
+    g.clear();
+    // legs
+    g.fillStyle(0x201410, 1);
+    g.fillRect(7, 34, 8, 8);
+    g.fillRect(19, 34, 8, 8);
+    // arms
+    g.fillStyle(0x2e1c16, 1);
+    g.fillRect(0, 14, 7, 18);
+    g.fillRect(27, 14, 7, 18);
+    // forge-hammer fists (glowing slag)
+    g.fillStyle(0xff7a2a, 1);
+    g.fillRect(0, 30, 8, 8);
+    g.fillRect(26, 30, 8, 8);
+    // torso + head (charred iron)
+    g.fillStyle(0x2e1c16, 1);
+    g.fillRect(5, 13, 24, 23);
+    g.fillRect(9, 1, 16, 13);
+    // brow shadow
+    g.fillStyle(0x1a0f0a, 1);
+    g.fillRect(9, 1, 16, 4);
+    // molten cracks seaming the crust
+    g.fillStyle(0xff5a1a, 1);
+    g.fillRect(11, 15, 2, 18);
+    g.fillRect(17, 14, 2, 20);
+    g.fillRect(22, 17, 2, 14);
+    g.fillRect(6, 20, 3, 2);
+    g.fillRect(25, 24, 3, 2);
+    // glowing forge core in the chest
+    g.fillStyle(0xff8a3a, 1);
+    g.fillRect(12, 18, 10, 10);
+    g.fillStyle(0xffe08a, 1);
+    g.fillRect(14, 20, 6, 6);
+    // ember eyes
+    g.fillStyle(0xffd060, 1);
+    g.fillRect(11, 6, 4, 3);
+    g.fillRect(19, 6, 4, 3);
+    g.fillStyle(0xff5a1a, 1);
+    g.fillRect(12, 7, 2, 2);
+    g.fillRect(20, 7, 2, 2);
+    g.generateTexture("cinderwrought", 34, 42);
+
+    // Sunken Forge (48x38) — the POI's ruined smithy centerpiece: a cracked
+    // stone forge base with a molten crucible glowing at its heart and a broken
+    // anvil beside it. Non-interactive world dressing (the Cinderwrought is the
+    // interactable threat, not the structure).
+    g.clear();
+    g.fillStyle(0x3a3038, 1);
+    g.fillRect(4, 20, 30, 18); // forge stone base
+    g.fillStyle(0x4a3f48, 1);
+    g.fillRect(6, 16, 26, 8); // upper stonework
+    g.fillStyle(0x1c1418, 1);
+    g.fillRect(10, 18, 18, 12); // hearth mouth (dark)
+    g.fillStyle(0xff6a1a, 0.9);
+    g.fillEllipse(19, 26, 14, 8); // molten crucible glow
+    g.fillStyle(0xffd060, 1);
+    g.fillEllipse(19, 26, 7, 4); // white-hot core
+    g.fillStyle(0x2a2228, 1);
+    g.fillRect(36, 26, 10, 6); // anvil body
+    g.fillRect(38, 22, 8, 5); // anvil face
+    g.fillStyle(0x1c161a, 1);
+    g.fillRect(44, 27, 3, 5); // anvil horn shadow
+    g.fillStyle(0xff8a3a, 1);
+    g.fillRect(15, 6, 2, 10); // ember plume rising from the hearth
+    g.fillStyle(0xffb060, 0.8);
+    g.fillRect(21, 4, 2, 12);
+    g.generateTexture("sunken_forge", 48, 38);
+
+    // Slag chunk (16x14) — decorative cooled-lava rubble scattered around the
+    // forge clearing (like the vein's crystal clusters), a few with ember veins.
+    g.clear();
+    g.fillStyle(0x241a18, 1);
+    g.fillRect(2, 6, 12, 8); // charred rock
+    g.fillRect(4, 3, 8, 5);
+    g.fillStyle(0x3a2a24, 1);
+    g.fillRect(4, 5, 6, 4); // lighter face
+    g.fillStyle(0xff6a1a, 1);
+    g.fillRect(6, 8, 4, 2); // ember vein
+    g.fillRect(3, 10, 2, 2);
+    g.generateTexture("slag_chunk", 16, 14);
+
     this.makeItemIcons(g);
 
     g.destroy(); // we only needed it to bake textures
@@ -1172,6 +1256,7 @@ export class BootScene extends Phaser.Scene {
     mapMarker("map_shack", 0xd8c090, 0x8a6a3a); // Gremlin Shack — wood-brown
     mapMarker("map_vein", 0xc79cf0, 0x7a3ec8); // Gloaming Vein — purple amethyst
     mapMarker("map_den", 0xe0a060, 0xc06a34); // Duskrunner Warren — dusty orange-brown
+    mapMarker("map_forge", 0xffb050, 0xd6481a); // Sunken Forge — fiery orange-red
 
     // ===== Badlands (biome 2 Phase 2) content =====
 

@@ -24,6 +24,7 @@ import { BadlandsDen } from "../entities/BadlandsDen";
 import { BossAltar } from "../entities/BossAltar";
 import { GremlinKing, STAGGER_DAMAGE_MULTIPLIER } from "../entities/GremlinKing";
 import { Gloamwarden, WARDEN_STAGGER_DAMAGE_MULTIPLIER } from "../entities/Gloamwarden";
+import { Cinderwrought, CINDERWROUGHT_STAGGER_DAMAGE_MULTIPLIER } from "../entities/Cinderwrought";
 import type { LootContainer, LootRollEntry } from "../systems/LootContainer";
 import type { ResourceType } from "../systems/Inventory";
 import {
@@ -362,6 +363,16 @@ const DEN_COUNT = 10;
 const DEN_MIN_SPACING = 950; // spread across chunks, but common enough that most areas have one
 const DEN_CLEAR_RADIUS = 200;
 
+// Sunken Forge POI (biome 2 Phase 3 POI 2) — a single themed landmark out in the
+// badlands guarded by the Cinderwrought mini-boss. Placed well clear of the war
+// camp and Gloaming Vein so it reads as its own destination; FORGE_CLEAR_RADIUS
+// keeps ordinary badlands spawns out of the forge clearing (the "POI busy =
+// missing exclusion zone" lesson).
+const FORGE_MIN_DIST_FROM_CAMP = 1000;
+const FORGE_MIN_DIST_FROM_VEIN = 900;
+const FORGE_CLEAR_RADIUS = 220;
+const FORGE_DECOR_COUNT = 9; // decorative slag chunks scattered across the clearing
+
 // The main gameplay scene: build the world, spawn the player and resources,
 // follow the camera, and run the mouse-driven interaction + HUD.
 export class MainScene extends Phaser.Scene {
@@ -483,6 +494,15 @@ export class MainScene extends Phaser.Scene {
   private badlandsDens: BadlandsDen[] = [];
   private hoveredDen: BadlandsDen | null = null;
   private denLightPoints: { x: number; y: number }[] = [];
+
+  // Sunken Forge POI (biome 2 Phase 3 POI 2) — a badlands landmark guarded by the
+  // Cinderwrought mini-boss. Position chosen once in create() (after the vein, so
+  // it steers clear of it and the camp). forgeLightPoints glow ember at night.
+  // All reset per run in create() (scene.restart field-init gotcha).
+  private forgePosition: { x: number; y: number } | null = null;
+  private cinderwrought: Cinderwrought | null = null;
+  private forgeDiscoveredOnMap = false;
+  private forgeLightPoints: { x: number; y: number }[] = [];
   // Right-click "Upgrade / Destroy" popup for any placed object (Workbench,
   // Campfire, Drying Rack, ...) — a single generic system, not per-type.
   private contextMenu!: ContextMenu;
@@ -730,6 +750,10 @@ export class MainScene extends Phaser.Scene {
     this.badlandsDens = [];
     this.hoveredDen = null;
     this.denLightPoints = [];
+    this.forgePosition = null;
+    this.cinderwrought = null;
+    this.forgeDiscoveredOnMap = false;
+    this.forgeLightPoints = [];
     this.upgradeTarget = null;
     this.placedLabels = new Map();
     this.dragSource = null;
@@ -796,6 +820,11 @@ export class MainScene extends Phaser.Scene {
     // clear of the war camp, and before node/enemy spawning so pickSpawnPoint's
     // VEIN_CLEAR_RADIUS exclusion keeps ordinary content out of the ore clearing.
     this.veinPosition = this.pickVeinPosition(this.sessionRng());
+    // Sunken Forge POI (biome 2 Phase 3 POI 2) — chosen after the vein (kept
+    // clear of both it and the camp) and before any spawning so its own
+    // FORGE_CLEAR_RADIUS exclusion in pickBadlandsPoint keeps ordinary badlands
+    // content out of the forge clearing.
+    this.forgePosition = this.pickForgePosition(this.sessionRng());
 
     // Ground: a repeating grass texture only over the FOREST REGION (biome 1),
     // where it shows through the translucent forest bake. A world-sized tilesprite
@@ -879,6 +908,7 @@ export class MainScene extends Phaser.Scene {
     this.spawnWarCamp();
     this.spawnBossAltar();
     this.spawnGloamingVein();
+    this.spawnSunkenForge(); // biome 2 Phase 3 POI 2 — the Cinderwrought mini-boss landmark
     this.spawnBadlandsDens(); // biome 2 Phase 3 POI — before wild packs so den clearings stay clear
     this.spawnBadlandsEnemies(); // biome 2 Phase 2 — out in the badlands patchwork
     this.physics.add.collider(this.enemyGroup, solids);
@@ -1346,6 +1376,13 @@ export class MainScene extends Phaser.Scene {
       const s = toScreen(d.x, d.y);
       lights.push({ x: s.x, y: s.y, radius: 90 * z });
     }
+    // Sunken Forge (Phase 3 POI 2): a warm ember glow — the molten crucible +
+    // slag read as a lit smithy from a distance, a navigation beacon in the dark.
+    for (const f of this.forgeLightPoints) {
+      if (!onScreen(f.x, f.y)) continue;
+      const s = toScreen(f.x, f.y);
+      lights.push({ x: s.x, y: s.y, radius: 130 * z });
+    }
     return lights;
   }
 
@@ -1416,7 +1453,8 @@ export class MainScene extends Phaser.Scene {
     if (this.respawnAccumMs < RESPAWN_TICK_MS) return;
     this.respawnAccumMs = 0;
 
-    const isBoss = (e: Enemy) => e instanceof GremlinKing || e instanceof Gloamwarden;
+    const isBoss = (e: Enemy) =>
+      e instanceof GremlinKing || e instanceof Gloamwarden || e instanceof Cinderwrought;
     const alive = this.enemies.filter((e) => !e.depleted && !isBoss(e));
     if (alive.length >= RESPAWN_MAX_LIVE) return;
 
@@ -2651,6 +2689,13 @@ export class MainScene extends Phaser.Scene {
         )
       )
         continue;
+      // Sunken Forge (Phase 3 POI 2): keep ordinary badlands content out of the
+      // forge clearing (it has its own Cinderwrought mini-boss + dressing).
+      if (
+        this.forgePosition &&
+        Phaser.Math.Distance.Between(x, y, this.forgePosition.x, this.forgePosition.y) < FORGE_CLEAR_RADIUS
+      )
+        continue;
       // Badlands must be the DOMINANT biome here, not merely present: near the
       // forest transition a point can carry >=0.4 badlands coverage while forest
       // (disc or an overlapping forest blob) still wins the blend — placing a
@@ -3563,6 +3608,67 @@ export class MainScene extends Phaser.Scene {
     this.eventLog.add("combat", "The Gloaming Vein cracks open — its shards can now be mined.");
   }
 
+  // Sunken Forge POI (biome 2 Phase 3 POI 2): a badlands clearing kept a notable
+  // distance from both the war camp and the Gloaming Vein so it reads as its own
+  // destination. Reuses pickBadlandsPoint (which already excludes camp/vein);
+  // forgePosition isn't set yet here, so its own FORGE_CLEAR_RADIUS exclusion
+  // doesn't reject the pick. Returns null only if the badlands never yields a
+  // covered point (spawnSunkenForge then no-ops).
+  private pickForgePosition(rng: Phaser.Math.RandomDataGenerator): { x: number; y: number } | null {
+    let last: { x: number; y: number } | null = null;
+    for (let attempt = 0; attempt < 200; attempt++) {
+      const p = this.pickBadlandsPoint(rng);
+      if (!p) continue;
+      last = p;
+      if (
+        this.altarPosition &&
+        Phaser.Math.Distance.Between(p.x, p.y, this.altarPosition.x, this.altarPosition.y) < FORGE_MIN_DIST_FROM_CAMP
+      )
+        continue;
+      if (
+        this.veinPosition &&
+        Phaser.Math.Distance.Between(p.x, p.y, this.veinPosition.x, this.veinPosition.y) < FORGE_MIN_DIST_FROM_VEIN
+      )
+        continue;
+      return p;
+    }
+    return last;
+  }
+
+  // Spawn the Sunken Forge: the Cinderwrought mini-boss anchored at the clearing
+  // center, the ruined smithy structure behind it, and decorative slag chunks
+  // scattered around. The forge structure + a couple slag chunks feed
+  // forgeLightPoints so the clearing glows ember at night (like the war-camp
+  // braziers / vein crystals). No post-kill interactable — the loot is the
+  // Cinderwrought's guaranteed drop (unlike the vein's mineable nodes).
+  private spawnSunkenForge(): void {
+    if (!this.forgePosition) return;
+    const rng = this.sessionRng();
+    const c = this.forgePosition;
+
+    // The ruined forge structure — offset slightly so the boss stands in front
+    // of it, not on top of it. Non-interactive, Y-sorted world dressing.
+    const forgeY = c.y - 30;
+    this.add.image(c.x, forgeY, "sunken_forge").setDepth(ysortDepth(forgeY));
+    this.forgeLightPoints.push({ x: c.x, y: forgeY });
+
+    const wrought = new Cinderwrought(this, { x: c.x, y: c.y });
+    this.cinderwrought = wrought;
+    this.enemies.push(wrought);
+    this.enemyGroup.add(wrought);
+
+    // Decorative cooled-lava rubble across the clearing so the forge reads as a
+    // scorched ruin, not one structure on dust. A few glow at night as beacons.
+    for (let i = 0; i < FORGE_DECOR_COUNT; i++) {
+      const a = rng.frac() * Math.PI * 2;
+      const r = rng.between(60, 175);
+      const x = Phaser.Math.Clamp(c.x + Math.cos(a) * r, 20, WORLD_W - 20);
+      const y = Phaser.Math.Clamp(c.y + Math.sin(a) * r, 20, WORLD_H - 20);
+      this.add.image(x, y, "slag_chunk").setDepth(ysortDepth(y));
+      if (i % 4 === 0) this.forgeLightPoints.push({ x, y });
+    }
+  }
+
   // A discovered (not summoned) Boss Altar gets a one-time landmark marker on
   // the minimap once the player has actually explored close enough to reveal
   // its fog cell — reuses fog's own REVEAL_RADIUS so "discovered" means the
@@ -3636,6 +3742,19 @@ export class MainScene extends Phaser.Scene {
       });
       // A prominent discovery popup, same beat as finding a new biome.
       this.eventLog.add("poi", "Discovered: Duskrunner Warren");
+    }
+    // Sunken Forge (Phase 3 POI 2) — a discovered fixed landmark, fiery
+    // orange-red marker, same one-shot treatment as the other POIs.
+    if (this.forgePosition && !this.forgeDiscoveredOnMap && inReveal(this.forgePosition.x, this.forgePosition.y)) {
+      this.forgeDiscoveredOnMap = true;
+      this.exploredMap.addLandmark({
+        worldX: this.forgePosition.x,
+        worldY: this.forgePosition.y,
+        iconKey: "map_forge",
+        label: "The Sunken Forge",
+        tint: 0xd6481a,
+      });
+      this.eventLog.add("poi", "Discovered: The Sunken Forge");
     }
     // Once the player is actually holding a Totem, spell out what to do with it
     // (trigger is once-per-run idempotent, so a per-frame poll here is fine).
@@ -4045,7 +4164,7 @@ export class MainScene extends Phaser.Scene {
   private promptColorFor(): string {
     const e = this.hoveredEnemy;
     if (!e) return "#ffffff";
-    if (e instanceof GremlinKing || e instanceof Gloamwarden) return "#ff5a5a";
+    if (e instanceof GremlinKing || e instanceof Gloamwarden || e instanceof Cinderwrought) return "#ff5a5a";
     if (e.elite) return "#ff9d5c";
     return "#ffffff";
   }
@@ -4352,6 +4471,7 @@ export class MainScene extends Phaser.Scene {
   private staggerMultiplierFor(enemy: Enemy): number {
     if (enemy instanceof GremlinKing && enemy.isStaggered()) return STAGGER_DAMAGE_MULTIPLIER;
     if (enemy instanceof Gloamwarden && enemy.isStaggered()) return WARDEN_STAGGER_DAMAGE_MULTIPLIER;
+    if (enemy instanceof Cinderwrought && enemy.isStaggered()) return CINDERWROUGHT_STAGGER_DAMAGE_MULTIPLIER;
     return 1;
   }
 
@@ -4539,9 +4659,10 @@ export class MainScene extends Phaser.Scene {
   // enemy. Kept here (not on Enemy) since it's a scoring concern, not behavior.
   private classifyKill(enemy: Enemy): KillCategory {
     if (enemy instanceof GremlinKing) return "boss";
-    // The Gloamwarden is a mini-boss — no dedicated score band exists, so it's
-    // scored at the elite tier (per the plan's "simplest" open sub-decision).
-    if (enemy instanceof Gloamwarden || enemy.elite) return "elite";
+    // The Gloamwarden/Cinderwrought are mini-bosses — no dedicated score band
+    // exists, so they're scored at the elite tier (per the plan's "simplest"
+    // open sub-decision).
+    if (enemy instanceof Gloamwarden || enemy instanceof Cinderwrought || enemy.elite) return "elite";
     return "normal";
   }
 
@@ -4642,6 +4763,7 @@ export class MainScene extends Phaser.Scene {
       if (
         enemy instanceof GremlinKing ||
         enemy instanceof Gloamwarden ||
+        enemy instanceof Cinderwrought ||
         enemy instanceof Hexling ||
         enemy instanceof Sandmaw
       ) {

@@ -2,24 +2,36 @@
 
 ## Current State
 
-_Living snapshot — edit in place, never append. Last shipped: **Biome 2 — Phase 3: Duskrunner
-Warren POI** (2026-07-12, Opus). The **first of Phase 3's two POIs** (the user chose "two POIs
-first"; the badlands boss + Gremlin King rework stay deferred). A **two-wave destructible den**,
-NOT a shack clone: `src/entities/BadlandsDen.ts` is a burrow mound guarded by **3 Duskrunners →
-(on clear) 3 ELITE Duskrunners**; only once both waves fall does the den become **attackable with a
-melee weapon** (its own HP), and smashing it collapses it into a **lootable cache** (a heap of the
-fallen — reuses `LootContainer`/`ChestMenu`). Loot is thus gated behind destruction; the Warren
-does **NOT respawn** (you destroy it). **10 dens (fairly common — ~one per sizable badlands chunk,
-per the user)** spread ≥950px apart via `pickBadlandsPoint` (+ a `DEN_CLEAR_RADIUS` exclusion).
-**Duskrunners are now a badlands food source** — every one drops raw `duskrunner_meat` (cook/eat
-specifics deferred, like sunfruit/emberbloom). Discovering one fires a prominent **discovery popup
-toast** (new `"poi"` `LogKind`) + a `map_den` minimap/world landmark; faint gloam-ember night glow.
-Verified live via `preview_eval`: 10 dens spread across r 2505–5004, wave
-1 (normal) → wave 2 (elite) → attackable → wrecked+cache → loot; prompt gating (nothing during
-waves, "Smash" only with a melee weapon, "Search the remains" when looted, out-of-reach null); meat
-drop; landmark; sprites render. Next: **Phase 3 POI 2 — the Sunken Forge mini-boss** (then the
-badlands boss + King rework). See "Biome 2 — Phase 3: Duskrunner Warren POI" below.
+_Living snapshot — edit in place, never append. Last shipped: **Biome 2 — Phase 3 POI 2: the
+Sunken Forge** (2026-07-12, Opus). The **second of Phase 3's two POIs** (the user chose "two POIs
+first"; the badlands boss + Gremlin King rework stay deferred). A **bespoke fire/forge mini-boss**
+guarding a themed badlands landmark: `src/entities/Cinderwrought.ts` mirrors the Gloamwarden's
+telegraph/poise/stagger skeleton (a trimmed sibling, NOT a shared framework) with two new-feeling
+attacks — a **Cinder Cone** (the game's only cone: exhales a fire fan in a direction **locked at
+telegraph start**, so sidestep the 820ms wind-up) and a **Forge Hammer** (a heavy wide-but-short
+front-arc smash, re-locked at execute — back out to dodge). HP 300, poise 70 (stagger → ×1.5),
+scale 1.8, regens 12 HP/s deaggro'd; resists blunt ×0.8 / weak pierce ×1.25 (the Phase-1
+damage-type nudge). Both attacks funnel through `checkPlayerHit` → `applyDamageToPlayer` (dash
+i-frames/armor just work). Loot (locked): **1 Refined Trophy (Uncommon) + 3-5 Gloam Shards**
+(mirrors the Gloamwarden). The forge structure + scattered slag props glow ember at night; a
+`map_forge` landmark + `"poi"` discovery toast fire on discovery. **No smelting wiring** (Phase 4
+doesn't exist — smithy theme ships as loot + fight only) and **no post-kill interactable** (loot is
+the guaranteed drop, unlike the vein's mineable nodes). Placed once in `create()` ≥1000px from camp
+/ ≥900px from vein, before spawning, with a `FORGE_CLEAR_RADIUS` (220) exclusion in
+`pickBadlandsPoint`. Verified live via `preview_eval` + screenshot: spawns at r≈4174 (accessible
+badlands); full `idle→telegraph→execute→recover` cycle for both attacks; cone/hammer wedge geometry
+(hit-in-arc, miss-sidestep, miss-beyond-range); resists; stagger; the fight kills a full-HP player;
+discovery landmark + toast; sprites render. Next: **the badlands final boss** (new win-con) + the
+**Gremlin King critical-drop rework**. See "Biome 2 — Phase 3 POI 2: the Sunken Forge" below.
 [[survivor-rpg-biome-2-plan]]_
+
+_Prior: **Biome 2 — Phase 3: Duskrunner Warren POI** (2026-07-12, Opus). The first of Phase 3's two
+POIs — a **two-wave destructible den**, NOT a shack clone: `src/entities/BadlandsDen.ts` is a burrow
+mound guarded by **3 Duskrunners → (on clear) 3 ELITE Duskrunners**; only once both waves fall does
+the den become **attackable with a melee weapon**, and smashing it collapses it into a **lootable
+cache** (reuses `LootContainer`/`ChestMenu`). Loot gated behind destruction; no respawn. 10 dens
+spread ≥950px apart; Duskrunners now drop raw `duskrunner_meat`. `map_den` landmark + `"poi"` toast
+on discovery. See "Biome 2 — Phase 3: Duskrunner Warren POI" below._
 
 _Prior: **Biome 2 — Phase 2b: Sandmaw** (2026-07-12, Opus). The deferred 4th native badlands
 creature — a **burrowing ambusher**. The **Sandmaw** (`src/entities/Sandmaw.ts`) lurks submerged
@@ -168,11 +180,11 @@ layer — resist/weak, AOE arcs, pack-aggro, magic-bypass, all dormant hooks), *
 light up those hooks; plan `.claude/plans/biome-2-phase-2-enemies.md`), and **Phase 2b**
 (the 4th native creature — the **Sandmaw** burrowing ambusher; plan
 `.claude/plans/biome-2-phase-2b-sandmaw.md`). The badlands is now **walkable + populated with a
-complete 4-enemy roster**. **Phase 3 is underway** — the user chose "two POIs first," and **POI 1,
-the Duskrunner Warren, has shipped** (two-wave destructible den → lootable cache; see below).
-Remaining Phase 3 work (own sessions): **POI 2 — the Sunken Forge mini-boss (next)**, then the
-**badlands boss** (new win-con, demotes the Gremlin King) + the **Gremlin King critical-drop
-rework**. Then Phase 4 smelting/forging gear tier; Phase 5 tier-2 relics + biome-1 trim +
+complete 4-enemy roster**. **Phase 3 is underway** — the user chose "two POIs first," and **both POIs
+have now shipped**: POI 1 the Duskrunner Warren (two-wave destructible den → cache) and **POI 2 the
+Sunken Forge** (the Cinderwrought fire/forge mini-boss; see below). Remaining Phase 3 work (own
+sessions): the **badlands boss** (new win-con, demotes the Gremlin King) + the **Gremlin King
+critical-drop rework**. Then Phase 4 smelting/forging gear tier; Phase 5 tier-2 relics + biome-1 trim +
 family-replace-with-refund. The master-plan tail **M-TE** (trophy-gated gear) is folded into
 this biome-2 work. Real pixel art/animations stay deliberately deferred until content/balance
 settle (roadmap item 8). Phase 2/2b badlands stats/counts + Phase 1's arc/resist/pack numbers are
@@ -211,6 +223,65 @@ all first-pass — expect a tuning pass as the biome fills out.
 ## Recent Entries
 
 > Older entries in STATUS-archive.md.
+
+### Biome 2 — Phase 3 POI 2: the Sunken Forge (Cinderwrought fire/forge mini-boss)
+
+Plan: `.claude/plans/biome-2-phase-3-pois.md` (Phase 3, umbrella `biome-2-sunscorch-badlands.md`).
+Built on **Opus** (new mini-boss mechanic). The second of Phase 3's two POIs. Locked with the user
+via `AskUserQuestion`: **loot = Uncommon relic trophy + Gloam Shards** (mirror the Gloamwarden);
+**attacks = Cinder Cone + Forge Hammer**; **names = The Sunken Forge / Cinderwrought**.
+
+**`src/entities/Cinderwrought.ts`** — a bespoke fire/forge mini-boss modeled on `Gloamwarden.ts`'s
+telegraph/poise/stagger skeleton (a **trimmed sibling, NOT a shared framework** — per the "no boss
+framework" lock). Extends `Enemy` for the HP-bar/loot/death machinery, fully overrides `update()`
+(Snake/Boar/Gloamwarden precedent): `idle → telegraphing → executing → recovering → staggered`. A
+poise meter (70; `takeHit` chips 1:1 → stagger ×1.5 for 2.5s) drawn as a second amber bar below the
+HP bar. HP **300** (badlands-tough, above the forest Gloamwarden's 260), scale **1.8**, move 52,
+aggro 260, leash 520, regens 12 HP/s deaggro'd. `resistances: { blunt: 0.8, pierce: 1.25 }` — a
+molten-slag crust (the Phase-1 damage-type nudge, the inverse of a Sandmaw). Two **new-feeling**
+attacks, deliberately distinct from Gloamwarden (leap-smash/eruption) and GremlinKing (charge/slam):
+- **Cinder Cone** — the game's **only cone**: exhales a fire fan (±32°, 210px) in a direction
+  **locked at telegraph START** (820ms wind-up), so a sidestep clears it. 30 dmg / 140 kb.
+- **Forge Hammer** — a heavy **wide-but-short front-arc** smash (±70°, 155px), direction re-locked
+  at execute (tracks the player through the 720ms telegraph); the dodge is to back out of the wedge
+  (or dash). 44 dmg / 240 kb.
+Both attacks resolve via `checkPlayerHit()` (wedge geometry: dist + angular diff vs the locked
+`attackAngle`) — queried by the scene like the other area-damage bosses — funnelling through the
+same `applyDamageToPlayer` choke point, so dash i-frames/armor "just work" with no special-casing.
+Fire-colored `Graphics` telegraph + execute visuals (fan/wedge fills). Guaranteed loot: **1
+`refined_trophy_uncommon` + 3-5 `gloam_shard`** (mirrors the Gloamwarden's payoff).
+
+**`MainScene`** — `forgePosition` picked once in `create()` (after the vein) via `pickForgePosition`
+over `pickBadlandsPoint`, kept ≥1000px from the war camp / ≥900px from the Gloaming Vein so it reads
+as its own destination; picked **before** spawning so a new `FORGE_CLEAR_RADIUS` (220) exclusion in
+`pickBadlandsPoint` keeps ordinary badlands content out of the clearing (the standing exclusion-zone
+lesson). `spawnSunkenForge()` drops the `sunken_forge` structure + the Cinderwrought + 9 scattered
+`slag_chunk` props; `forgeLightPoints` glow ember at night (`collectLights`, radius 130). Discovery
+(`updateAltarDiscovery`) adds a `map_forge` minimap/world landmark ("The Sunken Forge", fiery
+`0xd6481a`) + fires the `"poi"` discovery toast. Wired into the `checkPlayerHit` boss `instanceof`
+union, `staggerMultiplierFor` (`CINDERWROUGHT_STAGGER_DAMAGE_MULTIPLIER`), `classifyKill` (**elite** —
+no dedicated mini-boss band, like the Gloamwarden), the boss prompt-color union, and the respawn
+`isBoss` exclusion. **No smelting wiring** (Phase 4 doesn't exist — the smithy theme ships as loot +
+the fight only, per the Phase-4 hook) and **no post-kill interactable** (loot is the guaranteed
+drop, unlike the vein's mineable nodes).
+
+**`BootScene`** — `cinderwrought` (34×42 charred-iron brute: molten cracks + forge-hammer fists +
+ember eyes, warm fire palette contrasting the Gloamwarden's violet), `sunken_forge` (48×38 ruined
+smithy w/ molten crucible + broken anvil), `slag_chunk` (16×14 cooled-lava rubble), `map_forge`
+marker (fiery orange-red).
+
+Files: new `Cinderwrought.ts`; `MainScene.ts` (import, constants, fields/reset, `pickForgePosition`/
+`spawnSunkenForge`, exclusion, lights, discovery, 4 combat unions); `BootScene.ts` (4 textures);
+`dashboard/main.ts` (Enemies-tab entry — the one manual mirror). No `RECIPES.md` change (no recipes).
+**Verified:** `tsc --noEmit` clean; `preview_start` boots with no console errors; `preview_eval` +
+screenshot — forge at r≈4174 (accessible badlands), 3377px from camp / 3167px from vein; all 4
+textures load; boss HP 300/poise 70/scale 1.8; aggro + poise-bar-on-aggro; full `idle→telegraph→
+execute→recover→idle` cycle for BOTH attacks (manual-clock driven, since the backgrounded preview
+throttles rAF); cone hits the fan / misses at 90° sidestep / misses beyond 210px; hammer hits front
+/ misses behind / misses beyond 155px; resists blunt 0.8 / pierce 1.25 / slash 1.0; poise→0 staggers
+(×1.5); the fight kills a full-HP player (damage path end-to-end); discovery adds the `map_forge`
+landmark + fires the `"poi"` toast; the Cinderwrought + forge structure + slag render in the
+badlands. **Next: the badlands final boss (new win-con) + the Gremlin King critical-drop rework.**
 
 ### Biome 2 — Phase 3: Duskrunner Warren POI (two-wave destructible den)
 
@@ -369,112 +440,5 @@ Files: `BootScene.ts` (Cragscale tint), `Recipes.ts` (axe name), `RunEndUI.ts` +
 (capped breakdown), `RECIPES.md`. `tsc --noEmit` clean; verified live via `preview_eval` +
 screenshot; no console errors.
 
-### Placeholder art pass — all creatures + non-rotating facing (2026-07-12, Opus)
-
-the user: bring the placeholder art up to real effort even before real pixel art, using the new
-**Hexling as the minimum detail bar** (it "looks awesome"), revamp every model that hadn't had
-love, and make enemies follow the Hexling's **non-rotating** facing — noting this is visual only
-and must NOT change attack direction (an enemy can still hit you while not facing exactly at you).
-
-**Non-rotating facing (Enemy.ts).** The `upright` flag already existed (Hexling-only) — flipped its
-default from `?? false` to `?? true`, so EVERY enemy is now non-rotating: `applyUprightFacing`
-mirrors left/right via `flipX` with a ≤~11° (`UPRIGHT_MAX_TILT` 0.22 rad) up/down tilt, never
-rotating off-vertical. The old default (`applyFacing`'s full-360° rotation-toward-travel + a random
-full spawn rotation) was literally flipping the vertically-drawn Gremlin King / Gloamwarden
-upside-down as they walked. Base `Enemy` is never instantiated directly (all subclasses), and no
-subclass passes `upright:false`, so the single default flip covers the whole roster; the spawn
-randomizer now only picks a random `flipX` mirror. **Purely visual** — attack hit-checks all use
-x/y distance math (`tickMeleeSwing`, `checkPlayerHit`, charge/pounce/roll contact radii), never
-sprite facing, so nothing about who-can-hit-whom changed. Kept the **Cragscale roll-spin** (it sets
-`rotation` directly as a deliberate rolling-ball attack tell); after the roll it settles via
-`faceAngle` back to the upright tilt. Comments on `EnemyConfig.upright` / the constructor /
-`applyFacing` updated to describe the new default.
-
-**Art (BootScene.ts).** Every creature texture redrawn to the Hexling's bar (layered silhouette +
-base/shadow/highlight shading + feature details + glow), **preserving each texture's exact
-dimensions** so reach/scale/body-separation tuning is untouched. All side-view creatures are now
-drawn facing **RIGHT** (was nose-left) so the `flipX` convention reads correctly. Each with a
-parameterized `draw*` helper generating normal + a crimson/gold **elite** recolor of the identical
-silhouette (matching the existing `drawHexling` pattern):
-- **player** (20x20) — front-facing blue-tunic adventurer: head+hair+eyes, tunic w/ belt+buckle,
-  arms+hands, legs+boots. (Player is its own class, not `upright`; orientation is static, only the
-  equipped-icon offset tracks facing — so a symmetric front view is correct.)
-- **Boar** (26x20) — bristly hog, back-spikes, upward tusk, snout+nostrils, beady eye+glint.
-- **Snake** (20x8) — head+yellow eye+forked tongue at right, scale flecks, belly underline.
-- **Gremlin** (18x22) / **Gremling** (14x16) — hunched imps: pointed ears, glowing eyes, snaggle
-  teeth, pot-belly, clawed hands (Gremling smaller/simpler = lesser threat).
-- **Duskrunner** (24x14) — lean jackal: bushy tail, pointed ear, ember eye, four legs.
-- **Cragscale** (28x18) — armored reptile: ridged + spiked stone-plate back, stubby legs, tail.
-- **Gremlin King** (40x48) — hulking ogre-gremlin: bone crown, glowing eyes, upward tusks, huge
-  fists, muscled torso + loincloth.
-- **Gloamwarden** (34x42) — amethyst brute: violet body, shoulder/head crystal growths, crystalline
-  fists, glowing chest core + eyes.
-- **Hexling** left as-is (the benchmark). World props (trees/rocks/stations) + item icons left
-  as-is — out of scope for a creature pass.
-
-**Verification.** Type-check clean; no console errors. Live `preview_eval` texture-showcase overlay
-confirmed all sprites render with the intended detail; a follow-up query confirmed all 233 live
-enemies report `upright:true` with near-zero rotation and varied `flipX`. Real pixel art +
-animations still deferred (roadmap item 8) — this is a polish-the-placeholder pass, not the final
-art.
-
-### Biome 2 playtest fix batch #2 (worldgen seam, ground texture, Hexling rotation, damage)
-
-Off a second badlands playtest (the user), built on **Sonnet** — fixes/tuning on already-shipped
-systems, no new mechanic. Four items:
-
-1. **Worldgen seam (the real "flat lines" cause).** The tiled `outerFeatureBiome` (badlands/dunes/
-   outer-forest feature layer, `MainScene.ts`) generates its Voronoi zones + CA smoothing + creek
-   ribbon as a bounded, non-toroidal grid, but `Biome.bilinear()` samples it with wraparound for
-   tiled instances — bilinearly blending the grid's two UNRELATED edges together, which bakes a
-   hard seam every `OUTER_FEATURE_SIZE` (4000 world px) in both x and y. Confirmed live via
-   `preview_eval`: `worldBiomeColorAt` scan found nothing (smooth data), but a direct screenshot at
-   a tile-boundary-adjacent player position showed one clean horizontal line — later confirmed via
-   `outerFeatureBiome.forestWeight()` boundary scans. Fixed in `Biome.ts`: `buildVoronoiZones` now
-   uses a toroidal (shortest-way-around) delta for seed distance when `tiled`; `smooth()`'s CA
-   neighbor lookup wraps via `Biome.wrapCell` instead of the old "out-of-bounds counts as agreeing"
-   rule; `carveCreek()` swaps its free random walk for a periodic sine wobble when tiled (guarantees
-   `wobble(0) === wobble(mainLen)`, so the ribbon's start/end lateral position always matches at the
-   wrap). Re-verified post-fix: 0 big `forestWeight` jumps scanned across 5 tile boundaries × 5
-   sample points each. This is a DIFFERENT root cause than the prior "Phase 2 playtest fix batch"'s
-   forest-disc-square-edge fix (see below) — that one didn't touch the tiled outer layer at all.
-2. **Ground texture ("loses the speckled texture" outside spawn).** New `colorUtil.mottleColor()`
-   — a generic two-octave brightness-noise pass (broad 150px + fine 55px), applied in
-   `WorldBiomes.worldBiomeColorAt()` to the base layer + outer-forest-blob color (skipped inside the
-   protected forest core, which keeps its real crisp tileSprite bake). Badlands/Dunes already had
-   their own richer noise (barely touched by this subtle a pass); the open-wilds base layer and
-   Dunes' flat fill had none at all — this was the actual "flat light green" the user saw. Explicit
-   placeholder pass (comment points at CLAUDE.md's real-art-later note).
-3. **Hexling rotation** ("shouldn't rotate and look upside down... should be upright, maybe mirror
-   left/right with slight angles up/down"). New `EnemyConfig.upright` flag (`Enemy.ts`) — only
-   Hexling sets it. Skips the base `Enemy` constructor's random-360°-spawn-rotation (replaced by a
-   random initial `flipX`) and `applyFacing`'s full-rotation-toward-travel (the Boar/Snake/
-   Duskrunner/Cragscale nose-first pattern), replaced by a new `applyUprightFacing()`: mirrors via
-   `flipX` on horizontal movement, tilts `rotation` at most `UPRIGHT_MAX_TILT` (0.22 rad, ~11°)
-   toward vertical movement, clamped so it's never near horizontal/upside-down. `faceAngle()` (used
-   by locked-direction telegraphs) branches the same way, though Hexling doesn't currently call it.
-   Verified live: `applyFacing` at all 8 compass directions stayed within ±0.192 rad.
-4. **Biome-2 damage bumped significantly** ("badlands enemies don't do enough damage... should hurt
-   even with lvl 3 armor... base hexlings should kill you in like 3 hits... make the game hard").
-   Raw damage (net-of-armor in parens, vs. the 13-flat Lvl-3-armor cap): Duskrunner bite 20→**34**
-   (net 21, was 7); Cragscale basher/roll 22→**40** (net 27, was 9); Hexling bolt 14→**22** and
-   flame 18→**34** (both `magic` — bypass armor entirely, so raw IS net; 3 flame hits ≈ 102 now
-   kills a base 100-HP player). For comparison, biome-1's hardest hitters net ~12 (Boar) and ~7
-   (Snake) through the same armor cap — biome-2 is now clearly, deliberately harder. Also fixed a
-   latent bug found while touching this: **Elite Hexling dealt the exact same bolt/flame damage as
-   a base Hexling** — every other elite gets +50% dmg via its `maxHealth`/`biteDamage` constructor
-   scaling, but Hexling's magic damage was two module-level consts never read against `elite`. Now
-   `boltDamage`/`flameDamage` are per-instance fields scaled `elite ? round(BASE*1.5) : BASE`,
-   assigned after `super()` (can't reference `this` before it) and read at both call sites.
-5. **Map cell blockiness** (secondary polish alongside #1, same "sharp edges" complaint). New
-   `ExploredMap.colorAtSmoothed()` — a center-weighted 3x3 average over revealed neighbor fog cells
-   (still -1/fog if the cell itself is unrevealed, never bleeds color INTO fog) — wired into both
-   `WorldMapUI`'s dirty-triggered terrain rebuild and `MinimapUI`'s per-frame cell fill, softening
-   the visible hard rectangular cell edges especially at `WorldMapUI`'s higher zoom levels.
-
-Verified: `tsc --noEmit` clean, `npm run build` clean, live `preview_eval` on all four items (seam
-scan, mottle visible in a fresh screenshot, Hexling facing at 8 directions, live damage constant
-readout), no console errors. No `RECIPES.md` change (no recipe/cost changes).
-
-> Older entries (16-item playtest fix batch, Biome 2 Phase 2, Biome 2 Phase 1, Biome 2 Phase 0,
-> Welcome overlay, and earlier) are in STATUS-archive.md.
+> Older entries (Placeholder art pass, Biome 2 playtest fix batch #2, 16-item playtest fix batch,
+> Biome 2 Phase 2/1/0, Welcome overlay, and earlier) are in STATUS-archive.md.

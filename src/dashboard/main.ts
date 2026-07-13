@@ -237,6 +237,19 @@ const ENEMIES: EnemyStat[] = [
     notes:
       "Gloaming Vein guardian. Poise 60 (stagger → 1.5× dmg for 2.5s). Scale 1.7, scored as an elite kill. Bespoke attacks (NOT charge/radial-slam): a leaping smash (previews the Gremlin King) + a rooted crystal-eruption ground-target (punish window). Regens 10 HP/s while deaggro'd.",
   },
+  {
+    name: "Cinderwrought (MINI-BOSS)",
+    hp: 300,
+    speed: 52,
+    aggro: 260,
+    attacks: [
+      { label: "Cinder Cone (locked-direction fire cone, 210px / ±32°)", damage: 30, telegraphMs: 820 },
+      { label: "Forge Hammer (heavy front-arc smash, 155px / ±70°)", damage: 44, telegraphMs: 720 },
+    ],
+    loot: "3-5 Gloam Shard + 1 Refined Trophy (Uncommon)",
+    notes:
+      "Sunken Forge guardian (badlands Phase 3 POI 2). Poise 70 (stagger → 1.5× dmg for 2.5s). Scale 1.8, scored as an elite kill. Resists blunt ×0.8, weak to pierce ×1.25. Bespoke attacks (NOT the roster's charge/slam/smash/eruption): the Cinder Cone locks its direction at telegraph START (sidestep the wind-up) — the game's only cone; the Forge Hammer re-locks at execute and hits a wide short front wedge (back out to dodge). Regens 12 HP/s while deaggro'd. No post-kill node — loot is its guaranteed drop.",
+  },
 ];
 
 // ---------------------------------------------------------------------------

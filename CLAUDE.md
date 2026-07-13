@@ -1167,9 +1167,10 @@ done — see 5w) → M-SS (stats/skills depth pass + crit, done — see 5ab) →
 M-W1 + M-TE, IN PROGRESS — Phase 0 worldgen (5ac) + Phase 1 combat systems (5ad) + Phase 2
 core enemies & flora (5ae) + Phase 2b 4th native creature — the Sandmaw burrowing ambusher
 (5af) done. **Phase 3 underway** (the user chose "two POIs first"): POI 1 — the Duskrunner
-Warren (two-wave destructible den → lootable cache) — done (5ag); still to do: POI 2 (Sunken
-Forge mini-boss), then the badlands boss (new win-con) + Gremlin King critical-drop rework.
-See the biome-2 umbrella plan below.**
+Warren (two-wave destructible den → lootable cache) — done (5ag); POI 2 — the Sunken Forge
+(the Cinderwrought fire/forge mini-boss) — done (5ah); still to do: the badlands boss (new
+win-con, demotes the Gremlin King) + Gremlin King critical-drop rework. See the biome-2
+umbrella plan below.**
 
 5ac. **Biome 2 (Sunscorch Badlands) — Phase 0: Patchwork worldgen.** Plan:
    `.claude/plans/biome-2-phase-0-world-ring.md` (Phase 0 of the
@@ -1332,8 +1333,38 @@ See the biome-2 umbrella plan below.**
    `hoveredDen`/`promptForDen`/`tryInteract` branch; interactable only while attackable/looted so
    the mound doesn't block enemy hovers during the fight). Dashboard Enemies tab Duskrunner loot
    row updated; no `RECIPES.md` change. Verified live via `preview_eval` (spawn/spread, full
-   wave→smash→loot cycle, prompt gating, meat drop, landmark, sprites). **Next: POI 2 — the Sunken
-   Forge mini-boss.** See `STATUS.md` + [[survivor-rpg-biome-2-plan]].
+   wave→smash→loot cycle, prompt gating, meat drop, landmark, sprites). See `STATUS.md` +
+   [[survivor-rpg-biome-2-plan]].
+5ah. **Biome 2 — Phase 3 POI 2: the Sunken Forge (Cinderwrought mini-boss).** Plan:
+   `.claude/plans/biome-2-phase-3-pois.md` (Phase 3, umbrella). Built on **Opus** (new mini-boss
+   mechanic). The second of Phase 3's two POIs. Locked with the user via `AskUserQuestion`: **loot =
+   Uncommon relic trophy + Gloam Shards** (mirror the Gloamwarden); **attacks = Cinder Cone + Forge
+   Hammer**; **names = The Sunken Forge / Cinderwrought**. `src/entities/Cinderwrought.ts` is a
+   bespoke fire/forge mini-boss modeled on `Gloamwarden.ts`'s telegraph/poise/stagger skeleton (a
+   **trimmed sibling, NOT a shared framework** — the "no boss framework" lock): extends `Enemy`,
+   fully overrides `update()` (`idle→telegraphing→executing→recovering→staggered`). HP 300
+   (badlands-tough, above the forest Gloamwarden's 260), scale 1.8, poise 70 (stagger → ×1.5 for
+   2.5s), regens 12 HP/s deaggro'd; `resistances: { blunt: 0.8, pierce: 1.25 }` (a molten-slag crust
+   — the Phase-1 damage-type nudge, inverse of a Sandmaw). Two **new-feeling** attacks distinct from
+   the roster's charge/slam/smash/eruption: the **Cinder Cone** (the game's only cone — a fire fan
+   ±32°/210px whose direction is **locked at telegraph start**, so sidestep the 820ms wind-up; 30
+   dmg/140 kb) and the **Forge Hammer** (a heavy wide-but-short front-arc smash ±70°/155px,
+   re-locked at execute; back out to dodge; 44 dmg/240 kb). Both resolve via `checkPlayerHit()`
+   (wedge geometry) → the shared `applyDamageToPlayer` choke point, so dash i-frames/armor "just
+   work." Guaranteed loot: **1 `refined_trophy_uncommon` + 3-5 `gloam_shard`** (mirrors the
+   Gloamwarden). **MainScene:** `forgePosition` picked once in `create()` (≥1000px from camp /
+   ≥900px from vein, before spawning) with a new `FORGE_CLEAR_RADIUS` (220) exclusion in
+   `pickBadlandsPoint`; `spawnSunkenForge()` drops the `sunken_forge` structure + Cinderwrought + 9
+   `slag_chunk` props; ember night glow (`forgeLightPoints`); `map_forge` landmark + `"poi"`
+   discovery toast; wired into the `checkPlayerHit` boss union, `staggerMultiplierFor`,
+   `classifyKill` (**elite**), the boss prompt-color union, and the respawn `isBoss` exclusion.
+   **No smelting wiring** (Phase 4 doesn't exist — smithy theme ships as loot + fight only) and **no
+   post-kill interactable** (loot is the guaranteed drop, unlike the vein's mineable nodes). No
+   `RECIPES.md` change. Verified live via `preview_eval` + screenshot (spawn/position, full
+   telegraph→execute→recover cycle for both attacks, cone/hammer wedge geometry hit/miss, resists,
+   stagger, kills a full-HP player, discovery landmark + toast, sprites). Dashboard Enemies tab
+   updated. **Next: the badlands final boss (new win-con) + the Gremlin King critical-drop rework.**
+   See `STATUS.md` + [[survivor-rpg-biome-2-plan]].
 
 **Not yet built — next up in rough order:**
 6. **World & discovery** — much bigger generated world, biomes, map, a single giant

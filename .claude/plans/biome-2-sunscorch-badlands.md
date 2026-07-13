@@ -234,8 +234,9 @@ textures. Elite trophies: give badlands elites their own tier-2 species trophies
 
 > **Status (2026-07-12):** Underway — see `biome-2-phase-3-pois.md` for the detailed slice. the user
 > scoped this to **"two POIs first"** (boss + King rework deferred). **POI 1 — the Duskrunner
-> Warren (a two-wave destructible den → lootable cache) — SHIPPED.** Next: POI 2 (the Sunken Forge
-> mini-boss), then the badlands boss + Gremlin King critical-drop rework.
+> Warren (a two-wave destructible den → lootable cache) — SHIPPED. POI 2 — the Sunken Forge
+> (a bespoke fire/forge mini-boss, the Cinderwrought — Cinder Cone + Forge Hammer) — SHIPPED.**
+> Next: the badlands boss (new win-con) + the Gremlin King critical-drop rework.
 
 **Exactly two NEW unique POIs — NOT counting the boss arena or the Gloaming Vein/shard
 farm(s)** (locked correction). The boss arena and vein are their own landmarks; these two are

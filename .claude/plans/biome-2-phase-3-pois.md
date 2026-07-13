@@ -7,9 +7,9 @@
 
 ## Scope + build order for Phase 3
 
-1. **POI 1 — Duskrunner Warren** (SHIPPED, this session). Two-wave destructible den → cache.
-2. **POI 2 — the Sunken Forge** (NEXT). A bespoke fire/forge mini-boss guarding a themed landmark.
-3. **Badlands boss** (later, its own session). New win-condition final boss; demotes the Gremlin
+1. **POI 1 — Duskrunner Warren** (SHIPPED). Two-wave destructible den → cache.
+2. **POI 2 — the Sunken Forge** (SHIPPED). A bespoke fire/forge mini-boss guarding a themed landmark.
+3. **Badlands boss** (NEXT, its own session). New win-condition final boss; demotes the Gremlin
    King. Bespoke AI à la `GremlinKing.ts`/`Gloamwarden.ts` (telegraph/poise, NOT a shared
    framework). Update the M-R1 win/score classifier so killing THIS boss fires `endRun("won")`.
 4. **Gremlin King critical-drop rework** (later, interlocks with Phase 4 gear). Retire
@@ -86,25 +86,58 @@ meat drop; the discovery popup toast + `map_den` landmark render. `tsc` clean, n
 
 ---
 
-## POI 2 — the Sunken Forge (NEXT, not built)
+## POI 2 — the Sunken Forge (SHIPPED 2026-07-12, Opus)
+
+the user's locked decisions (AskUserQuestion): **loot = Uncommon relic trophy + Gloam Shards**
+(mirror the Gloamwarden); **attacks = Cinder Cone + Forge Hammer**; **names = The Sunken Forge /
+Cinderwrought**.
 
 A bespoke fire/forge **mini-boss** guarding a themed landmark, modeled on `Gloamwarden.ts`'s
 telegraph/poise/stagger skeleton (a trimmed sibling, NOT a shared framework), with two
 **new-feeling** attacks distinct from Gloamwarden (leap-smash / point-eruption) and GremlinKing
-(charge / radial-slam). Proposed:
-- **Cinder Cone** — rears back, then exhales a fire cone in a LOCKED direction (sidestep-dodgeable).
-  No cone attack exists in the game yet — the signature.
-- **Forge Hammer** — a heavy overhead front-arc smash punishing close-range standing.
+(charge / radial-slam):
+- **Cinder Cone** — rears back, then exhales a fire cone in a **LOCKED direction** (the angle
+  snaps to the player at telegraph START, so sidestepping the 820ms wind-up clears the ±32°/210px
+  fan). The game's **only** cone attack — the Cinderwrought's signature.
+- **Forge Hammer** — a heavy overhead front-arc smash (±70°/155px, re-locks direction at execute)
+  punishing close standing; the dodge is to back out of the wide-but-short wedge (or dash).
 
-Reuse the POI toolkit exactly like the Gloaming Vein: `pickBadlandsPoint` position picked once (own
-`SHRINE_CLEAR_RADIUS`, kept clear of camp/vein/dens/center), a scorched-molten floor stamp in
-`buildBiomeTexture`, ember night-glow (`collectLights`), a `map_shrine` landmark + the new `"poi"`
-discovery toast, and `checkPlayerHit` area-damage wired into the boss `instanceof` union.
+### As built
 
-**Open decisions to resolve when POI 2 starts** (the earlier AskUserQuestion was dismissed):
-1. **Forge-boss loot** — a better (Uncommon) relic trophy for the harder fight, vs. mirroring the
-   Gloaming Vein's shard/refined-trophy economy, vs. a Phase-4 seed material.
-2. **Names** — "The Sunken Forge" + mini-boss "Cinderwrought" unless the user renames.
+- **`src/entities/Cinderwrought.ts`** — extends `Enemy` for the HP-bar/loot/death machinery, fully
+  overrides `update()` (Snake/Boar/Gloamwarden precedent). `idle → telegraphing → executing →
+  recovering → staggered` state machine + a poise meter (70, `takeHit` chips 1:1 → stagger ×1.5 for
+  2.5s) drawn as a second amber bar below the HP bar. HP 300 (badlands-tough, above the forest
+  Gloamwarden's 260), scale 1.8, regens 12 HP/s deaggro'd, leash 520. `resistances: { blunt: 0.8,
+  pierce: 1.25 }` (a molten-slag crust — the Phase-1 damage-type nudge, inverse of a Sandmaw). Both
+  attacks funnel through `checkPlayerHit()` (wedge geometry: dist + angular diff vs the locked
+  `attackAngle`) → `applyDamageToPlayer`, so dash i-frames/armor just work. Cone 30 dmg/140 kb,
+  hammer 44 dmg/240 kb. Fire-colored `Graphics` telegraph + execute visuals (fan/wedge), no
+  world-space red arcs on the sprite itself beyond the fill.
+- **`MainScene`** — `forgePosition` picked once in `create()` (after the vein, kept ≥1000px from the
+  camp / ≥900px from the vein via `pickForgePosition` over `pickBadlandsPoint`), before spawning so
+  a new `FORGE_CLEAR_RADIUS` (220) exclusion in `pickBadlandsPoint` keeps ordinary badlands content
+  out of the clearing (the standing exclusion-zone lesson). `spawnSunkenForge()` drops the
+  `sunken_forge` structure + the Cinderwrought + `FORGE_DECOR_COUNT` (9) scattered `slag_chunk`
+  props; `forgeLightPoints` glow ember at night (`collectLights`, radius 130). Discovery adds a
+  `map_forge` minimap/world landmark ("The Sunken Forge", fiery `0xd6481a`) + fires the `"poi"`
+  discovery toast (`updateAltarDiscovery`). Wired into the `checkPlayerHit` boss `instanceof` union,
+  `staggerMultiplierFor`, `classifyKill` (elite), the boss prompt-color union, and the respawn
+  `isBoss` exclusion. Scored as an **elite** kill (no dedicated mini-boss band, like the Gloamwarden).
+- **`BootScene`** — `cinderwrought` (34×42 charred-iron brute with molten cracks + forge-hammer
+  fists + ember eyes), `sunken_forge` (48×38 ruined smithy w/ molten crucible + anvil), `slag_chunk`
+  (16×14 cooled-lava rubble), `map_forge` marker (fiery orange-red).
+- **No smelting wiring** — Phase 4 doesn't exist, so the forge's smithy theme ships as loot + the
+  mini-boss fight only, per the plan's Phase-4 hook. **No post-kill interactable** (unlike the vein's
+  mineable nodes) — the loot IS the Cinderwrought's guaranteed drop. No `RECIPES.md` change.
+
+**Verified live** (`preview_eval` + screenshot): forge spawns at r≈4174 (accessible badlands),
+3377px from camp / 3167px from vein; all 4 textures load; boss HP 300/poise 70/scale 1.8; aggro +
+poise-bar-on-aggro; full `idle→telegraph→execute→recover→idle` cycle for BOTH attacks; cone hits in
+the fan / misses at 90° sidestep / misses beyond 210px; hammer hits front / misses behind / misses
+beyond 155px; resists blunt 0.8 / pierce 1.25 / slash 1.0; poise→0 staggers (×1.5); the fight kills a
+full-HP player (damage path end-to-end); discovery adds the `map_forge` landmark + fires the `"poi"`
+toast; `tsc --noEmit` clean, no console errors. Dashboard Enemies tab updated (the one manual mirror).
 
 Deferred to their own later sessions: the **badlands final boss** (new win-con) and the **Gremlin
 King critical-drop rework** (interlocks with Phase 4 gear).
