@@ -40,6 +40,7 @@ requires standing near a placed Workbench (`MainScene.isNearWorkbench`).
 | Gremlin Shirt | Armor | 1 | Yes | 3 Gremlin Leather, 1 Leather Scraps, 5 Bones | Light Armor 0 | Item (armor, chest) |
 | Gremlin Pants | Armor | 1 | Yes | 2 Gremlin Leather, 2 Leather Scraps, 1 Blackberry | Light Armor 0 | Item (armor, legs) |
 | Gremlin Totem | Misc | 1 | Yes | 3 Gremlin Trophy, 1 Wood, 1 Gremlin Guck | — | Item (ritual — summons the Gremlin King at the Boss Altar) |
+| Effigy of the Duneshaper | Misc | 1 | Yes | 3 Gloam-Bone Fetish, 2 Gloam Shard, 8 Bones | — | Item (ritual — summons the Duneshaper at a badlands altar; crafting it reveals the altars on the map) |
 
 \* Slingshot Pellets is tier 0 (no Workbench needed) but has an extra discovery
 gate beyond tier/ingredients: it stays hidden until the player has crafted a

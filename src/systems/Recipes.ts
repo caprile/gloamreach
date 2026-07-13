@@ -238,6 +238,16 @@ export const RECIPES: Recipe[] = [
     requiredSkills: [],
     output: { kind: "item", itemId: "gremlin_totem", itemName: "Gremlin Totem" },
   },
+  {
+    id: "tyrant_totem",
+    name: "Effigy of the Duneshaper",
+    description: "An effigy bound from warren fetishes and gloam shards. Offer it to a badlands altar's fire to summon the Duneshaper.",
+    category: "misc",
+    tier: 1,
+    costs: { warren_fetish: 3, gloam_shard: 2, bones: 8 },
+    requiredSkills: [],
+    output: { kind: "item", itemId: "tyrant_totem", itemName: "Effigy of the Duneshaper" },
+  },
 ];
 
 export function itemNameFor(itemId: string): string | undefined {

@@ -194,6 +194,11 @@ export class GremlinKing extends Enemy {
     return this.bossState === "staggered";
   }
 
+  // For the shared BossHealthUI (BossBarTarget) — its poise scale.
+  get poiseMax(): number {
+    return BOSS_MAX_POISE;
+  }
+
   // Fully custom state machine — does NOT call super.update() (same
   // precedent as Snake.ts). Returns false always: the boss never uses the
   // base "bite lands" contract, area damage is queried separately via

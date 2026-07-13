@@ -591,6 +591,25 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     hotbarable: false,
   },
 
+  // --- Duneshaper (badlands final boss) summon ---
+  warren_fetish: {
+    key: "warren_fetish",
+    name: "Gloam-Bone Fetish",
+    description: "A knot of bone and gloam-scarred hide, hoarded deep in the Duskrunner warrens. It hums faintly, as if pulling toward some old altar out in the badlands.",
+    texture: "icon_warren_fetish",
+    maxStack: 99,
+    hotbarable: false,
+  },
+  tyrant_totem: {
+    key: "tyrant_totem",
+    name: "Effigy of the Duneshaper",
+    description: "An effigy bound from warren fetishes and gloam shards. Offer it to a badlands altar's fire to call down what sleeps beneath the dunes.",
+    texture: "icon_tyrant_totem",
+    maxStack: 99,
+    hotbarable: true,
+    stats: [{ label: "Type", value: "Ritual Item" }],
+  },
+
   // --- gloaming vein (mineable rarity-ore POI + trophy refinement) ---
   gloam_shard: {
     key: "gloam_shard",

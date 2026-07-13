@@ -2,28 +2,39 @@
 
 ## Current State
 
-_Living snapshot — edit in place, never append. Last shipped: **Biome 2 — Phase 3 POI 2: the
-Sunken Forge** (2026-07-12, Opus). The **second of Phase 3's two POIs** (the user chose "two POIs
-first"; the badlands boss + Gremlin King rework stay deferred). A **bespoke fire/forge mini-boss**
-guarding a themed badlands landmark: `src/entities/Cinderwrought.ts` mirrors the Gloamwarden's
-telegraph/poise/stagger skeleton (a trimmed sibling, NOT a shared framework) with two new-feeling
-attacks — a **Cinder Cone** (the game's only cone: exhales a fire fan in a direction **locked at
-telegraph start**, so sidestep the 820ms wind-up) and a **Forge Hammer** (a heavy wide-but-short
-front-arc smash, re-locked at execute — back out to dodge). HP 300, poise 70 (stagger → ×1.5),
-scale 1.8, regens 12 HP/s deaggro'd; resists blunt ×0.8 / weak pierce ×1.25 (the Phase-1
-damage-type nudge). Both attacks funnel through `checkPlayerHit` → `applyDamageToPlayer` (dash
-i-frames/armor just work). Loot (locked): **1 Refined Trophy (Uncommon) + 3-5 Gloam Shards**
-(mirrors the Gloamwarden). The forge structure + scattered slag props glow ember at night; a
-`map_forge` landmark + `"poi"` discovery toast fire on discovery. **No smelting wiring** (Phase 4
-doesn't exist — smithy theme ships as loot + fight only) and **no post-kill interactable** (loot is
-the guaranteed drop, unlike the vein's mineable nodes). Placed once in `create()` ≥1000px from camp
-/ ≥900px from vein, before spawning, with a `FORGE_CLEAR_RADIUS` (220) exclusion in
-`pickBadlandsPoint`. Verified live via `preview_eval` + screenshot: spawns at r≈4174 (accessible
-badlands); full `idle→telegraph→execute→recover` cycle for both attacks; cone/hammer wedge geometry
-(hit-in-arc, miss-sidestep, miss-beyond-range); resists; stagger; the fight kills a full-HP player;
-discovery landmark + toast; sprites render. Next: **the badlands final boss** (new win-con) + the
-**Gremlin King critical-drop rework**. See "Biome 2 — Phase 3 POI 2: the Sunken Forge" below.
-[[survivor-rpg-biome-2-plan]]_
+_Living snapshot — edit in place, never append. Last shipped: **Biome 2 — Phase 3: The Duneshaper
+(badlands final boss + win-con swap)** (2026-07-13, Opus). The **new win-condition final boss**,
+demoting the Gremlin King to a mid-boss. `src/entities/Duneshaper.ts` — a gloam-warped apex
+sorcerer, bespoke telegraph/poise AI (GremlinKing/Gloamwarden precedent, NOT a shared framework).
+HP **900**, poise 120 (stagger → ×1.5 for 3s), scale 2.3; resists magic ×0.5, weak to melee ×1.3;
+regens 14 HP/s deaggro'd. **Phase-gated ESCALATION** (locked with the user): 3 attacks at full HP —
+**Gloam Volley** (3 magic bolts), **Sand Spikes** (3 PHYSICAL-pierce circles — armor applies),
+**Blink Nova** (teleport + radial magic burst); **+Gloamfire Lance** (locked-direction magic beam)
+at **70% HP**; **+Sunscorch Barrage** (7-circle magic carpet) **and enrage timing** at **50% HP**.
+Magic attacks bypass flat armor (Phase-1 hook); only the spikes are physical. All area attacks
+funnel through `checkPlayerHit` → `applyDamageToPlayer` (dash i-frames/armor just work); the volley
+self-resolves as projectiles. Loot: **2 Refined Trophy (Uncommon) + 5-8 Gloam Shards**. **Summon
+(the user):** its own badlands **Boss Altar(s)** — **3 scattered Tyrant Altars** — but the summon
+item (**Effigy of the Duneshaper**, tier-1 recipe) is crafted from **Gloam-Bone Fetishes looted
+from Duskrunner Warren caches** (guaranteed 1/cache). **Clue system (the user):** several altars so
+one's reachable + they glow at night + auto-discover as violet `map_tyrant_altar` landmarks +
+**crafting the effigy reveals ALL altars on the map** with a directional nudge to the nearest.
+**Win-con swap:** a Duneshaper kill fires `endRun("won")`; the Gremlin King no longer wins (still
+"boss" score, still drops its fang — its critical-drop rework is deferred to Phase 4). BossHealthUI
+generalized to a `BossBarTarget` interface (shows whichever big boss is engaged). Verified live via
+`preview_eval`: 3 spread altars + all 6 textures load; summon consumes the effigy + prompt gating;
+boss stats/resists/loot; phase pool 3→4→5; state-machine cycle; all 5 attacks' `checkPlayerHit`
+(physical-vs-magic + knockback + one-hit-per-instance + miss); volley = 3 magic bolts; **Duneshaper
+kill → `endRun("won")` (VICTORY screen rendered), Gremlin King kill → no win**; effigy craft reveals
+all altars + "tugs toward the north-west" nudge; boss renders (visible/alpha/onScreen). Next:
+**Gremlin King critical-drop rework** (Phase 4 gear gate); then Phase 4 smelting/forging + Phase 5
+tier-2 relics. See "Biome 2 — Phase 3: The Duneshaper" below. [[survivor-rpg-biome-2-plan]]_
+
+_Prior: **Biome 2 — Phase 3 POI 2: the Sunken Forge** (2026-07-12, Opus). A **bespoke fire/forge
+mini-boss** (`src/entities/Cinderwrought.ts`) guarding a themed badlands landmark — a Cinder Cone
+(locked-direction fire fan, the game's only cone) + a Forge Hammer (wide-but-short front-arc smash).
+HP 300, poise 70, resists blunt ×0.8 / weak pierce ×1.25. Loot: 1 Refined Trophy (Uncommon) + 3-5
+Gloam Shards. `map_forge` landmark + `"poi"` toast on discovery. See its entry below._
 
 _Prior: **Biome 2 — Phase 3: Duskrunner Warren POI** (2026-07-12, Opus). The first of Phase 3's two
 POIs — a **two-wave destructible den**, NOT a shack clone: `src/entities/BadlandsDen.ts` is a burrow
@@ -180,13 +191,15 @@ layer — resist/weak, AOE arcs, pack-aggro, magic-bypass, all dormant hooks), *
 light up those hooks; plan `.claude/plans/biome-2-phase-2-enemies.md`), and **Phase 2b**
 (the 4th native creature — the **Sandmaw** burrowing ambusher; plan
 `.claude/plans/biome-2-phase-2b-sandmaw.md`). The badlands is now **walkable + populated with a
-complete 4-enemy roster**. **Phase 3 is underway** — the user chose "two POIs first," and **both POIs
-have now shipped**: POI 1 the Duskrunner Warren (two-wave destructible den → cache) and **POI 2 the
-Sunken Forge** (the Cinderwrought fire/forge mini-boss; see below). Remaining Phase 3 work (own
-sessions): the **badlands boss** (new win-con, demotes the Gremlin King) + the **Gremlin King
-critical-drop rework**. Then Phase 4 smelting/forging gear tier; Phase 5 tier-2 relics + biome-1 trim +
-family-replace-with-refund. The master-plan tail **M-TE** (trophy-gated gear) is folded into
-this biome-2 work. Real pixel art/animations stay deliberately deferred until content/balance
+complete 4-enemy roster**. **Phase 3 is underway** — the user chose "two POIs first," which shipped
+(Duskrunner Warren + Sunken Forge), and now the **badlands final boss has shipped too: the
+Duneshaper** (`src/entities/Duneshaper.ts`), the **new win-condition** (a Duneshaper kill wins the
+run; the Gremlin King is demoted to a mid-boss). Summoned via **3 scattered badlands Tyrant Altars**
++ an **Effigy of the Duneshaper** crafted from **Warren-cache fetishes**, with a **clue system**
+(reveal-all-altars-on-craft + night glow + map landmarks). **Remaining Phase 3 work:** the **Gremlin
+King critical-drop rework** (deferred — it must gate the not-yet-built Phase 4 gear). Then Phase 4
+smelting/forging gear tier; Phase 5 tier-2 relics + biome-1 trim + family-replace-with-refund. The
+master-plan tail **M-TE** (trophy-gated gear) is folded into this biome-2 work. Real pixel art/animations stay deliberately deferred until content/balance
 settle (roadmap item 8). Phase 2/2b badlands stats/counts + Phase 1's arc/resist/pack numbers are
 all first-pass — expect a tuning pass as the biome fills out.
 
@@ -223,6 +236,79 @@ all first-pass — expect a tuning pass as the biome fills out.
 ## Recent Entries
 
 > Older entries in STATUS-archive.md.
+
+### Biome 2 — Phase 3: The Duneshaper (badlands final boss + win-con swap)
+
+Plan: `.claude/plans/biome-2-phase-3-badlands-boss.md` (Phase 3, umbrella `biome-2-sunscorch-badlands.md`).
+Built on **Opus** (new boss mechanic). The **badlands final boss** and the game's **new
+win-condition**, demoting the Gremlin King to a mid-boss. Locked with the user via `AskUserQuestion` +
+a follow-up: scope = boss + win-swap now (King's critical-drop rework deferred to Phase 4); identity
+= a gloam-warped apex sorcerer; difficulty = phase-gated attack escalation; summon = its own altars
+but the totem is gathered from a POI (the Warrens); **plus** multiple altars + a clue system.
+
+**`src/entities/Duneshaper.ts`** — bespoke telegraph/poise AI (GremlinKing/Gloamwarden precedent,
+NOT a shared framework); extends `Enemy`, fully overrides `update()`; `idle → telegraphing →
+executing → recovering → staggered`. HP **900** (final boss, above the King's 600), poise 120
+(stagger → ×1.5 for 3s), scale 2.3, aggro 300, leash 580, regens 14 HP/s deaggro'd. A **caster**:
+holds ~220px and casts. `resistances: { magic: 0.5, slash/blunt/pierce: 1.3 }` (soft caster hide).
+**Damage-type mix** so gear reads: Sand Spikes are PHYSICAL pierce (flat armor applies); Volley/Nova/
+Lance/Barrage are `magic` (bypass flat armor, Phase-1 hook).
+- **Phase-gated escalation** (`availableAttacks()` grows as HP drops; `pickAttack` never repeats):
+  - **100%→:** Gloam Volley (3 magic `gloam_bolt` projectiles, ±18°), Sand Spikes (3 physical circles
+    across the player's spot), Blink Nova (teleport to the player + radial magic burst 132px).
+  - **≤70% HP:** + Gloamfire Lance (locked-direction magic beam, 340px/±10° — sidestep the wind-up).
+  - **≤50% HP:** + Sunscorch Barrage (7-circle magic carpet — find a gap) **and** enrage timing
+    (shorter telegraph/recovery + faster move, captured per state-entry).
+- Area attacks resolve via `checkPlayerHit()` (`{damage, knockback?, dmgType?}`) → `applyDamageToPlayer`
+  (dash i-frames/armor just work); the volley self-resolves as projectiles (the enemy-projectile→
+  player overlap forwards `dmgType: "magic"`). One hit per attack instance. Loot: **2
+  `refined_trophy_uncommon` + 5-8 `gloam_shard`** (Phase 5 re-tiers the badlands trophy set).
+
+**Summon (the user: own altar, totem gathered from a POI):**
+- **`warren_fetish`** ("Gloam-Bone Fetish", new `ResourceType`) added to `DUSKRUNNER_WARREN_LOOT_TABLE`
+  (guaranteed 1/cache). **`tyrant_totem`** ("Effigy of the Duneshaper", new crafted item) — tier-1
+  recipe `{ warren_fetish: 3, gloam_shard: 2, bones: 8 }`, a consumable like `gremlin_totem`.
+- **`BossAltar.kind`** (`"gremlin" | "tyrant"`). The forest War-Camp altar stays `"gremlin"`;
+  `spawnTyrantAltars` adds **3** `"tyrant"` altars (own `tyrant_altar` texture) via
+  `pickTyrantAltarPositions` (`pickBadlandsPoint`, ≥2600px apart), pushed into `bossAltars` so hover/
+  night-light/discovery reuse. Positions picked in `create()` before spawning; a `TYRANT_ALTAR_CLEAR_
+  RADIUS` (170) exclusion keeps content off the clearings. `attemptSummonBoss` branches on kind →
+  `attemptSummonDuneshaper` (consumes the effigy, guards a global `tyrantSummoned` flag, spawns the
+  boss after the ritual delay). `promptForAltar` tyrant → "[LMB] Offer the Effigy".
+
+**Clue system (the user — the world is huge, a single altar could be across the map):** (1) all
+tyrant altars glow at night (`collectLights` already lights `bossAltars`); (2) `updateAltarDiscovery`
+gives them a distinct violet `map_tyrant_altar` landmark + "Duneshaper's Altar" label when explored
+near; (3) **the load-bearing fix** — crafting the effigy (`onTyrantTotemCrafted`, hooked in
+`craftRecipe`) reveals **ALL** tyrant altars on the map at once + an event-log directional nudge
+("The effigy tugs toward the north-west…") toward the nearest (a `compassDir` helper).
+
+**Win-con swap:** a `Duneshaper` kill fires `endRun("won")`; the `GremlinKing` win trigger was
+removed (still `classifyKill` "boss" = 500 pts, still drops `gremlin_king_fang` — Phase-4 rework).
+Wired into `classifyKill`, the `checkPlayerHit` boss union, `staggerMultiplierFor`, the boss
+prompt-color union, and the respawn `isBoss` exclusion. **BossHealthUI generalized** from a
+`GremlinKing`-typed param to a `BossBarTarget` interface (`displayName/health/maxHealth/poise/
+poiseMax/depleted/isEngaged()`); the scene passes `engagedBigBoss()` (Gremlin King or Duneshaper,
+whichever is engaged). GremlinKing got a `poiseMax` getter. Mini-bosses stay off the big HUD.
+
+**`BootScene`** — `duneshaper` (44×54 hooded gloam-tyrant w/ staff + gloam-crystal), `tyrant_altar`
+(64×56 sandstone ring + violet gloamfire), `gloam_bolt` (violet magic bolt), `icon_warren_fetish`,
+`icon_tyrant_totem`, `map_tyrant_altar` (violet marker).
+
+Files: new `Duneshaper.ts` + plan; `BossAltar.ts` (kind), `Inventory.ts` (+warren_fetish), `Items.ts`
+(+2 defs), `Recipes.ts` (+tyrant_totem), `BootScene.ts` (6 textures), `BossHealthUI.ts` (interface),
+`GremlinKing.ts` (`poiseMax`), `MainScene.ts` (fields/reset, positions, spawn, exclusion, altar
+branching, summon, win/HUD/hooks, craft-clue, warren loot), `dashboard/main.ts` (Enemies mirror),
+`RECIPES.md`. **Verified:** `tsc --noEmit` clean; `preview_start` boots with no console errors;
+`preview_eval` — 3 spread tyrant altars (r 2563–3978) + all 6 textures load; summon consumes the
+effigy + prompt gating (in-reach / summoned=null); boss HP 900 / poise 120 / scale 2.3 / resists /
+loot; phase pool 3→4→5 by HP; full state-machine cycle; **all 5 attacks' `checkPlayerHit`** — spikes
+50 physical (armor applies) / nova 42 magic kb220 / lance 46 magic / barrage 30 magic, one hit per
+instance, miss when far; volley = 3 magic gloam bolts; **Duneshaper kill → `endRun("won")` (the
+VICTORY screen rendered), Gremlin King kill → NO win**; effigy craft reveals all 3 altars + fires the
+directional nudge; `engagedBigBoss()` returns "The Duneshaper"; boss renders (visible/alpha 1/
+onScreen, night 0). Dashboard Enemies tab updated (the one manual mirror). **Next: the Gremlin King
+critical-drop rework** (Phase 4 gear gate).
 
 ### Biome 2 — Phase 3 POI 2: the Sunken Forge (Cinderwrought fire/forge mini-boss)
 

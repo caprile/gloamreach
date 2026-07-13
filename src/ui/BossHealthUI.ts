@@ -1,13 +1,24 @@
 import Phaser from "phaser";
-import { GremlinKing, BOSS_MAX_POISE } from "../entities/GremlinKing";
+
+// Anything the big boss bar can display — the Gremlin King (mid-boss) or the
+// Duneshaper (final boss). A tiny structural interface instead of importing a
+// concrete class, so each boss just exposes its own poise scale via poiseMax.
+export interface BossBarTarget {
+  displayName: string;
+  health: number;
+  maxHealth: number;
+  poise: number;
+  poiseMax: number;
+  depleted: boolean;
+  isEngaged(): boolean;
+}
 
 // Fixed top-of-screen boss encounter bar (Elden Ring/Valheim-style — big,
 // impossible to miss, not the small floating world-space bar every regular
-// enemy gets). Only ever shows the Gremlin King today, but takes the base
-// class so a future second boss doesn't need a new UI file. Visible only
-// while a boss is currently engaged (aggro'd) and not yet defeated — same
-// gating condition the floating bars already use, just surfaced somewhere
-// the player can't miss mid-fight.
+// enemy gets). Shows whichever big boss (Gremlin King / Duneshaper) is engaged.
+// Visible only while that boss is currently engaged (aggro'd) and not yet
+// defeated — same gating condition the floating bars already use, just surfaced
+// somewhere the player can't miss mid-fight.
 const BAR_W = 560;
 const HP_BAR_H = 28;
 const POISE_BAR_H = 12;
@@ -70,7 +81,7 @@ export class BossHealthUI {
       .setVisible(false);
   }
 
-  update(boss: GremlinKing | null): void {
+  update(boss: BossBarTarget | null): void {
     const visible = !!boss && !boss.depleted && boss.isEngaged();
     this.nameText.setVisible(visible);
     this.hpBarBg.setVisible(visible);
@@ -81,6 +92,6 @@ export class BossHealthUI {
 
     this.nameText.setText(boss.displayName);
     this.hpBarFill.setScale(Math.max(0, boss.health / boss.maxHealth), 1);
-    this.poiseBarFill.setScale(Math.max(0, boss.poise / BOSS_MAX_POISE), 1);
+    this.poiseBarFill.setScale(Math.max(0, boss.poise / boss.poiseMax), 1);
   }
 }

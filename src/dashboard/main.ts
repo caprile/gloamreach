@@ -250,6 +250,22 @@ const ENEMIES: EnemyStat[] = [
     notes:
       "Sunken Forge guardian (badlands Phase 3 POI 2). Poise 70 (stagger → 1.5× dmg for 2.5s). Scale 1.8, scored as an elite kill. Resists blunt ×0.8, weak to pierce ×1.25. Bespoke attacks (NOT the roster's charge/slam/smash/eruption): the Cinder Cone locks its direction at telegraph START (sidestep the wind-up) — the game's only cone; the Forge Hammer re-locks at execute and hits a wide short front wedge (back out to dodge). Regens 12 HP/s while deaggro'd. No post-kill node — loot is its guaranteed drop.",
   },
+  {
+    name: "The Duneshaper (FINAL BOSS)",
+    hp: 900,
+    speed: 48,
+    aggro: 300,
+    attacks: [
+      { label: "Gloam Volley (3 magic bolts, ±18° spread — projectiles)", damage: 24, telegraphMs: 700 },
+      { label: "Sand Spikes (3 circles, PHYSICAL pierce — armor applies)", damage: 50, telegraphMs: 850 },
+      { label: "Blink Nova (blink to player, radial magic burst 132px)", damage: 42, telegraphMs: 650 },
+      { label: "Gloamfire Lance @70% HP (locked-direction magic beam, 340px / ±10°)", damage: 46, telegraphMs: 900 },
+      { label: "Sunscorch Barrage @50% HP (7-circle magic carpet)", damage: 30, telegraphMs: 1100 },
+    ],
+    loot: "5-8 Gloam Shard + 2 Refined Trophy (Uncommon)",
+    notes:
+      "SUNSCORCH BADLANDS FINAL BOSS + new WIN-CONDITION (demotes the Gremlin King to a mid-boss). Poise 120 (stagger → 1.5× dmg for 3s). Scale 2.3. Resists magic ×0.5, weak to melee (slash/blunt/pierce ×1.3). Phase-gated ESCALATION: 3 attacks at full HP, +Gloamfire Lance at 70% HP, +Sunscorch Barrage AND enrage timing at 50% HP. A caster — holds ~220px and casts, magic attacks bypass flat armor, only Sand Spikes is physical. Summoned by offering an Effigy of the Duneshaper at any of the 3 badlands Tyrant Altars (crafting the effigy reveals them all on the map). Regens 14 HP/s while deaggro'd.",
+  },
 ];
 
 // ---------------------------------------------------------------------------

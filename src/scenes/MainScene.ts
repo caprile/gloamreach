@@ -25,6 +25,7 @@ import { BossAltar } from "../entities/BossAltar";
 import { GremlinKing, STAGGER_DAMAGE_MULTIPLIER } from "../entities/GremlinKing";
 import { Gloamwarden, WARDEN_STAGGER_DAMAGE_MULTIPLIER } from "../entities/Gloamwarden";
 import { Cinderwrought, CINDERWROUGHT_STAGGER_DAMAGE_MULTIPLIER } from "../entities/Cinderwrought";
+import { Duneshaper, DUNESHAPER_STAGGER_DAMAGE_MULTIPLIER } from "../entities/Duneshaper";
 import type { LootContainer, LootRollEntry } from "../systems/LootContainer";
 import type { ResourceType } from "../systems/Inventory";
 import {
@@ -111,7 +112,7 @@ import { EventLogUI } from "../ui/EventLogUI";
 import { KeybindsUI } from "../ui/KeybindsUI";
 import { MinimapUI, PANEL_W as MINIMAP_W, PANEL_H as MINIMAP_H, MARGIN as MINIMAP_MARGIN } from "../ui/MinimapUI";
 import { WorldMapUI } from "../ui/WorldMapUI";
-import { BossHealthUI } from "../ui/BossHealthUI";
+import { BossHealthUI, type BossBarTarget } from "../ui/BossHealthUI";
 import { FogOfWar, REVEAL_RADIUS } from "../systems/Fog";
 import { ExploredMap } from "../systems/ExploredMap";
 import { WorldBiomes, type BiomeId } from "../systems/WorldBiomes";
@@ -352,6 +353,9 @@ const DUSKRUNNER_WARREN_LOOT_TABLE: LootRollEntry[] = [
   { key: "sandmaw_chitin", min: 1, max: 2, chance: 0.35 },
   { key: "gloam_shard", min: 1, max: 2, chance: 0.4 },
   { key: "duskrunner_trophy", min: 1, max: 1, chance: 0.5 },
+  // The Duneshaper summon ingredient (badlands final boss). Guaranteed 1/cache —
+  // clearing a few Warrens gathers the fetishes an Effigy of the Duneshaper needs.
+  { key: "warren_fetish", min: 1, max: 1, chance: 1.0 },
 ];
 
 // Warren placement (biome 2 Phase 3): dens should be FAIRLY COMMON — roughly one
@@ -372,6 +376,14 @@ const FORGE_MIN_DIST_FROM_CAMP = 1000;
 const FORGE_MIN_DIST_FROM_VEIN = 900;
 const FORGE_CLEAR_RADIUS = 220;
 const FORGE_DECOR_COUNT = 9; // decorative slag chunks scattered across the clearing
+
+// Duneshaper altars (biome 2 Phase 3 — the badlands final boss). SEVERAL scatter
+// the badlands so at least one is reachable no matter which side of the huge
+// world the player explored (the user); crafting the summon Effigy also reveals
+// them all on the map (the clue system). Spread apart, kept clear of content.
+const TYRANT_ALTAR_COUNT = 3;
+const TYRANT_ALTAR_MIN_SPACING = 2600; // spread across the badlands ring
+const TYRANT_ALTAR_CLEAR_RADIUS = 170; // keep wild badlands spawns off the altar clearing
 
 // The main gameplay scene: build the world, spawn the player and resources,
 // follow the camera, and run the mouse-driven interaction + HUD.
@@ -479,6 +491,18 @@ export class MainScene extends Phaser.Scene {
   // (scene.restart doesn't re-run field initializers).
   private campLightPoints: { x: number; y: number }[] = [];
   private gremlinKing: GremlinKing | null = null;
+
+  // The Duneshaper (biome 2 Phase 3) — the badlands FINAL BOSS + new
+  // win-condition. Several tyrant altars scatter the badlands (so one is
+  // reachable); the boss is summoned once per run by offering an Effigy of the
+  // Duneshaper at any of them. tyrantAltarPositions is chosen in create() before
+  // spawning (so a clear-radius exclusion keeps content off them);
+  // tyrantAltarsRevealed gates the one-time reveal-all-altars clue on totem
+  // craft. All reset per run in create() (scene.restart field-init gotcha).
+  private duneshaper: Duneshaper | null = null;
+  private tyrantSummoned = false;
+  private tyrantAltarPositions: { x: number; y: number }[] = [];
+  private tyrantAltarsRevealed = false;
   // Gloaming Vein POI — chosen once in create() (after altarPosition, so it can
   // steer clear of the war camp). Its ore nodes start shielded and are cracked
   // open when the Gloamwarden dies. veinLightPoints glow purple at night
@@ -741,6 +765,10 @@ export class MainScene extends Phaser.Scene {
     this.hoveredAltar = null;
     this.campLightPoints = [];
     this.gremlinKing = null;
+    this.duneshaper = null;
+    this.tyrantSummoned = false;
+    this.tyrantAltarPositions = [];
+    this.tyrantAltarsRevealed = false;
     this.veinPosition = null;
     this.gloamingVeinNodes = [];
     this.gloamwarden = null;
@@ -825,6 +853,10 @@ export class MainScene extends Phaser.Scene {
     // FORGE_CLEAR_RADIUS exclusion in pickBadlandsPoint keeps ordinary badlands
     // content out of the forge clearing.
     this.forgePosition = this.pickForgePosition(this.sessionRng());
+    // Duneshaper altars (biome 2 Phase 3 final boss) — several scattered badlands
+    // altars, chosen before spawning so their TYRANT_ALTAR_CLEAR_RADIUS exclusion
+    // in pickBadlandsPoint keeps ordinary content off the altar clearings.
+    this.tyrantAltarPositions = this.pickTyrantAltarPositions(this.sessionRng());
 
     // Ground: a repeating grass texture only over the FOREST REGION (biome 1),
     // where it shows through the translucent forest bake. A world-sized tilesprite
@@ -910,6 +942,7 @@ export class MainScene extends Phaser.Scene {
     this.spawnGloamingVein();
     this.spawnSunkenForge(); // biome 2 Phase 3 POI 2 — the Cinderwrought mini-boss landmark
     this.spawnBadlandsDens(); // biome 2 Phase 3 POI — before wild packs so den clearings stay clear
+    this.spawnTyrantAltars(); // biome 2 Phase 3 — the badlands final-boss altars
     this.spawnBadlandsEnemies(); // biome 2 Phase 2 — out in the badlands patchwork
     this.physics.add.collider(this.enemyGroup, solids);
     this.physics.add.collider(this.player, this.enemyGroup);
@@ -1214,7 +1247,7 @@ export class MainScene extends Phaser.Scene {
       this.updateMagnet(delta);
       this.updateTreeOcclusion(delta);
       this.updateMapReveal();
-      this.bossHealthUI.update(this.gremlinKing);
+      this.bossHealthUI.update(this.engagedBigBoss());
       this.syncSpeckleLayer();
       return;
     }
@@ -1277,7 +1310,7 @@ export class MainScene extends Phaser.Scene {
     this.updateTreeOcclusion(delta);
     this.updateMapReveal();
     this.updateShackGlows();
-    this.bossHealthUI.update(this.gremlinKing);
+    this.bossHealthUI.update(this.engagedBigBoss());
     this.updateCraftingMenuWorkbenchProximity();
     this.syncSpeckleLayer();
   }
@@ -1454,7 +1487,10 @@ export class MainScene extends Phaser.Scene {
     this.respawnAccumMs = 0;
 
     const isBoss = (e: Enemy) =>
-      e instanceof GremlinKing || e instanceof Gloamwarden || e instanceof Cinderwrought;
+      e instanceof GremlinKing ||
+      e instanceof Gloamwarden ||
+      e instanceof Cinderwrought ||
+      e instanceof Duneshaper;
     const alive = this.enemies.filter((e) => !e.depleted && !isBoss(e));
     if (alive.length >= RESPAWN_MAX_LIVE) return;
 
@@ -2491,6 +2527,10 @@ export class MainScene extends Phaser.Scene {
   // mid-interaction still consumes correctly), then a short ritual pause
   // before the boss actually spawns.
   private attemptSummonBoss(altar: BossAltar): void {
+    if (altar.kind === "tyrant") {
+      this.attemptSummonDuneshaper(altar);
+      return;
+    }
     if (altar.summoned) return;
     if (this.hotbar.container.count("gremlin_totem") >= 1) {
       this.hotbar.container.removeCount("gremlin_totem", 1);
@@ -2515,6 +2555,27 @@ export class MainScene extends Phaser.Scene {
     this.enemies.push(boss);
     this.enemyGroup.add(boss);
     this.eventLog.add("combat", "The Gremlin King rises!");
+  }
+
+  // Duneshaper summon (biome 2 Phase 3). Consumes one Effigy of the Duneshaper
+  // (hotbar first, per the prompt gate; backpack fallback) at any tyrant altar,
+  // then a ritual pause before the final boss spawns. tyrantSummoned gates it to
+  // one summon per run across all altars.
+  private attemptSummonDuneshaper(altar: BossAltar): void {
+    if (this.tyrantSummoned) return;
+    if (this.hotbar.container.count("tyrant_totem") >= 1) {
+      this.hotbar.container.removeCount("tyrant_totem", 1);
+    } else if (this.backpack.count("tyrant_totem") >= 1) {
+      this.backpack.removeCount("tyrant_totem", 1);
+    } else {
+      this.eventLog.add("info", "The altar hungers for an effigy — none offered.");
+      return;
+    }
+    this.afterItemMove();
+    this.tyrantSummoned = true;
+    altar.summoned = true;
+    this.eventLog.add("combat", "The altar's gloamfire flares violet...");
+    this.time.delayedCall(MainScene.BOSS_RITUAL_DELAY_MS, () => this.spawnDuneshaper(altar));
   }
 
   // Move a whole stack from `container[index]` into the open rack's input slot,
@@ -2694,6 +2755,14 @@ export class MainScene extends Phaser.Scene {
       if (
         this.forgePosition &&
         Phaser.Math.Distance.Between(x, y, this.forgePosition.x, this.forgePosition.y) < FORGE_CLEAR_RADIUS
+      )
+        continue;
+      // Duneshaper altars (Phase 3): keep wild badlands content off each altar's
+      // own clearing so the summon landmark reads clean.
+      if (
+        this.tyrantAltarPositions.some(
+          (a) => Phaser.Math.Distance.Between(x, y, a.x, a.y) < TYRANT_ALTAR_CLEAR_RADIUS,
+        )
       )
         continue;
       // Badlands must be the DOMINANT biome here, not merely present: near the
@@ -3523,6 +3592,37 @@ export class MainScene extends Phaser.Scene {
     this.bossAltars.push(altar);
   }
 
+  // Duneshaper altars (biome 2 Phase 3). Pick several spots out in the badlands,
+  // spread apart, so at least one is reachable from wherever the player explored
+  // (the world is huge — a single altar could sit on the far side). Positions are
+  // chosen in create() BEFORE spawning so pickBadlandsPoint's TYRANT_ALTAR_CLEAR_
+  // RADIUS exclusion keeps content off the clearings.
+  private pickTyrantAltarPositions(rng: Phaser.Math.RandomDataGenerator): { x: number; y: number }[] {
+    const picks: { x: number; y: number }[] = [];
+    let guard = 0;
+    while (picks.length < TYRANT_ALTAR_COUNT && guard++ < 600) {
+      const p = this.pickBadlandsPoint(rng);
+      if (!p) continue;
+      if (picks.some((q) => Phaser.Math.Distance.Between(p.x, p.y, q.x, q.y) < TYRANT_ALTAR_MIN_SPACING)) continue;
+      picks.push(p);
+    }
+    return picks;
+  }
+
+  private spawnTyrantAltars(): void {
+    for (const p of this.tyrantAltarPositions) {
+      this.bossAltars.push(new BossAltar(this, { x: p.x, y: p.y, kind: "tyrant" }));
+    }
+  }
+
+  private spawnDuneshaper(altar: BossAltar): void {
+    const boss = new Duneshaper(this, { x: altar.x, y: altar.y - 70 });
+    this.duneshaper = boss;
+    this.enemies.push(boss);
+    this.enemyGroup.add(boss);
+    this.eventLog.add("combat", "Sand screams skyward — the Duneshaper rises!");
+  }
+
   // Gloaming Vein POI: a forest clearing a notable distance from BOTH world
   // center and the war camp, so it reads as its own destination. Reuses
   // pickSpawnPoint (which already excludes the camp) and rejects candidates too
@@ -3685,6 +3785,17 @@ export class MainScene extends Phaser.Scene {
       if (Phaser.Math.Distance.Between(this.player.x, this.player.y, altar.x, altar.y) > ALTAR_DISCOVERY_RADIUS)
         continue;
       altar.discoveredOnMap = true;
+      if (altar.kind === "tyrant") {
+        // Duneshaper's Altar (badlands final boss) — a gloam-violet landmark.
+        this.exploredMap.addLandmark({
+          worldX: altar.x,
+          worldY: altar.y,
+          iconKey: "map_tyrant_altar",
+          label: "Duneshaper's Altar",
+          tint: 0x9a5ee8,
+        });
+        continue;
+      }
       this.exploredMap.addLandmark({
         worldX: altar.x,
         worldY: altar.y,
@@ -4164,7 +4275,13 @@ export class MainScene extends Phaser.Scene {
   private promptColorFor(): string {
     const e = this.hoveredEnemy;
     if (!e) return "#ffffff";
-    if (e instanceof GremlinKing || e instanceof Gloamwarden || e instanceof Cinderwrought) return "#ff5a5a";
+    if (
+      e instanceof GremlinKing ||
+      e instanceof Gloamwarden ||
+      e instanceof Cinderwrought ||
+      e instanceof Duneshaper
+    )
+      return "#ff5a5a";
     if (e.elite) return "#ff9d5c";
     return "#ffffff";
   }
@@ -4233,7 +4350,14 @@ export class MainScene extends Phaser.Scene {
   // whether the altar looks interactable.
   private promptForAltar(altar: BossAltar): string | null {
     const inReach = Phaser.Math.Distance.Between(this.player.x, this.player.y, altar.x, altar.y) <= REACH;
-    if (!inReach || altar.summoned) return null;
+    if (!inReach) return null;
+    if (altar.kind === "tyrant") {
+      // Any tyrant altar goes quiet once the Duneshaper has been summoned this
+      // run (one boss/run, gated globally on tyrantSummoned, not per-altar).
+      if (this.tyrantSummoned) return null;
+      return "[LMB] Offer the Effigy";
+    }
+    if (altar.summoned) return null;
     return "[LMB] Call Their Leader";
   }
 
@@ -4468,10 +4592,21 @@ export class MainScene extends Phaser.Scene {
   // Poise-break punish multiplier for a staggerable boss/mini-boss, else 1.
   // Shared by the primary melee hit, arc secondaries, and ranged so the three
   // can't drift.
+  // Whichever "big" boss (Gremlin King / Duneshaper) is currently engaged, for
+  // the fixed top-of-screen BossHealthUI. Mini-bosses (Gloamwarden/Cinderwrought)
+  // stay off the big bar — they keep only their floating world-space bars.
+  private engagedBigBoss(): BossBarTarget | null {
+    for (const b of [this.gremlinKing, this.duneshaper]) {
+      if (b && !b.depleted && b.isEngaged()) return b;
+    }
+    return null;
+  }
+
   private staggerMultiplierFor(enemy: Enemy): number {
     if (enemy instanceof GremlinKing && enemy.isStaggered()) return STAGGER_DAMAGE_MULTIPLIER;
     if (enemy instanceof Gloamwarden && enemy.isStaggered()) return WARDEN_STAGGER_DAMAGE_MULTIPLIER;
     if (enemy instanceof Cinderwrought && enemy.isStaggered()) return CINDERWROUGHT_STAGGER_DAMAGE_MULTIPLIER;
+    if (enemy instanceof Duneshaper && enemy.isStaggered()) return DUNESHAPER_STAGGER_DAMAGE_MULTIPLIER;
     return 1;
   }
 
@@ -4621,10 +4756,12 @@ export class MainScene extends Phaser.Scene {
     this.hoveredEnemy = null;
     this.promptText.setVisible(false);
 
-    // Run/score tracking. Killing the final boss (Gremlin King, for now) wins
-    // the run — end it after a short beat so the death feedback plays first.
+    // Run/score tracking. Killing the FINAL boss (the Duneshaper) wins the run —
+    // end it after a short beat so the death feedback plays first. The Gremlin
+    // King is now a mid-boss (biome 2 demoted it): still a "boss" score, but no
+    // longer the win-condition.
     this.run.recordKill(this.classifyKill(enemy));
-    if (enemy instanceof GremlinKing) {
+    if (enemy instanceof Duneshaper) {
       this.time.delayedCall(1200, () => this.endRun("won"));
     }
   }
@@ -4658,7 +4795,7 @@ export class MainScene extends Phaser.Scene {
   // Kill category for run scoring: the final boss, an elite variant, or a plain
   // enemy. Kept here (not on Enemy) since it's a scoring concern, not behavior.
   private classifyKill(enemy: Enemy): KillCategory {
-    if (enemy instanceof GremlinKing) return "boss";
+    if (enemy instanceof GremlinKing || enemy instanceof Duneshaper) return "boss";
     // The Gloamwarden/Cinderwrought are mini-bosses — no dedicated score band
     // exists, so they're scored at the elite tier (per the plan's "simplest"
     // open sub-decision).
@@ -4764,6 +4901,7 @@ export class MainScene extends Phaser.Scene {
         enemy instanceof GremlinKing ||
         enemy instanceof Gloamwarden ||
         enemy instanceof Cinderwrought ||
+        enemy instanceof Duneshaper ||
         enemy instanceof Hexling ||
         enemy instanceof Sandmaw
       ) {
@@ -5362,6 +5500,51 @@ export class MainScene extends Phaser.Scene {
     this.recomputeEquipped();
     this.refreshHud();
     this.inventoryMenu.refresh();
+    // Clue system (biome 2 Phase 3): the moment the player commits to the boss
+    // by crafting the effigy, reveal ALL badlands altars on the map so a distant
+    // one is never a dead end (the world is huge).
+    if (key === "tyrant_totem") this.onTyrantTotemCrafted();
+  }
+
+  // Reveal every Duneshaper altar on the world map (one-time) + point the player
+  // at the nearest, so crafting the effigy always tells them where to go. The
+  // altars also auto-discover when explored near and glow at night — this is the
+  // load-bearing "the altar is across the map" fix (the user).
+  private onTyrantTotemCrafted(): void {
+    if (this.tyrantAltarsRevealed) return;
+    this.tyrantAltarsRevealed = true;
+    let nearest: BossAltar | null = null;
+    let nearestDist = Infinity;
+    for (const altar of this.bossAltars) {
+      if (altar.kind !== "tyrant") continue;
+      if (!altar.discoveredOnMap) {
+        altar.discoveredOnMap = true;
+        this.exploredMap.addLandmark({
+          worldX: altar.x,
+          worldY: altar.y,
+          iconKey: "map_tyrant_altar",
+          label: "Duneshaper's Altar",
+          tint: 0x9a5ee8,
+        });
+      }
+      const d = Phaser.Math.Distance.Between(this.player.x, this.player.y, altar.x, altar.y);
+      if (d < nearestDist) {
+        nearestDist = d;
+        nearest = altar;
+      }
+    }
+    if (nearest) {
+      const dir = this.compassDir(this.player.x, this.player.y, nearest.x, nearest.y);
+      this.eventLog.add("combat", `The effigy tugs toward the ${dir} — a Duneshaper's Altar waits (see your map).`);
+    }
+  }
+
+  // Rough 8-point compass direction from (x0,y0) toward (x1,y1) — for the
+  // effigy's directional nudge (y grows downward in world space).
+  private compassDir(x0: number, y0: number, x1: number, y1: number): string {
+    const deg = (Phaser.Math.RadToDeg(Math.atan2(y1 - y0, x1 - x0)) + 360) % 360;
+    const names = ["east", "south-east", "south", "south-west", "west", "north-west", "north", "north-east"];
+    return names[Math.round(deg / 45) % 8];
   }
 
   private canAffordBatch(recipe: Recipe, batches: number): boolean {

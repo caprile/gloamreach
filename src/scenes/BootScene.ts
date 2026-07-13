@@ -441,6 +441,23 @@ export class BootScene extends Phaser.Scene {
     g.fillTriangle(28, 24, 36, 24, 32, 10); // flame highlight
     g.generateTexture("boss_altar", 64, 56);
 
+    // Duneshaper's Altar (badlands final boss) — a weathered sandstone ring with
+    // a gloam-violet flame, distinct from the gremlin altar's orange fire so it
+    // reads as its own landmark out in the dunes. 64x56.
+    g.clear();
+    g.fillStyle(0x9a7a4a, 1);
+    g.fillRect(4, 30, 56, 20); // sandstone base ring
+    g.fillStyle(0x6a5230, 1);
+    g.fillRect(20, 24, 24, 20); // pit recess
+    g.fillStyle(0x8a4ad0, 1);
+    g.fillTriangle(26, 24, 38, 24, 32, 4); // gloamfire
+    g.fillStyle(0xc79cf0, 1);
+    g.fillTriangle(28, 24, 36, 24, 32, 10); // flame highlight
+    g.fillStyle(0x2a1a3a, 1);
+    g.fillRect(10, 44, 4, 6); // carved runestones flanking the ring
+    g.fillRect(50, 44, 4, 6);
+    g.generateTexture("tyrant_altar", 64, 56);
+
     // Gremlin camp clutter — small decorative prop scattered near the altar
     // as an escalating environmental hint (purely visual, no physics/
     // interaction). 16x16: a crude bone/rock cairn.
@@ -696,6 +713,50 @@ export class BootScene extends Phaser.Scene {
     g.fillRect(12, 7, 2, 2);
     g.fillRect(20, 7, 2, 2);
     g.generateTexture("cinderwrought", 34, 42);
+
+    // The Duneshaper (44x54) — the badlands FINAL BOSS: a tall gloam-warped
+    // sorcerer in a tattered violet robe over sand-scoured wrappings, wielding a
+    // crooked staff crowned with a gloam-crystal, glowing eyes. Drawn upright
+    // facing RIGHT (staff arm at +x), non-rotating (upright:true). Purple-gloam +
+    // desert palette so it's unmistakably the badlands' apex, not a big Hexling.
+    g.clear();
+    // robe body (flared)
+    g.fillStyle(0x3a2456, 1);
+    g.fillTriangle(8, 52, 36, 52, 22, 18);
+    g.fillRect(13, 20, 18, 30);
+    // robe shading + gloam trim
+    g.fillStyle(0x27183a, 1);
+    g.fillRect(13, 20, 5, 30);
+    g.fillStyle(0x7a3ec8, 1);
+    g.fillRect(20, 24, 4, 26); // central gloam seam
+    g.fillRect(10, 46, 24, 3); // hem band
+    // sand-wrapped cowl + shoulders
+    g.fillStyle(0x8a6a3e, 1);
+    g.fillRect(12, 12, 20, 10);
+    // head (shadowed hood)
+    g.fillStyle(0x1c1230, 1);
+    g.fillRect(16, 2, 12, 14);
+    g.fillStyle(0x2a1a44, 1);
+    g.fillRect(15, 6, 14, 4); // hood brim
+    // glowing eyes
+    g.fillStyle(0xd0a0ff, 1);
+    g.fillRect(18, 8, 3, 2);
+    g.fillRect(24, 8, 3, 2);
+    g.fillStyle(0xffffff, 0.85);
+    g.fillRect(19, 8, 1, 1);
+    g.fillRect(25, 8, 1, 1);
+    // staff (right/+x side) + gloam crystal crown
+    g.fillStyle(0x5a3c22, 1);
+    g.fillRect(35, 6, 3, 44);
+    g.fillStyle(0x9a5ee8, 1);
+    g.fillTriangle(33, 8, 40, 8, 36, -2);
+    g.fillStyle(0xe0c0ff, 1);
+    g.fillCircle(36, 5, 3);
+    // trailing sand/ember motes at the hem
+    g.fillStyle(0xe0a860, 0.9);
+    g.fillRect(6, 50, 3, 3);
+    g.fillRect(34, 50, 3, 3);
+    g.generateTexture("duneshaper", 44, 54);
 
     // Sunken Forge (48x38) — the POI's ruined smithy centerpiece: a cracked
     // stone forge base with a molten crucible glowing at its heart and a broken
@@ -1128,6 +1189,35 @@ export class BootScene extends Phaser.Scene {
     g.fillCircle(12, 6, 3);
     g.generateTexture("icon_gremlin_totem", ICON, ICON);
 
+    // Gloam-Bone Fetish: a bound knot of bone with a gloam-violet inlay + hide
+    // wrap — the Duneshaper summon ingredient, looted from Duskrunner warrens.
+    g.clear();
+    g.fillStyle(0xd8cdb0, 1);
+    g.fillRect(8, 4, 3, 16); // bone shaft
+    g.fillRect(6, 3, 7, 3); // bone knob
+    g.fillStyle(0x6a4a2a, 1);
+    g.fillRect(6, 10, 12, 3); // hide binding
+    g.fillStyle(0x9a5ee8, 1);
+    g.fillCircle(15, 15, 3); // gloam inlay
+    g.fillStyle(0xe0c0ff, 1);
+    g.fillCircle(15, 15, 1.4);
+    g.generateTexture("icon_warren_fetish", ICON, ICON);
+
+    // Effigy of the Duneshaper: a crooked robed effigy topped with a gloam
+    // crystal — the crafted badlands-boss summon totem.
+    g.clear();
+    g.fillStyle(0x3a2456, 1);
+    g.fillTriangle(6, 21, 18, 21, 12, 8); // robe cone
+    g.fillStyle(0x7a3ec8, 1);
+    g.fillRect(11, 10, 2, 11); // gloam seam
+    g.fillStyle(0x8a6a3e, 1);
+    g.fillRect(8, 9, 8, 3); // wrap
+    g.fillStyle(0x9a5ee8, 1);
+    g.fillCircle(12, 5, 3); // crystal crown
+    g.fillStyle(0xe0c0ff, 1);
+    g.fillCircle(12, 5, 1.4);
+    g.generateTexture("icon_tyrant_totem", ICON, ICON);
+
     // Gremlin King Fang: a large pale fang/tusk trophy.
     g.clear();
     g.fillStyle(0xe8e0cc, 1);
@@ -1257,6 +1347,7 @@ export class BootScene extends Phaser.Scene {
     mapMarker("map_vein", 0xc79cf0, 0x7a3ec8); // Gloaming Vein — purple amethyst
     mapMarker("map_den", 0xe0a060, 0xc06a34); // Duskrunner Warren — dusty orange-brown
     mapMarker("map_forge", 0xffb050, 0xd6481a); // Sunken Forge — fiery orange-red
+    mapMarker("map_tyrant_altar", 0xc79cf0, 0x7a2ec8); // Duneshaper's Altar — gloam violet (the badlands boss landmark)
 
     // ===== Badlands (biome 2 Phase 2) content =====
 
@@ -1538,6 +1629,18 @@ export class BootScene extends Phaser.Scene {
     g.fillStyle(0xe0b0ff, 1);
     g.fillCircle(4, 4, 2);
     g.generateTexture("hex_bolt", 8, 8);
+
+    // Gloam Bolt — the Duneshaper's magic bolt. Bigger + brighter than a hex
+    // bolt (violet orb, ember-white core, faint tail) so the boss's volley reads
+    // as its own, weightier projectile.
+    g.clear();
+    g.fillStyle(0x5a2ea8, 0.9);
+    g.fillCircle(5, 5, 5);
+    g.fillStyle(0x9a5ee8, 1);
+    g.fillCircle(5, 5, 3.5);
+    g.fillStyle(0xffe0ff, 1);
+    g.fillCircle(5, 5, 1.6);
+    g.generateTexture("gloam_bolt", 10, 10);
 
     // Emberbloom — desert herb. 14x18: slim green stalk + a small ember-orange
     // bloom. Picked = bare stalk (mirrors the blackberry picked-bush pattern).

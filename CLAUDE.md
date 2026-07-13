@@ -1168,8 +1168,9 @@ M-W1 + M-TE, IN PROGRESS — Phase 0 worldgen (5ac) + Phase 1 combat systems (5a
 core enemies & flora (5ae) + Phase 2b 4th native creature — the Sandmaw burrowing ambusher
 (5af) done. **Phase 3 underway** (the user chose "two POIs first"): POI 1 — the Duskrunner
 Warren (two-wave destructible den → lootable cache) — done (5ag); POI 2 — the Sunken Forge
-(the Cinderwrought fire/forge mini-boss) — done (5ah); still to do: the badlands boss (new
-win-con, demotes the Gremlin King) + Gremlin King critical-drop rework. See the biome-2
+(the Cinderwrought fire/forge mini-boss) — done (5ah); the **badlands final boss — the
+Duneshaper** (new win-con, demotes the Gremlin King) — done (5ai); still to do: the **Gremlin
+King critical-drop rework** (deferred — gates the not-yet-built Phase 4 gear). See the biome-2
 umbrella plan below.**
 
 5ac. **Biome 2 (Sunscorch Badlands) — Phase 0: Patchwork worldgen.** Plan:
@@ -1365,6 +1366,50 @@ umbrella plan below.**
    stagger, kills a full-HP player, discovery landmark + toast, sprites). Dashboard Enemies tab
    updated. **Next: the badlands final boss (new win-con) + the Gremlin King critical-drop rework.**
    See `STATUS.md` + [[survivor-rpg-biome-2-plan]].
+
+5ai. **Biome 2 — Phase 3: The Duneshaper (badlands final boss + win-con swap).** Plan:
+   `.claude/plans/biome-2-phase-3-badlands-boss.md` (Phase 3, umbrella). Built on **Opus** (new boss
+   mechanic). The **badlands final boss** and the game's **new win-condition**, demoting the Gremlin
+   King to a mid-boss. Locked with the user via `AskUserQuestion` + a follow-up: scope = boss +
+   win-swap now (King's critical-drop rework deferred to Phase 4, which gates it); identity = **the
+   Duneshaper** (a gloam-warped apex sorcerer); difficulty = **phase-gated attack escalation**;
+   summon = its own altar but the totem is **gathered from a POI** (the Warrens); **plus** multiple
+   altars + a clue system. **`src/entities/Duneshaper.ts`** — bespoke telegraph/poise AI (GremlinKing/
+   Gloamwarden precedent, NOT a shared framework); extends `Enemy`, fully overrides `update()`. HP
+   **900**, poise 120 (stagger ×1.5/3s), scale 2.3, regens 14 HP/s deaggro'd; `resistances: { magic:
+   0.5, slash/blunt/pierce: 1.3 }` (soft caster hide). A **caster** — holds ~220px and casts.
+   **Damage-type mix:** Sand Spikes are PHYSICAL pierce (flat armor applies); Volley/Nova/Lance/
+   Barrage are `magic` (bypass flat armor, Phase-1 hook). **Phase-gated ESCALATION** (`availableAttacks`
+   grows as HP drops): 3 at full HP — **Gloam Volley** (3 magic `gloam_bolt` projectiles), **Sand
+   Spikes** (3 physical circles), **Blink Nova** (teleport + radial magic burst); **+Gloamfire Lance**
+   (locked-direction magic beam) at **70%**; **+Sunscorch Barrage** (7-circle magic carpet) **and
+   enrage timing** at **50%**. Area attacks via `checkPlayerHit()` → `applyDamageToPlayer` (dash
+   i-frames/armor just work); the volley self-resolves as projectiles. Loot: **2
+   `refined_trophy_uncommon` + 5-8 `gloam_shard`** (Phase 5 re-tiers the badlands trophy set).
+   **Summon:** new `warren_fetish` ("Gloam-Bone Fetish", `ResourceType`) added to the Warren cache
+   loot (guaranteed 1); new `tyrant_totem` ("Effigy of the Duneshaper") — tier-1 recipe `{
+   warren_fetish: 3, gloam_shard: 2, bones: 8 }`, a consumable like `gremlin_totem`. `BossAltar.kind`
+   (`"gremlin"|"tyrant"`); `spawnTyrantAltars` adds **3** badlands `"tyrant"` altars (own
+   `tyrant_altar` texture) via `pickTyrantAltarPositions` (≥2600px apart), pushed into `bossAltars`
+   (hover/night-light/discovery reuse); `TYRANT_ALTAR_CLEAR_RADIUS` (170) keeps content off them.
+   `attemptSummonBoss` branches on kind → `attemptSummonDuneshaper` (consumes the effigy, global
+   `tyrantSummoned` guard). **Clue system (the user — huge world, a single altar could be across the
+   map):** all tyrant altars glow at night + auto-discover as violet `map_tyrant_altar` landmarks +
+   **crafting the effigy reveals ALL altars on the map** (`onTyrantTotemCrafted`, hooked in
+   `craftRecipe`) with a `compassDir` directional nudge to the nearest. **Win-con swap:** a
+   `Duneshaper` kill fires `endRun("won")`; the `GremlinKing` win trigger removed (still "boss" score
+   + drops its fang — Phase-4 rework). Wired into `classifyKill`, the `checkPlayerHit` boss union,
+   `staggerMultiplierFor`, the boss prompt-color union, and the respawn `isBoss` exclusion.
+   **BossHealthUI generalized** to a `BossBarTarget` interface (`GremlinKing` gained a `poiseMax`
+   getter); scene passes `engagedBigBoss()` (whichever big boss is engaged; mini-bosses stay off the
+   big HUD). `BootScene`: `duneshaper` (44×54), `tyrant_altar`, `gloam_bolt`, `icon_warren_fetish`,
+   `icon_tyrant_totem`, `map_tyrant_altar`. Verified live (`preview_eval`): 3 spread altars + 6
+   textures load; summon consumes the effigy + prompt gating; boss stats/resists/loot; phase pool
+   3→4→5; state-machine cycle; all 5 attacks' `checkPlayerHit` (physical-vs-magic + knockback +
+   one-hit-per-instance + miss); volley = 3 magic bolts; **Duneshaper kill → `endRun("won")` (VICTORY
+   screen rendered), Gremlin King kill → no win**; effigy craft reveals all altars + directional
+   nudge; boss renders. `tsc` clean; dashboard Enemies tab + `RECIPES.md` updated. **Next: the Gremlin
+   King critical-drop rework** (Phase 4 gear gate). See `STATUS.md` + [[survivor-rpg-biome-2-plan]].
 
 **Not yet built — next up in rough order:**
 6. **World & discovery** — much bigger generated world, biomes, map, a single giant
