@@ -41,7 +41,7 @@ function markWelcomeSeen(): void {
 // gestures, never the totem->altar->boss win condition.
 const PAGES: { title: string; lines: string[] }[] = [
   {
-    title: "Welcome, Survivor",
+    title: "Welcome to Gloamreach",
     lines: [
       "This is an early, in-development build. Art and sound are all",
       "placeholders for now, and balance is still being tuned.",
@@ -147,13 +147,13 @@ export class WelcomeUI {
       this.scene.add
         .rectangle(this.panelX, this.panelY, PANEL_W, PANEL_H, 0x0a0a0a, 0.97)
         .setOrigin(0, 0)
-        .setStrokeStyle(1, 0x555e6e)
+        .setStrokeStyle(1, 0x6e5a94)
         .setScrollFactor(0)
         .setDepth(DEPTH_PANEL),
     );
 
     let y = this.panelY + 26;
-    this.text(cx, y, page.title, 26, "#ffffff", 0.5);
+    this.text(cx, y, page.title, 26, "#c9a4f0", 0.5);
     y += 46;
 
     this.text(this.panelX + 32, y, page.lines.join("\n"), 15, "#c8d0dc", 0);
