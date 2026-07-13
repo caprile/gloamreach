@@ -399,3 +399,28 @@ Standard project loop (`CLAUDE.md` "Verification workflow"):
   `WORLD_H` depth.
 - Each POI enforces its no-spawn exclusion zone in every sampler *before* prop tuning.
 - Commit this umbrella + each phase plan into the repo's `.claude/plans/`.
+
+## Deferred follow-ups (post-umbrella, locked with the user 2026-07-13)
+
+The umbrella's 6 phases (0–5) are all shipped. A post-umbrella mixed batch also shipped
+(biome-wide wood/stone gatherables, tool tiers via `ResourceNode.minToolTier` +
+`equippedToolTier` + `src/systems/ToolUpgrades.ts` → Ironshod axe → Ironbark tree/wood,
+plus relic-UI fixes — see STATUS.md). During that batch the user flagged three items as
+**"probably needs its own session"** — captured here (and in the
+[[survivor-rpg-biome-2-plan]] memory) so they survive STATUS.md pruning:
+
+1. **Ember-tier uniqueness + heavy/light armor SET BONUSES.** Ember (T2) gear must feel
+   distinct from base ore gear beyond raw numbers. Locked: give the heavy AND light sets
+   **set bonuses** — impactful, **entirely unique effects that do NOT overlap the relic
+   effects**. T2 should NOT be oppressively stronger than base on an armor-NUMBER level;
+   the **set bonus is the real catch**.
+2. **Basic AND T2 ore weapons + armor should get in-place UPGRADES** (like the existing
+   weapon/armor upgrade system). Explicitly **do NOT gate these behind any workbench
+   upgrade for now.**
+3. **Q/E/R/T activated-ability system (a NEW CORE MECHANIC — for a FUTURE biome, likely
+   biome 3, NOT biome 2).** Q/E/R/T are open hotkeys; special armor/weapons would grant
+   **activated abilities with cooldowns** on them. Staging call: **biome 2 keeps a simple
+   passive/static special** (the set bonuses above), and QERT actives debut in the next
+   biome — deliberately avoiding piling too many new mechanics into biome 2 (which already
+   introduced smelting + ores + bleed + magic). This is a good candidate for its own plan
+   file when scoped.

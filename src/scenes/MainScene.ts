@@ -1607,23 +1607,42 @@ export class MainScene extends Phaser.Scene {
     while (toSpawn-- > 0) {
       const { x, y } = this.pickNightSpawnPoint(rng, RESPAWN_RING_MIN, RESPAWN_RING_MAX);
       const enemy = this.makeRespawnEnemy(rng, x, y, eliteMult);
+      if (!enemy) continue; // no roster for this point's biome (e.g. dunes)
       this.enemies.push(enemy);
       this.enemyGroup.add(enemy);
     }
   }
 
-  // Pick a respawn species weighted by the baseline spawnEnemies() mix
-  // (Boar 24 / Snake 28 / RangedGremlin 22 / MeleeGremling 8 = 82) — meat sources
-  // (Boar/Snake, ~63%) dominate, so respawns solve the food shortage directly
-  // while keeping variety. Elite rolls at the standard chance (night-boosted,
-  // matching every other spawn path).
+  // Pick a respawn species matching the BIOME at the chosen point (biome-aware
+  // top-up — checked per-point so a spawn ring straddling a biome border spawns the
+  // right roster on each side). Forest/base → the forest mix (Boar 24 / Snake 28 /
+  // RangedGremlin 22 / MeleeGremling 8 = 82); badlands → the badlands mix (weighted
+  // to roughly the spawnBadlandsEnemies() proportions). In both, the meat source
+  // dominates (forest: Boar/Snake ~63%; badlands: Duskrunner ~38%, whose
+  // duskrunner_meat is the badlands food drop) so respawns solve the food shortage
+  // directly. Dunes is an empty placeholder biome with no roster yet → returns null
+  // (no top-up there). Elite rolls at the standard chance (night-boosted, matching
+  // every other spawn path).
   private makeRespawnEnemy(
     rng: Phaser.Math.RandomDataGenerator,
     x: number,
     y: number,
     eliteMult: number,
-  ): Enemy {
+  ): Enemy | null {
     const elite = this.rollElite(rng, eliteMult);
+    const biome = this.worldBiomes.dominantBiomeAt(x, y);
+    if (biome === "badlands") {
+      // Weighted ~ spawnBadlandsEnemies() counts (Duskrunner ~84 / Cragscale 46 /
+      // Hexling 44 / Sandmaw 46 = 220). Duskrunners respawn as LONE runners (no
+      // pack) — a top-up, not a fresh war party.
+      const roll = rng.between(1, 220);
+      if (roll <= 84) return new Duskrunner(this, { x, y, elite });
+      if (roll <= 130) return new Cragscale(this, { x, y, elite });
+      if (roll <= 174) return new Hexling(this, { x, y, elite });
+      return new Sandmaw(this, { x, y, elite });
+    }
+    if (biome === "dunes") return null; // placeholder biome, no roster yet
+    // forest + base (the universal between-blobs layer) → the forest roster.
     const roll = rng.between(1, 82);
     if (roll <= 24) return new Boar(this, { x, y, elite });
     if (roll <= 52) return new Snake(this, { x, y, elite });

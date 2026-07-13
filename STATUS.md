@@ -2,7 +2,13 @@
 
 ## Current State
 
-_Living snapshot — edit in place, never append. Last shipped: **Biome-wide wood/stone + Ironbark
+_Living snapshot — edit in place, never append. Last shipped: **Biome-aware enemy respawn**
+(2026-07-13, Sonnet). A small correctness fix on the fog-top-up respawn system (an open Biome-2
+item): `makeRespawnEnemy` now picks the respawn roster from the biome at each spawn point
+(`worldBiomes.dominantBiomeAt`) — forest/base → the forest mix, badlands → the badlands roster
+(Duskrunner/Cragscale/Hexling/Sandmaw), dunes → nothing — so a player in the badlands stops
+getting forest enemies topped up and the badlands roster replenishes. `tsc` clean; verified live.
+See the entry below. Prior: **Biome-wide wood/stone + Ironbark
 axe-upgrade chain + relic-UI fixes** (2026-07-13, Opus). Off the master-plan build order — a mixed
 batch. **Relic-UI fixes:** the Character menu (K) and Tab combined menu are now mutually exclusive
 (they z-fought over the new Relics column), and the relic hover tooltip shows the relic's family/class.
@@ -134,15 +140,46 @@ below + [[survivor-rpg-dev-console]].
   holds the biome-1 roster/POIs; the **badlands patchwork now holds the Duskrunner/Cragscale/
   Hexling/Sandmaw roster + Emberbloom/Sunfruit flora** (via `pickBadlandsPoint`). Everything past
   the badlands band (dunes, the empty outer ring) is still terrain only until later phases.
-- **Enemy respawn top-up is forest-species-only, biome-agnostic.** `makeRespawnEnemy` weights
-  by the biome-1 `spawnEnemies()` counts and spawns near the player regardless of which biome
-  they're standing in — so a player camping in the badlands gets forest enemies topped up
-  around them, and the badlands roster (spawned once at world-gen) does NOT replenish. Harmless
-  for now, but a Phase 2b/M-W1 follow-up (make respawns biome-aware).
+- ~~**Enemy respawn top-up is forest-species-only, biome-agnostic.**~~ **FIXED (2026-07-13)** —
+  `makeRespawnEnemy` now picks the roster from the biome at each chosen spawn point
+  (`worldBiomes.dominantBiomeAt`): forest/base → the forest mix, badlands → the badlands mix
+  (Duskrunner/Cragscale/Hexling/Sandmaw), dunes → nothing (empty placeholder). See the entry below.
 
 ## Recent Entries
 
 > Older entries in STATUS-archive.md.
+
+### Biome-aware enemy respawn (2026-07-13, Sonnet)
+
+Off the master-plan build order — a small correctness fix on the existing fog-top-up respawn
+system (an open Biome-2 item, not a new mechanic). **The gap:** `MainScene.makeRespawnEnemy`
+always drew from the biome-1 forest roster (Boar/Snake/RangedGremlin/MeleeGremling) regardless
+of where the player stood, so a player camping in the badlands got **forest** enemies topped up
+around them and the badlands roster (spawned once at world-gen) never replenished — draining
+badlands food/loot over a long run.
+
+**Fix:** `makeRespawnEnemy` now queries `worldBiomes.dominantBiomeAt(x, y)` at each chosen spawn
+point (per-**point**, not per-player, so a spawn ring straddling a biome border spawns the right
+roster on each side) and branches:
+- **forest / base** (the universal between-blobs layer) → unchanged forest mix (Boar 24 / Snake 28 /
+  RangedGremlin 22 / MeleeGremling 8 = 82). Meat sources still ~63%.
+- **badlands** → the badlands mix, weighted ~ `spawnBadlandsEnemies()` counts (Duskrunner 84 /
+  Cragscale 46 / Hexling 44 / Sandmaw 46 = 220). Duskrunners respawn as **lone** runners (no pack —
+  a top-up, not a fresh war party); their `duskrunner_meat` is the badlands food drop, so the
+  ~38% Duskrunner share keeps food renewable there the same way Boar/Snake do in the forest.
+- **dunes** → returns `null` (empty placeholder biome, no roster yet); `updateRespawns` skips a
+  null with `continue`, so no top-up happens out there.
+
+Return type widened `Enemy → Enemy | null`; the only caller (`updateRespawns`) guards the null.
+Elite rolls (night-boosted) + the density/cap/ring machinery are all unchanged — only the species
+choice became biome-aware. **Still open (unchanged):** the *density targeting* is still
+player-radius-based and biome-agnostic (fine — it's just a "how many nearby" measure), and the
+dunes/deep-ring biomes remain content-less by design.
+
+Verified live (`preview_eval`, 300 samples/biome): a forest point produced **only** the 4 forest
+species (0 badlands), a badlands point (r=2220) produced **only** the 4 badlands species (0 forest),
+and 50 dunes samples all returned null. `tsc --noEmit` clean, no console errors. `RECIPES.md`
+unchanged (no recipe/data change); dashboard unchanged (respawn weighting isn't mirrored there).
 
 ### Biome-wide wood/stone + Ironbark axe-upgrade chain + relic-UI fixes (2026-07-13, Opus)
 
