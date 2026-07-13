@@ -38,9 +38,12 @@ export type ResourceType =
   | "cragscale_plate" // dropped by Cragscales — a future heavy-armor/smithing ingredient
   | "hex_essence" // dropped by Hexlings — a future magic-weapon/alchemy reagent
   | "sandmaw_chitin" // dropped by Sandmaws — a light-but-tough plating shard (future armor/tool material)
+  | "ember_ore" // mined from a Sunken Forge's ember deposits (after killing the Cinderwrought) — a smelting/metalworking material (Phase 4)
   | "warren_fetish" // looted from Duskrunner Warren caches — the Effigy of the Duneshaper (badlands boss summon) ingredient
   | "emberbloom" // arid desert-herb harvestable — a future alchemy ingredient
   | "sunfruit" // cactus-fruit harvestable — a future food ingredient
+  | "gloamcap" // gloam-touched desert mushroom harvestable — a future alchemy/food ingredient
+  | "dustbloom" // pale windblown desert flower harvestable — a future alchemy ingredient
   // Badlands elite trophies (Common/tier1 for now; Phase 5 retiers them to tier-2 + Ember refinement)
   | "duskrunner_trophy"
   | "cragscale_trophy"

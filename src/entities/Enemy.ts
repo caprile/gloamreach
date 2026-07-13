@@ -256,6 +256,14 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     return this.state === "chasing";
   }
 
+  // Whether the player can target/hit this enemy right now (hover-to-attack +
+  // weapon-arc sweep). Default: any live enemy. The Sandmaw overrides this to
+  // false while submerged, so a lurking ambusher can't be clicked/swept before
+  // it surfaces (the user: "sand guy shouldn't be attackable while invisible").
+  isTargetable(): boolean {
+    return !this.depleted;
+  }
+
   get biteDamage(): number {
     return this.biteDamageValue;
   }

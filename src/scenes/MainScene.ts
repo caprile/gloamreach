@@ -59,8 +59,10 @@ import {
   weaponBaseCritChance,
   weaponBaseCritMult,
   weaponArc,
+  bypassesArmor,
   type WeaponType,
   type DamageType,
+  type IncomingDamageType,
 } from "../systems/Weapons";
 import { outputKey, RECIPES, type Recipe } from "../systems/Recipes";
 import { itemDef, armorTypesWornPerPiece } from "../systems/Items";
@@ -242,6 +244,11 @@ const WAR_CAMP_CLEAR_RADIUS = 300; // resource-node/enemy spawn exclusion edge
 // This wider radius fires discovery while still approaching through the
 // clutter trail, matching how visually obvious the camp already is by then.
 const ALTAR_DISCOVERY_RADIUS = 900;
+// Every non-altar POI (shacks, vein, dens, forges) uses this generous detection
+// radius so they land on the minimap/world-map from a good way off, not only
+// once you're right on top of them (the user: "POIs should show up sooner").
+// Scaled off fog's terrain reveal radius so the two stay related if that changes.
+const POI_DISCOVERY_RADIUS = Math.max(760, REVEAL_RADIUS * 2.6);
 // Gloaming Vein POI (rare mineable rarity-ore, gated behind the Gloamwarden).
 // Placed a notable distance from both world center and the war camp so it reads
 // as its own destination. VEIN_CLEAR_RADIUS is the no-spawn zone kept clear of
@@ -363,27 +370,37 @@ const DUSKRUNNER_WARREN_LOOT_TABLE: LootRollEntry[] = [
 // keeps ordinary wild badlands packs out of a den's own clearing (the "POI busy
 // = missing exclusion zone" lesson); DEN_MIN_SPACING spreads them so they land
 // in different chunks rather than clustering.
-const DEN_COUNT = 10;
-const DEN_MIN_SPACING = 950; // spread across chunks, but common enough that most areas have one
+const DEN_COUNT = 16; // bumped 10→16 (the user: "need more burrows")
+const DEN_MIN_SPACING = 900; // spread across chunks, but common enough that most areas have one
 const DEN_CLEAR_RADIUS = 200;
 
-// Sunken Forge POI (biome 2 Phase 3 POI 2) — a single themed landmark out in the
-// badlands guarded by the Cinderwrought mini-boss. Placed well clear of the war
-// camp and Gloaming Vein so it reads as its own destination; FORGE_CLEAR_RADIUS
-// keeps ordinary badlands spawns out of the forge clearing (the "POI busy =
-// missing exclusion zone" lesson).
+// Sunken Forge POIs (biome 2 Phase 3 POI 2) — SEVERAL themed landmarks out in the
+// badlands, each guarded by a Cinderwrought mini-boss (the user: "way more of the
+// ember POIs — took me forever to find the one on the map"). Placed well clear of
+// the war camp and Gloaming Vein so each reads as its own destination;
+// FORGE_CLEAR_RADIUS keeps ordinary badlands spawns out of a forge clearing (the
+// "POI busy = missing exclusion zone" lesson).
+const FORGE_COUNT = 5;
+const FORGE_MIN_SPACING = 1600; // spread the forges across the badlands
 const FORGE_MIN_DIST_FROM_CAMP = 1000;
-const FORGE_MIN_DIST_FROM_VEIN = 900;
-const FORGE_CLEAR_RADIUS = 220;
+const FORGE_MIN_DIST_FROM_VEIN = 700;
+const FORGE_CLEAR_RADIUS = 240;
 const FORGE_DECOR_COUNT = 9; // decorative slag chunks scattered across the clearing
+const FORGE_ORE_COUNT = 4; // shielded ember-ore nodes, cracked open on the Cinderwrought's death
 
-// Duneshaper altars (biome 2 Phase 3 — the badlands final boss). SEVERAL scatter
-// the badlands so at least one is reachable no matter which side of the huge
-// world the player explored (the user); crafting the summon Effigy also reveals
-// them all on the map (the clue system). Spread apart, kept clear of content.
-const TYRANT_ALTAR_COUNT = 3;
+// Duneshaper altars (biome 2 Phase 3 — the badlands final boss). ONE PER QUADRANT
+// of the map (the user — players move outward radially and shouldn't have to
+// backtrack across the world), so at least one is reachable no matter which side
+// of the huge world the player explored; crafting the summon Effigy also reveals
+// them all on the map (the clue system). Kept clear of content.
 const TYRANT_ALTAR_MIN_SPACING = 2600; // spread across the badlands ring
-const TYRANT_ALTAR_CLEAR_RADIUS = 170; // keep wild badlands spawns off the altar clearing
+// The altar clearing is now a big, obvious PLACE (the user: "boss altar area needs
+// to be way bigger and noticeable similar to other POIs") — a wide gloam-blighted
+// floor ringed by standing stones and guarded by elite Hexlings. The clear radius
+// grew to match so nothing wild spawns inside the arena.
+const TYRANT_ALTAR_CLEAR_RADIUS = 360;
+const TYRANT_ALTAR_FLOOR_RADIUS = 300;
+const TYRANT_ALTAR_GUARD_COUNT = 4; // elite Hexlings guarding each altar
 
 // The main gameplay scene: build the world, spawn the player and resources,
 // follow the camera, and run the mouse-driven interaction + HUD.
@@ -503,6 +520,7 @@ export class MainScene extends Phaser.Scene {
   private tyrantSummoned = false;
   private tyrantAltarPositions: { x: number; y: number }[] = [];
   private tyrantAltarsRevealed = false;
+  private tyrantAltarLightPoints: { x: number; y: number }[] = [];
   // Gloaming Vein POI — chosen once in create() (after altarPosition, so it can
   // steer clear of the war camp). Its ore nodes start shielded and are cracked
   // open when the Gloamwarden dies. veinLightPoints glow purple at night
@@ -519,13 +537,22 @@ export class MainScene extends Phaser.Scene {
   private hoveredDen: BadlandsDen | null = null;
   private denLightPoints: { x: number; y: number }[] = [];
 
-  // Sunken Forge POI (biome 2 Phase 3 POI 2) — a badlands landmark guarded by the
-  // Cinderwrought mini-boss. Position chosen once in create() (after the vein, so
-  // it steers clear of it and the camp). forgeLightPoints glow ember at night.
+  // Sunken Forge POIs (biome 2 Phase 3 POI 2) — SEVERAL badlands landmarks, each
+  // guarded by a Cinderwrought mini-boss (the user: "way more of the ember POIs").
+  // Positions chosen once in create() (after the vein, so they steer clear of it
+  // and the camp). Each forge has shielded ember-ore nodes that crack open when
+  // its Cinderwrought dies (a smelting/metal material payoff — the mineable thing
+  // "here after we kill him"). forgeLightPoints glow ember at night (collectLights).
   // All reset per run in create() (scene.restart field-init gotcha).
-  private forgePosition: { x: number; y: number } | null = null;
-  private cinderwrought: Cinderwrought | null = null;
-  private forgeDiscoveredOnMap = false;
+  private forgePositions: { x: number; y: number }[] = [];
+  private forges: {
+    x: number;
+    y: number;
+    boss: Cinderwrought | null;
+    oreNodes: ResourceNode[];
+    cracked: boolean;
+    discoveredOnMap: boolean;
+  }[] = [];
   private forgeLightPoints: { x: number; y: number }[] = [];
   // Right-click "Upgrade / Destroy" popup for any placed object (Workbench,
   // Campfire, Drying Rack, ...) — a single generic system, not per-type.
@@ -769,6 +796,7 @@ export class MainScene extends Phaser.Scene {
     this.tyrantSummoned = false;
     this.tyrantAltarPositions = [];
     this.tyrantAltarsRevealed = false;
+    this.tyrantAltarLightPoints = [];
     this.veinPosition = null;
     this.gloamingVeinNodes = [];
     this.gloamwarden = null;
@@ -778,9 +806,8 @@ export class MainScene extends Phaser.Scene {
     this.badlandsDens = [];
     this.hoveredDen = null;
     this.denLightPoints = [];
-    this.forgePosition = null;
-    this.cinderwrought = null;
-    this.forgeDiscoveredOnMap = false;
+    this.forgePositions = [];
+    this.forges = [];
     this.forgeLightPoints = [];
     this.upgradeTarget = null;
     this.placedLabels = new Map();
@@ -852,7 +879,7 @@ export class MainScene extends Phaser.Scene {
     // clear of both it and the camp) and before any spawning so its own
     // FORGE_CLEAR_RADIUS exclusion in pickBadlandsPoint keeps ordinary badlands
     // content out of the forge clearing.
-    this.forgePosition = this.pickForgePosition(this.sessionRng());
+    this.forgePositions = this.pickForgePositions(this.sessionRng());
     // Duneshaper altars (biome 2 Phase 3 final boss) — several scattered badlands
     // altars, chosen before spawning so their TYRANT_ALTAR_CLEAR_RADIUS exclusion
     // in pickBadlandsPoint keeps ordinary content off the altar clearings.
@@ -940,10 +967,11 @@ export class MainScene extends Phaser.Scene {
     this.spawnWarCamp();
     this.spawnBossAltar();
     this.spawnGloamingVein();
-    this.spawnSunkenForge(); // biome 2 Phase 3 POI 2 — the Cinderwrought mini-boss landmark
+    this.spawnSunkenForges(); // biome 2 Phase 3 POI 2 — the Cinderwrought mini-boss landmarks
     this.spawnBadlandsDens(); // biome 2 Phase 3 POI — before wild packs so den clearings stay clear
     this.spawnTyrantAltars(); // biome 2 Phase 3 — the badlands final-boss altars
     this.spawnBadlandsEnemies(); // biome 2 Phase 2 — out in the badlands patchwork
+    this.scatterDecor(); // purely-decorative immersion props across both biomes
     this.physics.add.collider(this.enemyGroup, solids);
     this.physics.add.collider(this.player, this.enemyGroup);
 
@@ -1415,6 +1443,13 @@ export class MainScene extends Phaser.Scene {
       if (!onScreen(f.x, f.y)) continue;
       const s = toScreen(f.x, f.y);
       lights.push({ x: s.x, y: s.y, radius: 130 * z });
+    }
+    // Duneshaper altar arenas: gloam crystals glow violet at night, so the
+    // (now much larger) boss-altar clearing reads as a major beacon in the dark.
+    for (const t of this.tyrantAltarLightPoints) {
+      if (!onScreen(t.x, t.y)) continue;
+      const s = toScreen(t.x, t.y);
+      lights.push({ x: s.x, y: s.y, radius: 120 * z });
     }
     return lights;
   }
@@ -2750,11 +2785,12 @@ export class MainScene extends Phaser.Scene {
         )
       )
         continue;
-      // Sunken Forge (Phase 3 POI 2): keep ordinary badlands content out of the
-      // forge clearing (it has its own Cinderwrought mini-boss + dressing).
+      // Sunken Forges (Phase 3 POI 2): keep ordinary badlands content out of each
+      // forge clearing (each has its own Cinderwrought mini-boss + dressing).
       if (
-        this.forgePosition &&
-        Phaser.Math.Distance.Between(x, y, this.forgePosition.x, this.forgePosition.y) < FORGE_CLEAR_RADIUS
+        this.forgePositions.some(
+          (f) => Phaser.Math.Distance.Between(x, y, f.x, f.y) < FORGE_CLEAR_RADIUS,
+        )
       )
         continue;
       // Duneshaper altars (Phase 3): keep wild badlands content off each altar's
@@ -3305,7 +3341,8 @@ export class MainScene extends Phaser.Scene {
 
     // Duskrunner packs — the pack-aggro payoff. Each pack clusters around one
     // badlands point so updatePackAggro visibly converges them once one engages.
-    const PACK_COUNT = 16;
+    // Bumped 16→24 (the user: "enemy density feels pretty weak").
+    const PACK_COUNT = 24;
     const PACK_JITTER = 70;
     for (let p = 0; p < PACK_COUNT; p++) {
       const center = this.pickBadlandsPoint(rng);
@@ -3321,7 +3358,7 @@ export class MainScene extends Phaser.Scene {
     }
 
     // Cragscales — scattered lone armored bruisers (the damage-type teachers).
-    const CRAGSCALE_COUNT = 34;
+    const CRAGSCALE_COUNT = 46;
     for (let i = 0; i < CRAGSCALE_COUNT; i++) {
       const pt = this.pickBadlandsPoint(rng);
       if (!pt) break;
@@ -3331,7 +3368,7 @@ export class MainScene extends Phaser.Scene {
     }
 
     // Hexlings — scattered magic casters (the first magic damage to the player).
-    const HEXLING_COUNT = 34;
+    const HEXLING_COUNT = 44;
     for (let i = 0; i < HEXLING_COUNT; i++) {
       const pt = this.pickBadlandsPoint(rng);
       if (!pt) break;
@@ -3341,9 +3378,9 @@ export class MainScene extends Phaser.Scene {
     }
 
     // Sandmaws — scattered LONE burrowing ambushers (Phase 2b, the 4th native).
-    // Not packed (a lurker is a solo trap), and moderate count — the threat is
-    // the surprise erupt, not density. They lie submerged until you wander close.
-    const SANDMAW_COUNT = 24;
+    // Not packed (a lurker is a solo trap). Bumped 24→46 (the user: "need more
+    // burrows") so a badlands crossing regularly triggers a lurking ambush.
+    const SANDMAW_COUNT = 46;
     for (let i = 0; i < SANDMAW_COUNT; i++) {
       const pt = this.pickBadlandsPoint(rng);
       if (!pt) break;
@@ -3378,6 +3415,15 @@ export class MainScene extends Phaser.Scene {
       }
       pt = pt ?? fallback;
       if (!pt) break;
+      // POI dressing — a sandy dirt floor + a ring of bone-cairn stakes so the
+      // warren reads as a den from a distance (the user).
+      this.decoratePoi(rng, pt.x, pt.y, {
+        floorTexture: "poi_floor_den",
+        floorRadius: 150,
+        ringTexture: "poi_ring_den",
+        ringCount: 14,
+        ringRadius: 140,
+      });
       const den = new BadlandsDen(this, { x: pt.x, y: pt.y });
       this.badlandsDens.push(den);
       this.denLightPoints.push({ x: pt.x, y: pt.y });
@@ -3394,7 +3440,8 @@ export class MainScene extends Phaser.Scene {
     for (let i = 0; i < 3; i++) {
       const x = Phaser.Math.Clamp(den.x + rng.between(-JITTER, JITTER), 60, WORLD_W - 60);
       const y = Phaser.Math.Clamp(den.y + rng.between(-JITTER, JITTER), 60, WORLD_H - 60);
-      const d = new Duskrunner(this, { x, y, elite });
+      // Anchor guards to the den so they don't idle-wander off the POI.
+      const d = new Duskrunner(this, { x, y, elite, wanderAnchor: { x: den.x, y: den.y } });
       guards.push(d);
       this.enemies.push(d);
       this.enemyGroup.add(d);
@@ -3495,8 +3542,36 @@ export class MainScene extends Phaser.Scene {
         this.nodes.push(node);
       }
     };
-    scatterFlora("emberbloom", "emberbloom_picked", "emberbloom", "Emberbloom", 40);
-    scatterFlora("sunfruit_cactus", "sunfruit_cactus_picked", "sunfruit", "Sunfruit", 32);
+    // More pickable badlands vegetation (the user), with bumped counts so the
+    // flats don't read as barren.
+    scatterFlora("emberbloom", "emberbloom_picked", "emberbloom", "Emberbloom", 60);
+    scatterFlora("sunfruit_cactus", "sunfruit_cactus_picked", "sunfruit", "Sunfruit", 48);
+    scatterFlora("gloamcap", "gloamcap_picked", "gloamcap", "Gloamcap", 44);
+    scatterFlora("dustbloom", "dustbloom_picked", "dustbloom", "Dustbloom", 52);
+  }
+
+  // Purely-decorative, non-interactive immersion props scattered through both
+  // biomes (the user: "for both biomes add a bunch of decorative textures so it's
+  // more immersive"). Not tracked (auto-destroyed on scene.restart), Y-sorted
+  // like any world object, and routed through the existing spawn samplers so
+  // they respect every POI exclusion zone. Placeholder art.
+  private scatterDecor(): void {
+    const rng = this.sessionRng();
+    // Forest floor dressing — ferns, wildflowers, mushrooms, fallen logs.
+    const forestDecor = ["decor_fern", "decor_flowers", "decor_mushrooms", "decor_log"];
+    for (let i = 0; i < 220; i++) {
+      const p = this.pickSpawnPoint(rng, "forest", 0, true);
+      const key = forestDecor[rng.between(0, forestDecor.length - 1)];
+      this.add.image(p.x, p.y, key).setDepth(ysortDepth(p.y));
+    }
+    // Badlands dressing — skulls, dead bushes, mesa boulders, bone piles.
+    const badlandsDecor = ["decor_skull", "decor_deadbush", "decor_mesarock", "decor_bones"];
+    for (let i = 0; i < 260; i++) {
+      const p = this.pickBadlandsPoint(rng);
+      if (!p) continue;
+      const key = badlandsDecor[rng.between(0, badlandsDecor.length - 1)];
+      this.add.image(p.x, p.y, key).setDepth(ysortDepth(p.y));
+    }
   }
 
   // Scatter Gremlin Shacks (first POI) through the forest zone, spread apart
@@ -3598,20 +3673,71 @@ export class MainScene extends Phaser.Scene {
   // chosen in create() BEFORE spawning so pickBadlandsPoint's TYRANT_ALTAR_CLEAR_
   // RADIUS exclusion keeps content off the clearings.
   private pickTyrantAltarPositions(rng: Phaser.Math.RandomDataGenerator): { x: number; y: number }[] {
+    // ONE PER QUADRANT (the user): the player moves outward radially, so wherever
+    // they push out from center, an altar is in reach without backtracking across
+    // the huge world. Each quadrant is a sign of (x-cx, y-cy); reject a badlands
+    // sample until it lands in the target quadrant (and clears prior picks).
     const picks: { x: number; y: number }[] = [];
-    let guard = 0;
-    while (picks.length < TYRANT_ALTAR_COUNT && guard++ < 600) {
-      const p = this.pickBadlandsPoint(rng);
-      if (!p) continue;
-      if (picks.some((q) => Phaser.Math.Distance.Between(p.x, p.y, q.x, q.y) < TYRANT_ALTAR_MIN_SPACING)) continue;
-      picks.push(p);
+    const quadrants: [number, number][] = [
+      [1, 1],
+      [-1, 1],
+      [-1, -1],
+      [1, -1],
+    ];
+    for (const [sx, sy] of quadrants) {
+      let placed: { x: number; y: number } | null = null;
+      let fallback: { x: number; y: number } | null = null;
+      for (let attempt = 0; attempt < 400; attempt++) {
+        const p = this.pickBadlandsPoint(rng);
+        if (!p) continue;
+        if (Math.sign(p.x - WORLD_CX) !== sx || Math.sign(p.y - WORLD_CY) !== sy) continue;
+        fallback = p;
+        if (picks.some((q) => Phaser.Math.Distance.Between(p.x, p.y, q.x, q.y) < TYRANT_ALTAR_MIN_SPACING)) continue;
+        placed = p;
+        break;
+      }
+      const chosen = placed ?? fallback;
+      if (chosen) picks.push(chosen);
     }
     return picks;
   }
 
   private spawnTyrantAltars(): void {
+    const rng = this.sessionRng();
     for (const p of this.tyrantAltarPositions) {
+      // A big, unmistakable arena (the user): a wide gloam-blighted floor + a ring
+      // of standing stones + scattered gloam crystals, so it reads as a major
+      // landmark from a long way off, like the other POIs.
+      this.decoratePoi(rng, p.x, p.y, {
+        floorTexture: "poi_floor_tyrant",
+        floorRadius: TYRANT_ALTAR_FLOOR_RADIUS,
+        ringTexture: "poi_ring_tyrant",
+        ringCount: 30,
+        ringRadius: TYRANT_ALTAR_FLOOR_RADIUS - 20,
+      });
+      // Decorative gloam crystals scattered inside the arena — extra "big deal"
+      // dressing, a few glowing at night as beacons (like the vein clearing).
+      for (let i = 0; i < 12; i++) {
+        const a = rng.frac() * Math.PI * 2;
+        const r = rng.between(60, TYRANT_ALTAR_FLOOR_RADIUS - 40);
+        const x = Phaser.Math.Clamp(p.x + Math.cos(a) * r, 20, WORLD_W - 20);
+        const y = Phaser.Math.Clamp(p.y + Math.sin(a) * r, 20, WORLD_H - 20);
+        this.add.image(x, y, "gloam_crystal_cluster").setDepth(ysortDepth(y));
+        if (i % 4 === 0) this.tyrantAltarLightPoints.push({ x, y });
+      }
       this.bossAltars.push(new BossAltar(this, { x: p.x, y: p.y, kind: "tyrant" }));
+
+      // Guarded by ELITE Hexlings (the user) — a caster escort that punishes
+      // walking in unprepared, ringing the altar so the arena has teeth.
+      for (let i = 0; i < TYRANT_ALTAR_GUARD_COUNT; i++) {
+        const a = (i / TYRANT_ALTAR_GUARD_COUNT) * Math.PI * 2 + rng.frac() * 0.4;
+        const r = TYRANT_ALTAR_FLOOR_RADIUS - 70 + rng.between(-20, 20);
+        const x = Phaser.Math.Clamp(p.x + Math.cos(a) * r, 60, WORLD_W - 60);
+        const y = Phaser.Math.Clamp(p.y + Math.sin(a) * r, 60, WORLD_H - 60);
+        const hex = new Hexling(this, { x, y, elite: true });
+        this.enemies.push(hex);
+        this.enemyGroup.add(hex);
+      }
     }
   }
 
@@ -3652,6 +3778,15 @@ export class MainScene extends Phaser.Scene {
     if (!this.veinPosition) return;
     const rng = this.sessionRng();
     const c = this.veinPosition;
+
+    // A ring of gloam standing stones around the ore clearing (the floor is
+    // already baked into the biome texture) so the vein reads as a bounded POI
+    // from a distance, like every other landmark (the user).
+    this.decoratePoi(rng, c.x, c.y, {
+      ringTexture: "poi_ring_tyrant",
+      ringCount: 18,
+      ringRadius: 150,
+    });
 
     const warden = new Gloamwarden(this, { x: c.x, y: c.y });
     this.gloamwarden = warden;
@@ -3714,12 +3849,12 @@ export class MainScene extends Phaser.Scene {
   // forgePosition isn't set yet here, so its own FORGE_CLEAR_RADIUS exclusion
   // doesn't reject the pick. Returns null only if the badlands never yields a
   // covered point (spawnSunkenForge then no-ops).
-  private pickForgePosition(rng: Phaser.Math.RandomDataGenerator): { x: number; y: number } | null {
-    let last: { x: number; y: number } | null = null;
-    for (let attempt = 0; attempt < 200; attempt++) {
+  private pickForgePositions(rng: Phaser.Math.RandomDataGenerator): { x: number; y: number }[] {
+    const picks: { x: number; y: number }[] = [];
+    let guard = 0;
+    while (picks.length < FORGE_COUNT && guard++ < 800) {
       const p = this.pickBadlandsPoint(rng);
       if (!p) continue;
-      last = p;
       if (
         this.altarPosition &&
         Phaser.Math.Distance.Between(p.x, p.y, this.altarPosition.x, this.altarPosition.y) < FORGE_MIN_DIST_FROM_CAMP
@@ -3730,9 +3865,10 @@ export class MainScene extends Phaser.Scene {
         Phaser.Math.Distance.Between(p.x, p.y, this.veinPosition.x, this.veinPosition.y) < FORGE_MIN_DIST_FROM_VEIN
       )
         continue;
-      return p;
+      if (picks.some((q) => Phaser.Math.Distance.Between(p.x, p.y, q.x, q.y) < FORGE_MIN_SPACING)) continue;
+      picks.push(p);
     }
-    return last;
+    return picks;
   }
 
   // Spawn the Sunken Forge: the Cinderwrought mini-boss anchored at the clearing
@@ -3741,31 +3877,118 @@ export class MainScene extends Phaser.Scene {
   // forgeLightPoints so the clearing glows ember at night (like the war-camp
   // braziers / vein crystals). No post-kill interactable — the loot is the
   // Cinderwrought's guaranteed drop (unlike the vein's mineable nodes).
-  private spawnSunkenForge(): void {
-    if (!this.forgePosition) return;
+  private spawnSunkenForges(): void {
     const rng = this.sessionRng();
-    const c = this.forgePosition;
+    for (const c of this.forgePositions) {
+      // A POI ring + distinct floor + decorations (the user: "POIs should have some
+      // kind of ring around them, add decorations and different floor texture").
+      this.decoratePoi(rng, c.x, c.y, {
+        floorTexture: "poi_floor_forge",
+        floorRadius: 210,
+        ringTexture: "poi_ring_forge",
+        ringCount: 22,
+        ringRadius: 200,
+      });
 
-    // The ruined forge structure — offset slightly so the boss stands in front
-    // of it, not on top of it. Non-interactive, Y-sorted world dressing.
-    const forgeY = c.y - 30;
-    this.add.image(c.x, forgeY, "sunken_forge").setDepth(ysortDepth(forgeY));
-    this.forgeLightPoints.push({ x: c.x, y: forgeY });
+      // The ruined forge structure — offset slightly so the boss stands in front
+      // of it, not on top of it. Non-interactive, Y-sorted world dressing.
+      const forgeY = c.y - 30;
+      this.add.image(c.x, forgeY, "sunken_forge").setDepth(ysortDepth(forgeY));
+      this.forgeLightPoints.push({ x: c.x, y: forgeY });
 
-    const wrought = new Cinderwrought(this, { x: c.x, y: c.y });
-    this.cinderwrought = wrought;
-    this.enemies.push(wrought);
-    this.enemyGroup.add(wrought);
+      const wrought = new Cinderwrought(this, { x: c.x, y: c.y });
+      this.enemies.push(wrought);
+      this.enemyGroup.add(wrought);
 
-    // Decorative cooled-lava rubble across the clearing so the forge reads as a
-    // scorched ruin, not one structure on dust. A few glow at night as beacons.
-    for (let i = 0; i < FORGE_DECOR_COUNT; i++) {
-      const a = rng.frac() * Math.PI * 2;
-      const r = rng.between(60, 175);
-      const x = Phaser.Math.Clamp(c.x + Math.cos(a) * r, 20, WORLD_W - 20);
-      const y = Phaser.Math.Clamp(c.y + Math.sin(a) * r, 20, WORLD_H - 20);
-      this.add.image(x, y, "slag_chunk").setDepth(ysortDepth(y));
-      if (i % 4 === 0) this.forgeLightPoints.push({ x, y });
+      // Shielded ember-ore nodes ringing the forge — inert until the Cinderwrought
+      // dies, then cracked open into mineable Cinderforged Ore (a smelting/metal
+      // material, the "something mineable here after we kill him"). Mirrors the
+      // Gloaming Vein pattern exactly.
+      const oreNodes: ResourceNode[] = [];
+      for (let i = 0; i < FORGE_ORE_COUNT; i++) {
+        const a = (i / FORGE_ORE_COUNT) * Math.PI * 2 + rng.frac() * 0.5;
+        const r = 110 + rng.between(-14, 14);
+        const x = Phaser.Math.Clamp(c.x + Math.cos(a) * r, 60, WORLD_W - 60);
+        const y = Phaser.Math.Clamp(c.y + Math.sin(a) * r, 60, WORLD_H - 60);
+        const node = new ResourceNode(this, {
+          x,
+          y,
+          texture: "ember_ore_shielded",
+          resource: "ember_ore",
+          amount: rng.between(1, 2),
+          action: "mine",
+          displayName: "Ember Deposit",
+          loose: false,
+          health: 2,
+          shielded: true,
+        });
+        this.nodes.push(node);
+        this.obstacleNodes.push(node);
+        oreNodes.push(node);
+        this.forgeLightPoints.push({ x, y });
+      }
+
+      // Decorative cooled-lava rubble across the clearing so the forge reads as a
+      // scorched ruin, not one structure on dust. A few glow at night as beacons.
+      for (let i = 0; i < FORGE_DECOR_COUNT; i++) {
+        const a = rng.frac() * Math.PI * 2;
+        const r = rng.between(60, 175);
+        const x = Phaser.Math.Clamp(c.x + Math.cos(a) * r, 20, WORLD_W - 20);
+        const y = Phaser.Math.Clamp(c.y + Math.sin(a) * r, 20, WORLD_H - 20);
+        this.add.image(x, y, "slag_chunk").setDepth(ysortDepth(y));
+        if (i % 4 === 0) this.forgeLightPoints.push({ x, y });
+      }
+
+      this.forges.push({ x: c.x, y: c.y, boss: wrought, oreNodes, cracked: false, discoveredOnMap: false });
+    }
+  }
+
+  // A slain Cinderwrought cracks open its forge's ember-ore deposits so the
+  // player can mine Cinderforged Ore (the metalworking payoff for the fight).
+  private onCinderwroughtKilled(enemy: Enemy): void {
+    const forge = this.forges.find((f) => f.boss === enemy);
+    if (!forge || forge.cracked) return;
+    forge.cracked = true;
+    forge.boss = null;
+    for (const node of forge.oreNodes) {
+      if (!node.depleted) node.crack("ember_ore_node");
+    }
+    this.eventLog.add("combat", "The forge's ember deposits crack open — mine them for Cinderforged Ore.");
+  }
+
+  // Shared POI dressing (the user: "POIs should have some kind of ring around
+  // them, add decorations and a different floor texture for all of them"): a soft
+  // floor decal under the POI + a ring of small marker props around its edge, so
+  // every landmark reads as a deliberate, bounded PLACE from a distance — not one
+  // structure dropped on open ground. Floor sits just above the baked ground
+  // (-7) and below all Y-sorted world objects; ring props Y-sort normally.
+  private decoratePoi(
+    rng: Phaser.Math.RandomDataGenerator,
+    cx: number,
+    cy: number,
+    opts: {
+      floorTexture?: string;
+      floorRadius?: number;
+      ringTexture?: string;
+      ringCount?: number;
+      ringRadius?: number;
+    },
+  ): void {
+    if (opts.floorTexture && opts.floorRadius) {
+      this.add
+        .image(cx, cy, opts.floorTexture)
+        .setDisplaySize(opts.floorRadius * 2, opts.floorRadius * 2)
+        .setDepth(-7);
+    }
+    if (opts.ringTexture && opts.ringCount && opts.ringRadius) {
+      const step = (Math.PI * 2) / opts.ringCount;
+      for (let i = 0; i < opts.ringCount; i++) {
+        const a = i * step + rng.frac() * step * 0.3;
+        const r = opts.ringRadius + rng.between(-8, 8);
+        const x = Phaser.Math.Clamp(cx + Math.cos(a) * r, 20, WORLD_W - 20);
+        const y = Phaser.Math.Clamp(cy + Math.sin(a) * r, 20, WORLD_H - 20);
+        this.add.image(x, y, opts.ringTexture).setDepth(ysortDepth(y));
+      }
     }
   }
 
@@ -3775,14 +3998,22 @@ export class MainScene extends Phaser.Scene {
   // same thing here as it does for terrain. Deliberately per-altar/one-shot,
   // not a live blip — keeps the minimap's locked "no entity blips" rule intact
   // (a fixed landmark once found is conceptually more like revealed terrain).
-  private updateAltarDiscovery(): void {
-    const inReveal = (x: number, y: number) =>
-      Phaser.Math.Distance.Between(this.player.x, this.player.y, x, y) <= REVEAL_RADIUS;
+  // `forceAll` (used by the dev reveal-whole-map command) marks every POI
+  // discovered regardless of distance, so revealing the map also drops all POI
+  // landmarks on it (the user: "the reveal map feature should show points of
+  // interest on the map").
+  private updateAltarDiscovery(forceAll = false): void {
+    // POIs get a generous detection radius (the user: "POIs not just boss altars
+    // should show up on the minimap and map sooner") — larger than fog's own
+    // terrain REVEAL_RADIUS so a structure lands on the map from a good way off,
+    // before you're right on top of it.
+    const inPoiReveal = (x: number, y: number) =>
+      forceAll || Phaser.Math.Distance.Between(this.player.x, this.player.y, x, y) <= POI_DISCOVERY_RADIUS;
     // Boss Altar / War Camp — a larger red marker so the camp is the standout
     // landmark on the minimap.
     for (const altar of this.bossAltars) {
       if (altar.discoveredOnMap) continue;
-      if (Phaser.Math.Distance.Between(this.player.x, this.player.y, altar.x, altar.y) > ALTAR_DISCOVERY_RADIUS)
+      if (!forceAll && Phaser.Math.Distance.Between(this.player.x, this.player.y, altar.x, altar.y) > ALTAR_DISCOVERY_RADIUS)
         continue;
       altar.discoveredOnMap = true;
       if (altar.kind === "tyrant") {
@@ -3816,7 +4047,7 @@ export class MainScene extends Phaser.Scene {
     for (const shack of this.gremlinShacks) {
       if (shack.nearCamp) continue;
       if (shack.discoveredOnMap) continue;
-      if (!inReveal(shack.x, shack.y)) continue;
+      if (!inPoiReveal(shack.x, shack.y)) continue;
       shack.discoveredOnMap = true;
       this.exploredMap.addLandmark({
         worldX: shack.x,
@@ -3828,7 +4059,7 @@ export class MainScene extends Phaser.Scene {
     }
     // Gloaming Vein — a discovered fixed structure, marked in purple. Same
     // one-shot treatment as the altar/shacks (no live entity blip).
-    if (this.veinPosition && !this.veinDiscoveredOnMap && inReveal(this.veinPosition.x, this.veinPosition.y)) {
+    if (this.veinPosition && !this.veinDiscoveredOnMap && inPoiReveal(this.veinPosition.x, this.veinPosition.y)) {
       this.veinDiscoveredOnMap = true;
       this.exploredMap.addLandmark({
         worldX: this.veinPosition.x,
@@ -3842,7 +4073,7 @@ export class MainScene extends Phaser.Scene {
     // orange-brown markers, same one-shot treatment as the shacks.
     for (const den of this.badlandsDens) {
       if (den.discoveredOnMap) continue;
-      if (!inReveal(den.x, den.y)) continue;
+      if (!inPoiReveal(den.x, den.y)) continue;
       den.discoveredOnMap = true;
       this.exploredMap.addLandmark({
         worldX: den.x,
@@ -3854,13 +4085,15 @@ export class MainScene extends Phaser.Scene {
       // A prominent discovery popup, same beat as finding a new biome.
       this.eventLog.add("poi", "Discovered: Duskrunner Warren");
     }
-    // Sunken Forge (Phase 3 POI 2) — a discovered fixed landmark, fiery
-    // orange-red marker, same one-shot treatment as the other POIs.
-    if (this.forgePosition && !this.forgeDiscoveredOnMap && inReveal(this.forgePosition.x, this.forgePosition.y)) {
-      this.forgeDiscoveredOnMap = true;
+    // Sunken Forges (Phase 3 POI 2) — discovered fixed landmarks, fiery
+    // orange-red markers, same one-shot treatment as the other POIs.
+    for (const forge of this.forges) {
+      if (forge.discoveredOnMap) continue;
+      if (!inPoiReveal(forge.x, forge.y)) continue;
+      forge.discoveredOnMap = true;
       this.exploredMap.addLandmark({
-        worldX: this.forgePosition.x,
-        worldY: this.forgePosition.y,
+        worldX: forge.x,
+        worldY: forge.y,
         iconKey: "map_forge",
         label: "The Sunken Forge",
         tint: 0xd6481a,
@@ -4032,7 +4265,7 @@ export class MainScene extends Phaser.Scene {
       }
     }
     for (const enemy of this.enemies) {
-      if (enemy.depleted) continue;
+      if (enemy.depleted || !enemy.isTargetable()) continue;
       const radius = Math.max(enemy.displayWidth, enemy.displayHeight) / 2 + 6;
       const d = Phaser.Math.Distance.Between(world.x, world.y, enemy.x, enemy.y);
       if (d <= radius && d < best) {
@@ -4578,7 +4811,7 @@ export class MainScene extends Phaser.Scene {
       const swingAngle = Phaser.Math.Angle.Between(this.player.x, this.player.y, enemy.x, enemy.y);
       const halfAngle = Phaser.Math.DegToRad(arc.halfAngleDeg);
       for (const other of this.enemies) {
-        if (other === enemy || other.depleted) continue;
+        if (other === enemy || other.depleted || !other.isTargetable()) continue;
         const d = Phaser.Math.Distance.Between(this.player.x, this.player.y, other.x, other.y);
         if (d > arc.range + this.enemyRadiusBonus(other)) continue;
         const a = Phaser.Math.Angle.Between(this.player.x, this.player.y, other.x, other.y);
@@ -4752,6 +4985,7 @@ export class MainScene extends Phaser.Scene {
     this.onShackGuardKilled(enemy);
     this.onDenGuardKilled(enemy);
     if (enemy instanceof Gloamwarden) this.onGloamwardenKilled();
+    if (enemy instanceof Cinderwrought) this.onCinderwroughtKilled(enemy);
     this.eventLog.add("combat", `Defeated ${enemy.displayName}`);
     this.hoveredEnemy = null;
     this.promptText.setVisible(false);
@@ -4842,6 +5076,34 @@ export class MainScene extends Phaser.Scene {
     });
   }
 
+  // Floating damage number over the player when hit, tinted by the incoming
+  // damage type so elemental hits read clearly (the user: "fire damage should be
+  // clear"): fire = orange, magic = violet, physical = red. Drawn just above the
+  // player's head, rising and fading like the enemy-hit numbers.
+  private spawnPlayerDamageNumber(amount: number, dmgType?: IncomingDamageType): void {
+    const color =
+      dmgType === "fire" ? "#ff8a2a" : dmgType === "magic" ? "#c48aff" : "#ff5a5a";
+    const text = this.add
+      .text(this.player.x, this.player.y - 26, `-${amount}`, {
+        fontFamily: "monospace",
+        fontSize: "15px",
+        fontStyle: "bold",
+        color,
+        stroke: "#000000",
+        strokeThickness: 3,
+      })
+      .setOrigin(0.5, 0.5)
+      .setDepth(50);
+    this.tweens.add({
+      targets: text,
+      y: text.y - 22,
+      alpha: 0,
+      duration: 750,
+      ease: "Cubic.easeOut",
+      onComplete: () => text.destroy(),
+    });
+  }
+
   // Small rising/fading callout at the player — an explicit deviation from
   // the standing "never reveal what's missing" silent-guard convention,
   // used only where a player specifically asked for feedback (e.g. firing a
@@ -4906,7 +5168,7 @@ export class MainScene extends Phaser.Scene {
         enemy instanceof Sandmaw
       ) {
         const areaHit = enemy.checkPlayerHit(this.player.x, this.player.y) as
-          | { damage: number; knockback?: number; dmgType?: DamageType }
+          | { damage: number; knockback?: number; dmgType?: IncomingDamageType }
           | null;
         if (areaHit) {
           this.applyDamageToPlayer(
@@ -5000,7 +5262,7 @@ export class MainScene extends Phaser.Scene {
   private applyDamageToPlayer(
     amount: number,
     knockback?: { fromX: number; fromY: number; speed: number },
-    dmgType?: DamageType,
+    dmgType?: IncomingDamageType,
     bleed?: { dmgPerSec: number; durationMs: number },
   ): void {
     if (this.isDead) return;
@@ -5010,14 +5272,18 @@ export class MainScene extends Phaser.Scene {
     // roll opens no wound (the whole attack is dodged, not just its direct hit).
     if (bleed) this.bleed.apply(bleed.dmgPerSec, bleed.durationMs);
     // Relic damage-taken reduction (M-RL) applies first (a percentage), then
-    // flat armor deduction. Magic damage (Biome 2 Phase 1) BYPASSES the flat
-    // armor term — it gives the badlands magical enemy real teeth and seeds a
-    // future magic-resist-gear hook; the relic %-reduction still applies. Every
-    // biome-1 source deals physical, so the default path is unchanged. Floored
-    // at 1 so no relic/armor combination grants full immunity.
+    // flat armor deduction. Magic AND fire damage (Biome 2) BYPASS the flat
+    // armor term — they give the badlands casters/forge-boss real teeth and seed
+    // a future elemental-resist-gear hook; the relic %-reduction still applies.
+    // Every biome-1 source deals physical, so the default path is unchanged.
+    // Floored at 1 so no relic/armor combination grants full immunity.
     const relicAdjusted = amount * this.relics.damageTakenMult();
-    const armor = dmgType === "magic" ? 0 : totalPlayerDefense(this.equipment);
+    const armor = dmgType && bypassesArmor(dmgType) ? 0 : totalPlayerDefense(this.equipment);
     const reduced = Math.max(1, Math.round(relicAdjusted - armor));
+    // Floating number over the player, tinted by incoming type, so it's clear
+    // when you're being hit by fire/magic (the user: "fire damage should be
+    // clear") vs a physical bite.
+    this.spawnPlayerDamageNumber(reduced, dmgType);
     const died = this.health.takeDamage(reduced);
     this.refreshHealthBar();
     this.hints.trigger("took_damage"); // first hit taken this run -> nudge toward healing
@@ -6727,6 +6993,9 @@ export class MainScene extends Phaser.Scene {
       }
     }
     this.exploredMap.drainRevealed();
+    // Also drop every POI landmark on the map (not just revealed terrain), so the
+    // reveal command surfaces all points of interest at once (the user).
+    this.updateAltarDiscovery(true);
     // The corner minimap repaints its nearby window every frame, so it needs no
     // dirty nudge; the full map does.
     this.worldMapUI.markDirty();

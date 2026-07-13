@@ -797,9 +797,201 @@ export class BootScene extends Phaser.Scene {
     g.fillRect(3, 10, 2, 2);
     g.generateTexture("slag_chunk", 16, 14);
 
+    // --- POI floor decals (soft radial circles) + ring markers ---
+    // A distinct floor + a ring of props around every POI so each reads as a
+    // deliberate, bounded place from a distance (the user). Floors are stretched
+    // via setDisplaySize, so a modest 160px soft-radial texture is plenty.
+    const poiFloor = (key: string, base: number, core?: number) => {
+      g.clear();
+      const S = 160;
+      const c = S / 2;
+      const rings = 12;
+      for (let i = rings; i >= 1; i--) {
+        g.fillStyle(base, 0.05);
+        g.fillCircle(c, c, c * (i / rings));
+      }
+      if (core !== undefined) {
+        for (let i = 5; i >= 1; i--) {
+          g.fillStyle(core, 0.06);
+          g.fillCircle(c, c, c * 0.42 * (i / 5));
+        }
+      }
+      g.generateTexture(key, S, S);
+    };
+    poiFloor("poi_floor_forge", 0x2a1c16, 0x5a2410); // scorched earth, ember core
+    poiFloor("poi_floor_den", 0x5a4326); // packed sandy dirt
+    poiFloor("poi_floor_tyrant", 0x241a34, 0x4a2f6e); // gloam-blighted violet, amethyst core
+    poiFloor("poi_floor_vein", 0x241a34, 0x4a2f6e); // matches the vein's baked-floor palette
+
+    // Forge ring marker (14x22) — a stubby ember-veined slag pillar.
+    g.clear();
+    g.fillStyle(0x241a18, 1);
+    g.fillRect(3, 6, 8, 16);
+    g.fillStyle(0x3a2a24, 1);
+    g.fillRect(4, 4, 6, 5);
+    g.fillStyle(0xff6a1a, 1);
+    g.fillRect(5, 12, 4, 2);
+    g.fillRect(6, 16, 3, 2);
+    g.generateTexture("poi_ring_forge", 14, 24);
+
+    // Den ring marker (14x20) — a bone-and-dirt cairn stake.
+    g.clear();
+    g.fillStyle(0x5a4326, 1);
+    g.fillRect(4, 10, 6, 10);
+    g.fillStyle(0xd8cba0, 1); // pale bone shard jammed on top
+    g.fillRect(5, 3, 4, 9);
+    g.fillRect(3, 5, 8, 3);
+    g.generateTexture("poi_ring_den", 14, 22);
+
+    // Tyrant-altar ring marker (14x28) — a jagged gloam standing stone.
+    g.clear();
+    g.fillStyle(0x2a2030, 1);
+    g.fillTriangle(2, 28, 12, 28, 7, 2);
+    g.fillStyle(0x3a2a4a, 1);
+    g.fillTriangle(4, 28, 8, 28, 7, 6);
+    g.fillStyle(0x9a5ee8, 0.9); // gloam-violet vein
+    g.fillRect(6, 10, 2, 12);
+    g.generateTexture("poi_ring_tyrant", 14, 30);
+
+    // Ember-ore node (26x28) — shielded (dark, capped) then cracked-open
+    // (glowing metal veins exposed), mirroring the Gloaming Vein pair.
+    g.clear();
+    g.fillStyle(0x2c2420, 1);
+    g.fillRect(3, 10, 20, 18); // dark rock body
+    g.fillRect(6, 6, 14, 8);
+    g.fillStyle(0x453a32, 1);
+    g.fillRect(5, 12, 10, 6); // stone facets
+    g.fillStyle(0x1a1512, 1);
+    g.fillRect(9, 3, 8, 6); // capped/shielded shell
+    g.generateTexture("ember_ore_shielded", 26, 30);
+    g.clear();
+    g.fillStyle(0x2c2420, 1);
+    g.fillRect(3, 10, 20, 18);
+    g.fillRect(6, 6, 14, 8);
+    g.fillStyle(0x5a3a2a, 1);
+    g.fillRect(5, 12, 12, 8);
+    g.fillStyle(0xff7a2a, 1); // exposed molten-metal veins
+    g.fillRect(7, 14, 3, 6);
+    g.fillRect(12, 12, 3, 8);
+    g.fillRect(16, 15, 2, 5);
+    g.fillStyle(0xffd070, 1);
+    g.fillRect(8, 16, 1, 3);
+    g.fillRect(13, 14, 1, 4);
+    g.generateTexture("ember_ore_node", 26, 30);
+
+    this.makeDecorProps(g);
     this.makeItemIcons(g);
 
     g.destroy(); // we only needed it to bake textures
+  }
+
+  // Purely-decorative, non-interactive scatter props for both biomes (the user:
+  // "for both biomes add a bunch of decorative textures so it is more
+  // immersive"). Scattered by MainScene.scatterDecor; Y-sorted like any world
+  // object. Placeholder art, like everything else — real tilesets swap in later.
+  private makeDecorProps(g: Phaser.GameObjects.Graphics): void {
+    // --- Forest decor ---
+    // Fern cluster (18x16) — a low spray of green fronds.
+    g.clear();
+    g.fillStyle(0x2f5a2a, 1);
+    for (let i = 0; i < 5; i++) {
+      const fx = 3 + i * 3;
+      g.fillTriangle(fx, 15, fx + 3, 15, fx + 1, 2 + (i % 2) * 3);
+    }
+    g.fillStyle(0x3f7a3a, 1);
+    for (let i = 0; i < 4; i++) {
+      const fx = 5 + i * 3;
+      g.fillTriangle(fx, 15, fx + 2, 15, fx + 1, 5);
+    }
+    g.generateTexture("decor_fern", 18, 16);
+
+    // Wildflowers (16x14) — a tuft of grass with colored blossoms.
+    g.clear();
+    g.fillStyle(0x3f7a3a, 1);
+    g.fillRect(3, 8, 2, 6);
+    g.fillRect(7, 6, 2, 8);
+    g.fillRect(11, 8, 2, 6);
+    g.fillStyle(0xe8d24a, 1);
+    g.fillCircle(4, 7, 2.2);
+    g.fillStyle(0xe86a9a, 1);
+    g.fillCircle(8, 5, 2.4);
+    g.fillStyle(0x6aa8e8, 1);
+    g.fillCircle(12, 7, 2.2);
+    g.generateTexture("decor_flowers", 16, 14);
+
+    // Mushroom cluster (16x14) — red-capped toadstools.
+    g.clear();
+    g.fillStyle(0xe8e0d0, 1);
+    g.fillRect(4, 8, 2, 5);
+    g.fillRect(9, 7, 3, 6);
+    g.fillStyle(0xc0402a, 1);
+    g.fillEllipse(5, 7, 6, 4);
+    g.fillEllipse(10, 6, 8, 5);
+    g.fillStyle(0xf0e0d0, 1);
+    g.fillCircle(4, 6, 1);
+    g.fillCircle(11, 5, 1.2);
+    g.generateTexture("decor_mushrooms", 16, 14);
+
+    // Mossy log (28x14) — a fallen log with a mossy top.
+    g.clear();
+    g.fillStyle(0x5a3f28, 1);
+    g.fillRect(2, 6, 24, 8);
+    g.fillStyle(0x6a4a30, 1);
+    g.fillRect(2, 6, 24, 3);
+    g.fillStyle(0x3f6a34, 1);
+    g.fillRect(4, 5, 8, 3); // moss patches
+    g.fillRect(16, 5, 7, 3);
+    g.fillStyle(0x2a1f14, 1);
+    g.fillCircle(3, 10, 3); // dark end
+    g.generateTexture("decor_log", 28, 16);
+
+    // --- Badlands decor ---
+    // Bleached skull (16x14) — a sun-bleached animal skull.
+    g.clear();
+    g.fillStyle(0xd8cba8, 1);
+    g.fillEllipse(8, 8, 12, 9);
+    g.fillRect(6, 11, 4, 3); // snout
+    g.fillStyle(0x2a2018, 1);
+    g.fillCircle(5, 7, 1.6); // eye sockets
+    g.fillCircle(11, 7, 1.6);
+    g.fillStyle(0xb0a180, 1);
+    g.fillTriangle(1, 3, 4, 7, 1, 8); // horns
+    g.fillTriangle(15, 3, 12, 7, 15, 8);
+    g.generateTexture("decor_skull", 16, 14);
+
+    // Dead bush (18x18) — a dry tangled shrub.
+    g.clear();
+    g.fillStyle(0x6a5236, 1);
+    for (let i = 0; i < 7; i++) {
+      const bx = 3 + i * 2;
+      g.fillTriangle(9, 17, bx, 4 + (i % 3) * 3, bx + 2, 17);
+    }
+    g.fillStyle(0x836540, 1);
+    g.fillRect(8, 12, 2, 5);
+    g.generateTexture("decor_deadbush", 18, 18);
+
+    // Red mesa boulder (22x18) — a layered red-rock boulder.
+    g.clear();
+    g.fillStyle(0x8a4a34, 1);
+    g.fillRect(2, 8, 18, 10);
+    g.fillEllipse(11, 8, 18, 8);
+    g.fillStyle(0x9c5a40, 1);
+    g.fillRect(4, 6, 14, 3);
+    g.fillStyle(0x6a3626, 1);
+    g.fillRect(2, 13, 18, 2); // strata line
+    g.generateTexture("decor_mesarock", 22, 18);
+
+    // Bone pile (18x12) — sun-bleached ribs/bones on the ground.
+    g.clear();
+    g.fillStyle(0xd8cba8, 1);
+    g.fillRect(2, 6, 12, 2);
+    g.fillRect(4, 9, 11, 2);
+    g.fillRect(6, 3, 9, 2);
+    g.fillStyle(0xb0a180, 1);
+    g.fillCircle(2, 7, 1.6);
+    g.fillCircle(14, 4, 1.6);
+    g.fillCircle(15, 10, 1.6);
+    g.generateTexture("decor_bones", 18, 12);
   }
 
   // Small 24x24 inventory/hotbar icons for craftable outputs. Distinct enough
@@ -1682,6 +1874,48 @@ export class BootScene extends Phaser.Scene {
     g.fillRect(11, 8, 4, 8);
     g.generateTexture("sunfruit_cactus_picked", 16, 24);
 
+    // Gloamcap — a gloam-touched desert mushroom cluster (violet caps on pale
+    // stalks). Picked = just the stalks. More pickable badlands vegetation.
+    g.clear();
+    g.fillStyle(0xcbb48a, 1);
+    g.fillRect(4, 12, 2, 8); // stalks
+    g.fillRect(9, 10, 2, 10);
+    g.fillStyle(0x6a3ea8, 1);
+    g.fillEllipse(5, 11, 8, 5); // caps
+    g.fillEllipse(10, 9, 9, 6);
+    g.fillStyle(0x9a5ee8, 1);
+    g.fillEllipse(10, 8, 4, 2); // highlight
+    g.generateTexture("gloamcap", 16, 22);
+    g.clear();
+    g.fillStyle(0xcbb48a, 1);
+    g.fillRect(4, 12, 2, 8);
+    g.fillRect(9, 10, 2, 10);
+    g.generateTexture("gloamcap_picked", 16, 22);
+
+    // Dustbloom — a low cluster of pale windblown desert flowers. Picked = a bare
+    // dry tuft.
+    g.clear();
+    g.fillStyle(0x6a6a4a, 1);
+    g.fillRect(6, 12, 2, 8); // stem
+    g.fillRect(9, 13, 2, 7);
+    g.fillStyle(0x8a8a5a, 1);
+    g.fillRect(3, 15, 4, 2); // dry grass fans
+    g.fillRect(11, 14, 4, 2);
+    g.fillStyle(0xe0d2a0, 1); // pale blooms
+    g.fillCircle(7, 9, 3);
+    g.fillCircle(10, 11, 2.5);
+    g.fillStyle(0xfff0c0, 1);
+    g.fillCircle(7, 9, 1.2);
+    g.generateTexture("dustbloom", 16, 22);
+    g.clear();
+    g.fillStyle(0x6a6a4a, 1);
+    g.fillRect(6, 14, 2, 6);
+    g.fillRect(9, 15, 2, 5);
+    g.fillStyle(0x8a8a5a, 1);
+    g.fillRect(3, 17, 4, 2);
+    g.fillRect(11, 16, 4, 2);
+    g.generateTexture("dustbloom_picked", 16, 22);
+
     // --- badlands resource icons (ICON=24) ---
     g.clear(); // Duskrunner Pelt — a stretched tan/purple hide
     g.fillStyle(0x8a7a6a, 1);
@@ -1722,6 +1956,20 @@ export class BootScene extends Phaser.Scene {
     g.fillRect(11, 9, 2, 7); // ridge highlight
     g.generateTexture("icon_sandmaw_chitin", ICON, ICON);
 
+    g.clear(); // Cinderforged Ore — a chunk of dark ore with molten metal veins
+    g.fillStyle(0x3a2c22, 1);
+    g.fillRect(4, 8, 16, 12);
+    g.fillRect(7, 5, 10, 5);
+    g.fillStyle(0x5a4030, 1);
+    g.fillRect(6, 10, 8, 6);
+    g.fillStyle(0xff7a2a, 1);
+    g.fillRect(8, 11, 3, 7);
+    g.fillRect(14, 10, 3, 8);
+    g.fillStyle(0xffd070, 1);
+    g.fillRect(9, 13, 1, 3);
+    g.fillRect(15, 12, 1, 4);
+    g.generateTexture("icon_ember_ore", ICON, ICON);
+
     g.clear(); // Emberbloom icon — a herb sprig with an ember bloom
     g.fillStyle(0x5a7a4a, 1);
     g.fillRect(11, 10, 2, 11);
@@ -1733,6 +1981,31 @@ export class BootScene extends Phaser.Scene {
     g.fillStyle(0xffd24a, 1);
     g.fillCircle(12, 7, 2);
     g.generateTexture("icon_emberbloom", ICON, ICON);
+
+    g.clear(); // Gloamcap — violet mushroom
+    g.fillStyle(0xcbb48a, 1);
+    g.fillRect(11, 12, 3, 9); // stalk
+    g.fillStyle(0x6a3ea8, 1);
+    g.fillEllipse(12, 10, 14, 8); // cap
+    g.fillStyle(0x9a5ee8, 1);
+    g.fillEllipse(12, 8, 7, 3);
+    g.fillStyle(0xe0b0ff, 1);
+    g.fillCircle(9, 9, 1.2);
+    g.fillCircle(15, 10, 1.2);
+    g.generateTexture("icon_gloamcap", ICON, ICON);
+
+    g.clear(); // Dustbloom — pale desert flower
+    g.fillStyle(0x6a6a4a, 1);
+    g.fillRect(11, 12, 2, 9); // stem
+    g.fillStyle(0xe0d2a0, 1);
+    g.fillCircle(12, 8, 5); // petals
+    g.fillCircle(7, 10, 3);
+    g.fillCircle(17, 10, 3);
+    g.fillStyle(0xfff0c0, 1);
+    g.fillCircle(12, 8, 2);
+    g.fillStyle(0xc0a860, 1);
+    g.fillCircle(12, 8, 1);
+    g.generateTexture("icon_dustbloom", ICON, ICON);
 
     g.clear(); // Sunfruit icon — a red fruit with a green nub
     g.fillStyle(0xd83a3a, 1);

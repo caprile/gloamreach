@@ -62,6 +62,14 @@ export class EventLogUI {
   // (playtest: rapid cooking made "Cooked X" toasts collide). Mirrors the
   // `activeRecipeToasts` pattern already used below for the side toasts.
   private activeCenterToasts: { height: number }[] = [];
+  // A monotonic cursor for the next center-toast Y. Summing live-toast heights
+  // (the old approach) reused a FRONT slot the instant its toast faded — but the
+  // earliest-created toast always fades first (shared delay+duration), so a new
+  // toast would land on an older one still on screen (playtest: "Defeated X" and
+  // "Slash leveled up" overlapped). Instead we only ever grow the cursor and
+  // reset it to the top when the stack is fully empty, so two live toasts can
+  // never share a Y.
+  private centerStackNextY = -1;
   // Extra vertical offset for the center-toast stack, set by MainScene while
   // the (separately-drawn) Player-Level-Up banner is on screen — that banner
   // sits at a fixed y regardless of this stack's height, so without this a
@@ -237,7 +245,11 @@ export class EventLogUI {
       .setDepth(6001);
 
     const slotH = text.height + 18; // box padding + gap to the next toast
-    const y = 72 + this.topOffset + this.activeCenterToasts.reduce((sum, t) => sum + t.height, 0);
+    // Reset to the top only when nothing is on screen; otherwise keep growing
+    // downward so a freed front slot is never reused under a still-visible toast.
+    if (this.activeCenterToasts.length === 0) this.centerStackNextY = 72 + this.topOffset;
+    const y = this.centerStackNextY;
+    this.centerStackNextY += slotH;
     const stackEntry = { height: slotH };
     this.activeCenterToasts.push(stackEntry);
     text.setPosition(cx, y);

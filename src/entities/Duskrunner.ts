@@ -18,9 +18,14 @@ import type { SwingConfig } from "./Enemy";
 // point-blank bite.
 
 const AGGRO_RADIUS = 160;
-const DEAGGRO_RADIUS = 280;
+// Very sticky (the user: "duskrunners should be really hard to deaggro"). A pack
+// that's locked on doesn't give up until you're most of a screen away — the
+// swarm's whole identity is the relentless run-down, so kiting has to mean
+// genuinely outrunning them, not strolling just past the old 280px edge.
+const DEAGGRO_RADIUS = 620;
 const CHASE_SPEED = 92; // fast — nearly the player's walk speed, so it runs you down
 const WANDER_SPEED = 22;
+const ANCHOR_LEASH = 90; // den guards: wander stays within this of the den, and returns if pulled out
 // 30, not 20: a flat 20px bite whiffed on diagonal approaches because the
 // player↔enemy collider holds their centers ~24px apart on the diagonal, so the
 // strike-frame reach check never saw the player in range (the user: "melee
@@ -28,21 +33,22 @@ const WANDER_SPEED = 22;
 const MELEE_RANGE = 30;
 
 const MAX_HEALTH = 20; // noticeably tougher than a Gremling (12), still low for a swarm unit
-// 34, not 20: the user's badlands-rebalance call — biome-2 enemies must hurt
-// SIGNIFICANTLY more than the biome-1 roster even through max (Lvl-3, 13 flat)
-// armor. 34 - 13 = 21 net per bite, and a pack of 3-4 landing that together
-// forces real dodging instead of face-tanking.
-const BITE_DAMAGE = 34;
+// 42, not 34: badlands damage still read "a bit weak" in a full-armor playtest
+// (the user). 42 - 13 = 29 net per bite; a pack of 3-4 landing that on the same
+// beat is a real threat you have to break line-of-sight or dash out of.
+const BITE_DAMAGE = 42;
 
 const PACK_AGGRO_RADIUS = 260; // a woken packmate within this range also engages
 
 // Snappy point-blank bite — the fallback when the player is right on top of it.
+// Faster cooldown (the user: "faster on their cooldown to attack again"): a swarm
+// that's on top of you should be snapping almost continuously.
 const BITE_SWING: SwingConfig = {
   reach: MELEE_RANGE,
-  windupMs: 200,
+  windupMs: 180,
   strikeMs: 60,
-  recoverMs: 260,
-  cooldownMs: 220,
+  recoverMs: 200,
+  cooldownMs: 140,
 };
 
 // Pounce — a crouch tell then a fast locked-direction leap that overshoots
@@ -53,8 +59,8 @@ const POUNCE_WINDUP_MS = 260; // crouch/load tell
 const POUNCE_SPEED = 330; // clearly faster than chase — closes the gap in a blink
 const POUNCE_MAX_DIST = 185; // travels this far before landing/recovering
 const POUNCE_HIT_RADIUS = 32; // contact check along the leap (was 22 — same body-gap fix as MELEE_RANGE)
-const POUNCE_RECOVER_MS = 320; // landing recovery — the punish window
-const POUNCE_COOLDOWN_MS = 850;
+const POUNCE_RECOVER_MS = 300; // landing recovery — the punish window
+const POUNCE_COOLDOWN_MS = 560; // faster re-pounce (the user) — keeps the pressure up between leaps
 const POUNCE_KNOCKBACK = 90; // a small shove on a landed pounce
 
 type DuskAttack = "bite" | "pounce";
@@ -62,6 +68,10 @@ type DuskAttack = "bite" | "pounce";
 export class Duskrunner extends Enemy {
   private wanderTgt: { x: number; y: number } | null = null;
   private nextRoamAt = 0;
+  // Den guards are anchored to their warren so they don't idle-drift away from
+  // the POI (the user: "duskrunners are still wandering away from their POI").
+  // Wild pack Duskrunners leave this null and roam freely.
+  private anchor: { x: number; y: number } | null = null;
 
   // Pounce state — locked at wind-up start, never re-read (sidestep-dodgeable).
   private currentAttack: DuskAttack | null = null;
@@ -70,7 +80,10 @@ export class Duskrunner extends Enemy {
   private pounceHit = false;
   private pounceCooldownUntil = 0;
 
-  constructor(scene: Phaser.Scene, cfg: { x: number; y: number; elite?: boolean }) {
+  constructor(
+    scene: Phaser.Scene,
+    cfg: { x: number; y: number; elite?: boolean; wanderAnchor?: { x: number; y: number } },
+  ) {
     const elite = cfg.elite ?? false;
     super(scene, {
       x: cfg.x,
@@ -99,6 +112,7 @@ export class Duskrunner extends Enemy {
     // MainScene.updatePackAggro. Same-class only, so it can't wake a Cragscale.
     this.packAggro = true;
     this.packAggroRadius = PACK_AGGRO_RADIUS;
+    this.anchor = cfg.wanderAnchor ?? null;
     if (elite) {
       this.speedMult = 1.1;
       this.setScale(1.3);
@@ -150,11 +164,23 @@ export class Duskrunner extends Enemy {
       return false;
     }
 
-    // Idle wander — small incremental drift.
-    if (now >= this.nextRoamAt) {
+    // Idle wander — small incremental drift. Anchored (den) guards roam only a
+    // short leash around the warren and get pulled straight back if they've
+    // strayed too far, so they never wander off the POI.
+    if (this.anchor && Phaser.Math.Distance.Between(this.x, this.y, this.anchor.x, this.anchor.y) > ANCHOR_LEASH) {
+      this.wanderTgt = { x: this.anchor.x, y: this.anchor.y };
+      this.nextRoamAt = now + Phaser.Math.Between(2000, 4000);
+    } else if (now >= this.nextRoamAt) {
       const angle = Phaser.Math.FloatBetween(0, Math.PI * 2);
       const d = Phaser.Math.Between(20, 50);
-      this.wanderTgt = { x: this.x + Math.cos(angle) * d, y: this.y + Math.sin(angle) * d };
+      let tx = this.x + Math.cos(angle) * d;
+      let ty = this.y + Math.sin(angle) * d;
+      if (this.anchor) {
+        // Bias the drift back toward the anchor so it circles the den, not away.
+        tx = Phaser.Math.Clamp(tx, this.anchor.x - ANCHOR_LEASH, this.anchor.x + ANCHOR_LEASH);
+        ty = Phaser.Math.Clamp(ty, this.anchor.y - ANCHOR_LEASH, this.anchor.y + ANCHOR_LEASH);
+      }
+      this.wanderTgt = { x: tx, y: ty };
       this.nextRoamAt = now + Phaser.Math.Between(2000, 4000);
     }
     if (this.wanderTgt) {

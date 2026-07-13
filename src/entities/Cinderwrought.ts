@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import { Enemy } from "./Enemy";
+import type { IncomingDamageType } from "../systems/Weapons";
 
 // The Sunken Forge's guardian mini-boss (biome 2 Phase 3, POI 2). Bespoke AI
 // following the Gloamwarden/GremlinKing telegraph/poise pattern but a trimmed
@@ -42,7 +43,10 @@ const CONE_IMPACT_MS = 420; // breath sustained; the hit lands once within this 
 const CONE_RECOVER_MS = 700;
 const CONE_RANGE = 210;
 const CONE_HALF_ANGLE = Phaser.Math.DegToRad(32); // ~64deg fan
-const CONE_DAMAGE = 30;
+// Fire damage — bypasses flat armor (like magic), so it hurts even in full
+// plate. Bumped 30→46 (the user: "cinder guy damage is too low"): a forge boss
+// breathing fire should be a real threat, not a chip.
+const CONE_DAMAGE = 46;
 const CONE_KNOCKBACK = 140;
 
 // Forge Hammer — heavy overhead front-arc smash. Locks direction at execute;
@@ -52,7 +56,9 @@ const HAMMER_IMPACT_MS = 150; // planted overhead beat — the strike window
 const HAMMER_RECOVER_MS = 780;
 const HAMMER_RANGE = 155; // reaches just past MELEE_STOP_RANGE so a standing player is caught
 const HAMMER_HALF_ARC = Phaser.Math.DegToRad(70); // wide front wedge
-const HAMMER_DAMAGE = 44;
+// Fire damage (the molten hammer) — bypasses armor; bumped 44→58 so getting
+// caught in the wedge is a genuine "you should have dodged" punish.
+const HAMMER_DAMAGE = 58;
 const HAMMER_KNOCKBACK = 240;
 
 const MELEE_STOP_RANGE = 150; // both attacks reach from here; stops approaching inside it
@@ -367,7 +373,10 @@ export class Cinderwrought extends Enemy {
 
   // Queried each frame by MainScene.updateEnemies() (like GremlinKing/Gloamwarden)
   // — area damage needs richer info (knockback) than the base bite bool.
-  checkPlayerHit(playerX: number, playerY: number): { damage: number; knockback?: number } | null {
+  checkPlayerHit(
+    playerX: number,
+    playerY: number,
+  ): { damage: number; knockback?: number; dmgType?: IncomingDamageType } | null {
     if (this.wroughtState !== "executing" || this.hasHitThisAttack) return null;
     const dist = Phaser.Math.Distance.Between(this.x, this.y, playerX, playerY);
     const angleToPlayer = Phaser.Math.Angle.Between(this.x, this.y, playerX, playerY);
@@ -375,11 +384,11 @@ export class Cinderwrought extends Enemy {
     if (this.currentAttack === "cone") {
       if (dist > CONE_RANGE || angleDiff > CONE_HALF_ANGLE) return null;
       this.hasHitThisAttack = true;
-      return { damage: CONE_DAMAGE, knockback: CONE_KNOCKBACK };
+      return { damage: CONE_DAMAGE, knockback: CONE_KNOCKBACK, dmgType: "fire" };
     }
     if (dist > HAMMER_RANGE || angleDiff > HAMMER_HALF_ARC) return null;
     this.hasHitThisAttack = true;
-    return { damage: HAMMER_DAMAGE, knockback: HAMMER_KNOCKBACK };
+    return { damage: HAMMER_DAMAGE, knockback: HAMMER_KNOCKBACK, dmgType: "fire" };
   }
 
   takeHit(damage: number): boolean {

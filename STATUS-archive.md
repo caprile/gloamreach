@@ -5184,3 +5184,104 @@ systems, no new mechanic. Four items:
 Verified: `tsc --noEmit` clean, `npm run build` clean, live `preview_eval` on all four items (seam
 scan, mottle visible in a fresh screenshot, Hexling facing at 8 directions, live damage constant
 readout), no console errors. No `RECIPES.md` change (no recipe/cost changes).
+
+### Biome 2 — Phase 2b: Sandmaw (burrowing ambusher, the 4th native creature)
+
+Plan: `.claude/plans/biome-2-phase-2b-sandmaw.md`. Built on **Opus** (new enemy AI / state
+machine). The "+1 native creature" deferred out of Phase 2's core-3 scope. Creature identity
+locked with the user via `AskUserQuestion`: **a burrowing ambusher** (over an aerial diver or a
+stealth flanker).
+
+**The Sandmaw** (`src/entities/Sandmaw.ts`) — a gloam-touched burrowing ambush predator, the
+badlands roster's 4th and most distinct threat vector. The existing trio is swarm-pounce
+(Duskrunner) / armored roll-tank (Cragscale) / stationary flame-mage (Hexling); the Sandmaw adds
+**"watch the ground / don't stand still near a lurker."** Own bespoke state machine, fully
+overrides `update()` (does NOT call super — same precedent as Snake/Hexling):
+`submerged → surfacing → erupting → exposed → burrowing → submerged`.
+- **submerged** — near-invisible (alpha 0.18, a subtler Snake), slow-stalks (30px/s) toward a
+  player within `STALK_RADIUS` 240px but outside the ambush ring to reposition (holds still
+  otherwise — a slow drift so it isn't an invisible shove). Triggers on `AMBUSH_RADIUS` 62px.
+- **surfacing** — pops to full alpha + `playWindupTell` load-up + a growing dust-ring telegraph
+  previewing the exact burst radius. `SURFACE_WINDUP_MS` 560ms = the dodge window.
+- **erupting** — a radial **sand-burst** (`BURST_RADIUS` 95px, 38 physical + 220 knockback), one
+  hit per eruption, dealt via `checkPlayerHit()` (queried by the scene like the bosses / Hexling
+  flame — NOT a melee bite; `biteDamage: 0`). Added `Sandmaw` to that `instanceof` union.
+- **exposed** — fully surfaced + planted 1100ms: the vulnerable punish window.
+- **burrowing** — dives back under (350ms), then a 2600ms re-ambush cooldown.
+
+Numbers first-pass: HP 45 (between Duskrunner 20 / Cragscale 60), erupt 38 (~25 net through the
+13-flat Lvl-3 armor cap, badlands-rebalance tier). Elite ×1.5 HP/dmg, ×1.1 speed, ×1.3 scale, 2×
+loot, crimson/gold recolor. **Dodge math:** a walking player (95px/s) covers ~52px in the 560ms
+wind-up; from 62px in they just clear the 95px burst with a beat of reaction — greedy/advancing
+players eat it, reactive ones (or a dash + its i-frames) escape (same movement-dodgeable
+principle as 5t's smash fix). **Resist profile (locked):** `{ pierce: 0.6, blunt: 1.4 }` — the
+**inverse of Cragscale** (resist-slash/weak-pierce), so clubs/warhammer shine on Sandmaws where
+the Primal Spear shines on Cragscales; the damage-type layer now rewards carrying more than one
+weapon. **Reveal-and-retaliate:** attacked while submerged → surfaces + erupts (Snake/Hexling
+`takeHit` precedent). `isAggro()` hidden while submerged (HP bar shows only once surfaced).
+**Spawn:** scattered **lone** ambushers (no pack — a lurker is a solo trap), 24 via
+`pickBadlandsPoint` in `spawnBadlandsEnemies()`, elite via `rollElite`. **Loot:**
+`sandmaw_chitin` ×1 (×2 elite; a light-but-tough plating shard, no recipe yet); elite +
+`sandmaw_trophy` (Common/tier1 in `TROPHY_ROLL`, like the other badlands trophies — Phase 5
+retiers to tier-2 + Ember).
+
+Files: new `Sandmaw.ts`; `Inventory.ts` + `Items.ts` (2 resources); `Relics.ts` (`TROPHY_ROLL`);
+`BootScene.ts` (`drawSandmaw` normal + elite 26×18 plated burrower facing right, + chitin/trophy
+icons); `MainScene.ts` (import, spawn 24, area-hit union); `dashboard/main.ts` (Enemies-tab entry
++ trophy-source row). No `RECIPES.md` change (no recipes). **Verified:** `tsc --noEmit` clean;
+`preview_start` boots with no console errors; `preview_eval` — 24 Sandmaws spawn, all 4 textures
+load, full state cycle submerged→surfacing(α1)→erupting→hit `{38, kb220}`→single-hit-per-erupt→
+exposed→burrowing→submerged(α0.18); a player 300px out at erupt = no hit (dodge); resists
+pierce×0.6/blunt×1.4/slash×1.0; takeHit-while-submerged flips to surfacing; `isAggro()` false
+while submerged; sprite + elite recolor render correctly. **Next: Phase 3** (badlands boss = new
+win-con + Gremlin King critical-drop rework + 2 POIs).
+
+### 4-item playtest fix batch (Cragscale art, axe name, boss-continue, refined-relic cap)
+
+Off the user's latest playtest notes. Sonnet-class fixes/tuning on already-shipped systems, no new
+mechanic. Four items:
+
+1. **Boar/Cragscale too similar.** Both were warm-brown quadrupeds facing right — the Cragscale
+   hide `0x7a5040` was nearly the Boar body `0x6b4a2a`. Re-toned the **normal** Cragscale to a cool
+   slate-grey palette (hide `0x69726c`, cooler belly/head, lighter stone plates) so the rock
+   reptile reads as stony, not a second boar. Elite (crimson/gold) unchanged. Verified via texture
+   pixel sample: Boar body `#6b4a2a` vs Cragscale body `#69726c`.
+2. **Woodcutter's Axe name in the crafting menu.** The prior batch renamed only the item's inventory
+   `name` (`Items.ts`); the `stone_axe` RECIPE in `Recipes.ts` still read "Stone Axe", and the
+   crafting menu shows the recipe name. Changed `Recipes.ts` recipe `name` → "Woodcutter's Axe"
+   (id/key/output all stay `stone_axe`). RECIPES.md table row updated.
+3. **Continue past the win (in-progress playtesting).** Beating the current end-game boss (Gremlin
+   King) fires `endRun("won")` which froze the world at the run-end screen, blocking end-to-end
+   testing into biome 2. `RunEndUI` now shows a green **[ Continue ]** button beside [ New Run ]
+   **only on a win** (`RunEndDeps.onContinue`, two-button layout; death shows only New Run), plus a
+   caption ("Continue = explore in-progress content past this boss"). `MainScene.resumeAfterWin()`
+   hides the screen, clears `runOver`, sets `inProgressMode`, and raises a **persistent top-center
+   caveat banner** ("⚠ IN-PROGRESS CONTENT — past the current end-game target") so it's clear you're
+   past finished content — this sets the precedent for pushing live builds before a biome is done, as
+   the end-game target moves outward with future bosses. The win's score is posted at the kill.
+   **Death is UNaffected** — a hardcore death always ends the run, even after Continuing (the user: no
+   respawn during playtesting): `onPlayerDeath`'s `endRun("died")` no longer gates on the continue
+   flag, and `endRun` calls a new `Run.setOutcome()` when `inProgressMode` so a continued-then-died
+   run's end screen correctly reads **YOU DIED** (the win's `end()` had already locked the outcome to
+   "won"; `setOutcome` overrides it) and hides the banner. New fields reset in `create()` per the
+   `scene.restart()` field-init gotcha. Verified live: win screen carries both buttons + caption;
+   Continue sets `runOver=false`/`inProgressMode=true` + shows the banner (screenshot, top-center,
+   clear of HUD); a death after Continue forces outcome "died", hides the banner, and shows the YOU
+   DIED screen (no completion bonus). Phase 3 of the biome-2 plan properly demotes the Gremlin King
+   from win-con to a mid-boss with a critical drop.
+4. **No Mythic from a Refined (Uncommon) trophy.** A `refined_trophy_uncommon` has rarity `uncommon`
+   and rolls the Uncommon outcome table, which has a 1% Mythic band — so a gated refinement could
+   still gamba a Mythic. Added an optional `TrophyRoll.maxRarity`; `refined_trophy_uncommon` now sets
+   `maxRarity: "rare"`, and `RelicManager.roll()` clamps any rolled-up result above the cap down to
+   it (the 1% Mythic band merges into Rare → ~6% Rare, rest Uncommon). Raw Common trophies and the
+   deeper-biome-scaffold `refined_trophy_rare` are uncapped (Rare-refined can still hit Mythic — a
+   Phase-5 concern, unreachable in biome 1). The dashboard "Trophy → outcome odds" breakdown now
+   merges capped bands so its display matches the roll clamp; RECIPES.md refined-trophy row notes the
+   cap. Verified live: 30k refined-Uncommon rolls → **0 Mythic** (1782 Rare ≈ 6%, rest Uncommon);
+   30k rare-refined rolls → ~10% Mythic (uncapped, confirming the cap is trophy-specific).
+
+Files: `BootScene.ts` (Cragscale tint), `Recipes.ts` (axe name), `RunEndUI.ts` + `MainScene.ts`
+(continue button + resume + death gate), `Relics.ts` (`maxRarity` + clamp), `dashboard/main.ts`
+(capped breakdown), `RECIPES.md`. `tsc --noEmit` clean; verified live via `preview_eval` +
+screenshot; no console errors.
+

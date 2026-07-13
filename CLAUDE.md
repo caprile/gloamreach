@@ -1169,9 +1169,9 @@ core enemies & flora (5ae) + Phase 2b 4th native creature — the Sandmaw burrow
 (5af) done. **Phase 3 underway** (the user chose "two POIs first"): POI 1 — the Duskrunner
 Warren (two-wave destructible den → lootable cache) — done (5ag); POI 2 — the Sunken Forge
 (the Cinderwrought fire/forge mini-boss) — done (5ah); the **badlands final boss — the
-Duneshaper** (new win-con, demotes the Gremlin King) — done (5ai); still to do: the **Gremlin
-King critical-drop rework** (deferred — gates the not-yet-built Phase 4 gear). See the biome-2
-umbrella plan below.**
+Duneshaper** (new win-con, demotes the Gremlin King) — done (5ai); then a **19-item badlands
+playtest batch** (5aj) — done; still to do: the **Gremlin King critical-drop rework** (deferred —
+gates the not-yet-built Phase 4 gear). See the biome-2 umbrella plan below.**
 
 5ac. **Biome 2 (Sunscorch Badlands) — Phase 0: Patchwork worldgen.** Plan:
    `.claude/plans/biome-2-phase-0-world-ring.md` (Phase 0 of the
@@ -1408,8 +1408,30 @@ umbrella plan below.**
    3→4→5; state-machine cycle; all 5 attacks' `checkPlayerHit` (physical-vs-magic + knockback +
    one-hit-per-instance + miss); volley = 3 magic bolts; **Duneshaper kill → `endRun("won")` (VICTORY
    screen rendered), Gremlin King kill → no win**; effigy craft reveals all altars + directional
-   nudge; boss renders. `tsc` clean; dashboard Enemies tab + `RECIPES.md` updated. **Next: the Gremlin
-   King critical-drop rework** (Phase 4 gear gate). See `STATUS.md` + [[survivor-rpg-biome-2-plan]].
+   nudge; boss renders. `tsc` clean; dashboard Enemies tab + `RECIPES.md` updated. See `STATUS.md`
+   + [[survivor-rpg-biome-2-plan]].
+
+5aj. **Biome 2 — 19-item badlands playtest batch.** Built on **Opus** (a fire damage type + a forge
+   refactor are new-ish mechanics, plus broad tuning). Off the user's badlands playtest. Highlights (full
+   list + verification in `STATUS.md`): fixed the center-toast **overlap** (Defeated-X vs level-up — a
+   freed front slot was reused under a live toast; now a monotonic cursor); added a **`fire` damage type**
+   (`IncomingDamageType`, kept out of `DamageType`/`SkillType`) that **bypasses flat armor** like magic +
+   a player-facing **floating damage number tinted by type** so incoming type is clear; **Cinderwrought**
+   now deals fire (cone 30→46, hammer 44→58) and on death **cracks open mineable Cinderforged Ore**
+   (`ember_ore`, a smelting/metal material — Phase-4 hook); **5 Sunken Forges** now (was 1, refactored to
+   `forges[]`); badlands damage bumped (Duskrunner 34→42, Cragscale 40→48, Hexling 22/34→26/40, Sandmaw
+   38→46); **Duskrunner** very hard to deaggro (leash 280→620) + faster attack cooldowns + **den guards
+   anchored** (no idle wander); **Cragscale** roll radius 40→58; **Sandmaw un-targetable while submerged**
+   (new `Enemy.isTargetable()`); more density (Sandmaws 24→46, dens 10→16, packs/cragscales/hexlings up) +
+   **2 new badlands harvestables** (Gloamcap, Dustbloom) + ~200 more flora; every POI now gets a **distinct
+   floor decal + ring of marker props** (`decoratePoi`); the **Duneshaper altars** are a big gloam arena
+   guarded by **elite Hexlings**, **one per quadrant** (4, was 3); **POI map-detection radius** widened
+   (~260→760px) so POIs appear on the map sooner + the dev reveal-map now drops **all** POI landmarks;
+   "Gloam-Bone Fetish" → "**Gloam-Bone Totem**"; and **decorative immersion props** scattered across BOTH
+   biomes (ferns/flowers/mushrooms/logs in the forest; skulls/dead bushes/mesa boulders/bones in the
+   badlands). `tsc` clean; verified live via `preview_eval` + a demo screenshot; dashboard Enemies tab +
+   `RECIPES.md` updated. **Next: the Gremlin King critical-drop rework** (Phase 4 gear gate). See
+   `STATUS.md` + [[survivor-rpg-biome-2-plan]].
 
 **Not yet built — next up in rough order:**
 6. **World & discovery** — much bigger generated world, biomes, map, a single giant

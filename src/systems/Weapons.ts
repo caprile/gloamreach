@@ -5,6 +5,19 @@ export type WeaponType = "wood_club" | "stone_club" | "bone_knife" | "primal_spe
 // allowed for future weapons with mixed damage; only the first counts today.
 export type DamageType = "slash" | "blunt" | "pierce" | "ranged" | "magic";
 
+// Damage types an ENEMY can deal to the player. A superset of the weapon
+// DamageType (which doubles as the weapon-skill keys) — enemies can also deal
+// elemental "fire" (the Cinderwrought), which is NOT a player weapon skill, so
+// it lives here rather than polluting DamageType/SkillType. Both `magic` and
+// `fire` bypass the player's flat armor (see MainScene.applyDamageToPlayer).
+export type IncomingDamageType = DamageType | "fire";
+
+// Whether an incoming type ignores the flat-armor term (relic %-reduction +
+// floor-at-1 still apply). Magic and fire are the two "elemental" types.
+export function bypassesArmor(type: IncomingDamageType): boolean {
+  return type === "magic" || type === "fire";
+}
+
 const WEAPON_DAMAGE_TYPES: Record<WeaponType, DamageType[]> = {
   wood_club: ["blunt"],
   stone_club: ["blunt"],
@@ -66,7 +79,7 @@ export function weaponAttacksPerSecond(weapon: WeaponType): number {
   return 1000 / WEAPON_COOLDOWN_MS[weapon];
 }
 
-export function damageTypeDisplayName(type: DamageType): string {
+export function damageTypeDisplayName(type: IncomingDamageType): string {
   return type.charAt(0).toUpperCase() + type.slice(1);
 }
 

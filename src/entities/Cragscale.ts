@@ -22,10 +22,10 @@ const WANDER_SPEED = 14;
 const MELEE_RANGE = 30; // its big body needs a slightly longer basher threshold
 
 const MAX_HEALTH = 60; // "noticeably tougher" = a real damage sponge vs the forest roster
-// 40, not 22: badlands-rebalance pass — the tank of the trio should hit
-// significantly harder than any biome-1 enemy through max (Lvl-3, 13 flat)
-// armor (40 - 13 = 27 net), on top of its resist-slash/weak-pierce gimmick.
-const BITE_DAMAGE = 40; // shared "hit" value for both the basher and the roll
+// 48, not 40: badlands still read "a bit weak" in full armor (the user). The tank
+// should be the scariest single hit out here — 48 - 13 = 35 net through max
+// (Lvl-3, 13 flat) armor, on top of its resist-slash/weak-pierce gimmick + bleed.
+const BITE_DAMAGE = 48; // shared "hit" value for both the basher and the roll
 
 // Heavy basher — a long, readable wind-up + long recovery (the punish window),
 // with a solid shove on connect.
@@ -48,7 +48,10 @@ const ROLL_TRIGGER_MAX = 215; // beyond MELEE_RANGE and within this → roll to 
 const ROLL_WINDUP_MS = 560; // tuck-in tell
 const ROLL_SPEED = 300; // was 240 — fast enough to catch a strafing player
 const ROLL_MAX_DIST = 230;
-const ROLL_HIT_RADIUS = 40; // was 30 — a casual sidestep no longer clears the shell
+// 58, not 40 (the user: "bigger radius when spinning"). The rolling shell now
+// sweeps a genuinely wide lane — a lazy strafe won't clear it; you need a
+// committed dash or to get fully outside its line.
+const ROLL_HIT_RADIUS = 58;
 const ROLL_RECOVER_MS = 640; // unroll/turnaround — the punish window
 const ROLL_COOLDOWN_MS = 1000;
 const ROLL_KNOCKBACK = 230;

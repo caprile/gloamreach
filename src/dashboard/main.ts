@@ -165,12 +165,12 @@ const ENEMIES: EnemyStat[] = [
     speed: 92,
     aggro: 160,
     attacks: [
-      { label: "Pounce (locked leap, 190px band, 32px hit)", damage: 20, telegraphMs: 260 },
-      { label: "Bite (point-blank fallback, 30px reach)", damage: 20, telegraphMs: 200 },
+      { label: "Pounce (locked leap, 190px band, 32px hit, cd 560ms)", damage: 42, telegraphMs: 260 },
+      { label: "Bite (point-blank fallback, 30px reach, cd 140ms)", damage: 42, telegraphMs: 180 },
     ],
     loot: "1 Duskrunner Pelt + 1 Duskrunner Meat (elite 2x each)",
     trophy: "Duskrunner Trophy (elite)",
-    notes: "Biome 2 canid swarm. Fast, low-HP. Signature POUNCE gap-closer (sidestep-dodgeable) + point-blank bite. Pack-aggro (radius 260) — an aggro'd runner wakes packmates; spawns in packs of 3-4 AND rallies packmates to pounce together (attack-sync). Neutral resists (the AOE-arc payoff enemy). Now also a badlands FOOD SOURCE — drops raw Duskrunner Meat (Phase 3; cook/eat specifics deferred). Guards the Duskrunner Warren POI in two waves (3 normal, then 3 elite). Reach/damage bumped 2026-07-12.",
+    notes: "Biome 2 canid swarm. Fast, low-HP. Signature POUNCE gap-closer (sidestep-dodgeable) + point-blank bite. Pack-aggro (radius 260) — an aggro'd runner wakes packmates; spawns in packs of 3-4 AND rallies packmates to pounce together (attack-sync). Neutral resists (the AOE-arc payoff enemy). Now also a badlands FOOD SOURCE — drops raw Duskrunner Meat. Guards the Duskrunner Warren POI in two waves (3 normal, then 3 elite); den guards are ANCHORED (no idle wander). 2026-07-13 tuning: dmg 34→42, VERY hard to deaggro (leash 280→620), faster attack cooldowns.",
   },
   {
     name: "Cragscale (BADLANDS)",
@@ -178,8 +178,8 @@ const ENEMIES: EnemyStat[] = [
     speed: 40,
     aggro: 130,
     attacks: [
-      { label: "Rolling charge (300px/s, 40px hit, +BLEED 5/s×4s)", damage: 22, telegraphMs: 560 },
-      { label: "Heavy basher (point-blank + 180 shove)", damage: 22, telegraphMs: 520 },
+      { label: "Rolling charge (300px/s, 58px hit, +BLEED 5/s×4s)", damage: 48, telegraphMs: 560 },
+      { label: "Heavy basher (point-blank + 180 shove)", damage: 48, telegraphMs: 520 },
     ],
     loot: "1-2 Cragscale Plate",
     trophy: "Cragscale Trophy (elite)",
@@ -191,8 +191,8 @@ const ENEMIES: EnemyStat[] = [
     speed: 46,
     aggro: 170,
     attacks: [
-      { label: "Hex bolt (projectile 250px, BYPASSES armor)", damage: 14, eliteScales: false },
-      { label: "Flame Strike (3 delayed magic AoE circles, 48px, close-range)", damage: 18, telegraphMs: 820 },
+      { label: "Hex bolt (projectile 250px, BYPASSES armor)", damage: 26, eliteScales: false },
+      { label: "Flame Strike (3 delayed magic AoE circles, 48px, close-range)", damage: 40, telegraphMs: 820 },
     ],
     loot: "1 Hex Essence",
     trophy: "Hexling Trophy (elite)",
@@ -204,7 +204,7 @@ const ENEMIES: EnemyStat[] = [
     speed: 30,
     aggro: 62,
     attacks: [
-      { label: "Sand Erupt (radial AoE, 95px burst, +220 knockback)", damage: 38, telegraphMs: 560 },
+      { label: "Sand Erupt (radial AoE, 95px burst, +220 knockback)", damage: 46, telegraphMs: 560 },
     ],
     loot: "1-2 Sandmaw Chitin",
     trophy: "Sandmaw Trophy (elite)",
@@ -243,12 +243,12 @@ const ENEMIES: EnemyStat[] = [
     speed: 52,
     aggro: 260,
     attacks: [
-      { label: "Cinder Cone (locked-direction fire cone, 210px / ±32°)", damage: 30, telegraphMs: 820 },
-      { label: "Forge Hammer (heavy front-arc smash, 155px / ±70°)", damage: 44, telegraphMs: 720 },
+      { label: "Cinder Cone (locked-direction FIRE cone, 210px / ±32°, bypasses armor)", damage: 46, telegraphMs: 820 },
+      { label: "Forge Hammer (heavy FIRE front-arc smash, 155px / ±70°, bypasses armor)", damage: 58, telegraphMs: 720 },
     ],
-    loot: "3-5 Gloam Shard + 1 Refined Trophy (Uncommon)",
+    loot: "3-5 Gloam Shard + 1 Refined Trophy (Uncommon) + cracks open mineable Cinderforged Ore nodes on death",
     notes:
-      "Sunken Forge guardian (badlands Phase 3 POI 2). Poise 70 (stagger → 1.5× dmg for 2.5s). Scale 1.8, scored as an elite kill. Resists blunt ×0.8, weak to pierce ×1.25. Bespoke attacks (NOT the roster's charge/slam/smash/eruption): the Cinder Cone locks its direction at telegraph START (sidestep the wind-up) — the game's only cone; the Forge Hammer re-locks at execute and hits a wide short front wedge (back out to dodge). Regens 12 HP/s while deaggro'd. No post-kill node — loot is its guaranteed drop.",
+      "Sunken Forge guardian (badlands Phase 3 POI 2). NOW 5 forges spread across the badlands (was 1). Poise 70 (stagger → 1.5× dmg for 2.5s). Scale 1.8, scored as an elite kill. Resists blunt ×0.8, weak to pierce ×1.25. Its attacks deal FIRE damage (new damage type, 2026-07-13) which BYPASSES flat armor like magic — cone 30→46, hammer 44→58. Bespoke attacks: the Cinder Cone locks its direction at telegraph START (sidestep the wind-up) — the game's only cone; the Forge Hammer re-locks at execute and hits a wide short front wedge (back out to dodge). Regens 12 HP/s while deaggro'd. On death, its ring of shielded Ember Deposits crack open into mineable Cinderforged Ore (a smelting/metal material — Phase 4 hook).",
   },
   {
     name: "The Duneshaper (FINAL BOSS)",

@@ -31,7 +31,7 @@ const MAX_HEALTH = 55; // was 30 — a squishy caster still, but not 1-2-shot th
 // Hexling's raw number IS the net damage. the user: "base hexlings should kill
 // you in like 3 hits" — bolt + flame (below) are both bumped to make that true
 // even at full HP/Vitality, not just against an unarmored player.
-const BOLT_DAMAGE = 22; // magic — bypasses armor
+const BOLT_DAMAGE = 26; // magic — bypasses armor (bumped 22→26, badlands still read soft in full armor)
 const CAST_COOLDOWN_MS = 1700;
 const BOLT_SPEED = 210;
 const BOLT_MAX_RANGE = 250;
@@ -45,7 +45,7 @@ const FLAME_TRIGGER = 150; // player within this (and flame ready) → flame str
 const FLAME_TELEGRAPH_MS = 820; // growing-circle tell (the dodge window)
 const FLAME_IMPACT_MS = 240; // detonation window checkPlayerHit fires in
 const FLAME_COOLDOWN_MS = 4600;
-const FLAME_DAMAGE = 34; // magic, bypasses armor — the close-range punish, ~3-hit-kills a base player
+const FLAME_DAMAGE = 40; // magic, bypasses armor — the close-range punish, ~3-hit-kills a base player
 const FLAME_RADIUS = 48; // each circle's damage radius
 const FLAME_SPREAD = 62; // gap between the 3 clustered circles
 

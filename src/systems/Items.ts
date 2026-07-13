@@ -354,6 +354,14 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     maxStack: 99,
     hotbarable: false,
   },
+  ember_ore: {
+    key: "ember_ore",
+    name: "Cinderforged Ore",
+    description: "Raw metal ore veined with cooling ember, mined from a Sunken Forge's deposits. The stuff of smithing.",
+    texture: "icon_ember_ore",
+    maxStack: 99,
+    hotbarable: false,
+  },
   emberbloom: {
     key: "emberbloom",
     name: "Emberbloom",
@@ -367,6 +375,22 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     name: "Sunfruit",
     description: "The swollen fruit of a Sunscorch cactus — bitter raw, but full of water.",
     texture: "icon_sunfruit",
+    maxStack: 99,
+    hotbarable: false,
+  },
+  gloamcap: {
+    key: "gloamcap",
+    name: "Gloamcap",
+    description: "A violet mushroom that only fruits where the gloam has soaked the sand. Faintly luminous.",
+    texture: "icon_gloamcap",
+    maxStack: 99,
+    hotbarable: false,
+  },
+  dustbloom: {
+    key: "dustbloom",
+    name: "Dustbloom",
+    description: "A pale, papery flower that clings to the driest flats. Its petals scatter on the wind.",
+    texture: "icon_dustbloom",
     maxStack: 99,
     hotbarable: false,
   },
@@ -594,7 +618,7 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
   // --- Duneshaper (badlands final boss) summon ---
   warren_fetish: {
     key: "warren_fetish",
-    name: "Gloam-Bone Fetish",
+    name: "Gloam-Bone Totem",
     description: "A knot of bone and gloam-scarred hide, hoarded deep in the Duskrunner warrens. It hums faintly, as if pulling toward some old altar out in the badlands.",
     texture: "icon_warren_fetish",
     maxStack: 99,

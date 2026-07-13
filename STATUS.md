@@ -2,7 +2,29 @@
 
 ## Current State
 
-_Living snapshot — edit in place, never append. Last shipped: **Biome 2 — Phase 3: The Duneshaper
+_Living snapshot — edit in place, never append. Last shipped: **Badlands playtest batch (19 items)**
+(2026-07-13, Opus). A broad polish/tuning pass off a badlands playtest. **HUD:** fixed the "Defeated X"
+vs skill/level-up center-toast overlap (a freed front slot was reused under a still-visible toast — now a
+monotonic cursor that only resets when the stack empties). **Combat/enemies:** added a **fire** damage type
+(`IncomingDamageType`) that bypasses flat armor like magic + a player-facing floating damage number tinted
+by type (fire orange / magic violet / physical red) so incoming type reads clearly; **Cinderwrought** now
+deals FIRE (cone 30→46, hammer 44→58) and on death cracks open **mineable Cinderforged Ore** (a smelting/
+metal material — Phase-4 hook); badlands damage bumped across the board (Duskrunner 34→42, Cragscale 40→48,
+Hexling bolt 22→26 / flame 34→40, Sandmaw 38→46); **Duskrunner** is now very hard to deaggro (leash 280→620),
+attacks faster (pounce cd 850→560, bite cd 220→140), and den guards are **anchored** (no idle wander);
+**Cragscale** roll radius 40→58; **Sandmaw** is **un-targetable while submerged** (new `Enemy.isTargetable()`).
+**Density:** more of everything — **5 Sunken Forges** (was 1), 16 dens (was 10), 46 Sandmaws (was 24), more
+packs/cragscales/hexlings, ~200 more badlands flora + **2 new harvestables** (Gloamcap, Dustbloom).
+**POIs:** every POI now gets a **distinct floor decal + a ring of marker props** (`decoratePoi`); the
+**Duneshaper altars** are a big gloam-blighted arena guarded by **elite Hexlings**, and there's now **one
+per quadrant** (4). **Map/discovery:** POI detection radius widened (~260→760px so they appear on the map
+sooner); the dev reveal-map now drops **all** POI landmarks; the Gloaming Vein reliably lands on the map.
+**Naming:** "Gloam-Bone Fetish" → "Gloam-Bone Totem". Decorative immersion props scattered across BOTH biomes
+(ferns/flowers/mushrooms/logs in the forest; skulls/dead bushes/mesa boulders/bones in the badlands). Verified
+live via `preview_eval` (counts/quadrants/textures/fire-bypass/Cinderwrought fire returns/Sandmaw untargetable/
+den anchor/reveal-map landmarks) + a demo screenshot; `tsc` clean. See the batch entry below. [[survivor-rpg-biome-2-plan]]_
+
+_Prior: **Biome 2 — Phase 3: The Duneshaper
 (badlands final boss + win-con swap)** (2026-07-13, Opus). The **new win-condition final boss**,
 demoting the Gremlin King to a mid-boss. `src/entities/Duneshaper.ts` — a gloam-warped apex
 sorcerer, bespoke telegraph/poise AI (GremlinKing/Gloamwarden precedent, NOT a shared framework).
@@ -237,6 +259,64 @@ all first-pass — expect a tuning pass as the biome fills out.
 
 > Older entries in STATUS-archive.md.
 
+### Badlands playtest batch (19 items, 2026-07-13, Opus)
+
+Broad polish/tuning pass off a badlands playtest. No new milestone letter. All verified live via
+`preview_eval` + a demo screenshot; `tsc --noEmit` clean.
+
+1. **HUD toast overlap** (`EventLogUI.ts`) — "Defeated X" (combat) and "Slash leveled up" (levelup)
+   center toasts overlapped "sometimes." Root cause: the Y was summed over live-toast heights, but the
+   earliest toast always fades first, so a freed FRONT slot got reused under a still-visible toast. Fixed
+   with a monotonic `centerStackNextY` cursor that only resets to the top when the stack is fully empty.
+2. **Fire damage type** (`Weapons.ts` + `MainScene`) — new `IncomingDamageType = DamageType | "fire"`
+   (kept OUT of `DamageType`/`SkillType` so it isn't a bogus weapon skill) + `bypassesArmor()` (magic|fire).
+   `applyDamageToPlayer` bypasses flat armor for fire like magic. New `spawnPlayerDamageNumber()` floats a
+   colored number over the player on every hit (fire orange / magic violet / physical red) so incoming type
+   is clear (the user: "fire damage should be clear").
+3. **Cinderwrought rework** (`Cinderwrought.ts`) — attacks now return `dmgType: "fire"`, damage up (cone
+   30→46, hammer 44→58). On death, `onCinderwroughtKilled` cracks its shielded Ember Deposit nodes into
+   mineable **Cinderforged Ore** (`ember_ore`, new resource + `Ember Deposit` node) — the "something mineable
+   after we kill him" for smelting/metalworking (Phase-4 hook).
+4. **More Sunken Forges** — refactored the single `forgePosition`/`cinderwrought` into `forgePositions[]` +
+   `forges[]`; **`FORGE_COUNT` = 5** (the user: "way more of the ember POIs"), spread `FORGE_MIN_SPACING` apart,
+   each with its own boss + ore ring + dressing.
+5. **Badlands damage bump** — Duskrunner 34→42, Cragscale 40→48, Hexling bolt 22→26 / flame 34→40,
+   Sandmaw 38→46.
+6. **Duskrunner tuning** — deaggro leash 280→**620** (very sticky, the user), attack cooldowns faster
+   (pounce 850→560, bite 220→140); den guards take a `wanderAnchor` and stay leashed to the den (no idle
+   wander off the POI).
+7. **Cragscale** roll hit radius 40→**58** (bigger spin lane).
+8. **Sandmaw** — new `Enemy.isTargetable()` (default `!depleted`); Sandmaw overrides it to `false` while
+   submerged, and the hover-target loop + AOE-arc sweep both honor it → can't be clicked/swept while invisible.
+9. **Density** — Sandmaws 24→46, dens 10→16, packs 16→24, cragscales 34→46, hexlings 34→44.
+10. **Badlands flora** — bumped counts + 2 new harvestables (**Gloamcap**, **Dustbloom**) with node/picked/
+    icon textures + `Items`/`Inventory` defs.
+11. **POI rings/floors/decor** — new `decoratePoi(rng, cx, cy, {floor, ring})` helper + `poi_floor_*` soft
+    radial decals (depth -7) + `poi_ring_*` marker props; wired into forges, dens, Duneshaper altars, and the
+    Gloaming Vein.
+12. **Duneshaper altar arena** — `TYRANT_ALTAR_CLEAR_RADIUS` 170→360 + a wide gloam floor + a ring of standing
+    stones + scattered gloam crystals (night-glowing via `tyrantAltarLightPoints`) + **4 elite Hexling guards**
+    each.
+13. **One altar per quadrant** — `pickTyrantAltarPositions` now places one Duneshaper altar in each of the 4
+    map quadrants (the user: "start thinking in # per quadrant") instead of 3 scattered.
+14. **POI discovery radius** — new `POI_DISCOVERY_RADIUS` (~760px, was fog's 260) so shacks/vein/dens/forges
+    land on the minimap + world map from much further out.
+15. **Reveal-map shows POIs** — `updateAltarDiscovery(forceAll)`; the dev reveal-whole-map command
+    (`Ctrl+Shift+M`) now force-adds every POI landmark, not just terrain.
+16. **Rename** — "Gloam-Bone Fetish" → "Gloam-Bone Totem" (display name; key `warren_fetish` unchanged).
+17. **Decorative immersion props** — `makeDecorProps` (8 textures) + `scatterDecor` drops ~480 non-interactive
+    props across both biomes (forest: fern/flowers/mushrooms/log; badlands: skull/dead bush/mesa boulder/bones),
+    routed through the spawn samplers so they respect every POI exclusion zone.
+
+**Verified** (`preview_eval`, single clean server after clearing a stale one): 5 forges / 16 dens / 46 Sandmaws
+/ 5 Cinderwroughts / 4 tyrant altars (quadrants EN/ES/WN/WS) / 21 elite Hexlings / 20 ember-ore nodes / 44
+Gloamcap + 52 Dustbloom; all 15 sampled textures exist; Cinderwrought cone→`{46,fire}` / hammer→`{58,fire}`;
+fire bypasses armor (40 full vs slash 36 through 4 armor); Sandmaw `isTargetable()` false while submerged; den
+guard has anchor; `updateAltarDiscovery(true)` drops 32 landmarks (1 altar + 16 den + 5 forge + 5 shack + 4
+tyrant + 1 vein). Files: `EventLogUI.ts`, `Weapons.ts`, `Enemy.ts`, `Duskrunner.ts`, `Cragscale.ts`,
+`Hexling.ts`, `Sandmaw.ts`, `Cinderwrought.ts`, `MainScene.ts`, `BootScene.ts`, `Items.ts`, `Inventory.ts`,
+`dashboard/main.ts`, `RECIPES.md`.
+
 ### Biome 2 — Phase 3: The Duneshaper (badlands final boss + win-con swap)
 
 Plan: `.claude/plans/biome-2-phase-3-badlands-boss.md` (Phase 3, umbrella `biome-2-sunscorch-badlands.md`).
@@ -426,105 +506,6 @@ yields pelt+meat, discovery fires the "poi" popup toast + adds the `map_den` lan
 confirm the den mound + guards render and the discovery toast pops. **Next: POI 2 — the Sunken
 Forge mini-boss.**
 
-### Biome 2 — Phase 2b: Sandmaw (burrowing ambusher, the 4th native creature)
-
-Plan: `.claude/plans/biome-2-phase-2b-sandmaw.md`. Built on **Opus** (new enemy AI / state
-machine). The "+1 native creature" deferred out of Phase 2's core-3 scope. Creature identity
-locked with the user via `AskUserQuestion`: **a burrowing ambusher** (over an aerial diver or a
-stealth flanker).
-
-**The Sandmaw** (`src/entities/Sandmaw.ts`) — a gloam-touched burrowing ambush predator, the
-badlands roster's 4th and most distinct threat vector. The existing trio is swarm-pounce
-(Duskrunner) / armored roll-tank (Cragscale) / stationary flame-mage (Hexling); the Sandmaw adds
-**"watch the ground / don't stand still near a lurker."** Own bespoke state machine, fully
-overrides `update()` (does NOT call super — same precedent as Snake/Hexling):
-`submerged → surfacing → erupting → exposed → burrowing → submerged`.
-- **submerged** — near-invisible (alpha 0.18, a subtler Snake), slow-stalks (30px/s) toward a
-  player within `STALK_RADIUS` 240px but outside the ambush ring to reposition (holds still
-  otherwise — a slow drift so it isn't an invisible shove). Triggers on `AMBUSH_RADIUS` 62px.
-- **surfacing** — pops to full alpha + `playWindupTell` load-up + a growing dust-ring telegraph
-  previewing the exact burst radius. `SURFACE_WINDUP_MS` 560ms = the dodge window.
-- **erupting** — a radial **sand-burst** (`BURST_RADIUS` 95px, 38 physical + 220 knockback), one
-  hit per eruption, dealt via `checkPlayerHit()` (queried by the scene like the bosses / Hexling
-  flame — NOT a melee bite; `biteDamage: 0`). Added `Sandmaw` to that `instanceof` union.
-- **exposed** — fully surfaced + planted 1100ms: the vulnerable punish window.
-- **burrowing** — dives back under (350ms), then a 2600ms re-ambush cooldown.
-
-Numbers first-pass: HP 45 (between Duskrunner 20 / Cragscale 60), erupt 38 (~25 net through the
-13-flat Lvl-3 armor cap, badlands-rebalance tier). Elite ×1.5 HP/dmg, ×1.1 speed, ×1.3 scale, 2×
-loot, crimson/gold recolor. **Dodge math:** a walking player (95px/s) covers ~52px in the 560ms
-wind-up; from 62px in they just clear the 95px burst with a beat of reaction — greedy/advancing
-players eat it, reactive ones (or a dash + its i-frames) escape (same movement-dodgeable
-principle as 5t's smash fix). **Resist profile (locked):** `{ pierce: 0.6, blunt: 1.4 }` — the
-**inverse of Cragscale** (resist-slash/weak-pierce), so clubs/warhammer shine on Sandmaws where
-the Primal Spear shines on Cragscales; the damage-type layer now rewards carrying more than one
-weapon. **Reveal-and-retaliate:** attacked while submerged → surfaces + erupts (Snake/Hexling
-`takeHit` precedent). `isAggro()` hidden while submerged (HP bar shows only once surfaced).
-**Spawn:** scattered **lone** ambushers (no pack — a lurker is a solo trap), 24 via
-`pickBadlandsPoint` in `spawnBadlandsEnemies()`, elite via `rollElite`. **Loot:**
-`sandmaw_chitin` ×1 (×2 elite; a light-but-tough plating shard, no recipe yet); elite +
-`sandmaw_trophy` (Common/tier1 in `TROPHY_ROLL`, like the other badlands trophies — Phase 5
-retiers to tier-2 + Ember).
-
-Files: new `Sandmaw.ts`; `Inventory.ts` + `Items.ts` (2 resources); `Relics.ts` (`TROPHY_ROLL`);
-`BootScene.ts` (`drawSandmaw` normal + elite 26×18 plated burrower facing right, + chitin/trophy
-icons); `MainScene.ts` (import, spawn 24, area-hit union); `dashboard/main.ts` (Enemies-tab entry
-+ trophy-source row). No `RECIPES.md` change (no recipes). **Verified:** `tsc --noEmit` clean;
-`preview_start` boots with no console errors; `preview_eval` — 24 Sandmaws spawn, all 4 textures
-load, full state cycle submerged→surfacing(α1)→erupting→hit `{38, kb220}`→single-hit-per-erupt→
-exposed→burrowing→submerged(α0.18); a player 300px out at erupt = no hit (dodge); resists
-pierce×0.6/blunt×1.4/slash×1.0; takeHit-while-submerged flips to surfacing; `isAggro()` false
-while submerged; sprite + elite recolor render correctly. **Next: Phase 3** (badlands boss = new
-win-con + Gremlin King critical-drop rework + 2 POIs).
-
-### 4-item playtest fix batch (Cragscale art, axe name, boss-continue, refined-relic cap)
-
-Off the user's latest playtest notes. Sonnet-class fixes/tuning on already-shipped systems, no new
-mechanic. Four items:
-
-1. **Boar/Cragscale too similar.** Both were warm-brown quadrupeds facing right — the Cragscale
-   hide `0x7a5040` was nearly the Boar body `0x6b4a2a`. Re-toned the **normal** Cragscale to a cool
-   slate-grey palette (hide `0x69726c`, cooler belly/head, lighter stone plates) so the rock
-   reptile reads as stony, not a second boar. Elite (crimson/gold) unchanged. Verified via texture
-   pixel sample: Boar body `#6b4a2a` vs Cragscale body `#69726c`.
-2. **Woodcutter's Axe name in the crafting menu.** The prior batch renamed only the item's inventory
-   `name` (`Items.ts`); the `stone_axe` RECIPE in `Recipes.ts` still read "Stone Axe", and the
-   crafting menu shows the recipe name. Changed `Recipes.ts` recipe `name` → "Woodcutter's Axe"
-   (id/key/output all stay `stone_axe`). RECIPES.md table row updated.
-3. **Continue past the win (in-progress playtesting).** Beating the current end-game boss (Gremlin
-   King) fires `endRun("won")` which froze the world at the run-end screen, blocking end-to-end
-   testing into biome 2. `RunEndUI` now shows a green **[ Continue ]** button beside [ New Run ]
-   **only on a win** (`RunEndDeps.onContinue`, two-button layout; death shows only New Run), plus a
-   caption ("Continue = explore in-progress content past this boss"). `MainScene.resumeAfterWin()`
-   hides the screen, clears `runOver`, sets `inProgressMode`, and raises a **persistent top-center
-   caveat banner** ("⚠ IN-PROGRESS CONTENT — past the current end-game target") so it's clear you're
-   past finished content — this sets the precedent for pushing live builds before a biome is done, as
-   the end-game target moves outward with future bosses. The win's score is posted at the kill.
-   **Death is UNaffected** — a hardcore death always ends the run, even after Continuing (the user: no
-   respawn during playtesting): `onPlayerDeath`'s `endRun("died")` no longer gates on the continue
-   flag, and `endRun` calls a new `Run.setOutcome()` when `inProgressMode` so a continued-then-died
-   run's end screen correctly reads **YOU DIED** (the win's `end()` had already locked the outcome to
-   "won"; `setOutcome` overrides it) and hides the banner. New fields reset in `create()` per the
-   `scene.restart()` field-init gotcha. Verified live: win screen carries both buttons + caption;
-   Continue sets `runOver=false`/`inProgressMode=true` + shows the banner (screenshot, top-center,
-   clear of HUD); a death after Continue forces outcome "died", hides the banner, and shows the YOU
-   DIED screen (no completion bonus). Phase 3 of the biome-2 plan properly demotes the Gremlin King
-   from win-con to a mid-boss with a critical drop.
-4. **No Mythic from a Refined (Uncommon) trophy.** A `refined_trophy_uncommon` has rarity `uncommon`
-   and rolls the Uncommon outcome table, which has a 1% Mythic band — so a gated refinement could
-   still gamba a Mythic. Added an optional `TrophyRoll.maxRarity`; `refined_trophy_uncommon` now sets
-   `maxRarity: "rare"`, and `RelicManager.roll()` clamps any rolled-up result above the cap down to
-   it (the 1% Mythic band merges into Rare → ~6% Rare, rest Uncommon). Raw Common trophies and the
-   deeper-biome-scaffold `refined_trophy_rare` are uncapped (Rare-refined can still hit Mythic — a
-   Phase-5 concern, unreachable in biome 1). The dashboard "Trophy → outcome odds" breakdown now
-   merges capped bands so its display matches the roll clamp; RECIPES.md refined-trophy row notes the
-   cap. Verified live: 30k refined-Uncommon rolls → **0 Mythic** (1782 Rare ≈ 6%, rest Uncommon);
-   30k rare-refined rolls → ~10% Mythic (uncapped, confirming the cap is trophy-specific).
-
-Files: `BootScene.ts` (Cragscale tint), `Recipes.ts` (axe name), `RunEndUI.ts` + `MainScene.ts`
-(continue button + resume + death gate), `Relics.ts` (`maxRarity` + clamp), `dashboard/main.ts`
-(capped breakdown), `RECIPES.md`. `tsc --noEmit` clean; verified live via `preview_eval` +
-screenshot; no console errors.
-
-> Older entries (Placeholder art pass, Biome 2 playtest fix batch #2, 16-item playtest fix batch,
-> Biome 2 Phase 2/1/0, Welcome overlay, and earlier) are in STATUS-archive.md.
+> Older entries (Biome 2 Phase 2b Sandmaw, 4-item playtest fix batch, Placeholder art pass, Biome 2
+> playtest fix batch #2, 16-item playtest fix batch, Biome 2 Phase 2/1/0, Welcome overlay, and earlier)
+> are in STATUS-archive.md.

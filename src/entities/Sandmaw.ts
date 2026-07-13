@@ -30,7 +30,7 @@ const MAX_HEALTH = 45; // between Duskrunner (20) and Cragscale (60) — an ambu
 // Physical burst. Badlands-rebalance tier: it must hurt through max (Lvl-3, 13
 // flat) armor — 38 - 13 = 25 net, in line with the Duskrunner/Cragscale bumps.
 // It's a heavy committed hit but fully telegraphed + movement-dodgeable.
-const ERUPT_DAMAGE = 38;
+const ERUPT_DAMAGE = 46; // bumped 38→46 — a big committed ambush should really punish getting caught (badlands damage pass)
 const BURST_RADIUS = 95; // AoE radius around the Sandmaw (the tremor telegraph previews exactly this)
 const ERUPT_KNOCKBACK = 220; // a strong sand-blast shove (near-cosmetic today — see Player.update knockback note)
 
@@ -275,6 +275,14 @@ export class Sandmaw extends Enemy {
   // HP bar only shows once it has surfaced (mirrors Snake hiding its bar while
   // hidden) — a lurking Sandmaw gives away nothing.
   isAggro(): boolean {
+    return this.mode !== "submerged";
+  }
+
+  // Un-targetable while submerged (the user: "shouldn't be attackable while
+  // invisible") — the player can't hover-click or weapon-arc-sweep a lurking
+  // mound. The reveal-on-hit takeHit() path is now only reachable once it has
+  // surfaced, which is the intended interaction.
+  isTargetable(): boolean {
     return this.mode !== "submerged";
   }
 
