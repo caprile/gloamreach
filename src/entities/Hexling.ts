@@ -26,12 +26,18 @@ const APPROACH_SPEED = 46; // slow walk to close into cast range (it does NOT ki
 const WANDER_SPEED = 16;
 const WANDER_RADIUS = 60;
 
-const MAX_HEALTH = 55; // was 30 — a squishy caster still, but not 1-2-shot the instant you reach it
+const MAX_HEALTH = 95; // was 55, was 30 — playtest: badlands enemies died too fast even in Woods-tier gear; a stand-and-cast caster needs to actually survive being closed on to threaten its Flame Strike punish
 // 22, not 14 — badlands-rebalance pass: magic bypasses armor entirely, so a
 // Hexling's raw number IS the net damage. the user: "base hexlings should kill
 // you in like 3 hits" — bolt + flame (below) are both bumped to make that true
 // even at full HP/Vitality, not just against an unarmored player.
-const BOLT_DAMAGE = 26; // magic — bypasses armor (bumped 22→26, badlands still read soft in full armor)
+// Fired as a tight 3-bolt volley now (see castBolt), not a single shot — the
+// per-bolt number came down from the old single-shot 26 so a stationary
+// point-target hit by exactly one bolt (the common case) deals about the same
+// as before; a player caught square in the cone can eat more than one.
+const BOLT_DAMAGE = 16; // magic — bypasses armor, per bolt (was a single 26 pre-volley-rework)
+const BOLT_COUNT = 3;
+const BOLT_SPREAD = Phaser.Math.DegToRad(7); // tight cone-line (the user: "more cone-line", not a wide fan — cf. Duneshaper's 18° volley)
 const CAST_COOLDOWN_MS = 1700;
 const BOLT_SPEED = 210;
 const BOLT_MAX_RANGE = 250;
@@ -93,9 +99,12 @@ export class Hexling extends Enemy {
       biteDamage: 0, // all damage flows through the bolt/flame paths, never a melee bite
       elite,
       eliteTrophy: "hexling_trophy",
-      // "Resists magic, weak to physical" — all three melee types shred it, its
-      // own element barely dents it. ranged left neutral.
-      resistances: { magic: 0.4, slash: 1.4, blunt: 1.4, pierce: 1.4 },
+      // Reworked per playtest (the user): a gloam-warded caster should shrug off
+      // steel and hurt from its OWN element, the inverse of the original "melee
+      // shreds it" tuning — resistant to all physical, weak to magic (a Sandmaw-
+      // shaped inverse: that one resists blunt/weak pierce, this resists
+      // everything physical and is only vulnerable to magic weapons).
+      resistances: { magic: 1.5, slash: 0.5, blunt: 0.5, pierce: 0.5 },
       upright: true, // humanoid mage — mirror left/right, never rotate upside-down
     });
     this.boltDamage = elite ? Math.round(BOLT_DAMAGE * 1.5) : BOLT_DAMAGE;
@@ -132,7 +141,7 @@ export class Hexling extends Enemy {
       }
     }
 
-    if (dist > DEAGGRO_RADIUS) {
+    if (dist > DEAGGRO_RADIUS && !this.withinAggroPersist(now)) {
       this.mode = "idle";
       body.setVelocity(0, 0);
       return false;
@@ -309,21 +318,27 @@ export class Hexling extends Enemy {
     this.nextCastAt = Math.max(this.nextCastAt, now + 250); // brief beat before casting again
   }
 
+  // Falcon-blaster-style tight 3-bolt cone (the user), not a single rock —
+  // each bolt is its own full-damage-type projectile, self-resolving like the
+  // Duneshaper's Gloam Volley (the precedent this mirrors).
   private castBolt(playerX: number, playerY: number, now: number): void {
     this.markAttackLanded(now);
-    const angle = Phaser.Math.Angle.Between(this.x, this.y, playerX, playerY);
-    const cfg: ProjectileConfig = {
-      x: this.x,
-      y: this.y,
-      angle,
-      speed: BOLT_SPEED,
-      damage: this.boltDamage,
-      texture: "hex_bolt",
-      maxRangePx: BOLT_MAX_RANGE,
-      sourceIsPlayer: false,
-      damageType: "magic", // bypasses the player's flat armor (Phase 1 hook)
-    };
-    (this.scene as unknown as ProjectileHost).spawnProjectile(cfg);
+    const baseAngle = Phaser.Math.Angle.Between(this.x, this.y, playerX, playerY);
+    for (let i = 0; i < BOLT_COUNT; i++) {
+      const offset = (i - (BOLT_COUNT - 1) / 2) * BOLT_SPREAD;
+      const cfg: ProjectileConfig = {
+        x: this.x,
+        y: this.y,
+        angle: baseAngle + offset,
+        speed: BOLT_SPEED,
+        damage: this.boltDamage,
+        texture: "hex_bolt",
+        maxRangePx: BOLT_MAX_RANGE,
+        sourceIsPlayer: false,
+        damageType: "magic", // bypasses the player's flat armor (Phase 1 hook)
+      };
+      (this.scene as unknown as ProjectileHost).spawnProjectile(cfg);
+    }
   }
 
   takeHit(damage: number): boolean {

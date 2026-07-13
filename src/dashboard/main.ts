@@ -189,7 +189,7 @@ const ENEMIES: EnemyStat[] = [
   },
   {
     name: "Hexling (BADLANDS)",
-    hp: 55,
+    hp: 95,
     speed: 46,
     aggro: 170,
     attacks: [
@@ -198,7 +198,7 @@ const ENEMIES: EnemyStat[] = [
     ],
     loot: "1 Hex Essence",
     trophy: "Hexling Trophy (elite)",
-    notes: "Biome 2 MAGE (redesigned 2026-07-12 — was a reskinned gremlin kiter). Distinct taller robed/staff texture. STANDS AND CASTS (no kite — only repositions via blink). Close-range punish: FLAME STRIKE calls down 3 delayed fire circles at your locked position (walk out to dodge) that detonate as magic AoE (18, bypasses armor), then it BLINKS ~220px away. Blink is also the cornered fallback. HP 30→55 so it's not 1-2-shot on reach. Resist: magic ×0.4, slash/blunt/pierce ×1.4 (weak to physical).",
+    notes: "Biome 2 MAGE (redesigned 2026-07-12 — was a reskinned gremlin kiter). Distinct taller robed/staff texture. STANDS AND CASTS (no kite — only repositions via blink). Close-range punish: FLAME STRIKE calls down 3 delayed fire circles at your locked position (walk out to dodge) that detonate as magic AoE (18, bypasses armor), then it BLINKS ~220px away. Blink is also the cornered fallback. HP 30→55→95 (playtest: died too fast even in Woods-tier gear). Resist REWORKED 2026-07-13: magic ×1.5 (weak), slash/blunt/pierce ×0.5 (resists all physical) — the inverse of the original tuning; only magic weapons hurt it now.",
   },
   {
     name: "Sandmaw (BADLANDS)",

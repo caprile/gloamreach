@@ -20,7 +20,11 @@ const MAX_HEALTH = 20;
 const BITE_DAMAGE = 25; // shared "hit" value for both the gore bite and the charge
 
 // Point-blank gore bite — short, snappy, keeps a cornered player honest.
-const GORE_RANGE = 44; // dist at/under which the boar gores instead of charging
+// Also doubles as the boar's melee standoff distance now that it holds here
+// between attacks instead of closing to zero — 44 read as "too far away to be
+// meleeing" next to the rest of the roster's ~28-30px melee range (Duskrunner's
+// 30 was the good reference point), so it came down to match.
+const GORE_RANGE = 30; // dist at/under which the boar gores instead of charging
 const GORE_WINDUP_MS = 260;
 const GORE_STRIKE_MS = 90;
 const GORE_RECOVER_MS = 320;
@@ -119,7 +123,7 @@ export class Boar extends Enemy {
       this.mode = "chasing";
       this.startPursuit(now);
     } else if (this.mode === "chasing" && !this.isAttacking()) {
-      if (dist > DEAGGRO_RADIUS) {
+      if (dist > DEAGGRO_RADIUS && !this.withinAggroPersist(now)) {
         this.mode = "idle";
       } else if (this.hasGivenUpPursuit(now)) {
         this.mode = "idle";
@@ -141,6 +145,16 @@ export class Boar extends Enemy {
     }
 
     if (this.mode === "chasing") {
+      // Already within gore range but the gore is on cooldown — hold here and
+      // face the player instead of continuing to close the gap to zero.
+      // Without this it just walks straight through/onto the player every
+      // frame it's not actively winding up an attack (nothing else stops it —
+      // there's no physical collision between player and enemies).
+      if (dist <= GORE_RANGE + this.reachBonus()) {
+        body.setVelocity(0, 0);
+        this.applyFacing(playerX - this.x, playerY - this.y);
+        return false;
+      }
       const angle = Phaser.Math.Angle.Between(this.x, this.y, playerX, playerY);
       const speed = CHASE_SPEED * this.speedMult * this.envSpeedMult;
       const vx = Math.cos(angle) * speed;

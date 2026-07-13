@@ -25,8 +25,16 @@ const CATEGORIES: { id: RecipeCategory; label: string }[] = [
   { id: "misc", label: "Misc" },
 ];
 
-const PANEL_W = 340;
+// Widened + split into two columns (recipe list left, detail panel right) so
+// the description/stats/cost block sits BESIDE the list instead of below it
+// — with every recipe discovered the old single-column layout pushed the
+// detail panel off the bottom of a fixed-height panel. PANEL_W bumped
+// accordingly; LIST_COL_W is the list column's width before the detail
+// column starts.
+const PANEL_W = 620;
 const PANEL_H = 440;
+const LIST_COL_W = 190;
+const DETAIL_GAP = 20;
 const MARGIN_RIGHT = 16;
 // Stacks below the top-right MinimapUI panel (+ the stat-points badge that
 // now lives in the gap between them) instead of the old fixed 70px, which
@@ -266,9 +274,10 @@ export class CraftingMenu {
       y += 22;
     }
 
-    y += 12;
     if (this.selected && this.selected.category === this.activeCategory) {
-      this.renderDetail(this.selected, x0, y);
+      // Detail column sits BESIDE the list, starting at the same height as
+      // the list itself (not below it) — see LIST_COL_W above.
+      this.renderDetail(this.selected, x0 + LIST_COL_W + DETAIL_GAP, tabY + 28);
     }
   }
 
@@ -300,7 +309,7 @@ export class CraftingMenu {
       fontFamily: "monospace",
       fontSize: "12px",
       color: "#c8d0dc",
-      wordWrap: { width: PANEL_W - 24 },
+      wordWrap: { width: this.panelX + PANEL_W - 12 - x0 },
     });
     desc.setScrollFactor(0).setDepth(3001);
     this.rows.push(desc);

@@ -40,9 +40,9 @@ const ERUPT_KNOCKBACK = 220; // a strong sand-blast shove (near-cosmetic today �
 // reactive ones (or a dash, which also grants i-frames) escape.
 const SURFACE_WINDUP_MS = 560;
 const ERUPT_STRIKE_MS = 340; // detonation window (long enough for the spikes to visibly shoot up + the per-frame hit query)
-const EXPOSED_MS = 1100; // fully surfaced + planted after erupting — the vulnerable punish window
+const EXPOSED_MS = 850; // fully surfaced + planted after erupting — the vulnerable punish window (was 1100, playtest: whole cycle read too slow/infrequent)
 const BURROW_MS = 350; // dive-back-under animation
-const RESUBMERGE_COOLDOWN_MS = 2600; // after re-burrowing, before it can ambush again
+const RESUBMERGE_COOLDOWN_MS = 1300; // after re-burrowing, before it can ambush again (was 2600 — more frequent per playtest, dodge windows themselves untouched)
 const SUBMERGED_ALPHA = 0.18; // near-invisible but a keen eye can spot the mound (subtler than Snake's 0.35)
 
 // S-curve stalk: while creeping toward the player it weaves side-to-side instead

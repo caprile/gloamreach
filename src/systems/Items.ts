@@ -987,8 +987,8 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
   // --- Duneshaper (badlands final boss) summon ---
   warren_fetish: {
     key: "warren_fetish",
-    name: "Gloam-Bone Totem",
-    description: "A knot of bone and gloam-scarred hide, hoarded deep in the Duskrunner warrens. It hums faintly, as if pulling toward some old altar out in the badlands.",
+    name: "Gloam-Bone Fetish",
+    description: "A knot of bone and gloam-scarred hide, hoarded deep in the Duskrunner warrens. Raw material — bind three together at a Workbench to craft an effigy for the badlands altars.",
     texture: "icon_warren_fetish",
     maxStack: 99,
     hotbarable: false,

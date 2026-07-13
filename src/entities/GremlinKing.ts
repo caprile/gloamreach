@@ -372,7 +372,7 @@ export class GremlinKing extends Enemy {
         const dist = Phaser.Math.Distance.Between(this.x, this.y, this.smashTargetX, this.smashTargetY);
         if (dist <= SMASH_LAND_EPS || this.smashElapsed >= SMASH_LEAP_MS) {
           body.setVelocity(0, 0);
-          this.smashLanded = true;
+            this.smashLanded = true;
           // The impact/strike window: hold planted briefly so checkPlayerHit
           // (called the same frame from MainScene) can register the AoE.
           this.stateEnteredAt = now;

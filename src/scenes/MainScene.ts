@@ -999,7 +999,15 @@ export class MainScene extends Phaser.Scene {
     this.spawnBadlandsEnemies(); // biome 2 Phase 2 — out in the badlands patchwork
     this.scatterDecor(); // purely-decorative immersion props across both biomes
     this.physics.add.collider(this.enemyGroup, solids);
-    this.physics.add.collider(this.player, this.enemyGroup);
+    // Deliberately NO physics collider between the player and enemies — every
+    // attempt at a "solid but not pushable" middle ground (immovable bodies,
+    // then dash-only exemptions) still let an enemy's own chase/attack
+    // velocity shove the player via Arcade's separation math each frame they
+    // overlap (and vice versa before that). Enemies are walk-through, same
+    // as trees/boulders (see updateTreeOcclusion's non-solid precedent) — all
+    // damage already flows through distance-based hit checks in
+    // updateEnemies()/checkPlayerHit(), never through this collider, so
+    // dropping it entirely costs nothing but the unwanted shove.
 
     // Enemy projectiles (Gremlin's rock throw) hit the player via overlap,
     // reusing the same i-frame-respecting entry point melee damage already
@@ -1350,10 +1358,15 @@ export class MainScene extends Phaser.Scene {
     // and ignores armor. A small red number over the player reads as "bleeding".
     const bleedDmg = this.bleed.tick(delta);
     if (bleedDmg > 0 && !this.isDead) {
-      const died = this.health.takeDamage(bleedDmg);
+      // DEV god mode: same floor-at-1-HP guard applyDamageToPlayer() uses —
+      // bleed was bypassing it entirely and could still kill the player.
+      const appliedBleed = this.devGodMode
+        ? Math.min(bleedDmg, Math.max(0, this.health.value() - 1))
+        : bleedDmg;
+      const died = this.health.takeDamage(appliedBleed);
       this.refreshHealthBar();
       this.spawnDamageNumber(this.player.x, this.player.y, bleedDmg, false, "weak");
-      if (died) this.onPlayerDeath();
+      if (died && !this.devGodMode) this.onPlayerDeath();
     }
     this.player.syncEquippedIconPosition();
     this.updateAttackRangeRing();
@@ -3626,6 +3639,7 @@ export class MainScene extends Phaser.Scene {
       this.eventLog.add("combat", "The warren stirs — elite Duskrunners burst out!");
     } else if (den.phase === "wave2") {
       den.phase = "attackable";
+      den.markAttackable();
       this.eventLog.add("info", "The warren stands undefended — smash it to loot the den");
     }
   }
@@ -3760,18 +3774,43 @@ export class MainScene extends Phaser.Scene {
     const rng = this.sessionRng();
     // Forest floor dressing — ferns, wildflowers, mushrooms, fallen logs.
     const forestDecor = ["decor_fern", "decor_flowers", "decor_mushrooms", "decor_log"];
-    for (let i = 0; i < 220; i++) {
-      const p = this.pickSpawnPoint(rng, "forest", 0, true);
-      const key = forestDecor[rng.between(0, forestDecor.length - 1)];
-      this.add.image(p.x, p.y, key).setDepth(ysortDepth(p.y));
-    }
+    this.scatterDecorClustered(rng, forestDecor, 220, () => this.pickSpawnPoint(rng, "forest", 0, true));
     // Badlands dressing — skulls, dead bushes, mesa boulders, bone piles.
     const badlandsDecor = ["decor_skull", "decor_deadbush", "decor_mesarock", "decor_bones"];
-    for (let i = 0; i < 260; i++) {
-      const p = this.pickBadlandsPoint(rng);
-      if (!p) continue;
-      const key = badlandsDecor[rng.between(0, badlandsDecor.length - 1)];
-      this.add.image(p.x, p.y, key).setDepth(ysortDepth(p.y));
+    this.scatterDecorClustered(rng, badlandsDecor, 260, () => this.pickBadlandsPoint(rng));
+  }
+
+  // Places purely-decorative props in irregular clumps around sampled centers
+  // instead of spreading each one independently — a flat per-tile random
+  // scatter (the original approach) reads as uniform wallpaper rather than
+  // something that grew there. Cluster SIZE itself varies (mostly small
+  // sprigs, occasionally a denser patch, sometimes a lone prop) so some
+  // stretches of ground end up dense and others sparse, per playtest
+  // feedback that the old even spread looked unnatural.
+  private scatterDecorClustered(
+    rng: Phaser.Math.RandomDataGenerator,
+    textures: string[],
+    totalCount: number,
+    pickCenter: () => { x: number; y: number } | null,
+  ): void {
+    const JITTER = 85;
+    let placed = 0;
+    let misses = 0;
+    while (placed < totalCount && misses < 200) {
+      const center = pickCenter();
+      if (!center) {
+        misses++;
+        continue;
+      }
+      const remaining = totalCount - placed;
+      const size = Math.min(remaining, rng.weightedPick([1, 1, 2, 2, 3, 3, 4, 5, 6, 8]));
+      for (let i = 0; i < size; i++) {
+        const x = Phaser.Math.Clamp(center.x + rng.between(-JITTER, JITTER), 60, WORLD_W - 60);
+        const y = Phaser.Math.Clamp(center.y + rng.between(-JITTER, JITTER), 60, WORLD_H - 60);
+        const key = textures[rng.between(0, textures.length - 1)];
+        this.add.image(x, y, key).setDepth(ysortDepth(y));
+      }
+      placed += size;
     }
   }
 
@@ -4285,6 +4324,7 @@ export class MainScene extends Phaser.Scene {
       });
       // A prominent discovery popup, same beat as finding a new biome.
       this.eventLog.add("poi", "Discovered: Duskrunner Warren");
+      this.hints.trigger("den_found");
     }
     // Sunken Forges (Phase 3 POI 2) — discovered fixed landmarks, fiery
     // orange-red markers, same one-shot treatment as the other POIs.
@@ -5498,7 +5538,10 @@ export class MainScene extends Phaser.Scene {
     this.sfx.hit();
     // Bleed rides the same i-frame guard above, so a dashed-through Cragscale
     // roll opens no wound (the whole attack is dodged, not just its direct hit).
-    if (bleed) this.bleed.apply(bleed.dmgPerSec, bleed.durationMs);
+    if (bleed) {
+      this.bleed.apply(bleed.dmgPerSec, bleed.durationMs);
+      this.hints.trigger("bled");
+    }
     // Relic damage-taken reduction (M-RL) applies first (a percentage), then
     // flat armor deduction. Magic AND fire damage (Biome 2) BYPASS the flat
     // armor term — they give the badlands casters/forge-boss real teeth and seed
@@ -5514,6 +5557,7 @@ export class MainScene extends Phaser.Scene {
       // Phase 4). Light-armor players take the hit undiminished, as before.
       const mit = this.wearsHeavyArmor() ? heavyArmorMagicMitigation(this.skills) : 0;
       reduced = Math.max(1, Math.round(relicAdjusted * (1 - mit)));
+      this.hints.trigger("magic_damage");
     } else {
       reduced = Math.max(1, Math.round(relicAdjusted - totalPlayerDefense(this.equipment)));
     }
@@ -6550,7 +6594,14 @@ export class MainScene extends Phaser.Scene {
   }
 
   private upgradeIngredientsKnown(upg: UpgradeDef): boolean {
-    return Object.keys(upg.costs).every((r) => this.discovered.has(r));
+    if (!Object.keys(upg.costs).every((r) => this.discovered.has(r))) return false;
+    // A station upgrade shouldn't be discoverable/announced before the player
+    // has ever discovered the station it applies to (e.g. Ember Crucible
+    // shouldn't unlock off just having a Gremlin King's Heart in hand if the
+    // Smelter itself hasn't been built yet) — armor/weapon upgrades have no
+    // "appliesToItemKey" station gate, so this only narrows StationUpgradeDef.
+    if ("appliesToItemKey" in upg && !this.discovered.has((upg as StationUpgradeDef).appliesToItemKey)) return false;
+    return true;
   }
 
   private canAffordUpgrade(upg: UpgradeDef): boolean {

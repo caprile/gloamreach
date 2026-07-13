@@ -27,6 +27,12 @@ export class BadlandsDen {
   readonly image: Phaser.GameObjects.Image;
   private cacheImage: Phaser.GameObjects.Image | null = null;
   private glowImage: Phaser.GameObjects.Image | null = null;
+  // A faint ember glow on the mound itself, present from the moment the den
+  // spawns (not just once looted) — playtest feedback was that a Warren read
+  // as scenery, not an "obviously destroy this" POI, until it was already
+  // cleared. Brightens once `attackable` to say "smash me now"; swapped out
+  // for the brighter cache glow on collapse().
+  private moundGlow: Phaser.GameObjects.Image;
   readonly x: number;
   readonly y: number;
   readonly loot = new LootContainer(DEN_CACHE_SIZE);
@@ -43,6 +49,22 @@ export class BadlandsDen {
     this.x = cfg.x;
     this.y = cfg.y;
     this.image = scene.add.image(cfg.x, cfg.y, "duskrunner_den").setDepth(ysortDepth(cfg.y));
+    this.moundGlow = scene.add
+      .image(cfg.x, cfg.y, "light_soft")
+      .setTint(0xff9a4a)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setScale(0.16)
+      .setAlpha(0.3)
+      .setDepth(this.image.depth - 1);
+    scene.tweens.add({
+      targets: this.moundGlow,
+      alpha: 0.5,
+      scale: 0.2,
+      duration: 1100,
+      yoyo: true,
+      repeat: -1,
+      ease: "Sine.easeInOut",
+    });
   }
 
   // The current hover/interact target: the cache once destroyed, else the mound.
@@ -87,9 +109,28 @@ export class BadlandsDen {
     this.image.setTint(Phaser.Display.Color.GetColor(shade.r, shade.g, shade.b));
   }
 
+  // Both guard waves are down — the den is now smashable. Brighten/quicken
+  // the mound glow so it visually shouts "hit me" rather than staying the
+  // same faint idle pulse it had while guarded.
+  markAttackable(): void {
+    this.scene.tweens.killTweensOf(this.moundGlow);
+    this.moundGlow.setAlpha(0.6).setScale(0.22);
+    this.scene.tweens.add({
+      targets: this.moundGlow,
+      alpha: 0.95,
+      scale: 0.3,
+      duration: 550,
+      yoyo: true,
+      repeat: -1,
+      ease: "Sine.easeInOut",
+    });
+  }
+
   private collapse(): void {
     this.phase = "looted";
     this.scene.tweens.killTweensOf(this.image);
+    this.scene.tweens.killTweensOf(this.moundGlow);
+    this.moundGlow.destroy();
     this.image.setTexture("duskrunner_den_wrecked").clearTint();
     this.cacheImage = this.scene.add
       .image(this.x, this.y + 6, "warren_cache")

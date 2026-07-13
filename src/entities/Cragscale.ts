@@ -107,7 +107,7 @@ export class Cragscale extends Enemy {
       this.state = "chasing";
       this.startPursuit(now);
     } else if (this.state === "chasing" && !this.isAttacking()) {
-      if (dist > DEAGGRO_RADIUS) {
+      if (dist > DEAGGRO_RADIUS && !this.withinAggroPersist(now)) {
         this.state = "idle";
       } else if (this.hasGivenUpPursuit(now)) {
         this.state = "idle";

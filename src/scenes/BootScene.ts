@@ -960,17 +960,24 @@ export class BootScene extends Phaser.Scene {
     g.fillCircle(11, 5, 1.2);
     g.generateTexture("decor_mushrooms", 16, 14);
 
-    // Mossy log (28x14) — a fallen log with a mossy top.
+    // Mossy log (28x14) — a fallen log, drawn as a plain cylinder with a cut
+    // end cap at EACH end (symmetric rings, no single off-center dark blob) so
+    // it reads unambiguously as timber, not a creature with an eye (playtest:
+    // the old asymmetric dark circle at one end read as a face).
     g.clear();
     g.fillStyle(0x5a3f28, 1);
-    g.fillRect(2, 6, 24, 8);
+    g.fillRect(3, 6, 22, 8);
     g.fillStyle(0x6a4a30, 1);
-    g.fillRect(2, 6, 24, 3);
+    g.fillRect(3, 6, 22, 2); // highlight along the top edge
     g.fillStyle(0x3f6a34, 1);
-    g.fillRect(4, 5, 8, 3); // moss patches
-    g.fillRect(16, 5, 7, 3);
-    g.fillStyle(0x2a1f14, 1);
-    g.fillCircle(3, 10, 3); // dark end
+    g.fillRect(9, 5, 6, 3); // single centered moss patch
+    // End-cap rings — same treatment on both ends, tree-ring concentric ellipses.
+    g.fillStyle(0x4a3020, 1);
+    g.fillEllipse(3, 10, 5, 8);
+    g.fillEllipse(25, 10, 5, 8);
+    g.fillStyle(0x6a4a30, 1);
+    g.fillEllipse(3, 10, 3, 5.5);
+    g.fillEllipse(25, 10, 3, 5.5);
     g.generateTexture("decor_log", 28, 16);
 
     // --- Badlands decor ---
@@ -1866,14 +1873,21 @@ export class BootScene extends Phaser.Scene {
     drawSandmaw("sandmaw", 0x9a8258, 0x6a583a, 0xb59a6a, 0x241826, 0xcfc0a0, 0xffa93a);
     drawSandmaw("sandmaw_elite", 0x6a1f2a, 0x3f1020, 0xf0c040, 0x3f1020, 0xffe8a0, 0xffe08a);
 
-    // Hexling's magic bolt — small violet orb with a bright core (contrasts the
-    // grey gremlin rock so a "this one eats armor" bolt reads differently).
+    // Hexling's fire bolt — an elongated blast, not a rock (the user: "like
+    // Falcon's laser from Smash Bros but fire"). Drawn pointing +x (matches
+    // Projectile's default travel-angle orientation): a tapering ember-orange
+    // streak with a hot yellow-white core and a soft outer glow.
     g.clear();
-    g.fillStyle(0x7a3ec8, 1);
-    g.fillCircle(4, 4, 4);
-    g.fillStyle(0xe0b0ff, 1);
-    g.fillCircle(4, 4, 2);
-    g.generateTexture("hex_bolt", 8, 8);
+    g.fillStyle(0xff5a1e, 0.5);
+    g.fillEllipse(9, 4, 18, 6); // outer glow, elongated along the travel axis
+    g.fillStyle(0xff7a1e, 1);
+    g.fillTriangle(0, 2, 0, 6, 13, 4); // tapered tail -> body
+    g.fillEllipse(11, 4, 7, 4.4);
+    g.fillStyle(0xffd23a, 1);
+    g.fillEllipse(13, 4, 4.4, 2.6); // hot core
+    g.fillStyle(0xfff4c0, 1);
+    g.fillEllipse(15, 4, 2.2, 1.4); // white-hot tip
+    g.generateTexture("hex_bolt", 18, 8);
 
     // Gloam Bolt — the Duneshaper's magic bolt. Bigger + brighter than a hex
     // bolt (violet orb, ember-white core, faint tail) so the boss's volley reads

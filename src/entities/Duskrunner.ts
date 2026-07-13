@@ -130,7 +130,7 @@ export class Duskrunner extends Enemy {
       this.startPursuit(now);
     } else if (this.state === "chasing" && !this.isAttacking()) {
       // Don't deaggro mid-attack — a committed pounce/bite always plays out.
-      if (dist > DEAGGRO_RADIUS) {
+      if (dist > DEAGGRO_RADIUS && !this.withinAggroPersist(now)) {
         this.state = "idle";
       } else if (this.hasGivenUpPursuit(now)) {
         this.state = "idle";

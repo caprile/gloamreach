@@ -57,6 +57,20 @@ const CHASE_GIVEUP_MS = 30000;
 const POST_GIVEUP_IMMUNITY_MS = 5000;
 const CLOSE_REAGGRO_RADIUS = 50; // px — overrides the immunity window even before it expires
 
+// Aggro persistence (playtest: ranged attacks — Slingshot/Javelin, or simply
+// backing off after landing a hit — put the player outside a melee enemy's
+// own DEAGGRO_RADIUS, so the raw per-frame distance check flipped it back to
+// idle almost immediately after being hit; aggro read as "for a second" not
+// "for a fight"). This decouples deaggro from a pure instantaneous distance
+// check: any aggro trigger (proximity or taking a hit) keeps the target
+// "remembered" for AGGRO_PERSIST_MS even while outside the deaggro radius, so
+// an enemy has real time to close the distance instead of losing the player
+// the instant a ranged hit puts them beyond melee range. A shared MECHANISM
+// on the base class (like canAggro/CHASE_GIVEUP above) — each subclass still
+// owns its own deaggro *radius*, this only gates how quickly that radius
+// check is allowed to fire.
+const AGGRO_PERSIST_MS = 4000;
+
 // One independently-rolled drop entry. Most enemies (Boar, Snake) have a
 // single entry; the ranged Gremlin variant drops two (skin + blood) — see
 // EnemyConfig.loot below, which is why this is an array rather than a single
@@ -306,12 +320,29 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   // Call when starting a fresh pursuit (idle -> chasing).
   protected startPursuit(now: number): void {
     this.pursuitClockStart = now;
+    this.extendAggroPersist(now);
   }
 
   // Call whenever this enemy successfully lands an attack — resets the
   // give-up clock so a fight that's actually landing hits never times out.
   protected markAttackLanded(now: number): void {
     this.pursuitClockStart = now;
+    this.extendAggroPersist(now);
+  }
+
+  private aggroPersistUntil = -Infinity;
+
+  // Refresh the aggro-persistence window (see AGGRO_PERSIST_MS above) — called
+  // on every aggro trigger: starting pursuit, landing a hit, and taking a hit.
+  protected extendAggroPersist(now: number): void {
+    this.aggroPersistUntil = now + AGGRO_PERSIST_MS;
+  }
+
+  // True while still within the persistence window — a subclass's distance-
+  // based deaggro check should be gated on this being false, not fire purely
+  // off `dist > deaggroRadius`.
+  protected withinAggroPersist(now: number): boolean {
+    return now < this.aggroPersistUntil;
   }
 
   // True once continuous pursuit has run long enough without landing a hit
@@ -349,7 +380,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
       // Ordinary "target left" case — no re-aggro immunity, resumes instantly
       // if the player comes back within range. Never deaggro mid-swing: a
       // committed telegraphed attack always plays out (dodge = leave its reach).
-      if (dist > DEAGGRO_RADIUS) {
+      if (dist > DEAGGRO_RADIUS && !this.withinAggroPersist(now)) {
         this.state = "idle";
       } else if (this.hasGivenUpPursuit(now)) {
         // 30s of trying without landing a single hit — back off instead of
@@ -455,6 +486,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     // enemy that just backed off doesn't stand there tanking hits without
     // fighting back.
     this.aggroImmuneUntil = 0;
+    this.extendAggroPersist(this.scene.time.now);
     if (this.state === "idle") {
       this.state = "chasing";
       this.startPursuit(this.scene.time.now);

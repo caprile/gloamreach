@@ -20,7 +20,10 @@ export type HintId =
   | "elite_trophy"
   | "right_click_tip"
   | "altar_found"
-  | "totem_ready";
+  | "totem_ready"
+  | "den_found"
+  | "bled"
+  | "magic_damage";
 
 // Plain, terse tip text — no mascot voice, no cryptic flavor. Each nudges the
 // mechanic just enough to unblock a cold player without solving anything.
@@ -36,6 +39,9 @@ const HINT_TEXT: Record<HintId, string> = {
   right_click_tip: "Right-click equipped gear or a placed station to inspect and upgrade it.",
   altar_found: "You found the Gremlin War Camp — a heavily-defended stronghold. Worth exploring further once you're strong enough.",
   totem_ready: "You hold a Gremlin Totem. Take it to the Boss Altar and place it in the fire to summon the boss.",
+  den_found: "A Duskrunner Warren — clear both guard waves, then hit the exposed den itself to smash it open for loot.",
+  bled: "You're bleeding — it ticks damage over time and ignores armor. Some badlands attacks open wounds like this on hit.",
+  magic_damage: "That hit came through your armor. Magic and fire damage bypass flat armor entirely — mind the badlands casters.",
 };
 
 const STORAGE_KEY = "survivor-rpg:hints-enabled:v1";

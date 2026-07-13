@@ -133,7 +133,7 @@ export class RangedGremlin extends Enemy {
       }
     }
 
-    if (dist > RANGED_DEAGGRO_RADIUS) {
+    if (dist > RANGED_DEAGGRO_RADIUS && !this.withinAggroPersist(now)) {
       this.mode = "idle";
       body.setVelocity(0, 0);
       return false;
@@ -379,7 +379,7 @@ export class MeleeGremling extends Enemy {
       this.startPursuit(now);
     } else if (this.mode === "chasing" && !this.isAttacking()) {
       // Don't deaggro mid-swing — a committed attack always plays out.
-      if (dist > MELEE_DEAGGRO_RADIUS) {
+      if (dist > MELEE_DEAGGRO_RADIUS && !this.withinAggroPersist(now)) {
         this.mode = "idle";
       } else if (this.hasGivenUpPursuit(now)) {
         this.mode = "idle";
