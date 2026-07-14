@@ -6026,3 +6026,78 @@ Combat feel + balance on the badlands roster + the two bosses. All numbers first
   fire-resist notes). No `RECIPES.md` change (no recipe/data-module change). **Remaining triage:
   S3–S6.**
 
+
+### S3 — Relic Forge menu UI + "all relic effects" panel (2026-07-13, Sonnet)
+
+Third of the 6 triaged badlands-playtest sessions (`.claude/plans/badlands-playtest-triage.md`).
+Pure UI/wiring on the already-designed relic system — no new mechanic, no recipe/data change (so
+`RECIPES.md` + dashboard are untouched; the dashboard reads `Relics.ts` live regardless). `tsc`
+clean; verified live via `preview_eval` with a seeded loadout (numeric layout assertions —
+screenshots hit the backgrounded-render quirk).
+
+- **Result-line / relic-grid overlap fixed (`RelicForgeMenu.ts`).** A plain-success roll's
+  reserved result-block height (26px) was smaller than the "Forged: X" line + the grid's own
+  "Your Relics" header gap, so the header rode up onto the result text. Phase 5 had only fixed the
+  2-line "replaced/declined" and "choice" verdicts; the common plain case was still wrong.
+  `resultBlockH` now branches by state: none 24 / plain 46 / auto-resolved conflict 64 / choice
+  134. Verified: Forged line bottom 530 vs "Your Relics" header y 540 (10px clear).
+- **Forge grid wrap + tier grouping.** The owned-relic grid used `COLS = 6` at 84px chips = 544px,
+  overflowing the 528px usable panel once a run filled several families → chips ran off the right
+  edge. `COLS` 6→5 (452px, fits). The grid is now grouped by **power tier** (`groupsByTier`): a
+  "Tier N" subheader precedes each tier's chips (wrapping within the tier), so a run can see a T1
+  relic beside the T2 that would displace it. Grid height is now measured (`relicGridHeight`) so
+  the panel grows to fit; each chip shows its family label. Verified: 8 chips across Tier 1 / Tier
+  2, max chip right 1148 ≤ panel-right 1232.
+- **Aggregated "all relic effects" panel (`InventoryMenu.ts` + `Relics.ts`).** New
+  `RelicManager.effectSummary()` returns one row per effect **channel** the loadout actually
+  touches — a formatted grand total (tier-scaled) plus the per-relic contributions behind it
+  (`RelicEffectSummary`). Rendered as a compact "Effects" list under the 8 relic slots in the
+  Inventory Relics column; hovering a channel pops a tooltip listing which relics grant it + each
+  one's amount (reuses the column's inline tipBg/tipText surface). `InventoryMenu.PANEL_H` now
+  grows to reserve room for the realistic worst case (9 active channels — one relic per family,
+  crit family feeds only one crit channel); verified the 9-channel case fits (list bottom 471 ≤
+  panel bottom 483). New `relicEffectSummary` dep wired in `MainScene`.
+- **Bug caught + fixed during verification:** the effects-list render call passed `PANEL_Y +
+  RELIC_FX_Y`, double-adding the panel offset (`RELIC_FX_Y` is already absolute, built from
+  `RELICS_Y`). It happened to fit with a light 6-channel loadout but the worst-case 9 channels
+  would have clipped ~40px past the panel; fixed to pass `RELIC_FX_Y` directly (matching how
+  `PANEL_H` reserves the space).
+- Files: `RelicForgeMenu.ts`, `InventoryMenu.ts`, `Relics.ts`, `MainScene.ts`.
+  **Remaining triage: S4–S6** (POI placement/respawn, recipe gating, UX polish).
+
+### S4 — Badlands POI placement, respawn & spawn bugs (2026-07-13, Sonnet)
+
+Fourth of the 6 triaged badlands-playtest sessions (`.claude/plans/badlands-playtest-triage.md`).
+Four independent fixes on the badlands POI/spawn systems — no new mechanic, no recipe/data change
+(`RECIPES.md` + dashboard untouched). `tsc` clean; all four verified live via `preview_eval` (a
+fresh server booted clean after an earlier contended/wedged boot state — the double-banner quirk).
+
+- **Night-surge biome bug (`MainScene.spawnNightBatch`).** The nightfall surge hardcoded the
+  forest roster (2 Boar/2 Snake/2 Gremlin) regardless of where the player was, so a badlands
+  nightfall spawned forest animals. Now each of the ~6 surge spawns draws its species from its own
+  spawn point's biome via the already-biome-aware `makeRespawnEnemy` (dunes → null → skipped).
+  Verified: player parked at a deep-badlands forge, every surge enemy matched its own point's
+  biome (a Hexling on a badlands point; forest species only on the forest blobs the ring straddled).
+- **Warren wave-2 delay (`MainScene.onDenGuardKilled` + `DEN_WAVE2_DELAY_MS` 1600ms).** Clearing
+  wave 1 insta-popped + insta-aggro'd the elite wave 2 in the same frame. Now the den "stirs"
+  immediately and the 3 elite Duskrunners burst a 1.6s beat later (a `time.delayedCall`, guarded on
+  phase so a den reset/destroyed before it fires can't spawn a ghost wave). Verified: guards empty
+  immediately after wave-1 clear, then 3 elite Duskrunners after the delay.
+- **POI spacing / push deeper (`pickBadlandsPoint` gains an `rMin` param; `POI_DEEP_R_MIN` 3600,
+  `POI_MIN_SEPARATION` 1000, `clearsOtherPois`).** The Sunken Forges + Duneshaper altars now pick
+  from a deeper radial band (off the forest edge — they're destinations), and the altars keep
+  `POI_MIN_SEPARATION` from the camp/vein/forges. Verified: forges all ≥3688 / altars all ≥4175
+  from center (one per quadrant), min forge↔altar gap 1279. Warren dens intentionally stay near-ish
+  (unchanged).
+- **General POI respawn (locked decision 4; `updatePoiRespawns`, `POI_RESPAWN_MS` 8min).** Warren
+  dens, the Gloaming Vein, and Sunken Forges now re-arm 8 min after being **fully cleared** (den
+  looted + cache emptied; vein/forge mini-boss dead + all its ore mined) — boss-summon altars
+  (gremlin/tyrant) stay one-shot. Polled each frame (the clear conditions are themselves polled
+  states). Extracted `BadlandsDen.reset()`, `armVein()`, `armForge()` (the initial spawns now call
+  the same arm helpers; night-glow points pushed only on the first arm since they're static). A
+  respawned vein/forge builds **fresh** shielded ore (the old nodes were destroyed on depletion).
+  Verified: all three armed at T0+8min then, on firing, reset to their guarded state — den → wave1
+  with 3 *normal* guards, vein → fresh Gloamwarden + 5 shielded nodes, forge → fresh Cinderwrought
+  + 4 shielded ore.
+
+**Remaining triage: S5–S6** (recipe/upgrade gating + dev-cmd bugs; UX/text polish).

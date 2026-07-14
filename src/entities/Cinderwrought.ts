@@ -22,7 +22,7 @@ import type { IncomingDamageType } from "../systems/Weapons";
 export type WroughtState = "idle" | "telegraphing" | "executing" | "recovering" | "staggered";
 export type WroughtAttackType = "cone" | "hammer";
 
-const WROUGHT_MAX_HEALTH = 340; // 300→340 (S2: playtest took zero hits — make it tankier too, not just harder to dodge)
+const WROUGHT_MAX_HEALTH = 260; // 340→260 (PB2: now TWO guard each forge — trimmed so a two-boss fight is a step up, not an HP slog)
 export const CINDERWROUGHT_SCALE = 1.8;
 const AGGRO_RADIUS = 260;
 const LEASH_RADIUS = 520; // kited past this -> fully deaggros
@@ -35,6 +35,10 @@ const STAGGER_DURATION_MS = 2500;
 const POISE_REGEN_DELAY_MS = 3500;
 const POISE_REGEN_PER_SEC = 12;
 const POISE_BAR_OFFSET_Y = 10;
+// A mini-boss stagger bar reads as a real mechanic — much bigger than the tiny
+// 22×3 regular-enemy bars (the user: "stagger bar too small").
+const POISE_BAR_W = 56;
+const POISE_BAR_H = 6;
 
 // Cinder Cone — locked-direction fire breath. Long readable wind-up; the cone
 // direction is fixed at telegraph start so a sidestep clears it.
@@ -98,17 +102,21 @@ export class Cinderwrought extends Enemy {
   private poiseBarFill: Phaser.GameObjects.Rectangle;
   private telegraphGfx: Phaser.GameObjects.Graphics;
 
-  constructor(scene: Phaser.Scene, cfg: { x: number; y: number }) {
+  constructor(scene: Phaser.Scene, cfg: { x: number; y: number; dropTrophy?: boolean }) {
     super(scene, {
       x: cfg.x,
       y: cfg.y,
       texture: "cinderwrought",
       displayName: "Cinderwrought",
-      // Guaranteed drop (the user): a better relic trophy for the harder fight +
-      // the shards that fuel refining — mirrors the Gloamwarden's payoff.
+      // Guaranteed drop (the user): the badlands "ember guy" is the native Ember
+      // Shard source now (was Gloam — that never made sense for a badlands mob).
+      // BOTH guards of a Sunken Forge drop Ember Shards (the point of doubling
+      // them — reliable tier-2 refine currency), but only ONE drops the tier-2
+      // refined trophy (dropTrophy) so a two-guard site doesn't flood refined
+      // trophies at 2/site. Defaults true for a lone Cinderwrought.
       loot: [
-        { resource: "gloam_shard", min: 3, max: 5 },
-        { resource: "refined_trophy_uncommon", min: 1, max: 1 },
+        { resource: "ember_shard", min: 2, max: 4 },
+        ...(cfg.dropTrophy ?? true ? [{ resource: "refined_trophy_uncommon_t2" as const, min: 1, max: 1 }] : []),
       ],
       maxHealth: WROUGHT_MAX_HEALTH,
       biteDamage: 0, // all damage flows through checkPlayerHit()
@@ -122,16 +130,16 @@ export class Cinderwrought extends Enemy {
     this.baseScale = CINDERWROUGHT_SCALE;
     this.setScale(CINDERWROUGHT_SCALE);
 
-    const barX = cfg.x - Enemy.BAR_W / 2;
+    const barX = cfg.x - POISE_BAR_W / 2;
     const barY = cfg.y - Enemy.BAR_OFFSET_Y + POISE_BAR_OFFSET_Y;
-    this.poiseBarBg = scene.add.rectangle(barX, barY, Enemy.BAR_W, Enemy.BAR_H, 0x2a1710, 0.85).setOrigin(0, 0.5);
-    this.poiseBarFill = scene.add.rectangle(barX, barY, Enemy.BAR_W, Enemy.BAR_H, 0xff8a3a, 1).setOrigin(0, 0.5);
+    this.poiseBarBg = scene.add.rectangle(barX, barY, POISE_BAR_W, POISE_BAR_H, 0x2a1710, 0.85).setOrigin(0, 0.5);
+    this.poiseBarFill = scene.add.rectangle(barX, barY, POISE_BAR_W, POISE_BAR_H, 0xff8a3a, 1).setOrigin(0, 0.5);
     this.telegraphGfx = scene.add.graphics();
   }
 
   preUpdate(time: number, delta: number): void {
     super.preUpdate(time, delta);
-    const barX = this.x - Enemy.BAR_W / 2;
+    const barX = this.x - POISE_BAR_W / 2;
     const barY = this.y - Enemy.BAR_OFFSET_Y + POISE_BAR_OFFSET_Y;
     const aggro = this.isAggro();
     this.poiseBarBg.setPosition(barX, barY).setDepth(this.depth + 1).setVisible(aggro);

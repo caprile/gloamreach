@@ -405,6 +405,9 @@ const DEN_WAVE2_DELAY_MS = 1600; // beat between wave-1 clear and the elite wave
 // (gremlin/tyrant) are the ONLY one-shot POIs. Mirrors the shack's 6-min guard
 // respawn; a mini-boss POI is a bigger commitment, so it's a bit longer.
 const POI_RESPAWN_MS = 8 * 60 * 1000; // 8 min after full clear before a POI re-arms
+// Only toast a POI respawn if the player is within this of it (roughly on-screen
+// + a margin) — a respawn across the map is noise (the user).
+const POI_RESPAWN_NOTIFY_RADIUS = 900;
 
 // Badlands content band radii (from world center). Most content fills the
 // accessible inner band; POI_DEEP_R_MIN pushes the "destination" landmarks (Sunken
@@ -617,11 +620,11 @@ export class MainScene extends Phaser.Scene {
   private forges: {
     x: number;
     y: number;
-    boss: Cinderwrought | null;
+    bosses: Cinderwrought[]; // two Cinderwroughts guard each forge (the user)
     oreNodes: ResourceNode[];
     cracked: boolean;
     discoveredOnMap: boolean;
-    respawnAt: number | null; // S4: armed once fully cleared (boss dead + ore mined)
+    respawnAt: number | null; // S4: armed once fully cleared (bosses dead + ore mined)
   }[] = [];
   private forgeLightPoints: { x: number; y: number }[] = [];
   // Right-click "Upgrade / Destroy" popup for any placed object (Workbench,
@@ -864,6 +867,9 @@ export class MainScene extends Phaser.Scene {
     // Let crafting count/consume EQUIPPED pieces toward recipe ingredients
     // (T2 reforge recipes take the base forged piece you may have worn).
     this.crafting.setEquipment(this.equipment);
+    // ...and count/consume items sitting in the hotbar too (weapons/tools live
+    // there — e.g. a Sunsteel Pike a reforge consumes).
+    this.crafting.setHotbar(this.hotbar.container);
     this.eventLog = new EventLog();
     this.craftingMenuLastNearWorkbench = null;
     this.dryingRacks = [];
@@ -1186,6 +1192,7 @@ export class MainScene extends Phaser.Scene {
       openWeaponUpgrade: (c, i) => this.openWeaponUpgradeMenu(c, i),
       eatItem: (c, i) => this.eatItem(c, i),
       isDragging: () => this.dragSource !== null,
+      stationTexture: (key, tier) => this.tieredStationTexture(key, tier),
     });
     this.createStaminaBar();
     this.createHealthBar();
@@ -2500,6 +2507,7 @@ export class MainScene extends Phaser.Scene {
       forgeTier: () => (this.openForge?.getData("tier") as number | undefined) ?? 0,
       convert: () => this.convertGloamToEmber(),
       resolveFamilyChoice: (keepNew) => this.resolveRelicFamilyChoice(keepNew),
+      hasDiscovered: (key) => this.discovered.has(key),
     });
   }
 
@@ -2868,7 +2876,7 @@ export class MainScene extends Phaser.Scene {
       else if (now >= this.veinRespawnAt) {
         this.veinRespawnAt = null;
         this.armVein(this.sessionRng(), false);
-        this.eventLog.add("info", "The Gloaming Vein reforms — its guardian stirs anew.");
+        this.notifyPoiRespawn(this.veinPosition.x, this.veinPosition.y, "The Gloaming Vein reforms — its guardian stirs anew.");
       }
     }
     // Sunken Forges: mini-boss dead + every ember-ore node mined out.
@@ -2882,7 +2890,7 @@ export class MainScene extends Phaser.Scene {
       else if (now >= forge.respawnAt) {
         forge.respawnAt = null;
         this.armForge(this.sessionRng(), forge, false);
-        this.eventLog.add("info", "Embers rekindle at a Sunken Forge — its guardian returns.");
+        this.notifyPoiRespawn(forge.x, forge.y, "Embers rekindle at a Sunken Forge — its guardian returns.");
       }
     }
     // Warren dens: destroyed (looted) AND the cache fully emptied by the player.
@@ -2896,8 +2904,18 @@ export class MainScene extends Phaser.Scene {
       else if (now >= den.respawnAt) {
         den.reset(); // clears respawnAt, resets to wave1, re-arms loot
         this.spawnDenWave(den, false); // fresh wave 1 of 3 normal Duskrunners
-        this.eventLog.add("info", "A Warren has been reclaimed — Duskrunners burrow in anew.");
+        this.notifyPoiRespawn(den.x, den.y, "A Warren has been reclaimed — Duskrunners burrow in anew.");
       }
+    }
+  }
+
+  // POI respawns fire on a timer regardless of where the player is; only surface
+  // the toast when they're near enough to actually witness it (the user: "should
+  // only get notified of POIs respawning if I am nearby"). The respawn itself
+  // still happens either way.
+  private notifyPoiRespawn(x: number, y: number, message: string): void {
+    if (Phaser.Math.Distance.Between(this.player.x, this.player.y, x, y) <= POI_RESPAWN_NOTIFY_RADIUS) {
+      this.eventLog.add("info", message);
     }
   }
 
@@ -4155,19 +4173,21 @@ export class MainScene extends Phaser.Scene {
   // via the discovered-material toast.
   private spawnBadlandsFlora(): void {
     const rng = this.sessionRng();
+    // `patch` (the user): crops (blooms) grow in little patches of 3-5 around a
+    // shared center instead of scattered individually; the cactus + mushroom
+    // stay solo. A patch places its members with a small jitter off the center.
     const scatterFlora = (
       texture: string,
       pickedTexture: string,
       resource: ResourceType,
       displayName: string,
       count: number,
+      patch?: { min: number; max: number },
     ) => {
-      for (let i = 0; i < count; i++) {
-        const pt = this.pickBadlandsPoint(rng);
-        if (!pt) break;
+      const makeNode = (x: number, y: number) => {
         const node = new ResourceNode(this, {
-          x: pt.x,
-          y: pt.y,
+          x,
+          y,
           texture,
           resource,
           amount: 1,
@@ -4180,14 +4200,27 @@ export class MainScene extends Phaser.Scene {
           regrowMs: BLACKBERRY_REGROW_MS,
         });
         this.nodes.push(node);
+      };
+      let placed = 0;
+      while (placed < count) {
+        const center = this.pickBadlandsPoint(rng);
+        if (!center) break;
+        const inPatch = patch ? Math.min(rng.between(patch.min, patch.max), count - placed) : 1;
+        for (let j = 0; j < inPatch; j++) {
+          const jx = patch && j > 0 ? rng.between(-38, 38) : 0;
+          const jy = patch && j > 0 ? rng.between(-38, 38) : 0;
+          makeNode(center.x + jx, center.y + jy);
+          placed++;
+        }
       }
     };
     // More pickable badlands vegetation (the user), with bumped counts so the
-    // flats don't read as barren.
-    scatterFlora("emberbloom", "emberbloom_picked", "emberbloom", "Emberbloom", 60);
+    // flats don't read as barren. Blooms (Emberbloom/Dustbloom) grow in patches;
+    // the cactus (Sunfruit) and mushroom (Gloamcap) stay scattered solo.
+    scatterFlora("emberbloom", "emberbloom_picked", "emberbloom", "Emberbloom", 60, { min: 3, max: 5 });
     scatterFlora("sunfruit_cactus", "sunfruit_cactus_picked", "sunfruit", "Sunfruit", 48);
     scatterFlora("gloamcap", "gloamcap_picked", "gloamcap", "Gloamcap", 44);
-    scatterFlora("dustbloom", "dustbloom_picked", "dustbloom", "Dustbloom", 52);
+    scatterFlora("dustbloom", "dustbloom_picked", "dustbloom", "Dustbloom", 52, { min: 3, max: 5 });
   }
 
   // Mineable badlands minerals (biome 2 Phase 4) — the smelting economy's raw
@@ -4290,13 +4323,18 @@ export class MainScene extends Phaser.Scene {
     const rng = this.sessionRng();
     const pt = () => this.pickBadlandsPoint(rng, 0.4, BADLANDS_R_MAX_INNER, BADLANDS_R_MAX_OUTER);
 
-    const scatterFlora = (texture: string, pickedTexture: string, resource: ResourceType, displayName: string, count: number) => {
-      for (let i = 0; i < count; i++) {
-        const p = pt();
-        if (!p) break;
+    const scatterFlora = (
+      texture: string,
+      pickedTexture: string,
+      resource: ResourceType,
+      displayName: string,
+      count: number,
+      patch?: { min: number; max: number }, // blooms grow in patches (the user); cactus/mushroom stay solo
+    ) => {
+      const makeNode = (x: number, y: number) => {
         const node = new ResourceNode(this, {
-          x: p.x,
-          y: p.y,
+          x,
+          y,
           texture,
           resource,
           amount: 1,
@@ -4309,12 +4347,24 @@ export class MainScene extends Phaser.Scene {
           regrowMs: BLACKBERRY_REGROW_MS,
         });
         this.nodes.push(node);
+      };
+      let placed = 0;
+      while (placed < count) {
+        const center = pt();
+        if (!center) break;
+        const inPatch = patch ? Math.min(rng.between(patch.min, patch.max), count - placed) : 1;
+        for (let j = 0; j < inPatch; j++) {
+          const jx = patch && j > 0 ? rng.between(-38, 38) : 0;
+          const jy = patch && j > 0 ? rng.between(-38, 38) : 0;
+          makeNode(center.x + jx, center.y + jy);
+          placed++;
+        }
       }
     };
-    scatterFlora("emberbloom", "emberbloom_picked", "emberbloom", "Emberbloom", 30);
+    scatterFlora("emberbloom", "emberbloom_picked", "emberbloom", "Emberbloom", 30, { min: 3, max: 5 });
     scatterFlora("sunfruit_cactus", "sunfruit_cactus_picked", "sunfruit", "Sunfruit", 24);
     scatterFlora("gloamcap", "gloamcap_picked", "gloamcap", "Gloamcap", 22);
-    scatterFlora("dustbloom", "dustbloom_picked", "dustbloom", "Dustbloom", 26);
+    scatterFlora("dustbloom", "dustbloom_picked", "dustbloom", "Dustbloom", 26, { min: 3, max: 5 });
 
     const scatterOre = (texture: string, resource: ResourceType, displayName: string, count: number, health: number, amountMin: number, amountMax: number) => {
       for (let i = 0; i < count; i++) {
@@ -4760,14 +4810,14 @@ export class MainScene extends Phaser.Scene {
       const forge = {
         x: c.x,
         y: c.y,
-        boss: null as Cinderwrought | null,
         oreNodes: [] as ResourceNode[],
+        bosses: [] as Cinderwrought[],
         cracked: false,
         discoveredOnMap: false,
         respawnAt: null as number | null,
       };
       this.forges.push(forge);
-      this.armForge(rng, forge, true); // Cinderwrought + shielded ore (lights on first arm)
+      this.armForge(rng, forge, true); // 2 Cinderwroughts + shielded ore (lights on first arm)
 
       // Decorative cooled-lava rubble across the clearing so the forge reads as a
       // scorched ruin, not one structure on dust. A few glow at night as beacons.
@@ -4789,14 +4839,20 @@ export class MainScene extends Phaser.Scene {
   // create(), so a respawn reuses them.
   private armForge(
     rng: Phaser.Math.RandomDataGenerator,
-    forge: { x: number; y: number; boss: Cinderwrought | null; oreNodes: ResourceNode[]; cracked: boolean },
+    forge: { x: number; y: number; bosses: Cinderwrought[]; oreNodes: ResourceNode[]; cracked: boolean },
     pushLights: boolean,
   ): void {
     forge.cracked = false;
-    const wrought = new Cinderwrought(this, { x: forge.x, y: forge.y });
-    forge.boss = wrought;
-    this.enemies.push(wrought);
-    this.enemyGroup.add(wrought);
+    // Two Cinderwroughts guard each forge (the user) — flanking the ruin so they
+    // don't overlap. BOTH drop Ember Shards (reliable tier-2 refine currency),
+    // but only the first drops the refined trophy so a site doesn't flood them.
+    forge.bosses = [];
+    [-70, 70].forEach((dx, i) => {
+      const wrought = new Cinderwrought(this, { x: forge.x + dx, y: forge.y, dropTrophy: i === 0 });
+      forge.bosses.push(wrought);
+      this.enemies.push(wrought);
+      this.enemyGroup.add(wrought);
+    });
 
     const oreNodes: ResourceNode[] = [];
     for (let i = 0; i < FORGE_ORE_COUNT; i++) {
@@ -4830,10 +4886,12 @@ export class MainScene extends Phaser.Scene {
   // A slain Cinderwrought cracks open its forge's ember-ore deposits so the
   // player can mine Cinderforged Ore (the metalworking payoff for the fight).
   private onCinderwroughtKilled(enemy: Enemy): void {
-    const forge = this.forges.find((f) => f.boss === enemy);
+    const forge = this.forges.find((f) => f.bosses.includes(enemy as Cinderwrought));
     if (!forge || forge.cracked) return;
+    // Both guardians must fall before the deposits crack open.
+    if (forge.bosses.some((b) => b !== enemy && !b.depleted)) return;
     forge.cracked = true;
-    forge.boss = null;
+    forge.bosses = [];
     for (const node of forge.oreNodes) {
       if (!node.depleted) node.crack("ember_ore_node");
     }

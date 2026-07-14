@@ -24,7 +24,7 @@ import type { ProjectileConfig, ProjectileHost } from "./Projectile";
 export type TyrantState = "idle" | "telegraphing" | "executing" | "recovering" | "staggered";
 export type TyrantAttack = "volley" | "spikes" | "nova" | "lance" | "barrage";
 
-const MAX_HEALTH = 1050; // 900→1050 (S2: tankier — a real gate, not a speed bump)
+const MAX_HEALTH = 1250; // 1050→1250 (S3: the final boss felt easier than the mid-boss — more HP + sharper attacks, the user)
 export const DUNESHAPER_SCALE = 2.3;
 const AGGRO_RADIUS = 300;
 const LEASH_RADIUS = 580; // kited past this -> fully deaggros
@@ -41,8 +41,13 @@ const STAGGER_DURATION_MS = 2200;
 const POISE_REGEN_DELAY_MS = 3000;
 const POISE_REGEN_PER_SEC = 22;
 const POISE_BAR_OFFSET_Y = 10;
+// A boss stagger bar reads as a real mechanic — much bigger than the tiny 22×3
+// regular-enemy bars (the primary poise display is the top BossHealthUI bar,
+// but the world bar shouldn't be a thin sliver either).
+const POISE_BAR_W = 64;
+const POISE_BAR_H = 6;
 
-const ATTACK_COOLDOWN_MS = 900;
+const ATTACK_COOLDOWN_MS = 700; // 900→700 (S3: less downtime between casts — more pressure)
 const RETURN_HOME_EPS = 20;
 
 // Phase gates (fraction of max HP). The attack pool grows as HP drops.
@@ -67,13 +72,21 @@ const VOLLEY_BOLT_DAMAGE = 22; // magic — bypasses armor, per bolt
 const VOLLEY_BOLT_SPEED = 460;
 const VOLLEY_BOLT_RANGE = 520;
 
-// --- Sand Spikes — 3 growing circles across the player's spot, PHYSICAL. ---
-const SPIKES_TELEGRAPH_MS = 850;
+// --- Sand Spikes — a tracked 5-circle CROSS erupting under the player, PHYSICAL. ---
+// S3 (the user: "3-circle attack too much like the hexling one, needs to be harder
+// to dodge"): was 3 circles in a perpendicular row (a plain sidestep dodged it,
+// and it read like the Hexling's bolt spread). Now it's a + of circles — center on
+// the player + 4 arms along the boss→player axis and its perpendicular — that
+// TRACKS the player until SPIKES_LOCK_FRAC, so the cardinal escapes are all
+// covered and only a DIAGONAL run or a dash clears it. Distinct silhouette (a
+// sand starburst under your feet), and genuinely a "move or dash" moment.
+const SPIKES_TELEGRAPH_MS = 780;
 const SPIKES_IMPACT_MS = 260;
-const SPIKES_RECOVER_MS = 700;
-const SPIKES_RADIUS = 46;
-const SPIKES_SPREAD = 62;
-const SPIKES_DAMAGE = 56; // 50→56 physical pierce — the flat-armor subtraction applies (S2: more dmg)
+const SPIKES_RECOVER_MS = 640;
+const SPIKES_RADIUS = 44;
+const SPIKES_SPREAD = 64; // arm distance from center
+const SPIKES_LOCK_FRAC = 0.5; // track the player for the first half of the wind-up
+const SPIKES_DAMAGE = 56; // physical pierce — the flat-armor subtraction applies
 const SPIKES_KNOCKBACK = 70;
 
 // --- Blink Nova — teleport near the player, detonate a radial magic burst. ---
@@ -85,13 +98,20 @@ const NOVA_RADIUS = 132;
 const NOVA_DAMAGE = 50; // 42→50 magic (S2: more dmg)
 const NOVA_KNOCKBACK = 220;
 
-// --- Gloamfire Lance (phase 2) — locked-direction beam. ---
-const LANCE_TELEGRAPH_MS = 700; // 900→700 (S2: a real beam — a tighter react window, harder to sidestep)
-const LANCE_IMPACT_MS = 320;
-const LANCE_RECOVER_MS = 800;
-const LANCE_RANGE = 340;
-const LANCE_HALF_ANGLE = Phaser.Math.DegToRad(10);
-const LANCE_DAMAGE = 54; // 46→54 magic (S2: more dmg)
+// --- Gloamfire Lance (phase 2) — a tracking-then-committed sweeping beam. ---
+// S3 (the user: "beam still trivial to sidestep"): the old beam locked its heading
+// at telegraph START, so a full wind-up of free perpendicular walking dodged it.
+// Now it TRACKS the player through the first LANCE_LOCK_FRAC of the wind-up before
+// committing (a short reaction window, not a free pre-dodge), and SWEEPS ±half
+// across that heading during the strike so a static sidestep gets caught.
+const LANCE_TELEGRAPH_MS = 640;
+const LANCE_IMPACT_MS = 340;
+const LANCE_RECOVER_MS = 750;
+const LANCE_RANGE = 360;
+const LANCE_HALF_ANGLE = Phaser.Math.DegToRad(11);
+const LANCE_LOCK_FRAC = 0.6; // re-aim at the player until 60% through the wind-up, then commit
+const LANCE_SWEEP_HALF = Phaser.Math.DegToRad(20); // beam sweeps across ±20° during the strike
+const LANCE_DAMAGE = 54; // magic — bypasses armor
 const LANCE_KNOCKBACK = 120;
 
 // --- Sunscorch Barrage (phase 3) — a carpet of meteor circles. ---
@@ -155,12 +175,13 @@ export class Duneshaper extends Enemy {
       y: cfg.y,
       texture: "duneshaper",
       displayName: "The Duneshaper",
-      // Guaranteed relic payoff for the final fight — a couple of refined
-      // (Uncommon-rolling) trophies + shards to fuel the forge. Phase 5 will
-      // re-tier the whole badlands trophy set (tier-2 + Ember); kept simple here.
+      // The final boss drops the Boss Refined Trophy (Rare, 50% roll-up to
+      // Mythic) for consistency with the Gremlin King — though killing the
+      // Duneshaper ENDS the run, so this drop is unreachable in practice (kept
+      // for correctness / a future continue-mode). Plus ember shards.
       loot: [
-        { resource: "gloam_shard", min: 5, max: 8 },
-        { resource: "refined_trophy_uncommon", min: 2, max: 2 },
+        { resource: "ember_shard", min: 5, max: 8 },
+        { resource: "boss_refined_trophy", min: 1, max: 1 },
       ],
       maxHealth: MAX_HEALTH,
       biteDamage: 0, // all damage flows through checkPlayerHit() / projectiles
@@ -174,16 +195,16 @@ export class Duneshaper extends Enemy {
     this.baseScale = DUNESHAPER_SCALE;
     this.setScale(DUNESHAPER_SCALE);
 
-    const barX = cfg.x - Enemy.BAR_W / 2;
+    const barX = cfg.x - POISE_BAR_W / 2;
     const barY = cfg.y - Enemy.BAR_OFFSET_Y + POISE_BAR_OFFSET_Y;
-    this.poiseBarBg = scene.add.rectangle(barX, barY, Enemy.BAR_W, Enemy.BAR_H, 0x1a1030, 0.85).setOrigin(0, 0.5);
-    this.poiseBarFill = scene.add.rectangle(barX, barY, Enemy.BAR_W, Enemy.BAR_H, 0xc79cf0, 1).setOrigin(0, 0.5);
+    this.poiseBarBg = scene.add.rectangle(barX, barY, POISE_BAR_W, POISE_BAR_H, 0x1a1030, 0.85).setOrigin(0, 0.5);
+    this.poiseBarFill = scene.add.rectangle(barX, barY, POISE_BAR_W, POISE_BAR_H, 0xc79cf0, 1).setOrigin(0, 0.5);
     this.telegraphGfx = scene.add.graphics();
   }
 
   preUpdate(time: number, delta: number): void {
     super.preUpdate(time, delta);
-    const barX = this.x - Enemy.BAR_W / 2;
+    const barX = this.x - POISE_BAR_W / 2;
     const barY = this.y - Enemy.BAR_OFFSET_Y + POISE_BAR_OFFSET_Y;
     const aggro = this.isAggro();
     this.poiseBarBg.setPosition(barX, barY).setDepth(this.depth + 1).setVisible(aggro);
@@ -308,20 +329,10 @@ export class Duneshaper extends Enemy {
     this.playWindupTell(this.currentStateDurationMs, 0xc79cf0);
 
     if (attack === "lance") {
-      // Lock the beam direction NOW (sidestep during the wind-up to dodge).
+      // Initial aim; re-aimed each frame until LANCE_LOCK_FRAC (see updateTelegraphing).
       this.attackAngle = Phaser.Math.Angle.Between(this.x, this.y, playerX, playerY);
     } else if (attack === "spikes") {
-      // 3 circles: on the player + a perpendicular spread (a sideways dodge is
-      // covered, retreating straight back escapes — a learnable pattern).
-      const axis = Phaser.Math.Angle.Between(this.x, this.y, playerX, playerY);
-      const perp = axis + Math.PI / 2;
-      const ox = Math.cos(perp) * SPIKES_SPREAD;
-      const oy = Math.sin(perp) * SPIKES_SPREAD;
-      this.zoneCircles = [
-        { x: playerX, y: playerY },
-        { x: playerX + ox, y: playerY + oy },
-        { x: playerX - ox, y: playerY - oy },
-      ];
+      this.buildSpikesCross(playerX, playerY);
     } else if (attack === "barrage") {
       // A carpet: a ring of impacts around the player + one on them. Find a gap.
       this.zoneCircles = [{ x: playerX, y: playerY }];
@@ -336,11 +347,48 @@ export class Duneshaper extends Enemy {
   }
 
   private updateTelegraphing(playerX: number, playerY: number, now: number): void {
-    // The lance keeps its locked heading; everything else keeps facing the player.
-    if (this.currentAttack === "lance") this.faceAngle(this.attackAngle);
-    else this.applyFacing(playerX - this.x, playerY - this.y);
+    const frac = this.currentStateDurationMs > 0 ? (now - this.stateEnteredAt) / this.currentStateDurationMs : 1;
+    if (this.currentAttack === "lance") {
+      // Track the player through the first LANCE_LOCK_FRAC of the wind-up, then
+      // commit — so a full wind-up of free walking no longer pre-dodges the beam.
+      if (frac < LANCE_LOCK_FRAC) this.attackAngle = Phaser.Math.Angle.Between(this.x, this.y, playerX, playerY);
+      this.faceAngle(this.attackAngle);
+    } else if (this.currentAttack === "spikes") {
+      // Track the cross onto the player for the first half of the wind-up.
+      if (frac < SPIKES_LOCK_FRAC) this.buildSpikesCross(playerX, playerY);
+      this.applyFacing(playerX - this.x, playerY - this.y);
+    } else {
+      this.applyFacing(playerX - this.x, playerY - this.y);
+    }
     this.drawTelegraph(now);
     if (now >= this.stateEnteredAt + this.currentStateDurationMs) this.beginExecute(now, playerX, playerY);
+  }
+
+  // The Sand Spikes CROSS: center on the player + 4 arms along the boss→player
+  // axis and its perpendicular, so every cardinal escape is covered and only a
+  // diagonal run / dash clears it.
+  private buildSpikesCross(playerX: number, playerY: number): void {
+    const axis = Phaser.Math.Angle.Between(this.x, this.y, playerX, playerY);
+    const perp = axis + Math.PI / 2;
+    const ax = Math.cos(axis) * SPIKES_SPREAD;
+    const ay = Math.sin(axis) * SPIKES_SPREAD;
+    const px = Math.cos(perp) * SPIKES_SPREAD;
+    const py = Math.sin(perp) * SPIKES_SPREAD;
+    this.zoneCircles = [
+      { x: playerX, y: playerY },
+      { x: playerX + ax, y: playerY + ay },
+      { x: playerX - ax, y: playerY - ay },
+      { x: playerX + px, y: playerY + py },
+      { x: playerX - px, y: playerY - py },
+    ];
+  }
+
+  // The lance's heading during the strike: the committed angle sweeps across
+  // ±LANCE_SWEEP_HALF over the impact window, so a static sidestep gets caught.
+  private lanceAngleAt(now: number): number {
+    if (this.tyrantState !== "executing") return this.attackAngle;
+    const frac = Phaser.Math.Clamp((now - this.stateEnteredAt) / Math.max(1, this.currentStateDurationMs), 0, 1);
+    return this.attackAngle + (frac * 2 - 1) * LANCE_SWEEP_HALF;
   }
 
   private beginExecute(now: number, playerX: number, playerY: number): void {
@@ -500,8 +548,9 @@ export class Duneshaper extends Enemy {
     const frac = Phaser.Math.Clamp((now - this.stateEnteredAt) / Math.max(1, this.currentStateDurationMs), 0, 1);
     if (this.currentAttack === "lance") {
       const flick = 0.85 + 0.15 * Math.sin(frac * Math.PI * 6);
-      this.fillWedge(g, this.attackAngle, LANCE_HALF_ANGLE, LANCE_RANGE, 0xb060ff, 0.5 * flick);
-      this.fillWedge(g, this.attackAngle, LANCE_HALF_ANGLE * 0.5, LANCE_RANGE, 0xffe0ff, 0.6 * flick);
+      const a = this.lanceAngleAt(now);
+      this.fillWedge(g, a, LANCE_HALF_ANGLE, LANCE_RANGE, 0xb060ff, 0.5 * flick);
+      this.fillWedge(g, a, LANCE_HALF_ANGLE * 0.5, LANCE_RANGE, 0xffe0ff, 0.6 * flick);
     } else if (this.currentAttack === "spikes" || this.currentAttack === "barrage") {
       const magic = this.currentAttack === "barrage";
       const r0 = magic ? BARRAGE_CIRCLE_RADIUS : SPIKES_RADIUS;
@@ -535,7 +584,7 @@ export class Duneshaper extends Enemy {
     }
     if (this.currentAttack === "lance") {
       const angleToPlayer = Phaser.Math.Angle.Between(this.x, this.y, playerX, playerY);
-      const angleDiff = Math.abs(Phaser.Math.Angle.Wrap(angleToPlayer - this.attackAngle));
+      const angleDiff = Math.abs(Phaser.Math.Angle.Wrap(angleToPlayer - this.lanceAngleAt(this.scene.time.now)));
       if (dist > LANCE_RANGE || angleDiff > LANCE_HALF_ANGLE) return null;
       this.hasHitThisAttack = true;
       return { damage: LANCE_DAMAGE, knockback: LANCE_KNOCKBACK, dmgType: "magic" };

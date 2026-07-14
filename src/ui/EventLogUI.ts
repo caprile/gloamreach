@@ -47,6 +47,18 @@ const RECIPE_TOAST_HOLD_MS = 5500; // playtest feedback (again): recipe/material
 const RECIPE_TOAST_FADE_MS = 1500;
 const RECIPE_TOAST_STAGGER_MS = 200;
 
+// Max simultaneous center toasts ("Defeated X", level-up, discovery). Beyond
+// this the oldest is evicted so the top-anchored stack can't reach the player.
+const MAX_CENTER_TOASTS = 4;
+
+// A live center toast + its GameObjects, so the stack can be repositioned.
+interface CenterToast {
+  text: Phaser.GameObjects.Text;
+  box: Phaser.GameObjects.Rectangle;
+  height: number;
+  tween?: Phaser.Tweens.Tween;
+}
+
 // Persistent event feed, anchored top-left beside KeybindsUI (not stacked
 // underneath it — an open InventoryMenu panel covers the same top-left
 // column below Keybinds, so the log used to get hidden behind it whenever
@@ -60,23 +72,12 @@ export class EventLogUI {
   private collapsed = true;
   private scrollOffset = 0; // entries scrolled up from the newest
   private rows: Phaser.GameObjects.GameObject[] = [];
-  // Ordered (oldest first) heights of currently-visible center toasts, so a
-  // new one's Y offset is the real cumulative stack height rather than a bare
-  // counter. The old counter approach decremented on fade-COMPLETE, but with
-  // a shared delay+duration the earliest-created toast always completes
-  // first — so a later toast's slot could free up while it was still
-  // visible, and the next toast reused that same Y and overlapped it
-  // (playtest: rapid cooking made "Cooked X" toasts collide). Mirrors the
-  // `activeRecipeToasts` pattern already used below for the side toasts.
-  private activeCenterToasts: { height: number }[] = [];
-  // A monotonic cursor for the next center-toast Y. Summing live-toast heights
-  // (the old approach) reused a FRONT slot the instant its toast faded — but the
-  // earliest-created toast always fades first (shared delay+duration), so a new
-  // toast would land on an older one still on screen (playtest: "Defeated X" and
-  // "Slash leveled up" overlapped). Instead we only ever grow the cursor and
-  // reset it to the top when the stack is fully empty, so two live toasts can
-  // never share a Y.
-  private centerStackNextY = -1;
+  // Currently-visible center toasts, oldest first — each carries its own
+  // GameObjects so the stack can be repacked (relayoutCenterToasts) whenever a
+  // toast is added, evicted, or fades. Repacking from the top keeps the stack
+  // bounded to MAX_CENTER_TOASTS worth of height, so a burst can't march down
+  // over the player (the user), and closes gaps as toasts leave.
+  private activeCenterToasts: CenterToast[] = [];
   // Extra vertical offset for the center-toast stack, set by MainScene while
   // the (separately-drawn) Player-Level-Up banner is on screen — that banner
   // sits at a fixed y regardless of this stack's height, so without this a
@@ -256,23 +257,30 @@ export class EventLogUI {
       .setDepth(6001);
 
     const slotH = text.height + 18; // box padding + gap to the next toast
-    // Reset to the top only when nothing is on screen; otherwise keep growing
-    // downward so a freed front slot is never reused under a still-visible toast.
-    if (this.activeCenterToasts.length === 0) this.centerStackNextY = 72 + this.topOffset;
-    const y = this.centerStackNextY;
-    this.centerStackNextY += slotH;
-    const stackEntry = { height: slotH };
-    this.activeCenterToasts.push(stackEntry);
-    text.setPosition(cx, y);
+    text.setPosition(cx, 0);
 
     const box = this.scene.add
-      .rectangle(cx, y - 6, text.width + 24, text.height + 12, colors.fill, 0.95)
+      .rectangle(cx, 0, text.width + 24, text.height + 12, colors.fill, 0.95)
       .setOrigin(0.5, 0)
       .setStrokeStyle(2, colors.border)
       .setScrollFactor(0)
       .setDepth(6000);
 
-    this.scene.tweens.add({
+    const stackEntry: CenterToast = { text, box, height: slotH };
+    this.activeCenterToasts.push(stackEntry);
+    // Cap the stack so a burst of kills/level-ups can't march the toasts down
+    // over the player (the user). Beyond the cap, evict the OLDEST immediately.
+    while (this.activeCenterToasts.length > MAX_CENTER_TOASTS) {
+      const oldest = this.activeCenterToasts.shift()!;
+      oldest.tween?.remove();
+      oldest.text.destroy();
+      oldest.box.destroy();
+    }
+    // Repack every live toast from the top so the stack stays bounded (and
+    // closes gaps when one is evicted or fades).
+    this.relayoutCenterToasts();
+
+    stackEntry.tween = this.scene.tweens.add({
       targets: [text, box],
       alpha: 0,
       delay: 4000, // playtest: center toasts (level-up etc.) lingered too briefly
@@ -281,9 +289,23 @@ export class EventLogUI {
         text.destroy();
         box.destroy();
         const idx = this.activeCenterToasts.indexOf(stackEntry);
-        if (idx !== -1) this.activeCenterToasts.splice(idx, 1);
+        if (idx !== -1) {
+          this.activeCenterToasts.splice(idx, 1);
+          this.relayoutCenterToasts();
+        }
       },
     });
+  }
+
+  // Position every live center toast in a top-anchored stack, so it can never
+  // grow past MAX_CENTER_TOASTS worth of height (and gaps close as toasts fade).
+  private relayoutCenterToasts(): void {
+    let y = 72 + this.topOffset;
+    for (const t of this.activeCenterToasts) {
+      t.text.setY(y);
+      t.box.setY(y - 6);
+      y += t.height;
+    }
   }
 
   // Recipe unlocks (and material discoveries) queue up and slide in one at a

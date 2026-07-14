@@ -140,11 +140,12 @@ export function trophyOverallSuccessChance(trophyRarity: RelicRarity): number {
   return Math.min(1, TROPHY_OUTCOME_ODDS[trophyRarity].reduce((s, b) => s + b.chance, 0));
 }
 
-// Resolve the produced result rarity for one roll of a trophy of the given
-// rarity (null = the trophy failed / crumbled).
-function rollOutcomeRarity(trophyRarity: RelicRarity, rng: () => number): RelicRarity | null {
+// Resolve the produced result rarity for one roll given an outcome band list
+// (null = the trophy failed / crumbled). Bands are the shared per-rarity table
+// OR a trophy's own `outcomeOdds` override (the Boss Refined Trophy).
+function rollOutcomeRarity(bands: { rarity: RelicRarity; chance: number }[], rng: () => number): RelicRarity | null {
   let r = rng();
-  for (const band of TROPHY_OUTCOME_ODDS[trophyRarity]) {
+  for (const band of bands) {
     if (r < band.chance) return band.rarity;
     r -= band.chance;
   }
@@ -274,6 +275,11 @@ export interface TrophyRoll {
   // gamba into the top rarity. A would-be result above this cap clamps down to
   // it. Absent = no cap (raw drops roll up freely to their table's max).
   maxRarity?: RelicRarity;
+  // Optional per-trophy outcome-band override, replacing TROPHY_OUTCOME_ODDS[rarity].
+  // The Boss Refined Trophy uses this for its bespoke "Rare, 50% roll-up to
+  // Mythic" profile (which the shared Rare table can't express). Bands walk
+  // highest-rarity-first, same as the shared table.
+  outcomeOdds?: { rarity: RelicRarity; chance: number }[];
 }
 export const TROPHY_ROLL: Record<string, TrophyRoll> = {
   // Biome-1 elite trophies: Common / Tier 1 — they share the Common outcome
@@ -293,6 +299,18 @@ export const TROPHY_ROLL: Record<string, TrophyRoll> = {
   // Dormant this milestone — killing the King wins the run, so a fang can't be
   // spent yet. Correct + ready for M-W1's mid-bosses.
   gremlin_king_fang: { rarity: "rare", powerTier: 1 },
+  // Boss Refined Trophy — dropped by true bosses (Gremlin King now, Duneshaper
+  // too though its drop is unreachable since that kill wins the run). Rolls
+  // RARE with a 50% chance to roll UP to Mythic (the user). One item/key; the
+  // Gremlin King is biome-1 so tier 1 is correct, and Duneshaper's is moot.
+  boss_refined_trophy: {
+    rarity: "rare",
+    powerTier: 1,
+    outcomeOdds: [
+      { rarity: "mythic", chance: 0.5 },
+      { rarity: "rare", chance: 1.0 },
+    ],
+  },
   // Refined trophies (Gloaming Vein loop, biome 1). Roll-only keys (produced
   // ONLY by refinement) so they climb trophies one rarity up into a
   // guaranteed-success roll. A Refined (Uncommon) trophy rolls the Uncommon
@@ -447,10 +465,17 @@ function trophyDiscardRefund(trophyKey: string): { refundShardKey: string; refun
   if (!recipe) return { refundShardKey: "gloam_shard", refundShardAmount: 0 };
   return { refundShardKey: recipe.shardKey, refundShardAmount: Math.floor(recipe.shardCount * 0.5) };
 }
-// A displacement that keeps the new relic's slot at the OLD relic's expense
-// gives nothing back — see the block above.
-function noRefund(tier: number): { refundShardKey: string; refundShardAmount: number } {
-  return { refundShardKey: shardKeyForTier(tier), refundShardAmount: 0 };
+// USER OVERRIDE (playtest): "relics that get replaced should get the partial
+// refund also." A displacement that keeps the NEW relic and discards the OLD one
+// now returns a SMALL, capped refund for the displaced old relic. We can't know
+// which trophy made it, so it's a flat value by the old relic's rarity (tier-
+// scaled). Kept small; the old net-farm worry is moot now that ember mobs supply
+// shards directly, and to replace at all you must roll a strictly-better relic.
+const REPLACE_REFUND_BY_RARITY: Record<RelicRarity, number> = { common: 1, uncommon: 2, rare: 3, mythic: 5 };
+function replaceRefund(oldId: string, oldTier: number): { refundShardKey: string; refundShardAmount: number } {
+  const rarity = RELIC_DEFS[oldId].rarity;
+  const amt = Math.max(1, Math.round(REPLACE_REFUND_BY_RARITY[rarity] * (oldTier >= 2 ? 1.5 : 1)));
+  return { refundShardKey: shardKeyForTier(oldTier), refundShardAmount: amt };
 }
 
 // Dominance comparison between two relic instances (already scaled to their
@@ -553,6 +578,9 @@ export class RelicManager {
   // compute the Keep-Old (discard-new) refund from its shard cost. Only one
   // choice is ever pending at a time (the forge blocks rolls until resolved).
   private pendingChoiceTrophyKey: string | null = null;
+  // The contested OLD relic, so a Keep-New (replace) refund can be previewed.
+  private pendingChoiceOldId: string | null = null;
+  private pendingChoiceOldTier = 1;
 
   count(): number {
     return Object.keys(this.instances).length;
@@ -585,7 +613,8 @@ export class RelicManager {
     const t = TROPHY_ROLL[trophyKey];
     if (!t) return null;
 
-    let resultRarity = rollOutcomeRarity(t.rarity, rng);
+    const bands = t.outcomeOdds ?? TROPHY_OUTCOME_ODDS[t.rarity];
+    let resultRarity = rollOutcomeRarity(bands, rng);
     const firstRollHit = !resultRarity && !this.firstRollDone;
     const pityHit = !resultRarity && this.misses[t.rarity] + 1 >= PITY_THRESHOLD[t.rarity];
     if (!resultRarity && (firstRollHit || pityHit)) resultRarity = t.rarity;
@@ -616,9 +645,9 @@ export class RelicManager {
 
     const verdict = compareInstances(id, t.powerTier, existing.id, existing.powerTier);
     if (verdict === "better") {
-      // New relic wins the slot — the OLD one is displaced with no refund.
+      // New relic wins the slot — the OLD one is displaced with a small refund.
       this.instances[family] = { id, powerTier: t.powerTier };
-      return { ...base, familyConflict: { family, oldId: existing.id, oldPowerTier: existing.powerTier, verdict: "replaced", ...noRefund(existing.powerTier) } };
+      return { ...base, familyConflict: { family, oldId: existing.id, oldPowerTier: existing.powerTier, verdict: "replaced", ...replaceRefund(existing.id, existing.powerTier) } };
     }
     if (verdict === "worse_or_equal") {
       // New relic is discarded — refund half its trophy's shard cost.
@@ -626,8 +655,11 @@ export class RelicManager {
       return { ...base, familyConflict: { family, oldId: existing.id, oldPowerTier: existing.powerTier, verdict: "declined", ...refund } };
     }
     // Ambiguous — leave ownership untouched until the caller resolves it, and
-    // remember the trophy so resolveChoice() can price a Keep-Old refund.
+    // remember the trophy + old relic so resolveChoice()/previewChoiceRefunds()
+    // can price both the Keep-Old and Keep-New refunds.
     this.pendingChoiceTrophyKey = trophyKey;
+    this.pendingChoiceOldId = existing.id;
+    this.pendingChoiceOldTier = existing.powerTier;
     return { ...base, familyConflict: { family, oldId: existing.id, oldPowerTier: existing.powerTier, verdict: "choice" } };
   }
 
@@ -640,9 +672,9 @@ export class RelicManager {
     const trophyKey = this.pendingChoiceTrophyKey;
     this.pendingChoiceTrophyKey = null;
     if (keepNew) {
-      // Old relic displaced — no refund (the upgrade is the reward).
+      // Old relic displaced — small refund for the discarded old relic.
       this.instances[family] = { id: newId, powerTier: newPowerTier };
-      return { discardedId: existing.id, ...noRefund(existing.powerTier) };
+      return { discardedId: existing.id, ...replaceRefund(existing.id, existing.powerTier) };
     }
     // Just-rolled relic discarded — refund half its trophy's shard cost.
     return { discardedId: newId, ...trophyDiscardRefund(trophyKey ?? "") };
@@ -655,7 +687,10 @@ export class RelicManager {
     keepNew: { refundShardKey: string; refundShardAmount: number };
     keepOld: { refundShardKey: string; refundShardAmount: number };
   } {
-    return { keepNew: noRefund(1), keepOld: trophyDiscardRefund(this.pendingChoiceTrophyKey ?? "") };
+    const keepNew = this.pendingChoiceOldId
+      ? replaceRefund(this.pendingChoiceOldId, this.pendingChoiceOldTier)
+      : { refundShardKey: "gloam_shard", refundShardAmount: 0 };
+    return { keepNew, keepOld: trophyDiscardRefund(this.pendingChoiceTrophyKey ?? "") };
   }
 
   // Owned relics, one per family, ordered by ascending rarity then name — for

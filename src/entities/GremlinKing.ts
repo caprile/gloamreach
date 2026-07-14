@@ -149,7 +149,13 @@ export class GremlinKing extends Enemy {
       // The Heart is the King's load-bearing biome-2 drop (Phase 4): it upgrades
       // a Smelter to melt the rare ore. Skipping the King costs you the whole
       // rare/T2 forged tier (locked decision 10).
-      loot: [{ resource: "gremlin_king_heart", min: 1, max: 1 }],
+      // The Heart gates the rare-ore smelting tier (Phase 4). Plus a Boss
+      // Refined Trophy (Rare, 50% roll-up to Mythic) — the King is the one boss
+      // you kill mid-run and keep playing, so its trophy is actually spendable.
+      loot: [
+        { resource: "gremlin_king_heart", min: 1, max: 1 },
+        { resource: "boss_refined_trophy", min: 1, max: 1 },
+      ],
       maxHealth: BOSS_MAX_HEALTH,
       biteDamage: 0, // never uses the base bite path — all damage flows through checkPlayerHit()
     });

@@ -2,24 +2,36 @@
 
 ## Current State
 
-_Living snapshot — edit in place, never append. Last shipped: **PB1 — post-2nd-boss playtest fix
-batch (all 3 sessions done)** (2026-07-14): a 3-session triage off a 21-item dump from beating the
-Duneshaper. **Session 1** (4 parallel worktree agents): forged armor up (Emberhide 16→23, Embersteel
-23→32), stone costs −30-40%, ~1.4-1.6× faster leveling, new Duskrunner Skewer dish; equipped pieces
-now count toward reforge recipes; per-tier relic roll buttons; **relic refund reworked to 50% of a
-discarded roll's trophy cost** (raw→0, refined→1 — never nets shards). **Session 2:** enemy
-**wander-anchor** (Boar/Cragscale/free Gremlings sample idle wander from spawn, no more drift) +
-**Hexling** rework (neutral to physical, center-bolt-fire / outer-two-physical volley, drops **4-6**
-hex essence, elite **9-11**, bumped once more same day so clearing ~half the badlands ring covers
-all base biome-2 forged gear's 23-hex-essence cost without a full loop). **Session 3:** populated
-the forest patchwork blobs beyond `BIOME_RADIUS` and extended the badlands band from
-`BADLANDS_R_MAX_INNER` (5200) out to a new `BADLANDS_R_MAX_OUTER` (8500) — two additive spawn passes
-(`spawnOuterForestContent/Enemies`, `spawnOuterBadlandsContent/Enemies`) via new
-`pickOuterForestPoint` + a widened `pickBadlandsPoint(..., rMax)`. Verified live: 100% placement
-success for both new node passes, zero POI-exclusion violations traceable to the new code. **PB1 is
-now fully shipped.** A pre-existing, unrelated minor bug was discovered during verification (spawn
-task `task_c1db4f83`: `pickSpawnPoint`'s exhaustion fallback can return an unvalidated point) — not
-fixed here, flagged separately. See the PB1 entry below + [[survivor-rpg-relics]].
+_Living snapshot — edit in place, never append. Last shipped: **PB2 — post-Duneshaper playtest batch
+(15 items)** (2026-07-14, Opus): **Relic/trophy economy** — new **Boss Trophy** from Gremlin King +
+Duneshaper (bespoke odds: Rare with a 50% roll-up to Mythic, never fails); **Cinderwrought now drops
+Ember Shards** (2-4) + a tier-2 Ember-Refined Trophy (was Gloam + tier-1 — Gloam never made sense for
+a badlands mob), and there are now **2 Cinderwroughts per Sunken Forge** (**260 HP each**, trimmed
+340→260 for the two-boss fight; ore cracks only when both die; **both drop 2-4 Ember Shard, only one
+drops the refined trophy** so a two-guard site doesn't flood trophies); **replaced relics now partial-refund**
+(1/2/3/5 shards by rarity ×1.5 T2) on top of the declined-roll refund; **Ember-Shard refine recipe
+hidden until Ember Shard discovered** (`hasDiscovered` gate). **Gear** — **+2 right-click levels for
+ALL forged armor & weapons** (steel + ember, via ArmorUpgrades/WeaponUpgrades, tuned so Lvl-1 ember
+always out-stats Lvl-3 steel — Emberhide Legs base bumped 7→8), sunk in ingots; **hotbar items now
+count toward reforge recipes** (`Crafting.setHotbar` — a Sunsteel Pike in the hotbar is now visible to
+the Embersteel Pike reforge); higher-tier weapons cost **more stamina** (starter < Sunsteel < Ember).
+**Duneshaper sharpen pass** — HP 1050→1250, cooldown 900→700ms; the **Lance tracks the player through
+60% of the wind-up then commits + sweeps ±20° on the strike** (was locked at telegraph start,
+trivially sidesteppable); **Sand Spikes reworked from 3 spaced circles to a tracked 5-circle cross**
+(distinct from the Hexling, only a diagonal/dash clears it). **HUD** — bigger boss stagger bars
+(mini-boss world bars 22×3→56×6, top boss-bar poise 12→20px); **center-toast burst capped at 4 +
+repacked from the top** so "Defeated X" bursts no longer march over the player; **POI-respawn toasts
+only fire when within 900px**; **tier-aware bench art in the hotbar**. **World** — emberblooms +
+dustblooms grow in **patches of 3-5** (cactus/mushroom stay solo). `tsc` clean; verified live via
+`preview_eval`. **Flagged non-repro:** the "duskrunner stacks to 98" report — every stacking primitive
+(`add`/`sortAndStack`/`moveSlot`/hotbar top-up) fills to the full 99; no off-by-one found. See the
+PB2 entry below + [[survivor-rpg-relics]].
+Prior: **PB1 — post-2nd-boss playtest fix batch (3 sessions)** (2026-07-14): forged armor up
+(Emberhide 16→23, Embersteel 23→32), stone costs −30-40%, faster leveling, Duskrunner Skewer;
+equipped pieces count toward reforge; per-tier relic roll buttons; relic refund = 50% of a discarded
+roll's trophy cost; enemy **wander-anchor**; **Hexling** rework (hex-essence drops 4-6/elite 9-11);
+populated forest blobs + extended badlands band (`BADLANDS_R_MAX_OUTER` 8500). A pre-existing minor
+bug flagged (spawn task `task_c1db4f83`: `pickSpawnPoint` exhaustion fallback). See the PB1 entry below.
 Prior: **S7 — pre-push inventory/dev-cmd tweaks** (2026-07-13, Opus): search-box insta-clear `✕`
 button, `nobuildcost` TEMPORARILY lists all recipes (display-only), taller backpack grid
 (`BACKPACK_ROWS 6 → 15`). See the S7 entry below.
@@ -233,6 +245,84 @@ below + [[survivor-rpg-dev-console]].
 
 > Older entries in STATUS-archive.md.
 
+### PB2 — Post-Duneshaper playtest batch, 15 items (2026-07-14, Opus)
+
+Off the user's Duneshaper-clear playtest. Locked 4 design calls via `AskUserQuestion`; the rest were
+clear fixes. Organized into 5 workstreams (relic economy / notifications+HUD / Duneshaper combat /
+gear+crafting / world+flora), done sequentially (all route through MainScene + shared data files, so
+worktree-parallel would only conflict). Built on Opus (new mechanics: trophy economy, gear-level tier,
+boss combat rework).
+
+**Relic/trophy economy** (`Relics.ts`, boss loot, `Items.ts`, `RelicForgeMenu.ts`):
+- New **`boss_refined_trophy`** ("Boss Trophy") dropped by the **Gremlin King** (+ keeps its Heart) and
+  the **Duneshaper** (unreachable — that kill wins the run — kept for consistency). Uses a new per-trophy
+  **`outcomeOdds` override** on `TrophyRoll` (Rare 50% / Mythic 50%, never fails) — the shared Rare
+  table couldn't express it. Verified live: 4000 rolls → 49.6% Mythic / 50.4% Rare, 0 fails, first roll
+  guaranteed.
+- **Cinderwrought** re-tiered: drops **2-4 Ember Shard** (was 3-5 Gloam — a badlands mob dropping Gloam
+  never made sense; the user) + **`refined_trophy_uncommon_t2`** (Tier 2, was tier-1). **2 Cinderwroughts
+  now guard each Sunken Forge** (`forge.boss` → `forge.bosses[]`; ore cracks only when BOTH die) — 5
+  forges × 2 = 10, so ember sites reliably supply the tier-2 refine currency (this replaced the trophy→shard
+  salvage idea — the user's call). Gloamwarden unchanged (forest, Gloam + tier-1).
+- **Two-guard balance pass** (the user follow-up, locked via `AskUserQuestion`): doubling the guards had
+  silently doubled HP + loot. Per-guard **HP 340→260** (total 520, a step up from the old single 340 fight,
+  not a 2× slog); **both guards drop 2-4 Ember Shard** (the supply was the point) but **only one drops the
+  tier-2 refined trophy** (new `Cinderwrought` `dropTrophy` cfg flag; `armForge` passes `i === 0`), so a
+  site yields 1 refined trophy, not 2. Attacks/fire damage unchanged. Verified live: HP 260, trophy-guard
+  loot = ember + trophy, other = ember only.
+- **Replaced relics now partial-refund** (`replaceRefund`: 1/2/3/5 shards by rarity, ×1.5 for Tier 2) on
+  top of the existing declined-roll refund — the old net-farm worry is moot now that ember mobs supply
+  shards directly. The `previewChoiceRefunds`/`resolveChoice` Keep-New path pays it too.
+- **Ember-Shard refine recipe hidden until Ember Shard discovered** — new `hasDiscovered` dep on the forge
+  menu filters `refine_common_t2` until its shard currency is known (fixes "ember shard recipes before
+  discovering ember shard").
+
+**Gear & crafting** (`ArmorUpgrades.ts`, `WeaponUpgrades.ts`, `Weapons.ts`, `Crafting.ts`, `Items.ts`):
+- **+2 right-click levels for every forged piece** — base (Sunsteel/Duskhide) AND enhanced (Embersteel/
+  Emberhide/Ember Brand), via compact `forgedArmorUpgrades`/`forgedWeaponUpgrades` helpers. Armor +1/level
+  (+2 at Lvl 3), weapons +2/level (+4 at Lvl 3), sunk in ingots (the user: a use for the ingot stockpile).
+  Tuned + verified so **Lvl-1 ember always out-stats Lvl-3 steel** (embersteel_helm base 10 > sunsteel_helm
+  Lvl 3 = 8; emberhide_leggings base **bumped 7→8** > duskhide_leggings Lvl 3 = 7). Reforging a leveled
+  steel piece still yields a Lvl-1 ember piece (recipe output is tier 0 — falls out naturally). Steel
+  upgrades gate on Workbench Lvl 3, ember on Lvl 4.
+- **Hotbar items now count toward recipe ingredients** (`Crafting.setHotbar(hotbar.container)`) — weapons/
+  tools live in the hotbar, so a Sunsteel Pike there is now visible+consumable by the Embersteel Pike
+  reforge (fixes "still not looking at items in hotbar when considering upgrades"). Verified: a hotbar
+  Sunsteel Pike returns `availableFor === 1`.
+- **Higher-tier weapons cost more stamina**: Sunsteel 20/12/15→22/15/18, Embersteel 22/13/16→27/18/22,
+  Ember Brand 15→19 — each tier a clear step up.
+
+**Duneshaper combat sharpen pass** (`Duneshaper.ts`, Q4 "sharpen + add pressure"): HP **1050→1250**,
+`ATTACK_COOLDOWN 900→700ms`. The **Gloamfire Lance** now tracks the player through 60% of the wind-up
+then commits **and sweeps ±20° across the strike** (was locked at telegraph start = trivially
+pre-sidesteppable). **Sand Spikes** reworked from 3 spaced perpendicular circles to a **tracked 5-circle
+cross** (center + 4 axis/perp arms) — distinct from the Hexling's bolt spread, covers every cardinal
+escape so only a diagonal run / dash clears it.
+
+**Notifications & HUD** (`EventLogUI.ts`, `BossHealthUI.ts`, boss entities, `HotbarUI.ts`, `MainScene.ts`):
+- **Center-toast burst capped at 4 + repacked from the top** — a monotonic cursor let "Defeated X"
+  bursts march down over the player; now the oldest is evicted past 4 and the stack re-anchors at the top.
+  Verified: 8 toasts → 4 active, max Y 174px (well above the player).
+- **Bigger boss stagger bars**: mini-boss world poise bars 22×3 → **56×6** (Cinderwrought/Gloamwarden,
+  Duneshaper 64×6); the top `BossHealthUI` poise section **12→20px**.
+- **POI-respawn toasts only within 900px** (`notifyPoiRespawn`) — the respawn still happens, only the toast
+  is distance-gated (the user).
+- **Tier-aware bench art in the hotbar** — new optional `stationTexture` dep resolves `icon_workbench_t2`
+  etc. so an upgraded bench shows its tier sprite in the hotbar, matching the placed one.
+
+**World/flora** (`MainScene.spawnBadlandsFlora` + `spawnOuterBadlandsContent`): **Emberblooms + Dustblooms
+grow in patches of 3-5** around a shared center (jittered); Sunfruit (cactus) + Gloamcap (mushroom) stay
+scattered solo. Verified: 59/90 emberblooms have a close neighbor.
+
+**Answered:** food buffs cap at **3** concurrent (`BuffManager`, shared with the Bedroll rest effect).
+**Flagged non-repro (#9):** "duskrunner stacks to 98" — every stacking primitive (`add`,
+`topUpExistingHotbarStack`, `sortAndStack`, `moveSlot`) fills to the full 99; no off-by-one exists.
+
+Docs: `RECIPES.md` (relic-trophy table + boss-odds row, forged armor/weapon upgrade tables, weapon
+stamina) and the dashboard Enemies/Relics tabs updated. `tsc` clean; verified live via `preview_eval`
+(boss-trophy odds, 2-guards-per-forge + loot, forge menu open, hotbar reforge counting, ember-upgrade
+tables + stat invariants, toast cap, tier-aware hotbar texture, flora clustering); zero console errors.
+
 ### PB1 — Post-2nd-boss playtest fix batch, all 3 sessions (2026-07-14)
 
 A 3-session triage off a 21-item playtest dump from beating the Duneshaper (badlands final
@@ -374,78 +464,5 @@ wording (Items/Recipes/RECIPES.md). Emberblink set-bonus desc now word-wraps to 
 column (`addText` gained an optional wrap width). Placed stations get a soft dark postFX
 outline (WebGL-guarded) to read against the badlands floor. `tsc` clean throughout.
 
-### S4 — Badlands POI placement, respawn & spawn bugs (2026-07-13, Sonnet)
 
-Fourth of the 6 triaged badlands-playtest sessions (`.claude/plans/badlands-playtest-triage.md`).
-Four independent fixes on the badlands POI/spawn systems — no new mechanic, no recipe/data change
-(`RECIPES.md` + dashboard untouched). `tsc` clean; all four verified live via `preview_eval` (a
-fresh server booted clean after an earlier contended/wedged boot state — the double-banner quirk).
-
-- **Night-surge biome bug (`MainScene.spawnNightBatch`).** The nightfall surge hardcoded the
-  forest roster (2 Boar/2 Snake/2 Gremlin) regardless of where the player was, so a badlands
-  nightfall spawned forest animals. Now each of the ~6 surge spawns draws its species from its own
-  spawn point's biome via the already-biome-aware `makeRespawnEnemy` (dunes → null → skipped).
-  Verified: player parked at a deep-badlands forge, every surge enemy matched its own point's
-  biome (a Hexling on a badlands point; forest species only on the forest blobs the ring straddled).
-- **Warren wave-2 delay (`MainScene.onDenGuardKilled` + `DEN_WAVE2_DELAY_MS` 1600ms).** Clearing
-  wave 1 insta-popped + insta-aggro'd the elite wave 2 in the same frame. Now the den "stirs"
-  immediately and the 3 elite Duskrunners burst a 1.6s beat later (a `time.delayedCall`, guarded on
-  phase so a den reset/destroyed before it fires can't spawn a ghost wave). Verified: guards empty
-  immediately after wave-1 clear, then 3 elite Duskrunners after the delay.
-- **POI spacing / push deeper (`pickBadlandsPoint` gains an `rMin` param; `POI_DEEP_R_MIN` 3600,
-  `POI_MIN_SEPARATION` 1000, `clearsOtherPois`).** The Sunken Forges + Duneshaper altars now pick
-  from a deeper radial band (off the forest edge — they're destinations), and the altars keep
-  `POI_MIN_SEPARATION` from the camp/vein/forges. Verified: forges all ≥3688 / altars all ≥4175
-  from center (one per quadrant), min forge↔altar gap 1279. Warren dens intentionally stay near-ish
-  (unchanged).
-- **General POI respawn (locked decision 4; `updatePoiRespawns`, `POI_RESPAWN_MS` 8min).** Warren
-  dens, the Gloaming Vein, and Sunken Forges now re-arm 8 min after being **fully cleared** (den
-  looted + cache emptied; vein/forge mini-boss dead + all its ore mined) — boss-summon altars
-  (gremlin/tyrant) stay one-shot. Polled each frame (the clear conditions are themselves polled
-  states). Extracted `BadlandsDen.reset()`, `armVein()`, `armForge()` (the initial spawns now call
-  the same arm helpers; night-glow points pushed only on the first arm since they're static). A
-  respawned vein/forge builds **fresh** shielded ore (the old nodes were destroyed on depletion).
-  Verified: all three armed at T0+8min then, on firing, reset to their guarded state — den → wave1
-  with 3 *normal* guards, vein → fresh Gloamwarden + 5 shielded nodes, forge → fresh Cinderwrought
-  + 4 shielded ore.
-
-**Remaining triage: S5–S6** (recipe/upgrade gating + dev-cmd bugs; UX/text polish).
-
-### S3 — Relic Forge menu UI + "all relic effects" panel (2026-07-13, Sonnet)
-
-Third of the 6 triaged badlands-playtest sessions (`.claude/plans/badlands-playtest-triage.md`).
-Pure UI/wiring on the already-designed relic system — no new mechanic, no recipe/data change (so
-`RECIPES.md` + dashboard are untouched; the dashboard reads `Relics.ts` live regardless). `tsc`
-clean; verified live via `preview_eval` with a seeded loadout (numeric layout assertions —
-screenshots hit the backgrounded-render quirk).
-
-- **Result-line / relic-grid overlap fixed (`RelicForgeMenu.ts`).** A plain-success roll's
-  reserved result-block height (26px) was smaller than the "Forged: X" line + the grid's own
-  "Your Relics" header gap, so the header rode up onto the result text. Phase 5 had only fixed the
-  2-line "replaced/declined" and "choice" verdicts; the common plain case was still wrong.
-  `resultBlockH` now branches by state: none 24 / plain 46 / auto-resolved conflict 64 / choice
-  134. Verified: Forged line bottom 530 vs "Your Relics" header y 540 (10px clear).
-- **Forge grid wrap + tier grouping.** The owned-relic grid used `COLS = 6` at 84px chips = 544px,
-  overflowing the 528px usable panel once a run filled several families → chips ran off the right
-  edge. `COLS` 6→5 (452px, fits). The grid is now grouped by **power tier** (`groupsByTier`): a
-  "Tier N" subheader precedes each tier's chips (wrapping within the tier), so a run can see a T1
-  relic beside the T2 that would displace it. Grid height is now measured (`relicGridHeight`) so
-  the panel grows to fit; each chip shows its family label. Verified: 8 chips across Tier 1 / Tier
-  2, max chip right 1148 ≤ panel-right 1232.
-- **Aggregated "all relic effects" panel (`InventoryMenu.ts` + `Relics.ts`).** New
-  `RelicManager.effectSummary()` returns one row per effect **channel** the loadout actually
-  touches — a formatted grand total (tier-scaled) plus the per-relic contributions behind it
-  (`RelicEffectSummary`). Rendered as a compact "Effects" list under the 8 relic slots in the
-  Inventory Relics column; hovering a channel pops a tooltip listing which relics grant it + each
-  one's amount (reuses the column's inline tipBg/tipText surface). `InventoryMenu.PANEL_H` now
-  grows to reserve room for the realistic worst case (9 active channels — one relic per family,
-  crit family feeds only one crit channel); verified the 9-channel case fits (list bottom 471 ≤
-  panel bottom 483). New `relicEffectSummary` dep wired in `MainScene`.
-- **Bug caught + fixed during verification:** the effects-list render call passed `PANEL_Y +
-  RELIC_FX_Y`, double-adding the panel offset (`RELIC_FX_Y` is already absolute, built from
-  `RELICS_Y`). It happened to fit with a light 6-channel loadout but the worst-case 9 channels
-  would have clipped ~40px past the panel; fixed to pass `RELIC_FX_Y` directly (matching how
-  `PANEL_H` reserves the space).
-- Files: `RelicForgeMenu.ts`, `InventoryMenu.ts`, `Relics.ts`, `MainScene.ts`.
-  **Remaining triage: S4–S6** (POI placement/respawn, recipe gating, UX polish).
 

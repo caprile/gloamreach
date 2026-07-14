@@ -18,9 +18,18 @@ export class Crafting {
   // not just the backpack. Set by the scene after construction — a setter
   // rather than a ctor param keeps the two `new Crafting()` sites untouched.
   private equipment?: Equipment;
+  // Optional hotbar reference so a recipe ingredient can be satisfied by an item
+  // sitting in the hotbar — weapons/tools (e.g. the Sunsteel Pike a reforge
+  // consumes) live in the hotbar, not the backpack (the user: "still not looking
+  // at items in hotbar when considering upgrades").
+  private hotbar?: ItemContainer;
 
   setEquipment(equipment: Equipment): void {
     this.equipment = equipment;
+  }
+
+  setHotbar(hotbar: ItemContainer): void {
+    this.hotbar = hotbar;
   }
 
   // How many of `key` are currently worn across all equipment slots — armor
@@ -35,11 +44,12 @@ export class Crafting {
     return n;
   }
 
-  // Total owned of `key` toward a recipe: backpack + worn equipment. This is
-  // what the crafting-menu ingredient readout and affordability check read, so
-  // "Emberhide Vest 0/1" correctly counts a Duskhide Vest you have EQUIPPED.
+  // Total owned of `key` toward a recipe: backpack + hotbar + worn equipment.
+  // This is what the crafting-menu ingredient readout and affordability check
+  // read, so "Embersteel Pike 0/1" correctly counts a Sunsteel Pike sitting in
+  // the hotbar or one you have EQUIPPED.
   availableFor(key: string, backpack: ItemContainer): number {
-    return backpack.count(key) + this.equippedCount(key);
+    return backpack.count(key) + (this.hotbar?.count(key) ?? 0) + this.equippedCount(key);
   }
 
   // Call after any resource pickup, skill level-up, or workbench placement —
@@ -98,9 +108,19 @@ export class Crafting {
     if (free) return true;
     if (!this.canAfford(recipe, backpack)) return false;
     for (const [resource, amount] of Object.entries(recipe.costs) as [ResourceType, number][]) {
-      const fromBackpack = Math.min(backpack.count(resource), amount);
-      if (fromBackpack > 0) backpack.removeCount(resource, fromBackpack);
-      let remaining = amount - fromBackpack;
+      let remaining = amount;
+      const fromBackpack = Math.min(backpack.count(resource), remaining);
+      if (fromBackpack > 0) {
+        backpack.removeCount(resource, fromBackpack);
+        remaining -= fromBackpack;
+      }
+      if (remaining > 0 && this.hotbar) {
+        const fromHotbar = Math.min(this.hotbar.count(resource), remaining);
+        if (fromHotbar > 0) {
+          this.hotbar.removeCount(resource, fromHotbar);
+          remaining -= fromHotbar;
+        }
+      }
       while (remaining > 0 && this.consumeEquipped(resource)) remaining -= 1;
     }
     return true;

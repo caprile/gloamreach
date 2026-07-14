@@ -83,6 +83,46 @@ export const WEAPON_UPGRADES: WeaponUpgradeDef[] = [
   },
 ];
 
+// Forged-weapon upgrades (biome 2, the user: "add levels to the ember weapons").
+// Both the base forged weapons (Sunsteel) and the enhanced ones (Embersteel +
+// Ember Brand) get two right-click levels (+2 then +2 damage), sunk in ingots.
+// Tuned so a base (Lvl 1) ember weapon out-damages a fully-upgraded (Lvl 3) steel
+// one: every ember base is >= steel base + 5, and steel tops out at +4.
+function forgedWeaponUpgrades(key: string, name: string, ingot: ResourceType): WeaponUpgradeDef[] {
+  return [
+    {
+      id: `${key}_lvl2`,
+      name: `${name} Lvl 2`,
+      description: `Reforge the ${name.toLowerCase()} with another ingot for a heavier, harder-hitting head.`,
+      appliesToItemKey: key,
+      resultTier: 1,
+      costs: { [ingot]: 2 },
+      damageBonus: 2,
+      deltaLabel: "+2 Damage",
+    },
+    {
+      id: `${key}_lvl3`,
+      name: `${name} Lvl 3`,
+      description: `A master reforge — a third ingot worked into the ${name.toLowerCase()} for a truly punishing strike.`,
+      appliesToItemKey: key,
+      resultTier: 2,
+      costs: { [ingot]: 3 },
+      damageBonus: 2,
+      deltaLabel: "+2 Damage",
+    },
+  ];
+}
+
+WEAPON_UPGRADES.push(
+  ...forgedWeaponUpgrades("sunsteel_warhammer", "Sunsteel Warhammer", "sunsteel_ingot"),
+  ...forgedWeaponUpgrades("sunsteel_sword", "Sunsteel Longsword", "sunsteel_ingot"),
+  ...forgedWeaponUpgrades("sunsteel_pike", "Sunsteel Pike", "sunsteel_ingot"),
+  ...forgedWeaponUpgrades("embersteel_warhammer", "Embersteel Warhammer", "embersteel_ingot"),
+  ...forgedWeaponUpgrades("embersteel_sword", "Embersteel Longsword", "embersteel_ingot"),
+  ...forgedWeaponUpgrades("embersteel_pike", "Embersteel Pike", "embersteel_ingot"),
+  ...forgedWeaponUpgrades("ember_brand", "Ember Brand", "embersteel_ingot"),
+);
+
 // The upgrades that could apply to a given weapon item, ordered by the tier
 // they grant so a weapon upgrades one step at a time.
 export function weaponUpgradesForItem(itemKey: string): WeaponUpgradeDef[] {

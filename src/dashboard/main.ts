@@ -223,9 +223,9 @@ const ENEMIES: EnemyStat[] = [
       { label: "Charge (line, dodgeable)", damage: 55, telegraphMs: 850 },
       { label: "Ground Slam (AoE 150px + knockback)", damage: 55, telegraphMs: 950 },
     ],
-    loot: "Gremlin King's Heart (unique — upgrades a Smelter to melt rare ore, Phase 4)",
+    loot: "Gremlin King's Heart (Phase-4 smelting gate) + 1 Boss Trophy (Rare, 50% → Mythic)",
     notes:
-      "Poise 100 (stagger → 1.5× dmg for 3s). Enrages <50% HP: shorter telegraphs, faster — not more damage. The only enemy with real telegraph/dodge windows today.",
+      "Poise 100 (stagger → 1.5× dmg for 3s). Enrages <50% HP: shorter telegraphs, faster — not more damage. The one boss you kill mid-run, so its Boss Trophy is actually spendable.",
   },
   {
     name: "Gloamwarden (MINI-BOSS)",
@@ -242,32 +242,32 @@ const ENEMIES: EnemyStat[] = [
   },
   {
     name: "Cinderwrought (MINI-BOSS)",
-    hp: 340,
+    hp: 260,
     speed: 52,
     aggro: 260,
     attacks: [
       { label: "Cinder Cone (locked-direction FIRE cone, 235px / ±32°, bypasses armor)", damage: 46, telegraphMs: 620 },
       { label: "Forge Hammer (heavy FIRE front-arc smash, 168px / ±70°, bypasses armor)", damage: 58, telegraphMs: 560 },
     ],
-    loot: "3-5 Gloam Shard + 1 Refined Trophy (Uncommon) + cracks open mineable Cinderforged Ore nodes on death",
+    loot: "Each guard: 2-4 Ember Shard; ONE of the two also drops 1 Ember-Refined Trophy (Uncommon, Tier 2). Ore nodes crack open only once BOTH guards die.",
     notes:
-      "Sunken Forge guardian (badlands Phase 3 POI 2). NOW 5 forges spread across the badlands (was 1). Poise 70 (stagger → 1.5× dmg for 2.5s). Scale 1.8, scored as an elite kill. Resists blunt ×0.8, weak to pierce ×1.25. Its attacks deal FIRE damage (new damage type, 2026-07-13) which BYPASSES flat armor like magic — cone 30→46, hammer 44→58. Bespoke attacks: the Cinder Cone locks its direction at telegraph START (sidestep the wind-up) — the game's only cone; the Forge Hammer re-locks at execute and hits a wide short front wedge (back out to dodge). Regens 12 HP/s while deaggro'd. On death, its ring of shielded Ember Deposits crack open into mineable Cinderforged Ore (a smelting/metal material — Phase 4 hook). S2 (playtest took zero hits): HP 300→340, telegraphs shorter (cone 820→620, hammer 720→560), reach longer (cone 210→235, hammer 155→168), and attack cooldown 850→650ms — harder to dodge and hits more often.",
+      "Sunken Forge guardian (badlands Phase 3 POI 2). NOW 5 forges × 2 Cinderwroughts each = 10 (the user: 2 guards per forge so the ember sites reliably drop Ember Shards — the native Ember Shard source, was Gloam). Ore only cracks once BOTH guards die. Poise 70 (stagger → 1.5× dmg for 2.5s). Scale 1.8, scored as an elite kill. Resists blunt ×0.8, weak to pierce ×1.25. Its attacks deal FIRE damage which BYPASSES flat armor like magic. Bespoke attacks: the Cinder Cone locks its direction at telegraph START (sidestep the wind-up) — the game's only cone; the Forge Hammer re-locks at execute and hits a wide short front wedge (back out to dodge). Regens 12 HP/s while deaggro'd. On death, its ring of shielded Ember Deposits crack open into mineable Cinderforged Ore (Phase 4 hook).",
   },
   {
     name: "The Duneshaper (FINAL BOSS)",
-    hp: 1050,
+    hp: 1250,
     speed: 48,
     aggro: 300,
     attacks: [
       { label: "Gloam Volley (6 beam-like magic bolts, ±9° tight fan, 460px/s — projectiles)", damage: 22, telegraphMs: 420 },
-      { label: "Sand Spikes (3 circles, PHYSICAL pierce — armor applies)", damage: 56, telegraphMs: 850 },
+      { label: "Sand Spikes (5-circle CROSS, tracks then locks; PHYSICAL pierce — armor applies; only a diagonal/dash clears it)", damage: 56, telegraphMs: 780 },
       { label: "Blink Nova (blink to player, radial magic burst 132px)", damage: 50, telegraphMs: 650 },
-      { label: "Gloamfire Lance @70% HP (locked-direction magic beam, 340px / ±10°)", damage: 54, telegraphMs: 700 },
+      { label: "Gloamfire Lance @70% HP (tracking-then-committed SWEEPING magic beam, 360px / ±11°, sweeps ±20° on strike)", damage: 54, telegraphMs: 640 },
       { label: "Sunscorch Barrage @50% HP (7-circle magic carpet)", damage: 34, telegraphMs: 1100 },
     ],
-    loot: "5-8 Gloam Shard + 2 Refined Trophy (Uncommon)",
+    loot: "5-8 Ember Shard + 1 Boss Trophy (Rare, 50% → Mythic — unreachable, kill wins the run)",
     notes:
-      "SUNSCORCH BADLANDS FINAL BOSS + new WIN-CONDITION (demotes the Gremlin King to a mid-boss). Poise 170 (stagger → 1.35× dmg for 2.2s). Scale 2.3. Resists magic ×0.5, weak to melee (slash/blunt/pierce ×1.3). Phase-gated ESCALATION: 3 attacks at full HP, +Gloamfire Lance at 70% HP, +Sunscorch Barrage AND enrage timing at 50% HP. A caster — holds ~220px and casts, magic attacks bypass flat armor, only Sand Spikes is physical. Summoned by offering an Effigy of the Duneshaper at any of the 3 badlands Tyrant Altars (crafting the effigy reveals them all on the map). Regens 14 HP/s while deaggro'd. S2 (was a speed bump, not a gate): HP 900→1050; Gloam Volley reworked to a BEAM-LIKE 6-bolt spray (was 3) — near-instant (bolt speed 240→460, wind-up 700→420ms) so it can't be lazily sidestepped; Lance wind-up 900→700ms; damage up across attacks; and much harder to stagger-lock (poise 120→170, punish 1.5×→1.35× / 3s→2.2s, poise regens sooner & faster).",
+      "SUNSCORCH BADLANDS FINAL BOSS + WIN-CONDITION (demotes the Gremlin King to a mid-boss). Poise 170 (stagger → 1.35× dmg for 2.2s). Scale 2.3. Resists magic ×0.5, weak to melee (slash/blunt/pierce ×1.3). Phase-gated ESCALATION: 3 attacks at full HP, +Gloamfire Lance at 70% HP, +Sunscorch Barrage AND enrage timing at 50% HP. A caster — holds ~220px and casts, magic attacks bypass flat armor, only Sand Spikes is physical. Summoned by offering an Effigy of the Duneshaper at any of the 3 badlands Tyrant Altars (crafting the effigy reveals them all on the map). Regens 14 HP/s while deaggro'd. S3 (the user: felt easier than the mid-boss): HP 1050→1250; ATTACK_COOLDOWN 900→700ms; the LANCE now tracks the player through 60% of the wind-up then commits + SWEEPS ±20° on the strike (was locked at telegraph start — trivially sidesteppable); Sand Spikes reworked from 3 spaced circles to a tracked 5-circle CROSS (distinct from the Hexling, only a diagonal run/dash clears it).",
   },
 ];
 
@@ -552,7 +552,8 @@ function renderRelics(): string {
     cragscale_trophy: "Elite Cragscale (badlands)",
     hexling_trophy: "Elite Hexling (badlands)",
     sandmaw_trophy: "Elite Sandmaw (badlands)",
-    gremlin_king_fang: "Retired — the King now drops the Gremlin King's Heart (a Phase-4 smelting material), not this trophy",
+    gremlin_king_fang: "Retired — the King now drops the Gremlin King's Heart (a Phase-4 smelting material) + the Boss Trophy, not this",
+    boss_refined_trophy: "Bosses (Gremlin King + Duneshaper) — bespoke odds: Rare with a 50% roll-up to Mythic, never fails",
     refined_trophy_uncommon: "Refinement (Gloaming Vein, Gloam Shards) — roll-only",
     refined_trophy_uncommon_t2: "Refinement (badlands, Ember Shards) — roll-only",
     refined_trophy_rare: "Refinement (scaffold) — roll-only",
@@ -563,7 +564,9 @@ function renderRelics(): string {
     // odds match Relics.roll()'s clamp.
     const capIdx = roll.maxRarity ? RELIC_RARITIES.indexOf(roll.maxRarity) : Infinity;
     const bands: { rarity: typeof RELIC_RARITIES[number]; chance: number }[] = [];
-    for (const b of TROPHY_OUTCOME_ODDS[roll.rarity]) {
+    // A trophy may carry a bespoke outcomeOdds override (the Boss Trophy) —
+    // prefer it over the shared per-rarity table, matching Relics.roll().
+    for (const b of roll.outcomeOdds ?? TROPHY_OUTCOME_ODDS[roll.rarity]) {
       const eff = RELIC_RARITIES.indexOf(b.rarity) > capIdx ? roll.maxRarity! : b.rarity;
       const existing = bands.find((x) => x.rarity === eff);
       if (existing) existing.chance += b.chance;

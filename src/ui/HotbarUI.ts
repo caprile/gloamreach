@@ -25,6 +25,11 @@ export interface HotbarUIDeps {
   eatItem: (container: ItemContainer, index: number) => void;
   // Suppress tooltips while a drag is in progress.
   isDragging: () => boolean;
+  // Resolve the on-screen texture for a stack, honoring per-tier station art so
+  // an upgraded bench in the hotbar shows the same tier sprite it does when
+  // placed (the user: "art for benches needs to also show in the hotbar").
+  // Returns null to fall back to the item's base icon.
+  stationTexture?: (key: string, tier: number) => string | null;
 }
 
 // Always-visible bottom-center bar, TWO stacked rows of ROW1_COUNT slots
@@ -166,8 +171,10 @@ export class HotbarUI {
       if (stack) {
         const def = itemDef(stack.key);
         if (def) {
+          const tiered = this.deps.stationTexture?.(stack.key, stack.tier ?? 0);
+          const tex = tiered && this.scene.textures.exists(tiered) ? tiered : def.texture;
           const icon = this.scene.add
-            .image(x + SLOT_SIZE / 2, y + SLOT_SIZE / 2, def.texture)
+            .image(x + SLOT_SIZE / 2, y + SLOT_SIZE / 2, tex)
             .setScrollFactor(0)
             .setDepth(2901);
           this.rows.push(icon);

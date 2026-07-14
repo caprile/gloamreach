@@ -950,7 +950,7 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     hotbarable: false,
     armorSlot: "legs",
     armorType: "light_armor",
-    armorDefense: 7,
+    armorDefense: 8, // 7→8: keeps base Emberhide > a fully-upgraded (Lvl 3) Duskhide (7)
     stats: [
       { label: "Type", value: "Armor (Legs)" },
       { label: "Armor Type", value: "Light" },
@@ -1053,6 +1053,14 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     name: "Gremlin King's Heart",
     description: "The still-warm heart of the Gremlin King, wrapped in gloamfire. Set it into a Smelter to bind heat enough to melt the rarest ore.",
     texture: "icon_gremlin_king_heart",
+    maxStack: 99,
+    hotbarable: false,
+  },
+  boss_refined_trophy: {
+    key: "boss_refined_trophy",
+    name: "Boss Trophy",
+    description: "A trophy torn from a true boss, blazing with power. Bound at a Relic Forge it never crumbles — and has a real chance of a Mythic relic.",
+    texture: "icon_boss_refined_trophy",
     maxStack: 99,
     hotbarable: false,
   },

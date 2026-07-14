@@ -21,7 +21,7 @@ export interface BossBarTarget {
 // somewhere the player can't miss mid-fight.
 const BAR_W = 560;
 const HP_BAR_H = 28;
-const POISE_BAR_H = 12;
+const POISE_BAR_H = 20; // 12→20: the stagger bar read as a thin sliver (the user)
 const GAP = 5;
 const TOP_MARGIN = 16;
 const DEPTH = 2950; // clears WORLD_H/other fixed HUD (2800-2902), stays below CraftingMenu/InventoryMenu (3000+) and Tooltip (4500)

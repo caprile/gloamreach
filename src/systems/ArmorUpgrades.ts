@@ -103,6 +103,57 @@ export const ARMOR_UPGRADES: ArmorUpgradeDef[] = [
   },
 ];
 
+// Forged-gear upgrades (biome 2, the user: "add levels to the ember armor and
+// weapons"). Both the base forged tier (Sunsteel/Duskhide) and the enhanced
+// tier (Embersteel/Emberhide) now get two right-click levels (+1 then +1 armor,
+// = +2 over base at Lvl 3), sunk in ingots — a use for the ingot stockpile.
+// Tuned so a base (Lvl 1) ember piece always out-armors a fully-upgraded (Lvl 3)
+// steel piece: every ember base is >= steel base + 3, and steel tops out at +2.
+// Gated on the same Workbench tier the piece is forged at (Sunsteel Lvl 3 = tier
+// 2, Embersteel Lvl 4 = tier 3), so you already have the bench when you can wear
+// the gear.
+function forgedArmorUpgrades(key: string, name: string, ingot: ResourceType, benchTier: number): ArmorUpgradeDef[] {
+  return [
+    {
+      id: `${key}_lvl2`,
+      name: `${name} Lvl 2`,
+      description: `Reforge the ${name.toLowerCase()} with another ingot for a tighter, tougher fit.`,
+      appliesToItemKey: key,
+      resultTier: 1,
+      costs: { [ingot]: 2 },
+      requiresWorkbenchTier: benchTier,
+      defenseBonus: 1,
+      deltaLabel: "+1 Armor",
+    },
+    {
+      id: `${key}_lvl3`,
+      name: `${name} Lvl 3`,
+      description: `A master reforge — a third ingot beaten into the ${name.toLowerCase()} for the last measure of protection.`,
+      appliesToItemKey: key,
+      resultTier: 2,
+      costs: { [ingot]: 3 },
+      requiresWorkbenchTier: benchTier,
+      defenseBonus: 2,
+      deltaLabel: "+1 Armor",
+    },
+  ];
+}
+
+ARMOR_UPGRADES.push(
+  ...forgedArmorUpgrades("sunsteel_helm", "Sunsteel Helm", "sunsteel_ingot", 2),
+  ...forgedArmorUpgrades("sunsteel_cuirass", "Sunsteel Cuirass", "sunsteel_ingot", 2),
+  ...forgedArmorUpgrades("sunsteel_greaves", "Sunsteel Greaves", "sunsteel_ingot", 2),
+  ...forgedArmorUpgrades("duskhide_hood", "Duskhide Hood", "sunsteel_ingot", 2),
+  ...forgedArmorUpgrades("duskhide_vest", "Duskhide Vest", "sunsteel_ingot", 2),
+  ...forgedArmorUpgrades("duskhide_leggings", "Duskhide Leggings", "sunsteel_ingot", 2),
+  ...forgedArmorUpgrades("embersteel_helm", "Embersteel Helm", "embersteel_ingot", 3),
+  ...forgedArmorUpgrades("embersteel_cuirass", "Embersteel Cuirass", "embersteel_ingot", 3),
+  ...forgedArmorUpgrades("embersteel_greaves", "Embersteel Greaves", "embersteel_ingot", 3),
+  ...forgedArmorUpgrades("emberhide_hood", "Emberhide Hood", "embersteel_ingot", 3),
+  ...forgedArmorUpgrades("emberhide_vest", "Emberhide Vest", "embersteel_ingot", 3),
+  ...forgedArmorUpgrades("emberhide_leggings", "Emberhide Leggings", "embersteel_ingot", 3),
+);
+
 // The upgrades that could apply to a given equipped armor item, ordered by
 // the tier they grant.
 export function armorUpgradesForItem(itemKey: string): ArmorUpgradeDef[] {

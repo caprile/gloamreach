@@ -115,13 +115,16 @@ const WEAPON_STAMINA_COST: Record<WeaponType, number> = {
   primal_spear: 16,
   slingshot: 6,
   javelin: 16,
-  sunsteel_warhammer: 20,
-  sunsteel_sword: 12,
-  sunsteel_pike: 15,
-  embersteel_warhammer: 22,
-  embersteel_sword: 13,
-  embersteel_pike: 16,
-  ember_brand: 15,
+  // Higher-tier weapons cost more stamina (the user) — the ember tier was barely
+  // above steel (13 vs 12). Now each tier is a clear step up, so the bigger
+  // weapon is a real commitment, not a free upgrade: starter < Sunsteel < Ember.
+  sunsteel_warhammer: 22,
+  sunsteel_sword: 15,
+  sunsteel_pike: 18,
+  embersteel_warhammer: 27,
+  embersteel_sword: 18,
+  embersteel_pike: 22,
+  ember_brand: 19,
 };
 export function weaponStaminaCost(weapon: WeaponType): number {
   return WEAPON_STAMINA_COST[weapon];

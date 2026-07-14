@@ -54,6 +54,10 @@ export interface RelicForgeMenuDeps {
   // once the player picks Keep New / Keep Old. Returns the refund info so the
   // menu can update its result line, or null if there's nothing pending.
   resolveFamilyChoice: (keepNew: boolean) => ChoiceResolution | null;
+  // Whether a material key has been discovered. Used to gate a refine recipe
+  // whose shard currency (e.g. Ember Shard) the player hasn't seen yet — so the
+  // Refine tab never asks for a currency that doesn't exist to the player.
+  hasDiscovered: (key: string) => boolean;
 }
 
 const DEPTH_BG = 3000;
@@ -486,7 +490,12 @@ export class RelicForgeMenu {
     }
 
     const count = (k: string) => this.deps.backpack.count(k);
-    const recipes = REFINE_RECIPES.filter((r) => ownedRefineInput(r, count) > 0);
+    // Surface a recipe only if the player owns eligible input trophies AND has
+    // discovered its shard currency — otherwise a badlands run could see a
+    // tier-2 (Ember Shard) refine row before ever finding an Ember Shard.
+    const recipes = REFINE_RECIPES.filter(
+      (r) => ownedRefineInput(r, count) > 0 && this.deps.hasDiscovered(r.shardKey),
+    );
     const ROW_H = 72;
     const listTop = 96;
 

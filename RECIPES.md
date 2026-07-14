@@ -134,23 +134,28 @@ armor**. Applied as a flat deduction from incoming physical damage, floored at
 
 ### Forged armor sets (biome 2 Phase 4) — base defense (`ItemDef.armorDefense`)
 
-No right-click ArmorUpgrades — the base sets are enhanced via **standalone T2
-reforge recipes** (the enhanced set consumes the base piece — see the crafting
-table). **Heavy armor** has a real effect: the `heavy_armor` skill gives partial
-**magic/fire mitigation** (−0.4%/level, cap −30%) while wearing ≥1 heavy piece
-(`Skills.heavyArmorMagicMitigation`) — its identity vs light armor's dash
+Two progression axes: (1) the base sets **reforge** into the T2 sets via
+standalone recipes (the enhanced set consumes the base piece — see the crafting
+table), and (2) **every** forged piece — base AND T2 — now gets **two right-click
+armor levels** (`+1` then `+1`, = **+2 over base at Lvl 3**), sunk in ingots
+(the user: a use for the ingot stockpile). Tuned so a base (Lvl 1) ember piece
+always out-armors a fully-upgraded (Lvl 3) steel piece. **Heavy armor** has a real
+effect: the `heavy_armor` skill gives partial **magic/fire mitigation** (−0.4%/
+level, cap −30%) while wearing ≥1 heavy piece — its identity vs light armor's dash
 i-frames. `heavy_armor` XP accrues per worn piece on a kill.
 
-| Set | Type | Helm | Chest | Legs | Full-set armor |
+| Set | Type | Helm | Chest | Legs | Full-set (Lvl 1 → Lvl 3) |
 |---|---|---|---|---|---|
-| Sunsteel (base) | Heavy | 6 | 8 | 6 | 20 |
-| Embersteel (T2) | Heavy | 10 | 12 | 10 | 32 |
-| Duskhide (base) | Light | 4 | 6 | 5 | 15 |
-| Emberhide (T2) | Light | 7 | 9 | 7 | 23 |
+| Sunsteel (base) | Heavy | 6 | 8 | 6 | 20 → 26 |
+| Embersteel (T2) | Heavy | 10 | 12 | 10 | 32 → 38 |
+| Duskhide (base) | Light | 4 | 6 | 5 | 15 → 21 |
+| Emberhide (T2) | Light | 7 | 9 | 8 | 24 → 30 |
 
-Armor totals were bumped meaningfully in the S1 balance batch (playtest: forged
-gear felt too flimsy) — heavy still beats light at each tier, and each tier is a
-clear step up.
+Forged-piece upgrade costs: base (Sunsteel/Duskhide) Lvl 2 = **2 Sunsteel Ingot**,
+Lvl 3 = **3 Sunsteel Ingot** (needs Workbench Lvl 3). T2 (Embersteel/Emberhide)
+Lvl 2 = **2 Embersteel Ingot**, Lvl 3 = **3 Embersteel Ingot** (needs Workbench
+Lvl 4). Each level `+1 armor`. (Emberhide Leggings base bumped 7→8 so base still
+beats a Lvl-3 Duskhide legging.)
 
 ## Weapon Upgrades (`src/systems/WeaponUpgrades.ts`)
 
@@ -171,19 +176,24 @@ out-hits a fully-upgraded starter weapon.
 
 ### Forged weapons (biome 2 Phase 4) — one per melee damage type
 
-The enhanced (T2) weapons are full standalone recipes that **reforge** the base
-weapon (see the crafting table), not right-click upgrades. AOE arc widths in
-`Weapons.ts` `WEAPON_ARC`.
+The enhanced (T2) weapons **reforge** the base weapon (full standalone recipes,
+see the crafting table). On top of that, **every** forged weapon — Sunsteel,
+Embersteel, and the Ember Brand — now gets **two right-click damage levels**
+(`+2` then `+2`, = **+4 damage at Lvl 3**): Lvl 2 = 2 ingot, Lvl 3 = 3 ingot
+(Sunsteel Ingot for the base weapons, Embersteel Ingot for the T2 + Ember Brand).
+Tuned so a base (Lvl 1) ember weapon out-damages a fully-upgraded (Lvl 3) steel
+one. Stamina costs were also bumped so each tier is a clear step up (the user):
+starter < Sunsteel < Ember. AOE arc widths in `Weapons.ts` `WEAPON_ARC`.
 
 | Weapon | Dmg / Cooldown / Stamina | Damage Type | Arc (½angle / range / falloff) |
 |---|---|---|---|
-| Sunsteel Warhammer | 17 / 800ms / 20 | Blunt | 55° / 62 / 0.75 (widest sweeper) |
-| Sunsteel Longsword | 14 / 480ms / 12 | Slash | 30° / 40 / 0.55 |
-| Sunsteel Pike | 15 / 620ms / 15 | Pierce | 40° / 56 / 0.65 |
-| Embersteel Warhammer | 23 / 800ms / 22 | Blunt | 58° / 66 / 0.78 |
-| Embersteel Longsword | 19 / 470ms / 13 | Slash | 32° / 42 / 0.58 |
-| Embersteel Pike | 20 / 610ms / 16 | Pierce | 42° / 58 / 0.68 |
-| Ember Brand | 17 / 520ms / 15 | **Magic** | 45° / 52 / 0.6 (fire washes over foes) |
+| Sunsteel Warhammer | 17 / 800ms / 22 | Blunt | 55° / 62 / 0.75 (widest sweeper) |
+| Sunsteel Longsword | 14 / 480ms / 15 | Slash | 30° / 40 / 0.55 |
+| Sunsteel Pike | 15 / 620ms / 18 | Pierce | 40° / 56 / 0.65 |
+| Embersteel Warhammer | 23 / 800ms / 27 | Blunt | 58° / 66 / 0.78 |
+| Embersteel Longsword | 19 / 470ms / 18 | Slash | 32° / 42 / 0.58 |
+| Embersteel Pike | 20 / 610ms / 22 | Pierce | 42° / 58 / 0.68 |
+| Ember Brand | 17 / 520ms / 19 | **Magic** | 45° / 52 / 0.6 (fire washes over foes) |
 
 The **Ember Brand** is the first magic weapon (rare-ore-exclusive). Its raw 17 is
 mid-pack (DPS ≈ the Embersteel Pike on a neutral target), but `magic` type routes
@@ -350,6 +360,11 @@ relic they produce.
 | Common | 10% | 2.5% | 1% | — | 86.5% | 12 |
 | Uncommon | — | rest (94%) | 5% | 1% | 0% | 8 |
 | Rare | — | — | rest (90%) | 10% | 0% | — |
+| **Boss** (bespoke `outcomeOdds`) | — | — | 50% | 50% | 0% | — |
+
+The **Boss Refined Trophy** uses a per-trophy `outcomeOdds` override (not the
+shared Rare table): it always succeeds and rolls **Rare with a 50% chance to roll
+up to Mythic** — the standout relic payoff for killing a true boss.
 
 | Trophy | Source | Rarity | Power Tier |
 |---|---|---|---|
@@ -360,10 +375,26 @@ relic they produce.
 | Cragscale Trophy | Elite Cragscale (badlands) | Common | **2** |
 | Hexling Trophy | Elite Hexling (badlands) | Common | **2** |
 | Sandmaw Trophy | Elite Sandmaw (badlands) | Common | **2** |
-| ~~Gremlin King Fang~~ | — | — | Retired — the King now drops the **Gremlin King's Heart** (a Phase-4 smelting material that upgrades a Smelter to melt rare ore), NOT a relic trophy |
+| **Boss Trophy** | Gremlin King + Duneshaper (bosses) | Rare (bespoke — 50% → Mythic) | 1 |
+| ~~Gremlin King Fang~~ | — | — | Retired — the King now drops the **Gremlin King's Heart** (Phase-4 smelting gate) + the new **Boss Trophy** |
 | Refined Trophy | Refinement (Gloaming Vein, Gloam) | Uncommon | 1 (roll-only — never dropped/refined; **capped at Rare, no Mythic**) |
 | Ember-Refined Trophy | Refinement (badlands, Ember) | Uncommon | **2** (roll-only; **capped at Rare**) |
 | Radiant Trophy | Refinement (scaffold) | Rare | 1 (roll-only — deeper biomes) |
+
+**Mini-boss / boss guaranteed drops** (relic economy): **Gloamwarden** (forest) →
+3–4 Gloam Shard + 1 Refined Trophy (Tier 1). **Cinderwrought** (badlands, **2 per
+Sunken Forge**, 260 HP each) → **each** guard drops 2–4 **Ember Shard**, and **one
+of the two** also drops 1 Ember-Refined Trophy (Tier 2) — the native Ember Shard
+source, so ember sites supply the tier-2 refine currency without hauling Gloam
+from the forest (both drop shards for supply; only one drops the trophy so a
+two-guard site doesn't flood refined trophies). **Gremlin King** → Gremlin King's Heart + 1
+**Boss Trophy**. **Duneshaper** → 5–8 Ember Shard + 1 Boss Trophy (its kill wins
+the run, so the trophy is unreachable in practice — kept for consistency).
+
+**Replaced-relic refund** (Phase-5 family loadout): rolling a strictly-better
+relic that displaces an owned one now refunds a **small** shard amount for the old
+relic (1/2/3/5 by rarity × 1.5 for Tier 2), on top of the existing declined-roll
+refund (the user).
 
 ### Trophy refinement — Gloaming Vein / Ember Kiln (Refine tab)
 
