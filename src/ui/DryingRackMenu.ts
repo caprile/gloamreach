@@ -35,9 +35,9 @@ export interface DryingRackMenuDeps {
   descKey?: () => string; // itemDef key for the description line (default "drying_rack")
   actionLabel?: () => string; // process-button verb (default "Process")
   busyLabel?: () => string; // button label while the bar fills (default "Drying…")
-  // Secondary consumable ("A + B = output") pulled from the backpack — the
-  // Smelter's Hex Essence fuel. Absent for the Drying Rack (no fuel line/gate).
-  fuelInfo?: () => { name: string; texture: string; have: number; needPerOutput: number } | null;
+  // Pull the loaded fuel (Smelter's Hex Essence) back out into the backpack.
+  // Only wired for the Smelter (the Drying Rack has no fuel slot).
+  retrieveFuel?: () => void;
 }
 
 const SLOT = 46;
@@ -85,6 +85,8 @@ export class DryingRackMenu {
   private backpackY: number;
   private processX: number;
   private inputBox: { x: number; y: number } = { x: 0, y: 0 };
+  // Fuel drop-target (Smelter only) — sits to the right of the input slot.
+  private fuelBox: { x: number; y: number } = { x: 0, y: 0 };
   private sliderTrack: { x: number; y: number; w: number } = { x: 0, y: 0, w: SLIDER_W };
 
   // Desired OUTPUT count the player currently has selected to produce (not
@@ -111,6 +113,7 @@ export class DryingRackMenu {
     this.backpackY = this.panelY + 90;
     this.processX = this.backpackX + BACKPACK_W + 30;
     this.inputBox = { x: this.processX + 40, y: this.backpackY };
+    this.fuelBox = { x: this.processX + 40 + IO_SLOT + 14, y: this.backpackY };
     this.sliderTrack = { x: this.processX, y: this.backpackY + IO_SLOT + 34, w: SLIDER_W };
 
     this.bg = scene.add
@@ -206,6 +209,18 @@ export class DryingRackMenu {
     );
   }
 
+  // True when a screen point is over the fuel slot (Smelter only) — the drop
+  // target that loads dragged fuel. False when the open station has no fuel slot.
+  isOverFuel(screenX: number, screenY: number): boolean {
+    if (!this.open || !this.deps.station()?.usesFuelSlot()) return false;
+    return (
+      screenX >= this.fuelBox.x &&
+      screenX <= this.fuelBox.x + IO_SLOT &&
+      screenY >= this.fuelBox.y &&
+      screenY <= this.fuelBox.y + IO_SLOT
+    );
+  }
+
   // --- slider drag (driven by MainScene's shared global pointermove/up) ---
 
   isDraggingSlider(): boolean {
@@ -264,7 +279,7 @@ export class DryingRackMenu {
       const x = this.backpackX + col * (SLOT + GAP);
       const y = this.backpackY + row * (SLOT + GAP);
       const stack = backpack.slot(i);
-      const valid = !!stack && station.canAccept(stack.key);
+      const valid = !!stack && (station.canAccept(stack.key) || station.canAcceptFuel(stack.key));
 
       const box = this.scene.add
         .rectangle(x, y, SLOT, SLOT, 0x14181f, 0.9)
@@ -305,29 +320,47 @@ export class DryingRackMenu {
 
   private renderProcess(station: ProcessingStation, max: number): void {
     const px = this.processX;
-
-    // --- Input ---
-    this.addText(px, this.backpackY - 18, "Input", 12, "#8a93a3");
     const ib = this.inputBox;
+    const useFuel = station.usesFuelSlot();
+
+    // --- Input slot (+ Fuel slot for the Smelter, side by side) ---
+    this.addText(ib.x, this.backpackY - 18, useFuel ? "Ore" : "Input", 12, "#8a93a3");
     this.renderSlotBox(ib.x, ib.y, station.input, station.input ? "#8fe38f" : "#3a4250");
-    if (station.input) {
-      const takeOut = this.scene.add
-        .text(ib.x + IO_SLOT + 12, ib.y + 4, "Take Out", {
+    // Small "Take Out" link under a loaded slot (moved below to make room for
+    // the fuel slot to its right).
+    const takeLink = (x: number, y: number, label: string, onClick: () => void) => {
+      const t = this.scene.add
+        .text(x, y, label, {
           fontFamily: "monospace",
-          fontSize: "12px",
+          fontSize: "11px",
           color: "#c8d0dc",
           backgroundColor: "#20242e",
-          padding: { x: 6, y: 3 },
+          padding: { x: 5, y: 2 },
         })
         .setScrollFactor(0)
         .setDepth(DEPTH_TEXT)
         .setInteractive({ useHandCursor: true })
-        .on("pointerdown", () => this.deps.retrieveInput());
-      this.rows.push(takeOut);
+        .on("pointerdown", onClick);
+      this.rows.push(t);
+    };
+    const underSlotY = ib.y + IO_SLOT + 2;
+    if (station.input) takeLink(ib.x, underSlotY, "Take Out", () => this.deps.retrieveInput());
+
+    if (useFuel) {
+      const fb = this.fuelBox;
+      this.addText(fb.x, this.backpackY - 18, "Fuel", 12, "#8a93a3");
+      this.renderSlotBox(fb.x, fb.y, station.fuel, station.fuel ? "#c9a86a" : "#3a4250");
+      if (station.fuel) {
+        takeLink(fb.x, underSlotY, "Take Out", () => this.deps.retrieveFuel?.());
+      } else {
+        // Empty-fuel hint so the player knows the Smelter needs Hex Essence.
+        const fuelName = itemDef(station.fuelKey() ?? "")?.name ?? "fuel";
+        this.addText(fb.x, underSlotY + 1, `Load ${fuelName}`, 10, "#8a7a55");
+      }
     }
 
     // --- Amount selector (slider + numeric entry) ---
-    const amountY = ib.y + IO_SLOT + 8;
+    const amountY = ib.y + IO_SLOT + 22;
     const amountLabel = station.input
       ? `Amount: ${this.selectedAmount} / ${max}`
       : "Amount: — (load an input first)";
@@ -343,6 +376,9 @@ export class DryingRackMenu {
       .on("pointerdown", () => this.promptForAmount(max));
     this.rows.push(amountText);
 
+    // Slider Y follows the (now lower) amount label. Only Y moves — the drag
+    // hit-test reads track.x/w, so repositioning Y each render is safe.
+    this.sliderTrack.y = amountY + 20;
     const track = this.sliderTrack;
     const trackBg = this.scene.add
       .rectangle(track.x, track.y, track.w, SLIDER_H, 0x1a1f2a, 0.95)
@@ -407,26 +443,12 @@ export class DryingRackMenu {
       preview.output > 0 ? "#8fe38f" : "#5b6472",
     );
 
-    // Optional fuel line ("A + B = output") — the Smelter needs Hex Essence per
-    // ingot. Draw the requirement + gate the button when the backpack is short.
-    let fuelOk = true;
-    let btnY = previewY + 26;
-    const fuel = this.deps.fuelInfo?.();
-    if (fuel) {
-      const need = preview.output * fuel.needPerOutput;
-      fuelOk = fuel.have >= need;
-      const fuelY = previewY + 20;
-      const fuelIcon = this.scene.add
-        .image(px + 8, fuelY + 8, fuel.texture)
-        .setDisplaySize(16, 16)
-        .setScrollFactor(0)
-        .setDepth(DEPTH_TEXT);
-      this.rows.push(fuelIcon);
-      this.addText(px + 20, fuelY, `${fuel.name}: ${fuel.have}/${need}`, 12, fuelOk ? "#c8d0dc" : "#e38f8f");
-      btnY = previewY + 46;
-    }
+    // The Smelter's fuel is now its own loaded slot (rendered above), and
+    // maxPossibleOutput already caps the slider by the loaded fuel — so if the
+    // preview shows an output, the fuel to make it is guaranteed present.
+    const btnY = previewY + 26;
 
-    const canProcess = preview.output > 0 && fuelOk && !this.busy;
+    const canProcess = preview.output > 0 && !this.busy;
     const btn = this.scene.add
       .text(px, btnY, this.busy ? (this.deps.busyLabel?.() ?? "Drying…") : (this.deps.actionLabel?.() ?? "Process"), {
         fontFamily: "monospace",

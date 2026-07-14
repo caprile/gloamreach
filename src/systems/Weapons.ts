@@ -69,18 +69,21 @@ const WEAPON_DAMAGE: Record<WeaponType, number> = {
   primal_spear: 8,
   slingshot: 2,
   javelin: 5,
-  sunsteel_warhammer: 14,
-  sunsteel_sword: 10,
-  sunsteel_pike: 12,
-  // Enhanced tier: a real step over the base forged numbers (~+40-50%).
-  embersteel_warhammer: 20,
-  embersteel_sword: 15,
-  embersteel_pike: 17,
+  // Base forged tier — every one clears the max-UPGRADED Primal Spear (13)
+  // so freshly-forged gear always out-hits maxed starter gear (S1 rebalance;
+  // the old 10/12 sword/pike sat below 13, which read as a downgrade).
+  sunsteel_warhammer: 17,
+  sunsteel_sword: 14,
+  sunsteel_pike: 15,
+  // Enhanced tier: a real step over the base forged numbers (~+35-45%).
+  embersteel_warhammer: 23,
+  embersteel_sword: 19,
+  embersteel_pike: 20,
   // The magic brand's raw number sits mid-pack; its DPS lands near the
   // Embersteel Pike on a NEUTRAL target, but its "magic" type is shrugged off
   // (~x0.4-0.5) by the gloam-casters (Hexlings, the Duneshaper). It's the only
   // `magic` weapon-skill source — a sidegrade with an upside, not flatly best.
-  ember_brand: 14,
+  ember_brand: 17,
 };
 export function weaponDamage(weapon: WeaponType): number {
   return WEAPON_DAMAGE[weapon];

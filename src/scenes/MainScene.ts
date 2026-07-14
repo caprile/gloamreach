@@ -2015,6 +2015,10 @@ export class MainScene extends Phaser.Scene {
         this.loadRackInput(src.container, src.index);
         return;
       }
+      if (this.dryingRackMenu.isOverFuel(pointer.x, pointer.y)) {
+        this.loadRackFuel(src.container, src.index);
+        return;
+      }
       const rackBagIndex = this.dryingRackMenu.slotIndexAt(pointer.x, pointer.y);
       if (rackBagIndex !== null) {
         // Click-in-place on the rack's own backpack grid: double-click or
@@ -2299,28 +2303,18 @@ export class MainScene extends Phaser.Scene {
       skills: this.skills,
       station: () => this.openRack,
       beginDrag: (c, i, p) => this.beginItemDrag(c, i, p),
-      quickLoad: (i) => this.loadRackInput(this.backpack, i),
+      quickLoad: (i) => this.quickLoadStation(this.backpack, i),
       isDragging: () => this.dragSource !== null,
       retrieveInput: () => this.retrieveRackInput(),
-      processAmount: (amount) =>
-        this.openStationKind === "smelter" ? this.processSmelterAmount(amount) : this.processRackAmount(amount),
-      // The same menu serves the Smelter — switch title/verb/fuel by kind.
+      retrieveFuel: () => this.retrieveRackFuel(),
+      // The Smelter's fuel now lives in its own loaded slot, so process is the
+      // same call for both stations — station.process() burns loaded fuel itself.
+      processAmount: (amount) => this.processRackAmount(amount),
+      // The same menu serves the Smelter — switch title/verb by kind.
       title: () => (this.openStationKind === "smelter" ? "Smelter" : "Drying Rack"),
       descKey: () => (this.openStationKind === "smelter" ? "smelter" : "drying_rack"),
       actionLabel: () => (this.openStationKind === "smelter" ? "Smelt" : "Process"),
       busyLabel: () => (this.openStationKind === "smelter" ? "Smelting…" : "Drying…"),
-      fuelInfo: () => {
-        if (this.openStationKind !== "smelter") return null;
-        const recipe = this.openRack?.recipeForLoaded();
-        if (!recipe?.fuel) return null;
-        const def = itemDef(recipe.fuel.key);
-        return {
-          name: def?.name ?? recipe.fuel.key,
-          texture: def?.texture ?? "",
-          have: this.backpack.count(recipe.fuel.key),
-          needPerOutput: recipe.fuel.per,
-        };
-      },
     });
   }
 
@@ -2337,8 +2331,8 @@ export class MainScene extends Phaser.Scene {
   }
 
   // A placed Smelter reuses the Drying Rack's processing menu (both are
-  // ProcessingStations) — openStationKind flips the menu's title/verb/fuel and
-  // routes the process call to processSmelterAmount (which deducts fuel).
+  // ProcessingStations) — openStationKind flips the menu's title/verb and shows
+  // the dedicated fuel slot; station.process() burns the loaded fuel itself.
   private openSmelterMenu(image: Phaser.GameObjects.Image): void {
     const smelter = this.smelters.find((s) => s.image === image);
     if (!smelter) return;
@@ -2839,6 +2833,43 @@ export class MainScene extends Phaser.Scene {
     this.afterItemMove();
   }
 
+  // Load a whole stack into the Smelter's fuel slot (Hex Essence).
+  private loadRackFuel(container: ItemContainer, index: number): void {
+    const station = this.openRack;
+    if (!station) return;
+    const stack = container.slot(index);
+    if (!stack || !station.canAcceptFuel(stack.key)) return;
+    station.addFuel(stack.key, stack.count);
+    container.set(index, null);
+    this.dryingRackMenu.selectFullAmount();
+    this.afterItemMove();
+  }
+
+  // Route a right-click / quick-move on a backpack stack to the right slot —
+  // valid input goes to the input slot, valid fuel to the fuel slot.
+  private quickLoadStation(container: ItemContainer, index: number): void {
+    const station = this.openRack;
+    const stack = container.slot(index);
+    if (!station || !stack) return;
+    if (station.canAccept(stack.key)) this.loadRackInput(container, index);
+    else if (station.canAcceptFuel(stack.key)) this.loadRackFuel(container, index);
+  }
+
+  // Pull the loaded (unburned) fuel back out of the Smelter into the backpack.
+  private retrieveRackFuel(): void {
+    const station = this.openRack;
+    if (!station?.fuel) return;
+    const f = station.fuel;
+    const leftover = this.addToBackpack(f.key, f.count);
+    station.takeFuel();
+    if (leftover > 0) {
+      this.spawnLooseDrop(f.key, leftover, this.player.x, this.player.y, DROPPED_ITEM_MAGNET_COOLDOWN_MS);
+      this.eventLog.add("info", "Backpack full — some fuel landed on the floor");
+    }
+    this.dryingRackMenu.selectFullAmount();
+    this.afterItemMove();
+  }
+
   // Instantly convert `amount` units of the rack's loaded input. The result
   // auto-lands in the backpack if there's room; any overflow drops on the
   // floor next to the player instead of being silently lost (per user spec —
@@ -2846,36 +2877,6 @@ export class MainScene extends Phaser.Scene {
   private processRackAmount(amount: number): void {
     const station = this.openRack;
     if (!station) return;
-    const result = station.process(amount);
-    if (!result) return;
-    const leftover = this.addToBackpack(result.key, result.count);
-    if (leftover > 0) {
-      this.spawnLooseDrop(result.key, leftover, this.player.x, this.player.y, DROPPED_ITEM_MAGNET_COOLDOWN_MS);
-      this.eventLog.add("info", "Backpack full — some output landed on the floor");
-    }
-    this.sfx.craft();
-    this.afterItemMove();
-  }
-
-  // Smelt `amount` output units of the loaded ore — like processRackAmount, but
-  // first checks/deducts the recipe's Hex Essence fuel from the backpack ("A + B
-  // = ingot"). A short fuel supply is a no-op with a message (the menu already
-  // greys the button, but re-guard since fuel could change between click and
-  // the bar completing).
-  private processSmelterAmount(amount: number): void {
-    const station = this.openRack;
-    if (!station) return;
-    const recipe = station.recipeForLoaded();
-    const preview = station.previewFor(amount);
-    if (preview.output <= 0) return;
-    if (recipe?.fuel) {
-      const needFuel = preview.output * recipe.fuel.per;
-      if (this.backpack.count(recipe.fuel.key) < needFuel) {
-        this.eventLog.add("info", `Not enough ${itemDef(recipe.fuel.key)?.name ?? "fuel"} to smelt`);
-        return;
-      }
-      this.backpack.removeCount(recipe.fuel.key, needFuel);
-    }
     const result = station.process(amount);
     if (!result) return;
     const leftover = this.addToBackpack(result.key, result.count);
@@ -3808,6 +3809,8 @@ export class MainScene extends Phaser.Scene {
       displayName: string,
       count: number,
       health: number,
+      amountMin: number,
+      amountMax: number,
     ) => {
       for (let i = 0; i < count; i++) {
         const pt = this.pickBadlandsPoint(rng);
@@ -3817,7 +3820,7 @@ export class MainScene extends Phaser.Scene {
           y: pt.y,
           texture,
           resource,
-          amount: rng.between(1, 2),
+          amount: rng.between(amountMin, amountMax),
           action: "mine",
           displayName,
           loose: false,
@@ -3827,9 +3830,14 @@ export class MainScene extends Phaser.Scene {
         this.obstacleNodes.push(node);
       }
     };
-    scatterOre("clay_deposit", "clay", "Clay Deposit", 40, 2);
-    scatterOre("sunscorch_ore_node", "sunscorch_ore", "Sunscorch Ore", 44, 3);
-    scatterOre("ember_ore_node", "ember_ore", "Cinderforged Vein", 8, 3);
+    // S1 rebalance — "not grindy": ore nodes yield a handful each and scatter
+    // denser. Sunscorch (common metal) is plentiful; Cinderforged veins stay
+    // rarer but no longer trickle 1-2 (the Sunken Forge POI is the main ember
+    // source, but scattered veins now pay off too). Ratio is 1:1 so a node's
+    // yield equals its ingot potential.
+    scatterOre("clay_deposit", "clay", "Clay Deposit", 44, 2, 2, 3);
+    scatterOre("sunscorch_ore_node", "sunscorch_ore", "Sunscorch Ore", 60, 3, 3, 5);
+    scatterOre("ember_ore_node", "ember_ore", "Cinderforged Vein", 14, 3, 2, 4);
   }
 
   // Every biome needs a supply of the basics — wood and stone. The forest disc
@@ -4268,7 +4276,9 @@ export class MainScene extends Phaser.Scene {
           y,
           texture: "ember_ore_shielded",
           resource: "ember_ore",
-          amount: rng.between(1, 2),
+          // The Ember POI is the *main* Cinderforged source — a rich payoff for
+          // the Cinderwrought fight (S1: was 1-2, way too thin).
+          amount: rng.between(4, 7),
           action: "mine",
           displayName: "Ember Deposit",
           loose: false,
@@ -6992,7 +7002,7 @@ export class MainScene extends Phaser.Scene {
       this.dryingRacks.splice(rackIndex, 1);
     }
 
-    // Same refund + cleanup for a placed Smelter's loaded ore.
+    // Same refund + cleanup for a placed Smelter's loaded ore AND fuel.
     const smelterIndex = this.smelters.findIndex((s) => s.image === obj);
     if (smelterIndex !== -1) {
       const station = this.smelters[smelterIndex].station;
@@ -7000,6 +7010,15 @@ export class MainScene extends Phaser.Scene {
         this.spawnLooseDrop(
           station.input.key,
           station.input.count,
+          obj.x,
+          obj.y,
+          DROPPED_ITEM_MAGNET_COOLDOWN_MS,
+        );
+      }
+      if (station.fuel) {
+        this.spawnLooseDrop(
+          station.fuel.key,
+          station.fuel.count,
           obj.x,
           obj.y,
           DROPPED_ITEM_MAGNET_COOLDOWN_MS,

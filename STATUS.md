@@ -2,7 +2,19 @@
 
 ## Current State
 
-_Living snapshot — edit in place, never append. Last shipped: **Ember-tier armor set bonuses**
+_Living snapshot — edit in place, never append. Last shipped: **S1 — Badlands metal economy &
+forged-gear balance** (2026-07-13, Opus). First of the 6 triaged badlands-playtest sessions
+(`.claude/plans/badlands-playtest-triage.md`), the "not grindy" pass: **smelt ratio → 1 ore + 1 hex
+→ 1 ingot** (both ingots); **ore nodes yield a handful + scatter denser** (Sunscorch 60×3–5,
+Cinderforged 14×2–4 + Sunken Forge deposits 4–7); base **Sunsteel weapons bumped to 17/14/15** so
+they all clear the max-upgraded Primal Spear (13) — Embersteel 23/19/20, Ember Brand 17 to keep the
+T2 gap; **Duskhide light armor → 4/5/4 = 13** (matches maxed Gremlin Lvl 3) using **zero metal**
+(pelt/chitin/bone); and a **dedicated Fuel slot on the Smelter menu** (Hex Essence is loaded into its
+own slot rather than pulled silently from the backpack — `ProcessingStation.fuel` + a fuel-gated
+`maxPossibleOutput`/`process`; the shared Drying Rack menu is visually unchanged). `tsc` clean;
+verified live; `RECIPES.md` updated (dashboard reads the data modules live, so no manual edit).
+**Remaining triage: S2–S6** (boss/enemy tuning, relic UI, POI placement/respawn, recipe gating,
+UX polish). See the entry below + [[survivor-rpg-biome-2-plan]]. Prior: **Ember-tier armor set bonuses**
 (2026-07-13, Opus). The deferred payoff for building the best-in-biome forged gear: two full-set
 (3-piece) bonuses, both **unique mechanics** (not the raw-% channels relics own). **Embersteel (heavy)
 → Molten Bulwark**: knockback immunity + fire thorns on melee attackers. **Emberhide (light) →
@@ -33,7 +45,7 @@ _Prior: **Campfire tiers + cross-biome cooking +
 no-ladder station upgrades** (2026-07-13, Opus). **Station/processor upgrades are now no-ladder** (any
 discovered upgrade applies in any order; applying = +1 level; weapon/armor keep their ladder), plus
 Campfire Lvl 3/4, 5 new HP-regen dishes, and a collapsible/scrollable cooking-menu rework. Full detail
-in Recent Entries + [[survivor-rpg-no-ladder-station-upgrades]] [[survivor-rpg-cooking-food-buffs]]._
+in STATUS-archive.md + [[survivor-rpg-no-ladder-station-upgrades]] [[survivor-rpg-cooking-food-buffs]]._
 
 _Prior: **Biome 2 — Phase 5: Relics rework**
 (2026-07-13, Opus). The relic economy for biome 2 + the requested rebalance, closing out the biome-2
@@ -153,6 +165,46 @@ below + [[survivor-rpg-dev-console]].
 ## Recent Entries
 
 > Older entries in STATUS-archive.md.
+
+### S1 — Badlands metal economy & forged-gear balance (2026-07-13, Opus)
+
+First of the 6 triaged badlands-playtest sessions (`.claude/plans/badlands-playtest-triage.md`)
+— the "not grindy" interlocking economy pass. Locked decisions applied from the triage's
+shared block.
+
+- **Smelt ratio → 1:1** (`Processing.ts` `SMELT_RECIPES`): sunscorch→sunsteel and
+  ember→embersteel are both now **1 ore + 1 hex → 1 ingot** (was 2 ore + 1/2 hex). A node's
+  yield now equals its ingot potential. (Watch-item from decision 1 — hex bottleneck — is
+  *eased* by this, not worsened: ember fuel dropped 2→1 hex, sunsteel unchanged.)
+- **Ore economy** (`MainScene.spawnBadlandsMinerals`): `scatterOre` now takes an amount
+  range. Sunscorch **60 nodes × 3–5** (was 44 × 1–2), Cinderforged scatter **14 × 2–4**
+  (was 8 × 1–2), Clay 44 × 2–3. The **Sunken Forge POI ember deposits → 4–7 each** (was
+  1–2) — the POI is now the rich ember source.
+- **Weapon damage** (`Weapons.ts`): the max-**upgraded** Primal Spear is **13** (base 8 +2 +3;
+  RECIPES.md said 12 — a stale doc bug, fixed). Base forged Sunsteel now **17/14/15**
+  (warhammer/sword/pike, was 14/10/12 — sword & pike sat *below* 13, reading as a downgrade),
+  all clearing 13. Embersteel bumped to **23/19/20** to keep the T2 gap; Ember Brand 14→**17**.
+- **Duskhide light armor** (`Items.ts` + `Recipes.ts`): base **4/5/4 = 13** (was 3/4/3 = 10),
+  matching a fully-upgraded Gremlin Lvl 3 set (< Sunsteel heavy's 14). Recipes now use
+  **zero metal** (pelt/chitin/bone only) — a "no forge required" light path. Descriptions
+  de-steeled.
+- **Dedicated fuel slot** (`Processing.ts` + `DryingRackMenu.ts` + `MainScene.ts`): the
+  Smelter's Hex Essence is now loaded into its **own slot** (was pulled silently from the
+  backpack). `ProcessingStation` gained `fuel`/`usesFuelSlot()`/`canAcceptFuel()`/`addFuel()`/
+  `takeFuel()`; `maxPossibleOutput()` caps by loaded fuel and `process()` burns fuel from the
+  slot. The shared menu renders a second **Fuel** slot beside **Ore** (with its own Take Out
+  link + an empty "Load Hex Essence" hint) only when `usesFuelSlot()` — the Drying Rack is
+  visually unchanged. Drag-drop (`isOverFuel` → `loadRackFuel`), right-click quick-load
+  (`quickLoadStation` routes ore→input / hex→fuel), retrieve, and Smelter-destroy refund
+  all handle fuel. `processSmelterAmount` deleted (fuel now lives in the slot, so smelt uses
+  the same `processRackAmount` path).
+
+Verified live via `preview_eval` (fuel-gated 1:1 smelt end-to-end; drying rack still 2:1 with
+no fuel slot; both menus screenshotted; new weapon/armor/ratio numbers confirmed off the live
+modules — which the dashboard reads directly, so it needs no manual edit). `tsc` clean; no
+console errors. `RECIPES.md` updated (smelt table, armor totals, weapon table, Primal-Spear-13
+fix). **Remaining triage sessions: 2 (boss/enemy tuning), 3 (relic UI), 4 (POI placement/
+respawn), 5 (recipe gating/dev cmds), 6 (UX/text polish).** See [[survivor-rpg-biome-2-plan]].
 
 ### Ember-tier armor set bonuses (2026-07-13, Opus)
 
@@ -342,64 +394,3 @@ verified live via `preview_eval` (see below) — caught and fixed one real layou
   `RelicForgeMenu.ts`, `RelicBarUI.ts`, `InventoryMenu.ts`, `MainScene.ts`, `RECIPES.md`,
   `dashboard/main.ts`. **This completes the biome-2 umbrella plan
   (`.claude/plans/biome-2-sunscorch-badlands.md`) — all 6 phases (0–5) are shipped.**
-
-### Campfire tiers + cross-biome cooking + no-ladder station upgrades (2026-07-13, Opus)
-
-Plan: `.claude/plans/zany-whistling-flurry.md`. Off the master-plan build order — the user
-wanted higher campfire tiers to cook the badlands food drops (which shipped with no recipes),
-cross-biome dishes, and a cooking-menu rework. Designing it surfaced that the whole station-upgrade
-model needed fixing first, so that became the foundation.
-
-- **Station/processor upgrades are now NO-LADDER, apply = +1, level = count (the user, locked).**
-  Previously each `StationUpgradeDef.resultTier` was a hardcoded destination and the shared Upgrade
-  panel locked every upgrade except `resultTier === currentTier + 1` ("Requires previous tier"). Now:
-  any *discovered* upgrade for a station shows immediately (any order), and applying it bumps the
-  station's level by exactly **+1** — **level = count of upgrades applied**, tracked as a per-instance
-  applied-id set. So a Lvl 1 Workbench carried into the badlands takes the badlands upgrade straight
-  to Lvl 2 (not Lvl 3). Recipes/dishes gate on the level *count*; material-specificity comes from a
-  recipe's own ingredient discovery, so "any 2 workbench upgrades → forged-gear level" is intended.
-  `resultTier` is demoted to a sort hint. **Scope = stations/processors only** — worn weapon/armor
-  upgrades keep their `resultTier` ladder (the shared `UpgradeMenu` branches on a new
-  `appliedUpgradeIds()` dep: non-null for a placed station → no-ladder/set path, null for weapon/armor
-  → old ladder). The applied-id set is a new `ItemStack.upgrades?: string[]` + `ResourceNode.upgrades`,
-  threaded through `spawnLooseDrop`/`collectNode`/placement so it **survives Destroy → pickup →
-  re-Place** alongside `tier` (without it, a re-placed station could re-apply the cheapest upgrade to
-  max its level for free). `applyStationUpgrade` appends the id, sets `tier = set.size`;
-  `sortAndStack` preserves the set (unique per instance).
-- **Campfire Lvl 3/4** (`StationUpgrades.ts`): two more (non-ladder) campfire upgrades — **Sunsteel
-  Grill** (`{sunsteel_ingot:3, clay:8, stone:10}`) and **Emberforge Hearth** (`{embersteel_ingot:3,
-  stone:20}`), reusing the ingot economy with distinct costs. `applyTierVisual` now tints non-textured
-  stations (campfire) warmer per level (Lvl2 amber → Lvl3 → Lvl4 ember) via `CAMPFIRE_TIER_TINT`.
-- **5 new dishes** (`Cooking.ts`/`Items.ts`/`BootScene.ts`), HP-regen only, gentle ramp matching the
-  existing "not a 2x jump" philosophy (Lvl3 ≈ +3 HP/s, Lvl4 ≈ +3.5). Design rule (the user): each level
-  has a **biome-native best** dish craftable entirely from current-biome ingredients (no backtracking
-  to farm) — Seared Duskrunner Steak (Lvl3), Sunscorch Feast (Lvl4), plus a meatless Emberbloom Broth —
-  and **optional mixed** dishes that only spend a plentiful leftover (boar_meat) — Sunfruit-Glazed Ribs,
-  Ember-Glazed Skewer. `requiredCampfireTier` (already existed) = the level count.
-- **Cooking-menu rework** (`CookingMenu.ts`): the flat list is now **collapsible per-level sections,
-  descending (best on top)**, sorted within a tier by total heal, in a **scrollable** viewport (fixed
-  intro + fixed footer, scrollable middle). Scrolling uses **windowed rendering** — only rows/headers
-  intersecting the viewport are created (off-window rows never exist, so no phantom clicks) — plus a
-  geometry mask that clips the partial edge rows (mask clips rendering only, not input; both mask and
-  masked objects are `scrollFactor(0)` at fixed screen coords). Its own wheel handler scrolls only when
-  the pointer is over the panel; MainScene's global wheel handler gained a guard so the hotbar doesn't
-  cycle while scrolling the menu. **Cookable indicators** (the user's ask): each section header shows an
-  amber `● N ready` badge (recipes you can make now, even when collapsed), and a **"Show only cookable"**
-  filter checkbox. `CraftingMenu` category tabs gained a matching amber dot when a category has a
-  currently-craftable recipe. All amber (`#ffe08a`), never green (reserve red/green for buff deltas).
-- **Verified live** (`preview_eval`, tsc clean, no console errors): no-ladder apply=+1 + count level +
-  order-independence + duplicate-guard + correct offered set; weapon/armor keep the ladder
-  (`appliedUpgradeIds` null); applied-set survives destroy→pickup; campfire tint distinct per level; new
-  dishes visible/grouped tier-descending/heal-sorted; cook consumes correctly + eating applies a buff;
-  menu scrollable (wheel-over-panel-only, collapse re-clamps scroll, mask present, filter drops
-  non-cookable), panel stays fixed with camera far from origin; crafting tab-dots render. Dashboard
-  station-upgrade rows dropped the misleading "Lvl N" tag (now "+1 level" + a no-ladder note); campfire
-  cooking tier tag fixed for Lvl 3/4. `RECIPES.md` cooking + station-upgrade tables updated.
-  (Screenshot capture was unavailable — the preview tab stayed backgrounded — so the pixel-level mask
-  clip is visually unconfirmed, but per the plan the windowed render makes input correct regardless and
-  the mask/objects share fixed `scrollFactor(0)` screen coords.)
-
-> Older entries (Dev console commands, Phase 4b enhanced gear tier, Phase 4a Smelting economy, Badlands playtest batch, Biome 2
-> Phase 3 The Duneshaper, Phase 3 POI 2 Sunken Forge, Phase 3 Duskrunner Warren POI, Phase 2b Sandmaw,
-> 4-item playtest fix batch, Placeholder art pass, Biome 2 playtest fix batch #2, 16-item playtest fix
-> batch, Biome 2 Phase 2/1/0, Welcome overlay, and earlier) are in STATUS-archive.md.

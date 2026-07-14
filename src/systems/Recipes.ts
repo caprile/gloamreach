@@ -308,25 +308,29 @@ export const RECIPES: Recipe[] = [
   },
 
   // --- forged LIGHT armor: Duskhide set (biome 2 Phase 4, Workbench Lvl 3) ---
+  // Duskhide is the badlands' "no forge required" light path — crafted purely
+  // from beast drops (pelt / chitin / bone), zero metal, so a light build never
+  // has to smelt (S1 rebalance). Its base total (13) matches a fully-upgraded
+  // Gremlin (Lvl 3) set, then reforges into Emberhide.
   {
     id: "duskhide_hood",
     name: "Duskhide Hood",
-    description: "A light hood of tanned duskrunner hide with a steel band.",
+    description: "A light hood of tanned duskrunner hide bound with chitin.",
     category: "armor",
     tier: 1,
     requiresWorkbenchTier: 2,
-    costs: { duskrunner_pelt: 3, sunsteel_ingot: 1 },
+    costs: { duskrunner_pelt: 4, sandmaw_chitin: 1 },
     requiredSkills: [{ skill: "light_armor", level: 0 }],
     output: { kind: "item", itemId: "duskhide_hood", itemName: "Duskhide Hood" },
   },
   {
     id: "duskhide_vest",
     name: "Duskhide Vest",
-    description: "A layered duskrunner-hide vest with steel-buckled seams.",
+    description: "A layered duskrunner-hide vest reinforced with bone and chitin.",
     category: "armor",
     tier: 1,
     requiresWorkbenchTier: 2,
-    costs: { duskrunner_pelt: 5, sunsteel_ingot: 2, bones: 3 },
+    costs: { duskrunner_pelt: 6, bones: 3, sandmaw_chitin: 2 },
     requiredSkills: [{ skill: "light_armor", level: 0 }],
     output: { kind: "item", itemId: "duskhide_vest", itemName: "Duskhide Vest" },
   },
@@ -337,7 +341,7 @@ export const RECIPES: Recipe[] = [
     category: "armor",
     tier: 1,
     requiresWorkbenchTier: 2,
-    costs: { duskrunner_pelt: 3, sunsteel_ingot: 1, sandmaw_chitin: 1 },
+    costs: { duskrunner_pelt: 4, sandmaw_chitin: 2 },
     requiredSkills: [{ skill: "light_armor", level: 0 }],
     output: { kind: "item", itemId: "duskhide_leggings", itemName: "Duskhide Leggings" },
   },

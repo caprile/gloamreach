@@ -45,9 +45,9 @@ requires standing near a placed Workbench (`MainScene.isNearWorkbench`).
 | Sunsteel Helm | Armor | 1 | Yes (Lvl 3) | 2 Sunsteel Ingot, 2 Cragscale Plate | Heavy Armor 0 | Item (armor, helmet, **heavy**) |
 | Sunsteel Cuirass | Armor | 1 | Yes (Lvl 3) | 4 Sunsteel Ingot, 4 Cragscale Plate, 5 Bones | Heavy Armor 0 | Item (armor, chest, **heavy**) |
 | Sunsteel Greaves | Armor | 1 | Yes (Lvl 3) | 2 Sunsteel Ingot, 2 Cragscale Plate, 2 Sandmaw Chitin | Heavy Armor 0 | Item (armor, legs, **heavy**) |
-| Duskhide Hood | Armor | 1 | Yes (Lvl 3) | 3 Duskrunner Pelt, 1 Sunsteel Ingot | Light Armor 0 | Item (armor, helmet, light) |
-| Duskhide Vest | Armor | 1 | Yes (Lvl 3) | 5 Duskrunner Pelt, 2 Sunsteel Ingot, 3 Bones | Light Armor 0 | Item (armor, chest, light) |
-| Duskhide Leggings | Armor | 1 | Yes (Lvl 3) | 3 Duskrunner Pelt, 1 Sunsteel Ingot, 1 Sandmaw Chitin | Light Armor 0 | Item (armor, legs, light) |
+| Duskhide Hood | Armor | 1 | Yes (Lvl 3) | 4 Duskrunner Pelt, 1 Sandmaw Chitin | Light Armor 0 | Item (armor, helmet, light — no metal) |
+| Duskhide Vest | Armor | 1 | Yes (Lvl 3) | 6 Duskrunner Pelt, 3 Bones, 2 Sandmaw Chitin | Light Armor 0 | Item (armor, chest, light — no metal) |
+| Duskhide Leggings | Armor | 1 | Yes (Lvl 3) | 4 Duskrunner Pelt, 2 Sandmaw Chitin | Light Armor 0 | Item (armor, legs, light — no metal) |
 | Sunsteel Warhammer | Weapons | 1 | Yes (Lvl 3) | 4 Sunsteel Ingot, 2 Cragscale Plate, 4 Wood | Blunt 3 | Item (weapon, blunt — wide AOE sweep) |
 | Sunsteel Longsword | Weapons | 1 | Yes (Lvl 3) | 3 Sunsteel Ingot, 2 Wood | Slash 3 | Item (weapon, slash) |
 | Sunsteel Pike | Weapons | 1 | Yes (Lvl 3) | 3 Sunsteel Ingot, 3 Wood | Pierce 3 | Item (weapon, pierce) |
@@ -145,8 +145,11 @@ i-frames. `heavy_armor` XP accrues per worn piece on a kill.
 |---|---|---|---|---|---|
 | Sunsteel (base) | Heavy | 4 | 6 | 4 | 14 |
 | Embersteel (T2) | Heavy | 7 | 9 | 7 | 23 |
-| Duskhide (base) | Light | 3 | 4 | 3 | 10 |
+| Duskhide (base) | Light | 4 | 5 | 4 | 13 |
 | Emberhide (T2) | Light | 5 | 6 | 5 | 16 |
+
+Duskhide base (13) is tuned to match a fully-upgraded Gremlin (Lvl 3) set, so
+freshly-forged badlands light armor never feels worse than maxed biome-1 gear.
 
 ## Weapon Upgrades (`src/systems/WeaponUpgrades.ts`)
 
@@ -160,8 +163,10 @@ the weapon (backpack or hotbar).
 | Bone Knife | 4 / 350ms / 8 | Slash | +1 Dmg — 3 Bones | +2 Dmg — 8 Bones, 2 Gremlin Guck |
 | Primal Spear | 8 / 650ms / 16 | Pierce | +2 Dmg — 3 Wood, 2 Stone, 3 Bones | +3 Dmg — 5 Wood, 4 Stone, 3 Gremlin Guck |
 
-Max damage at Lvl 3: Stone Club 9, Bone Knife 7, Primal Spear 12 (before the
-weapon-skill damage multiplier, `Skills.weaponSkillDamageMultiplier`).
+Max damage at Lvl 3: Stone Club 9, Bone Knife 7, Primal Spear 13 (before the
+weapon-skill damage multiplier, `Skills.weaponSkillDamageMultiplier`). The base
+forged (Sunsteel) weapons all clear this 13, so freshly-forged gear always
+out-hits a fully-upgraded starter weapon.
 
 ### Forged weapons (biome 2 Phase 4) — one per melee damage type
 
@@ -171,15 +176,15 @@ weapon (see the crafting table), not right-click upgrades. AOE arc widths in
 
 | Weapon | Dmg / Cooldown / Stamina | Damage Type | Arc (½angle / range / falloff) |
 |---|---|---|---|
-| Sunsteel Warhammer | 14 / 800ms / 20 | Blunt | 55° / 62 / 0.75 (widest sweeper) |
-| Sunsteel Longsword | 10 / 480ms / 12 | Slash | 30° / 40 / 0.55 |
-| Sunsteel Pike | 12 / 620ms / 15 | Pierce | 40° / 56 / 0.65 |
-| Embersteel Warhammer | 20 / 800ms / 22 | Blunt | 58° / 66 / 0.78 |
-| Embersteel Longsword | 15 / 470ms / 13 | Slash | 32° / 42 / 0.58 |
-| Embersteel Pike | 17 / 610ms / 16 | Pierce | 42° / 58 / 0.68 |
-| Ember Brand | 14 / 520ms / 15 | **Magic** | 45° / 52 / 0.6 (fire washes over foes) |
+| Sunsteel Warhammer | 17 / 800ms / 20 | Blunt | 55° / 62 / 0.75 (widest sweeper) |
+| Sunsteel Longsword | 14 / 480ms / 12 | Slash | 30° / 40 / 0.55 |
+| Sunsteel Pike | 15 / 620ms / 15 | Pierce | 40° / 56 / 0.65 |
+| Embersteel Warhammer | 23 / 800ms / 22 | Blunt | 58° / 66 / 0.78 |
+| Embersteel Longsword | 19 / 470ms / 13 | Slash | 32° / 42 / 0.58 |
+| Embersteel Pike | 20 / 610ms / 16 | Pierce | 42° / 58 / 0.68 |
+| Ember Brand | 17 / 520ms / 15 | **Magic** | 45° / 52 / 0.6 (fire washes over foes) |
 
-The **Ember Brand** is the first magic weapon (rare-ore-exclusive). Its raw 14 is
+The **Ember Brand** is the first magic weapon (rare-ore-exclusive). Its raw 17 is
 mid-pack (DPS ≈ the Embersteel Pike on a neutral target), but `magic` type routes
 through enemy resistances — **neutral** vs most badlands beasts, **resisted**
 (~×0.4–0.5) by the gloam-casters (Hexlings / the Duneshaper). A sidegrade with an
@@ -235,18 +240,22 @@ how much to run via a slider (output-amount based, see `DryingRackMenu.ts`).
 ## Smelting — Smelter (`src/systems/Processing.ts` `SMELT_RECIPES`) — biome 2 Phase 4
 
 `A + B = Ingot`: ore (loaded into the Smelter's input slot) **plus Hex Essence
-fuel** consumed from the backpack. Reuses the Drying Rack's menu (same
-`ProcessingStation`, tier- and fuel-aware). The rare recipe needs an **Ember
-Crucible**–upgraded **Smelter Lvl 2** (`minStationTier: 1`, gated on the Gremlin
-King's Heart — see Station Upgrades).
+fuel loaded into its own dedicated fuel slot** (S1 — was pulled silently from the
+backpack). Reuses the Drying Rack's menu (same `ProcessingStation`, tier- and
+fuel-aware). The rare recipe needs an **Ember Crucible**–upgraded **Smelter Lvl
+2** (`minStationTier: 1`, gated on the Gremlin King's Heart — see Station
+Upgrades).
 
 | Ore | Fuel (per ingot) | Output | Ratio | Smelter Tier |
 |---|---|---|---|---|
-| Sunscorch Ore (common, scattered badlands) | 1 Hex Essence | Sunsteel Ingot | 2 : 1 | Any (Lvl 1) |
-| Cinderforged Ore (rare veins + Sunken Forge POI) | 2 Hex Essence | Embersteel Ingot | 2 : 1 | Lvl 2 (Ember Crucible) |
+| Sunscorch Ore (common, scattered badlands) | 1 Hex Essence | Sunsteel Ingot | 1 : 1 | Any (Lvl 1) |
+| Cinderforged Ore (rare veins + Sunken Forge POI) | 1 Hex Essence | Embersteel Ingot | 1 : 1 | Lvl 2 (Ember Crucible) |
 
-Clay (Smelter build material), Sunscorch Ore, and rare Cinderforged veins are
-mineable `mine` nodes scattered in the badlands (Stone Pickaxe, non-respawning).
+Ratio is **1 ore + 1 hex → 1 ingot** (S1 rebalance — the old 2:1 made forging
+grindy). Clay (Smelter build material), Sunscorch Ore, and rare Cinderforged
+veins are mineable `mine` nodes scattered in the badlands (Stone Pickaxe,
+non-respawning). Node yields (S1): Clay 44×2–3, Sunscorch 60×3–5, Cinderforged
+14×2–4 scattered + the Sunken Forge POI deposits at 4–7 each.
 
 ## Cooking — Campfire (`src/systems/Cooking.ts`)
 
