@@ -852,6 +852,9 @@ export class MainScene extends Phaser.Scene {
     this.equippedWeaponTier = 0;
     this.hotbar = new Hotbar();
     this.equipment = new Equipment();
+    // Let crafting count/consume EQUIPPED pieces toward recipe ingredients
+    // (T2 reforge recipes take the base forged piece you may have worn).
+    this.crafting.setEquipment(this.equipment);
     this.eventLog = new EventLog();
     this.craftingMenuLastNearWorkbench = null;
     this.dryingRacks = [];
@@ -6543,8 +6546,10 @@ export class MainScene extends Phaser.Scene {
 
   private canAffordBatch(recipe: Recipe, batches: number): boolean {
     if (this.devNoBuildCost) return true;
+    // availableFor counts EQUIPPED pieces too, so a T2 reforge consuming a
+    // worn base piece isn't blocked here (matches Crafting.canAfford/craft).
     return (Object.entries(recipe.costs) as [ResourceType, number][]).every(
-      ([resource, amount]) => this.backpack.count(resource) >= amount * batches,
+      ([resource, amount]) => this.crafting.availableFor(resource, this.backpack) >= amount * batches,
     );
   }
 
