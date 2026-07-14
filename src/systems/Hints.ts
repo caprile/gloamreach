@@ -83,7 +83,7 @@ const HINT_DEFS: Record<HintId, HintEntry> = {
   // Objective/place nudges — vague, in-character, no walkthrough.
   altar_found: {
     kind: "hint",
-    text: "A war camp — walls, watch-fires, the lot. Whatever they've dug in to guard must be worth taking. I'm not strong enough to find out yet.",
+    text: "A war camp — walls, watch-fires, the lot. Whatever they've dug in to guard must be worth taking. I'll need to gear up before I storm it.",
   },
   totem_ready: {
     kind: "hint",

@@ -87,7 +87,7 @@ import {
   weaponTierDamageBonus,
   type WeaponUpgradeDef,
 } from "../systems/WeaponUpgrades";
-import { toolUpgradesForItem } from "../systems/ToolUpgrades";
+import { toolUpgradesForItem, TOOL_UPGRADES } from "../systems/ToolUpgrades";
 import { EventLog } from "../systems/EventLog";
 import { Biome, type ZoneType } from "../systems/Biome";
 import { Equipment, EQUIP_SLOTS, type EquipSlot, type EquippedItem } from "../systems/Equipment";
@@ -475,6 +475,11 @@ export class MainScene extends Phaser.Scene {
   // system, so they need their own one-shot discovery tracking (mirrors
   // Crafting's internal discoveredIds, just for a different data table).
   private discoveredUpgradeIds = new Set<string>();
+  // Which TOOL_UPGRADES.id's have had their "New Upgrade Unlocked!" toast fired.
+  // Tool upgrades (ToolUpgrades.ts) live outside the Recipe/Crafting system too,
+  // so they need the same one-shot discovery tracking as discoveredUpgradeIds —
+  // a separate set only because they use a different data table (mirrors it).
+  private discoveredToolUpgradeIds = new Set<string>();
   // Cook recipes (Cooking.ts) discovered so far — one-shot "New Recipe
   // Unlocked!" toast tracking, same as discoveredUpgradeIds but for the cook
   // table. Tier-0 dishes unlock on first campfire placement; tier-1 on upgrade.
@@ -838,6 +843,7 @@ export class MainScene extends Phaser.Scene {
     this.backpack = new ItemContainer(BACKPACK_CAPACITY);
     this.discovered = new Set<string>();
     this.discoveredUpgradeIds = new Set<string>();
+    this.discoveredToolUpgradeIds = new Set<string>();
     this.discoveredCookRecipeIds = new Set<string>();
     this.campfireMaxTierSeen = -1;
     this.equippedTool = null;
@@ -2065,10 +2071,12 @@ export class MainScene extends Phaser.Scene {
       const rackBagIndex = this.dryingRackMenu.slotIndexAt(pointer.x, pointer.y);
       if (rackBagIndex !== null) {
         // Click-in-place on the rack's own backpack grid: double-click or
-        // Ctrl-click quick-loads the whole stack into the rack's input,
-        // mirroring the existing right-click quickLoad gesture.
+        // Ctrl-click quick-loads the whole stack into the station, mirroring
+        // the existing right-click quickLoad gesture. quickLoadStation routes
+        // to the input OR fuel slot by item kind, so Ctrl-click works on the
+        // Smelter's Hex Essence fuel too (not just the input).
         if (src.container === this.backpack && src.index === rackBagIndex) {
-          if (this.isQuickMoveClick(pointer, `rack:${rackBagIndex}`)) this.loadRackInput(this.backpack, rackBagIndex);
+          if (this.isQuickMoveClick(pointer, `rack:${rackBagIndex}`)) this.quickLoadStation(this.backpack, rackBagIndex);
           return;
         }
         moveSlot(src.container, src.index, this.backpack, rackBagIndex);
@@ -6355,6 +6363,18 @@ export class MainScene extends Phaser.Scene {
       if (this.discoveredUpgradeIds.has(upg.id)) continue;
       if (!this.upgradeIngredientsKnown(upg)) continue;
       this.discoveredUpgradeIds.add(upg.id);
+      const icon = itemDef(upg.appliesToItemKey)?.texture;
+      this.eventLog.add("recipe", `New Upgrade Unlocked! ${upg.name}`, icon);
+    }
+    // Tool upgrades (ToolUpgrades.ts) sit outside the Recipe/Crafting system in
+    // the same way station upgrades do, so they get the identical one-shot
+    // discovery announcement — becomes available once its ingredients are known
+    // and the tool it targets has been discovered (upgradeIngredientsKnown's
+    // appliesToItemKey gate covers the latter).
+    for (const upg of TOOL_UPGRADES) {
+      if (this.discoveredToolUpgradeIds.has(upg.id)) continue;
+      if (!this.upgradeIngredientsKnown(upg)) continue;
+      this.discoveredToolUpgradeIds.add(upg.id);
       const icon = itemDef(upg.appliesToItemKey)?.texture;
       this.eventLog.add("recipe", `New Upgrade Unlocked! ${upg.name}`, icon);
     }
