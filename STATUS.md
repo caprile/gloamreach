@@ -8,10 +8,11 @@ beating the Duneshaper, built as **4 parallel worktree agents** (balance, crafti
 discovery/UI, relic economy). Forged armor up (Emberhide 16→23, Embersteel 23→32), stone costs
 −30-40%, ~1.4-1.6× faster leveling, new Duskrunner Skewer dish; equipped pieces now count toward
 reforge recipes; per-tier relic roll buttons; **relic refund reworked to 50% of a discarded roll's
-trophy cost** (raw→0, refined→1 — never nets shards). **In progress:** Session 2 (enemy
-wander-anchor + Hexling: neutral-to-physical, middle-bolt-fire, 3-5 hex essence) and Session 3
-(populate the empty outer world with biome-appropriate nodes + enemies) are queued. See the PB1
-entry below + [[survivor-rpg-relics]].
+trophy cost** (raw→0, refined→1 — never nets shards). **Session 2 also shipped** (2026-07-14):
+enemy **wander-anchor** (Boar/Cragscale/free Gremlings sample idle wander from spawn, no more
+drift) + **Hexling** rework (neutral to physical, center-bolt-fire / outer-two-physical volley,
+drops 3-5 hex essence). **In progress:** Session 3 (populate the empty outer world with
+biome-appropriate nodes + enemies) is queued. See the PB1 entry below + [[survivor-rpg-relics]].
 Prior: **S7 — pre-push inventory/dev-cmd tweaks** (2026-07-13, Opus): search-box insta-clear `✕`
 button, `nobuildcost` TEMPORARILY lists all recipes (display-only), taller backpack grid
 (`BACKPACK_ROWS 6 → 15`). See the S7 entry below.
@@ -223,13 +224,14 @@ below + [[survivor-rpg-dev-console]].
 
 > Older entries in STATUS-archive.md.
 
-### PB1 — Post-2nd-boss playtest fix batch, Session 1 (2026-07-14)
+### PB1 — Post-2nd-boss playtest fix batch, Sessions 1-2 (2026-07-14)
 
-First of a 3-session triage off a 21-item playtest dump from beating the Duneshaper
-(badlands final boss). Session 1 = the fix/tuning slice, built as **4 parallel worktree
-agents** (disjoint files, merged into `main` with zero conflicts, `tsc` clean, boots +
-runs verified live). Sessions 2 (enemy wander-anchor + Hexling) and 3 (populate the empty
-outer world) are queued.
+A 3-session triage off a 21-item playtest dump from beating the Duneshaper (badlands final
+boss). **Sessions 1-2 shipped; Session 3 (populate the empty outer world with
+biome-appropriate nodes + enemies) is queued.** Session 1 = the fix/tuning slice, built as
+**4 parallel worktree agents** (disjoint files, merged into `main` with zero conflicts).
+Session 2 = enemy AI + Hexling, done inline. Both `tsc` clean, verified live via
+`preview_eval`.
 
 - **Balance (A):** forged armor up — Sunsteel heavy 14→**20**, Duskhide light 13→**15**,
   Embersteel heavy 23→**32**, Emberhide light 16→**23**. Stone costs down ~30-40% across
@@ -249,6 +251,19 @@ outer world) are queued.
   keyed off a stored pending trophy). A refund is only ever half a *paid* cost, so rerolling
   can't net shards. Verified live against the real `RelicManager` (raw→0, refined-T1→1 gloam,
   refined-T2→1 ember). Also fixed the auto-declined path naming the wrong relic as discarded.
+- **Enemy wander-anchor (Session 2):** Boar/Cragscale drew each idle wander target relative to
+  their *current* position (incremental drift) and never returned toward spawn — a bad run of
+  targets walked them far off. They now sample wander targets from a stored **spawn point** each
+  cycle (the RangedGremlin/Hexling pattern; `WANDER_RADIUS` 90/70), so a pulled-away enemy gently
+  drifts home. Free `MeleeGremling`s now **default their `wanderAnchor` to spawn** (was null →
+  drift); shack guards' explicit anchor is unchanged.
+- **Hexling (Session 2):** neutral to physical now (dropped the flat 0.5 slash/blunt/pierce
+  resist that made an armor-bypassing caster un-killable with a normal weapon; keeps its magic
+  **and** fire ×1.5 weaknesses). The 3-bolt volley mixes damage types — **center bolt = fire**
+  (armor-bypassing, the shot to dodge), **outer two = physical** (armor applies), with a distinct
+  `hex_bolt_phys` texture. Drops **3-5** hex essence (elite **6-8**, was 1/2). `Projectile.damageType`
+  widened `DamageType`→`IncomingDamageType` so a bolt can carry fire. Verified live (resist
+  multipliers, the fire/physical/texture split off a real `castBolt`, anchors on spawned enemies).
 
 RECIPES.md + dashboard relic prose updated. See [[survivor-rpg-relics]].
 
