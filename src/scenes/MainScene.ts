@@ -7885,12 +7885,13 @@ export class MainScene extends Phaser.Scene {
         this.refreshHealthBar();
         this.eventLog.add("info", "[DEV] Healed to full");
       },
-      // A pure COST cheat: while on, crafting/upgrading is free (no ingredient
-      // deduction, affordability checks pass) AND station/armor/weapon upgrades
-      // become available even without their mats discovered. It does NOT unlock
-      // recipes — you still craft what you've discovered, just for free — so
-      // toggling it off leaves discovery exactly as it was (it used to call
-      // crafting.unlockAll(), which permanently revealed every recipe).
+      // A cost + temporary-unlock cheat: while on, crafting/upgrading is free
+      // (no ingredient deduction, affordability checks pass), station/armor/
+      // weapon upgrades become available even without their mats discovered, AND
+      // the crafting menu lists EVERY recipe so anything can be made. The unlock
+      // is display-only (CraftingMenu.visibleRecipes) — it never mutates the
+      // real discovered set, so toggling it off snaps the list back to what was
+      // genuinely discovered rather than permanently revealing every recipe.
       nobuildcost: (on?: boolean) => {
         this.devNoBuildCost = on ?? !this.devNoBuildCost;
         this.refreshDiscovery();

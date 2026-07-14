@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { isPlaceableRecipe, outputKey, type Recipe, type RecipeCategory } from "../systems/Recipes";
+import { isPlaceableRecipe, outputKey, RECIPES, type Recipe, type RecipeCategory } from "../systems/Recipes";
 import type { Crafting } from "../systems/Crafting";
 import type { ResourceType } from "../systems/Inventory";
 import type { ItemContainer } from "../systems/ItemContainer";
@@ -186,6 +186,15 @@ export class CraftingMenu {
     this.rows = [];
   }
 
+  // The recipes the panel lists. Normally the discovered set; while the DEV
+  // `nobuildcost` cheat is on, EVERY recipe is shown so the player can craft
+  // anything for free. This is display-only — it never touches Crafting's
+  // discoveredIds, so turning the cheat off snaps the list right back to what
+  // was genuinely discovered (nothing is permanently unlocked).
+  private visibleRecipes(): Recipe[] {
+    return this.deps.noBuildCost() ? RECIPES : this.deps.crafting.discoveredRecipes();
+  }
+
   private render(): void {
     this.clearRows();
     const x0 = this.panelX + 12;
@@ -196,9 +205,9 @@ export class CraftingMenu {
     // right now (ingredients + proximity) — drives a small amber dot on the tab
     // so a collapsed (unselected) tab still signals "there's something makeable
     // in here." Amber, NOT green (reserve red/green for buff/debuff deltas).
-    const discovered = this.deps.crafting.discoveredRecipes();
+    const visible = this.visibleRecipes();
     const craftableCats = new Set(
-      discovered.filter((r) => isCraftable(this.deps, r)).map((r) => r.category),
+      visible.filter((r) => isCraftable(this.deps, r)).map((r) => r.category),
     );
     for (const cat of CATEGORIES) {
       const active = cat.id === this.activeCategory;
@@ -230,8 +239,7 @@ export class CraftingMenu {
     }
 
     let y = tabY + 28;
-    const recipes = this.deps.crafting
-      .discoveredRecipes()
+    const recipes = this.visibleRecipes()
       .filter((r) => r.category === this.activeCategory)
       .sort((a, b) => {
         const aAfford = isCraftable(this.deps, a) ? 0 : 1;

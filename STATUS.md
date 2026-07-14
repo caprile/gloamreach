@@ -2,7 +2,13 @@
 
 ## Current State
 
-_Living snapshot — edit in place, never append. Last shipped: **S5 + S6 — gating/dev-cmd fixes,
+_Living snapshot — edit in place, never append. Last shipped: **S7 — pre-push inventory/dev-cmd
+tweaks** (2026-07-13, Opus): search-box insta-clear `✕` button, confirmed search state resets on
+close, `nobuildcost` now TEMPORARILY lists all recipes (display-only via
+`CraftingMenu.visibleRecipes()` — reverts cleanly when toggled off, never mutates the discovered
+set), and a **taller backpack grid** (`BACKPACK_ROWS 6 → 15`) so a per-biome tab shows every row
+with no scroll. See the S7 entry below.
+Prior: **S5 + S6 — gating/dev-cmd fixes,
 UX polish + Inventory rework** (2026-07-13, Opus). The final two triaged badlands-playtest
 sessions (`.claude/plans/badlands-playtest-triage.md`), merged — **the entire 6-session triage
 batch (S1–S6) is now done.** The S6 "inventory sort" item grew into a full **inventory rework**
@@ -209,6 +215,31 @@ below + [[survivor-rpg-dev-console]].
 ## Recent Entries
 
 > Older entries in STATUS-archive.md.
+
+### S7 — Pre-push inventory/dev-cmd tweaks (2026-07-13, Opus)
+
+Four small final tweaks before push, no new mechanic:
+- **Taller backpack grid** — `BACKPACK_ROWS 6 → 15` (viewport ~252px → ~720px). Each
+  biome holds ~45-48 unique items (~9-11 rows at 6 cols), so a per-biome tab
+  (Forest/Badlands) now shows **every row with no scroll**; panel bottom lands ~y=898,
+  still clear of the bottom hotbar (~960). The "All" tab (93 unique items) still scrolls
+  a little (~284px) — expected for the everything-view; only a wider grid would make it
+  scroll-free too. Cols unchanged (6). Verified live with one of every item loaded.
+- **Search-box insta-clear button** — the Inventory search field now renders a `✕` at its
+  right edge whenever there's a query (`InventoryMenu.renderSearch`), wiping the search
+  instantly on click and keeping the box focused so the player can retype.
+- **Search state doesn't persist on close** — confirmed already handled: `teardown()`
+  (run on every close path via `toggle()`) resets `search`/`searchFocused`/`scrollY`/
+  `activeTab`. Verified live (`ore` → close → empty → reopen → empty).
+- **`nobuildcost` now TEMPORARILY unlocks all recipes** (reverses the S5 de-invert, but
+  cleanly): while the cheat is on, `CraftingMenu.visibleRecipes()` lists **all** `RECIPES`
+  instead of just `crafting.discoveredRecipes()` — display-only, so it never mutates the
+  discovered set. Toggling off snaps the list straight back (verified: 8 discovered → 41
+  all → 8, discovered set untouched). Free-craft/free-upgrade behavior unchanged.
+
+Verified live via `preview_eval` + screenshots (full inventory with all sections +
+wheel-scroll + paper-doll/Combat/Relics columns; clear button; recipe unlock revert).
+`tsc` clean, no console errors.
 
 ### S5 + S6 — Gating/dev-cmd fixes, UX polish + Inventory rework (2026-07-13, Opus)
 

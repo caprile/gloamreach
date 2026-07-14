@@ -97,7 +97,13 @@ const SLOT = 46;
 const GAP = 6;
 const CELL = SLOT + GAP;
 export const BACKPACK_COLS = 6;
-export const BACKPACK_ROWS = 6; // sizes the grid VIEWPORT height (not the container)
+// Sizes the grid VIEWPORT height (not the container). Each biome tab holds
+// ~45-48 unique items => ~9-11 rows at 6 cols (~590-690px of content), so 15
+// rows (~720px viewport) lets a per-biome tab show every row with no scroll.
+// The panel bottom then lands ~y=898, still clear of the bottom hotbar (~960).
+// The "All" tab (93 items) still scrolls a little — expected for the
+// everything-view; a wider grid would be needed to make it scroll-free too.
+export const BACKPACK_ROWS = 15;
 // The backpack container is now effectively unlimited (auto-organized tabbed
 // view, no manual arranging) — sized generously so a single hardcore run can't
 // realistically overflow it. The 6x6 grid is just the on-screen viewport into
@@ -173,8 +179,11 @@ const RELIC_FX_MAX_ROWS = 9;
 const RELIC_FX_BOTTOM = RELIC_FX_Y + 18 + RELIC_FX_MAX_ROWS * RELIC_FX_ROW_H;
 
 export const PANEL_W = RELICS_X + RELICS_W - PANEL_X + 12;
-// Tall enough for whichever column reaches lowest — the backpack grid, or the
-// relic-effects list under the Relics column.
+// Tall enough for whichever column reaches lowest — the backpack grid (now 15
+// rows), or the relic-effects list under the Relics column. NOTE: because the
+// backpack is much taller than the Equipment/Combat/Relics columns, the lower-
+// right area of the panel (below RELIC_FX_BOTTOM) is intentionally left EMPTY
+// for now — reserved for a future run/character/set-bonus readout (deferred).
 export const PANEL_H = Math.max(BACKPACK_Y + BACKPACK_H + 20, RELIC_FX_BOTTOM + 8) - PANEL_Y;
 
 // Trash drop target: sits below the armor grid, in the panel's otherwise-
@@ -771,6 +780,29 @@ export class InventoryMenu {
       0,
       0.5,
     );
+    // Insta-clear "✕" — only shown when there's a query to clear. Wipes the
+    // search immediately (keeps the box focused so the player can retype).
+    if (hasText) {
+      const clear = this.scene.add
+        .text(BACKPACK_X + BACKPACK_W - 8, BP_SEARCH_Y + BP_SEARCH_H / 2, "✕", {
+          fontFamily: "monospace",
+          fontSize: "13px",
+          color: "#8a93a3",
+        })
+        .setOrigin(1, 0.5)
+        .setScrollFactor(0)
+        .setDepth(3002)
+        .setInteractive({ useHandCursor: true })
+        .on("pointerover", () => clear.setColor("#e8ecf2"))
+        .on("pointerout", () => clear.setColor("#8a93a3"))
+        .on("pointerdown", () => {
+          this.search = "";
+          this.scrollY = 0;
+          this.searchFocused = true;
+          this.render();
+        });
+      this.rows.push(clear);
+    }
   }
 
   // The sectioned, scrollable backpack grid. Items are pulled from the flat
