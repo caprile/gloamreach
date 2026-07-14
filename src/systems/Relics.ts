@@ -419,34 +419,38 @@ export interface ChoiceResolution {
   refundShardAmount: number;
 }
 
-// Shard refund on displacing a relic during a family conflict.
+// Shard refund when a family conflict DISCARDS the just-rolled relic.
 //
 // EXPLOIT FIX (playtest — "am I netting ember shards?"): the old formula
-// (REFUND_BASE[rarity] × powerTier) paid REAL shards — e.g. displacing a
-// Common/T2 relic refunded 2 Ember Shards. But the trophy that produced the
-// new relic drops FREE from an elite (zero shard cost), so rolling into an
-// owned family and displacing was a NET shard source: roll → auto-replace →
-// +2 Ember, farmable indefinitely. Since a RelicInstance doesn't track whether
-// it came from a raw (free) or refined (shard-costed) trophy, there's no way to
-// scale the refund to actual acquisition cost — and ANY positive refund on the
-// free-trophy path is a net gain. So the displacement refund is now ZERO: an
-// automatic replace/decline/choice consumes the trophy and gives nothing back
-// (a wasted roll is just a wasted roll), which is the only accounting that
-// makes displacing/rerolling provably never a shard source. The dominance
-// behavior (auto-replace/decline/choice) is unchanged — only the payout is
-// removed. The refund plumbing (RollResult.refundShard*, previewShardRefund,
-// resolveChoice) is kept intact so a future explicit "dismantle for shards"
-// sink can reuse it, and the UI simply omits any zero-amount refund line.
+// (REFUND_BASE[rarity] × powerTier) paid REAL shards on ANY displacement — but
+// the trophy that produced the new relic drops FREE from an elite (zero shard
+// cost), so rolling into an owned family and displacing the OLD relic was a NET
+// shard source (roll → auto-replace → +shards, farmable). The rule now (locked
+// with the user — "50% of the shard cost if the created relic doesn't replace one"):
+//   • Replacing/upgrading (verdict "better" / Keep New) refunds NOTHING — getting
+//     the better relic IS the reward, and the displaced OLD relic's cost is
+//     unknowable anyway.
+//   • Discarding the JUST-ROLLED relic (verdict "worse_or_equal" / Keep Old)
+//     refunds 50% (floored) of the shards that trophy COST to make. Raw trophies
+//     drop free (refund 0); only REFINED trophies — which cost shards at the
+//     Relic Forge / Ember Kiln — pay half back, softening a wasted refined roll.
+// Together this keeps rerolling from ever netting shards while still returning
+// value on a costly refined-trophy roll that didn't make the loadout.
 function shardKeyForTier(tier: number): string {
   return tier >= 2 ? "ember_shard" : "gloam_shard";
 }
-function shardRefund(id: string, powerTier: number): { refundShardKey: string; refundShardAmount: number } {
-  return { refundShardKey: shardKeyForTier(powerTier), refundShardAmount: 0 };
+// Refund for discarding the just-rolled relic — 50% (floored) of the trophy's
+// shard cost. A refined trophy's cost is its REFINE_RECIPES row; a raw trophy
+// isn't a refine output, so it refunds nothing.
+function trophyDiscardRefund(trophyKey: string): { refundShardKey: string; refundShardAmount: number } {
+  const recipe = REFINE_RECIPES.find((r) => r.output === trophyKey);
+  if (!recipe) return { refundShardKey: "gloam_shard", refundShardAmount: 0 };
+  return { refundShardKey: recipe.shardKey, refundShardAmount: Math.floor(recipe.shardCount * 0.5) };
 }
-// Public wrapper — lets UI preview a refund amount before the player commits
-// to a choice (e.g. the family-conflict "Keep New / Keep Old" prompt).
-export function previewShardRefund(id: string, powerTier: number): { refundShardKey: string; refundShardAmount: number } {
-  return shardRefund(id, powerTier);
+// A displacement that keeps the new relic's slot at the OLD relic's expense
+// gives nothing back — see the block above.
+function noRefund(tier: number): { refundShardKey: string; refundShardAmount: number } {
+  return { refundShardKey: shardKeyForTier(tier), refundShardAmount: 0 };
 }
 
 // Dominance comparison between two relic instances (already scaled to their
@@ -545,6 +549,10 @@ export class RelicManager {
   // The very first roll of a run is a guaranteed success (the "hook") — this
   // flips true after the first roll of any kind.
   private firstRollDone = false;
+  // The trophy key behind an unresolved "choice" verdict, so resolveChoice() can
+  // compute the Keep-Old (discard-new) refund from its shard cost. Only one
+  // choice is ever pending at a time (the forge blocks rolls until resolved).
+  private pendingChoiceTrophyKey: string | null = null;
 
   count(): number {
     return Object.keys(this.instances).length;
@@ -608,15 +616,18 @@ export class RelicManager {
 
     const verdict = compareInstances(id, t.powerTier, existing.id, existing.powerTier);
     if (verdict === "better") {
-      const refund = shardRefund(existing.id, existing.powerTier);
+      // New relic wins the slot — the OLD one is displaced with no refund.
       this.instances[family] = { id, powerTier: t.powerTier };
-      return { ...base, familyConflict: { family, oldId: existing.id, oldPowerTier: existing.powerTier, verdict: "replaced", ...refund } };
+      return { ...base, familyConflict: { family, oldId: existing.id, oldPowerTier: existing.powerTier, verdict: "replaced", ...noRefund(existing.powerTier) } };
     }
     if (verdict === "worse_or_equal") {
-      const refund = shardRefund(id, t.powerTier);
+      // New relic is discarded — refund half its trophy's shard cost.
+      const refund = trophyDiscardRefund(trophyKey);
       return { ...base, familyConflict: { family, oldId: existing.id, oldPowerTier: existing.powerTier, verdict: "declined", ...refund } };
     }
-    // Ambiguous — leave ownership untouched until the caller resolves it.
+    // Ambiguous — leave ownership untouched until the caller resolves it, and
+    // remember the trophy so resolveChoice() can price a Keep-Old refund.
+    this.pendingChoiceTrophyKey = trophyKey;
     return { ...base, familyConflict: { family, oldId: existing.id, oldPowerTier: existing.powerTier, verdict: "choice" } };
   }
 
@@ -626,13 +637,25 @@ export class RelicManager {
   resolveChoice(family: RelicFamily, keepNew: boolean, newId: string, newPowerTier: number): ChoiceResolution | null {
     const existing = this.instances[family];
     if (!existing) return null;
+    const trophyKey = this.pendingChoiceTrophyKey;
+    this.pendingChoiceTrophyKey = null;
     if (keepNew) {
-      const refund = shardRefund(existing.id, existing.powerTier);
+      // Old relic displaced — no refund (the upgrade is the reward).
       this.instances[family] = { id: newId, powerTier: newPowerTier };
-      return { discardedId: existing.id, ...refund };
+      return { discardedId: existing.id, ...noRefund(existing.powerTier) };
     }
-    const refund = shardRefund(newId, newPowerTier);
-    return { discardedId: newId, ...refund };
+    // Just-rolled relic discarded — refund half its trophy's shard cost.
+    return { discardedId: newId, ...trophyDiscardRefund(trophyKey ?? "") };
+  }
+
+  // Preview the two refund outcomes for the pending "Keep New / Keep Old" prompt
+  // (Keep New displaces the OLD relic → nothing; Keep Old discards the just-
+  // rolled relic → half its trophy's shard cost). Reads the stored pending trophy.
+  previewChoiceRefunds(): {
+    keepNew: { refundShardKey: string; refundShardAmount: number };
+    keepOld: { refundShardKey: string; refundShardAmount: number };
+  } {
+    return { keepNew: noRefund(1), keepOld: trophyDiscardRefund(this.pendingChoiceTrophyKey ?? "") };
   }
 
   // Owned relics, one per family, ordered by ascending rarity then name — for

@@ -314,14 +314,21 @@ where possible:
   a **Keep New / Keep Old** prompt and blocks further rolls until you choose; the
   other is discarded.
 
-**No shard refund on displacement** (playtest exploit fix): a discarded relic
-gives **nothing** back. The old design refunded Gloam/Ember Shards scaled by the
-displaced relic's rarity × tier, but the trophy that produced the new relic drops
-free from elites, so rolling into an owned family and displacing was a **net shard
-source** (roll → auto-replace → free shards, farmable). Since a relic doesn't
-track whether it came from a free (raw) or shard-costed (refined) trophy, any
-positive refund on that path is a net gain — so displacement now yields zero. A
-wasted roll is simply a wasted trophy.
+**Shard refund = 50% of a discarded roll's trophy cost** (playtest exploit fix).
+The old design refunded Gloam/Ember Shards on *any* displacement scaled by the
+displaced relic's rarity × tier — but the trophy that produced the new relic
+drops free from elites, so rolling into an owned family and displacing the old
+relic was a **net shard source** (roll → auto-replace → free shards, farmable).
+The rule now:
+- **Upgrade / Keep New** (the new relic wins the slot, old relic displaced) →
+  **no refund**. Getting the better relic is the reward.
+- **Auto-declined / Keep Old** (the just-rolled relic is discarded) → refund
+  **50% (floored) of the shards that trophy cost to make**. Raw trophies drop
+  free → refund **0**; only **refined** trophies (2 shards to make) pay back
+  **1** shard of their tier's currency (Gloam T1 / Ember T2).
+
+Because a refund is only ever half of a *paid* cost, rerolling can never net
+shards, but a wasted refined-trophy roll returns some value.
 
 **Magnitudes were trimmed** this pass (locked decision 8) — every relic's effect
 numbers are scaled to ~0.625× their original values (e.g. Common damage

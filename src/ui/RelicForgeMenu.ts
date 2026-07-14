@@ -17,7 +17,6 @@ import {
   REFINE_RECIPES,
   ownedRefineInput,
   canAffordRefine,
-  previewShardRefund,
   GLOAM_TO_EMBER_RATIO,
   type RefineRecipe,
   type RollResult,
@@ -690,8 +689,12 @@ export class RelicForgeMenu {
     // Name the relic this would displace — "Forged: {new} [rarity]" is already
     // on the line above, so this reads as "{new} forged … Replace {old}?".
     this.addText(x, y, `Replace ${oldDef.name}?`, 11, "#c8a05a");
-    const newRefund = previewShardRefund(oldId, oldTier);
-    const oldRefund = previewShardRefund(newId, newTier);
+    // Keep New displaces the OLD relic (no refund); Keep Old discards the just-
+    // rolled relic (half its trophy's shard cost). The manager prices both off
+    // the pending trophy — the relic ids/tiers here are only for the labels.
+    const refunds = this.deps.relics.previewChoiceRefunds();
+    const newRefund = refunds.keepNew;
+    const oldRefund = refunds.keepOld;
     const rowY = y + 16;
     const btnW = (this.panelW - 32 - 10) / 2;
     const btnH = 52;

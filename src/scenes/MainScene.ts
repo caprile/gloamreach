@@ -2531,8 +2531,13 @@ export class MainScene extends Phaser.Scene {
       // grant the refund now. "choice" is left unresolved (ownership
       // untouched) until the player picks via the forge menu's prompt.
       const conflict = result.familyConflict;
-      if (conflict?.verdict === "replaced" || conflict?.verdict === "declined") {
+      if (conflict?.verdict === "replaced") {
+        // Old relic displaced — no refund; grantRelicRefund just logs it.
         this.grantRelicRefund(conflict.refundShardKey!, conflict.refundShardAmount!, RELIC_DEFS[conflict.oldId].name);
+      } else if (conflict?.verdict === "declined") {
+        // The JUST-ROLLED relic (def) is the one discarded — refund half its
+        // trophy's shard cost (0 for a free raw trophy).
+        this.grantRelicRefund(conflict.refundShardKey!, conflict.refundShardAmount!, def.name);
       } else if (conflict?.verdict === "choice") {
         this.pendingRelicChoice = result;
       }
@@ -2546,8 +2551,9 @@ export class MainScene extends Phaser.Scene {
   // conflicts) — drops to the floor if the backpack is full, same pattern as
   // refineTrophies' output grant.
   private grantRelicRefund(shardKey: string, amount: number, discardedName: string): void {
-    // Displacement no longer refunds shards (exploit fix — see
-    // Relics.shardRefund): a zero amount just logs the discard, granting nothing.
+    // A discarded relic refunds half its trophy's shard cost (0 for a free raw
+    // trophy, or on an upgrade where the OLD relic is displaced) — see
+    // Relics.trophyDiscardRefund. A zero amount just logs the discard.
     if (amount <= 0) {
       this.eventLog.add("info", `${discardedName} discarded.`);
       return;
