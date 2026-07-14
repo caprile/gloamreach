@@ -11,8 +11,10 @@ reforge recipes; per-tier relic roll buttons; **relic refund reworked to 50% of 
 trophy cost** (raw→0, refined→1 — never nets shards). **Session 2 also shipped** (2026-07-14):
 enemy **wander-anchor** (Boar/Cragscale/free Gremlings sample idle wander from spawn, no more
 drift) + **Hexling** rework (neutral to physical, center-bolt-fire / outer-two-physical volley,
-drops 3-5 hex essence). **In progress:** Session 3 (populate the empty outer world with
-biome-appropriate nodes + enemies) is queued. See the PB1 entry below + [[survivor-rpg-relics]].
+drops **4-6** hex essence, elite **9-11** — bumped again post-Session-2 so clearing ~half the
+badlands ring covers all base biome-2 forged gear's 23-hex-essence cost without a full loop).
+**In progress:** Session 3 (populate the empty outer world with biome-appropriate nodes +
+enemies) is queued. See the PB1 entry below + [[survivor-rpg-relics]].
 Prior: **S7 — pre-push inventory/dev-cmd tweaks** (2026-07-13, Opus): search-box insta-clear `✕`
 button, `nobuildcost` TEMPORARILY lists all recipes (display-only), taller backpack grid
 (`BACKPACK_ROWS 6 → 15`). See the S7 entry below.
@@ -261,9 +263,18 @@ Session 2 = enemy AI + Hexling, done inline. Both `tsc` clean, verified live via
   resist that made an armor-bypassing caster un-killable with a normal weapon; keeps its magic
   **and** fire ×1.5 weaknesses). The 3-bolt volley mixes damage types — **center bolt = fire**
   (armor-bypassing, the shot to dodge), **outer two = physical** (armor applies), with a distinct
-  `hex_bolt_phys` texture. Drops **3-5** hex essence (elite **6-8**, was 1/2). `Projectile.damageType`
+  `hex_bolt_phys` texture. Drops **4-6** hex essence (elite **9-11**, was 1/2, then 3-5/6-8 —
+  bumped once more same day once the math on base biome-2 gear's total hex-essence cost, 23,
+  was actually worked out — see below). `Projectile.damageType`
   widened `DamageType`→`IncomingDamageType` so a bolt can carry fire. Verified live (resist
   multipliers, the fire/physical/texture split off a real `castBolt`, anchors on spawned enemies).
+- **Hex essence economy (same-day follow-up):** playtest — building base biome-2 gear (Forge
+  Anvil unlock 5 + all 3 Sunsteel weapons 10 + full Sunsteel heavy armor 8 = **23** ingots, at 1
+  hex essence per smelted ingot) shouldn't require looping the entire badlands ring. Hexlings
+  spawn uniformly across the whole ring (44 total, no literal quadrant split), so half the ring
+  ≈ ~22 of them; bumped the drop again (4-6/9-11, was 3-5/6-8) so clearing even a modest fraction
+  of that half comfortably clears the 23-essence target with real margin. Verified live off real
+  spawned Hexlings (normal 4-6, elite 9-11). `tsc` clean, no console errors.
 
 RECIPES.md + dashboard relic prose updated. See [[survivor-rpg-relics]].
 
