@@ -410,6 +410,15 @@ const POI_RESPAWN_MS = 8 * 60 * 1000; // 8 min after full clear before a POI re-
 // accessible inner band; POI_DEEP_R_MIN pushes the "destination" landmarks (Sunken
 // Forges + Duneshaper altars, S4) further out so they don't crowd the forest edge.
 const BADLANDS_R_MIN = 2500;
+const BADLANDS_R_MAX_INNER = 5200; // the original "accessible inner band" ceiling
+// PB1 Session 3 (playtest: "lot of empty space... at least put trees and rocks out
+// here" + "shouldn't have to loop the whole badlands ring") — extends the populated
+// badlands band another ~3300px band out, and gives the forest patchwork blobs
+// beyond BIOME_RADIUS their own (lighter) content pass. Deliberately NOT filled all
+// the way to WORLD_RADIUS (14000) — that deep frontier stays reserved for a future
+// biome per the roadmap, not silently backfilled with biome-1/2 content.
+const BADLANDS_R_MAX_OUTER = 8500;
+const OUTER_FOREST_R_MAX = 6000;
 const POI_DEEP_R_MIN = 3600;
 // Keep distinct POI types from crowding each other (S4). Enforced in the pickers
 // against every already-placed POI center, on top of each POI's own clear radius.
@@ -1062,6 +1071,14 @@ export class MainScene extends Phaser.Scene {
     this.spawnBadlandsDens(); // biome 2 Phase 3 POI — before wild packs so den clearings stay clear
     this.spawnTyrantAltars(); // biome 2 Phase 3 — the badlands final-boss altars
     this.spawnBadlandsEnemies(); // biome 2 Phase 2 — out in the badlands patchwork
+    // PB1 Session 3 — populate the forest patchwork blobs beyond BIOME_RADIUS and
+    // extend the badlands band beyond BADLANDS_R_MAX_INNER. Called last of the
+    // content passes (every POI position is set by now) so their exclusion checks
+    // are fully correct, unlike the inner-band passes above which run before POIs.
+    this.spawnOuterForestContent();
+    this.spawnOuterForestEnemies();
+    this.spawnOuterBadlandsContent();
+    this.spawnOuterBadlandsEnemies();
     this.scatterDecor(); // purely-decorative immersion props across both biomes
     this.physics.add.collider(this.enemyGroup, solids);
     // Deliberately NO physics collider between the player and enemies — every
@@ -3142,6 +3159,7 @@ export class MainScene extends Phaser.Scene {
     rng: Phaser.Math.RandomDataGenerator,
     minCoverage = 0.4,
     rMin = BADLANDS_R_MIN,
+    rMax = BADLANDS_R_MAX_INNER,
   ): { x: number; y: number } | null {
     // Concentrated in the ACCESSIBLE inner badlands band (the first badlands a
     // player reaches from the forest edge), biased toward the inner edge — the
@@ -3149,9 +3167,12 @@ export class MainScene extends Phaser.Scene {
     // walks through empty dusty ground (the user: "0 enemies in a badlands area").
     // rMin lets specific callers (the Sunken Forges + Duneshaper altars, S4) push
     // their pick DEEPER past the forest-edge band so those landmarks sit out in
-    // real badlands, not right on the woods border.
+    // real badlands, not right on the woods border. rMax lets the PB1 Session 3
+    // "outer badlands" spawn pass push the band further out (playtest: shouldn't
+    // have to loop the whole ring for base biome-2 content) without touching the
+    // original inner-band callers, which all keep the default.
     const R_MIN = rMin; // right at the forest edge / transition (default)
-    const R_MAX = 5200; // inner-to-mid badlands; deep ring left sparse for now
+    const R_MAX = rMax; // inner-to-mid badlands by default; deep ring left sparse for now
     let last: { x: number; y: number } | null = null;
     for (let attempt = 0; attempt < 400; attempt++) {
       const ang = rng.frac() * Math.PI * 2;
@@ -3203,6 +3224,55 @@ export class MainScene extends Phaser.Scene {
       return { x, y };
     }
     return last;
+  }
+
+  // PB1 Session 3 — the forest-blob counterpart to pickBadlandsPoint. Beyond
+  // BIOME_RADIUS, WorldBiomes paints forest as one of the patchwork "blobs" (it's
+  // tier 1, so it stays eligible at any radius per the ceiling model), but nothing
+  // sampled it for content — those patches rendered forest-colored ground with zero
+  // trees/rocks/enemies (playtest: "lot of empty space in the verdant woods outside
+  // of center"). Sweeps an annulus from the edge of the central disc out to rMax,
+  // requiring forest to be the DOMINANT biome (same reasoning as pickBadlandsPoint —
+  // a point can carry some forest coverage while badlands/dunes still wins the
+  // blend) and honoring every POI exclusion the badlands picker does, since a forest
+  // blob can in principle sit near any of them. Returns null if no covered point is
+  // found within budget — callers should skip that spawn attempt, same as the
+  // badlands picker's null contract.
+  private pickOuterForestPoint(
+    rng: Phaser.Math.RandomDataGenerator,
+    minCoverage = 0.4,
+    rMin = BIOME_RADIUS,
+    rMax = OUTER_FOREST_R_MAX,
+  ): { x: number; y: number } | null {
+    for (let attempt = 0; attempt < 400; attempt++) {
+      const ang = rng.frac() * Math.PI * 2;
+      const r = rMin + rng.frac() * (rMax - rMin); // uniform — blobs are patchy either way
+      const x = WORLD_CX + Math.cos(ang) * r;
+      const y = WORLD_CY + Math.sin(ang) * r;
+      if (
+        this.altarPosition &&
+        Phaser.Math.Distance.Between(x, y, this.altarPosition.x, this.altarPosition.y) < WAR_CAMP_CLEAR_RADIUS
+      )
+        continue;
+      if (
+        this.veinPosition &&
+        Phaser.Math.Distance.Between(x, y, this.veinPosition.x, this.veinPosition.y) < VEIN_CLEAR_RADIUS
+      )
+        continue;
+      if (this.badlandsDens.some((d) => Phaser.Math.Distance.Between(x, y, d.x, d.y) < DEN_CLEAR_RADIUS)) continue;
+      if (this.forgePositions.some((f) => Phaser.Math.Distance.Between(x, y, f.x, f.y) < FORGE_CLEAR_RADIUS))
+        continue;
+      if (
+        this.tyrantAltarPositions.some(
+          (a) => Phaser.Math.Distance.Between(x, y, a.x, a.y) < TYRANT_ALTAR_CLEAR_RADIUS,
+        )
+      )
+        continue;
+      if (this.worldBiomes.dominantBiomeAt(x, y) !== "forest") continue;
+      if (this.worldBiomes.coverageAt(x, y, "forest") < minCoverage) continue;
+      return { x, y };
+    }
+    return null;
   }
 
   // True if `p` sits at least POI_MIN_SEPARATION from every already-placed POI of
@@ -3628,6 +3698,68 @@ export class MainScene extends Phaser.Scene {
     }
   }
 
+  // PB1 Session 3 — trees/rocks/branches/boulders/blackberries in the forest
+  // patchwork blobs beyond BIOME_RADIUS (playtest: "put trees and rocks and stuff
+  // out here"). Deliberately lighter than the central disc (~half its counts) —
+  // these are patchy blobs, not a solid biome, and pickOuterForestPoint's null
+  // return (no forest coverage found within budget) just skips that spawn, so the
+  // ACTUAL placed count self-corrects to however much real forest-blob area exists
+  // out to OUTER_FOREST_R_MAX. No cattails here (creek-edge specific; outer blobs
+  // carry no creek terrain).
+  private spawnOuterForestContent(): void {
+    const rng = this.sessionRng();
+    const scatter = (
+      count: number,
+      cfg: {
+        texture: string;
+        resource: ResourceType;
+        amount: number;
+        action: NodeAction;
+        displayName: string;
+        health: number;
+        persistent?: boolean;
+        pickedTexture?: string;
+        regrowMs?: number;
+      },
+    ) => {
+      for (let i = 0; i < count; i++) {
+        const pt = this.pickOuterForestPoint(rng);
+        if (!pt) break;
+        const node = new ResourceNode(this, {
+          x: pt.x,
+          y: pt.y,
+          texture: cfg.texture,
+          resource: cfg.resource,
+          amount: cfg.amount,
+          action: cfg.action,
+          displayName: cfg.displayName,
+          loose: false,
+          health: cfg.health,
+          persistent: cfg.persistent,
+          pickedTexture: cfg.pickedTexture,
+          regrowMs: cfg.regrowMs,
+        });
+        this.nodes.push(node);
+        if (cfg.action !== "pickup") this.obstacleNodes.push(node);
+      }
+    };
+    scatter(50, { texture: "branch", resource: "wood", amount: 1, action: "pickup", displayName: "Branch", health: 1 });
+    scatter(40, { texture: "rock", resource: "stone", amount: 1, action: "pickup", displayName: "Rock", health: 1 });
+    scatter(90, { texture: "tree", resource: "wood", amount: 5, action: "chop", displayName: "Tree", health: 3 });
+    scatter(24, { texture: "boulder", resource: "stone", amount: 5, action: "mine", displayName: "Boulder", health: 3 });
+    scatter(20, {
+      texture: "blackberry_bush",
+      resource: "blackberry",
+      amount: 2,
+      action: "pickup",
+      displayName: "Blackberries",
+      health: 1,
+      persistent: true,
+      pickedTexture: "blackberry_bush_picked",
+      regrowMs: BLACKBERRY_REGROW_MS,
+    });
+  }
+
   // Like pickSpawnPoint, but rejection-samples for a creek-*border* cell (dry
   // land adjacent to water) — the reedy bank where Cattail grows. Falls back to
   // the last draw after a cap so a creek with no reachable edge can't hang.
@@ -3737,6 +3869,47 @@ export class MainScene extends Phaser.Scene {
     }
   }
 
+  // PB1 Session 3 — the forest roster's counterpart to spawnOuterForestContent:
+  // the same 4 species out in the forest patchwork blobs beyond BIOME_RADIUS, at
+  // roughly half the central disc's counts (a patchy blob, not a solid biome).
+  // pickOuterForestPoint's null return skips a spawn attempt, so real placed
+  // counts self-correct to however much forest-blob area actually exists.
+  private spawnOuterForestEnemies(): void {
+    const rng = this.sessionRng();
+    const OUTER_BOAR_COUNT = 14;
+    for (let i = 0; i < OUTER_BOAR_COUNT; i++) {
+      const pt = this.pickOuterForestPoint(rng);
+      if (!pt) break;
+      const enemy = new Boar(this, { x: pt.x, y: pt.y, elite: this.rollElite(rng) });
+      this.enemies.push(enemy);
+      this.enemyGroup.add(enemy);
+    }
+    const OUTER_SNAKE_COUNT = 16;
+    for (let i = 0; i < OUTER_SNAKE_COUNT; i++) {
+      const pt = this.pickOuterForestPoint(rng);
+      if (!pt) break;
+      const snake = new Snake(this, { x: pt.x, y: pt.y, elite: this.rollElite(rng) });
+      this.enemies.push(snake);
+      this.enemyGroup.add(snake);
+    }
+    const OUTER_RANGED_GREMLIN_COUNT = 12;
+    for (let i = 0; i < OUTER_RANGED_GREMLIN_COUNT; i++) {
+      const pt = this.pickOuterForestPoint(rng);
+      if (!pt) break;
+      const gremlin = new RangedGremlin(this, { x: pt.x, y: pt.y, elite: this.rollElite(rng) });
+      this.enemies.push(gremlin);
+      this.enemyGroup.add(gremlin);
+    }
+    const OUTER_MELEE_GREMLING_COUNT = 5;
+    for (let i = 0; i < OUTER_MELEE_GREMLING_COUNT; i++) {
+      const pt = this.pickOuterForestPoint(rng);
+      if (!pt) break;
+      const gremling = new MeleeGremling(this, { x: pt.x, y: pt.y, elite: this.rollElite(rng) });
+      this.enemies.push(gremling);
+      this.enemyGroup.add(gremling);
+    }
+  }
+
   // Badlands roster (biome 2 Phase 2) — spawned out in the badlands patchwork via
   // pickBadlandsPoint, never the forest disc. "Noticeably tougher" (locked): the
   // enemies themselves carry ~1.5-2x forest stats, and Duskrunners come in packs.
@@ -3791,6 +3964,56 @@ export class MainScene extends Phaser.Scene {
     const SANDMAW_COUNT = 46;
     for (let i = 0; i < SANDMAW_COUNT; i++) {
       const pt = this.pickBadlandsPoint(rng);
+      if (!pt) break;
+      const s = new Sandmaw(this, { x: pt.x, y: pt.y, elite: this.rollElite(rng) });
+      this.enemies.push(s);
+      this.enemyGroup.add(s);
+    }
+  }
+
+  // PB1 Session 3 — extends the badlands roster into the [BADLANDS_R_MAX_INNER,
+  // BADLANDS_R_MAX_OUTER] band (playtest: "shouldn't have to loop around the whole
+  // Badlands level ring just to get enough for base biome-2 stuff" — more Hexlings
+  // in particular directly grows the hex-essence supply). Roughly half the inner
+  // band's counts; called after every POI position is set so it correctly excludes
+  // dens/forges/tyrant altars even though they're chosen before the wild inner-band
+  // packs (spawnBadlandsFlora/Minerals/Nodes run before POIs are placed and don't
+  // get this benefit — a pre-existing gap, not something this pass changes).
+  private spawnOuterBadlandsEnemies(): void {
+    const rng = this.sessionRng();
+    const OUTER_PACK_COUNT = 12;
+    const PACK_JITTER = 70;
+    for (let p = 0; p < OUTER_PACK_COUNT; p++) {
+      const center = this.pickBadlandsPoint(rng, 0.4, BADLANDS_R_MAX_INNER, BADLANDS_R_MAX_OUTER);
+      if (!center) break;
+      const size = rng.between(3, 4);
+      for (let i = 0; i < size; i++) {
+        const x = Phaser.Math.Clamp(center.x + rng.between(-PACK_JITTER, PACK_JITTER), 60, WORLD_W - 60);
+        const y = Phaser.Math.Clamp(center.y + rng.between(-PACK_JITTER, PACK_JITTER), 60, WORLD_H - 60);
+        const d = new Duskrunner(this, { x, y, elite: this.rollElite(rng) });
+        this.enemies.push(d);
+        this.enemyGroup.add(d);
+      }
+    }
+    const OUTER_CRAGSCALE_COUNT = 24;
+    for (let i = 0; i < OUTER_CRAGSCALE_COUNT; i++) {
+      const pt = this.pickBadlandsPoint(rng, 0.4, BADLANDS_R_MAX_INNER, BADLANDS_R_MAX_OUTER);
+      if (!pt) break;
+      const c = new Cragscale(this, { x: pt.x, y: pt.y, elite: this.rollElite(rng) });
+      this.enemies.push(c);
+      this.enemyGroup.add(c);
+    }
+    const OUTER_HEXLING_COUNT = 22;
+    for (let i = 0; i < OUTER_HEXLING_COUNT; i++) {
+      const pt = this.pickBadlandsPoint(rng, 0.4, BADLANDS_R_MAX_INNER, BADLANDS_R_MAX_OUTER);
+      if (!pt) break;
+      const h = new Hexling(this, { x: pt.x, y: pt.y, elite: this.rollElite(rng) });
+      this.enemies.push(h);
+      this.enemyGroup.add(h);
+    }
+    const OUTER_SANDMAW_COUNT = 24;
+    for (let i = 0; i < OUTER_SANDMAW_COUNT; i++) {
+      const pt = this.pickBadlandsPoint(rng, 0.4, BADLANDS_R_MAX_INNER, BADLANDS_R_MAX_OUTER);
       if (!pt) break;
       const s = new Sandmaw(this, { x: pt.x, y: pt.y, elite: this.rollElite(rng) });
       this.enemies.push(s);
@@ -4056,6 +4279,91 @@ export class MainScene extends Phaser.Scene {
     scatter({ texture: "badlands_scraprock", resource: "stone", displayName: "Scrap Rock", action: "pickup", amount: 1, health: 1, count: 40 });
     // Ironbark — the gated hardwood. Rarer than the basics; needs the Ironshod axe.
     scatter({ texture: "ironbark_tree", resource: "ironbark", displayName: "Ironbark Tree", action: "chop", amount: 3, health: 4, count: 34, minToolTier: 1 });
+  }
+
+  // PB1 Session 3 — flora + minerals + basic wood/stone in the extended badlands
+  // band [BADLANDS_R_MAX_INNER, BADLANDS_R_MAX_OUTER], roughly half the inner
+  // band's counts (see spawnOuterBadlandsEnemies). Called after every POI position
+  // is set, so (unlike the inner-band spawnBadlandsFlora/Minerals/Nodes) this pass
+  // correctly excludes den/forge/tyrant-altar clearings too.
+  private spawnOuterBadlandsContent(): void {
+    const rng = this.sessionRng();
+    const pt = () => this.pickBadlandsPoint(rng, 0.4, BADLANDS_R_MAX_INNER, BADLANDS_R_MAX_OUTER);
+
+    const scatterFlora = (texture: string, pickedTexture: string, resource: ResourceType, displayName: string, count: number) => {
+      for (let i = 0; i < count; i++) {
+        const p = pt();
+        if (!p) break;
+        const node = new ResourceNode(this, {
+          x: p.x,
+          y: p.y,
+          texture,
+          resource,
+          amount: 1,
+          action: "pickup",
+          displayName,
+          loose: false,
+          health: 1,
+          persistent: true,
+          pickedTexture,
+          regrowMs: BLACKBERRY_REGROW_MS,
+        });
+        this.nodes.push(node);
+      }
+    };
+    scatterFlora("emberbloom", "emberbloom_picked", "emberbloom", "Emberbloom", 30);
+    scatterFlora("sunfruit_cactus", "sunfruit_cactus_picked", "sunfruit", "Sunfruit", 24);
+    scatterFlora("gloamcap", "gloamcap_picked", "gloamcap", "Gloamcap", 22);
+    scatterFlora("dustbloom", "dustbloom_picked", "dustbloom", "Dustbloom", 26);
+
+    const scatterOre = (texture: string, resource: ResourceType, displayName: string, count: number, health: number, amountMin: number, amountMax: number) => {
+      for (let i = 0; i < count; i++) {
+        const p = pt();
+        if (!p) break;
+        const node = new ResourceNode(this, {
+          x: p.x,
+          y: p.y,
+          texture,
+          resource,
+          amount: rng.between(amountMin, amountMax),
+          action: "mine",
+          displayName,
+          loose: false,
+          health,
+        });
+        this.nodes.push(node);
+        this.obstacleNodes.push(node);
+      }
+    };
+    scatterOre("clay_deposit", "clay", "Clay Deposit", 22, 2, 2, 3);
+    scatterOre("sunscorch_ore_node", "sunscorch_ore", "Sunscorch Ore", 30, 3, 3, 5);
+    scatterOre("ember_ore_node", "ember_ore", "Cinderforged Vein", 8, 3, 2, 4);
+
+    const scatterBasic = (cfg: { texture: string; resource: ResourceType; displayName: string; action: NodeAction; amount: number; health: number; count: number; minToolTier?: number }) => {
+      for (let i = 0; i < cfg.count; i++) {
+        const p = pt();
+        if (!p) break;
+        const node = new ResourceNode(this, {
+          x: p.x,
+          y: p.y,
+          texture: cfg.texture,
+          resource: cfg.resource,
+          amount: cfg.amount,
+          action: cfg.action,
+          displayName: cfg.displayName,
+          loose: false,
+          health: cfg.health,
+          minToolTier: cfg.minToolTier,
+        });
+        this.nodes.push(node);
+        if (cfg.action !== "pickup") this.obstacleNodes.push(node);
+      }
+    };
+    scatterBasic({ texture: "badlands_deadtree", resource: "wood", displayName: "Dead Tree", action: "chop", amount: 5, health: 3, count: 26 });
+    scatterBasic({ texture: "badlands_boulder", resource: "stone", displayName: "Badlands Boulder", action: "mine", amount: 5, health: 3, count: 22 });
+    scatterBasic({ texture: "badlands_branch", resource: "wood", displayName: "Dry Branch", action: "pickup", amount: 1, health: 1, count: 20 });
+    scatterBasic({ texture: "badlands_scraprock", resource: "stone", displayName: "Scrap Rock", action: "pickup", amount: 1, health: 1, count: 20 });
+    scatterBasic({ texture: "ironbark_tree", resource: "ironbark", displayName: "Ironbark Tree", action: "chop", amount: 3, health: 4, count: 16, minToolTier: 1 });
   }
 
   // Purely-decorative, non-interactive immersion props scattered through both
