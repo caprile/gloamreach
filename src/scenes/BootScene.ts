@@ -1295,6 +1295,18 @@ export class BootScene extends Phaser.Scene {
     g.fillRect(14, 10, 2, 2);
     g.generateTexture("icon_blood_snake_skewer", ICON, ICON);
 
+    // Duskrunner Skewer: plain fire-roasted badlands meat on a skewer (no glaze).
+    g.clear();
+    g.fillStyle(0xc0a060, 1);
+    g.fillRect(3, 11, 18, 2); // skewer
+    g.fillStyle(0x7a3a24, 1); // dusky roasted meat
+    g.fillRect(6, 7, 6, 6);
+    g.fillRect(13, 7, 5, 6);
+    g.fillStyle(0x9a5236, 1); // seared highlights
+    g.fillRect(7, 8, 3, 3);
+    g.fillRect(14, 8, 2, 3);
+    g.generateTexture("icon_duskrunner_skewer", ICON, ICON);
+
     // --- Lvl 3/4 campfire dishes (badlands) ---
 
     // Seared Duskrunner Steak: a thick browned steak with a pale dustbloom crust.

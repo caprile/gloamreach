@@ -55,7 +55,7 @@ export const RECIPES: Recipe[] = [
     description: "A crude axe for chopping trees.",
     category: "tools",
     tier: 0,
-    costs: { wood: 4, stone: 4 },
+    costs: { wood: 4, stone: 3 },
     requiredSkills: [{ skill: "chopping", level: 0 }],
     output: { kind: "tool", tool: "stone_axe" },
   },
@@ -65,7 +65,7 @@ export const RECIPES: Recipe[] = [
     description: "A crude pickaxe for mining boulders.",
     category: "tools",
     tier: 1,
-    costs: { wood: 3, stone: 4, leather: 1 },
+    costs: { wood: 3, stone: 3, leather: 1 },
     requiredSkills: [{ skill: "mining", level: 0 }],
     output: { kind: "tool", tool: "stone_pickaxe" },
   },
@@ -132,7 +132,7 @@ export const RECIPES: Recipe[] = [
     description: "A handful of rounded stones sized for a Slingshot.",
     category: "weapons",
     tier: 0,
-    costs: { stone: 5 },
+    costs: { stone: 3 },
     // Stone is common enough that this would otherwise appear immediately —
     // gate its discovery on having actually crafted a Slingshot first, so it
     // doesn't show up before there's anything to load it into.
@@ -167,7 +167,7 @@ export const RECIPES: Recipe[] = [
     description: "A placeable fire for light, warmth, and cooking.",
     category: "crafting",
     tier: 0,
-    costs: { wood: 5, stone: 3 },
+    costs: { wood: 5, stone: 2 },
     output: { kind: "item", itemId: "campfire", itemName: "Campfire" },
   },
   {
@@ -205,7 +205,7 @@ export const RECIPES: Recipe[] = [
     // Tier 1 (Workbench-gated) like the Drying Rack. No King drop — basic
     // smelting is available without ever fighting the Gremlin King (locked).
     tier: 1,
-    costs: { clay: 10, stone: 15 },
+    costs: { clay: 10, stone: 10 },
     output: { kind: "item", itemId: "smelter", itemName: "Smelter" },
   },
   {
@@ -248,7 +248,7 @@ export const RECIPES: Recipe[] = [
     // build gates it behind the same elite kills that fuel it, and keys its
     // discovery to the moment the relic loop becomes relevant.
     tier: 1,
-    costs: { stone: 10, bones: 5, gremlin_trophy: 1 },
+    costs: { stone: 7, bones: 5, gremlin_trophy: 1 },
     output: { kind: "item", itemId: "relic_forge", itemName: "Relic Forge" },
   },
   {

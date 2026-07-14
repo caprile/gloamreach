@@ -49,10 +49,11 @@ export function skillDisplayName(skill: SkillType): string {
 }
 
 // XP to advance from `level` to `level + 1`. A refill-style bar (each level's
-// bar empties/refills), not a cumulative total: 0->1 is 100, 1->2 is 200, etc.
-// First-pass numbers — expect tuning as more XP sources land.
+// bar empties/refills), not a cumulative total: 0->1 is 70, 1->2 is 140, etc.
+// Playtest speed-up (S1 balance batch): coefficient lowered 100->70 so skills
+// (and, via skill-ups feeding Player XP, player levels) climb ~1.4x faster.
 export function skillXpToNext(level: number): number {
-  return 100 * (level + 1);
+  return 70 * (level + 1);
 }
 
 const WEAPON_SKILL_DAMAGE_PCT_PER_LEVEL = 0.005; // +0.5% weapon damage per level

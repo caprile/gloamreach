@@ -595,6 +595,16 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     // Same +25%-over-Lvl-1-total rule as the boar skewer above (55 vs 44).
     edible: { hpPerSec: 2.5, durationMs: 22000 },
   },
+  duskrunner_skewer: {
+    key: "duskrunner_skewer",
+    name: "Duskrunner Skewer",
+    description: "A skewer of fire-roasted duskrunner meat. Right-click to eat.",
+    texture: "icon_duskrunner_skewer",
+    maxStack: 99,
+    hotbarable: true,
+    // A plain Lvl 2 dish — slightly above Cooked Boar Meat (55 vs 40 total).
+    edible: { hpPerSec: 2.5, durationMs: 22000 },
+  },
   // --- Lvl 3 campfire dishes (badlands). A gentle step above the Lvl 2 dishes
   // (~78 total heal vs ~55), matching the deliberate "not a 2x jump" ramp. ---
   seared_duskrunner_steak: {
@@ -753,11 +763,11 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     hotbarable: false,
     armorSlot: "helmet",
     armorType: "heavy_armor",
-    armorDefense: 4,
+    armorDefense: 6,
     stats: [
       { label: "Type", value: "Armor (Head)" },
       { label: "Armor Type", value: "Heavy" },
-      { label: "Armor", value: "4" },
+      { label: "Armor", value: "6" },
     ],
   },
   sunsteel_cuirass: {
@@ -769,11 +779,11 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     hotbarable: false,
     armorSlot: "chest",
     armorType: "heavy_armor",
-    armorDefense: 6,
+    armorDefense: 8,
     stats: [
       { label: "Type", value: "Armor (Chest)" },
       { label: "Armor Type", value: "Heavy" },
-      { label: "Armor", value: "6" },
+      { label: "Armor", value: "8" },
     ],
   },
   sunsteel_greaves: {
@@ -785,11 +795,11 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     hotbarable: false,
     armorSlot: "legs",
     armorType: "heavy_armor",
-    armorDefense: 4,
+    armorDefense: 6,
     stats: [
       { label: "Type", value: "Armor (Legs)" },
       { label: "Armor Type", value: "Heavy" },
-      { label: "Armor", value: "4" },
+      { label: "Armor", value: "6" },
     ],
   },
 
@@ -819,11 +829,11 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     hotbarable: false,
     armorSlot: "chest",
     armorType: "light_armor",
-    armorDefense: 5,
+    armorDefense: 6,
     stats: [
       { label: "Type", value: "Armor (Chest)" },
       { label: "Armor Type", value: "Light" },
-      { label: "Armor", value: "5" },
+      { label: "Armor", value: "6" },
     ],
   },
   duskhide_leggings: {
@@ -835,11 +845,11 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     hotbarable: false,
     armorSlot: "legs",
     armorType: "light_armor",
-    armorDefense: 4,
+    armorDefense: 5,
     stats: [
       { label: "Type", value: "Armor (Legs)" },
       { label: "Armor Type", value: "Light" },
-      { label: "Armor", value: "4" },
+      { label: "Armor", value: "5" },
     ],
   },
 
@@ -853,11 +863,11 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     hotbarable: false,
     armorSlot: "helmet",
     armorType: "heavy_armor",
-    armorDefense: 7,
+    armorDefense: 10,
     stats: [
       { label: "Type", value: "Armor (Head)" },
       { label: "Armor Type", value: "Heavy" },
-      { label: "Armor", value: "7" },
+      { label: "Armor", value: "10" },
       { label: "Set (3)", value: "Molten Bulwark" },
     ],
   },
@@ -870,11 +880,11 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     hotbarable: false,
     armorSlot: "chest",
     armorType: "heavy_armor",
-    armorDefense: 9,
+    armorDefense: 12,
     stats: [
       { label: "Type", value: "Armor (Chest)" },
       { label: "Armor Type", value: "Heavy" },
-      { label: "Armor", value: "9" },
+      { label: "Armor", value: "12" },
       { label: "Set (3)", value: "Molten Bulwark" },
     ],
   },
@@ -887,11 +897,11 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     hotbarable: false,
     armorSlot: "legs",
     armorType: "heavy_armor",
-    armorDefense: 7,
+    armorDefense: 10,
     stats: [
       { label: "Type", value: "Armor (Legs)" },
       { label: "Armor Type", value: "Heavy" },
-      { label: "Armor", value: "7" },
+      { label: "Armor", value: "10" },
       { label: "Set (3)", value: "Molten Bulwark" },
     ],
   },
@@ -906,11 +916,11 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     hotbarable: false,
     armorSlot: "helmet",
     armorType: "light_armor",
-    armorDefense: 5,
+    armorDefense: 7,
     stats: [
       { label: "Type", value: "Armor (Head)" },
       { label: "Armor Type", value: "Light" },
-      { label: "Armor", value: "5" },
+      { label: "Armor", value: "7" },
       { label: "Set (3)", value: "Emberblink" },
     ],
   },
@@ -923,11 +933,11 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     hotbarable: false,
     armorSlot: "chest",
     armorType: "light_armor",
-    armorDefense: 6,
+    armorDefense: 9,
     stats: [
       { label: "Type", value: "Armor (Chest)" },
       { label: "Armor Type", value: "Light" },
-      { label: "Armor", value: "6" },
+      { label: "Armor", value: "9" },
       { label: "Set (3)", value: "Emberblink" },
     ],
   },
@@ -940,11 +950,11 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     hotbarable: false,
     armorSlot: "legs",
     armorType: "light_armor",
-    armorDefense: 5,
+    armorDefense: 7,
     stats: [
       { label: "Type", value: "Armor (Legs)" },
       { label: "Armor Type", value: "Light" },
-      { label: "Armor", value: "5" },
+      { label: "Armor", value: "7" },
       { label: "Set (3)", value: "Emberblink" },
     ],
   },

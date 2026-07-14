@@ -79,8 +79,11 @@ export function statTotalEffect(stat: StatType, p: PlayerProgression): string {
 // skill XP (running/gathering) rather than deliberate combat — the curve, not
 // the XP hooks, was the problem (audited addXp/hooks for double-counting;
 // found none).
-const XP_BASE = 150;
-const XP_EXPONENT = 1.9;
+// Playtest speed-up (S1 balance batch): lowered from 150/1.9 to reach a given
+// level ~1.5x faster overall — the user wanted player levels & stat points to
+// come noticeably quicker. Soft-cap behavior is untouched.
+const XP_BASE = 110;
+const XP_EXPONENT = 1.8;
 export function xpToNextPlayerLevel(level: number): number {
   return Math.round(XP_BASE * Math.pow(level + 1, XP_EXPONENT));
 }

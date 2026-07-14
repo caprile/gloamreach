@@ -44,7 +44,7 @@ export const STATION_UPGRADES: StationUpgradeDef[] = [
     description: "A ring of stones and a cooking grate. Unlocks tastier campfire dishes.",
     appliesToItemKey: "campfire",
     resultTier: 1,
-    costs: { twine: 4, stone: 20 },
+    costs: { twine: 4, stone: 13 },
     deltaLabel: "Better campfire dishes",
   },
   {
@@ -53,7 +53,7 @@ export const STATION_UPGRADES: StationUpgradeDef[] = [
     description: "A forged grill plate over the coals. Sears badlands game and desert flora.",
     appliesToItemKey: "campfire",
     resultTier: 2,
-    costs: { sunsteel_ingot: 3, clay: 8, stone: 10 },
+    costs: { sunsteel_ingot: 3, clay: 8, stone: 7 },
     deltaLabel: "Better campfire dishes",
   },
   {
@@ -62,7 +62,7 @@ export const STATION_UPGRADES: StationUpgradeDef[] = [
     description: "An ember-fed hearth that never dies down. Cooks the richest cross-biome feasts.",
     appliesToItemKey: "campfire",
     resultTier: 3,
-    costs: { embersteel_ingot: 3, stone: 20 },
+    costs: { embersteel_ingot: 3, stone: 13 },
     deltaLabel: "Best campfire dishes",
   },
   {
@@ -71,7 +71,7 @@ export const STATION_UPGRADES: StationUpgradeDef[] = [
     description: "A gloam-shard conduit set into the forge. Unlocks trophy refinement.",
     appliesToItemKey: "relic_forge",
     resultTier: 1,
-    costs: { stone: 15, gloam_shard: 1 },
+    costs: { stone: 10, gloam_shard: 1 },
     deltaLabel: "Unlocks the Refine tab",
   },
   {
@@ -82,7 +82,7 @@ export const STATION_UPGRADES: StationUpgradeDef[] = [
     description: "A cinder-fed reduction kiln bolted to the forge. Renders Gloam Shards down into concentrated Ember.",
     appliesToItemKey: "relic_forge",
     resultTier: 2,
-    costs: { embersteel_ingot: 3, stone: 20 },
+    costs: { embersteel_ingot: 3, stone: 13 },
     deltaLabel: "Unlocks Gloam -> Ember conversion",
   },
   {
@@ -91,7 +91,7 @@ export const STATION_UPGRADES: StationUpgradeDef[] = [
     description: "A proper forge and anvil bolted to an ironbark frame. Lets you work metal ingots into gear.",
     appliesToItemKey: "workbench",
     resultTier: 2,
-    costs: { sunsteel_ingot: 5, ironbark: 5, stone: 10 },
+    costs: { sunsteel_ingot: 5, ironbark: 5, stone: 7 },
     deltaLabel: "Unlocks forged gear",
   },
   {
@@ -100,7 +100,7 @@ export const STATION_UPGRADES: StationUpgradeDef[] = [
     description: "The Gremlin King's still-burning heart set into the kiln — hot enough to melt the rarest ore.",
     appliesToItemKey: "smelter",
     resultTier: 1,
-    costs: { gremlin_king_heart: 1, stone: 10 },
+    costs: { gremlin_king_heart: 1, stone: 7 },
     deltaLabel: "Smelt rare ore",
   },
   {
@@ -112,7 +112,7 @@ export const STATION_UPGRADES: StationUpgradeDef[] = [
     description: "An ember-fed anvil on a heavy ironbark stand, hot enough to reforge finished gear. Unlocks the enhanced tier.",
     appliesToItemKey: "workbench",
     resultTier: 3,
-    costs: { embersteel_ingot: 5, ironbark: 8, stone: 15 },
+    costs: { embersteel_ingot: 5, ironbark: 8, stone: 10 },
     deltaLabel: "Unlocks enhanced gear",
   },
 ];
