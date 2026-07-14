@@ -394,6 +394,23 @@ const DUSKRUNNER_WARREN_LOOT_TABLE: LootRollEntry[] = [
 const DEN_COUNT = 16; // bumped 10→16 (the user: "need more burrows")
 const DEN_MIN_SPACING = 900; // spread across chunks, but common enough that most areas have one
 const DEN_CLEAR_RADIUS = 200;
+const DEN_WAVE2_DELAY_MS = 1600; // beat between wave-1 clear and the elite wave-2 emerging (S4)
+
+// POI respawn (S4, locked decision 4): Warren dens, the Gloaming Vein, and Sunken
+// Forges each re-arm on a timer AFTER being fully cleared (den looted + cache
+// emptied; vein/forge mini-boss dead + all its ore mined out). Boss-summon altars
+// (gremlin/tyrant) are the ONLY one-shot POIs. Mirrors the shack's 6-min guard
+// respawn; a mini-boss POI is a bigger commitment, so it's a bit longer.
+const POI_RESPAWN_MS = 8 * 60 * 1000; // 8 min after full clear before a POI re-arms
+
+// Badlands content band radii (from world center). Most content fills the
+// accessible inner band; POI_DEEP_R_MIN pushes the "destination" landmarks (Sunken
+// Forges + Duneshaper altars, S4) further out so they don't crowd the forest edge.
+const BADLANDS_R_MIN = 2500;
+const POI_DEEP_R_MIN = 3600;
+// Keep distinct POI types from crowding each other (S4). Enforced in the pickers
+// against every already-placed POI center, on top of each POI's own clear radius.
+const POI_MIN_SEPARATION = 1000;
 
 // Sunken Forge POIs (biome 2 Phase 3 POI 2) — SEVERAL themed landmarks out in the
 // badlands, each guarded by a Cinderwrought mini-boss (the user: "way more of the
@@ -563,6 +580,7 @@ export class MainScene extends Phaser.Scene {
   private gloamingVeinNodes: ResourceNode[] = [];
   private gloamwarden: Gloamwarden | null = null;
   private veinCracked = false;
+  private veinRespawnAt: number | null = null; // S4: armed once fully cleared (guardian dead + ore mined)
   private veinDiscoveredOnMap = false;
   private veinLightPoints: { x: number; y: number }[] = [];
 
@@ -586,6 +604,7 @@ export class MainScene extends Phaser.Scene {
     oreNodes: ResourceNode[];
     cracked: boolean;
     discoveredOnMap: boolean;
+    respawnAt: number | null; // S4: armed once fully cleared (boss dead + ore mined)
   }[] = [];
   private forgeLightPoints: { x: number; y: number }[] = [];
   // Right-click "Upgrade / Destroy" popup for any placed object (Workbench,
@@ -850,6 +869,7 @@ export class MainScene extends Phaser.Scene {
     this.gloamingVeinNodes = [];
     this.gloamwarden = null;
     this.veinCracked = false;
+    this.veinRespawnAt = null;
     this.veinDiscoveredOnMap = false;
     this.veinLightPoints = [];
     this.badlandsDens = [];
@@ -1422,6 +1442,7 @@ export class MainScene extends Phaser.Scene {
     this.updateMagnet(delta);
     this.updateEnemies(delta);
     this.updateRespawns(delta);
+    this.updatePoiRespawns(this.time.now);
     this.updateTreeOcclusion(delta);
     this.updateMapReveal();
     this.updateShackGlows();
@@ -1546,27 +1567,23 @@ export class MainScene extends Phaser.Scene {
   // any that never engaged — density returns to baseline each morning.
   private spawnNightBatch(): void {
     const rng = this.sessionRng();
-    const spawn = (make: (x: number, y: number) => Enemy) => {
+    // Biome-aware surge (S4): pick each spawn point, then draw its species from
+    // THAT point's biome roster via makeRespawnEnemy — so a nightfall out in the
+    // badlands stirs Duskrunners/Cragscale/Hexling/Sandmaw, not forest Boars
+    // (the old hardcoded 2 Boar/2 Snake/2 Gremlin mix ignored biome). Each rolls
+    // elite at the night-multiplied chance (M-EL2) — the nightfall surge is where
+    // the user wanted a higher elite rate, on top of already being denser/faster
+    // (M-DN). Dunes has no roster → makeRespawnEnemy returns null, skipped.
+    const NIGHT_BATCH = 6;
+    for (let i = 0; i < NIGHT_BATCH; i++) {
       const { x, y } = this.pickNightSpawnPoint(rng);
-      const enemy = make(x, y);
+      const enemy = this.makeRespawnEnemy(rng, x, y, NIGHT_ELITE_CHANCE_MULT);
+      if (!enemy) continue;
       this.enemies.push(enemy);
       this.enemyGroup.add(enemy);
       this.nightSpawns.push(enemy);
-    };
-    // First-pass mix (~6): 2 Boar, 2 Snake, 2 Gremlin. Each rolls elite at the
-    // night-multiplied chance (M-EL2) — the nightfall surge is also where
-    // the user wanted a higher elite rate, on top of already being denser/
-    // faster (M-DN).
-    for (let i = 0; i < 2; i++) {
-      spawn((x, y) => new Boar(this, { x, y, elite: this.rollElite(rng, NIGHT_ELITE_CHANCE_MULT) }));
     }
-    for (let i = 0; i < 2; i++) {
-      spawn((x, y) => new Snake(this, { x, y, elite: this.rollElite(rng, NIGHT_ELITE_CHANCE_MULT) }));
-    }
-    for (let i = 0; i < 2; i++) {
-      spawn((x, y) => new RangedGremlin(this, { x, y, elite: this.rollElite(rng, NIGHT_ELITE_CHANCE_MULT) }));
-    }
-    this.eventLog.add("info", "Night falls — the forest stirs...");
+    this.eventLog.add("info", "Night falls — the wilds stir...");
     this.hints.trigger("nightfall"); // first nightfall -> torch/danger nudge
   }
 
@@ -2741,6 +2758,55 @@ export class MainScene extends Phaser.Scene {
     for (const den of this.badlandsDens) den.syncGlow();
   }
 
+  // POI respawn (S4, locked decision 4): every badlands mini-boss POI re-arms
+  // POI_RESPAWN_MS after being FULLY cleared — so a long run doesn't run out of
+  // Gloam/Ember ore or Warren caches. "Fully cleared" is polled here (the states
+  // that define it — looted+empty, cracked+all-ore-mined — are themselves polled
+  // states, so a poll-and-arm loop is simpler than hooking each node/kill). Boss-
+  // summon altars (gremlin/tyrant) are deliberately NOT here — they stay one-shot.
+  // Arm-then-fire so the timer only starts once the clear condition first holds;
+  // the else-branch cancels a pending arm if the condition stops holding (it can't
+  // for vein/forge, but keeps dens honest if state ever changes underfoot).
+  private updatePoiRespawns(now: number): void {
+    // Gloaming Vein: guardian dead + every ore node mined out.
+    if (this.veinPosition && this.veinCracked && this.gloamingVeinNodes.every((n) => n.depleted)) {
+      if (this.veinRespawnAt === null) this.veinRespawnAt = now + POI_RESPAWN_MS;
+      else if (now >= this.veinRespawnAt) {
+        this.veinRespawnAt = null;
+        this.armVein(this.sessionRng(), false);
+        this.eventLog.add("info", "The Gloaming Vein reforms — its guardian stirs anew.");
+      }
+    }
+    // Sunken Forges: mini-boss dead + every ember-ore node mined out.
+    for (const forge of this.forges) {
+      const cleared = forge.cracked && forge.oreNodes.every((n) => n.depleted);
+      if (!cleared) {
+        forge.respawnAt = null;
+        continue;
+      }
+      if (forge.respawnAt === null) forge.respawnAt = now + POI_RESPAWN_MS;
+      else if (now >= forge.respawnAt) {
+        forge.respawnAt = null;
+        this.armForge(this.sessionRng(), forge, false);
+        this.eventLog.add("info", "Embers rekindle at a Sunken Forge — its guardian returns.");
+      }
+    }
+    // Warren dens: destroyed (looted) AND the cache fully emptied by the player.
+    for (const den of this.badlandsDens) {
+      const cleared = den.phase === "looted" && den.loot.isEmpty();
+      if (!cleared) {
+        den.respawnAt = null;
+        continue;
+      }
+      if (den.respawnAt === null) den.respawnAt = now + POI_RESPAWN_MS;
+      else if (now >= den.respawnAt) {
+        den.reset(); // clears respawnAt, resets to wave1, re-arms loot
+        this.spawnDenWave(den, false); // fresh wave 1 of 3 normal Duskrunners
+        this.eventLog.add("info", "A Warren has been reclaimed — Duskrunners burrow in anew.");
+      }
+    }
+  }
+
   // Called from tryAttackEnemy()'s kill branch for every defeated enemy — a
   // no-op unless `enemy` was one of a shack's guards. Schedules a respawn
   // only once BOTH guards are dead, not per-guard (chest re-arm itself
@@ -2998,12 +3064,16 @@ export class MainScene extends Phaser.Scene {
   private pickBadlandsPoint(
     rng: Phaser.Math.RandomDataGenerator,
     minCoverage = 0.4,
+    rMin = BADLANDS_R_MIN,
   ): { x: number; y: number } | null {
     // Concentrated in the ACCESSIBLE inner badlands band (the first badlands a
     // player reaches from the forest edge), biased toward the inner edge — the
     // deep badlands stays sparse. Content here needs real density or a player
     // walks through empty dusty ground (the user: "0 enemies in a badlands area").
-    const R_MIN = 2500; // right at the forest edge / transition
+    // rMin lets specific callers (the Sunken Forges + Duneshaper altars, S4) push
+    // their pick DEEPER past the forest-edge band so those landmarks sit out in
+    // real badlands, not right on the woods border.
+    const R_MIN = rMin; // right at the forest edge / transition (default)
     const R_MAX = 5200; // inner-to-mid badlands; deep ring left sparse for now
     let last: { x: number; y: number } | null = null;
     for (let attempt = 0; attempt < 400; attempt++) {
@@ -3056,6 +3126,23 @@ export class MainScene extends Phaser.Scene {
       return { x, y };
     }
     return last;
+  }
+
+  // True if `p` sits at least POI_MIN_SEPARATION from every already-placed POI of
+  // the requested kinds (S4 — keep distinct POI types from crowding each other, on
+  // top of each POI's own smaller clear radius). Only checks POIs already chosen at
+  // call time, so the caller order (altar → vein → forge → altars → dens) matters.
+  private clearsOtherPois(
+    p: { x: number; y: number },
+    kinds: ("altar" | "vein" | "forge" | "den")[],
+  ): boolean {
+    const far = (c: { x: number; y: number } | null | undefined) =>
+      !c || Phaser.Math.Distance.Between(p.x, p.y, c.x, c.y) >= POI_MIN_SEPARATION;
+    if (kinds.includes("altar") && !far(this.altarPosition)) return false;
+    if (kinds.includes("vein") && !far(this.veinPosition)) return false;
+    if (kinds.includes("forge") && !this.forgePositions.every(far)) return false;
+    if (kinds.includes("den") && !this.badlandsDens.every(far)) return false;
+    return true;
   }
 
   // One-time background bake: a single RenderTexture over the whole world,
@@ -3702,9 +3789,17 @@ export class MainScene extends Phaser.Scene {
     den.guards = den.guards.filter((g) => g !== enemy);
     if (den.guards.length > 0) return;
     if (den.phase === "wave1") {
+      // S4: don't insta-pop wave 2 on top of the player the instant wave 1 dies
+      // (they spawned + aggro'd in the same frame, which read as cheap). The den
+      // "stirs" now; the elites burst a beat later. Guard on phase so a den
+      // destroyed/reset before the beat elapses can't spawn a ghost wave.
       den.phase = "wave2";
-      this.spawnDenWave(den, true);
-      this.eventLog.add("combat", "The warren stirs — elite Duskrunners burst out!");
+      this.eventLog.add("combat", "The warren stirs — something is coming...");
+      this.time.delayedCall(DEN_WAVE2_DELAY_MS, () => {
+        if (den.phase !== "wave2" || den.guards.length > 0) return;
+        this.spawnDenWave(den, true);
+        this.eventLog.add("combat", "Elite Duskrunners burst from the den!");
+      });
     } else if (den.phase === "wave2") {
       den.phase = "attackable";
       den.markAttackable();
@@ -4049,11 +4144,15 @@ export class MainScene extends Phaser.Scene {
       let placed: { x: number; y: number } | null = null;
       let fallback: { x: number; y: number } | null = null;
       for (let attempt = 0; attempt < 400; attempt++) {
-        const p = this.pickBadlandsPoint(rng);
+        // Pushed DEEP (S4) — the final-boss altar is the furthest-out landmark.
+        const p = this.pickBadlandsPoint(rng, 0.4, POI_DEEP_R_MIN);
         if (!p) continue;
         if (Math.sign(p.x - WORLD_CX) !== sx || Math.sign(p.y - WORLD_CY) !== sy) continue;
         fallback = p;
         if (picks.some((q) => Phaser.Math.Distance.Between(p.x, p.y, q.x, q.y) < TYRANT_ALTAR_MIN_SPACING)) continue;
+        // Don't crowd another POI type (S4): keep clear of the war camp, the
+        // Gloaming Vein, and every Sunken Forge by POI_MIN_SEPARATION.
+        if (!this.clearsOtherPois(p, ["altar", "vein", "forge"])) continue;
         placed = p;
         break;
       }
@@ -4149,11 +4248,37 @@ export class MainScene extends Phaser.Scene {
       ringRadius: 150,
     });
 
+    this.armVein(rng, true); // guardian + shielded ore (pushes node lights on first arm)
+
+    // Decorative amethyst crystal clusters scattered across the clearing (like
+    // the war-camp props) so the ore area reads as a crystalline field, not a
+    // few nodes on grass. Non-interactive, Y-sorted. A few of the outer ones
+    // also glow at night as extra beacons.
+    const DECOR_COUNT = 10;
+    for (let i = 0; i < DECOR_COUNT; i++) {
+      const a = rng.frac() * Math.PI * 2;
+      const r = rng.between(40, 145);
+      const x = Phaser.Math.Clamp(c.x + Math.cos(a) * r, 20, WORLD_W - 20);
+      const y = Phaser.Math.Clamp(c.y + Math.sin(a) * r, 20, WORLD_H - 20);
+      this.add.image(x, y, "gloam_crystal_cluster").setDepth(ysortDepth(y));
+      if (i % 3 === 0) this.veinLightPoints.push({ x, y });
+    }
+  }
+
+  // (Re)arm the Gloaming Vein: its Gloamwarden guardian + a ring of shielded ore
+  // nodes. Used by the initial spawn and the S4 respawn once the vein is fully
+  // mined out. pushLights only on the FIRST arm — the clearing's night-glow points
+  // are static after create(), so a respawn reuses them (its crystals still glow).
+  private armVein(rng: Phaser.Math.RandomDataGenerator, pushLights: boolean): void {
+    if (!this.veinPosition) return;
+    const c = this.veinPosition;
+    this.veinCracked = false;
     const warden = new Gloamwarden(this, { x: c.x, y: c.y });
     this.gloamwarden = warden;
     this.enemies.push(warden);
     this.enemyGroup.add(warden);
 
+    const fresh: ResourceNode[] = [];
     for (let i = 0; i < VEIN_NODE_COUNT; i++) {
       const a = (i / VEIN_NODE_COUNT) * Math.PI * 2 + rng.frac() * 0.5;
       const r = VEIN_NODE_RING + rng.between(-14, 14);
@@ -4173,23 +4298,11 @@ export class MainScene extends Phaser.Scene {
       });
       this.nodes.push(node);
       this.obstacleNodes.push(node);
-      this.gloamingVeinNodes.push(node);
-      this.veinLightPoints.push({ x, y });
+      fresh.push(node);
+      if (pushLights) this.veinLightPoints.push({ x, y });
     }
-
-    // Decorative amethyst crystal clusters scattered across the clearing (like
-    // the war-camp props) so the ore area reads as a crystalline field, not a
-    // few nodes on grass. Non-interactive, Y-sorted. A few of the outer ones
-    // also glow at night as extra beacons.
-    const DECOR_COUNT = 10;
-    for (let i = 0; i < DECOR_COUNT; i++) {
-      const a = rng.frac() * Math.PI * 2;
-      const r = rng.between(40, 145);
-      const x = Phaser.Math.Clamp(c.x + Math.cos(a) * r, 20, WORLD_W - 20);
-      const y = Phaser.Math.Clamp(c.y + Math.sin(a) * r, 20, WORLD_H - 20);
-      this.add.image(x, y, "gloam_crystal_cluster").setDepth(ysortDepth(y));
-      if (i % 3 === 0) this.veinLightPoints.push({ x, y });
-    }
+    // Replace (not append) — a respawn's old nodes were destroyed on depletion.
+    this.gloamingVeinNodes = fresh;
   }
 
   // The Gloamwarden died — crack open every vein ore node so the player can now
@@ -4214,7 +4327,9 @@ export class MainScene extends Phaser.Scene {
     const picks: { x: number; y: number }[] = [];
     let guard = 0;
     while (picks.length < FORGE_COUNT && guard++ < 800) {
-      const p = this.pickBadlandsPoint(rng);
+      // Pushed DEEP (S4): the Sunken Forge is a destination, not forest-edge
+      // content — POI_DEEP_R_MIN keeps it out in real badlands.
+      const p = this.pickBadlandsPoint(rng, 0.4, POI_DEEP_R_MIN);
       if (!p) continue;
       if (
         this.altarPosition &&
@@ -4257,39 +4372,17 @@ export class MainScene extends Phaser.Scene {
       this.add.image(c.x, forgeY, "sunken_forge").setDepth(ysortDepth(forgeY));
       this.forgeLightPoints.push({ x: c.x, y: forgeY });
 
-      const wrought = new Cinderwrought(this, { x: c.x, y: c.y });
-      this.enemies.push(wrought);
-      this.enemyGroup.add(wrought);
-
-      // Shielded ember-ore nodes ringing the forge — inert until the Cinderwrought
-      // dies, then cracked open into mineable Cinderforged Ore (a smelting/metal
-      // material, the "something mineable here after we kill him"). Mirrors the
-      // Gloaming Vein pattern exactly.
-      const oreNodes: ResourceNode[] = [];
-      for (let i = 0; i < FORGE_ORE_COUNT; i++) {
-        const a = (i / FORGE_ORE_COUNT) * Math.PI * 2 + rng.frac() * 0.5;
-        const r = 110 + rng.between(-14, 14);
-        const x = Phaser.Math.Clamp(c.x + Math.cos(a) * r, 60, WORLD_W - 60);
-        const y = Phaser.Math.Clamp(c.y + Math.sin(a) * r, 60, WORLD_H - 60);
-        const node = new ResourceNode(this, {
-          x,
-          y,
-          texture: "ember_ore_shielded",
-          resource: "ember_ore",
-          // The Ember POI is the *main* Cinderforged source — a rich payoff for
-          // the Cinderwrought fight (S1: was 1-2, way too thin).
-          amount: rng.between(4, 7),
-          action: "mine",
-          displayName: "Ember Deposit",
-          loose: false,
-          health: 2,
-          shielded: true,
-        });
-        this.nodes.push(node);
-        this.obstacleNodes.push(node);
-        oreNodes.push(node);
-        this.forgeLightPoints.push({ x, y });
-      }
+      const forge = {
+        x: c.x,
+        y: c.y,
+        boss: null as Cinderwrought | null,
+        oreNodes: [] as ResourceNode[],
+        cracked: false,
+        discoveredOnMap: false,
+        respawnAt: null as number | null,
+      };
+      this.forges.push(forge);
+      this.armForge(rng, forge, true); // Cinderwrought + shielded ore (lights on first arm)
 
       // Decorative cooled-lava rubble across the clearing so the forge reads as a
       // scorched ruin, not one structure on dust. A few glow at night as beacons.
@@ -4301,9 +4394,52 @@ export class MainScene extends Phaser.Scene {
         this.add.image(x, y, "slag_chunk").setDepth(ysortDepth(y));
         if (i % 4 === 0) this.forgeLightPoints.push({ x, y });
       }
-
-      this.forges.push({ x: c.x, y: c.y, boss: wrought, oreNodes, cracked: false, discoveredOnMap: false });
     }
+  }
+
+  // (Re)arm one Sunken Forge: its Cinderwrought mini-boss + a ring of shielded
+  // ember-ore nodes (inert until onCinderwroughtKilled cracks them). Used by the
+  // initial spawn and the S4 respawn once the forge is fully mined out. pushLights
+  // only on the first arm — the clearing's night-glow points are static after
+  // create(), so a respawn reuses them.
+  private armForge(
+    rng: Phaser.Math.RandomDataGenerator,
+    forge: { x: number; y: number; boss: Cinderwrought | null; oreNodes: ResourceNode[]; cracked: boolean },
+    pushLights: boolean,
+  ): void {
+    forge.cracked = false;
+    const wrought = new Cinderwrought(this, { x: forge.x, y: forge.y });
+    forge.boss = wrought;
+    this.enemies.push(wrought);
+    this.enemyGroup.add(wrought);
+
+    const oreNodes: ResourceNode[] = [];
+    for (let i = 0; i < FORGE_ORE_COUNT; i++) {
+      const a = (i / FORGE_ORE_COUNT) * Math.PI * 2 + rng.frac() * 0.5;
+      const r = 110 + rng.between(-14, 14);
+      const x = Phaser.Math.Clamp(forge.x + Math.cos(a) * r, 60, WORLD_W - 60);
+      const y = Phaser.Math.Clamp(forge.y + Math.sin(a) * r, 60, WORLD_H - 60);
+      const node = new ResourceNode(this, {
+        x,
+        y,
+        texture: "ember_ore_shielded",
+        resource: "ember_ore",
+        // The Ember POI is the *main* Cinderforged source — a rich payoff for
+        // the Cinderwrought fight (S1: was 1-2, way too thin).
+        amount: rng.between(4, 7),
+        action: "mine",
+        displayName: "Ember Deposit",
+        loose: false,
+        health: 2,
+        shielded: true,
+      });
+      this.nodes.push(node);
+      this.obstacleNodes.push(node);
+      oreNodes.push(node);
+      if (pushLights) this.forgeLightPoints.push({ x, y });
+    }
+    // Replace (not append) — a respawn's old nodes were destroyed on depletion.
+    forge.oreNodes = oreNodes;
   }
 
   // A slain Cinderwrought cracks open its forge's ember-ore deposits so the

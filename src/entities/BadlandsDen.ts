@@ -43,21 +43,31 @@ export class BadlandsDen {
   // One-time minimap landmark once explored close enough (same discovered-
   // structure treatment as GremlinShack/BossAltar).
   discoveredOnMap = false;
+  // POI respawn (S4): when this den is fully cleared (looted + cache emptied) the
+  // scene arms a timer here; once it elapses reset() returns the den to wave1.
+  respawnAt: number | null = null;
 
   constructor(scene: Phaser.Scene, cfg: { x: number; y: number }) {
     this.scene = scene;
     this.x = cfg.x;
     this.y = cfg.y;
     this.image = scene.add.image(cfg.x, cfg.y, "duskrunner_den").setDepth(ysortDepth(cfg.y));
-    this.moundGlow = scene.add
-      .image(cfg.x, cfg.y, "light_soft")
+    this.moundGlow = this.createMoundGlow();
+  }
+
+  // The faint idle ember pulse on the mound (present from spawn so a Warren reads
+  // as an "obviously destroy this" POI, not scenery). Extracted so reset() can
+  // rebuild it after collapse() destroyed the original.
+  private createMoundGlow(): Phaser.GameObjects.Image {
+    const glow = this.scene.add
+      .image(this.x, this.y, "light_soft")
       .setTint(0xff9a4a)
       .setBlendMode(Phaser.BlendModes.ADD)
       .setScale(0.16)
       .setAlpha(0.3)
       .setDepth(this.image.depth - 1);
-    scene.tweens.add({
-      targets: this.moundGlow,
+    this.scene.tweens.add({
+      targets: glow,
       alpha: 0.5,
       scale: 0.2,
       duration: 1100,
@@ -65,6 +75,28 @@ export class BadlandsDen {
       repeat: -1,
       ease: "Sine.easeInOut",
     });
+    return glow;
+  }
+
+  // S4 respawn: return a fully-looted den to its guarded wave-1 state. The scene
+  // re-spawns wave 1 and re-arms the loot separately (mirrors respawnShackGuards).
+  reset(): void {
+    this.scene.tweens.killTweensOf(this.image);
+    this.cacheImage?.destroy();
+    this.cacheImage = null;
+    if (this.glowImage) {
+      this.scene.tweens.killTweensOf(this.glowImage);
+      this.glowImage.destroy();
+      this.glowImage = null;
+    }
+    this.image.setTexture("duskrunner_den").clearTint();
+    this.phase = "wave1";
+    this.health = this.maxHealth;
+    this.guards = [];
+    this.respawnAt = null;
+    // Let the next collapse roll fresh cache loot (it was emptied to get here).
+    this.loot.rearmIfEmpty();
+    this.moundGlow = this.createMoundGlow();
   }
 
   // The current hover/interact target: the cache once destroyed, else the mound.

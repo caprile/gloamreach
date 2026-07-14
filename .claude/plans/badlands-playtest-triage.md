@@ -92,18 +92,25 @@ The "not grindy" pass. Interlocking economy — do as one session.
 - Files: `RelicForgeMenu.ts`, `InventoryMenu.ts`, `Relics.ts` (`effectSummary` +
   `RelicEffectSummary`), `MainScene.ts` (dep wiring).
 
-## Session 4 — Badlands POI placement, respawn & spawn bugs · Sonnet
+## Session 4 — Badlands POI placement, respawn & spawn bugs · Sonnet — ✅ SHIPPED (2026-07-13)
 
 - **POI spacing:** min gap between POIs; push **boss/forge deeper** from the woods disc.
-  Warren dens may stay near-ish. (Check `pickBadlandsPoint` + per-POI clear radii /
-  min-distance-from-BIOME_RADIUS.)
+  Warren dens may stay near-ish. ✅ — `pickBadlandsPoint` gained an `rMin` param; Sunken
+  Forges + Duneshaper altars now pick from `POI_DEEP_R_MIN` (3600); altars keep
+  `POI_MIN_SEPARATION` (1000) from camp/vein/forges via new `clearsOtherPois`. Dens
+  unchanged (near-ish). Verified: forges ≥3688 / altars ≥4175 from center, gap ≥1279.
 - **General POI respawn** per decision 4: Warren dens + Gloam Vein + Sunken Forge respawn
-  on a timer after full clear; boss-summon altars excluded.
-- **Bug:** nighttime surge spawns *forest* enemies in the badlands (night batch uses the
-  forest roster regardless of biome — make it biome-aware).
-- **Warren dens:** add a delay between wave-1 clear and wave-2 spawn/aggro (they
-  insta-popped and insta-aggro'd).
-- Files: `MainScene` pick*/POI-spawn/respawn/night-batch/warren-wave code.
+  on a timer after full clear; boss-summon altars excluded. ✅ — per-frame
+  `updatePoiRespawns` arms `POI_RESPAWN_MS` (8 min) once fully cleared (den looted + cache
+  emptied; vein/forge mini-boss dead + all ore mined), then re-arms via new
+  `BadlandsDen.reset()`/`armVein()`/`armForge()` (fresh boss + fresh shielded ore).
+  Gremlin/tyrant summon altars stay one-shot.
+- **Bug:** nighttime surge spawns *forest* enemies in the badlands. ✅ — `spawnNightBatch`
+  now draws each spawn from its point's biome via `makeRespawnEnemy` (already biome-aware).
+- **Warren dens:** add a delay between wave-1 clear and wave-2 spawn/aggro. ✅ —
+  `DEN_WAVE2_DELAY_MS` (1600ms) `delayedCall` in `onDenGuardKilled`; den "stirs" then the
+  elite wave bursts a beat later (phase-guarded so a reset/destroy before it fires no-ops).
+- Files: `MainScene` pick*/POI-spawn/respawn/night-batch/warren-wave code; `BadlandsDen.ts`.
 
 ## Session 5 — Recipe/upgrade gating & dev-command bugs · Sonnet
 

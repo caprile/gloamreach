@@ -2,18 +2,24 @@
 
 ## Current State
 
-_Living snapshot — edit in place, never append. Last shipped: **S3 — Relic Forge menu UI + "all
-relic effects" panel** (2026-07-13, Sonnet). Third of the 6 triaged badlands-playtest sessions
-(`.claude/plans/badlands-playtest-triage.md`) — pure UI/wiring on the relic system, no new mechanic
-or data change. **Forge result-line/grid overlap fixed** (plain-success `resultBlockH` was too
-short, so the "Your Relics" header rode onto the "Forged:" line). **Forge owned-relic grid** now
-groups by **power tier** (a "Tier N" subheader per group) and `COLS` 6→5 so chips stop overflowing
-the panel. **New aggregated "all relic effects" list** in the Inventory Relics column
-(`RelicManager.effectSummary()` — one row per active channel with its tier-scaled grand total;
-hover a channel to see which relics feed it); `InventoryMenu.PANEL_H` grows to fit the 9-channel
-worst case. `tsc` clean; verified live (`preview_eval` numeric layout assertions — overlap gap,
-tier subheaders, chip/effects-list within panel). **Remaining triage: S4–S6** (POI placement/
-respawn, recipe gating, UX polish). See the entry below + [[survivor-rpg-relics]].
+_Living snapshot — edit in place, never append. Last shipped: **S4 — Badlands POI placement,
+respawn & spawn bugs** (2026-07-13, Sonnet). Fourth of the 6 triaged badlands-playtest sessions
+(`.claude/plans/badlands-playtest-triage.md`) — four fixes on the badlands POI/spawn systems, no
+new mechanic or data change. **Night-surge is biome-aware** (`spawnNightBatch` now draws each
+surge spawn from its own point's biome via `makeRespawnEnemy`, not a hardcoded forest mix — no
+more Boars at a badlands nightfall). **Warren wave-2 delayed** 1.6s (`DEN_WAVE2_DELAY_MS`) so it
+no longer insta-pops on the player. **Sunken Forges + Duneshaper altars pushed deeper**
+(`pickBadlandsPoint` gained an `rMin` param; `POI_DEEP_R_MIN` 3600) with a cross-POI min-gap
+(`POI_MIN_SEPARATION` 1000, `clearsOtherPois`). **General POI respawn** (locked decision 4): dens,
+the Gloaming Vein, and Sunken Forges re-arm 8 min after being fully cleared (boss-summon altars
+stay one-shot) via a per-frame `updatePoiRespawns` + extracted `BadlandsDen.reset()`/`armVein()`/
+`armForge()`. `tsc` clean; all four verified live via `preview_eval`. **Remaining triage: S5–S6**
+(recipe/upgrade gating + dev-cmd bugs; UX/text polish). See the entry below + [[survivor-rpg-biome-2-plan]].
+Prior: **S3 — Relic Forge menu UI + "all relic effects" panel** (2026-07-13, Sonnet). Third of the
+6 triaged badlands-playtest sessions — pure UI/wiring on the relic system, no new mechanic or data
+change. **Forge result-line/grid overlap fixed**; owned-relic grid groups by **power tier**
+(`COLS` 6→5); **new aggregated "all relic effects" list** in the Inventory Relics column
+(`RelicManager.effectSummary()`). See the entry below + [[survivor-rpg-relics]].
 Prior: **S2 — Badlands boss & enemy combat
 tuning** (2026-07-13, Opus). Second of the 6 triaged badlands-playtest sessions
 (`.claude/plans/badlands-playtest-triage.md`). **Duneshaper** made a real gate: HP 900→1050, the
@@ -193,6 +199,43 @@ below + [[survivor-rpg-dev-console]].
 ## Recent Entries
 
 > Older entries in STATUS-archive.md.
+
+### S4 — Badlands POI placement, respawn & spawn bugs (2026-07-13, Sonnet)
+
+Fourth of the 6 triaged badlands-playtest sessions (`.claude/plans/badlands-playtest-triage.md`).
+Four independent fixes on the badlands POI/spawn systems — no new mechanic, no recipe/data change
+(`RECIPES.md` + dashboard untouched). `tsc` clean; all four verified live via `preview_eval` (a
+fresh server booted clean after an earlier contended/wedged boot state — the double-banner quirk).
+
+- **Night-surge biome bug (`MainScene.spawnNightBatch`).** The nightfall surge hardcoded the
+  forest roster (2 Boar/2 Snake/2 Gremlin) regardless of where the player was, so a badlands
+  nightfall spawned forest animals. Now each of the ~6 surge spawns draws its species from its own
+  spawn point's biome via the already-biome-aware `makeRespawnEnemy` (dunes → null → skipped).
+  Verified: player parked at a deep-badlands forge, every surge enemy matched its own point's
+  biome (a Hexling on a badlands point; forest species only on the forest blobs the ring straddled).
+- **Warren wave-2 delay (`MainScene.onDenGuardKilled` + `DEN_WAVE2_DELAY_MS` 1600ms).** Clearing
+  wave 1 insta-popped + insta-aggro'd the elite wave 2 in the same frame. Now the den "stirs"
+  immediately and the 3 elite Duskrunners burst a 1.6s beat later (a `time.delayedCall`, guarded on
+  phase so a den reset/destroyed before it fires can't spawn a ghost wave). Verified: guards empty
+  immediately after wave-1 clear, then 3 elite Duskrunners after the delay.
+- **POI spacing / push deeper (`pickBadlandsPoint` gains an `rMin` param; `POI_DEEP_R_MIN` 3600,
+  `POI_MIN_SEPARATION` 1000, `clearsOtherPois`).** The Sunken Forges + Duneshaper altars now pick
+  from a deeper radial band (off the forest edge — they're destinations), and the altars keep
+  `POI_MIN_SEPARATION` from the camp/vein/forges. Verified: forges all ≥3688 / altars all ≥4175
+  from center (one per quadrant), min forge↔altar gap 1279. Warren dens intentionally stay near-ish
+  (unchanged).
+- **General POI respawn (locked decision 4; `updatePoiRespawns`, `POI_RESPAWN_MS` 8min).** Warren
+  dens, the Gloaming Vein, and Sunken Forges now re-arm 8 min after being **fully cleared** (den
+  looted + cache emptied; vein/forge mini-boss dead + all its ore mined) — boss-summon altars
+  (gremlin/tyrant) stay one-shot. Polled each frame (the clear conditions are themselves polled
+  states). Extracted `BadlandsDen.reset()`, `armVein()`, `armForge()` (the initial spawns now call
+  the same arm helpers; night-glow points pushed only on the first arm since they're static). A
+  respawned vein/forge builds **fresh** shielded ore (the old nodes were destroyed on depletion).
+  Verified: all three armed at T0+8min then, on firing, reset to their guarded state — den → wave1
+  with 3 *normal* guards, vein → fresh Gloamwarden + 5 shielded nodes, forge → fresh Cinderwrought
+  + 4 shielded ore.
+
+**Remaining triage: S5–S6** (recipe/upgrade gating + dev-cmd bugs; UX/text polish).
 
 ### S3 — Relic Forge menu UI + "all relic effects" panel (2026-07-13, Sonnet)
 
