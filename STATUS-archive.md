@@ -5984,3 +5984,45 @@ console errors. `RECIPES.md` updated (smelt table, armor totals, weapon table, P
 fix). **Remaining triage sessions: 2 (boss/enemy tuning), 3 (relic UI), 4 (POI placement/
 respawn), 5 (recipe gating/dev cmds), 6 (UX/text polish).** See [[survivor-rpg-biome-2-plan]].
 
+
+
+### S2 — Badlands boss & enemy combat tuning (2026-07-13, Opus)
+
+Second of the 6 triaged badlands-playtest sessions (`.claude/plans/badlands-playtest-triage.md`).
+Combat feel + balance on the badlands roster + the two bosses. All numbers first-pass/tunable.
+
+- **Duneshaper** (`Duneshaper.ts`) — the final boss read as a speed bump, not a gate. Fixes:
+  - **Gloam Volley → a beam-like 6-bolt spray** (was 3): `VOLLEY_BOLTS` 3→6, `VOLLEY_BOLT_SPEED`
+    240→**460** (near-instant/beam-like travel), `VOLLEY_TELEGRAPH_MS` 700→**420** (short react
+    window so it can't be lazily sidestepped), `VOLLEY_SPREAD` 18°→**9°** (a tight ~45° fan reading
+    as a rapid beam-spray), `VOLLEY_BOLT_DAMAGE` 24→**22**/bolt (more bolts land now — a face-full
+    hurts more, a clipping single hit ≈ the same), range 460→520. Matches the user's "beam-like, 6
+    not 3, near-instant, short react window."
+  - **More damage across attacks:** spikes 50→56 (physical), nova 42→50, lance 46→54, barrage 30→34
+    (all magic bypass armor). Lance wind-up 900→**700** (a real beam — harder to sidestep).
+  - **Tankier + much harder to stagger-lock:** HP 900→**1050**; poise 120→**170** (more damage to
+    break); stagger punish **1.5×→1.35×** and **3s→2.2s**; poise regen delay 4000→3000ms + rate
+    15→22/s (recovers between stagger attempts). Resists easy stagger-locking per the balance target.
+- **Cinderwrought** (`Cinderwrought.ts`) — playtest took **zero hits**. Harder + harder to dodge:
+  telegraphs cone **820→620** / hammer **720→560** (less react time), reach cone **210→235** /
+  hammer **155→168** (a lazy back-pedal no longer clears it), attack cooldown **850→650** (attacks
+  more often), HP **300→340**. Damage unchanged (already bumped in the 19-item batch).
+- **Hexling** (`Hexling.ts`) — "teleports too much." Blink cooldown **2600→5200ms**, and the
+  post-flame reposition blink is now **gated on that cooldown** (was unconditional — it blinked after
+  every single flame strike on top of every corner). It now commits to standing and casting far more.
+- **Fire resistance layer** (decision 3, the counterweight to Emberblink's fire-nova being a blanket
+  answer). `Enemy.resistances` + `resistMultiplier()` widened from `DamageType` to
+  `IncomingDamageType` so **"fire" is resist-able**; `MainScene.dealSetBonusDamage` (Emberblink nova
+  + Molten Bulwark thorns) now applies `resistMultiplier("fire")` and tints the damage number by
+  effectiveness (was flat, always-"weak"). Data: **Cragscale ×0.5, Sandmaw ×0.5** (fire-resistant),
+  **Hexling ×1.5** (fire-weak), all other badlands enemies neutral. `Enemy.ts` dropped the now-unused
+  `DamageType` import.
+- **Verified live** (`preview_eval`, this session's own dev server): spawned all five and asserted
+  Duneshaper `{maxHealth:1050, poise:170, magic:0.5, pierce:1.3}`, Cinderwrought `{maxHealth:340}`,
+  the Gloam Volley spawning **6 bolts at 460 px/s**, and fire scaling through `dealSetBonusDamage`
+  (40 base → **20** on a Cragscale (×0.5), **60** on a Hexling (×1.5)); Cragscale/Sandmaw/Hexling
+  fire multipliers 0.5/0.5/1.5. `tsc --noEmit` clean, no console errors. **Dashboard Enemies tab
+  updated** (the one hand-mirrored source: Duneshaper/Cinderwrought/Hexling stats + Cragscale/Sandmaw
+  fire-resist notes). No `RECIPES.md` change (no recipe/data-module change). **Remaining triage:
+  S3–S6.**
+

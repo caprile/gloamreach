@@ -3,18 +3,23 @@
 ## Current State
 
 _Living snapshot — edit in place, never append. Last shipped: **PB1 — post-2nd-boss playtest fix
-batch, Session 1** (2026-07-14): the fix/tuning slice of a 3-session triage off a 21-item dump from
-beating the Duneshaper, built as **4 parallel worktree agents** (balance, crafting-menu bugs,
-discovery/UI, relic economy). Forged armor up (Emberhide 16→23, Embersteel 23→32), stone costs
-−30-40%, ~1.4-1.6× faster leveling, new Duskrunner Skewer dish; equipped pieces now count toward
-reforge recipes; per-tier relic roll buttons; **relic refund reworked to 50% of a discarded roll's
-trophy cost** (raw→0, refined→1 — never nets shards). **Session 2 also shipped** (2026-07-14):
-enemy **wander-anchor** (Boar/Cragscale/free Gremlings sample idle wander from spawn, no more
-drift) + **Hexling** rework (neutral to physical, center-bolt-fire / outer-two-physical volley,
-drops **4-6** hex essence, elite **9-11** — bumped again post-Session-2 so clearing ~half the
-badlands ring covers all base biome-2 forged gear's 23-hex-essence cost without a full loop).
-**In progress:** Session 3 (populate the empty outer world with biome-appropriate nodes +
-enemies) is queued. See the PB1 entry below + [[survivor-rpg-relics]].
+batch (all 3 sessions done)** (2026-07-14): a 3-session triage off a 21-item dump from beating the
+Duneshaper. **Session 1** (4 parallel worktree agents): forged armor up (Emberhide 16→23, Embersteel
+23→32), stone costs −30-40%, ~1.4-1.6× faster leveling, new Duskrunner Skewer dish; equipped pieces
+now count toward reforge recipes; per-tier relic roll buttons; **relic refund reworked to 50% of a
+discarded roll's trophy cost** (raw→0, refined→1 — never nets shards). **Session 2:** enemy
+**wander-anchor** (Boar/Cragscale/free Gremlings sample idle wander from spawn, no more drift) +
+**Hexling** rework (neutral to physical, center-bolt-fire / outer-two-physical volley, drops **4-6**
+hex essence, elite **9-11**, bumped once more same day so clearing ~half the badlands ring covers
+all base biome-2 forged gear's 23-hex-essence cost without a full loop). **Session 3:** populated
+the forest patchwork blobs beyond `BIOME_RADIUS` and extended the badlands band from
+`BADLANDS_R_MAX_INNER` (5200) out to a new `BADLANDS_R_MAX_OUTER` (8500) — two additive spawn passes
+(`spawnOuterForestContent/Enemies`, `spawnOuterBadlandsContent/Enemies`) via new
+`pickOuterForestPoint` + a widened `pickBadlandsPoint(..., rMax)`. Verified live: 100% placement
+success for both new node passes, zero POI-exclusion violations traceable to the new code. **PB1 is
+now fully shipped.** A pre-existing, unrelated minor bug was discovered during verification (spawn
+task `task_c1db4f83`: `pickSpawnPoint`'s exhaustion fallback can return an unvalidated point) — not
+fixed here, flagged separately. See the PB1 entry below + [[survivor-rpg-relics]].
 Prior: **S7 — pre-push inventory/dev-cmd tweaks** (2026-07-13, Opus): search-box insta-clear `✕`
 button, `nobuildcost` TEMPORARILY lists all recipes (display-only), taller backpack grid
 (`BACKPACK_ROWS 6 → 15`). See the S7 entry below.
@@ -213,10 +218,12 @@ below + [[survivor-rpg-dev-console]].
   outer ground is a single bounded `bakeOuterOverlay` RenderTexture (`OVERLAY_TEX` 4096²,
   LINEAR-filtered, stretched over the world — constant GPU cost at any world size). Never size
   a tilesprite/RenderTexture to the whole world.
-- **Badlands has content now (Phase 2/2b); dunes + deep ring are still empty.** The forest disc
-  holds the biome-1 roster/POIs; the **badlands patchwork now holds the Duskrunner/Cragscale/
-  Hexling/Sandmaw roster + Emberbloom/Sunfruit flora** (via `pickBadlandsPoint`). Everything past
-  the badlands band (dunes, the empty outer ring) is still terrain only until later phases.
+- **Forest blobs + a wider badlands band have content now (PB1 Session 3); dunes + the true deep
+  frontier are still empty.** The forest disc holds the biome-1 roster/POIs; **forest patchwork
+  blobs beyond `BIOME_RADIUS` also now get a (lighter) content pass** via `pickOuterForestPoint`;
+  the badlands patchwork holds the Duskrunner/Cragscale/Hexling/Sandmaw roster + Emberbloom/Sunfruit
+  flora out to `BADLANDS_R_MAX_OUTER` (8500, was 5200) via `pickBadlandsPoint`. Dunes and everything
+  beyond ~8500-9000 is still terrain only, deliberately reserved for a future biome.
 - ~~**Enemy respawn top-up is forest-species-only, biome-agnostic.**~~ **FIXED (2026-07-13)** —
   `makeRespawnEnemy` now picks the roster from the biome at each chosen spawn point
   (`worldBiomes.dominantBiomeAt`): forest/base → the forest mix, badlands → the badlands mix
@@ -226,13 +233,12 @@ below + [[survivor-rpg-dev-console]].
 
 > Older entries in STATUS-archive.md.
 
-### PB1 — Post-2nd-boss playtest fix batch, Sessions 1-2 (2026-07-14)
+### PB1 — Post-2nd-boss playtest fix batch, all 3 sessions (2026-07-14)
 
 A 3-session triage off a 21-item playtest dump from beating the Duneshaper (badlands final
-boss). **Sessions 1-2 shipped; Session 3 (populate the empty outer world with
-biome-appropriate nodes + enemies) is queued.** Session 1 = the fix/tuning slice, built as
-**4 parallel worktree agents** (disjoint files, merged into `main` with zero conflicts).
-Session 2 = enemy AI + Hexling, done inline. Both `tsc` clean, verified live via
+boss). **All 3 sessions shipped.** Session 1 = the fix/tuning slice, built as **4 parallel
+worktree agents** (disjoint files, merged into `main` with zero conflicts). Sessions 2-3 =
+enemy AI/Hexling and worldgen population, done inline. All `tsc` clean, verified live via
 `preview_eval`.
 
 - **Balance (A):** forged armor up — Sunsteel heavy 14→**20**, Duskhide light 13→**15**,
@@ -275,6 +281,25 @@ Session 2 = enemy AI + Hexling, done inline. Both `tsc` clean, verified live via
   ≈ ~22 of them; bumped the drop again (4-6/9-11, was 3-5/6-8) so clearing even a modest fraction
   of that half comfortably clears the 23-essence target with real margin. Verified live off real
   spawned Hexlings (normal 4-6, elite 9-11). `tsc` clean, no console errors.
+- **Populate the outer world (Session 3):** playtest — "lot of empty space in the verdant woods
+  outside of center" + "shouldn't have to loop around the whole Badlands ring." Two additive
+  spawn passes, both running after every POI position is set (unlike the pre-existing inner-band
+  passes, which run before POIs and don't get this benefit): `spawnOuterForestContent/Enemies`
+  populates forest patchwork blobs beyond `BIOME_RADIUS` (2000) with a lighter, ~half-density mix
+  of trees/rocks/branches/boulders/blackberries + Boar/Snake/RangedGremlin/MeleeGremling, via a new
+  `pickOuterForestPoint` sampler (mirrors `pickBadlandsPoint`'s structure — dominant-biome gate +
+  all 5 POI exclusions, returns `null` on exhaustion rather than an unvalidated fallback point).
+  `spawnOuterBadlandsContent/Enemies` extends the badlands band from `BADLANDS_R_MAX_INNER` (5200,
+  unchanged default) out to a new `BADLANDS_R_MAX_OUTER` (8500), reusing `pickBadlandsPoint` with
+  its new optional `rMax` param (every existing call site keeps the old default, unaffected).
+  Deliberately NOT filled to `WORLD_RADIUS` (14000) — the deep frontier stays reserved for a future
+  biome. Verified live via `preview_eval`: **100% placement success** for both new node passes (224
+  outer-forest nodes, 266 outer-badlands nodes — exact requested counts, meaning real coverage is
+  plentiful out there); 50 forest-species + 112 badlands-species enemies landed in their respective
+  new bands; sampled outer-forest positions confirmed `dominantBiomeAt() === "forest"`; zero
+  POI-exclusion violations traceable to the new code (all violations found trace to a pre-existing,
+  unrelated `pickSpawnPoint` fallback bug — flagged as a separate task, not fixed here). `tsc`
+  clean, no console errors even at the larger spawn count (554 enemies, 1447 nodes total).
 
 RECIPES.md + dashboard relic prose updated. See [[survivor-rpg-relics]].
 
@@ -423,44 +448,4 @@ screenshots hit the backgrounded-render quirk).
   `PANEL_H` reserves the space).
 - Files: `RelicForgeMenu.ts`, `InventoryMenu.ts`, `Relics.ts`, `MainScene.ts`.
   **Remaining triage: S4–S6** (POI placement/respawn, recipe gating, UX polish).
-
-### S2 — Badlands boss & enemy combat tuning (2026-07-13, Opus)
-
-Second of the 6 triaged badlands-playtest sessions (`.claude/plans/badlands-playtest-triage.md`).
-Combat feel + balance on the badlands roster + the two bosses. All numbers first-pass/tunable.
-
-- **Duneshaper** (`Duneshaper.ts`) — the final boss read as a speed bump, not a gate. Fixes:
-  - **Gloam Volley → a beam-like 6-bolt spray** (was 3): `VOLLEY_BOLTS` 3→6, `VOLLEY_BOLT_SPEED`
-    240→**460** (near-instant/beam-like travel), `VOLLEY_TELEGRAPH_MS` 700→**420** (short react
-    window so it can't be lazily sidestepped), `VOLLEY_SPREAD` 18°→**9°** (a tight ~45° fan reading
-    as a rapid beam-spray), `VOLLEY_BOLT_DAMAGE` 24→**22**/bolt (more bolts land now — a face-full
-    hurts more, a clipping single hit ≈ the same), range 460→520. Matches the user's "beam-like, 6
-    not 3, near-instant, short react window."
-  - **More damage across attacks:** spikes 50→56 (physical), nova 42→50, lance 46→54, barrage 30→34
-    (all magic bypass armor). Lance wind-up 900→**700** (a real beam — harder to sidestep).
-  - **Tankier + much harder to stagger-lock:** HP 900→**1050**; poise 120→**170** (more damage to
-    break); stagger punish **1.5×→1.35×** and **3s→2.2s**; poise regen delay 4000→3000ms + rate
-    15→22/s (recovers between stagger attempts). Resists easy stagger-locking per the balance target.
-- **Cinderwrought** (`Cinderwrought.ts`) — playtest took **zero hits**. Harder + harder to dodge:
-  telegraphs cone **820→620** / hammer **720→560** (less react time), reach cone **210→235** /
-  hammer **155→168** (a lazy back-pedal no longer clears it), attack cooldown **850→650** (attacks
-  more often), HP **300→340**. Damage unchanged (already bumped in the 19-item batch).
-- **Hexling** (`Hexling.ts`) — "teleports too much." Blink cooldown **2600→5200ms**, and the
-  post-flame reposition blink is now **gated on that cooldown** (was unconditional — it blinked after
-  every single flame strike on top of every corner). It now commits to standing and casting far more.
-- **Fire resistance layer** (decision 3, the counterweight to Emberblink's fire-nova being a blanket
-  answer). `Enemy.resistances` + `resistMultiplier()` widened from `DamageType` to
-  `IncomingDamageType` so **"fire" is resist-able**; `MainScene.dealSetBonusDamage` (Emberblink nova
-  + Molten Bulwark thorns) now applies `resistMultiplier("fire")` and tints the damage number by
-  effectiveness (was flat, always-"weak"). Data: **Cragscale ×0.5, Sandmaw ×0.5** (fire-resistant),
-  **Hexling ×1.5** (fire-weak), all other badlands enemies neutral. `Enemy.ts` dropped the now-unused
-  `DamageType` import.
-- **Verified live** (`preview_eval`, this session's own dev server): spawned all five and asserted
-  Duneshaper `{maxHealth:1050, poise:170, magic:0.5, pierce:1.3}`, Cinderwrought `{maxHealth:340}`,
-  the Gloam Volley spawning **6 bolts at 460 px/s**, and fire scaling through `dealSetBonusDamage`
-  (40 base → **20** on a Cragscale (×0.5), **60** on a Hexling (×1.5)); Cragscale/Sandmaw/Hexling
-  fire multipliers 0.5/0.5/1.5. `tsc --noEmit` clean, no console errors. **Dashboard Enemies tab
-  updated** (the one hand-mirrored source: Duneshaper/Cinderwrought/Hexling stats + Cragscale/Sandmaw
-  fire-resist notes). No `RECIPES.md` change (no recipe/data-module change). **Remaining triage:
-  S3–S6.**
 
