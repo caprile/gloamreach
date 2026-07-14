@@ -2546,6 +2546,12 @@ export class MainScene extends Phaser.Scene {
   // conflicts) — drops to the floor if the backpack is full, same pattern as
   // refineTrophies' output grant.
   private grantRelicRefund(shardKey: string, amount: number, discardedName: string): void {
+    // Displacement no longer refunds shards (exploit fix — see
+    // Relics.shardRefund): a zero amount just logs the discard, granting nothing.
+    if (amount <= 0) {
+      this.eventLog.add("info", `${discardedName} discarded.`);
+      return;
+    }
     const leftover = this.addToBackpack(shardKey, amount);
     if (leftover > 0) {
       this.spawnLooseDrop(shardKey, leftover, this.player.x, this.player.y, DROPPED_ITEM_MAGNET_COOLDOWN_MS);

@@ -534,8 +534,9 @@ function renderRelics(): string {
     owned family compares the two: the new relic <b>auto-replaces</b> if it's strictly better
     on every shared stat, <b>auto-declines</b> if the old one is, or — if neither dominates
     (e.g. a differing secondary stat) — the Relic Forge asks the player to pick Keep New /
-    Keep Old. Whichever relic is discarded refunds Gloam/Ember Shards (Common 1 / Uncommon 2 /
-    Rare 4 / Mythic 8, × power tier). Effect numbers below were <b>trimmed to ~0.625×</b> their
+    Keep Old. The discarded relic gives <b>nothing</b> back — the displacement shard refund was
+    removed (playtest exploit fix: free elite trophies made rolling-into-an-owned-family a net
+    shard source). Effect numbers below were <b>trimmed to ~0.625×</b> their
     original values this pass (a Tier-1 relic is now a modest edge with headroom above it).</p>`;
 
   html += `<h3>Trophy → outcome odds</h3><table><thead><tr>
@@ -647,9 +648,9 @@ function renderRelics(): string {
     html += `</tbody></table>`;
   }
   html += `<p class="note">A player holds <b>at most one relic per family</b> (Phase 5) — a
-    new roll into an owned family auto-replaces if strictly better, auto-declines (refunds
-    shards) if strictly worse/equal, or prompts a Keep New / Keep Old choice if neither
-    dominates (e.g. a differing secondary stat on a dual-stat relic).</p>`;
+    new roll into an owned family auto-replaces if strictly better, auto-declines if strictly
+    worse/equal, or prompts a Keep New / Keep Old choice if neither dominates (e.g. a differing
+    secondary stat on a dual-stat relic). The discarded relic gives nothing back (no shard refund).</p>`;
   return html;
 }
 
