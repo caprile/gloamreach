@@ -84,14 +84,23 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     sprintMultiplier: number,
     moveMult = 1,
     dashDistMult = 1,
+    inputEnabled = true,
   ): PlayerFrameResult {
     const now = this.scene.time.now;
     const body = this.body as Phaser.Physics.Arcade.Body;
 
     // Mid-dash: let Arcade physics carry the velocity set when the dash
-    // started; ignore normal input until it expires.
+    // started; ignore normal input until it expires (an in-flight dash always
+    // finishes, even if input was just disabled — e.g. focusing a text field).
     if (now < this.dashingUntil) {
       return { moving: true, sprinting: false, dashStarted: false, facing: this.facing };
+    }
+
+    // Input disabled (e.g. typing in the inventory search box): hold still and
+    // read no movement keys, so WASD routes to the text field, not the player.
+    if (!inputEnabled) {
+      body.setVelocity(0, 0);
+      return { moving: false, sprinting: false, dashStarted: false, facing: this.facing };
     }
 
     const left = this.cursors.left.isDown || this.wasd.left.isDown;

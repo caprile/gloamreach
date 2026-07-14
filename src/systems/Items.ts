@@ -1050,7 +1050,7 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
   // --- Duneshaper (badlands final boss) summon ---
   warren_fetish: {
     key: "warren_fetish",
-    name: "Gloam-Bone Fetish",
+    name: "Gloam-Bone Totem",
     description: "A knot of bone and gloam-scarred hide, hoarded deep in the Duskrunner warrens. Raw material — bind three together at a Workbench to craft an effigy for the badlands altars.",
     texture: "icon_warren_fetish",
     maxStack: 99,
@@ -1059,7 +1059,7 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
   tyrant_totem: {
     key: "tyrant_totem",
     name: "Effigy of the Duneshaper",
-    description: "An effigy bound from warren fetishes and gloam shards. Offer it to a badlands altar's fire to call down what sleeps beneath the dunes.",
+    description: "An effigy bound from Gloam-Bone Totems and gloam shards. Offer it to a badlands altar's fire to call down what sleeps beneath the dunes.",
     texture: "icon_tyrant_totem",
     maxStack: 99,
     hotbarable: true,
@@ -1113,6 +1113,64 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
 
 export function itemDef(key: string): ItemDef | undefined {
   return ITEM_DEFS[key];
+}
+
+// --- Inventory organization (tabbed-by-biome rework) ---
+// The biome an item belongs to = the first biome it appears in. Everything
+// defaults to "forest" (biome 1); only the explicitly-listed biome-2 keys are
+// "badlands". Cross-biome progression items follow "first appearance": the
+// Gremlin King's heart/fang, Gloaming-Vein shards + their forest-POI refined
+// trophies all first show up in the forest, so they stay forest even though
+// they feed badlands-tier crafting.
+export type ItemBiome = "forest" | "badlands";
+
+const BADLANDS_ITEM_KEYS = new Set<string>([
+  // raw materials + arid flora
+  "duskrunner_pelt", "duskrunner_meat", "cragscale_plate", "hex_essence",
+  "sandmaw_chitin", "ironbark", "ember_ore", "clay", "sunscorch_ore",
+  "sunsteel_ingot", "embersteel_ingot", "emberbloom", "sunfruit", "gloamcap",
+  "dustbloom",
+  // forged weapons
+  "sunsteel_warhammer", "sunsteel_sword", "sunsteel_pike",
+  "embersteel_warhammer", "embersteel_sword", "embersteel_pike", "ember_brand",
+  // forged armor
+  "sunsteel_helm", "sunsteel_cuirass", "sunsteel_greaves",
+  "duskhide_hood", "duskhide_vest", "duskhide_leggings",
+  "embersteel_helm", "embersteel_cuirass", "embersteel_greaves",
+  "emberhide_hood", "emberhide_vest", "emberhide_leggings",
+  // station + badlands dishes
+  "smelter",
+  "seared_duskrunner_steak", "emberbloom_broth", "sunfruit_glazed_ribs",
+  "sunscorch_feast", "emberglazed_skewer",
+  // badlands trophies / currency / summon
+  "duskrunner_trophy", "cragscale_trophy", "hexling_trophy", "sandmaw_trophy",
+  "ember_shard", "refined_trophy_uncommon_t2", "warren_fetish", "tyrant_totem",
+]);
+
+export function itemBiome(key: string): ItemBiome {
+  return BADLANDS_ITEM_KEYS.has(key) ? "badlands" : "forest";
+}
+
+// A coarse category axis, orthogonal to biome, used to break each biome tab
+// into labelled sections. Derived from existing def flags (no new per-item
+// data) plus a small trophy/ritual key set.
+export type ItemCategory = "material" | "gear" | "station" | "food" | "curio";
+
+const CURIO_ITEM_KEYS = new Set<string>([
+  "gloam_shard", "ember_shard", "gremlin_king_fang",
+  "warren_fetish", "tyrant_totem", "gremlin_totem",
+]);
+
+export function itemCategory(key: string): ItemCategory {
+  const def = ITEM_DEFS[key];
+  if (!def) return "material";
+  if (def.placeable) return "station";
+  if (def.edible) return "food";
+  // Real gear only — the ammo "slot" (slingshot pellets) is a material, not
+  // a wearable, so it groups with other stackable materials.
+  if (def.weapon || def.tool || (def.armorSlot && def.armorSlot !== "ammo")) return "gear";
+  if (CURIO_ITEM_KEYS.has(key) || key.includes("trophy")) return "curio";
+  return "material";
 }
 
 // Armor material type PER worn piece across the given equip slots (NOT deduped

@@ -112,7 +112,7 @@ The "not grindy" pass. Interlocking economy — do as one session.
   elite wave bursts a beat later (phase-guarded so a reset/destroy before it fires no-ops).
 - Files: `MainScene` pick*/POI-spawn/respawn/night-batch/warren-wave code; `BadlandsDen.ts`.
 
-## Session 5 — Recipe/upgrade gating & dev-command bugs · Sonnet
+## Session 5 — Recipe/upgrade gating & dev-command bugs · Sonnet — ✅ SHIPPED (2026-07-13, w/ S6 + inventory rework)
 
 - Workbench Lvl 3 recipes (Sunsteel etc.) should unlock **only after** the player first
   reaches Workbench Lvl 3 — not on recipe-discovery before the upgrade is applied.
@@ -122,7 +122,7 @@ The "not grindy" pass. Interlocking economy — do as one session.
   also grant free upgrades (currently inverted).
 - Files: `Crafting.ts`, recipe gating, `StationUpgrades.ts`, `__dev` console.
 
-## Session 6 — UX & text polish grab-bag · Sonnet
+## Session 6 — UX & text polish grab-bag · Sonnet — ✅ SHIPPED (2026-07-13; the inventory-sort item grew into a full inventory rework — see inventory-rework-and-s5-s6.md)
 
 - Effigy description still says "fetch" (renamed to Totem in 5aj; description stale).
 - Emberblink description runs off-screen — wrap/clamp the tooltip.

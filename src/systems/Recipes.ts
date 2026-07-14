@@ -264,7 +264,7 @@ export const RECIPES: Recipe[] = [
   {
     id: "tyrant_totem",
     name: "Effigy of the Duneshaper",
-    description: "An effigy bound from warren fetishes and gloam shards. Offer it to a badlands altar's fire to summon the Duneshaper.",
+    description: "An effigy bound from Gloam-Bone Totems and gloam shards. Offer it to a badlands altar's fire to summon the Duneshaper.",
     category: "misc",
     tier: 1,
     costs: { warren_fetish: 3, gloam_shard: 2, bones: 8 },

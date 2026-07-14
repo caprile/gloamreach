@@ -20,11 +20,23 @@ export class Crafting {
   // player has placed a Workbench at least once (separate from — and prior
   // to — the *currently near a workbench* check that gates actually
   // crafting/placing an already-discovered recipe).
-  refresh(discoveredItems: ReadonlySet<string>, skills: Skills, workbenchPlaced: boolean): Recipe[] {
+  refresh(
+    discoveredItems: ReadonlySet<string>,
+    skills: Skills,
+    workbenchPlaced: boolean,
+    maxWorkbenchTierReached: number,
+  ): Recipe[] {
     const newlyUnlocked: Recipe[] = [];
     for (const recipe of RECIPES) {
       if (this.discoveredIds.has(recipe.id)) continue;
       if (recipe.tier > 0 && !workbenchPlaced) continue;
+      // A recipe gated on a Workbench tier (Sunsteel@Lvl3, Embersteel@Lvl4)
+      // stays hidden until the bench has ACTUALLY been upgraded to that tier —
+      // not merely once its ingredients are known. (Crafting it still needs a
+      // nearby bench at that tier via MainScene.isNearWorkbenchAtTier.)
+      if (recipe.requiresWorkbenchTier !== undefined && maxWorkbenchTierReached < recipe.requiresWorkbenchTier) {
+        continue;
+      }
       if (
         this.ingredientsKnown(recipe, discoveredItems) &&
         this.skillsMet(recipe, skills) &&
@@ -39,13 +51,6 @@ export class Crafting {
 
   discoveredRecipes(): Recipe[] {
     return RECIPES.filter((r) => this.discoveredIds.has(r.id));
-  }
-
-  // DEV-only (the `nobuildcost` console command): mark every recipe
-  // discovered immediately, skipping the ingredient/skill/workbench-placed
-  // gates refresh() normally requires.
-  unlockAll(): void {
-    for (const recipe of RECIPES) this.discoveredIds.add(recipe.id);
   }
 
   canAfford(recipe: Recipe, backpack: ItemContainer): boolean {

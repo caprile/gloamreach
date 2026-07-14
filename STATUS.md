@@ -2,19 +2,29 @@
 
 ## Current State
 
-_Living snapshot — edit in place, never append. Last shipped: **S4 — Badlands POI placement,
-respawn & spawn bugs** (2026-07-13, Sonnet). Fourth of the 6 triaged badlands-playtest sessions
-(`.claude/plans/badlands-playtest-triage.md`) — four fixes on the badlands POI/spawn systems, no
-new mechanic or data change. **Night-surge is biome-aware** (`spawnNightBatch` now draws each
-surge spawn from its own point's biome via `makeRespawnEnemy`, not a hardcoded forest mix — no
-more Boars at a badlands nightfall). **Warren wave-2 delayed** 1.6s (`DEN_WAVE2_DELAY_MS`) so it
-no longer insta-pops on the player. **Sunken Forges + Duneshaper altars pushed deeper**
-(`pickBadlandsPoint` gained an `rMin` param; `POI_DEEP_R_MIN` 3600) with a cross-POI min-gap
-(`POI_MIN_SEPARATION` 1000, `clearsOtherPois`). **General POI respawn** (locked decision 4): dens,
-the Gloaming Vein, and Sunken Forges re-arm 8 min after being fully cleared (boss-summon altars
-stay one-shot) via a per-frame `updatePoiRespawns` + extracted `BadlandsDen.reset()`/`armVein()`/
-`armForge()`. `tsc` clean; all four verified live via `preview_eval`. **Remaining triage: S5–S6**
-(recipe/upgrade gating + dev-cmd bugs; UX/text polish). See the entry below + [[survivor-rpg-biome-2-plan]].
+_Living snapshot — edit in place, never append. Last shipped: **S5 + S6 — gating/dev-cmd fixes,
+UX polish + Inventory rework** (2026-07-13, Opus). The final two triaged badlands-playtest
+sessions (`.claude/plans/badlands-playtest-triage.md`), merged — **the entire 6-session triage
+batch (S1–S6) is now done.** The S6 "inventory sort" item grew into a full **inventory rework**
+(plan: `inventory-rework-and-s5-s6.md`): the backpack is now an **effectively-unlimited (240-slot)
+auto-organized tabbed inventory** — biome tabs (Forest/Badlands/All), a click-to-focus **search
+box** (spans all items; locks player movement + gameplay hotkeys while typing), and a
+**sectioned, wheel-scrollable grid** (window-rendered, no free-arrange — drops route to the first
+free slot). New `Items.ts` `itemBiome()`/`itemCategory()` helpers drive grouping; `sortAndStack`
+clusters by biome→category→name. **Equipment→trash drag** added (last missing drag path);
+**processor menus show only compatible materials** (fixing them for the bigger backpack too).
+**S5**: WB Lvl 3+ recipes gate discovery on a sticky `everMaxWorkbenchTier`; placing a station
+marks it discovered (Ember Crucible visible while placed); `nobuildcost` de-inverted (no
+permanent recipe unlock, upgrades now free). **S6**: Molten Bulwark → flat 15% DR + fire thorns
+(no more knockback-immunity); Effigy "Fetish"→"Totem" text; Emberblink tooltip wraps; placed
+stations get a dark postFX outline. `tsc` clean; verified live via `preview_eval`. Next: master-plan
+tail (a 3rd biome / deterministic seeded world-gen for M-W1 proper) or a fresh playtest pass.
+See the entry below + [[survivor-rpg-biome-2-plan]].
+Prior: **S4 — Badlands POI placement, respawn & spawn bugs** (2026-07-13, Sonnet). Fourth of the 6
+triaged badlands-playtest sessions — four fixes on the badlands POI/spawn systems: biome-aware
+night-surge, Warren wave-2 delay (`DEN_WAVE2_DELAY_MS`), Sunken Forges + Duneshaper altars pushed
+deeper (`POI_DEEP_R_MIN`/`POI_MIN_SEPARATION`), and general POI respawn (dens/Gloaming Vein/Sunken
+Forges re-arm 8 min after full clear; boss-summon altars stay one-shot via `updatePoiRespawns`).
 Prior: **S3 — Relic Forge menu UI + "all relic effects" panel** (2026-07-13, Sonnet). Third of the
 6 triaged badlands-playtest sessions — pure UI/wiring on the relic system, no new mechanic or data
 change. **Forge result-line/grid overlap fixed**; owned-relic grid groups by **power tier**
@@ -199,6 +209,52 @@ below + [[survivor-rpg-dev-console]].
 ## Recent Entries
 
 > Older entries in STATUS-archive.md.
+
+### S5 + S6 — Gating/dev-cmd fixes, UX polish + Inventory rework (2026-07-13, Opus)
+
+Final two triaged badlands-playtest sessions (`badlands-playtest-triage.md`), merged. The
+S6 "inventory sort" item grew — via a locked design conversation — into a full **inventory
+rework** (new data model + tabbed UI), which is why the session ran on Opus. Plan:
+`inventory-rework-and-s5-s6.md`.
+
+**Inventory rework** (locked via `AskUserQuestion`: auto-organized pages / effectively
+unlimited / tabs-by-biome). Backpack container grew **36 → 240** slots (`BACKPACK_CAPACITY`,
+effectively unlimited — a hardcore run can't overflow it). New `ItemDef` organization
+helpers in `Items.ts`: `itemBiome()` (forest/badlands, explicit badlands-key set; "first
+biome it appears in" — King heart/fang, Gloam shards + forest-POI refined trophies stay
+forest) and `itemCategory()` (material/gear/station/food/curio, derived from existing def
+flags + a curio/trophy key set). `ItemContainer.sortAndStack` now clusters by
+(biome, category, name). `InventoryMenu` backpack column rebuilt: a **biome tab strip**
+(All + each biome present), a **click-to-focus search box** (spans ALL items by name;
+typing locks player movement via a new `Player.update(inputEnabled)` param + `typingInSearch()`
+guards on every single-key hotkey 1-9/V/O/K/R/H/J/M + Esc-unfocuses-first), and a
+**sectioned, wheel-scrollable grid** (window-rendered — only in-viewport cells become
+GameObjects, mapped to real container indices via `visibleCells`; `handleWheel` consumes the
+wheel over the grid so the hotbar doesn't cycle). No free-arrange in the backpack (it's
+auto-organized) — drops anywhere over the grid route to the first free/merge slot
+(`isOverBackpackGrid` + `findAssignable`). **Equipment-slot → trash drag** added
+(`destroyEquippedSlot`, the last missing drag path). **Processor menus (Drying Rack/Smelter)
+now show ONLY compatible materials** (input/fuel the player owns) instead of the whole
+backpack dimmed — also fixes them for the bigger backpack (they used to iterate the first 36
+slots only). Verified live via `preview_eval`: tabs filter (all 25 / badlands 10 / forest 15),
+search spans biomes, scroll advances + consumes over grid, movement lock zeroes velocity,
+equipment→trash destroys w/o refund, processor shows 1 of 24 items; zero console errors.
+
+**S5 — gating & dev-command bugs.** WB Lvl 3+ recipes now gate discovery on a sticky
+`everMaxWorkbenchTier` (bumped on place/upgrade) via a new `Crafting.refresh` param, so
+Sunsteel/Embersteel recipes stay hidden until the bench is actually upgraded. Placing any
+station marks its key discovered (fixes Ember Crucible only appearing after picking the
+Smelter back up). `nobuildcost` de-inverted: dropped the permanent `unlockAll()` (verified:
+stays 7 recipes on/off) and made upgrades freely available (bypasses the upgrade
+ingredient-discovery gate; cost was already waived).
+
+**S6 — polish.** Molten Bulwark reworked (decision 2): knockback-immunity → **flat 15%
+damage reduction (all types) + fire thorns** (`SET_MOLTEN_DAMAGE_REDUCTION`, applied before
+armor/bypass in `applyDamageToPlayer`; knockback now always applies). Effigy text:
+`warren_fetish` "Gloam-Bone Fetish" → "Gloam-Bone Totem" + fixed the stale "warren fetishes"
+wording (Items/Recipes/RECIPES.md). Emberblink set-bonus desc now word-wraps to the Combat
+column (`addText` gained an optional wrap width). Placed stations get a soft dark postFX
+outline (WebGL-guarded) to read against the badlands floor. `tsc` clean throughout.
 
 ### S4 — Badlands POI placement, respawn & spawn bugs (2026-07-13, Sonnet)
 

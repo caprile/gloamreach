@@ -1,7 +1,7 @@
 import Phaser from "phaser";
 import { EQUIP_SLOTS, type EquipSlot } from "../systems/Equipment";
-import type { ItemContainer } from "../systems/ItemContainer";
-import { itemDef } from "../systems/Items";
+import type { ItemContainer, ItemStack } from "../systems/ItemContainer";
+import { itemDef, itemBiome, itemCategory, type ItemBiome, type ItemCategory } from "../systems/Items";
 import type { Skills } from "../systems/Skills";
 import type { PlayerProgression } from "../systems/Progression";
 import { RARITY_COLOR, rarityIcon, rarityName, relicEffectText, relicFamilyName, type RelicEffectSummary, type RelicFamilySlot, type RelicGroup } from "../systems/Relics";
@@ -95,9 +95,14 @@ export const PANEL_X = 16;
 export const PANEL_Y = 48;
 const SLOT = 46;
 const GAP = 6;
+const CELL = SLOT + GAP;
 export const BACKPACK_COLS = 6;
-export const BACKPACK_ROWS = 6;
-export const BACKPACK_SIZE = BACKPACK_COLS * BACKPACK_ROWS;
+export const BACKPACK_ROWS = 6; // sizes the grid VIEWPORT height (not the container)
+// The backpack container is now effectively unlimited (auto-organized tabbed
+// view, no manual arranging) — sized generously so a single hardcore run can't
+// realistically overflow it. The 6x6 grid is just the on-screen viewport into
+// this flat container; tabs/sections/scroll organize the rest.
+export const BACKPACK_CAPACITY = 240;
 const ARMOR_COLS = 3;
 
 // Fixed layout anchors so render() and slotIndexAt() stay in lockstep.
@@ -108,6 +113,26 @@ const BACKPACK_X = PANEL_X + 12; // 28
 const BACKPACK_Y = GRID_Y;
 const BACKPACK_W = BACKPACK_COLS * SLOT + (BACKPACK_COLS - 1) * GAP; // 306
 const BACKPACK_H = BACKPACK_ROWS * SLOT + (BACKPACK_ROWS - 1) * GAP; // 306
+
+// The backpack column now stacks a tab strip + search box above a scrollable,
+// sectioned grid (the grid viewport keeps the old BACKPACK_Y..+BACKPACK_H
+// footprint's bottom edge, so the panel height is unchanged).
+const BP_TABS_Y = PANEL_Y + 58;
+const BP_SEARCH_Y = PANEL_Y + 80;
+const BP_SEARCH_H = 22;
+const BP_GRID_TOP = PANEL_Y + 110;
+const BP_GRID_BOTTOM = BACKPACK_Y + BACKPACK_H; // unchanged bottom edge
+const BP_GRID_VIEW_H = BP_GRID_BOTTOM - BP_GRID_TOP;
+const BP_SECTION_H = 18; // height of a "Materials"/"Gear"/... section header row
+
+// Section order + labels within a biome tab (matches ItemContainer's sort).
+const CATEGORY_SECTIONS: { cat: ItemCategory; label: string }[] = [
+  { cat: "material", label: "Materials" },
+  { cat: "gear", label: "Gear" },
+  { cat: "station", label: "Stations" },
+  { cat: "food", label: "Food" },
+  { cat: "curio", label: "Trophies & Relics" },
+];
 
 const GRID_GAP = 24;
 const ARMOR_X = BACKPACK_X + BACKPACK_W + GRID_GAP; // 358
@@ -180,6 +205,16 @@ export class InventoryMenu {
   // inline tipBg/tipText pattern RelicBarUI/RelicForgeMenu already use).
   private relicTipBg?: Phaser.GameObjects.Rectangle;
   private relicTipText?: Phaser.GameObjects.Text;
+  // Tabbed-by-biome view state.
+  private activeTab: ItemBiome | "all" = "all";
+  private search = "";
+  private searchFocused = false;
+  private scrollY = 0; // px offset into the (possibly taller-than-viewport) grid
+  private maxScroll = 0; // computed each render
+  // Rebuilt every render: the on-screen cells actually drawn (in-viewport
+  // only), each mapped to its REAL backpack container index so drag-out and
+  // hit-testing resolve correctly even though the view is filtered/sorted.
+  private visibleCells: { x: number; y: number; index: number }[] = [];
 
   constructor(scene: Phaser.Scene, deps: InventoryMenuDeps) {
     this.scene = scene;
@@ -192,6 +227,81 @@ export class InventoryMenu {
       .setScrollFactor(0)
       .setDepth(3000)
       .setVisible(false);
+
+    // Search box focus tracking: clicking the search box focuses it; clicking
+    // anywhere else (or nothing) unfocuses. One deterministic handler beats
+    // relying on per-object pointerdown ordering.
+    scene.input.on("pointerdown", (p: Phaser.Input.Pointer) => {
+      if (!this.open) return;
+      const focus = this.pointInSearchBox(p.x, p.y);
+      if (focus !== this.searchFocused) {
+        this.searchFocused = focus;
+        this.render();
+      }
+    });
+    // Typed characters route to the search box while it's focused. The scene
+    // guards its gameplay hotkeys on isSearchFocused() and locks movement, so
+    // these keys don't double as game input.
+    scene.input.keyboard!.on("keydown", (e: KeyboardEvent) => {
+      if (!this.open || !this.searchFocused) return;
+      this.onSearchKey(e);
+    });
+  }
+
+  private pointInSearchBox(x: number, y: number): boolean {
+    return x >= BACKPACK_X && x <= BACKPACK_X + BACKPACK_W && y >= BP_SEARCH_Y && y <= BP_SEARCH_Y + BP_SEARCH_H;
+  }
+
+  private onSearchKey(e: KeyboardEvent): void {
+    if (e.key === "Enter") {
+      // Enter just unfocuses the box. (Esc is handled by the scene's Esc
+      // guard, which unfocuses the box before it would close the menu.)
+      this.unfocusSearch();
+      return;
+    }
+    if (e.key === "Backspace") {
+      if (this.search.length > 0) {
+        this.search = this.search.slice(0, -1);
+        this.scrollY = 0;
+        this.render();
+      }
+      e.preventDefault();
+      return;
+    }
+    // Printable single characters only.
+    if (e.key.length === 1) {
+      this.search += e.key;
+      this.scrollY = 0;
+      this.render();
+      e.preventDefault();
+    }
+  }
+
+  isSearchFocused(): boolean {
+    return this.open && this.searchFocused;
+  }
+
+  unfocusSearch(): void {
+    if (this.searchFocused) {
+      this.searchFocused = false;
+      this.render();
+    }
+  }
+
+  // Called from the scene's global wheel handler. Returns true (consuming the
+  // wheel) when the pointer is over the scrollable grid, scrolling it instead
+  // of cycling the hotbar.
+  handleWheel(pointer: Phaser.Input.Pointer, dy: number): boolean {
+    if (!this.open) return false;
+    const overGrid =
+      pointer.x >= BACKPACK_X &&
+      pointer.x <= BACKPACK_X + BACKPACK_W &&
+      pointer.y >= BP_GRID_TOP &&
+      pointer.y <= BP_GRID_BOTTOM;
+    if (!overGrid || this.maxScroll <= 0) return overGrid; // still consume if over grid, even with nothing to scroll
+    this.scrollY = Phaser.Math.Clamp(this.scrollY + (dy > 0 ? CELL : -CELL), 0, this.maxScroll);
+    this.render();
+    return true;
   }
 
   toggle(): void {
@@ -258,24 +368,41 @@ export class InventoryMenu {
     return index < slots.length ? slots[index].id : null;
   }
 
-  // Backpack slot index under a screen point, or null (used as a drop target).
+  // Real backpack container index of the item cell under a screen point, or
+  // null. Maps against the rendered (filtered/sorted/scrolled) cells — used as
+  // a drag SOURCE and for in-place click detection, NOT for free placement
+  // (the view is auto-organized; drops route to the first free slot instead —
+  // see isOverBackpackGrid).
   slotIndexAt(screenX: number, screenY: number): number | null {
     if (!this.open) return null;
-    const dx = screenX - BACKPACK_X;
-    const dy = screenY - BACKPACK_Y;
-    if (dx < 0 || dy < 0) return null;
-    const col = Math.floor(dx / (SLOT + GAP));
-    const row = Math.floor(dy / (SLOT + GAP));
-    if (col >= BACKPACK_COLS || row >= BACKPACK_ROWS) return null;
-    // reject the gap between cells
-    if (dx - col * (SLOT + GAP) > SLOT || dy - row * (SLOT + GAP) > SLOT) return null;
-    const index = row * BACKPACK_COLS + col;
-    return index < this.deps.backpack.size ? index : null;
+    for (const c of this.visibleCells) {
+      if (screenX >= c.x && screenX <= c.x + SLOT && screenY >= c.y && screenY <= c.y + SLOT) return c.index;
+    }
+    return null;
+  }
+
+  // Whether a screen point is anywhere over the scrollable backpack grid
+  // viewport — a drop here means "put this in the backpack" (first free/merge
+  // slot), since there's no free-arrange in the auto-organized view.
+  isOverBackpackGrid(screenX: number, screenY: number): boolean {
+    if (!this.open) return false;
+    return (
+      screenX >= BACKPACK_X &&
+      screenX <= BACKPACK_X + BACKPACK_W &&
+      screenY >= BP_GRID_TOP &&
+      screenY <= BP_GRID_BOTTOM
+    );
   }
 
   private teardown(): void {
     this.clearRows();
     this.hideTooltip();
+    // Fresh view each time it opens — no stale search filter hiding items.
+    this.searchFocused = false;
+    this.search = "";
+    this.scrollY = 0;
+    this.activeTab = "all";
+    this.visibleCells = [];
   }
 
   private clearRows(): void {
@@ -294,7 +421,9 @@ export class InventoryMenu {
     this.addText(ARMOR_X, PANEL_Y + 36, "Equipment", 12, "#8a93a3");
     this.addText(STATS_X, PANEL_Y + 36, "Combat", 12, "#8a93a3");
     this.addText(RELICS_X, PANEL_Y + 36, "Relics", 12, "#8a93a3");
-    this.renderBackpack();
+    this.renderTabs();
+    this.renderSearch();
+    this.renderBackpackGrid();
     this.renderArmor(ARMOR_X, ARMOR_Y);
     this.renderTrash();
     this.renderCombatStats(STATS_X, STATS_Y);
@@ -409,7 +538,10 @@ export class InventoryMenu {
       y += lineGap + 6;
       this.addText(x0, y, `◆ ${set.name}`, 12, "#f0a840");
       y += lineGap;
-      this.addText(x0, y, set.desc, 10, "#9a8560");
+      // Wrap the effect text to the column width so a long set-bonus desc
+      // (e.g. Emberblink) no longer runs off the panel/screen edge — S6.
+      const descT = this.addText(x0, y, set.desc, 10, "#9a8560", 0, 0, STATS_W);
+      y += descT.height;
     }
   }
 
@@ -563,60 +695,219 @@ export class InventoryMenu {
     });
   }
 
-  private renderBackpack(): void {
-    const backpack = this.deps.backpack;
+  // Which biomes the backpack currently holds items from (drives the tab strip
+  // — an empty biome gets no tab, so a fresh forest run shows no Badlands tab).
+  private presentBiomes(): ItemBiome[] {
+    const set = new Set<ItemBiome>();
+    const bp = this.deps.backpack;
+    for (let i = 0; i < bp.size; i++) {
+      const s = bp.slot(i);
+      if (s) set.add(itemBiome(s.key));
+    }
+    const out: ItemBiome[] = [];
+    if (set.has("forest")) out.push("forest");
+    if (set.has("badlands")) out.push("badlands");
+    return out;
+  }
 
-    for (let i = 0; i < BACKPACK_SIZE; i++) {
-      const col = i % BACKPACK_COLS;
-      const row = Math.floor(i / BACKPACK_COLS);
-      const x = BACKPACK_X + col * (SLOT + GAP);
-      const y = BACKPACK_Y + row * (SLOT + GAP);
-      const stack = backpack.slot(i);
-
-      const box = this.scene.add
-        .rectangle(x, y, SLOT, SLOT, 0x14181f, 0.9)
-        .setOrigin(0, 0)
-        .setStrokeStyle(1, 0x3a4250)
-        .setScrollFactor(0)
-        .setDepth(3001)
-        .setInteractive({ useHandCursor: true })
-        .on("pointerover", () => {
-          if (stack && !this.deps.isDragging())
-            this.tooltipUI.show(stack.key, { x, y, width: SLOT, height: SLOT }, "right", stack.tier);
+  private renderTabs(): void {
+    const tabs: (ItemBiome | "all")[] = ["all", ...this.presentBiomes()];
+    if (!tabs.includes(this.activeTab)) this.activeTab = "all";
+    const labels: Record<ItemBiome | "all", string> = { all: "All", forest: "Forest", badlands: "Badlands" };
+    let x = BACKPACK_X;
+    for (const tab of tabs) {
+      const active = tab === this.activeTab;
+      const t = this.scene.add
+        .text(x, BP_TABS_Y, labels[tab], {
+          fontFamily: "monospace",
+          fontSize: "12px",
+          color: active ? "#ffffff" : "#8a93a3",
         })
-        .on("pointerout", () => this.hideTooltip())
-        .on("pointerdown", (pointer: Phaser.Input.Pointer) => {
-          if (!stack) return;
-          // Right-click is reserved for context-menu/upgrade actions now —
-          // quick-move-to-hotbar (or quick-equip) moved to double-left-click,
-          // detected by the scene via the click-in-place path (see
-          // MainScene.resolveItemDrag) — except on a weapon/tool (opens its
-          // Upgrade panel) or a placeable (opens a "Place" popup).
-          if (pointer.rightButtonDown()) {
-            const def = itemDef(stack.key);
-            if (def?.edible) this.deps.eatItem(backpack, i);
-            else if (def?.weapon || def?.tool) this.deps.openWeaponUpgrade(backpack, i);
-            else if (def?.placeable) this.deps.openPlaceContextMenu(backpack, i, pointer.x, pointer.y);
-            return;
-          }
-          this.deps.beginDrag(backpack, i, pointer);
+        .setScrollFactor(0)
+        .setDepth(3002)
+        .setInteractive({ useHandCursor: true })
+        .on("pointerover", () => { if (tab !== this.activeTab) t.setColor("#c8d0da"); })
+        .on("pointerout", () => { if (tab !== this.activeTab) t.setColor("#8a93a3"); })
+        .on("pointerdown", () => {
+          if (this.activeTab === tab) return;
+          this.activeTab = tab;
+          this.scrollY = 0;
+          this.render();
         });
-      this.rows.push(box);
-
-      if (!stack) continue;
-
-      const def = itemDef(stack.key);
-      if (def) {
-        const icon = this.scene.add
-          .image(x + SLOT / 2, y + SLOT / 2, def.texture)
+      this.rows.push(t);
+      if (active) {
+        const underline = this.scene.add
+          .rectangle(x, BP_TABS_Y + 16, t.width, 2, 0xf0a840, 1)
+          .setOrigin(0, 0)
           .setScrollFactor(0)
           .setDepth(3002);
-        this.rows.push(icon);
+        this.rows.push(underline);
       }
-      if (stack.count > 1) {
-        this.addText(x + SLOT - 4, y + SLOT - 3, `${stack.count}`, 11, "#ffffff", 1, 1);
-      }
+      x += t.width + 16;
     }
+  }
+
+  private renderSearch(): void {
+    const focused = this.searchFocused;
+    const box = this.scene.add
+      .rectangle(BACKPACK_X, BP_SEARCH_Y, BACKPACK_W, BP_SEARCH_H, 0x14181f, 0.9)
+      .setOrigin(0, 0)
+      .setStrokeStyle(1, focused ? 0xf0a840 : 0x3a4250)
+      .setScrollFactor(0)
+      .setDepth(3001)
+      .setInteractive({ useHandCursor: true });
+    this.rows.push(box);
+    const hasText = this.search.length > 0;
+    // Placeholder only when unfocused + empty; focused shows the text + caret
+    // (so an empty focused box is just a caret, not "placeholder_").
+    const shown = hasText ? this.search : focused ? "" : "🔍 Search items...";
+    const caret = focused ? "_" : "";
+    this.addText(
+      BACKPACK_X + 6,
+      BP_SEARCH_Y + BP_SEARCH_H / 2,
+      `${shown}${caret}`,
+      11,
+      hasText ? "#e8ecf2" : "#5b6472",
+      0,
+      0.5,
+    );
+  }
+
+  // The sectioned, scrollable backpack grid. Items are pulled from the flat
+  // container, filtered by the active tab + search, grouped into category
+  // sections, laid out in content space, then window-rendered into the
+  // viewport (only in-view cells become GameObjects). visibleCells maps each
+  // drawn cell back to its real container index for drag/hit-testing.
+  private renderBackpackGrid(): void {
+    this.visibleCells = [];
+    const bp = this.deps.backpack;
+    const q = this.search.trim().toLowerCase();
+
+    const items: { index: number; stack: ItemStack }[] = [];
+    for (let i = 0; i < bp.size; i++) {
+      const s = bp.slot(i);
+      if (!s) continue;
+      // Search spans ALL items (any biome); it overrides the active tab while
+      // there's a query. Otherwise the tab filters by biome.
+      if (q) {
+        if (!(itemDef(s.key)?.name ?? s.key).toLowerCase().includes(q)) continue;
+      } else if (this.activeTab !== "all" && itemBiome(s.key) !== this.activeTab) {
+        continue;
+      }
+      items.push({ index: i, stack: s });
+    }
+
+    if (items.length === 0) {
+      this.addText(BACKPACK_X + BACKPACK_W / 2, BP_GRID_TOP + 28, q ? "No matching items" : "Empty", 12, "#5b6472", 0.5, 0.5);
+      this.maxScroll = 0;
+      return;
+    }
+
+    const byCat = new Map<ItemCategory, { index: number; stack: ItemStack }[]>();
+    for (const it of items) {
+      const c = itemCategory(it.stack.key);
+      const arr = byCat.get(c) ?? [];
+      arr.push(it);
+      byCat.set(c, arr);
+    }
+    for (const arr of byCat.values()) {
+      arr.sort((a, b) => {
+        const na = itemDef(a.stack.key)?.name ?? a.stack.key;
+        const nb = itemDef(b.stack.key)?.name ?? b.stack.key;
+        return na < nb ? -1 : na > nb ? 1 : (a.stack.tier ?? 0) - (b.stack.tier ?? 0);
+      });
+    }
+
+    // Lay out in content space (y from 0).
+    type El =
+      | { kind: "header"; y: number; label: string }
+      | { kind: "cell"; y: number; col: number; index: number; stack: ItemStack };
+    const els: El[] = [];
+    let cy = 0;
+    for (const { cat, label } of CATEGORY_SECTIONS) {
+      const arr = byCat.get(cat);
+      if (!arr || arr.length === 0) continue;
+      els.push({ kind: "header", y: cy, label });
+      cy += BP_SECTION_H;
+      arr.forEach((it, i) => {
+        const col = i % BACKPACK_COLS;
+        if (i > 0 && col === 0) cy += CELL; // new row
+        els.push({ kind: "cell", y: cy, col, index: it.index, stack: it.stack });
+        if (i === arr.length - 1) cy += CELL; // advance past the section's last row
+      });
+      cy += 6; // gap between sections
+    }
+    const contentH = cy;
+    this.maxScroll = Math.max(0, contentH - BP_GRID_VIEW_H);
+    this.scrollY = Phaser.Math.Clamp(this.scrollY, 0, this.maxScroll);
+
+    for (const el of els) {
+      const sy = BP_GRID_TOP + el.y - this.scrollY;
+      if (el.kind === "header") {
+        if (sy >= BP_GRID_TOP - 2 && sy + BP_SECTION_H <= BP_GRID_BOTTOM) {
+          this.addText(BACKPACK_X + 2, sy, el.label, 10, "#7c869a");
+        }
+        continue;
+      }
+      // Cells: fully-visible only (keeps the top edge clear of the search box).
+      if (sy < BP_GRID_TOP || sy + SLOT > BP_GRID_BOTTOM + 4) continue;
+      this.drawBackpackCell(BACKPACK_X + el.col * CELL, sy, el.index, el.stack);
+    }
+
+    this.renderScrollHints();
+  }
+
+  // One backpack item cell (box + icon + count) with the hover tooltip and
+  // right-click/drag handlers, mapped to its real container index.
+  private drawBackpackCell(x: number, y: number, index: number, stack: ItemStack): void {
+    const backpack = this.deps.backpack;
+    const box = this.scene.add
+      .rectangle(x, y, SLOT, SLOT, 0x14181f, 0.9)
+      .setOrigin(0, 0)
+      .setStrokeStyle(1, 0x3a4250)
+      .setScrollFactor(0)
+      .setDepth(3001)
+      .setInteractive({ useHandCursor: true })
+      .on("pointerover", () => {
+        if (!this.deps.isDragging())
+          this.tooltipUI.show(stack.key, { x, y, width: SLOT, height: SLOT }, "right", stack.tier);
+      })
+      .on("pointerout", () => this.hideTooltip())
+      .on("pointerdown", (pointer: Phaser.Input.Pointer) => {
+        // Right-click is reserved for context-menu/upgrade actions (eat / open
+        // Upgrade panel / Place popup); left-drag starts a move (see
+        // MainScene.resolveItemDrag).
+        if (pointer.rightButtonDown()) {
+          const def = itemDef(stack.key);
+          if (def?.edible) this.deps.eatItem(backpack, index);
+          else if (def?.weapon || def?.tool) this.deps.openWeaponUpgrade(backpack, index);
+          else if (def?.placeable) this.deps.openPlaceContextMenu(backpack, index, pointer.x, pointer.y);
+          return;
+        }
+        this.deps.beginDrag(backpack, index, pointer);
+      });
+    this.rows.push(box);
+    this.visibleCells.push({ x, y, index });
+
+    const def = itemDef(stack.key);
+    if (def) {
+      const icon = this.scene.add
+        .image(x + SLOT / 2, y + SLOT / 2, def.texture)
+        .setScrollFactor(0)
+        .setDepth(3002);
+      this.rows.push(icon);
+    }
+    if (stack.count > 1) {
+      this.addText(x + SLOT - 4, y + SLOT - 3, `${stack.count}`, 11, "#ffffff", 1, 1);
+    }
+  }
+
+  // Small up/down arrows at the grid's right edge when there's more above/below.
+  private renderScrollHints(): void {
+    if (this.maxScroll <= 0) return;
+    const x = BACKPACK_X + BACKPACK_W - 10;
+    if (this.scrollY > 0) this.addText(x, BP_GRID_TOP - 2, "▲", 10, "#8a93a3");
+    if (this.scrollY < this.maxScroll) this.addText(x, BP_GRID_BOTTOM - 14, "▼", 10, "#8a93a3");
   }
 
   private addText(
@@ -627,12 +918,20 @@ export class InventoryMenu {
     color: string,
     originX = 0,
     originY = 0,
-  ): void {
+    wrapWidth?: number,
+  ): Phaser.GameObjects.Text {
+    const style: Phaser.Types.GameObjects.Text.TextStyle = {
+      fontFamily: "monospace",
+      fontSize: `${size}px`,
+      color,
+    };
+    if (wrapWidth !== undefined) style.wordWrap = { width: wrapWidth };
     const t = this.scene.add
-      .text(x, y, str, { fontFamily: "monospace", fontSize: `${size}px`, color })
+      .text(x, y, str, style)
       .setOrigin(originX, originY)
       .setScrollFactor(0)
       .setDepth(3002);
     this.rows.push(t);
+    return t;
   }
 }

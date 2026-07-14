@@ -76,6 +76,9 @@ export class DryingRackMenu {
   private open = false;
   private rows: Phaser.GameObjects.GameObject[] = [];
   private tooltipUI: Tooltip;
+  // The compatible-material cells currently drawn, mapped to their real
+  // backpack index (the view is filtered, so grid position != container index).
+  private visibleCells: { x: number; y: number; index: number }[] = [];
 
   private panelX: number;
   private panelY: number;
@@ -182,19 +185,15 @@ export class DryingRackMenu {
     );
   }
 
-  // Backpack slot index under a screen point (drop target for moving items
-  // back into the bag), or null.
+  // Real backpack index of the compatible-material cell under a screen point
+  // (drop target for moving items back into the bag), or null. Maps against the
+  // filtered cells actually drawn, not a fixed grid.
   slotIndexAt(screenX: number, screenY: number): number | null {
     if (!this.open) return null;
-    const dx = screenX - this.backpackX;
-    const dy = screenY - this.backpackY;
-    if (dx < 0 || dy < 0) return null;
-    const col = Math.floor(dx / (SLOT + GAP));
-    const row = Math.floor(dy / (SLOT + GAP));
-    if (col >= COLS || row >= ROWS) return null;
-    if (dx - col * (SLOT + GAP) > SLOT || dy - row * (SLOT + GAP) > SLOT) return null;
-    const index = row * COLS + col;
-    return index < this.deps.backpack.size ? index : null;
+    for (const c of this.visibleCells) {
+      if (screenX >= c.x && screenX <= c.x + SLOT && screenY >= c.y && screenY <= c.y + SLOT) return c.index;
+    }
+    return null;
   }
 
   // True when a screen point is over the input slot — the drop target that
@@ -266,56 +265,70 @@ export class DryingRackMenu {
       .setDepth(DEPTH_TEXT);
     this.rows.push(descText);
 
-    this.addText(this.backpackX, this.backpackY - 18, "Backpack", 12, "#8a93a3");
+    this.addText(this.backpackX, this.backpackY - 18, "Compatible Materials", 12, "#8a93a3");
     this.renderBackpack(station);
     this.renderProcess(station, max);
   }
 
+  // Shows ONLY the materials this station can accept as input or fuel (that the
+  // player currently owns), instead of the whole backpack with everything else
+  // dimmed — no more scanning past a bag full of unrelated loot to find the two
+  // things a rack/smelter takes.
   private renderBackpack(station: ProcessingStation): void {
+    this.visibleCells = [];
     const backpack = this.deps.backpack;
-    for (let i = 0; i < COLS * ROWS; i++) {
-      const col = i % COLS;
-      const row = Math.floor(i / COLS);
+    const compatible: { index: number; stack: { key: string; count: number; tier?: number } }[] = [];
+    for (let i = 0; i < backpack.size; i++) {
+      const stack = backpack.slot(i);
+      if (stack && (station.canAccept(stack.key) || station.canAcceptFuel(stack.key))) {
+        compatible.push({ index: i, stack });
+      }
+    }
+
+    if (compatible.length === 0) {
+      this.addText(this.backpackX, this.backpackY + 8, "No compatible materials in your backpack.", 11, "#5b6472");
+      return;
+    }
+
+    compatible.forEach((entry, gridPos) => {
+      const col = gridPos % COLS;
+      const row = Math.floor(gridPos / COLS);
       const x = this.backpackX + col * (SLOT + GAP);
       const y = this.backpackY + row * (SLOT + GAP);
-      const stack = backpack.slot(i);
-      const valid = !!stack && (station.canAccept(stack.key) || station.canAcceptFuel(stack.key));
+      const stack = entry.stack;
+      const index = entry.index;
 
       const box = this.scene.add
         .rectangle(x, y, SLOT, SLOT, 0x14181f, 0.9)
         .setOrigin(0, 0)
-        .setStrokeStyle(1, valid ? 0x8fe38f : 0x3a4250)
+        .setStrokeStyle(1, 0x8fe38f)
         .setScrollFactor(0)
         .setDepth(DEPTH_ITEM)
         .setInteractive({ useHandCursor: true })
         .on("pointerover", () => {
-          if (stack && !this.deps.isDragging())
+          if (!this.deps.isDragging())
             this.tooltipUI.show(stack.key, { x, y, width: SLOT, height: SLOT }, "right", stack.tier);
         })
         .on("pointerout", () => this.tooltipUI.hide())
         .on("pointerdown", (pointer: Phaser.Input.Pointer) => {
-          if (!stack) return;
-          if (pointer.rightButtonDown()) this.deps.quickLoad(i);
-          else this.deps.beginDrag(backpack, i, pointer);
+          if (pointer.rightButtonDown()) this.deps.quickLoad(index);
+          else this.deps.beginDrag(backpack, index, pointer);
         });
       this.rows.push(box);
+      this.visibleCells.push({ x, y, index });
 
-      if (!stack) continue;
       const def = itemDef(stack.key);
       if (def) {
-        // Dim items that aren't a valid input for this station — a visual
-        // affordance only; they can still be dragged/rearranged.
         const icon = this.scene.add
           .image(x + SLOT / 2, y + SLOT / 2, def.texture)
           .setScrollFactor(0)
-          .setDepth(DEPTH_ITEM)
-          .setAlpha(valid ? 1 : 0.28);
+          .setDepth(DEPTH_ITEM);
         this.rows.push(icon);
       }
       if (stack.count > 1) {
-        this.addText(x + SLOT - 4, y + SLOT - 3, `${stack.count}`, 11, valid ? "#ffffff" : "#5b6472", 1, 1);
+        this.addText(x + SLOT - 4, y + SLOT - 3, `${stack.count}`, 11, "#ffffff", 1, 1);
       }
-    }
+    });
   }
 
   private renderProcess(station: ProcessingStation, max: number): void {

@@ -1,4 +1,17 @@
-import { itemDef } from "./Items";
+import { itemDef, itemBiome, itemCategory, type ItemCategory } from "./Items";
+
+// Biome then category ordering used by sortAndStack so a re-flowed backpack
+// physically clusters the way the tabbed inventory view groups it (forest
+// first, then badlands; within a biome, materials -> gear -> stations -> food
+// -> curios). Kept here (not in the UI) so a plain sort matches the view.
+const BIOME_ORDER: Record<string, number> = { forest: 0, badlands: 1 };
+const CATEGORY_ORDER: Record<ItemCategory, number> = {
+  material: 0,
+  gear: 1,
+  station: 2,
+  food: 3,
+  curio: 4,
+};
 
 // A single stack of one item type. `count` is always >= 1 while the stack
 // exists; emptied stacks become null slots.
@@ -158,6 +171,12 @@ export function sortAndStack(container: ItemContainer): void {
 
   const packed: ItemStack[] = [];
   const sorted = [...totals.values()].sort((a, b) => {
+    // Biome first, then category, then name — so the physical layout mirrors
+    // the tabbed-by-biome / sectioned inventory view.
+    const bd = (BIOME_ORDER[itemBiome(a.key)] ?? 0) - (BIOME_ORDER[itemBiome(b.key)] ?? 0);
+    if (bd !== 0) return bd;
+    const cd = CATEGORY_ORDER[itemCategory(a.key)] - CATEGORY_ORDER[itemCategory(b.key)];
+    if (cd !== 0) return cd;
     if (a.key !== b.key) return a.key < b.key ? -1 : 1;
     return (a.tier ?? 0) - (b.tier ?? 0);
   });

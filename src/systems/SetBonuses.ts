@@ -25,7 +25,7 @@ export const ARMOR_SETS: ArmorSet[] = [
     name: "Embersteel",
     pieces: ["embersteel_helm", "embersteel_cuirass", "embersteel_greaves"],
     bonusName: "Molten Bulwark",
-    bonusDesc: "Immune to knockback. Melee attackers are seared for fire damage.",
+    bonusDesc: "Reduces all incoming damage. Melee attackers are seared for fire damage.",
   },
   {
     id: "emberhide",

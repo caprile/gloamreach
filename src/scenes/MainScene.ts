@@ -107,7 +107,7 @@ import { UpgradeMenu, type UpgradeDef } from "../ui/UpgradeMenu";
 import { CharacterMenu } from "../ui/CharacterMenu";
 import {
   InventoryMenu,
-  BACKPACK_SIZE,
+  BACKPACK_CAPACITY,
   PANEL_X as INVENTORY_PANEL_X,
   PANEL_Y as INVENTORY_PANEL_Y,
   PANEL_W as INVENTORY_PANEL_W,
@@ -283,8 +283,11 @@ const DASH_STAMINA_COST = 25; // flat cost per dash — 4 dashes per full bar
 const DASH_IFRAME_MS = 150; // outlasts the dash burst itself (Milestone E)
 // --- Armor set-bonus magnitudes (biome 2 Phase 4 forged gear; see SetBonuses.ts) ---
 // Molten Bulwark (Embersteel heavy): a melee attacker that lands a hit is seared
-// for this much fire damage (thorns). Knockback immunity is a flag, no constant.
+// for this much fire damage (thorns), and ALL incoming damage is cut by a flat
+// fraction — a pure heavy-tank identity (the knockback-immunity that used to be
+// this set's other half was dropped per playtest, decision 2).
 const SET_THORNS_FIRE_DAMAGE = 9;
+const SET_MOLTEN_DAMAGE_REDUCTION = 0.15; // 15% off every hit (physical/magic/fire) while the full set is worn
 // Emberblink (Emberhide light): dash burst distance multiplier + the fire nova
 // that erupts at the landing point.
 const SET_EMBERBLINK_DASH_MULT = 1.6;
@@ -465,7 +468,7 @@ export class MainScene extends Phaser.Scene {
   // The single unified item pool. Resources and crafted items alike live here
   // as stacks; the hotbar is a second container items move into. `discovered`
   // records every item key ever added (drives recipe discovery).
-  private backpack = new ItemContainer(BACKPACK_SIZE);
+  private backpack = new ItemContainer(BACKPACK_CAPACITY);
   private discovered = new Set<string>();
   // Which StationUpgradeDef.id's have already had their "New Upgrade
   // Unlocked!" toast fired — upgrades live outside the Recipe/Crafting
@@ -775,6 +778,12 @@ export class MainScene extends Phaser.Scene {
   // should never re-lock on destroy, only current-proximity checks
   // (isNearWorkbench/isNearWorkbenchAtTier) should track the live placedObjects state.
   private everPlacedWorkbench = false;
+  // Highest Workbench tier the player has EVER reached (via placement or an
+  // upgrade), sticky like everPlacedWorkbench. Gates *discovery* of
+  // requiresWorkbenchTier recipes (Sunsteel etc.) so they don't appear until
+  // the bench has actually been upgraded to that level — separate from the
+  // live isNearWorkbenchAtTier proximity check that gates crafting them.
+  private everMaxWorkbenchTier = 0;
   // DEV-only playtest cheats, toggled via the window.__dev console commands
   // (installDevConsole) — gated to DEV builds only, never reachable in prod.
   private devGodMode = false;
@@ -826,7 +835,7 @@ export class MainScene extends Phaser.Scene {
     this.skills = new Skills();
     this.progression = new PlayerProgression();
     this.crafting = new Crafting();
-    this.backpack = new ItemContainer(BACKPACK_SIZE);
+    this.backpack = new ItemContainer(BACKPACK_CAPACITY);
     this.discovered = new Set<string>();
     this.discoveredUpgradeIds = new Set<string>();
     this.discoveredCookRecipeIds = new Set<string>();
@@ -903,6 +912,7 @@ export class MainScene extends Phaser.Scene {
     this.placementGhost = null;
     this.placedObjects = [];
     this.everPlacedWorkbench = false;
+    this.everMaxWorkbenchTier = 0;
     this.suppressNextPointerdown = false;
     // Per-run biome discovery state (reset here per the scene.restart() field-init gotcha).
     // Forest is pre-marked known — the player starts there, so the FIRST discovery
@@ -1239,6 +1249,9 @@ export class MainScene extends Phaser.Scene {
       // The cooking menu scrolls its own recipe list on wheel — don't also
       // cycle the hotbar when the pointer is over it.
       if (this.cookingMenu.isOpen() && this.cookingMenu.containsPoint(p.x, p.y)) return;
+      // The inventory's backpack grid scrolls on wheel when the pointer is over
+      // it (consumes the wheel so the hotbar doesn't also cycle).
+      if (this.inventoryMenu.handleWheel(p, dy)) return;
       this.cycleHotbar(dy > 0 ? 1 : -1);
     });
 
@@ -1251,6 +1264,9 @@ export class MainScene extends Phaser.Scene {
     });
     this.input.keyboard!.on("keydown-ESC", () => {
       if (this.runOver) return;
+      // Esc while typing in the inventory search just unfocuses the box (so it
+      // doesn't also close the whole menu on the same press).
+      if (this.inventoryMenu.isSearchFocused()) return this.inventoryMenu.unfocusSearch();
       if (this.welcomeUI.isOpen()) return this.closeWelcome();
       if (this.tipsUI.isOpen()) return this.closeTips();
       if (this.pauseMenu.isOpen()) return this.resumeGame();
@@ -1276,14 +1292,14 @@ export class MainScene extends Phaser.Scene {
       // stations/processors row, see Hotbar.ts) instead of row 1 — same
       // single selectHotbarSlot entry point either way.
       this.input.keyboard!.on(`keydown-${key}`, (event: KeyboardEvent) => {
-        if (this.runOver) return;
+        if (this.runOver || this.typingInSearch()) return;
         this.selectHotbarSlot(event.altKey ? ROW1_COUNT + i : i);
       });
     });
-    this.input.keyboard!.on("keydown-V", () => !this.runOver && this.toggleMagnet());
-    this.input.keyboard!.on("keydown-O", () => !this.runOver && this.toggleRangeRing());
+    this.input.keyboard!.on("keydown-V", () => !this.runOver && !this.typingInSearch() && this.toggleMagnet());
+    this.input.keyboard!.on("keydown-O", () => !this.runOver && !this.typingInSearch() && this.toggleRangeRing());
     this.input.keyboard!.on("keydown-K", () => {
-      if (this.runOver) return;
+      if (this.runOver || this.typingInSearch()) return;
       // Mutually exclusive with the Tab combined menu — one full-screen panel
       // at a time, so they can't overlap (the Relics column vs. the K panel).
       if (!this.characterMenu.isOpen() && this.inventoryMenu.isOpen()) {
@@ -1292,11 +1308,11 @@ export class MainScene extends Phaser.Scene {
       }
       this.characterMenu.toggle();
     });
-    this.input.keyboard!.on("keydown-R", () => !this.runOver && this.takeAllFromChest());
-    this.input.keyboard!.on("keydown-H", () => !this.runOver && this.toggleWheelSpansBothRows());
-    this.input.keyboard!.on("keydown-J", () => this.runHudUI.toggleMinimized());
+    this.input.keyboard!.on("keydown-R", () => !this.runOver && !this.typingInSearch() && this.takeAllFromChest());
+    this.input.keyboard!.on("keydown-H", () => !this.runOver && !this.typingInSearch() && this.toggleWheelSpansBothRows());
+    this.input.keyboard!.on("keydown-J", () => !this.typingInSearch() && this.runHudUI.toggleMinimized());
     this.input.keyboard!.on("keydown-M", (e: KeyboardEvent) => {
-      if (this.runOver) return;
+      if (this.runOver || this.typingInSearch()) return;
       // DEV: Ctrl+Shift+M reveals the whole map for worldgen inspection.
       if (e.ctrlKey && e.shiftKey) {
         this.revealEntireMap();
@@ -1387,7 +1403,10 @@ export class MainScene extends Phaser.Scene {
     // Relic move-speed bonus (M-RL) multiplies walk & sprint alike. Emberblink
     // set bonus (Emberhide light set) lengthens the dash burst only.
     const dashDistMult = this.hasSet("emberhide") ? SET_EMBERBLINK_DASH_MULT : 1;
-    const frame = this.player.update(delta, canSprint, canDash, sprintMultiplier, this.relics.moveSpeedMult(), dashDistMult);
+    // Movement locks while the inventory search box is focused, so WASD routes
+    // to the text field instead of walking the player.
+    const inputEnabled = !this.inventoryMenu.isSearchFocused();
+    const frame = this.player.update(delta, canSprint, canDash, sprintMultiplier, this.relics.moveSpeedMult(), dashDistMult, inputEnabled);
     this.clampPlayerToWorld();
 
     if (frame.sprinting) {
@@ -1787,6 +1806,13 @@ export class MainScene extends Phaser.Scene {
     this.refreshHud();
   }
 
+  // True while the inventory search box has keyboard focus — gameplay hotkeys
+  // (hotbar 1-9, V/O/K/R/H/J/M) and player movement all suppress on this so
+  // typed characters route to the search field.
+  private typingInSearch(): boolean {
+    return this.inventoryMenu.isSearchFocused();
+  }
+
   private anyMenuOpen(): boolean {
     return (
       this.craftingMenu.isOpen() ||
@@ -2138,27 +2164,34 @@ export class MainScene extends Phaser.Scene {
       this.afterItemMove();
       return;
     }
-    const bagIndex = this.inventoryMenu.slotIndexAt(pointer.x, pointer.y);
-    if (bagIndex !== null) {
-      // Click-in-place on a backpack slot: a DOUBLE left-click quick-moves
-      // the stack (to the hotbar, or equips it — see quickMoveItem), same
-      // action right-click used to trigger. A SINGLE click on a placeable
-      // enters placement mode instead (e.g. a station recovered via
-      // Destroy) — deferred behind the double-click window so a following
-      // second click quick-moves it instead of arming placement mode first
-      // (see deferSingleClick's own comment for why that ordering matters).
-      // A single click on a non-placeable is a no-op, same as before.
-      if (src.container === this.backpack && src.index === bagIndex) {
-        const key = `bag:${bagIndex}`;
-        if (this.isQuickMoveClick(pointer, key)) {
-          this.quickMoveItem(this.backpack, bagIndex);
-        } else if (itemDef(stack.key)?.placeable) {
-          this.deferSingleClick(() => this.startItemPlacement(this.backpack, bagIndex));
+    // Backpack grid (auto-organized, no free placement): a drop anywhere over
+    // it means "put this in the backpack" (first matching/free slot). Only an
+    // in-place click on the item's OWN cell keeps its quick-move / place-mode
+    // behavior.
+    if (this.inventoryMenu.isOverBackpackGrid(pointer.x, pointer.y)) {
+      const cellIndex = this.inventoryMenu.slotIndexAt(pointer.x, pointer.y);
+      if (src.container === this.backpack) {
+        // In-place on its own cell: DOUBLE left-click quick-moves the stack (to
+        // the hotbar, or equips it — see quickMoveItem); a SINGLE click on a
+        // placeable enters placement mode instead (deferred behind the
+        // double-click window). A drop onto a different cell is a no-op (no
+        // manual arranging) — snap back.
+        if (cellIndex === src.index) {
+          const key = `bag:${src.index}`;
+          if (this.isQuickMoveClick(pointer, key)) {
+            this.quickMoveItem(this.backpack, src.index);
+          } else if (itemDef(stack.key)?.placeable) {
+            this.deferSingleClick(() => this.startItemPlacement(this.backpack, src.index));
+          }
         }
         return;
       }
-      moveSlot(src.container, src.index, this.backpack, bagIndex);
-      this.afterItemMove();
+      // From the hotbar/chest/etc. into the backpack: merge or first free slot.
+      const di = this.backpack.findAssignable(stack.key);
+      if (di !== null) {
+        moveSlot(src.container, src.index, this.backpack, di);
+        this.afterItemMove();
+      }
       return;
     }
 
@@ -2190,17 +2223,38 @@ export class MainScene extends Phaser.Scene {
   // specifically; dropping outside every panel/HUD unequips to the floor.
   private resolveArmorDrag(slot: EquipSlot, pointer: Phaser.Input.Pointer): void {
     if (!this.inventoryMenu.isOpen()) return; // can't have started this drag otherwise
+    // Drag an equipped piece onto the trash box to permanently destroy it —
+    // the last inventory drag path that was missing (S6).
+    if (this.inventoryMenu.isOverTrash(pointer.x, pointer.y)) {
+      this.destroyEquippedSlot(slot);
+      return;
+    }
     if (this.inventoryMenu.armorSlotAt(pointer.x, pointer.y) !== null) return;
 
-    const bagIndex = this.inventoryMenu.slotIndexAt(pointer.x, pointer.y);
-    if (bagIndex !== null) {
-      this.unequipArmorSlot(slot, bagIndex);
+    // Over the backpack grid: unequip into the backpack (first free slot —
+    // the auto-organized view has no manual placement).
+    if (this.inventoryMenu.isOverBackpackGrid(pointer.x, pointer.y)) {
+      this.unequipArmorSlot(slot);
       return;
     }
 
     if (!this.inventoryMenu.containsPoint(pointer.x, pointer.y) && !this.pointerOverHud(pointer)) {
       this.unequipArmorSlot(slot);
     }
+  }
+
+  // Permanently destroy the item equipped in a paper-doll slot (drag-to-trash)
+  // — no refund/floor pickup, mirroring destroyStack for backpack items.
+  private destroyEquippedSlot(slot: EquipSlot): void {
+    const eq = this.equipment.get(slot);
+    if (!eq) return;
+    // The Upgrade panel's target no longer exists once destroyed — close it
+    // (mirrors unequipArmorSlot).
+    const t = this.upgradeTarget;
+    if (t && "armorSlot" in t && t.armorSlot === slot) this.closeUpgradeMenu();
+    this.equipment.set(slot, null);
+    this.eventLog.add("info", `Destroyed ${itemDef(eq.key)?.name ?? eq.key}`);
+    this.afterItemMove();
   }
 
   // Remove a whole stack from the inventory and spawn it as a recoverable
@@ -5899,8 +5953,12 @@ export class MainScene extends Phaser.Scene {
     // armor term — they give the badlands casters/forge-boss real teeth and seed
     // a future elemental-resist-gear hook; the relic %-reduction still applies.
     // Every biome-1 source deals physical, so the default path is unchanged.
+    // Molten Bulwark (Embersteel heavy set) layers a flat % cut on top of the
+    // relic reduction and BEFORE armor/bypass — it applies to every damage type,
+    // physical or elemental, so the tank set shrugs off casters too.
     // Floored at 1 so no relic/armor combination grants full immunity.
-    const relicAdjusted = amount * this.relics.damageTakenMult();
+    const moltenDr = this.hasSet("embersteel") ? SET_MOLTEN_DAMAGE_REDUCTION : 0;
+    const relicAdjusted = amount * this.relics.damageTakenMult() * (1 - moltenDr);
     let reduced: number;
     if (dmgType && bypassesArmor(dmgType)) {
       // Magic/fire bypass the flat-armor term. Heavy armor's skill gives partial
@@ -5924,10 +5982,10 @@ export class MainScene extends Phaser.Scene {
     const died = this.health.takeDamage(appliedDamage);
     this.refreshHealthBar();
     this.hints.trigger("took_damage"); // first hit taken this run -> nudge toward healing
-    // Molten Bulwark (Embersteel heavy set): the tank can't be shoved — every
-    // knockback source (bite shove, boss slam) is negated while the full set is
-    // worn, so you hold your ground and keep tanking.
-    if (knockback && !this.hasSet("embersteel")) {
+    // Knockback (bite shove, boss slam) always applies now — Molten Bulwark's
+    // old knockback-immunity was traded for the flat damage reduction above
+    // (decision 2), so the heavy set is pure mitigation, not a stance anchor.
+    if (knockback) {
       const angle = Phaser.Math.Angle.Between(knockback.fromX, knockback.fromY, this.player.x, this.player.y);
       const body = this.player.body as Phaser.Physics.Arcade.Body;
       body.setVelocity(Math.cos(angle) * knockback.speed, Math.sin(angle) * knockback.speed);
@@ -6283,7 +6341,7 @@ export class MainScene extends Phaser.Scene {
   // Re-run recipe discovery and announce anything newly unlocked. Call after
   // any resource pickup, skill level-up, or workbench placement.
   private refreshDiscovery(): void {
-    const unlocked = this.crafting.refresh(this.discovered, this.skills, this.hasWorkbenchPlaced());
+    const unlocked = this.crafting.refresh(this.discovered, this.skills, this.hasWorkbenchPlaced(), this.everMaxWorkbenchTier);
     // First recipe of the run becomes craftable -> point at the Tab menu.
     if (unlocked.length > 0) this.hints.trigger("open_menu");
     for (const recipe of unlocked) {
@@ -6637,6 +6695,13 @@ export class MainScene extends Phaser.Scene {
     const texture = itemDef(key)?.texture;
     const image = this.add.image(pos.x, pos.y, texture ?? "");
     image.setData("itemKey", key);
+    // Placed stations (Workbench, Drying Rack, Smelter, ...) wash out against
+    // the mottled badlands floor. A soft dark outline glow makes them read as
+    // a built object rather than terrain. WebGL-only (postFX); a Canvas
+    // fallback simply skips it — the outline is polish, not load-bearing. — S6
+    if (this.sys.game.renderer.type === Phaser.WEBGL) {
+      image.postFX.addGlow(0x000000, 5, 0, false, 0.1, 8);
+    }
     if (placedUpgrades && placedUpgrades.length > 0) {
       image.setData("upgrades", [...placedUpgrades]);
     }
@@ -6645,6 +6710,11 @@ export class MainScene extends Phaser.Scene {
       this.applyTierVisual(image, placedTier);
     }
     this.placedObjects.push(image);
+    // A placed station counts as "discovered" so its upgrades become visible
+    // while it's on the ground. Previously a Smelter's Ember Crucible upgrade
+    // only appeared once the Smelter was picked back up into the backpack
+    // (placeables skip the backpack on craft, so they were never discovered) — S5.
+    this.discovered.add(key);
     this.refreshStationLabel(image);
     // First time they put a station down, teach the right-click inspect/upgrade
     // gesture (also covered for equipped gear at the armor-equip site).
@@ -6654,6 +6724,9 @@ export class MainScene extends Phaser.Scene {
     // re-run discovery so that happens immediately, not just on next pickup.
     if (key === "workbench") {
       this.everPlacedWorkbench = true;
+      // A re-placed, already-upgraded Workbench keeps its reached tier sticky
+      // so its tier-gated recipes stay unlocked.
+      this.everMaxWorkbenchTier = Math.max(this.everMaxWorkbenchTier, placedTier);
       this.refreshDiscovery();
     }
     // A placed Drying Rack gets its own processing state, ticked in update()
@@ -6968,6 +7041,10 @@ export class MainScene extends Phaser.Scene {
   }
 
   private upgradeIngredientsKnown(upg: UpgradeDef): boolean {
+    // DEV free-craft: upgrades are freely available regardless of what mats
+    // have been discovered (grants "free upgrades" — the cost is already
+    // waived by canAffordUpgrade under the same flag).
+    if (this.devNoBuildCost) return true;
     if (!Object.keys(upg.costs).every((r) => this.discovered.has(r))) return false;
     // A station upgrade shouldn't be discoverable/announced before the player
     // has ever discovered the station it applies to (e.g. Ember Crucible
@@ -7047,6 +7124,14 @@ export class MainScene extends Phaser.Scene {
     // Upgrading a Campfire raises its level, unlocking (and announcing) the
     // dishes that level can cook.
     if (itemKey === "campfire") this.discoverCookRecipes(tier);
+    // Reaching a new Workbench tier newly unlocks the recipes gated on it
+    // (Sunsteel at Lvl 3, Embersteel at Lvl 4) — bump the sticky max and
+    // re-run discovery so they appear the moment the bench is upgraded, not
+    // only on the next pickup/craft — S5.
+    if (itemKey === "workbench") {
+      this.everMaxWorkbenchTier = Math.max(this.everMaxWorkbenchTier, tier);
+      this.refreshDiscovery();
+    }
     this.upgradeMenu.refresh();
     this.afterItemMove();
   }
@@ -7800,13 +7885,14 @@ export class MainScene extends Phaser.Scene {
         this.refreshHealthBar();
         this.eventLog.add("info", "[DEV] Healed to full");
       },
-      // Bypasses ingredient cost AND the workbench-tier/skill discovery gates
-      // for every recipe (via Crafting.unlockAll()) — a placed item still
-      // consumes one owned stack from the backpack like normal, since that's
-      // "place an owned item," not a build cost.
+      // A pure COST cheat: while on, crafting/upgrading is free (no ingredient
+      // deduction, affordability checks pass) AND station/armor/weapon upgrades
+      // become available even without their mats discovered. It does NOT unlock
+      // recipes — you still craft what you've discovered, just for free — so
+      // toggling it off leaves discovery exactly as it was (it used to call
+      // crafting.unlockAll(), which permanently revealed every recipe).
       nobuildcost: (on?: boolean) => {
         this.devNoBuildCost = on ?? !this.devNoBuildCost;
-        if (this.devNoBuildCost) this.crafting.unlockAll();
         this.refreshDiscovery();
         this.craftingMenu?.refresh();
         this.eventLog.add("info", `[DEV] Free craft ${this.devNoBuildCost ? "ON" : "OFF"}`);
