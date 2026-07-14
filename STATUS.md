@@ -2,12 +2,19 @@
 
 ## Current State
 
-_Living snapshot — edit in place, never append. Last shipped: **S7 — pre-push inventory/dev-cmd
-tweaks** (2026-07-13, Opus): search-box insta-clear `✕` button, confirmed search state resets on
-close, `nobuildcost` now TEMPORARILY lists all recipes (display-only via
-`CraftingMenu.visibleRecipes()` — reverts cleanly when toggled off, never mutates the discovered
-set), and a **taller backpack grid** (`BACKPACK_ROWS 6 → 15`) so a per-biome tab shows every row
-with no scroll. See the S7 entry below.
+_Living snapshot — edit in place, never append. Last shipped: **PB1 — post-2nd-boss playtest fix
+batch, Session 1** (2026-07-14): the fix/tuning slice of a 3-session triage off a 21-item dump from
+beating the Duneshaper, built as **4 parallel worktree agents** (balance, crafting-menu bugs,
+discovery/UI, relic economy). Forged armor up (Emberhide 16→23, Embersteel 23→32), stone costs
+−30-40%, ~1.4-1.6× faster leveling, new Duskrunner Skewer dish; equipped pieces now count toward
+reforge recipes; per-tier relic roll buttons; **relic refund reworked to 50% of a discarded roll's
+trophy cost** (raw→0, refined→1 — never nets shards). **In progress:** Session 2 (enemy
+wander-anchor + Hexling: neutral-to-physical, middle-bolt-fire, 3-5 hex essence) and Session 3
+(populate the empty outer world with biome-appropriate nodes + enemies) are queued. See the PB1
+entry below + [[survivor-rpg-relics]].
+Prior: **S7 — pre-push inventory/dev-cmd tweaks** (2026-07-13, Opus): search-box insta-clear `✕`
+button, `nobuildcost` TEMPORARILY lists all recipes (display-only), taller backpack grid
+(`BACKPACK_ROWS 6 → 15`). See the S7 entry below.
 Prior: **S5 + S6 — gating/dev-cmd fixes,
 UX polish + Inventory rework** (2026-07-13, Opus). The final two triaged badlands-playtest
 sessions (`.claude/plans/badlands-playtest-triage.md`), merged — **the entire 6-session triage
@@ -216,6 +223,35 @@ below + [[survivor-rpg-dev-console]].
 
 > Older entries in STATUS-archive.md.
 
+### PB1 — Post-2nd-boss playtest fix batch, Session 1 (2026-07-14)
+
+First of a 3-session triage off a 21-item playtest dump from beating the Duneshaper
+(badlands final boss). Session 1 = the fix/tuning slice, built as **4 parallel worktree
+agents** (disjoint files, merged into `main` with zero conflicts, `tsc` clean, boots +
+runs verified live). Sessions 2 (enemy wander-anchor + Hexling) and 3 (populate the empty
+outer world) are queued.
+
+- **Balance (A):** forged armor up — Sunsteel heavy 14→**20**, Duskhide light 13→**15**,
+  Embersteel heavy 23→**32**, Emberhide light 16→**23**. Stone costs down ~30-40% across
+  recipes + all station upgrades. Faster leveling — player curve `150·(L+1)^1.9` →
+  `110·(L+1)^1.8` (~1.6×), skill XP `100·(L+1)` → `70·(L+1)` (~1.4×). New **Duskrunner
+  Skewer** dish (Shishkabob + Duskrunner Meat @ Lvl-2 campfire → +2.5 HP/s 22s).
+- **Crafting-menu bugs (B):** equipped base pieces now count/consume toward reforge recipes
+  (`Crafting.setEquipment` + `availableFor`); long recipe names truncate (no more "Effigy of
+  the Duneshaper" overlap); set-bonus lines now shown in the crafting detail (e.g. Emberblink).
+- **Discovery/UI (C):** tool upgrades (Ironshod Axe) now fire the unlock toast like station
+  upgrades; war-camp hint reworded ("I'll need to gear up before I storm it."); Ctrl+Click on
+  the Smelter **fuel** slot now routes fuel correctly (was hardcoded to the input slot).
+- **Relic economy (D + follow-up):** per-tier roll buttons (Common **T1**/**T2** split, was
+  rarity-only); **refund exploit fixed**. Refund rule (locked with the user): upgrading/Keep-New
+  displaces the old relic for **nothing**; discarding the just-rolled relic refunds **50% of its
+  trophy's shard cost** — raw trophies free → 0, refined → 1 shard (`trophyDiscardRefund`,
+  keyed off a stored pending trophy). A refund is only ever half a *paid* cost, so rerolling
+  can't net shards. Verified live against the real `RelicManager` (raw→0, refined-T1→1 gloam,
+  refined-T2→1 ember). Also fixed the auto-declined path naming the wrong relic as discarded.
+
+RECIPES.md + dashboard relic prose updated. See [[survivor-rpg-relics]].
+
 ### S7 — Pre-push inventory/dev-cmd tweaks (2026-07-13, Opus)
 
 Four small final tweaks before push, no new mechanic:
@@ -401,44 +437,4 @@ Combat feel + balance on the badlands roster + the two bosses. All numbers first
   updated** (the one hand-mirrored source: Duneshaper/Cinderwrought/Hexling stats + Cragscale/Sandmaw
   fire-resist notes). No `RECIPES.md` change (no recipe/data-module change). **Remaining triage:
   S3–S6.**
-
-### S1 — Badlands metal economy & forged-gear balance (2026-07-13, Opus)
-
-First of the 6 triaged badlands-playtest sessions (`.claude/plans/badlands-playtest-triage.md`)
-— the "not grindy" interlocking economy pass. Locked decisions applied from the triage's
-shared block.
-
-- **Smelt ratio → 1:1** (`Processing.ts` `SMELT_RECIPES`): sunscorch→sunsteel and
-  ember→embersteel are both now **1 ore + 1 hex → 1 ingot** (was 2 ore + 1/2 hex). A node's
-  yield now equals its ingot potential. (Watch-item from decision 1 — hex bottleneck — is
-  *eased* by this, not worsened: ember fuel dropped 2→1 hex, sunsteel unchanged.)
-- **Ore economy** (`MainScene.spawnBadlandsMinerals`): `scatterOre` now takes an amount
-  range. Sunscorch **60 nodes × 3–5** (was 44 × 1–2), Cinderforged scatter **14 × 2–4**
-  (was 8 × 1–2), Clay 44 × 2–3. The **Sunken Forge POI ember deposits → 4–7 each** (was
-  1–2) — the POI is now the rich ember source.
-- **Weapon damage** (`Weapons.ts`): the max-**upgraded** Primal Spear is **13** (base 8 +2 +3;
-  RECIPES.md said 12 — a stale doc bug, fixed). Base forged Sunsteel now **17/14/15**
-  (warhammer/sword/pike, was 14/10/12 — sword & pike sat *below* 13, reading as a downgrade),
-  all clearing 13. Embersteel bumped to **23/19/20** to keep the T2 gap; Ember Brand 14→**17**.
-- **Duskhide light armor** (`Items.ts` + `Recipes.ts`): base **4/5/4 = 13** (was 3/4/3 = 10),
-  matching a fully-upgraded Gremlin Lvl 3 set (< Sunsteel heavy's 14). Recipes now use
-  **zero metal** (pelt/chitin/bone only) — a "no forge required" light path. Descriptions
-  de-steeled.
-- **Dedicated fuel slot** (`Processing.ts` + `DryingRackMenu.ts` + `MainScene.ts`): the
-  Smelter's Hex Essence is now loaded into its **own slot** (was pulled silently from the
-  backpack). `ProcessingStation` gained `fuel`/`usesFuelSlot()`/`canAcceptFuel()`/`addFuel()`/
-  `takeFuel()`; `maxPossibleOutput()` caps by loaded fuel and `process()` burns fuel from the
-  slot. The shared menu renders a second **Fuel** slot beside **Ore** (with its own Take Out
-  link + an empty "Load Hex Essence" hint) only when `usesFuelSlot()` — the Drying Rack is
-  visually unchanged. Drag-drop (`isOverFuel` → `loadRackFuel`), right-click quick-load
-  (`quickLoadStation` routes ore→input / hex→fuel), retrieve, and Smelter-destroy refund
-  all handle fuel. `processSmelterAmount` deleted (fuel now lives in the slot, so smelt uses
-  the same `processRackAmount` path).
-
-Verified live via `preview_eval` (fuel-gated 1:1 smelt end-to-end; drying rack still 2:1 with
-no fuel slot; both menus screenshotted; new weapon/armor/ratio numbers confirmed off the live
-modules — which the dashboard reads directly, so it needs no manual edit). `tsc` clean; no
-console errors. `RECIPES.md` updated (smelt table, armor totals, weapon table, Primal-Spear-13
-fix). **Remaining triage sessions: 2 (boss/enemy tuning), 3 (relic UI), 4 (POI placement/
-respawn), 5 (recipe gating/dev cmds), 6 (UX/text polish).** See [[survivor-rpg-biome-2-plan]].
 

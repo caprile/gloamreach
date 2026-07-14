@@ -5942,3 +5942,45 @@ mutual exclusion (Tab↔K); relic family names correct; recipe/upgrade costs upd
 console errors. `RECIPES.md` (new Tool Upgrades section + updated station/weapon costs) + dashboard
 (new Tool-upgrade table) updated.
 
+
+
+### S1 — Badlands metal economy & forged-gear balance (2026-07-13, Opus)
+
+First of the 6 triaged badlands-playtest sessions (`.claude/plans/badlands-playtest-triage.md`)
+— the "not grindy" interlocking economy pass. Locked decisions applied from the triage's
+shared block.
+
+- **Smelt ratio → 1:1** (`Processing.ts` `SMELT_RECIPES`): sunscorch→sunsteel and
+  ember→embersteel are both now **1 ore + 1 hex → 1 ingot** (was 2 ore + 1/2 hex). A node's
+  yield now equals its ingot potential. (Watch-item from decision 1 — hex bottleneck — is
+  *eased* by this, not worsened: ember fuel dropped 2→1 hex, sunsteel unchanged.)
+- **Ore economy** (`MainScene.spawnBadlandsMinerals`): `scatterOre` now takes an amount
+  range. Sunscorch **60 nodes × 3–5** (was 44 × 1–2), Cinderforged scatter **14 × 2–4**
+  (was 8 × 1–2), Clay 44 × 2–3. The **Sunken Forge POI ember deposits → 4–7 each** (was
+  1–2) — the POI is now the rich ember source.
+- **Weapon damage** (`Weapons.ts`): the max-**upgraded** Primal Spear is **13** (base 8 +2 +3;
+  RECIPES.md said 12 — a stale doc bug, fixed). Base forged Sunsteel now **17/14/15**
+  (warhammer/sword/pike, was 14/10/12 — sword & pike sat *below* 13, reading as a downgrade),
+  all clearing 13. Embersteel bumped to **23/19/20** to keep the T2 gap; Ember Brand 14→**17**.
+- **Duskhide light armor** (`Items.ts` + `Recipes.ts`): base **4/5/4 = 13** (was 3/4/3 = 10),
+  matching a fully-upgraded Gremlin Lvl 3 set (< Sunsteel heavy's 14). Recipes now use
+  **zero metal** (pelt/chitin/bone only) — a "no forge required" light path. Descriptions
+  de-steeled.
+- **Dedicated fuel slot** (`Processing.ts` + `DryingRackMenu.ts` + `MainScene.ts`): the
+  Smelter's Hex Essence is now loaded into its **own slot** (was pulled silently from the
+  backpack). `ProcessingStation` gained `fuel`/`usesFuelSlot()`/`canAcceptFuel()`/`addFuel()`/
+  `takeFuel()`; `maxPossibleOutput()` caps by loaded fuel and `process()` burns fuel from the
+  slot. The shared menu renders a second **Fuel** slot beside **Ore** (with its own Take Out
+  link + an empty "Load Hex Essence" hint) only when `usesFuelSlot()` — the Drying Rack is
+  visually unchanged. Drag-drop (`isOverFuel` → `loadRackFuel`), right-click quick-load
+  (`quickLoadStation` routes ore→input / hex→fuel), retrieve, and Smelter-destroy refund
+  all handle fuel. `processSmelterAmount` deleted (fuel now lives in the slot, so smelt uses
+  the same `processRackAmount` path).
+
+Verified live via `preview_eval` (fuel-gated 1:1 smelt end-to-end; drying rack still 2:1 with
+no fuel slot; both menus screenshotted; new weapon/armor/ratio numbers confirmed off the live
+modules — which the dashboard reads directly, so it needs no manual edit). `tsc` clean; no
+console errors. `RECIPES.md` updated (smelt table, armor totals, weapon table, Primal-Spear-13
+fix). **Remaining triage sessions: 2 (boss/enemy tuning), 3 (relic UI), 4 (POI placement/
+respawn), 5 (recipe gating/dev cmds), 6 (UX/text polish).** See [[survivor-rpg-biome-2-plan]].
+
