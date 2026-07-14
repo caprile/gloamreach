@@ -96,21 +96,22 @@ export class Hexling extends Enemy {
       y: cfg.y,
       texture: elite ? "hexling_elite" : "hexling",
       displayName: elite ? "Elite Hexling" : "Hexling",
+      // Hex Essence is the badlands smelting fuel + a recipe staple, and a single
+      // drop starved that economy (playtest). A caster now yields a real handful.
       loot: elite
-        ? [{ resource: "hex_essence", min: 2, max: 2 }]
-        : [{ resource: "hex_essence", min: 1, max: 1 }],
+        ? [{ resource: "hex_essence", min: 6, max: 8 }]
+        : [{ resource: "hex_essence", min: 3, max: 5 }],
       maxHealth: elite ? Math.round(MAX_HEALTH * 1.5) : MAX_HEALTH,
       biteDamage: 0, // all damage flows through the bolt/flame paths, never a melee bite
       elite,
       eliteTrophy: "hexling_trophy",
-      // Reworked per playtest (the user): a gloam-warded caster should shrug off
-      // steel and hurt from its OWN element, the inverse of the original "melee
-      // shreds it" tuning — resistant to all physical, weak to magic (a Sandmaw-
-      // shaped inverse: that one resists blunt/weak pierce, this resists
-      // everything physical and is only vulnerable to magic weapons).
-      // fire ×1.5: a robed caster's cloth-and-flesh frame catches flame (S2
-      // decision 3 — the one badlands enemy fire is meant to be strong against).
-      resistances: { magic: 1.5, slash: 0.5, blunt: 0.5, pierce: 0.5, fire: 1.5 },
+      // NEUTRAL to physical now (playtest: the user — the flat 0.5 physical resist
+      // made a caster that already bypasses armor + teleports feel un-killable with
+      // a normal weapon). It keeps its two WEAKNESSES (they favor the player): weak
+      // to magic (magic weapons are its counter) and weak to fire (S2 decision 3 —
+      // the one badlands enemy fire is meant to be strong against). Physical types
+      // are omitted → default 1.0.
+      resistances: { magic: 1.5, fire: 1.5 },
       upright: true, // humanoid mage — mirror left/right, never rotate upside-down
     });
     this.boltDamage = elite ? Math.round(BOLT_DAMAGE * 1.5) : BOLT_DAMAGE;
@@ -327,24 +328,30 @@ export class Hexling extends Enemy {
     this.nextCastAt = Math.max(this.nextCastAt, now + 250); // brief beat before casting again
   }
 
-  // Falcon-blaster-style tight 3-bolt cone (the user), not a single rock —
-  // each bolt is its own full-damage-type projectile, self-resolving like the
-  // Duneshaper's Gloam Volley (the precedent this mirrors).
+  // Tight 3-bolt cone (the user), each bolt its own projectile — self-resolving
+  // like the Duneshaper's Gloam Volley. MIXED damage now (playtest): the CENTER
+  // bolt is FIRE (bypasses armor — the shot you must actually dodge), the two
+  // OUTER bolts are PHYSICAL (undefined type → the player's flat armor reduces
+  // them), so armor is worth wearing against a Hexling instead of being fully
+  // negated by an all-magic volley.
   private castBolt(playerX: number, playerY: number, now: number): void {
     this.markAttackLanded(now);
     const baseAngle = Phaser.Math.Angle.Between(this.x, this.y, playerX, playerY);
+    const middle = (BOLT_COUNT - 1) / 2; // index 1 for BOLT_COUNT=3
     for (let i = 0; i < BOLT_COUNT; i++) {
-      const offset = (i - (BOLT_COUNT - 1) / 2) * BOLT_SPREAD;
+      const offset = (i - middle) * BOLT_SPREAD;
+      const isCenter = i === middle;
       const cfg: ProjectileConfig = {
         x: this.x,
         y: this.y,
         angle: baseAngle + offset,
         speed: BOLT_SPEED,
         damage: this.boltDamage,
-        texture: "hex_bolt",
+        texture: isCenter ? "hex_bolt" : "hex_bolt_phys",
         maxRangePx: BOLT_MAX_RANGE,
         sourceIsPlayer: false,
-        damageType: "magic", // bypasses the player's flat armor (Phase 1 hook)
+        // Center = fire (armor-bypassing); outer = physical (undefined → armor applies).
+        damageType: isCenter ? "fire" : undefined,
       };
       (this.scene as unknown as ProjectileHost).spawnProjectile(cfg);
     }

@@ -19,6 +19,10 @@ const AGGRO_RADIUS = 130;
 const DEAGGRO_RADIUS = 240;
 const CHASE_SPEED = 40; // deliberate lumber — but the roll closes the gap
 const WANDER_SPEED = 14;
+// Idle wander anchored to spawn (playtest: enemies drift too far). Targets drawn
+// fresh from the spawn point each cycle (RangedGremlin/Hexling pattern) so a
+// Cragscale pulled away by a chase drifts back home rather than roaming off.
+const WANDER_RADIUS = 70;
 const MELEE_RANGE = 30; // its big body needs a slightly longer basher threshold
 
 const MAX_HEALTH = 60; // "noticeably tougher" = a real damage sponge vs the forest roster
@@ -65,6 +69,8 @@ type CragAttack = "basher" | "roll";
 export class Cragscale extends Enemy {
   private wanderTgt: { x: number; y: number } | null = null;
   private nextRoamAt = 0;
+  private readonly spawnX: number;
+  private readonly spawnY: number;
 
   private currentAttack: CragAttack | null = null;
   private rollAngle = 0;
@@ -93,6 +99,8 @@ export class Cragscale extends Enemy {
       // the counterweight to the player's Emberblink fire-nova being dominant).
       resistances: { slash: 0.5, blunt: 1.0, pierce: 1.6, fire: 0.5 },
     });
+    this.spawnX = cfg.x;
+    this.spawnY = cfg.y;
     if (elite) {
       this.speedMult = 1.1;
       this.setScale(1.3);
@@ -142,8 +150,8 @@ export class Cragscale extends Enemy {
 
     if (now >= this.nextRoamAt) {
       const angle = Phaser.Math.FloatBetween(0, Math.PI * 2);
-      const d = Phaser.Math.Between(15, 40);
-      this.wanderTgt = { x: this.x + Math.cos(angle) * d, y: this.y + Math.sin(angle) * d };
+      const d = Phaser.Math.FloatBetween(0, WANDER_RADIUS);
+      this.wanderTgt = { x: this.spawnX + Math.cos(angle) * d, y: this.spawnY + Math.sin(angle) * d };
       this.nextRoamAt = now + Phaser.Math.Between(2500, 4500);
     }
     if (this.wanderTgt) {

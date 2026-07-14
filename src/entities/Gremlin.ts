@@ -328,13 +328,13 @@ export class MeleeGremling extends Enemy {
   private mode: MeleeMode = "idle";
   private meleeWanderTarget: { x: number; y: number } | null = null;
   private nextMeleeWanderAt = 0;
-  // Optional spawn anchor (Gremlin Shack guards) — when set, wander targets
-  // are drawn fresh from this point each cycle (mirrors RangedGremlin's
-  // spawn-anchored wander) instead of drifting from the current position, so
-  // a guard can never random-walk away from the shack it's posted at.
-  // Undefined for every free-roaming Gremling elsewhere, which keeps the
-  // original incremental-drift behavior unchanged.
-  private readonly wanderAnchor: { x: number; y: number; radius: number } | null;
+  // Spawn anchor — wander targets are drawn fresh from this point each cycle
+  // (mirrors RangedGremlin's spawn-anchored wander) instead of drifting from the
+  // current position. Shack guards pass an explicit anchor (the shack); every
+  // free-roaming Gremling now DEFAULTS to its own spawn point (playtest: enemies
+  // drifted too far from spawn), so a Gremling that gets pulled away by a chase
+  // gently drifts back home instead of roaming off.
+  private readonly wanderAnchor: { x: number; y: number; radius: number };
 
   constructor(
     scene: Phaser.Scene,
@@ -361,7 +361,7 @@ export class MeleeGremling extends Enemy {
       biteDamage: elite ? Math.round(MELEE_CLAW_DAMAGE * 1.5) : MELEE_CLAW_DAMAGE,
       elite,
     });
-    this.wanderAnchor = cfg.wanderAnchor ?? null;
+    this.wanderAnchor = cfg.wanderAnchor ?? { x: cfg.x, y: cfg.y, radius: 80 };
     if (elite) {
       this.speedMult = 1.1;
       this.setScale(1.4);
@@ -406,16 +406,11 @@ export class MeleeGremling extends Enemy {
 
     if (now >= this.nextMeleeWanderAt) {
       const angle = Phaser.Math.FloatBetween(0, Math.PI * 2);
-      if (this.wanderAnchor) {
-        const r = Phaser.Math.FloatBetween(0, this.wanderAnchor.radius);
-        this.meleeWanderTarget = {
-          x: this.wanderAnchor.x + Math.cos(angle) * r,
-          y: this.wanderAnchor.y + Math.sin(angle) * r,
-        };
-      } else {
-        const d = Phaser.Math.Between(20, 50);
-        this.meleeWanderTarget = { x: this.x + Math.cos(angle) * d, y: this.y + Math.sin(angle) * d };
-      }
+      const r = Phaser.Math.FloatBetween(0, this.wanderAnchor.radius);
+      this.meleeWanderTarget = {
+        x: this.wanderAnchor.x + Math.cos(angle) * r,
+        y: this.wanderAnchor.y + Math.sin(angle) * r,
+      };
       this.nextMeleeWanderAt = now + Phaser.Math.Between(2000, 4000);
     }
     if (this.meleeWanderTarget) {

@@ -2036,6 +2036,22 @@ export class BootScene extends Phaser.Scene {
     g.fillEllipse(15, 4, 2.2, 1.4); // white-hot tip
     g.generateTexture("hex_bolt", 18, 8);
 
+    // Hexling's PHYSICAL side-bolts — the two outer bolts of the volley (the
+    // center one is the fire `hex_bolt` above). Same streak shape, a cool
+    // steel-violet palette instead of ember-orange so the player can read which
+    // shot is the armor-piercing fire one and which are the armor-reducible pair.
+    g.clear();
+    g.fillStyle(0x6a5aa0, 0.5);
+    g.fillEllipse(9, 4, 18, 6);
+    g.fillStyle(0x8a7ac0, 1);
+    g.fillTriangle(0, 2, 0, 6, 13, 4);
+    g.fillEllipse(11, 4, 7, 4.4);
+    g.fillStyle(0xc0c8e0, 1);
+    g.fillEllipse(13, 4, 4.4, 2.6);
+    g.fillStyle(0xeef0ff, 1);
+    g.fillEllipse(15, 4, 2.2, 1.4);
+    g.generateTexture("hex_bolt_phys", 18, 8);
+
     // Gloam Bolt — the Duneshaper's magic bolt. Bigger + brighter than a hex
     // bolt (violet orb, ember-white core, faint tail) so the boss's volley reads
     // as its own, weightier projectile.

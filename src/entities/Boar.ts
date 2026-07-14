@@ -15,6 +15,12 @@ const AGGRO_RADIUS = 120; // px — the boar notices and commits from a fair ran
 const DEAGGRO_RADIUS = 230; // hysteresis gap above aggro, avoids boundary flicker
 const CHASE_SPEED = 60; // px/s — deliberate approach; slower than the player so it relies on the charge to close
 const WANDER_SPEED = 20;
+// Idle wander is now anchored to the spawn point (playtest: "things wander too
+// far from their spawn — needs an anchor"). Targets are drawn fresh from spawn
+// each cycle (the RangedGremlin/Hexling pattern) rather than drifting from the
+// current position, so a boar that gets pulled away by a chase gently drifts
+// back home instead of walking off.
+const WANDER_RADIUS = 90;
 
 const MAX_HEALTH = 20;
 const BITE_DAMAGE = 25; // shared "hit" value for both the gore bite and the charge
@@ -61,6 +67,8 @@ export class Boar extends Enemy {
 
   private boarWanderTarget: { x: number; y: number } | null = null;
   private boarNextWanderAt = 0;
+  private readonly spawnX: number;
+  private readonly spawnY: number;
 
   constructor(scene: Phaser.Scene, cfg: { x: number; y: number; elite?: boolean }) {
     const elite = cfg.elite ?? false;
@@ -86,6 +94,8 @@ export class Boar extends Enemy {
       elite,
       eliteTrophy: "boar_trophy",
     });
+    this.spawnX = cfg.x;
+    this.spawnY = cfg.y;
     if (elite) {
       this.speedMult = 1.1;
       this.setScale(1.3);
@@ -164,11 +174,12 @@ export class Boar extends Enemy {
       return false;
     }
 
-    // Idle wander — small incremental drift (matches the old base behavior).
+    // Idle wander — targets drawn fresh from the SPAWN point each cycle (anchored,
+    // not drifting from the current position — see WANDER_RADIUS).
     if (now >= this.boarNextWanderAt) {
       const angle = Phaser.Math.FloatBetween(0, Math.PI * 2);
-      const d = Phaser.Math.Between(20, 50);
-      this.boarWanderTarget = { x: this.x + Math.cos(angle) * d, y: this.y + Math.sin(angle) * d };
+      const d = Phaser.Math.FloatBetween(0, WANDER_RADIUS);
+      this.boarWanderTarget = { x: this.spawnX + Math.cos(angle) * d, y: this.spawnY + Math.sin(angle) * d };
       this.boarNextWanderAt = now + Phaser.Math.Between(2000, 4000);
     }
     if (this.boarWanderTarget) {
