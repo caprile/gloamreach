@@ -96,11 +96,17 @@ export class Hexling extends Enemy {
       y: cfg.y,
       texture: elite ? "hexling_elite" : "hexling",
       displayName: elite ? "Elite Hexling" : "Hexling",
-      // Hex Essence is the badlands smelting fuel + a recipe staple, and a single
-      // drop starved that economy (playtest). A caster now yields a real handful.
+      // Hex Essence is the ONLY smelting fuel (1 per ingot, both Sunsteel and
+      // Embersteel) — building every base forged item (Forge Anvil unlock: 5 +
+      // all 3 Sunsteel weapons: 10 + full Sunsteel heavy armor: 8 = 23 ingots,
+      // i.e. 23 hex essence) shouldn't require looping the whole badlands ring
+      // for it (playtest: "I shouldn't have to loop around the whole Badlands
+      // just to get enough for base biome-2 stuff"). Base ~5/kill (avg of 4-6)
+      // means clearing even a modest fraction of the ~22 Hexlings in half the
+      // ring (44 total, spawn uniformly) clears the 23-target with real margin.
       loot: elite
-        ? [{ resource: "hex_essence", min: 6, max: 8 }]
-        : [{ resource: "hex_essence", min: 3, max: 5 }],
+        ? [{ resource: "hex_essence", min: 9, max: 11 }]
+        : [{ resource: "hex_essence", min: 4, max: 6 }],
       maxHealth: elite ? Math.round(MAX_HEALTH * 1.5) : MAX_HEALTH,
       biteDamage: 0, // all damage flows through the bolt/flame paths, never a melee bite
       elite,
