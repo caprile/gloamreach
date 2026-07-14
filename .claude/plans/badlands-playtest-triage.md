@@ -72,15 +72,25 @@ The "not grindy" pass. Interlocking economy — do as one session.
   neutral) — data-only via `EnemyConfig.resistances`.
 - Files: `Duneshaper.ts`, `Cinderwrought.ts`, `Hexling.ts`, enemy configs, dashboard.
 
-## Session 3 — Relic Forge menu UI + "all relic effects" panel · Sonnet
+## Session 3 — Relic Forge menu UI + "all relic effects" panel · Sonnet — ✅ SHIPPED (2026-07-13)
 
-- Fix relic list overlapping the `Forged: X` result text (see screenshot).
-- Fix relic list crowding when all 8 families are filled (wrap/scroll).
-- Group displayed relics **by tier** (see what a T1 gets replaced by a T2).
+- Fix relic list overlapping the `Forged: X` result text (see screenshot). ✅ — the
+  plain-success result block reserved too little height so the grid's "Your Relics"
+  header rode up onto the Forged line; result-block heights now scale by verdict
+  (none/plain/auto-resolved/choice).
+- Fix relic list crowding when all 8 families are filled (wrap/scroll). ✅ — forge grid
+  `COLS` 6→5 (6×84px overflowed the 528px usable panel); grid height is now measured so
+  the panel grows to fit.
+- Group displayed relics **by tier** (see what a T1 gets replaced by a T2). ✅ — forge
+  grid now renders a "Tier N" subheader per power tier (`groupsByTier`), chips wrapping
+  within each tier; each chip shows its family label.
 - New **"all relic effects"** view: total aggregated effect list + hover a stat → which
-  relic grants it. (Likely lives on the Inventory Relics column added in Phase 5.)
-- Files: `RelicForgeMenu.ts`, Inventory relics column, `Relics.ts` (per-stat contribution
-  getter if needed).
+  relic grants it. ✅ — `RelicManager.effectSummary()` (new) drives a compact "Effects"
+  list under the 8 relic slots in the Inventory Relics column; hovering a channel pops a
+  tooltip breaking down each contributing relic + its amount. `InventoryMenu.PANEL_H`
+  grows to reserve room for the worst realistic case (9 active channels).
+- Files: `RelicForgeMenu.ts`, `InventoryMenu.ts`, `Relics.ts` (`effectSummary` +
+  `RelicEffectSummary`), `MainScene.ts` (dep wiring).
 
 ## Session 4 — Badlands POI placement, respawn & spawn bugs · Sonnet
 

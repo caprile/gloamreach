@@ -491,6 +491,39 @@ export function relicEffectText(def: RelicDef, powerTier = 1): string {
   return scaledEffectText(def, powerTier);
 }
 
+// --- aggregated "all relic effects" summary (Inventory Relics column) ---
+//
+// One display row per effect CHANNEL the loadout actually touches, with a
+// formatted grand total plus the per-relic contributions behind it (so a hover
+// can answer "which relic gives me this?"). Declaration order here is the
+// display order. A value's tier scaling is already baked into the numbers the
+// summary reports.
+function fmtPct(v: number): string {
+  return Math.abs(v) % 1 < 1e-6 ? v.toFixed(0) : v.toFixed(1);
+}
+const EFFECT_DISPLAY: { key: keyof RelicEffect; label: string; fmt: (v: number) => string }[] = [
+  { key: "damagePct", label: "Damage", fmt: (v) => `+${fmtPct(v)}%` },
+  { key: "critChancePct", label: "Crit Chance", fmt: (v) => `+${fmtPct(v)}%` },
+  { key: "critDamagePct", label: "Crit Dmg", fmt: (v) => `+${(0.01 * v).toFixed(2)}x` },
+  { key: "moveSpeedPct", label: "Move Speed", fmt: (v) => `+${fmtPct(v)}%` },
+  { key: "damageTakenPct", label: "Dmg Taken", fmt: (v) => `${fmtPct(v)}%` }, // already negative = good
+  { key: "staminaCostPct", label: "Stam. Cost", fmt: (v) => `${v > 0 ? "+" : ""}${fmtPct(v)}%` },
+  { key: "killHeal", label: "HP/Kill", fmt: (v) => `+${Math.round(v)}` },
+  { key: "maxHpPct", label: "Max HP", fmt: (v) => `+${fmtPct(v)}%` },
+  { key: "maxStaminaPct", label: "Max Stam.", fmt: (v) => `+${fmtPct(v)}%` },
+  { key: "maxHp", label: "Max HP", fmt: (v) => `+${Math.round(v)}` }, // legacy flat channels
+  { key: "maxStamina", label: "Max Stam.", fmt: (v) => `+${Math.round(v)}` },
+  { key: "xpPct", label: "Skill XP", fmt: (v) => `+${fmtPct(v)}%` },
+];
+
+// One aggregated channel: the grand total (formatted) + which relics feed it.
+export interface RelicEffectSummary {
+  key: keyof RelicEffect;
+  label: string;
+  total: string; // formatted aggregate, e.g. "+15%"
+  sources: { name: string; rarity: RelicRarity; amount: string }[];
+}
+
 export class RelicManager {
   // At most one owned relic PER FAMILY (Phase 5's loadout model).
   private instances: Partial<Record<RelicFamily, RelicInstance>> = {};
@@ -615,6 +648,30 @@ export class RelicManager {
       const group: RelicGroup | null = inst ? { id: inst.id, powerTier: inst.powerTier, def: RELIC_DEFS[inst.id], family } : null;
       return { family, label: relicFamilyName(family), group };
     });
+  }
+
+  // Aggregated "all relic effects" view — one row per channel the loadout
+  // actually touches, each with its formatted grand total and the per-relic
+  // contributions behind it (for the Inventory Relics column's hover-to-see-
+  // source breakdown). Skips channels no owned relic contributes to.
+  effectSummary(): RelicEffectSummary[] {
+    const out: RelicEffectSummary[] = [];
+    for (const { key, label, fmt } of EFFECT_DISPLAY) {
+      let total = 0;
+      const sources: { name: string; rarity: RelicRarity; amount: string }[] = [];
+      for (const family of RELIC_FAMILIES) {
+        const inst = this.instances[family];
+        if (!inst) continue;
+        const base = RELIC_DEFS[inst.id].effect[key];
+        if (!base) continue;
+        const v = base * powerTierMult(inst.powerTier);
+        total += v;
+        sources.push({ name: RELIC_DEFS[inst.id].name, rarity: RELIC_DEFS[inst.id].rarity, amount: fmt(v) });
+      }
+      if (sources.length === 0) continue;
+      out.push({ key, label, total: fmt(total), sources });
+    }
+    return out;
   }
 
   // Sum an effect channel across all owned instances (one per family), each

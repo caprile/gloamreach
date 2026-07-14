@@ -12,6 +12,7 @@ import {
   rarityHex,
   rarityIcon,
   relicEffectText,
+  relicFamilyName,
   REFINE_RECIPES,
   ownedRefineInput,
   canAffordRefine,
@@ -63,7 +64,11 @@ const DEPTH_TIP = 3010;
 const CHIP_W = 84;
 const CHIP_H = 62;
 const CHIP_GAP = 8;
-const COLS = 6;
+// 5 cols: 5*84 + 4*8 = 452 <= the 528px usable panel width. (Was 6, which
+// overflowed the panel by ~16px once a run filled several relic families.)
+const COLS = 5;
+// A small "Tier N" subheader precedes each power-tier group of chips.
+const TIER_HDR_H = 18;
 
 // Roll-button layout — buttons wrap so any number of trophy types (Gremlin +
 // Boar + Snake today, more with later biomes) lays out without overflowing.
@@ -333,7 +338,6 @@ export class RelicForgeMenu {
 
   private renderRoll(): void {
     const groups = this.displayGroups();
-    const gridRows = Math.max(1, Math.ceil(groups.length / COLS));
 
     // The roll-button block wraps with the number of rarity groups owned; the
     // result line + relic grid stack below it so nothing overlaps as variety
@@ -343,19 +347,52 @@ export class RelicForgeMenu {
     const rollTop = 96; // below title + tabs + subtitle
     const btnBlockH = 22 + btnRows * (BTN_H + BTN_GAP_Y);
     const resultY = rollTop + btnBlockH + 4;
-    // A plain result is one line; an auto-resolved family conflict adds a
-    // second (refund) line; an unresolved "choice" conflict adds the full
-    // Keep New / Keep Old button block instead of that second line.
+    // Reserve exactly the vertical space the result region needs so the grid's
+    // own "Your Relics" header (drawn at gridTop-22) always clears it:
+    //   • no result yet          — just the grid's header gap.
+    //   • plain success / fail    — one 13px line.
+    //   • auto-resolved conflict  — that line + a second (refund) line.
+    //   • unresolved "choice"     — the Keep New / Keep Old button block.
     const conflict = this.lastResult?.familyConflict;
-    const resultBlockH = conflict?.verdict === "choice" ? 130 : conflict ? 58 : 26;
+    let resultBlockH: number;
+    if (!this.lastResult) resultBlockH = 24;
+    else if (conflict?.verdict === "choice") resultBlockH = 134;
+    else if (conflict) resultBlockH = 64;
+    else resultBlockH = 46;
     const gridTop = resultY + resultBlockH;
 
-    this.panelH = gridTop + gridRows * (CHIP_H + CHIP_GAP) + 16;
+    this.panelH = gridTop + this.relicGridHeight(groups) + 16;
     this.layoutPanel();
     this.renderHeader("Feed a trophy to attempt a relic. A failed attempt still consumes the trophy.");
     this.renderRollButtons(this.panelY + rollTop);
     this.renderResultLine(this.panelY + resultY);
     this.renderRelicGrid(this.panelY + gridTop);
+  }
+
+  // Owned relics grouped by power tier (ascending) — so a run can see, at a
+  // glance, what its T1 relics get displaced by as T2 badlands relics roll in.
+  // Within a tier the groups keep groupedForDisplay()'s rarity-then-name order.
+  private groupsByTier(groups: RelicGroup[]): { tier: number; groups: RelicGroup[] }[] {
+    const byTier = new Map<number, RelicGroup[]>();
+    for (const g of groups) {
+      const list = byTier.get(g.powerTier);
+      if (list) list.push(g);
+      else byTier.set(g.powerTier, [g]);
+    }
+    return Array.from(byTier.keys())
+      .sort((a, b) => a - b)
+      .map((tier) => ({ tier, groups: byTier.get(tier)! }));
+  }
+
+  // Total height the tier-grouped relic grid occupies below its `top` anchor
+  // (the "Your Relics" header sits ABOVE top, so it isn't counted here).
+  private relicGridHeight(groups: RelicGroup[]): number {
+    if (groups.length === 0) return 24; // just the "no relics yet" line
+    let h = 0;
+    for (const t of this.groupsByTier(groups)) {
+      h += TIER_HDR_H + Math.ceil(t.groups.length / COLS) * (CHIP_H + CHIP_GAP);
+    }
+    return h;
   }
 
   // The Convert tab (Phase 5, Ember Kiln): render GLOAM_TO_EMBER_RATIO Gloam
@@ -688,35 +725,44 @@ export class RelicForgeMenu {
       return;
     }
 
-    groups.forEach((group, i) => {
-      const col = i % COLS;
-      const rowN = Math.floor(i / COLS);
-      const x = x0 + col * (CHIP_W + CHIP_GAP);
-      const y = top + rowN * (CHIP_H + CHIP_GAP);
-      const rarity = group.def.rarity;
+    // Grouped by power tier (each tier gets a subheader), chips wrapping at COLS
+    // within the tier. Lets the player see a T1 relic sitting alongside the T2
+    // that would displace it.
+    let y = top;
+    for (const t of this.groupsByTier(groups)) {
+      this.addText(x0, y, `Tier ${t.tier}`, 10, "#9fd0ff");
+      y += TIER_HDR_H;
+      t.groups.forEach((group, i) => {
+        const col = i % COLS;
+        const rowN = Math.floor(i / COLS);
+        const x = x0 + col * (CHIP_W + CHIP_GAP);
+        const cy = y + rowN * (CHIP_H + CHIP_GAP);
+        const rarity = group.def.rarity;
 
-      const chip = this.scene.add
-        .rectangle(x, y, CHIP_W, CHIP_H, 0x14181f, 0.95)
-        .setOrigin(0, 0)
-        .setStrokeStyle(1, RARITY_COLOR[rarity])
-        .setScrollFactor(0)
-        .setDepth(DEPTH_ITEM)
-        .setInteractive({ useHandCursor: true })
-        .on("pointerover", () => this.showTooltip(group.id, group.powerTier, x, y))
-        .on("pointerout", () => this.hideTooltip());
-      this.rows.push(chip);
+        const chip = this.scene.add
+          .rectangle(x, cy, CHIP_W, CHIP_H, 0x14181f, 0.95)
+          .setOrigin(0, 0)
+          .setStrokeStyle(1, RARITY_COLOR[rarity])
+          .setScrollFactor(0)
+          .setDepth(DEPTH_ITEM)
+          .setInteractive({ useHandCursor: true })
+          .on("pointerover", () => this.showTooltip(group.id, group.powerTier, x, cy))
+          .on("pointerout", () => this.hideTooltip());
+        this.rows.push(chip);
 
-      const gem = this.scene.add
-        .image(x + CHIP_W / 2, y + 20, rarityIcon(rarity))
-        .setScrollFactor(0)
-        .setDepth(DEPTH_ITEM + 1);
-      this.rows.push(gem);
+        const gem = this.scene.add
+          .image(x + CHIP_W / 2, cy + 22, rarityIcon(rarity))
+          .setScrollFactor(0)
+          .setDepth(DEPTH_ITEM + 1);
+        this.rows.push(gem);
 
-      // Power-tier indicator (biome 1 = T1, badlands elites = T2, see Relics.ts).
-      this.addText(x + 8, y + 6, `T${group.powerTier}`, 10, "#9fd0ff", 0, 0);
-      const name = group.def.name.length > 12 ? group.def.name.slice(0, 11) + "…" : group.def.name;
-      this.addText(x + CHIP_W / 2, y + CHIP_H - 12, name, 10, rarityHex(rarity), 0.5, 0);
-    });
+        // Family label top-left so it's clear which loadout slot this fills.
+        this.addText(x + 6, cy + 6, relicFamilyName(group.family), 8, "#7f8a99", 0, 0);
+        const name = group.def.name.length > 12 ? group.def.name.slice(0, 11) + "…" : group.def.name;
+        this.addText(x + CHIP_W / 2, cy + CHIP_H - 12, name, 10, rarityHex(rarity), 0.5, 0);
+      });
+      y += Math.ceil(t.groups.length / COLS) * (CHIP_H + CHIP_GAP);
+    }
   }
 
   private showTooltip(id: string, powerTier: number, chipX: number, chipY: number): void {

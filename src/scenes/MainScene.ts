@@ -7070,6 +7070,7 @@ export class MainScene extends Phaser.Scene {
       combatStats: () => this.combatStats(),
       runSpeedBreakdown: () => this.runSpeedBreakdown(),
       relicFamilySlots: () => this.relics.familySlots(),
+      relicEffectSummary: () => this.relics.effectSummary(),
       beginDrag: (c, i, p) => this.beginItemDrag(c, i, p),
       beginArmorDrag: (slot, p) => this.beginArmorDrag(slot, p),
       unequipArmorSlot: (slot) => this.unequipArmorSlot(slot),

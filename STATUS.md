@@ -2,7 +2,19 @@
 
 ## Current State
 
-_Living snapshot — edit in place, never append. Last shipped: **S2 — Badlands boss & enemy combat
+_Living snapshot — edit in place, never append. Last shipped: **S3 — Relic Forge menu UI + "all
+relic effects" panel** (2026-07-13, Sonnet). Third of the 6 triaged badlands-playtest sessions
+(`.claude/plans/badlands-playtest-triage.md`) — pure UI/wiring on the relic system, no new mechanic
+or data change. **Forge result-line/grid overlap fixed** (plain-success `resultBlockH` was too
+short, so the "Your Relics" header rode onto the "Forged:" line). **Forge owned-relic grid** now
+groups by **power tier** (a "Tier N" subheader per group) and `COLS` 6→5 so chips stop overflowing
+the panel. **New aggregated "all relic effects" list** in the Inventory Relics column
+(`RelicManager.effectSummary()` — one row per active channel with its tier-scaled grand total;
+hover a channel to see which relics feed it); `InventoryMenu.PANEL_H` grows to fit the 9-channel
+worst case. `tsc` clean; verified live (`preview_eval` numeric layout assertions — overlap gap,
+tier subheaders, chip/effects-list within panel). **Remaining triage: S4–S6** (POI placement/
+respawn, recipe gating, UX polish). See the entry below + [[survivor-rpg-relics]].
+Prior: **S2 — Badlands boss & enemy combat
 tuning** (2026-07-13, Opus). Second of the 6 triaged badlands-playtest sessions
 (`.claude/plans/badlands-playtest-triage.md`). **Duneshaper** made a real gate: HP 900→1050, the
 Gloam Volley reworked to a **beam-like 6-bolt spray** (was 3) — near-instant (bolt speed 240→460,
@@ -181,6 +193,44 @@ below + [[survivor-rpg-dev-console]].
 ## Recent Entries
 
 > Older entries in STATUS-archive.md.
+
+### S3 — Relic Forge menu UI + "all relic effects" panel (2026-07-13, Sonnet)
+
+Third of the 6 triaged badlands-playtest sessions (`.claude/plans/badlands-playtest-triage.md`).
+Pure UI/wiring on the already-designed relic system — no new mechanic, no recipe/data change (so
+`RECIPES.md` + dashboard are untouched; the dashboard reads `Relics.ts` live regardless). `tsc`
+clean; verified live via `preview_eval` with a seeded loadout (numeric layout assertions —
+screenshots hit the backgrounded-render quirk).
+
+- **Result-line / relic-grid overlap fixed (`RelicForgeMenu.ts`).** A plain-success roll's
+  reserved result-block height (26px) was smaller than the "Forged: X" line + the grid's own
+  "Your Relics" header gap, so the header rode up onto the result text. Phase 5 had only fixed the
+  2-line "replaced/declined" and "choice" verdicts; the common plain case was still wrong.
+  `resultBlockH` now branches by state: none 24 / plain 46 / auto-resolved conflict 64 / choice
+  134. Verified: Forged line bottom 530 vs "Your Relics" header y 540 (10px clear).
+- **Forge grid wrap + tier grouping.** The owned-relic grid used `COLS = 6` at 84px chips = 544px,
+  overflowing the 528px usable panel once a run filled several families → chips ran off the right
+  edge. `COLS` 6→5 (452px, fits). The grid is now grouped by **power tier** (`groupsByTier`): a
+  "Tier N" subheader precedes each tier's chips (wrapping within the tier), so a run can see a T1
+  relic beside the T2 that would displace it. Grid height is now measured (`relicGridHeight`) so
+  the panel grows to fit; each chip shows its family label. Verified: 8 chips across Tier 1 / Tier
+  2, max chip right 1148 ≤ panel-right 1232.
+- **Aggregated "all relic effects" panel (`InventoryMenu.ts` + `Relics.ts`).** New
+  `RelicManager.effectSummary()` returns one row per effect **channel** the loadout actually
+  touches — a formatted grand total (tier-scaled) plus the per-relic contributions behind it
+  (`RelicEffectSummary`). Rendered as a compact "Effects" list under the 8 relic slots in the
+  Inventory Relics column; hovering a channel pops a tooltip listing which relics grant it + each
+  one's amount (reuses the column's inline tipBg/tipText surface). `InventoryMenu.PANEL_H` now
+  grows to reserve room for the realistic worst case (9 active channels — one relic per family,
+  crit family feeds only one crit channel); verified the 9-channel case fits (list bottom 471 ≤
+  panel bottom 483). New `relicEffectSummary` dep wired in `MainScene`.
+- **Bug caught + fixed during verification:** the effects-list render call passed `PANEL_Y +
+  RELIC_FX_Y`, double-adding the panel offset (`RELIC_FX_Y` is already absolute, built from
+  `RELICS_Y`). It happened to fit with a light 6-channel loadout but the worst-case 9 channels
+  would have clipped ~40px past the panel; fixed to pass `RELIC_FX_Y` directly (matching how
+  `PANEL_H` reserves the space).
+- Files: `RelicForgeMenu.ts`, `InventoryMenu.ts`, `Relics.ts`, `MainScene.ts`.
+  **Remaining triage: S4–S6** (POI placement/respawn, recipe gating, UX polish).
 
 ### S2 — Badlands boss & enemy combat tuning (2026-07-13, Opus)
 
@@ -376,77 +426,3 @@ mutual exclusion (Tab↔K); relic family names correct; recipe/upgrade costs upd
 console errors. `RECIPES.md` (new Tool Upgrades section + updated station/weapon costs) + dashboard
 (new Tool-upgrade table) updated.
 
-### Biome 2 — Phase 5: Relics rework (2026-07-13, Opus)
-
-Plan: `.claude/plans/biome-2-sunscorch-badlands.md` (Phase 5, the umbrella's final milestone —
-**this completes it**). Built on **Opus**. Three locked deliverables (`AskUserQuestion`), plus a
-fourth request added mid-session (a dedicated Relics UI panel). `tsc --noEmit` clean throughout;
-verified live via `preview_eval` (see below) — caught and fixed one real layout bug along the way.
-
-- **Family loadout, not stacking (`src/systems/Relics.ts`).** New `RelicFamily` type (8: damage/
-  move/defense/stamina/lifesteal/vitality/crit/xp) + a `family` tag on every `RelicDef` — a
-  dual-stat relic claims one primary family (e.g. War Totem's `damagePct`+`staminaCostPct` is
-  `damage`). `RelicManager.instances` changed from an array of stackable `{id,powerTier}` to
-  `Partial<Record<RelicFamily, RelicInstance>>` — **at most one relic per family (8 max)**.
-  `roll()` now runs a new `compareInstances()` dominance check (direction-normalized per key —
-  `staminaCostPct`/`damageTakenPct` are "lower is better") whenever the produced relic's family is
-  already owned: **strictly better** (≥ on every shared stat, > on ≥1) → **auto-replaces**, old
-  relic refunds shards; **strictly worse/equal** → **auto-declines**, the new roll refunds shards
-  instead; **ambiguous** (mixed — e.g. a differing secondary stat) → `RollResult.familyConflict.
-  verdict = "choice"`, ownership left untouched until `resolveChoice(family, keepNew, newId,
-  newTier)` is called. Refund = `REFUND_BASE[rarity] * powerTier` (Common 1/Uncommon 2/Rare 4/
-  Mythic 8), in Gloam Shards (Tier 1) or Ember Shards (Tier ≥2) via `shardKeyForTier`. The
-  aggregate effect getters (`damageMult()` etc.) are **unchanged in shape** — `sumEffect()` just
-  iterates the 8 families instead of an array — so every `MainScene` call site kept working with
-  zero edits.
-- **Trimmed magnitudes (locked decision 8).** Every `RELIC_DEFS` effect scaled to exactly
-  **×0.625** the original value, matching the locked spec verbatim (Common damage 8→5%, Mythic
-  40→25%) — e.g. Stoneskin Charm −8→−5%, Tireless Charm −12→−8%, Titan Totem 40/30→25/19%.
-- **Tier-2 relics + Ember Shard currency.** All four badlands elite trophies (`duskrunner_trophy`/
-  `cragscale_trophy`/`hexling_trophy`/`sandmaw_trophy`) bumped `powerTier: 1 → 2` in `TROPHY_ROLL`
-  (still Common rarity, same odds/pity — just ×1.5 magnitude via the existing `POWER_TIER_MULT`
-  scaffold). New **Ember Shard** item (`Items.ts`/`Inventory.ts`, amber recolor of the Gloam Shard
-  texture in `BootScene.ts`) — converted from Gloam Shards at a new **Ember Kiln** Relic Forge
-  upgrade (`StationUpgrades.ts`, Lvl 2→3, `{embersteel_ingot:3, stone:20}`, discoverable once
-  Embersteel Ingot is known) via `GLOAM_TO_EMBER_RATIO = 3`. New tier-2 refine recipe
-  (`refine_common_t2`: 3 Common-T2 trophies + 2 Ember Shard → 1 `refined_trophy_uncommon_t2`,
-  new item, rolls Uncommon capped at Rare, powerTier 2) alongside the existing Tier-1 rows.
-- **Relic Forge menu (`RelicForgeMenu.ts`): new Convert tab + choice UI.** A third tab (Bind/
-  Refine/Convert), gated `forgeTier() >= 2` like Refine's `>= 1`, with a single "Convert" button
-  (commit-at-end `ProgressBar`, same pattern as Refine) that renders `GLOAM_TO_EMBER_RATIO` Gloam
-  into 1 Ember per click. The result line now branches on `familyConflict`: "replaced"/"declined"
-  show a second refund line; "choice" renders a **Keep New / Keep Old** two-button prompt (each
-  showing the relic's effect text + the shard refund the OTHER option would pay), blocking further
-  rolls/tab-switches until resolved — `resolveChoice()` mutates `lastResult` in place so the same
-  render path shows the outcome. **Closing the menu mid-choice auto-declines the new roll** (so a
-  spent trophy never yields literally nothing). Dead `×N` stacking badges removed from both this
-  menu's relic grid and `RelicBarUI.ts` (impossible now that families cap at 1).
-- **New Relics column on the Inventory panel (`InventoryMenu.ts`)** — a request added mid-session
-  after the user noted playtesters kept checking the Equipment tab for relics. A 4th side-by-side
-  section (2×4 = 8 fixed slots, one per family, paper-doll style like Equipment): empty slots show
-  the family label, filled slots show the rarity gem + a `T#` badge + a hover tooltip (name/
-  rarity/tier/effect, a small inline tipBg/tipText mirroring the existing `RelicBarUI`/
-  `RelicForgeMenu` pattern). Reads a new `RelicManager.familySlots()` (all 8 in fixed order,
-  filled or `null`) via a new `InventoryMenuDeps.relicFamilySlots` dep.
-- **Bug caught + fixed during verification:** the Bind tab's `resultBlockH` reserved layout space
-  only distinguished "no conflict" (1 line) from "choice" (buttons); it didn't account for
-  "replaced"/"declined" now being **2 lines** (a refund line was added under the "Forged:" line) —
-  the result text overlapped the "Your Relics" header and grid below it. Fixed by branching
-  `resultBlockH` on the conflict verdict (26/58/130) instead of just `choicePending()`; re-verified
-  live with exact pixel-gap assertions (`Text.y + Text.height` vs the grid header's `y`) for both
-  the 2-line and choice cases post-fix.
-- **Verified live** (`preview_eval`): all three roll verdicts via `RelicManager.roll()`/
-  `resolveChoice()` with controlled `rng` (no `Math.random` monkeypatching — that corrupts
-  Phaser's internal texture-key generation and was a red herring in an earlier pass); tier-scaling
-  dominance (an identical relic at T2 beats its own T1 copy); refund amounts match `REFUND_BASE ×
-  powerTier` exactly for all 4 rarities; `xpMult()` reflects a T2 Scholar's Idol (1.24×); Ember
-  conversion's 3-tier gating (no forge / Lvl 2 / Lvl 3) and the 6→3 gloam / +1 ember math; the
-  Relics inventory column renders with correct gem/tier-badge/empty-label states; the Relic Forge's
-  Bind/Refine/Convert tabs and the Keep New/Keep Old choice UI all render and resolve correctly
-  on-screen with no post-fix overlap; zero console errors after the fix. Dashboard `renderRelics()`
-  updated (family column + note, Ember conversion note, tier-2 trophy table rows — all read live
-  off `Relics.ts`, so magnitude/family data can't drift); `RECIPES.md` Relics section rewritten.
-  Files: `Relics.ts`, `Items.ts`, `Inventory.ts`, `BootScene.ts`, `StationUpgrades.ts`,
-  `RelicForgeMenu.ts`, `RelicBarUI.ts`, `InventoryMenu.ts`, `MainScene.ts`, `RECIPES.md`,
-  `dashboard/main.ts`. **This completes the biome-2 umbrella plan
-  (`.claude/plans/biome-2-sunscorch-badlands.md`) — all 6 phases (0–5) are shipped.**

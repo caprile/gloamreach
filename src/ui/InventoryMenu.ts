@@ -4,7 +4,7 @@ import type { ItemContainer } from "../systems/ItemContainer";
 import { itemDef } from "../systems/Items";
 import type { Skills } from "../systems/Skills";
 import type { PlayerProgression } from "../systems/Progression";
-import { RARITY_COLOR, rarityIcon, rarityName, relicEffectText, relicFamilyName, type RelicFamilySlot, type RelicGroup } from "../systems/Relics";
+import { RARITY_COLOR, rarityIcon, rarityName, relicEffectText, relicFamilyName, type RelicEffectSummary, type RelicFamilySlot, type RelicGroup } from "../systems/Relics";
 import { Tooltip } from "./Tooltip";
 
 export interface ArmorSlotView {
@@ -56,6 +56,10 @@ export interface InventoryMenuDeps {
   // filled) — surfaced right on the Inventory panel since playtesters kept
   // checking the Equipment column for them instead of the HUD relic bar.
   relicFamilySlots: () => RelicFamilySlot[];
+  // Aggregated "all relic effects" — one row per channel the owned relics
+  // touch, each with its grand total + the relics contributing to it (rendered
+  // below the relic slots; hovering a row shows the per-relic breakdown).
+  relicEffectSummary: () => RelicEffectSummary[];
   // Left-press on a filled slot begins dragging that stack.
   beginDrag: (container: ItemContainer, index: number, pointer: Phaser.Input.Pointer) => void;
   // Left-press on an occupied equipment slot begins dragging the equipped
@@ -132,8 +136,21 @@ const RELICS_Y = STATS_Y;
 const RELICS_COLS = 2;
 const RELICS_W = RELICS_COLS * SLOT + (RELICS_COLS - 1) * GAP;
 
+// Aggregated "all relic effects" list, stacked below the 8 relic slots in the
+// Relics column. Sized for the realistic worst case (~9 distinct active
+// channels — one relic per family, and the crit family feeds only one crit
+// channel) so the panel never clips it.
+const RELIC_GRID_ROWS = Math.ceil(8 / RELICS_COLS); // 4
+const RELIC_GRID_H = RELIC_GRID_ROWS * SLOT + (RELIC_GRID_ROWS - 1) * GAP;
+const RELIC_FX_Y = RELICS_Y + RELIC_GRID_H + 16; // "Effects" header baseline
+const RELIC_FX_ROW_H = 15;
+const RELIC_FX_MAX_ROWS = 9;
+const RELIC_FX_BOTTOM = RELIC_FX_Y + 18 + RELIC_FX_MAX_ROWS * RELIC_FX_ROW_H;
+
 export const PANEL_W = RELICS_X + RELICS_W - PANEL_X + 12;
-export const PANEL_H = BACKPACK_Y + BACKPACK_H - PANEL_Y + 20; // 382
+// Tall enough for whichever column reaches lowest — the backpack grid, or the
+// relic-effects list under the Relics column.
+export const PANEL_H = Math.max(BACKPACK_Y + BACKPACK_H + 20, RELIC_FX_BOTTOM + 8) - PANEL_Y;
 
 // Trash drop target: sits below the armor grid, in the panel's otherwise-
 // empty lower-right corner. Dragging a stack here permanently deletes it (see
@@ -282,6 +299,68 @@ export class InventoryMenu {
     this.renderTrash();
     this.renderCombatStats(STATS_X, STATS_Y);
     this.renderRelics(RELICS_X, RELICS_Y);
+    // RELIC_FX_Y is already an absolute Y (built from RELICS_Y, which includes
+    // PANEL_Y) — pass it straight through, matching how PANEL_H reserves space.
+    this.renderRelicEffects(RELICS_X, RELIC_FX_Y);
+  }
+
+  // Aggregated "all relic effects" — one row per active channel with its grand
+  // total, stacked below the relic slots. Hovering a row reuses the relic
+  // tooltip to break down which relics contribute (task from the S3 triage:
+  // "total aggregated effect list + hover a stat -> which relic grants it").
+  private renderRelicEffects(x0: number, y0: number): void {
+    const summary = this.deps.relicEffectSummary();
+    this.addText(x0, y0, "Effects", 11, "#8a93a3");
+    if (summary.length === 0) {
+      this.addText(x0, y0 + 16, "—", 10, "#5b6472");
+      return;
+    }
+    const totalX = x0 + RELICS_W;
+    summary.forEach((row, i) => {
+      const y = y0 + 18 + i * RELIC_FX_ROW_H;
+      // A wide invisible hit-rect over the whole row so hovering anywhere on
+      // it pops the source breakdown.
+      const hit = this.scene.add
+        .rectangle(x0, y, RELICS_W, RELIC_FX_ROW_H, 0x000000, 0.001)
+        .setOrigin(0, 0)
+        .setScrollFactor(0)
+        .setDepth(3001)
+        .setInteractive()
+        .on("pointerover", () => this.showRelicEffectTooltip(row, x0, y))
+        .on("pointerout", () => this.hideRelicTooltip());
+      this.rows.push(hit);
+      this.addText(x0, y, row.label, 10, "#a7b0bd");
+      this.addText(totalX, y, row.total, 10, "#c8d0da", 1, 0);
+    });
+  }
+
+  // Reuses the Relics-column tooltip surface to show which relics feed one
+  // aggregated effect channel (name + that relic's contribution).
+  private showRelicEffectTooltip(row: RelicEffectSummary, rowX: number, rowY: number): void {
+    const lines = row.sources.map((s) => `${s.name}: ${s.amount}`).join("\n");
+    const str = `${row.label}  ${row.total}\n${lines}`;
+    if (!this.relicTipText) {
+      this.relicTipText = this.scene.add
+        .text(0, 0, str, { fontFamily: "monospace", fontSize: "11px", color: "#e8ecf2", wordWrap: { width: 220 } })
+        .setScrollFactor(0)
+        .setDepth(3010);
+      this.relicTipBg = this.scene.add
+        .rectangle(0, 0, 10, 10, 0x000000, 0.95)
+        .setOrigin(0, 0)
+        .setScrollFactor(0)
+        .setDepth(3009);
+    }
+    this.relicTipText.setText(str);
+    this.relicTipBg!.setStrokeStyle(1, 0x8a93a3);
+    const padX = 8;
+    const padY = 6;
+    const w = this.relicTipText.width + padX * 2;
+    const h = this.relicTipText.height + padY * 2;
+    let tx = rowX - w - 6;
+    if (tx < 4) tx = rowX + RELICS_W + 6;
+    const ty = Phaser.Math.Clamp(rowY, 4, this.scene.scale.height - h - 4);
+    this.relicTipBg!.setPosition(tx, ty).setSize(w, h).setVisible(true);
+    this.relicTipText.setPosition(tx + padX, ty + padY).setVisible(true);
   }
 
   // Live equipped-loadout summary — damage/attack speed/attack stamina cost
