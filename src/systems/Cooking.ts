@@ -56,6 +56,15 @@ export const COOK_RECIPES: CookRecipe[] = [
     inputs: { shishkabob: 1, snake_meat: 1, gremlin_blood: 1 },
     requiredCampfireTier: 1,
   },
+  {
+    // A dead-simple Lvl 2 dish (the user playtest request): just badlands meat on
+    // a skewer — no herb/glaze — so duskrunner meat has an easy cook path.
+    id: "duskrunner_skewer",
+    name: "Duskrunner Skewer",
+    output: "duskrunner_skewer",
+    inputs: { shishkabob: 1, duskrunner_meat: 1 },
+    requiredCampfireTier: 1,
+  },
 
   // --- Lvl 3 campfire (tier 2) — badlands dishes ---
   {

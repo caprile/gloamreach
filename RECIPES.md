@@ -20,28 +20,28 @@ requires standing near a placed Workbench (`MainScene.isNearWorkbench`).
 
 | Name | Category | Tier | Workbench? | Costs | Required Skills | Output |
 |---|---|---|---|---|---|---|
-| Woodcutter's Axe | Tools | 0 | No | 4 Wood, 4 Stone | Chopping 0 | Tool |
-| Stone Pickaxe | Tools | 1 | Yes | 3 Wood, 4 Stone, 1 Leather Scraps | Mining 0 | Tool |
+| Woodcutter's Axe | Tools | 0 | No | 4 Wood, 3 Stone | Chopping 0 | Tool |
+| Stone Pickaxe | Tools | 1 | Yes | 3 Wood, 3 Stone, 1 Leather Scraps | Mining 0 | Tool |
 | Torch | Tools | 0 | No | 1 Wood | — | Item |
 | Wood Club | Weapons | 0 | No | 4 Wood | — | Item (weapon, blunt) |
 | Stone Club | Weapons | 1 | Yes | 3 Wood, 2 Stone, 1 Leather Scraps | Blunt 3 | Item (weapon, blunt) |
 | Bone Knife | Weapons | 1 | Yes | 1 Leather Scraps, 4 Bones | — | Item (weapon, slash) |
 | Primal Spear | Weapons | 1 | Yes | 4 Wood, 2 Stone, 1 Leather Scraps | — | Item (weapon, pierce) |
 | Slingshot | Weapons | 1 | Yes | 2 Wood, 2 Leather Scraps | — | Item (weapon, ranged — uses the Ammo slot) |
-| Slingshot Pellets | Weapons | 0 | No\* | 5 Stone | — | Item x25 (ammo) |
+| Slingshot Pellets | Weapons | 0 | No\* | 3 Stone | — | Item x25 (ammo) |
 | Javelin | Weapons | 1 | Yes | 3 Wood, 1 Stone | Pierce 5 | Item x2 (weapon, ranged, disposable — self-consuming stack) |
 | Shishkabob | Misc | 0 | No | 1 Wood | — | Item x2 |
-| Campfire | Crafting | 0 | No | 5 Wood, 5 Stone | — | Item (placeable) |
+| Campfire | Crafting | 0 | No | 5 Wood, 2 Stone | — | Item (placeable) |
 | Workbench | Crafting | 0 | No | 10 Wood | — | Item (placeable) |
 | Bedroll | Crafting | 0 | No | 3 Wood, 5 Cattail | — | Item (placeable — near a lit Campfire + no enemies nearby grants +1 HP/s "Resting") |
 | Drying Rack | Crafting | 1 | Yes | 5 Wood, 4 Leather Scraps, 2 Bones | — | Item (placeable, station) |
-| Relic Forge | Crafting | 1 | Yes | 10 Stone, 5 Bones, 1 Gremlin Trophy | — | Item (placeable, station — roll relics) |
+| Relic Forge | Crafting | 1 | Yes | 7 Stone, 5 Bones, 1 Gremlin Trophy | — | Item (placeable, station — roll relics) |
 | Gremlin Cap | Armor | 1 | Yes | 1 Gremlin Leather, 5 Blackberries | Light Armor 0 | Item (armor, helmet) |
 | Gremlin Shirt | Armor | 1 | Yes | 3 Gremlin Leather, 1 Leather Scraps, 5 Bones | Light Armor 0 | Item (armor, chest) |
 | Gremlin Pants | Armor | 1 | Yes | 2 Gremlin Leather, 2 Leather Scraps, 1 Blackberry | Light Armor 0 | Item (armor, legs) |
 | Gremlin Totem | Misc | 1 | Yes | 3 Gremlin Trophy, 1 Wood, 1 Gremlin Guck | — | Item (ritual — summons the Gremlin King at the Boss Altar) |
 | Effigy of the Duneshaper | Misc | 1 | Yes | 3 Gloam-Bone Totem, 2 Gloam Shard, 8 Bones | — | Item (ritual — summons the Duneshaper at a badlands altar; crafting it reveals the altars on the map) |
-| Smelter | Crafting | 1 | Yes | 10 Clay, 15 Stone | — | Item (placeable, station — smelts ore into ingots) |
+| Smelter | Crafting | 1 | Yes | 10 Clay, 10 Stone | — | Item (placeable, station — smelts ore into ingots) |
 | Sunsteel Helm | Armor | 1 | Yes (Lvl 3) | 2 Sunsteel Ingot, 2 Cragscale Plate | Heavy Armor 0 | Item (armor, helmet, **heavy**) |
 | Sunsteel Cuirass | Armor | 1 | Yes (Lvl 3) | 4 Sunsteel Ingot, 4 Cragscale Plate, 5 Bones | Heavy Armor 0 | Item (armor, chest, **heavy**) |
 | Sunsteel Greaves | Armor | 1 | Yes (Lvl 3) | 2 Sunsteel Ingot, 2 Cragscale Plate, 2 Sandmaw Chitin | Heavy Armor 0 | Item (armor, legs, **heavy**) |
@@ -96,14 +96,14 @@ fixed destination level.
 | Applies To | Toward | Name | Costs | Delta |
 |---|---|---|---|---|
 | Workbench | Lvl 2 | Tool Sharpener | 3 Twine, 5 Wood, 2 Stone | — (unlocks gates only) |
-| Workbench | Lvl 3 | Forge Anvil | 5 Sunsteel Ingot, 5 Ironbark, 10 Stone | Unlocks base forged gear (`requiresWorkbenchTier: 2`) |
-| Workbench | Lvl 4 | Emberforge Anvil | 5 Embersteel Ingot, 8 Ironbark, 15 Stone | Unlocks enhanced/T2 gear (`requiresWorkbenchTier: 3`) |
-| Campfire | Lvl 2 | Stone Hearth | 4 Twine, 20 Stone | Better campfire dishes |
-| Campfire | Lvl 3 | Sunsteel Grill | 3 Sunsteel Ingot, 8 Clay, 10 Stone | Better campfire dishes |
-| Campfire | Lvl 4 | Emberforge Hearth | 3 Embersteel Ingot, 20 Stone | Best campfire dishes |
-| Relic Forge | Lvl 2 | Gloam Conduit | 15 Stone, 1 Gloam Shard | Unlocks the Refine tab |
-| Relic Forge | Lvl 3 | Ember Kiln | 3 Embersteel Ingot, 20 Stone | Unlocks Gloam → Ember conversion (Convert tab) |
-| Smelter | Lvl 2 | Ember Crucible | 1 Gremlin King's Heart, 10 Stone | Smelt rare Cinderforged Ore → Embersteel Ingot |
+| Workbench | Lvl 3 | Forge Anvil | 5 Sunsteel Ingot, 5 Ironbark, 7 Stone | Unlocks base forged gear (`requiresWorkbenchTier: 2`) |
+| Workbench | Lvl 4 | Emberforge Anvil | 5 Embersteel Ingot, 8 Ironbark, 10 Stone | Unlocks enhanced/T2 gear (`requiresWorkbenchTier: 3`) |
+| Campfire | Lvl 2 | Stone Hearth | 4 Twine, 13 Stone | Better campfire dishes |
+| Campfire | Lvl 3 | Sunsteel Grill | 3 Sunsteel Ingot, 8 Clay, 7 Stone | Better campfire dishes |
+| Campfire | Lvl 4 | Emberforge Hearth | 3 Embersteel Ingot, 13 Stone | Best campfire dishes |
+| Relic Forge | Lvl 2 | Gloam Conduit | 10 Stone, 1 Gloam Shard | Unlocks the Refine tab |
+| Relic Forge | Lvl 3 | Ember Kiln | 3 Embersteel Ingot, 13 Stone | Unlocks Gloam → Ember conversion (Convert tab) |
+| Smelter | Lvl 2 | Ember Crucible | 1 Gremlin King's Heart, 7 Stone | Smelt rare Cinderforged Ore → Embersteel Ingot |
 
 Bench visuals change per tier (Workbench Lvl 2/3/4, Smelter Lvl 2 each get a
 distinct placeholder sprite). The Emberforge Anvil and Ember Kiln are only
@@ -143,13 +143,14 @@ i-frames. `heavy_armor` XP accrues per worn piece on a kill.
 
 | Set | Type | Helm | Chest | Legs | Full-set armor |
 |---|---|---|---|---|---|
-| Sunsteel (base) | Heavy | 4 | 6 | 4 | 14 |
-| Embersteel (T2) | Heavy | 7 | 9 | 7 | 23 |
-| Duskhide (base) | Light | 4 | 5 | 4 | 13 |
-| Emberhide (T2) | Light | 5 | 6 | 5 | 16 |
+| Sunsteel (base) | Heavy | 6 | 8 | 6 | 20 |
+| Embersteel (T2) | Heavy | 10 | 12 | 10 | 32 |
+| Duskhide (base) | Light | 4 | 6 | 5 | 15 |
+| Emberhide (T2) | Light | 7 | 9 | 7 | 23 |
 
-Duskhide base (13) is tuned to match a fully-upgraded Gremlin (Lvl 3) set, so
-freshly-forged badlands light armor never feels worse than maxed biome-1 gear.
+Armor totals were bumped meaningfully in the S1 balance batch (playtest: forged
+gear felt too flimsy) — heavy still beats light at each tier, and each tier is a
+clear step up.
 
 ## Weapon Upgrades (`src/systems/WeaponUpgrades.ts`)
 
@@ -275,6 +276,7 @@ that spend a plentiful earlier-biome leftover (boar_meat).
 | Cooked Snake Meat | any | 1 Shishkabob, 1 Snake Meat | Cooked Snake Meat | +2 HP/s for 22s |
 | Bramble-Glazed Boar Skewer | Lvl 2 | 1 Shishkabob, 1 Boar Meat, 2 Blackberries | Bramble-Glazed Boar Skewer | +2.5 HP/s for 20s |
 | Blood-Glazed Snake Skewer | Lvl 2 | 1 Shishkabob, 1 Snake Meat, 1 Gremlin Blood | Blood-Glazed Snake Skewer | +2.5 HP/s for 22s |
+| Duskrunner Skewer | Lvl 2 | 1 Shishkabob, 1 Duskrunner Meat | Duskrunner Skewer | +2.5 HP/s for 22s |
 | Seared Duskrunner Steak | Lvl 3 | 1 Shishkabob, 1 Duskrunner Meat, 1 Dustbloom | Seared Duskrunner Steak | +3 HP/s for 26s |
 | Sunfruit-Glazed Ribs | Lvl 3 | 1 Shishkabob, 2 Sunfruit, 1 Boar Meat | Sunfruit-Glazed Ribs | +3 HP/s for 26s |
 | Emberbloom Broth | Lvl 3 | 2 Emberbloom, 1 Sunfruit, 1 Gloamcap | Emberbloom Broth | +2.5 HP/s for 34s |
