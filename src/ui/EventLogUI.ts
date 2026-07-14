@@ -1,6 +1,6 @@
 import Phaser from "phaser";
 import type { EventLog, LogEntry, LogKind } from "../systems/EventLog";
-import { PANEL_X as INVENTORY_PANEL_X, PANEL_Y as INVENTORY_PANEL_Y, PANEL_H as INVENTORY_PANEL_H } from "./InventoryMenu";
+import { PANEL_X as INVENTORY_PANEL_X } from "./InventoryMenu";
 
 const PANEL_W = 260;
 const HEADER_H = 22;
@@ -22,18 +22,25 @@ const KIND_COLORS: Record<LogKind, { text: string; border: number; fill: number 
 };
 
 // Recipe-unlock / material-discovery toast: a small card (icon + text) that
-// slides in, holds while stacked under earlier ones, then fades. Anchored on
-// the LEFT, directly under the InventoryMenu panel's box (moved off the
-// top-right per the user — it used to collide visually with nothing there,
-// but the left side under the inventory box is where they want contextual
-// unlock feedback to live). Shared by both "recipe" (amber) and "material"
-// (blue, first-time-you-picked-this-up) entries so they stack in one queue
-// rather than colliding if both fire in the same beat.
+// slides in, holds while stacked, then fades. Anchored on the LEFT and grown
+// UPWARD from a fixed low baseline into the otherwise-empty left column.
+// Previously this anchored its TOP directly under the InventoryMenu panel's box
+// and grew downward — but that panel is now ~850px tall, so the stack started
+// near the bottom edge and a burst of several discoveries at once (e.g.
+// take-all from a chest of never-seen materials) ran straight off the bottom of
+// the screen. Decoupled from the inventory panel height entirely: the newest
+// toast sits at the baseline and older ones climb up, so any realistic burst
+// stays fully on screen. Shared by both "recipe" (amber) and "material" (blue,
+// first-time-you-picked-this-up) entries so they stack in one queue rather than
+// colliding if both fire in the same beat.
 const RECIPE_TOAST_W = 220;
 const RECIPE_TOAST_H = 40; // minimum height — grows for a message that wraps past 1 line
 const RECIPE_TOAST_GAP = 6;
 const RECIPE_TOAST_LEFT = INVENTORY_PANEL_X;
-const RECIPE_TOAST_TOP = INVENTORY_PANEL_Y + INVENTORY_PANEL_H + 12;
+// Distance from the bottom of the canvas to the bottom edge of the newest
+// toast (clear of the bottom-center hotbar/XP bar, which don't reach this far
+// left).
+const RECIPE_TOAST_BOTTOM_MARGIN = 118;
 const RECIPE_TOAST_ICON_SIZE = 24;
 const RECIPE_TOAST_SLIDE_MS = 280;
 const RECIPE_TOAST_HOLD_MS = 5500; // playtest feedback (again): recipe/material toasts still vanished too fast
@@ -79,11 +86,15 @@ export class EventLogUI {
   private topY: number;
   private recipeToastQueue: LogEntry[] = [];
   private recipeToastQueueBusy = false;
-  // Ordered (oldest first) heights of currently-visible recipe toasts, so a
-  // new one's Y offset is the real cumulative height of the stack rather than
-  // a fixed slot*constant — a message that wraps past one line used to spill
-  // past its box into whatever toast came after it.
+  // Heights of currently-visible recipe toasts — used only to know when the
+  // stack is fully empty (so the upward cursor below can reset to the baseline).
   private activeRecipeToasts: { height: number }[] = [];
+  // A monotonic cursor for the TOP edge of the next recipe toast. The stack
+  // grows UPWARD from the baseline (newest at the baseline, older ones above),
+  // so the cursor only ever moves up and resets to the baseline once the stack
+  // empties — the same reasoning as `centerStackNextY`: a slot freed by a
+  // faded toast is never reused under a still-visible one.
+  private recipeStackTopY = -1;
 
   // `x`/`topY` are this panel's fixed top-left anchor — the caller
   // (MainScene) computes `x` once from KeybindsUI's right edge so the two
@@ -313,9 +324,13 @@ export class EventLogUI {
     const toastH = Math.max(RECIPE_TOAST_H, text.height + 16);
 
     const stackEntry = { height: toastH };
-    const y =
-      RECIPE_TOAST_TOP +
-      this.activeRecipeToasts.reduce((sum, t) => sum + t.height + RECIPE_TOAST_GAP, 0);
+    // Grow upward: the newest toast's bottom sits at the baseline (when the
+    // stack is empty) or just above the current stack top otherwise. `y` is the
+    // toast's TOP edge, since the container/box use origin (0, 0).
+    const baselineBottom = this.scene.scale.height - RECIPE_TOAST_BOTTOM_MARGIN;
+    if (this.activeRecipeToasts.length === 0) this.recipeStackTopY = baselineBottom - toastH;
+    else this.recipeStackTopY -= toastH + RECIPE_TOAST_GAP;
+    const y = this.recipeStackTopY;
     this.activeRecipeToasts.push(stackEntry);
 
     const restX = RECIPE_TOAST_LEFT;
