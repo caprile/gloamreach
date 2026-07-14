@@ -5362,11 +5362,17 @@ export class MainScene extends Phaser.Scene {
   // Fire damage dealt by an armor SET BONUS (Molten Bulwark thorns, Emberblink
   // nova) — NOT a weapon hit, so it grants no weapon-skill XP and doesn't play
   // the swing sfx, but it CAN kill and must run the same loot/scoring tail.
-  // Flat fire damage; no resist lookup (kept simple this first pass — noted as a
-  // future hook if a fire-immune enemy ever ships).
+  // Fire honors the enemy's "fire" resist multiplier (S2 decision 3) — the
+  // counterweight that makes fire situational: Sandmaw/Cragscale resist it,
+  // Hexling is weak to it, everything else neutral. The damage number tints by
+  // effectiveness so the player reads whether fire is landing here.
   private dealSetBonusDamage(enemy: Enemy, dmg: number): void {
-    const depleted = enemy.takeHit(dmg);
-    this.spawnDamageNumber(enemy.x, enemy.y, Math.round(dmg), false, "weak");
+    const resistMult = enemy.resistMultiplier("fire");
+    const finalDmg = dmg * resistMult;
+    const effectiveness: DamageEffectiveness =
+      resistMult > 1.001 ? "weak" : resistMult < 0.999 ? "resist" : "normal";
+    const depleted = enemy.takeHit(finalDmg);
+    this.spawnDamageNumber(enemy.x, enemy.y, Math.round(finalDmg), false, effectiveness);
     if (depleted) this.resolveKill(enemy);
   }
 

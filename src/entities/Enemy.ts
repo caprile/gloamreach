@@ -1,6 +1,6 @@
 import Phaser from "phaser";
 import type { ResourceType } from "../systems/Inventory";
-import type { DamageType } from "../systems/Weapons";
+import type { IncomingDamageType } from "../systems/Weapons";
 import { ysortDepth } from "../systems/depth";
 
 export type EnemyState = "idle" | "chasing";
@@ -109,8 +109,11 @@ export interface EnemyConfig {
   // >1 = weak; any type absent = 1 (neutral). Lets badlands enemies teach the
   // damage-type layer (e.g. a rock reptile resists blunt, is weak to pierce)
   // purely as data — the resist math lives in MainScene.resolveWeaponHit. Empty
-  // for every biome-1 enemy, so their combat is unchanged.
-  resistances?: Partial<Record<DamageType, number>>;
+  // for every biome-1 enemy, so their combat is unchanged. Keyed by
+  // IncomingDamageType (the weapon types PLUS "fire") so an enemy can also resist
+  // or be weak to the player's fire damage (set-bonus thorns/Emberblink nova) —
+  // applied in MainScene.dealSetBonusDamage.
+  resistances?: Partial<Record<IncomingDamageType, number>>;
   // Visual facing mode. DEFAULT (true, as of the 2026-07 art pass) = non-rotating:
   // the sprite mirrors left/right via flipX with only a slight up/down tilt, never
   // rotating past horizontal (applyUprightFacing). Every creature texture is drawn
@@ -138,7 +141,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   elite = false;
   // Per-damage-type incoming multiplier (Biome 2 Phase 1). Read by
   // MainScene.resolveWeaponHit via resistMultiplier(); empty for biome-1 enemies.
-  private readonly resistances: Partial<Record<DamageType, number>>;
+  private readonly resistances: Partial<Record<IncomingDamageType, number>>;
   // --- swarm pack-aggro (Biome 2 Phase 1, opt-in) ---
   // When true, this enemy both propagates aggro to and receives aggro from
   // nearby same-type pack members (MainScene.updatePackAggro drives it). Off by
@@ -284,7 +287,9 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
 
   // Incoming-damage multiplier for a given damage type (Biome 2 Phase 1). 1 =
   // neutral (the default for any type not listed in this enemy's resistances).
-  resistMultiplier(type: DamageType): number {
+  // Accepts "fire" too (IncomingDamageType) so set-bonus fire damage can be
+  // resisted/amplified (S2 decision 3).
+  resistMultiplier(type: IncomingDamageType): number {
     return this.resistances[type] ?? 1;
   }
 

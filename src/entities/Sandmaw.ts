@@ -83,7 +83,9 @@ export class Sandmaw extends Enemy {
       // Cragscale's inverse (weak-pierce/resist-slash), so clubs/warhammer shine
       // here where the Primal Spear shines there — the damage-type layer rewards
       // carrying more than one weapon into the badlands.
-      resistances: { pierce: 0.6, blunt: 1.4 },
+      // fire ×0.5: a sand-burrower is at home in the heat (S2 decision 3 — makes
+      // the player's Emberblink fire-nova situational, not a blanket answer).
+      resistances: { pierce: 0.6, blunt: 1.4, fire: 0.5 },
     });
     this.eruptDamage = elite ? Math.round(ERUPT_DAMAGE * 1.5) : ERUPT_DAMAGE;
     this.telegraphGfx = scene.add.graphics();

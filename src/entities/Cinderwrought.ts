@@ -22,7 +22,7 @@ import type { IncomingDamageType } from "../systems/Weapons";
 export type WroughtState = "idle" | "telegraphing" | "executing" | "recovering" | "staggered";
 export type WroughtAttackType = "cone" | "hammer";
 
-const WROUGHT_MAX_HEALTH = 300; // a badlands mini-boss — tougher than the forest Gloamwarden (260)
+const WROUGHT_MAX_HEALTH = 340; // 300→340 (S2: playtest took zero hits — make it tankier too, not just harder to dodge)
 export const CINDERWROUGHT_SCALE = 1.8;
 const AGGRO_RADIUS = 260;
 const LEASH_RADIUS = 520; // kited past this -> fully deaggros
@@ -38,10 +38,10 @@ const POISE_BAR_OFFSET_Y = 10;
 
 // Cinder Cone — locked-direction fire breath. Long readable wind-up; the cone
 // direction is fixed at telegraph start so a sidestep clears it.
-const CONE_TELEGRAPH_MS = 820;
+const CONE_TELEGRAPH_MS = 620; // 820→620 (S2: harder to dodge — a shorter react window)
 const CONE_IMPACT_MS = 420; // breath sustained; the hit lands once within this window
 const CONE_RECOVER_MS = 700;
-const CONE_RANGE = 210;
+const CONE_RANGE = 235; // 210→235 (S2: reaches a step further so a lazy back-pedal doesn't clear it)
 const CONE_HALF_ANGLE = Phaser.Math.DegToRad(32); // ~64deg fan
 // Fire damage — bypasses flat armor (like magic), so it hurts even in full
 // plate. Bumped 30→46 (the user: "cinder guy damage is too low"): a forge boss
@@ -51,10 +51,10 @@ const CONE_KNOCKBACK = 140;
 
 // Forge Hammer — heavy overhead front-arc smash. Locks direction at execute;
 // the dodge is to leave the wide-but-short front wedge before it lands.
-const HAMMER_TELEGRAPH_MS = 720;
+const HAMMER_TELEGRAPH_MS = 560; // 720→560 (S2: harder to dodge — less time to back out of the wedge)
 const HAMMER_IMPACT_MS = 150; // planted overhead beat — the strike window
 const HAMMER_RECOVER_MS = 780;
-const HAMMER_RANGE = 155; // reaches just past MELEE_STOP_RANGE so a standing player is caught
+const HAMMER_RANGE = 168; // 155→168 (S2: catches a player who only takes one step back)
 const HAMMER_HALF_ARC = Phaser.Math.DegToRad(70); // wide front wedge
 // Fire damage (the molten hammer) — bypasses armor; bumped 44→58 so getting
 // caught in the wedge is a genuine "you should have dodged" punish.
@@ -62,7 +62,7 @@ const HAMMER_DAMAGE = 58;
 const HAMMER_KNOCKBACK = 240;
 
 const MELEE_STOP_RANGE = 150; // both attacks reach from here; stops approaching inside it
-const ATTACK_COOLDOWN_MS = 850;
+const ATTACK_COOLDOWN_MS = 650; // 850→650 (S2: attacks more often — less downtime between telegraphs)
 // How close to spawn counts as "home" while wandering back deaggro'd (mirrors
 // GremlinKing/Gloamwarden) — below this it idles instead of micro-adjusting.
 const RETURN_HOME_EPS = 20;

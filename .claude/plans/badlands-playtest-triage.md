@@ -45,7 +45,7 @@ balance, Sonnet for fixes/UI/tuning on existing systems).
 
 ---
 
-## Session 1 — Badlands metal economy & forged-gear balance ⭐ TOP PRIORITY · Opus
+## Session 1 — Badlands metal economy & forged-gear balance ⭐ TOP PRIORITY · Opus — ✅ SHIPPED (2026-07-13)
 
 The "not grindy" pass. Interlocking economy — do as one session.
 - Sunscorch ore: more per node (a handful) + denser scatter.
@@ -60,7 +60,7 @@ The "not grindy" pass. Interlocking economy — do as one session.
   `Recipes.ts`, `Weapons.ts`, `Items.ts` (armor values), `DryingRackMenu.ts` (fuel slot),
   `RECIPES.md`, dashboard.
 
-## Session 2 — Badlands boss & enemy combat tuning · Opus
+## Session 2 — Badlands boss & enemy combat tuning · Opus — ✅ SHIPPED (2026-07-13)
 
 - **Duneshaper:** projectiles → beam-like (like the Gremlin's); **6 not 3**; near-instant
   beam with a short react window (less wind-up so it's not trivially sidestepped); **more

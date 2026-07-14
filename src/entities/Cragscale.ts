@@ -89,7 +89,9 @@ export class Cragscale extends Enemy {
       // Locked resist profile: stone-hard plates turn aside blades (slash), take
       // blunt normally, and crack under a thrust (pierce = the Primal Spear).
       // ranged/magic left neutral (absent = 1).
-      resistances: { slash: 0.5, blunt: 1.0, pierce: 1.6 },
+      // fire ×0.5: a sun-baked rock-scale hide shrugs off flame (S2 decision 3 —
+      // the counterweight to the player's Emberblink fire-nova being dominant).
+      resistances: { slash: 0.5, blunt: 1.0, pierce: 1.6, fire: 0.5 },
     });
     if (elite) {
       this.speedMult = 1.1;

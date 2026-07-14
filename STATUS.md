@@ -2,7 +2,24 @@
 
 ## Current State
 
-_Living snapshot — edit in place, never append. Last shipped: **S1 — Badlands metal economy &
+_Living snapshot — edit in place, never append. Last shipped: **S2 — Badlands boss & enemy combat
+tuning** (2026-07-13, Opus). Second of the 6 triaged badlands-playtest sessions
+(`.claude/plans/badlands-playtest-triage.md`). **Duneshaper** made a real gate: HP 900→1050, the
+Gloam Volley reworked to a **beam-like 6-bolt spray** (was 3) — near-instant (bolt speed 240→460,
+wind-up 700→420ms) so it can't be lazily sidestepped, in a tight ±9° fan; Lance wind-up 900→700;
+damage up across attacks (spikes 50→56, nova 42→50, lance 46→54, barrage 30→34, volley 24→22/bolt);
+and **much harder to stagger-lock** (poise 120→170, punish 1.5×→1.35× / 3s→2.2s, poise regens sooner
+& faster). **Cinderwrought** harder to dodge (telegraphs cone 820→620 / hammer 720→560, reach cone
+210→235 / hammer 155→168, cooldown 850→650) + HP 300→340. **Hexling** teleports far less (blink
+cooldown 2600→5200 + no longer blinks after every flame strike). **Fire resistance layer** (decision
+3): `Enemy.resistances`/`resistMultiplier` widened to `IncomingDamageType` so **"fire" is
+resist-able**, and `MainScene.dealSetBonusDamage` now honors it (Emberblink nova / thorns) with an
+effectiveness-tinted damage number — **Cragscale + Sandmaw resist fire ×0.5, Hexling weak ×1.5, all
+others neutral** (the counterweight to Emberblink's fire-nova being a blanket answer). `tsc` clean;
+verified live (`preview_eval`: all stats + 6-bolt/460px volley + fire-scaled set-bonus damage 40→20
+Cragscale / 40→60 Hexling); dashboard Enemies tab updated. **Remaining triage: S3–S6** (relic UI, POI
+placement/respawn, recipe gating, UX polish). See the entry below + [[survivor-rpg-biome-2-plan]].
+Prior: **S1 — Badlands metal economy &
 forged-gear balance** (2026-07-13, Opus). First of the 6 triaged badlands-playtest sessions
 (`.claude/plans/badlands-playtest-triage.md`), the "not grindy" pass: **smelt ratio → 1 ore + 1 hex
 → 1 ingot** (both ingots); **ore nodes yield a handful + scatter denser** (Sunscorch 60×3–5,
@@ -13,8 +30,7 @@ T2 gap; **Duskhide light armor → 4/5/4 = 13** (matches maxed Gremlin Lvl 3) us
 own slot rather than pulled silently from the backpack — `ProcessingStation.fuel` + a fuel-gated
 `maxPossibleOutput`/`process`; the shared Drying Rack menu is visually unchanged). `tsc` clean;
 verified live; `RECIPES.md` updated (dashboard reads the data modules live, so no manual edit).
-**Remaining triage: S2–S6** (boss/enemy tuning, relic UI, POI placement/respawn, recipe gating,
-UX polish). See the entry below + [[survivor-rpg-biome-2-plan]]. Prior: **Ember-tier armor set bonuses**
+Prior: **Ember-tier armor set bonuses**
 (2026-07-13, Opus). The deferred payoff for building the best-in-biome forged gear: two full-set
 (3-piece) bonuses, both **unique mechanics** (not the raw-% channels relics own). **Embersteel (heavy)
 → Molten Bulwark**: knockback immunity + fire thorns on melee attackers. **Emberhide (light) →
@@ -165,6 +181,46 @@ below + [[survivor-rpg-dev-console]].
 ## Recent Entries
 
 > Older entries in STATUS-archive.md.
+
+### S2 — Badlands boss & enemy combat tuning (2026-07-13, Opus)
+
+Second of the 6 triaged badlands-playtest sessions (`.claude/plans/badlands-playtest-triage.md`).
+Combat feel + balance on the badlands roster + the two bosses. All numbers first-pass/tunable.
+
+- **Duneshaper** (`Duneshaper.ts`) — the final boss read as a speed bump, not a gate. Fixes:
+  - **Gloam Volley → a beam-like 6-bolt spray** (was 3): `VOLLEY_BOLTS` 3→6, `VOLLEY_BOLT_SPEED`
+    240→**460** (near-instant/beam-like travel), `VOLLEY_TELEGRAPH_MS` 700→**420** (short react
+    window so it can't be lazily sidestepped), `VOLLEY_SPREAD` 18°→**9°** (a tight ~45° fan reading
+    as a rapid beam-spray), `VOLLEY_BOLT_DAMAGE` 24→**22**/bolt (more bolts land now — a face-full
+    hurts more, a clipping single hit ≈ the same), range 460→520. Matches the user's "beam-like, 6
+    not 3, near-instant, short react window."
+  - **More damage across attacks:** spikes 50→56 (physical), nova 42→50, lance 46→54, barrage 30→34
+    (all magic bypass armor). Lance wind-up 900→**700** (a real beam — harder to sidestep).
+  - **Tankier + much harder to stagger-lock:** HP 900→**1050**; poise 120→**170** (more damage to
+    break); stagger punish **1.5×→1.35×** and **3s→2.2s**; poise regen delay 4000→3000ms + rate
+    15→22/s (recovers between stagger attempts). Resists easy stagger-locking per the balance target.
+- **Cinderwrought** (`Cinderwrought.ts`) — playtest took **zero hits**. Harder + harder to dodge:
+  telegraphs cone **820→620** / hammer **720→560** (less react time), reach cone **210→235** /
+  hammer **155→168** (a lazy back-pedal no longer clears it), attack cooldown **850→650** (attacks
+  more often), HP **300→340**. Damage unchanged (already bumped in the 19-item batch).
+- **Hexling** (`Hexling.ts`) — "teleports too much." Blink cooldown **2600→5200ms**, and the
+  post-flame reposition blink is now **gated on that cooldown** (was unconditional — it blinked after
+  every single flame strike on top of every corner). It now commits to standing and casting far more.
+- **Fire resistance layer** (decision 3, the counterweight to Emberblink's fire-nova being a blanket
+  answer). `Enemy.resistances` + `resistMultiplier()` widened from `DamageType` to
+  `IncomingDamageType` so **"fire" is resist-able**; `MainScene.dealSetBonusDamage` (Emberblink nova
+  + Molten Bulwark thorns) now applies `resistMultiplier("fire")` and tints the damage number by
+  effectiveness (was flat, always-"weak"). Data: **Cragscale ×0.5, Sandmaw ×0.5** (fire-resistant),
+  **Hexling ×1.5** (fire-weak), all other badlands enemies neutral. `Enemy.ts` dropped the now-unused
+  `DamageType` import.
+- **Verified live** (`preview_eval`, this session's own dev server): spawned all five and asserted
+  Duneshaper `{maxHealth:1050, poise:170, magic:0.5, pierce:1.3}`, Cinderwrought `{maxHealth:340}`,
+  the Gloam Volley spawning **6 bolts at 460 px/s**, and fire scaling through `dealSetBonusDamage`
+  (40 base → **20** on a Cragscale (×0.5), **60** on a Hexling (×1.5)); Cragscale/Sandmaw/Hexling
+  fire multipliers 0.5/0.5/1.5. `tsc --noEmit` clean, no console errors. **Dashboard Enemies tab
+  updated** (the one hand-mirrored source: Duneshaper/Cinderwrought/Hexling stats + Cragscale/Sandmaw
+  fire-resist notes). No `RECIPES.md` change (no recipe/data-module change). **Remaining triage:
+  S3–S6.**
 
 ### S1 — Badlands metal economy & forged-gear balance (2026-07-13, Opus)
 

@@ -59,7 +59,11 @@ const FLAME_SPREAD = 62; // gap between the 3 clustered circles
 // with flame on cooldown, and automatically at the end of every flame strike.
 const BLINK_TRIGGER = 92; // cornered inside this (flame not ready) → blink out
 const BLINK_DIST = 220;
-const BLINK_COOLDOWN_MS = 2600;
+// 5200 (was 2600): playtest — the Hexling "teleports too much" (S2). Roughly
+// doubling the cooldown, plus gating the post-flame reposition blink on this
+// same cooldown (see updateFlame), so it can't teleport after every flame on
+// top of every corner. It now commits to standing and casting far more often.
+const BLINK_COOLDOWN_MS = 5200;
 
 type HexMode = "idle" | "engaged";
 type FlameState = "none" | "telegraph" | "impact";
@@ -104,7 +108,9 @@ export class Hexling extends Enemy {
       // shreds it" tuning — resistant to all physical, weak to magic (a Sandmaw-
       // shaped inverse: that one resists blunt/weak pierce, this resists
       // everything physical and is only vulnerable to magic weapons).
-      resistances: { magic: 1.5, slash: 0.5, blunt: 0.5, pierce: 0.5 },
+      // fire ×1.5: a robed caster's cloth-and-flesh frame catches flame (S2
+      // decision 3 — the one badlands enemy fire is meant to be strong against).
+      resistances: { magic: 1.5, slash: 0.5, blunt: 0.5, pierce: 0.5, fire: 1.5 },
       upright: true, // humanoid mage — mirror left/right, never rotate upside-down
     });
     this.boltDamage = elite ? Math.round(BOLT_DAMAGE * 1.5) : BOLT_DAMAGE;
@@ -245,7 +251,10 @@ export class Hexling extends Enemy {
       this.telegraphGfx.clear();
       this.flameReadyAt = now + FLAME_COOLDOWN_MS;
       this.applyHpTint();
-      this.doBlink(playerX, playerY, now);
+      // Only reposition-blink if the blink is off cooldown (S2 anti-teleport):
+      // otherwise it stays put and casts point-blank, rather than teleporting
+      // away after every single flame strike.
+      if (now >= this.blinkReadyAt) this.doBlink(playerX, playerY, now);
     }
   }
 

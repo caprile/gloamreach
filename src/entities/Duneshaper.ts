@@ -24,7 +24,7 @@ import type { ProjectileConfig, ProjectileHost } from "./Projectile";
 export type TyrantState = "idle" | "telegraphing" | "executing" | "recovering" | "staggered";
 export type TyrantAttack = "volley" | "spikes" | "nova" | "lance" | "barrage";
 
-const MAX_HEALTH = 900; // final boss — above the Gremlin King's 600
+const MAX_HEALTH = 1050; // 900→1050 (S2: tankier — a real gate, not a speed bump)
 export const DUNESHAPER_SCALE = 2.3;
 const AGGRO_RADIUS = 300;
 const LEASH_RADIUS = 580; // kited past this -> fully deaggros
@@ -32,11 +32,14 @@ const MOVE_SPEED = 48;
 const PREFERRED_RANGE = 220; // a caster: holds around here and casts, only closing if farther
 const DEAGGRO_REGEN_PER_SEC = 14; // claws HP back between engagements (roster precedent)
 
-export const DUNESHAPER_MAX_POISE = 120;
-export const DUNESHAPER_STAGGER_DAMAGE_MULTIPLIER = 1.5;
-const STAGGER_DURATION_MS = 3000;
-const POISE_REGEN_DELAY_MS = 4000;
-const POISE_REGEN_PER_SEC = 15;
+// S2: harder to stagger-lock — poise up (170, more damage to break), the punish
+// window shorter (2.2s) and less rewarding (1.35× not 1.5×), and poise recovers
+// sooner + faster between engagements so it can't be chain-staggered.
+export const DUNESHAPER_MAX_POISE = 170;
+export const DUNESHAPER_STAGGER_DAMAGE_MULTIPLIER = 1.35;
+const STAGGER_DURATION_MS = 2200;
+const POISE_REGEN_DELAY_MS = 3000;
+const POISE_REGEN_PER_SEC = 22;
 const POISE_BAR_OFFSET_Y = 10;
 
 const ATTACK_COOLDOWN_MS = 900;
@@ -49,15 +52,20 @@ const ENRAGE_TELEGRAPH_MULTIPLIER = 0.7;
 const ENRAGE_RECOVER_MULTIPLIER = 0.75;
 const ENRAGE_MOVE_MULTIPLIER = 1.3;
 
-// --- Gloam Volley — 3 magic bolts in a spread (projectiles self-resolve). ---
-const VOLLEY_TELEGRAPH_MS = 700;
+// --- Gloam Volley — a beam-like 6-bolt spray (projectiles self-resolve). ---
+// S2 rework (the user): "beam-like, 6 not 3, near-instant, short react window."
+// Short wind-up (420ms) + fast bolts (460 px/s) so it can't be lazily
+// sidestepped, in a tight fan (6 × 9° = ~45°) that reads as a rapid beam-spray;
+// per-bolt damage trimmed slightly since more bolts now land (a face-full hurts
+// more, a clipping single hit ≈ the same).
+const VOLLEY_TELEGRAPH_MS = 420;
 const VOLLEY_EXECUTE_MS = 200;
 const VOLLEY_RECOVER_MS = 550;
-const VOLLEY_BOLTS = 3;
-const VOLLEY_SPREAD = Phaser.Math.DegToRad(18);
-const VOLLEY_BOLT_DAMAGE = 24; // magic — bypasses armor
-const VOLLEY_BOLT_SPEED = 240;
-const VOLLEY_BOLT_RANGE = 460;
+const VOLLEY_BOLTS = 6;
+const VOLLEY_SPREAD = Phaser.Math.DegToRad(9);
+const VOLLEY_BOLT_DAMAGE = 22; // magic — bypasses armor, per bolt
+const VOLLEY_BOLT_SPEED = 460;
+const VOLLEY_BOLT_RANGE = 520;
 
 // --- Sand Spikes — 3 growing circles across the player's spot, PHYSICAL. ---
 const SPIKES_TELEGRAPH_MS = 850;
@@ -65,7 +73,7 @@ const SPIKES_IMPACT_MS = 260;
 const SPIKES_RECOVER_MS = 700;
 const SPIKES_RADIUS = 46;
 const SPIKES_SPREAD = 62;
-const SPIKES_DAMAGE = 50; // physical pierce — the flat-armor subtraction applies
+const SPIKES_DAMAGE = 56; // 50→56 physical pierce — the flat-armor subtraction applies (S2: more dmg)
 const SPIKES_KNOCKBACK = 70;
 
 // --- Blink Nova — teleport near the player, detonate a radial magic burst. ---
@@ -74,16 +82,16 @@ const NOVA_IMPACT_MS = 200;
 const NOVA_RECOVER_MS = 650;
 const NOVA_BLINK_STANDOFF = 96; // lands this far from the player, on the near side
 const NOVA_RADIUS = 132;
-const NOVA_DAMAGE = 42; // magic
+const NOVA_DAMAGE = 50; // 42→50 magic (S2: more dmg)
 const NOVA_KNOCKBACK = 220;
 
 // --- Gloamfire Lance (phase 2) — locked-direction beam. ---
-const LANCE_TELEGRAPH_MS = 900;
+const LANCE_TELEGRAPH_MS = 700; // 900→700 (S2: a real beam — a tighter react window, harder to sidestep)
 const LANCE_IMPACT_MS = 320;
 const LANCE_RECOVER_MS = 800;
 const LANCE_RANGE = 340;
 const LANCE_HALF_ANGLE = Phaser.Math.DegToRad(10);
-const LANCE_DAMAGE = 46; // magic
+const LANCE_DAMAGE = 54; // 46→54 magic (S2: more dmg)
 const LANCE_KNOCKBACK = 120;
 
 // --- Sunscorch Barrage (phase 3) — a carpet of meteor circles. ---
@@ -93,7 +101,7 @@ const BARRAGE_RECOVER_MS = 850;
 const BARRAGE_RING_COUNT = 6;
 const BARRAGE_RING_RADIUS = 145; // ring of impacts around the player + one on them
 const BARRAGE_CIRCLE_RADIUS = 54;
-const BARRAGE_DAMAGE = 30; // magic
+const BARRAGE_DAMAGE = 34; // 30→34 magic (S2: more dmg)
 const BARRAGE_KNOCKBACK = 80;
 
 function telegraphMsFor(a: TyrantAttack): number {
