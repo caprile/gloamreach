@@ -6,6 +6,7 @@ import {
   RELIC_DEFS,
   TROPHY_ROLL,
   PITY_THRESHOLD,
+  RELIC_RARITIES,
   trophyOverallSuccessChance,
   RARITY_COLOR,
   rarityName,
@@ -236,33 +237,40 @@ export class RelicForgeMenu {
     this.rows = [];
   }
 
-  // Roll buttons are grouped by RARITY, not by individual species — every
-  // Common trophy (Gremlin/Boar/Snake) already shares the same odds + pity
-  // counter (5n), so three separate "Bind X Trophy" buttons was pure UI
-  // noise with zero mechanical difference between them (per playtest
-  // feedback / the #14 discussion — species trophies stay separate as drops
-  // for future per-source rarity scaling, this only collapses the FORGE UI).
-  // A group disappears once every trophy of that rarity hits 0, same as the
-  // old per-species behavior.
-  private rarityGroups(): { rarity: RelicRarity; keys: string[]; total: number }[] {
-    const byRarity = new Map<RelicRarity, string[]>();
+  // Roll buttons are grouped by the (rarity, powerTier) tuple — NOT by rarity
+  // alone and NOT by individual species. Species of the same rarity+tier share
+  // the same odds + pity counter (5n), so collapsing them into one button is
+  // pure convenience (the choice of which species to drain is mechanically
+  // invisible). But power TIER is a real, player-visible knob: a Common/T1 and
+  // a Common/T2 trophy produce relics of very different magnitude (×1.5), so
+  // they must be SEPARATE buttons — the player picks which tier feeds the roll
+  // (playtest feedback: "it's just 'roll an uncommon trophy'"). A group
+  // disappears once every trophy of that rarity+tier hits 0.
+  private rarityGroups(): { rarity: RelicRarity; tier: number; keys: string[]; total: number }[] {
+    // Key the map on "rarity@tier" so T1 and T2 Commons stay distinct.
+    const byTuple = new Map<string, { rarity: RelicRarity; tier: number; keys: string[] }>();
     for (const key of Object.keys(TROPHY_ROLL)) {
       if (this.deps.backpack.count(key) <= 0) continue;
-      const rarity = TROPHY_ROLL[key].rarity;
-      const list = byRarity.get(rarity);
-      if (list) list.push(key);
-      else byRarity.set(rarity, [key]);
+      const { rarity, powerTier } = TROPHY_ROLL[key];
+      const mapKey = `${rarity}@${powerTier}`;
+      const g = byTuple.get(mapKey);
+      if (g) g.keys.push(key);
+      else byTuple.set(mapKey, { rarity, tier: powerTier, keys: [key] });
     }
-    return Array.from(byRarity.entries()).map(([rarity, keys]) => ({
-      rarity,
-      keys,
-      total: keys.reduce((sum, k) => sum + this.deps.backpack.count(k), 0),
-    }));
+    return Array.from(byTuple.values())
+      // Stable, readable order: rarity ascending, then tier ascending.
+      .sort((a, b) =>
+        RELIC_RARITIES.indexOf(a.rarity) - RELIC_RARITIES.indexOf(b.rarity) || a.tier - b.tier,
+      )
+      .map((g) => ({
+        ...g,
+        total: g.keys.reduce((sum, k) => sum + this.deps.backpack.count(k), 0),
+      }));
   }
 
-  // Which specific trophy key a rarity-group's button actually consumes —
-  // whichever species the player currently has the most of, so stock drains
-  // evenly across species rather than always favoring one.
+  // Which specific trophy key a group's button actually consumes — whichever
+  // species (within the same rarity+tier) the player currently has the most
+  // of, so stock drains evenly across species rather than always favoring one.
   private pickTrophyToRoll(keys: string[]): string {
     return keys.reduce((best, k) => (this.deps.backpack.count(k) > this.deps.backpack.count(best) ? k : best));
   }
@@ -570,11 +578,12 @@ export class RelicForgeMenu {
     });
   }
 
-  // One roll button per owned RARITY (see rarityGroups), wrapping into rows
-  // of BTN_COLS. Consuming a group's button picks whichever species trophy
-  // is most plentiful (pickTrophyToRoll) — odds/pity are identical across
-  // species of the same rarity, so the choice is purely about draining stock
-  // evenly, not a player-visible decision.
+  // One roll button per owned (rarity, power-tier) group (see rarityGroups),
+  // wrapping into rows of BTN_COLS. Consuming a group's button picks whichever
+  // species trophy is most plentiful (pickTrophyToRoll) — odds/pity are
+  // identical across species of the same rarity+tier, so that choice is purely
+  // about draining stock evenly. Power TIER, by contrast, IS a player-visible
+  // decision (T1 vs T2 differ in relic magnitude), so it splits the buttons.
   private renderRollButtons(y: number): void {
     const x = this.panelX + 16;
     this.addText(x, y, "Bind", 13, "#c9a86a");
@@ -621,7 +630,7 @@ export class RelicForgeMenu {
         .setDepth(DEPTH_ITEM + 1);
       this.rows.push(gem);
 
-      this.addText(bx + 42, by + 8, `Roll a ${rarityName(rarity)} Trophy`, 12, can ? rarityHex(rarity) : "#5a6270");
+      this.addText(bx + 42, by + 8, `Roll a ${rarityName(rarity)} Trophy (T${group.tier})`, 12, can ? rarityHex(rarity) : "#5a6270");
       this.addText(bx + 42, by + 26, `have ${group.total}`, 11, can ? "#c8d0da" : "#e08a8a");
       this.addText(bx + 42, by + 42, pityStr, 10, "#8a93a3");
     });
@@ -646,20 +655,28 @@ export class RelicForgeMenu {
     if (!conflict) return;
     const oldDef = RELIC_DEFS[conflict.oldId];
     if (conflict.verdict === "replaced") {
-      const shardName = itemDef(conflict.refundShardKey!)?.name ?? conflict.refundShardKey;
-      this.addText(x, y + 20, `Replaced ${oldDef.name} — +${conflict.refundShardAmount} ${shardName}`, 11, "#9fd0ff");
+      // No shard refund on displacement anymore (see Relics.shardRefund) — the
+      // suffix only appears if a nonzero amount is ever restored.
+      this.addText(x, y + 20, `Replaced ${oldDef.name}${this.refundSuffix(conflict.refundShardKey, conflict.refundShardAmount)}`, 11, "#9fd0ff");
     } else if (conflict.verdict === "declined") {
-      const shardName = itemDef(conflict.refundShardKey!)?.name ?? conflict.refundShardKey;
-      this.addText(x, y + 20, `${oldDef.name} was already better — +${conflict.refundShardAmount} ${shardName}`, 11, "#9fd0ff");
+      this.addText(x, y + 20, `${oldDef.name} was already better${this.refundSuffix(conflict.refundShardKey, conflict.refundShardAmount)}`, 11, "#9fd0ff");
     } else {
       this.renderFamilyChoice(x, y + 20, def, oldDef, this.lastResult.id, this.lastResult.powerTier!, conflict.oldId, conflict.oldPowerTier);
     }
   }
 
+  // " — +N Shard" suffix, or "" when the refund is zero (the default now that
+  // displacement gives nothing back — see Relics.shardRefund).
+  private refundSuffix(shardKey: string | undefined, amount: number | undefined): string {
+    if (!shardKey || !amount || amount <= 0) return "";
+    const shardName = itemDef(shardKey)?.name ?? shardKey;
+    return ` — +${amount} ${shardName}`;
+  }
+
   // Both relics claim the same family and neither dominates (e.g. a differing
   // secondary stat) — let the player pick which one to keep. The other is
-  // discarded and refunds shards. Blocks rolling/tab-switching until resolved
-  // (see choicePending()).
+  // discarded (no shard refund anymore — see Relics.shardRefund). Blocks
+  // rolling/tab-switching until resolved (see choicePending()).
   private renderFamilyChoice(
     x: number,
     y: number,
@@ -691,8 +708,10 @@ export class RelicForgeMenu {
       this.rows.push(box);
       this.addText(bx + 8, rowY + 6, `Keep ${def.name}`, 12, rarityHex(def.rarity));
       this.addText(bx + 8, rowY + 22, relicEffectText(def, tier), 10, "#8a93a3");
-      const shardName = itemDef(refundKey)?.name ?? refundKey;
-      this.addText(bx + 8, rowY + 34, `discards other → +${refundAmt} ${shardName}`, 9, "#6a7280");
+      // Refund line only when something is actually restored (zero by default
+      // now — displacement is no longer a shard source; see Relics.shardRefund).
+      const line = refundAmt > 0 ? `discards other → +${refundAmt} ${itemDef(refundKey)?.name ?? refundKey}` : "discards the other relic";
+      this.addText(bx + 8, rowY + 34, line, 9, "#6a7280");
     };
 
     drawChoice(x, newDef, newTier, newRefund.refundShardKey, newRefund.refundShardAmount, () => this.resolveChoice(true));

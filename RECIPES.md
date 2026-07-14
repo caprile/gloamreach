@@ -304,15 +304,22 @@ family already owned compares the two relics (direction-normalized — "lower is
 better" stats like stamina cost compare correctly) and resolves automatically
 where possible:
 - **New relic strictly better** (≥ the old on every shared stat, better on at
-  least one) → **auto-replaces**; the displaced relic refunds Gloam/Ember Shards
-  (scaled by its own rarity × power tier: Common 1 / Uncommon 2 / Rare 4 / Mythic 8,
-  × tier).
-- **Old relic strictly better or equal** → the new roll is **auto-declined**; IT
-  refunds the shards instead (a "wasted" roll still pays a dividend).
+  least one) → **auto-replaces**; the displaced relic is discarded.
+- **Old relic strictly better or equal** → the new roll is **auto-declined**
+  (nothing changes).
 - **Neither dominates** (e.g. a differing secondary stat — one relic wins on
   damage, the other on stamina cost) → **ambiguous**: the Relic Forge menu shows
-  a **Keep New / Keep Old** prompt and blocks further rolls until you choose;
-  the discarded one still refunds shards.
+  a **Keep New / Keep Old** prompt and blocks further rolls until you choose; the
+  other is discarded.
+
+**No shard refund on displacement** (playtest exploit fix): a discarded relic
+gives **nothing** back. The old design refunded Gloam/Ember Shards scaled by the
+displaced relic's rarity × tier, but the trophy that produced the new relic drops
+free from elites, so rolling into an owned family and displacing was a **net shard
+source** (roll → auto-replace → free shards, farmable). Since a relic doesn't
+track whether it came from a free (raw) or shard-costed (refined) trophy, any
+positive refund on that path is a net gain — so displacement now yields zero. A
+wasted roll is simply a wasted trophy.
 
 **Magnitudes were trimmed** this pass (locked decision 8) — every relic's effect
 numbers are scaled to ~0.625× their original values (e.g. Common damage

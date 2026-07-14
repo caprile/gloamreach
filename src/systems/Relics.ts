@@ -419,16 +419,29 @@ export interface ChoiceResolution {
   refundShardAmount: number;
 }
 
-// Flat shard-refund base per rarity, multiplied by the discarded relic's own
-// power tier (not the geometric POWER_TIER_MULT — a simple linear scale is
-// plenty for a "here's something for the dupe" consolation).
-const REFUND_BASE: Record<RelicRarity, number> = { common: 1, uncommon: 2, rare: 4, mythic: 8 };
+// Shard refund on displacing a relic during a family conflict.
+//
+// EXPLOIT FIX (playtest — "am I netting ember shards?"): the old formula
+// (REFUND_BASE[rarity] × powerTier) paid REAL shards — e.g. displacing a
+// Common/T2 relic refunded 2 Ember Shards. But the trophy that produced the
+// new relic drops FREE from an elite (zero shard cost), so rolling into an
+// owned family and displacing was a NET shard source: roll → auto-replace →
+// +2 Ember, farmable indefinitely. Since a RelicInstance doesn't track whether
+// it came from a raw (free) or refined (shard-costed) trophy, there's no way to
+// scale the refund to actual acquisition cost — and ANY positive refund on the
+// free-trophy path is a net gain. So the displacement refund is now ZERO: an
+// automatic replace/decline/choice consumes the trophy and gives nothing back
+// (a wasted roll is just a wasted roll), which is the only accounting that
+// makes displacing/rerolling provably never a shard source. The dominance
+// behavior (auto-replace/decline/choice) is unchanged — only the payout is
+// removed. The refund plumbing (RollResult.refundShard*, previewShardRefund,
+// resolveChoice) is kept intact so a future explicit "dismantle for shards"
+// sink can reuse it, and the UI simply omits any zero-amount refund line.
 function shardKeyForTier(tier: number): string {
   return tier >= 2 ? "ember_shard" : "gloam_shard";
 }
 function shardRefund(id: string, powerTier: number): { refundShardKey: string; refundShardAmount: number } {
-  const def = RELIC_DEFS[id];
-  return { refundShardKey: shardKeyForTier(powerTier), refundShardAmount: REFUND_BASE[def.rarity] * powerTier };
+  return { refundShardKey: shardKeyForTier(powerTier), refundShardAmount: 0 };
 }
 // Public wrapper — lets UI preview a refund amount before the player commits
 // to a choice (e.g. the family-conflict "Keep New / Keep Old" prompt).
