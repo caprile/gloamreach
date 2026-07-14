@@ -5,6 +5,7 @@ import type { ResourceType } from "../systems/Inventory";
 import type { ItemContainer } from "../systems/ItemContainer";
 import { itemDef, type ItemStat } from "../systems/Items";
 import { weaponAttacksPerSecond, weaponDamage, weaponPrimaryDamageType } from "../systems/Weapons";
+import { ARMOR_SETS } from "../systems/SetBonuses";
 import { weaponSkillDamageMultiplier, type Skills } from "../systems/Skills";
 import type { PlayerProgression } from "../systems/Progression";
 import { MARGIN as MINIMAP_MARGIN, PANEL_H as MINIMAP_H } from "./MinimapUI";
@@ -281,8 +282,9 @@ export class CraftingMenu {
         this.rows.push(icon);
       }
 
+      const nameX = x0 + iconSize + 6;
       const t = this.scene.add
-        .text(x0 + iconSize + 6, y, label, {
+        .text(nameX, y, label, {
           fontFamily: "monospace",
           fontSize: "14px",
           color: isSelected ? "#ffe08a" : affordable ? "#ffffff" : "#5b6472",
@@ -293,6 +295,17 @@ export class CraftingMenu {
         .setDepth(3001)
         .setInteractive({ useHandCursor: true })
         .on("pointerdown", selectRecipe);
+      // Keep a long name (e.g. "Effigy of the Duneshaper") inside the list
+      // column so it never spills into the detail panel — truncate with an
+      // ellipsis until it fits. Measured, not char-counted, so it's exact.
+      const maxNameW = x0 + LIST_COL_W - nameX;
+      if (t.width > maxNameW) {
+        let trimmed = label;
+        while (trimmed.length > 1 && t.width > maxNameW) {
+          trimmed = trimmed.slice(0, -1);
+          t.setText(trimmed.trimEnd() + "…");
+        }
+      }
       this.rows.push(t);
       y += 22;
     }
@@ -338,6 +351,27 @@ export class CraftingMenu {
     this.rows.push(desc);
     y += desc.height + 8;
 
+    // If this piece belongs to an armor SET, surface the full-set bonus name +
+    // description here (playtester: "ember blink description should be in the
+    // ember armor description") — for every set piece, not just Ember.
+    const set = ARMOR_SETS.find((s) => s.pieces.includes(outputKey(recipe)));
+    if (set) {
+      const bonus = this.scene.add.text(
+        x0,
+        y,
+        `Set Bonus — ${set.bonusName}: ${set.bonusDesc}`,
+        {
+          fontFamily: "monospace",
+          fontSize: "12px",
+          color: "#e3b25a",
+          wordWrap: { width: this.panelX + PANEL_W - 12 - x0 },
+        },
+      );
+      bonus.setScrollFactor(0).setDepth(3001);
+      this.rows.push(bonus);
+      y += bonus.height + 8;
+    }
+
     // Weapon/armor damage & armor numbers — the freshly-crafted item is
     // always tier 0 (Lvl 1), so this shows base (adjusted-by-skill) exactly
     // like the InventoryMenu/Hotbar Tooltip does for an owned tier-0 item.
@@ -373,7 +407,9 @@ export class CraftingMenu {
     const maxQty = maxBatch * outputCount;
 
     for (const [resource, amount] of Object.entries(recipe.costs) as [ResourceType, number][]) {
-      const have = this.deps.backpack.count(resource);
+      // Counts EQUIPPED pieces too (a worn base forged piece counts toward a
+      // T2 reforge recipe), so the readout never shows a misleading "0/1".
+      const have = this.deps.crafting.availableFor(resource, this.deps.backpack);
       const need = amount * batch;
       const resourceName = itemDef(resource)?.name ?? resource;
       const t = this.scene.add.text(x0, y, `${resourceName}: ${have}/${need}`, {

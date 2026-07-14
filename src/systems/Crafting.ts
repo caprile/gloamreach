@@ -2,6 +2,7 @@ import { RECIPES, type Recipe } from "./Recipes";
 import type { ResourceType } from "./Inventory";
 import type { ItemContainer } from "./ItemContainer";
 import type { Skills } from "./Skills";
+import { EQUIP_SLOTS, type Equipment } from "./Equipment";
 
 // Tracks which recipes the player has unlocked. A recipe unlocks once its
 // ingredient item types have all been discovered (picked up at least once)
@@ -12,6 +13,34 @@ import type { Skills } from "./Skills";
 // treatment as an ingredient the player hasn't discovered yet.
 export class Crafting {
   private discoveredIds = new Set<string>();
+  // Optional worn-equipment reference so a recipe ingredient (e.g. the base
+  // forged piece a T2 reforge consumes) can be satisfied by an EQUIPPED item,
+  // not just the backpack. Set by the scene after construction — a setter
+  // rather than a ctor param keeps the two `new Crafting()` sites untouched.
+  private equipment?: Equipment;
+
+  setEquipment(equipment: Equipment): void {
+    this.equipment = equipment;
+  }
+
+  // How many of `key` are currently worn across all equipment slots — armor
+  // pieces are qty-1 per slot (ammo carries a count but a recipe never lists
+  // ammo as an ingredient, so counting slot-by-slot is fine).
+  private equippedCount(key: string): number {
+    if (!this.equipment) return 0;
+    let n = 0;
+    for (const s of EQUIP_SLOTS) {
+      if (this.equipment.get(s.id)?.key === key) n += 1;
+    }
+    return n;
+  }
+
+  // Total owned of `key` toward a recipe: backpack + worn equipment. This is
+  // what the crafting-menu ingredient readout and affordability check read, so
+  // "Emberhide Vest 0/1" correctly counts a Duskhide Vest you have EQUIPPED.
+  availableFor(key: string, backpack: ItemContainer): number {
+    return backpack.count(key) + this.equippedCount(key);
+  }
 
   // Call after any resource pickup, skill level-up, or workbench placement —
   // cheap no-op if nothing newly qualifies. Returns the recipes that
@@ -55,21 +84,39 @@ export class Crafting {
 
   canAfford(recipe: Recipe, backpack: ItemContainer): boolean {
     return (Object.entries(recipe.costs) as [ResourceType, number][]).every(
-      ([resource, amount]) => backpack.count(resource) >= amount,
+      ([resource, amount]) => this.availableFor(resource, backpack) >= amount,
     );
   }
 
-  // Deducts the ingredient cost from the backpack. Returns whether it ran.
-  // The caller is responsible for checking output room first and adding the
-  // crafted item. `free` (the DEV `nobuildcost` command) skips both the
-  // affordability check and the deduction.
+  // Deducts the ingredient cost. Returns whether it ran. Prefers the backpack
+  // copy, then falls back to unequipping-and-consuming worn pieces (the reforge
+  // case: a base forged piece you have equipped counts + can be consumed). The
+  // caller is responsible for checking output room first and adding the crafted
+  // item. `free` (the DEV `nobuildcost` command) skips both the affordability
+  // check and the deduction.
   craft(recipe: Recipe, backpack: ItemContainer, free = false): boolean {
     if (free) return true;
     if (!this.canAfford(recipe, backpack)) return false;
     for (const [resource, amount] of Object.entries(recipe.costs) as [ResourceType, number][]) {
-      backpack.removeCount(resource, amount);
+      const fromBackpack = Math.min(backpack.count(resource), amount);
+      if (fromBackpack > 0) backpack.removeCount(resource, fromBackpack);
+      let remaining = amount - fromBackpack;
+      while (remaining > 0 && this.consumeEquipped(resource)) remaining -= 1;
     }
     return true;
+  }
+
+  // Remove one worn piece matching `key` (consumed by the recipe — NOT returned
+  // to the backpack, it's an ingredient). Returns whether one was found.
+  private consumeEquipped(key: string): boolean {
+    if (!this.equipment) return false;
+    for (const s of EQUIP_SLOTS) {
+      if (this.equipment.get(s.id)?.key === key) {
+        this.equipment.set(s.id, null);
+        return true;
+      }
+    }
+    return false;
   }
 
   private ingredientsKnown(recipe: Recipe, discovered: ReadonlySet<string>): boolean {
