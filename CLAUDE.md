@@ -18,6 +18,15 @@ missing across sessions/machines as a result (this line used to say the north-st
 forward: after finalizing a plan, copy it into this repo's `.claude/plans/` and commit it
 alongside the feature it describes, so it survives for future sessions.
 
+**Read `STATUS.md`'s `## Current State` section at the start of every session, before
+doing anything else.** This file (CLAUDE.md) auto-loads, but `STATUS.md` does not — and
+`STATUS.md` is where the actual "what just shipped / what's in progress / what's next"
+lives, not here. This file's **Roadmap** section only tracks milestone-level features and
+deliberately omits small playtest-fix batches (e.g. the ongoing 2026-07-15 8-session
+playtest plan, `.claude/plans/playtest-2026-07-15-session-plan.md` — S1-S8, only S1/S2
+shipped so far) — those are tracked in `STATUS.md` only. Skipping this read is why a past
+session felt "unaware" of recent work despite STATUS.md itself being current.
+
 ## Stack
 
 - **Phaser 3** (2D game framework — tilemaps, sprites, arcade physics, scenes, input)
