@@ -2,7 +2,26 @@
 
 ## Current State
 
-_Living snapshot — edit in place, never append. Last shipped: **S6 — Cinderwrought rebalance**
+_Living snapshot — edit in place, never append. Last shipped: **S2 — Onboarding/Tutorial rework**
+(2026-07-15, Sonnet, plan `playtest-2026-07-15-session-plan.md`). Replaced `TipsUI`'s dynamic
+discovered-hints dump (an un-scrollable joined Text that overflowed the panel) with a curated
+**static "How to Play" reference** (movement/sprint/dash, mouse-only interact/right-click-upgrade,
+inventory/hotbar rows, food-buff stacking, character/map keys, the goal stated in generic
+no-spoiler terms). **The panel is now dynamically sized to the real measured text height**
+(build title/body at panel-relative Y first, read their actual `.height` after wordWrap, then
+compute the panel's final height/centered Y and shift everything down in one pass — same
+"measure real Text heights, then shift" pattern as this codebase's other dynamic-row-height
+panels) rather than a fixed guess — a first pass used a fixed 600×520 that undershot the real
+wrapped-text height at the game's native 1920x1080 resolution (only visible full-size; a
+scaled-down screenshot hid it) and let the Close button render mid-paragraph. `Hints.discovered()` removed (no longer
+consumed). Added two new one-off tutorial hints to `Hints.ts`: `dash_tip` (fires on the player's
+first `frame.dashStarted`) and `multi_food_tip` (fires on the player's first `eatItem()` call,
+teaching that food buffs stack). `KeybindsUI` already covered dash + right-click-upgrade lines, no
+change needed there. `tsc` clean; verified live via `javascript_tool` (opened the pause-menu Tips
+panel, screenshotted the new static panel, confirmed both new hints fire exactly once and are
+idempotent on a repeat `trigger()` call). **Next in the 8-session plan:** Wave 2 (S1, S3), then
+Wave 3 (S7 → S8).
+Prior: **S6 — Cinderwrought rebalance**
 (2026-07-15, Sonnet, plan `playtest-2026-07-15-session-plan.md`). The Sunken Forge's two-guard
 fight was too tough with both Cinderwroughts perma-attacking at once; goal is stagger-one-while-
 you-1v1-the-other. Poise 70→45 (stagger comes up more), attack cooldown 650→1050ms (more downtime
@@ -12,8 +31,7 @@ between telegraphs), both telegraphs lengthened (cone 620→750ms, hammer 560→
 fire→**physical** (armor now applies) so the pair is one fire attack (Cinder Cone, armor-bypass) +
 one physical (Forge Hammer) — was both fire. `tsc` clean; verified live via `javascript_tool`
 (spawned a Cinderwrought, confirmed `poise === 45` and `resistMultiplier('blunt') === 1.3`).
-Dashboard Enemies tab updated. **Next in the 8-session plan:** S2 (onboarding, Sonnet), then Wave 2
-S1/S3, Wave 3 S7→S8.
+Dashboard Enemies tab updated.
 Prior: **S5 — Relic forge SFX per rarity** (2026-07-15, Sonnet): per-rarity relic-forge reveal
 audio cues (`relicReelTick`/`relicCommon`/`relicUncommon`/`relicRare`/`relicMythic`/`relicCrumble`
 in `Sfx.ts`), hooked into `RelicRevealFx.ts` at the reveal landing. Full entry below.
@@ -274,6 +292,35 @@ below + [[survivor-rpg-dev-console]].
 ## Recent Entries
 
 > Older entries in STATUS-archive.md.
+
+### S2 — Onboarding/Tutorial rework (2026-07-15, Sonnet)
+Wave 1 of the 8-session 2026-07-15 playtest plan (`playtest-2026-07-15-session-plan.md`). Locked:
+Tips → a static How-to-Play reference (core controls, no spoilers/win-condition), keep the
+existing specific one-off popups. **`TipsUI.ts` reworked**: the old body was a dynamic dump of
+every `Hints.discovered()` entry joined into one un-scrollable Text — fine early, but overflowed
+`PANEL_H 460` once a run had racked up more than a handful of hints. Replaced with a curated
+static block (movement/sprint/dash, mouse-only interact + right-click-to-upgrade,
+inventory/crafting + hotbar rows, food-buff stacking, character/map keys, and the goal stated in
+generic terms only — no win-condition spoilers). `show()` no longer takes a `tips` param (the
+content is static now); the now-unused `Hints.discovered()` method was removed rather than left
+dead. **Two new tutorial hints added to `Hints.ts`** (`HintId`/`HINT_DEFS`): `dash_tip` (fires on
+the player's first `frame.dashStarted`, teaching Spacebar-dash + its dodge window) and
+`multi_food_tip` (fires on the player's first `eatItem()` call, teaching that different food buffs
+stack rather than replace each other) — both follow the standing "once per run if enabled,
+idempotent" `HintManager.trigger()` contract, no new machinery. `KeybindsUI.ts` already listed
+both "Dash: Space (while moving)" and "Inspect / upgrade: Right Click" — no change needed there.
+**Playtest fix (same session):** a first pass used a fixed 600×520 panel that read fine in a
+scaled-down screenshot but actually undershot the real wrapped-text height at the game's native
+1920x1080 resolution, so the Close button rendered mid-paragraph. Fixed by measuring the title/body
+`Text` objects' real `.height` after wordWrap and sizing the panel (and re-centering + shifting
+content) to fit exactly, floored at a `PANEL_H_MIN` of 300 — same "measure real heights, then
+shift" pattern as this codebase's other dynamic-row-height panels. `tsc` clean; verified live via
+`javascript_tool` at the game's native 1920x1080 resolution (measured each object's real `y`/
+`height`, confirmed a real gap between the body text's bottom and the Close button's top with no
+overlap, then screenshotted to confirm visually); triggered both new hints, confirmed each fires
+exactly once and a repeat `trigger('dash_tip')` call is a no-op; confirmed pause/resume state stays
+correct after closing Tips). No `RECIPES.md` change (no recipe/cost changes). **Next in the plan:**
+Wave 2 (S1, S3), then Wave 3 (S7 → S8).
 
 ### S6 — Cinderwrought rebalance (2026-07-15, Sonnet)
 Wave 1 of the 8-session 2026-07-15 playtest plan (`playtest-2026-07-15-session-plan.md`). the user's

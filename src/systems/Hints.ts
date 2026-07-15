@@ -26,6 +26,8 @@ export type HintId =
   | "nightfall"
   | "elite_trophy"
   | "right_click_tip"
+  | "dash_tip"
+  | "multi_food_tip"
   | "altar_found"
   | "totem_ready"
   | "den_found"
@@ -71,6 +73,14 @@ const HINT_DEFS: Record<HintId, HintEntry> = {
   right_click_tip: {
     kind: "tutorial",
     text: "Right-click equipped gear or a placed station to inspect and upgrade it.",
+  },
+  dash_tip: {
+    kind: "tutorial",
+    text: "That burst was a dash (Spacebar while moving) — it briefly dodges hits and has its own cooldown.",
+  },
+  multi_food_tip: {
+    kind: "tutorial",
+    text: "Different foods stack their healing — you can have more than one meal buff running at once.",
   },
   bled: {
     kind: "tutorial",
@@ -142,13 +152,5 @@ export class HintManager {
     this.shown.add(id);
     const def = HINT_DEFS[id];
     for (const cb of this.listeners) cb(def.text, id, def.kind);
-  }
-
-  // Every nudge discovered so far this run, in the order they first fired —
-  // Sets preserve insertion order, so no separate list is needed. Backs the
-  // Pause menu's re-readable Tips panel (playtest: right-click-to-upgrade
-  // and other non-obvious gestures needed a way to look the tip back up).
-  discovered(): HintEntry[] {
-    return Array.from(this.shown).map((id) => HINT_DEFS[id]);
   }
 }

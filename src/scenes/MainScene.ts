@@ -1474,6 +1474,7 @@ export class MainScene extends Phaser.Scene {
       this.awardSkillXp("running", RUNNING_XP_PER_SEC * (delta / 1000));
     }
     if (frame.dashStarted) {
+      this.hints.trigger("dash_tip");
       this.stamina.spend(DASH_STAMINA_COST);
       // light_armor extends the dodge window (M-SS "Evade Window").
       this.invulnerableUntil = this.time.now + DASH_IFRAME_MS + dashIframeBonusMs(this.skills);
@@ -2776,6 +2777,7 @@ export class MainScene extends Phaser.Scene {
     if (!stack) return;
     const def = itemDef(stack.key);
     if (!def?.edible) return;
+    this.hints.trigger("multi_food_tip");
     container.removeCount(stack.key, 1);
     this.buffs.apply({
       id: def.key,
@@ -6673,7 +6675,7 @@ export class MainScene extends Phaser.Scene {
   // list without unfreezing the world, then restore the pause menu on close.
   private openTips(): void {
     this.pauseMenu.hide();
-    this.tipsUI.show(this.hints.discovered(), () => this.closeTips());
+    this.tipsUI.show(() => this.closeTips());
   }
 
   private closeTips(): void {
