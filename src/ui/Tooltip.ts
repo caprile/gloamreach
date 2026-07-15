@@ -104,12 +104,12 @@ export class Tooltip {
       const dmgType = weaponPrimaryDamageType(def.weapon);
       const tierBase = base + weaponTierDamageBonus(def.weapon, tier);
       const adjusted = Math.round(tierBase * weaponSkillDamageMultiplier(dmgType, this.skills));
-      return `${base} (${adjusted})`;
+      return adjusted === base ? `${base}` : `${adjusted} (base ${base})`;
     }
     if (stat.label === "Armor" && def.armorSlot) {
       const base = def.armorDefense ?? 0;
       const adjusted = armorDefenseForTier(def.key, tier);
-      return adjusted === base ? `${base}` : `${base} (${adjusted})`;
+      return adjusted === base ? `${base}` : `${adjusted} (base ${base})`;
     }
     // (Stamina cost is shown as-authored — Strength/Agility no longer discount
     // it after M-SS; only relics do, and the tooltip is relic-agnostic.)

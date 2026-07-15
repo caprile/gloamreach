@@ -34,6 +34,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   private spaceKey: Phaser.Input.Keyboard.Key;
   private lastDashAt = -Infinity;
   private dashingUntil = 0;
+  private sprintLocked = false; // stamina ran out mid-sprint; needs shift release+re-press
   private facing: Facing = "down";
   private equippedIcon: Phaser.GameObjects.Image | null = null;
   private equippedIconTexture: string | null = null;
@@ -140,7 +141,16 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       return { moving: true, sprinting: false, dashStarted: true, facing: this.facing };
     }
 
-    const sprinting = moving && canSprint && this.shiftKey.isDown;
+    // Re-press latch: once stamina vetoes sprint mid-hold, don't silently
+    // resume the instant it regens back up — require a shift release first
+    // (the user: auto-resume-while-still-held felt like sprint "just worked
+    // again" with no player action).
+    if (!this.shiftKey.isDown) {
+      this.sprintLocked = false;
+    } else if (!canSprint) {
+      this.sprintLocked = true;
+    }
+    const sprinting = moving && canSprint && this.shiftKey.isDown && !this.sprintLocked;
     if (!moving) {
       body.setVelocity(0, 0);
     } else {

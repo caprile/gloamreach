@@ -2,7 +2,28 @@
 
 ## Current State
 
-_Living snapshot — edit in place, never append. Last shipped: **S2 — Onboarding/Tutorial rework**
+_Living snapshot — edit in place, never append. Last shipped: **S1 — Quick HUD/UX fixes**
+(2026-07-15, Sonnet, plan `playtest-2026-07-15-session-plan.md`). Four small independent fixes.
+**Sprint re-press latch**: `Player.ts` gained a `sprintLocked` flag — once stamina vetoes sprint
+mid-hold (`canSprint` goes false while shift is held), sprint won't silently resume the instant
+stamina regens back up while shift stays held; the lock only clears on a shift **release**, then a
+fresh press re-enables it. **Level-up banner overlap**: `showLevelUpBanner`'s push of the center-toast
+stack below the banner was a hardcoded `cy+80` guess that never measured the actual rendered text;
+now computed from the real `sub.y + sub.height/2` (the "measure real Text heights" pattern this
+codebase already uses for dynamic-row-height panels) + a 16px gap. **Stagger bar**: `POISE_BAR_H`
+20→16 (the real ask was a bigger *number*, not a thicker bar) plus a new centered numeric `"42/120"`
+readout text (`BossHealthUI.poiseText`) over the bar. **Armor/weapon tooltip display**: `Tooltip.
+statValue()` and `CraftingMenu.statValue()` both flipped their base/adjusted damage and armor
+lines from `"5 (7)"` (looked like no real effect) to `"7 (base 5)"` (upgraded value primary).
+`tsc` clean; verified live via `javascript_tool` (drained stamina to 0, held shift+D via dispatched
+key events, confirmed `sprintLocked` stays true and velocity stays at walk speed through a full
+0→100 stamina regen while shift is held, then clears on release and sprint resumes; injected a fake
+boss target into `bossHealthUI.update()` and confirmed the "42/120" label renders at bar height 16;
+called `showLevelUpBanner` directly and confirmed the computed `topOffset` (395 at native 1080p)
+matches the real measured banner bottom, not the old flat 404 guess). **Next in the 8-session plan:**
+S3 (inventory visuals + upgrade-ready indicators — **Opus**, new indicator system), then Wave 3
+(S7 → S8).
+Prior: **S2 — Onboarding/Tutorial rework**
 (2026-07-15, Sonnet, plan `playtest-2026-07-15-session-plan.md`). Replaced `TipsUI`'s dynamic
 discovered-hints dump (an un-scrollable joined Text that overflowed the panel) with a curated
 **static "How to Play" reference** (movement/sprint/dash, mouse-only interact/right-click-upgrade,
@@ -292,6 +313,38 @@ below + [[survivor-rpg-dev-console]].
 ## Recent Entries
 
 > Older entries in STATUS-archive.md.
+
+### S1 — Quick HUD/UX fixes (2026-07-15, Sonnet)
+Wave 2 of the 8-session 2026-07-15 playtest plan (`playtest-2026-07-15-session-plan.md`). Four
+small independent fixes, no shared theme beyond "quick."
+1. **Sprint re-press latch** (`Player.ts`) — a new `sprintLocked` field. Previously, once stamina
+   emptied and vetoed sprint mid-hold, the instant stamina regenerated back up (while shift stayed
+   held) sprint would silently resume — felt like free auto-resume. Now: `canSprint` going false
+   while shift is down sets the lock; it only clears on a shift **release**, so the player has to
+   let go and re-press to sprint again even if stamina is already full.
+2. **Level-up banner / center-toast overlap** (`MainScene.showLevelUpBanner`) — the push-down
+   offset for the `EventLogUI` center-toast stack was a hardcoded `cy + 80` that never measured the
+   real banner. Now computed from the actual rendered `sub.y + sub.height/2` (same
+   "measure real Text heights, then shift" pattern as this codebase's dynamic-row-height panels)
+   + a 16px gap, so it tracks real font metrics instead of a guess.
+3. **Stagger bar** (`BossHealthUI.ts`) — `POISE_BAR_H` 20→16 (the ask was a bigger *number*, a
+   thicker bar overshot) plus a new centered `poiseText` ("42/120") readout drawn over the bar.
+   `Enemy.BAR_OFFSET_Y` was already at the target value (16) from a prior pass — no change needed.
+4. **Armor/weapon tooltip "base (adjusted)" display** (`Tooltip.ts`, `CraftingMenu.ts`) — both
+   `statValue()` helpers flipped their damage/armor line from `"5 (7)"` (upgraded value buried in
+   parens, read as "no effect") to `"7 (base 5)"` (upgraded value primary, base secondary) whenever
+   skill/upgrade adjustment differs from the raw base.
+
+`tsc` clean. Verified live via `javascript_tool` against a running preview: drained stamina to 0
+with `stamina.spend(stamina.max)`, dispatched real `keydown`/`keyup` events for Shift+D, and
+confirmed `player.sprintLocked` stays `true` (velocity pinned to walk speed, 95px/s) through a full
+0→100 stamina regen while shift stays held, then clears on shift release with sprint resuming on
+re-press. Injected a fake `BossBarTarget` into `bossHealthUI.update()` and confirmed the poise bar
+renders at height 16 with a `"42/120"` text label. Called `showLevelUpBanner(5, 5)` directly and
+confirmed the computed `eventLogUI.topOffset` (395 at the game's native 1080p canvas height) matches
+`sub.y + sub.height/2 + 16` exactly, not the old flat guess. **Next in the 8-session plan:** S3
+(inventory visuals + upgrade-ready indicators — **Opus**, new indicator system — switch model
+first), then Wave 3 (S7 → S8, sequential, both touch `Weapons.ts`/`Recipes.ts`).
 
 ### S2 — Onboarding/Tutorial rework (2026-07-15, Sonnet)
 Wave 1 of the 8-session 2026-07-15 playtest plan (`playtest-2026-07-15-session-plan.md`). Locked:

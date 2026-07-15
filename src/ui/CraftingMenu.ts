@@ -325,7 +325,7 @@ export class CraftingMenu {
       const base = weaponDamage(def.weapon);
       const dmgType = weaponPrimaryDamageType(def.weapon);
       const adjusted = Math.round(base * weaponSkillDamageMultiplier(dmgType, this.deps.skills));
-      return adjusted === base ? `${base}` : `${base} (${adjusted})`;
+      return adjusted === base ? `${base}` : `${adjusted} (base ${base})`;
     }
     if (stat.label === "Armor" && def.armorSlot) {
       return `${def.armorDefense ?? 0}`;

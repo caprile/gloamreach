@@ -21,7 +21,7 @@ export interface BossBarTarget {
 // somewhere the player can't miss mid-fight.
 const BAR_W = 560;
 const HP_BAR_H = 28;
-const POISE_BAR_H = 20; // 12→20: the stagger bar read as a thin sliver (the user)
+const POISE_BAR_H = 16; // the ask was a bigger NUMBER, not a thicker bar (20 overshot); a numeric label carries the rest
 const GAP = 5;
 const TOP_MARGIN = 16;
 const DEPTH = 2950; // clears WORLD_H/other fixed HUD (2800-2902), stays below CraftingMenu/InventoryMenu (3000+) and Tooltip (4500)
@@ -32,6 +32,7 @@ export class BossHealthUI {
   private hpBarFill: Phaser.GameObjects.Rectangle;
   private poiseBarBg: Phaser.GameObjects.Rectangle;
   private poiseBarFill: Phaser.GameObjects.Rectangle;
+  private poiseText: Phaser.GameObjects.Text;
 
   constructor(scene: Phaser.Scene) {
     const barX = scene.scale.width / 2 - BAR_W / 2;
@@ -79,6 +80,22 @@ export class BossHealthUI {
       .setScrollFactor(0)
       .setDepth(DEPTH + 1)
       .setVisible(false);
+
+    // Numeric readout ("42/70") centered over the poise bar — the bar alone
+    // read as too thin to judge at a glance even at 20px tall; a real number
+    // is what players actually wanted (the user).
+    this.poiseText = scene.add
+      .text(scene.scale.width / 2, poiseY + POISE_BAR_H / 2, "", {
+        fontFamily: "monospace",
+        fontSize: "12px",
+        color: "#ffffff",
+        stroke: "#000000",
+        strokeThickness: 3,
+      })
+      .setOrigin(0.5, 0.5)
+      .setScrollFactor(0)
+      .setDepth(DEPTH + 2)
+      .setVisible(false);
   }
 
   update(boss: BossBarTarget | null): void {
@@ -88,10 +105,12 @@ export class BossHealthUI {
     this.hpBarFill.setVisible(visible);
     this.poiseBarBg.setVisible(visible);
     this.poiseBarFill.setVisible(visible);
+    this.poiseText.setVisible(visible);
     if (!boss || !visible) return;
 
     this.nameText.setText(boss.displayName);
     this.hpBarFill.setScale(Math.max(0, boss.health / boss.maxHealth), 1);
     this.poiseBarFill.setScale(Math.max(0, boss.poise / boss.poiseMax), 1);
+    this.poiseText.setText(`${Math.round(boss.poise)}/${boss.poiseMax}`);
   }
 }
