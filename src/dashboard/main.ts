@@ -246,12 +246,12 @@ const ENEMIES: EnemyStat[] = [
     speed: 52,
     aggro: 260,
     attacks: [
-      { label: "Cinder Cone (locked-direction FIRE cone, 235px / ±32°, bypasses armor)", damage: 46, telegraphMs: 620 },
-      { label: "Forge Hammer (heavy FIRE front-arc smash, 168px / ±70°, bypasses armor)", damage: 58, telegraphMs: 560 },
+      { label: "Cinder Cone (locked-direction FIRE cone, 235px / ±32°, bypasses armor)", damage: 32, telegraphMs: 750 },
+      { label: "Forge Hammer (heavy PHYSICAL front-arc smash, 168px / ±70°, armor applies)", damage: 40, telegraphMs: 680 },
     ],
     loot: "Each guard: 2-4 Ember Shard; ONE of the two also drops 1 Ember-Refined Trophy (Uncommon, Tier 2). Ore nodes crack open only once BOTH guards die.",
     notes:
-      "Sunken Forge guardian (badlands Phase 3 POI 2). NOW 5 forges × 2 Cinderwroughts each = 10 (the user: 2 guards per forge so the ember sites reliably drop Ember Shards — the native Ember Shard source, was Gloam). Ore only cracks once BOTH guards die. Poise 70 (stagger → 1.5× dmg for 2.5s). Scale 1.8, scored as an elite kill. Resists blunt ×0.8, weak to pierce ×1.25. Its attacks deal FIRE damage which BYPASSES flat armor like magic. Bespoke attacks: the Cinder Cone locks its direction at telegraph START (sidestep the wind-up) — the game's only cone; the Forge Hammer re-locks at execute and hits a wide short front wedge (back out to dodge). Regens 12 HP/s while deaggro'd. On death, its ring of shielded Ember Deposits crack open into mineable Cinderforged Ore (Phase 4 hook).",
+      "Sunken Forge guardian (badlands Phase 3 POI 2). 5 forges × 2 Cinderwroughts each = 10 (the user: 2 guards per forge so the ember sites reliably drop Ember Shards — the native Ember Shard source, was Gloam). Ore only cracks once BOTH guards die. S6 rebalance (the user: too tough with two perma-attacking overlapping guards): poise 70→45 (stagger comes up more often, still ×1.5 dmg for 2.5s), attack cooldown 650→1050ms (more downtime — stagger one while you 1v1 the other), telegraphs lengthened (cone 620→750ms, hammer 560→680ms), damage cut (cone 46→32, hammer 58→40), resists FIXED to actually resist blunt ×1.3 (was backwards, ×0.8 = weak) and weak to pierce ×1.25 unchanged. Only the Cinder Cone still deals FIRE (bypasses flat armor); the Forge Hammer is now PHYSICAL (armor applies) — one fire + one physical attack. Scale 1.8, scored as an elite kill. Bespoke attacks: the Cinder Cone locks its direction at telegraph START (sidestep the wind-up) — the game's only cone; the Forge Hammer re-locks at execute and hits a wide short front wedge (back out to dodge). Regens 12 HP/s while deaggro'd. On death, its ring of shielded Ember Deposits crack open into mineable Cinderforged Ore (Phase 4 hook).",
   },
   {
     name: "The Duneshaper (FINAL BOSS)",

@@ -6243,3 +6243,83 @@ Verified live via `preview_eval` + screenshots (full inventory with all sections
 wheel-scroll + paper-doll/Combat/Relics columns; clear button; recipe unlock revert).
 `tsc` clean, no console errors.
 
+
+### PB2 — Post-Duneshaper playtest batch, 15 items (2026-07-14, Opus)
+
+Off the user's Duneshaper-clear playtest. Locked 4 design calls via `AskUserQuestion`; the rest were
+clear fixes. Organized into 5 workstreams (relic economy / notifications+HUD / Duneshaper combat /
+gear+crafting / world+flora), done sequentially (all route through MainScene + shared data files, so
+worktree-parallel would only conflict). Built on Opus (new mechanics: trophy economy, gear-level tier,
+boss combat rework).
+
+**Relic/trophy economy** (`Relics.ts`, boss loot, `Items.ts`, `RelicForgeMenu.ts`):
+- New **`boss_refined_trophy`** ("Boss Trophy") dropped by the **Gremlin King** (+ keeps its Heart) and
+  the **Duneshaper** (unreachable — that kill wins the run — kept for consistency). Uses a new per-trophy
+  **`outcomeOdds` override** on `TrophyRoll` (Rare 50% / Mythic 50%, never fails) — the shared Rare
+  table couldn't express it. Verified live: 4000 rolls → 49.6% Mythic / 50.4% Rare, 0 fails, first roll
+  guaranteed.
+- **Cinderwrought** re-tiered: drops **2-4 Ember Shard** (was 3-5 Gloam — a badlands mob dropping Gloam
+  never made sense; the user) + **`refined_trophy_uncommon_t2`** (Tier 2, was tier-1). **2 Cinderwroughts
+  now guard each Sunken Forge** (`forge.boss` → `forge.bosses[]`; ore cracks only when BOTH die) — 5
+  forges × 2 = 10, so ember sites reliably supply the tier-2 refine currency (this replaced the trophy→shard
+  salvage idea — the user's call). Gloamwarden unchanged (forest, Gloam + tier-1).
+- **Two-guard balance pass** (the user follow-up, locked via `AskUserQuestion`): doubling the guards had
+  silently doubled HP + loot. Per-guard **HP 340→260** (total 520, a step up from the old single 340 fight,
+  not a 2× slog); **both guards drop 2-4 Ember Shard** (the supply was the point) but **only one drops the
+  tier-2 refined trophy** (new `Cinderwrought` `dropTrophy` cfg flag; `armForge` passes `i === 0`), so a
+  site yields 1 refined trophy, not 2. Attacks/fire damage unchanged. Verified live: HP 260, trophy-guard
+  loot = ember + trophy, other = ember only.
+- **Replaced relics now partial-refund** (`replaceRefund`: 1/2/3/5 shards by rarity, ×1.5 for Tier 2) on
+  top of the existing declined-roll refund — the old net-farm worry is moot now that ember mobs supply
+  shards directly. The `previewChoiceRefunds`/`resolveChoice` Keep-New path pays it too.
+- **Ember-Shard refine recipe hidden until Ember Shard discovered** — new `hasDiscovered` dep on the forge
+  menu filters `refine_common_t2` until its shard currency is known (fixes "ember shard recipes before
+  discovering ember shard").
+
+**Gear & crafting** (`ArmorUpgrades.ts`, `WeaponUpgrades.ts`, `Weapons.ts`, `Crafting.ts`, `Items.ts`):
+- **+2 right-click levels for every forged piece** — base (Sunsteel/Duskhide) AND enhanced (Embersteel/
+  Emberhide/Ember Brand), via compact `forgedArmorUpgrades`/`forgedWeaponUpgrades` helpers. Armor +1/level
+  (+2 at Lvl 3), weapons +2/level (+4 at Lvl 3), sunk in ingots (the user: a use for the ingot stockpile).
+  Tuned + verified so **Lvl-1 ember always out-stats Lvl-3 steel** (embersteel_helm base 10 > sunsteel_helm
+  Lvl 3 = 8; emberhide_leggings base **bumped 7→8** > duskhide_leggings Lvl 3 = 7). Reforging a leveled
+  steel piece still yields a Lvl-1 ember piece (recipe output is tier 0 — falls out naturally). Steel
+  upgrades gate on Workbench Lvl 3, ember on Lvl 4.
+- **Hotbar items now count toward recipe ingredients** (`Crafting.setHotbar(hotbar.container)`) — weapons/
+  tools live in the hotbar, so a Sunsteel Pike there is now visible+consumable by the Embersteel Pike
+  reforge (fixes "still not looking at items in hotbar when considering upgrades"). Verified: a hotbar
+  Sunsteel Pike returns `availableFor === 1`.
+- **Higher-tier weapons cost more stamina**: Sunsteel 20/12/15→22/15/18, Embersteel 22/13/16→27/18/22,
+  Ember Brand 15→19 — each tier a clear step up.
+
+**Duneshaper combat sharpen pass** (`Duneshaper.ts`, Q4 "sharpen + add pressure"): HP **1050→1250**,
+`ATTACK_COOLDOWN 900→700ms`. The **Gloamfire Lance** now tracks the player through 60% of the wind-up
+then commits **and sweeps ±20° across the strike** (was locked at telegraph start = trivially
+pre-sidesteppable). **Sand Spikes** reworked from 3 spaced perpendicular circles to a **tracked 5-circle
+cross** (center + 4 axis/perp arms) — distinct from the Hexling's bolt spread, covers every cardinal
+escape so only a diagonal run / dash clears it.
+
+**Notifications & HUD** (`EventLogUI.ts`, `BossHealthUI.ts`, boss entities, `HotbarUI.ts`, `MainScene.ts`):
+- **Center-toast burst capped at 4 + repacked from the top** — a monotonic cursor let "Defeated X"
+  bursts march down over the player; now the oldest is evicted past 4 and the stack re-anchors at the top.
+  Verified: 8 toasts → 4 active, max Y 174px (well above the player).
+- **Bigger boss stagger bars**: mini-boss world poise bars 22×3 → **56×6** (Cinderwrought/Gloamwarden,
+  Duneshaper 64×6); the top `BossHealthUI` poise section **12→20px**.
+- **POI-respawn toasts only within 900px** (`notifyPoiRespawn`) — the respawn still happens, only the toast
+  is distance-gated (the user).
+- **Tier-aware bench art in the hotbar** — new optional `stationTexture` dep resolves `icon_workbench_t2`
+  etc. so an upgraded bench shows its tier sprite in the hotbar, matching the placed one.
+
+**World/flora** (`MainScene.spawnBadlandsFlora` + `spawnOuterBadlandsContent`): **Emberblooms + Dustblooms
+grow in patches of 3-5** around a shared center (jittered); Sunfruit (cactus) + Gloamcap (mushroom) stay
+scattered solo. Verified: 59/90 emberblooms have a close neighbor.
+
+**Answered:** food buffs cap at **3** concurrent (`BuffManager`, shared with the Bedroll rest effect).
+**Flagged non-repro (#9):** "duskrunner stacks to 98" — every stacking primitive (`add`,
+`topUpExistingHotbarStack`, `sortAndStack`, `moveSlot`) fills to the full 99; no off-by-one exists.
+
+Docs: `RECIPES.md` (relic-trophy table + boss-odds row, forged armor/weapon upgrade tables, weapon
+stamina) and the dashboard Enemies/Relics tabs updated. `tsc` clean; verified live via `preview_eval`
+(boss-trophy odds, 2-guards-per-forge + loot, forge menu open, hotbar reforge counting, ember-upgrade
+tables + stat invariants, toast cap, tier-aware hotbar texture, flora clustering); zero console errors.
+
+

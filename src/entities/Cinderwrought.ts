@@ -29,10 +29,10 @@ const LEASH_RADIUS = 520; // kited past this -> fully deaggros
 const MOVE_SPEED = 52;
 const DEAGGRO_REGEN_PER_SEC = 12; // claws HP back between engagements (GremlinKing/Gloamwarden precedent)
 
-export const WROUGHT_MAX_POISE = 70;
+export const WROUGHT_MAX_POISE = 45; // 70→45 (S6: easier to stagger — the punish window should come up more often)
 export const CINDERWROUGHT_STAGGER_DAMAGE_MULTIPLIER = 1.5; // punish-window bonus (mirrors the roster)
 const STAGGER_DURATION_MS = 2500;
-const POISE_REGEN_DELAY_MS = 3500;
+const POISE_REGEN_DELAY_MS = 4200; // 3500→4200 (S6: a stagger sticks a bit longer before poise starts clawing back)
 const POISE_REGEN_PER_SEC = 12;
 const POISE_BAR_OFFSET_Y = 10;
 // A mini-boss stagger bar reads as a real mechanic — much bigger than the tiny
@@ -42,7 +42,7 @@ const POISE_BAR_H = 6;
 
 // Cinder Cone — locked-direction fire breath. Long readable wind-up; the cone
 // direction is fixed at telegraph start so a sidestep clears it.
-const CONE_TELEGRAPH_MS = 620; // 820→620 (S2: harder to dodge — a shorter react window)
+const CONE_TELEGRAPH_MS = 750; // 820→620 (S2), 620→750 (S6: lengthened back a bit — easier to read/dodge)
 const CONE_IMPACT_MS = 420; // breath sustained; the hit lands once within this window
 const CONE_RECOVER_MS = 700;
 const CONE_RANGE = 235; // 210→235 (S2: reaches a step further so a lazy back-pedal doesn't clear it)
@@ -50,23 +50,23 @@ const CONE_HALF_ANGLE = Phaser.Math.DegToRad(32); // ~64deg fan
 // Fire damage — bypasses flat armor (like magic), so it hurts even in full
 // plate. Bumped 30→46 (the user: "cinder guy damage is too low"): a forge boss
 // breathing fire should be a real threat, not a chip.
-const CONE_DAMAGE = 46;
+const CONE_DAMAGE = 32; // 30→46 (S2), 46→32 (S6: too tough with two forges attacking at once)
 const CONE_KNOCKBACK = 140;
 
 // Forge Hammer — heavy overhead front-arc smash. Locks direction at execute;
 // the dodge is to leave the wide-but-short front wedge before it lands.
-const HAMMER_TELEGRAPH_MS = 560; // 720→560 (S2: harder to dodge — less time to back out of the wedge)
+const HAMMER_TELEGRAPH_MS = 680; // 720→560 (S2), 560→680 (S6: lengthened back a bit — easier to read/dodge)
 const HAMMER_IMPACT_MS = 150; // planted overhead beat — the strike window
 const HAMMER_RECOVER_MS = 780;
 const HAMMER_RANGE = 168; // 155→168 (S2: catches a player who only takes one step back)
 const HAMMER_HALF_ARC = Phaser.Math.DegToRad(70); // wide front wedge
 // Fire damage (the molten hammer) — bypasses armor; bumped 44→58 so getting
 // caught in the wedge is a genuine "you should have dodged" punish.
-const HAMMER_DAMAGE = 58;
+const HAMMER_DAMAGE = 40; // 44→58 (S2), 58→40 (S6: too tough with two forges attacking at once)
 const HAMMER_KNOCKBACK = 240;
 
 const MELEE_STOP_RANGE = 150; // both attacks reach from here; stops approaching inside it
-const ATTACK_COOLDOWN_MS = 650; // 850→650 (S2: attacks more often — less downtime between telegraphs)
+const ATTACK_COOLDOWN_MS = 1050; // 850→650 (S2), 650→1050 (S6: more downtime — stagger one while you 1v1 the other)
 // How close to spawn counts as "home" while wandering back deaggro'd (mirrors
 // GremlinKing/Gloamwarden) — below this it idles instead of micro-adjusting.
 const RETURN_HOME_EPS = 20;
@@ -120,10 +120,11 @@ export class Cinderwrought extends Enemy {
       ],
       maxHealth: WROUGHT_MAX_HEALTH,
       biteDamage: 0, // all damage flows through checkPlayerHit()
-      // A molten-slag brute: the hard crust shrugs off blunt, the cracks between
-      // the plates take a piercing weapon well (the damage-type layer nudge —
-      // the inverse of a Sandmaw, so a spear/pick still shines somewhere).
-      resistances: { blunt: 0.8, pierce: 1.25 },
+      // A molten-slag brute: blunt cracks the hard crust (was backwards — RESISTED
+      // blunt before S6), the cracks between the plates still take a piercing
+      // weapon well (the inverse of a Sandmaw, so a spear/pick still shines
+      // somewhere).
+      resistances: { blunt: 1.3, pierce: 1.25 },
     });
     this.spawnX = cfg.x;
     this.spawnY = cfg.y;
@@ -396,7 +397,10 @@ export class Cinderwrought extends Enemy {
     }
     if (dist > HAMMER_RANGE || angleDiff > HAMMER_HALF_ARC) return null;
     this.hasHitThisAttack = true;
-    return { damage: HAMMER_DAMAGE, knockback: HAMMER_KNOCKBACK, dmgType: "fire" };
+    // Physical (S6: one fire attack + one physical, so armor actually matters
+    // against the hammer) — the molten HEAD is fire-forged but the blow itself
+    // is a crushing impact, not a burn.
+    return { damage: HAMMER_DAMAGE, knockback: HAMMER_KNOCKBACK };
   }
 
   takeHit(damage: number): boolean {

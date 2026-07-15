@@ -2,19 +2,21 @@
 
 ## Current State
 
-_Living snapshot — edit in place, never append. Last shipped: **S5 — Relic forge SFX per
-rarity** (2026-07-15, Sonnet, plan `playtest-2026-07-15-session-plan.md`). Per-rarity relic-forge
-reveal cues added to `Sfx.ts` (`relicReelTick` faint slot-machine click per gem swap, escalating
-`relicCommon`→`relicUncommon`→`relicRare`→`relicMythic` fanfares — Mythic is a layered sub-boom +
-ascending run + shimmer pad + sparkle tail — and a `relicCrumble` fizzle for fails). Hooked in
-`RelicRevealFx.ts` at the **reveal landing** (synced to the gem punch, not the delayed
-`announceRoll`); the reel tick fires per swap during the spin. **Kept to Sfx.ts + RelicRevealFx.ts
-only** per the plan's parallel-safety note — RelicRevealFx reads the MainScene's `sfx` field via a
-structural cast (`this.scene` IS the MainScene), so no MainScene edit / dep threading. `tsc` clean;
-verified live via `javascript_tool` — real uncommon roll fired 7 reel ticks + `relicUncommon` at
-landing; a forced fail fired ticks + `relicCrumble`; no console errors. See the entry below.
-**Next in the 8-session plan:** S6 (Cinderwrought rebalance, Sonnet), S2 (onboarding, Sonnet), then
-Wave 2 S1/S3, Wave 3 S7→S8.
+_Living snapshot — edit in place, never append. Last shipped: **S6 — Cinderwrought rebalance**
+(2026-07-15, Sonnet, plan `playtest-2026-07-15-session-plan.md`). The Sunken Forge's two-guard
+fight was too tough with both Cinderwroughts perma-attacking at once; goal is stagger-one-while-
+you-1v1-the-other. Poise 70→45 (stagger comes up more), attack cooldown 650→1050ms (more downtime
+between telegraphs), both telegraphs lengthened (cone 620→750ms, hammer 560→680ms), damage cut
+(cone 46→32, hammer 58→40). Fixed a backwards resist: blunt was **resisted** (×0.8), now correctly
+**weak** (×1.3, "blunt cracks the crust"); pierce weak ×1.25 unchanged. Forge Hammer switched from
+fire→**physical** (armor now applies) so the pair is one fire attack (Cinder Cone, armor-bypass) +
+one physical (Forge Hammer) — was both fire. `tsc` clean; verified live via `javascript_tool`
+(spawned a Cinderwrought, confirmed `poise === 45` and `resistMultiplier('blunt') === 1.3`).
+Dashboard Enemies tab updated. **Next in the 8-session plan:** S2 (onboarding, Sonnet), then Wave 2
+S1/S3, Wave 3 S7→S8.
+Prior: **S5 — Relic forge SFX per rarity** (2026-07-15, Sonnet): per-rarity relic-forge reveal
+audio cues (`relicReelTick`/`relicCommon`/`relicUncommon`/`relicRare`/`relicMythic`/`relicCrumble`
+in `Sfx.ts`), hooked into `RelicRevealFx.ts` at the reveal landing. Full entry below.
 Prior: **Relic redesign — single-family + Rare/Mythic unique procs + additive buckets**
 (2026-07-15, Opus): every relic touches ONE family axis; Common/Uncommon = a small flat stat
 plateauing at Uncommon; Rare/Mythic add a bespoke conditional proc (8 procs). All buff categories
@@ -273,6 +275,36 @@ below + [[survivor-rpg-dev-console]].
 
 > Older entries in STATUS-archive.md.
 
+### S6 — Cinderwrought rebalance (2026-07-15, Sonnet)
+Wave 1 of the 8-session 2026-07-15 playtest plan (`playtest-2026-07-15-session-plan.md`). the user's
+locked play-pattern goal for the Sunken Forge's two-guard fight: **stagger one while you 1v1 the
+other** — today it's too tough with both Cinderwroughts perma-attacking at once. All changes in
+`src/entities/Cinderwrought.ts`:
+- **Easier stagger:** `WROUGHT_MAX_POISE` 70→45, `POISE_REGEN_DELAY_MS` 3500→4200 (a stagger sticks
+  a little longer before poise starts clawing back).
+- **More downtime:** `ATTACK_COOLDOWN_MS` 650→1050 — meaningfully more idle time between telegraphs
+  so a 1v1 window actually opens up while the other guard is between attacks or staggered.
+- **Longer telegraphs (easier to read/dodge):** `CONE_TELEGRAPH_MS` 620→750, `HAMMER_TELEGRAPH_MS`
+  560→680.
+- **Less damage:** `CONE_DAMAGE` 46→32, `HAMMER_DAMAGE` 58→40.
+- **Resist fix (was backwards):** `resistances.blunt` 0.8→1.3 — the crust was accidentally
+  *resisting* blunt (0.8 = damage reduced); now it's correctly *weak* to blunt (1.3 = extra damage,
+  "blunt cracks the hard crust"), matching the in-code comment's own stated intent. `pierce: 1.25`
+  (weak) unchanged.
+- **One fire + one physical (was both fire):** `checkPlayerHit()`'s Forge Hammer branch dropped its
+  `dmgType: "fire"` so it's now plain physical (flat armor applies); **Cinder Cone stays fire**
+  (bypasses flat armor, like magic) — armor now matters against exactly one of the two attacks.
+- Did **not** add a per-forge attack-turn token (the plan's fallback if tuning alone didn't fix the
+  overlap feel) — the cooldown/telegraph/poise changes together should be enough; that's the thing
+  to watch for in the next playtest if the two guards still feel synced.
+
+`tsc --noEmit` clean. Verified live via `preview_start` + `javascript_tool` against the running
+game: `window.__dev.spawn('cinderwrought')`, then read the live instance's `poise` (45) and
+`resistMultiplier('blunt')`/`resistMultiplier('pierce')` (1.3 / 1.25) directly off the running
+`Enemy` — confirms the new numbers are actually wired, not just typed into the constants. Updated
+the dashboard's manual Enemies-tab mirror (damage/telegraph numbers, resist note, fire-vs-physical
+split, and the rebalance rationale) to match. No `RECIPES.md` change (no recipe/cost edits).
+
 ### S5 — Relic forge SFX per rarity (2026-07-15, Sonnet)
 Wave 1 of the 8-session 2026-07-15 playtest plan (`playtest-2026-07-15-session-plan.md`), the only
 session that never touches `MainScene.ts` (cleanest parallel-safe pick). Gave the Relic Forge's
@@ -377,83 +409,3 @@ dashboard Relics tab kept in sync. Four locked pieces:
 2713 rare rolls with an owned rare id → **0 leaked** the owned id; empty-pool fallback still
 returns a rare when all 8 are owned; Common success **23.55%** (200k rolls); refined Uncommon
 + refined-t2 both reach Mythic ~1.0%. `tsc` clean, dashboard boots with no console errors.
-
-### PB2 — Post-Duneshaper playtest batch, 15 items (2026-07-14, Opus)
-
-Off the user's Duneshaper-clear playtest. Locked 4 design calls via `AskUserQuestion`; the rest were
-clear fixes. Organized into 5 workstreams (relic economy / notifications+HUD / Duneshaper combat /
-gear+crafting / world+flora), done sequentially (all route through MainScene + shared data files, so
-worktree-parallel would only conflict). Built on Opus (new mechanics: trophy economy, gear-level tier,
-boss combat rework).
-
-**Relic/trophy economy** (`Relics.ts`, boss loot, `Items.ts`, `RelicForgeMenu.ts`):
-- New **`boss_refined_trophy`** ("Boss Trophy") dropped by the **Gremlin King** (+ keeps its Heart) and
-  the **Duneshaper** (unreachable — that kill wins the run — kept for consistency). Uses a new per-trophy
-  **`outcomeOdds` override** on `TrophyRoll` (Rare 50% / Mythic 50%, never fails) — the shared Rare
-  table couldn't express it. Verified live: 4000 rolls → 49.6% Mythic / 50.4% Rare, 0 fails, first roll
-  guaranteed.
-- **Cinderwrought** re-tiered: drops **2-4 Ember Shard** (was 3-5 Gloam — a badlands mob dropping Gloam
-  never made sense; the user) + **`refined_trophy_uncommon_t2`** (Tier 2, was tier-1). **2 Cinderwroughts
-  now guard each Sunken Forge** (`forge.boss` → `forge.bosses[]`; ore cracks only when BOTH die) — 5
-  forges × 2 = 10, so ember sites reliably supply the tier-2 refine currency (this replaced the trophy→shard
-  salvage idea — the user's call). Gloamwarden unchanged (forest, Gloam + tier-1).
-- **Two-guard balance pass** (the user follow-up, locked via `AskUserQuestion`): doubling the guards had
-  silently doubled HP + loot. Per-guard **HP 340→260** (total 520, a step up from the old single 340 fight,
-  not a 2× slog); **both guards drop 2-4 Ember Shard** (the supply was the point) but **only one drops the
-  tier-2 refined trophy** (new `Cinderwrought` `dropTrophy` cfg flag; `armForge` passes `i === 0`), so a
-  site yields 1 refined trophy, not 2. Attacks/fire damage unchanged. Verified live: HP 260, trophy-guard
-  loot = ember + trophy, other = ember only.
-- **Replaced relics now partial-refund** (`replaceRefund`: 1/2/3/5 shards by rarity, ×1.5 for Tier 2) on
-  top of the existing declined-roll refund — the old net-farm worry is moot now that ember mobs supply
-  shards directly. The `previewChoiceRefunds`/`resolveChoice` Keep-New path pays it too.
-- **Ember-Shard refine recipe hidden until Ember Shard discovered** — new `hasDiscovered` dep on the forge
-  menu filters `refine_common_t2` until its shard currency is known (fixes "ember shard recipes before
-  discovering ember shard").
-
-**Gear & crafting** (`ArmorUpgrades.ts`, `WeaponUpgrades.ts`, `Weapons.ts`, `Crafting.ts`, `Items.ts`):
-- **+2 right-click levels for every forged piece** — base (Sunsteel/Duskhide) AND enhanced (Embersteel/
-  Emberhide/Ember Brand), via compact `forgedArmorUpgrades`/`forgedWeaponUpgrades` helpers. Armor +1/level
-  (+2 at Lvl 3), weapons +2/level (+4 at Lvl 3), sunk in ingots (the user: a use for the ingot stockpile).
-  Tuned + verified so **Lvl-1 ember always out-stats Lvl-3 steel** (embersteel_helm base 10 > sunsteel_helm
-  Lvl 3 = 8; emberhide_leggings base **bumped 7→8** > duskhide_leggings Lvl 3 = 7). Reforging a leveled
-  steel piece still yields a Lvl-1 ember piece (recipe output is tier 0 — falls out naturally). Steel
-  upgrades gate on Workbench Lvl 3, ember on Lvl 4.
-- **Hotbar items now count toward recipe ingredients** (`Crafting.setHotbar(hotbar.container)`) — weapons/
-  tools live in the hotbar, so a Sunsteel Pike there is now visible+consumable by the Embersteel Pike
-  reforge (fixes "still not looking at items in hotbar when considering upgrades"). Verified: a hotbar
-  Sunsteel Pike returns `availableFor === 1`.
-- **Higher-tier weapons cost more stamina**: Sunsteel 20/12/15→22/15/18, Embersteel 22/13/16→27/18/22,
-  Ember Brand 15→19 — each tier a clear step up.
-
-**Duneshaper combat sharpen pass** (`Duneshaper.ts`, Q4 "sharpen + add pressure"): HP **1050→1250**,
-`ATTACK_COOLDOWN 900→700ms`. The **Gloamfire Lance** now tracks the player through 60% of the wind-up
-then commits **and sweeps ±20° across the strike** (was locked at telegraph start = trivially
-pre-sidesteppable). **Sand Spikes** reworked from 3 spaced perpendicular circles to a **tracked 5-circle
-cross** (center + 4 axis/perp arms) — distinct from the Hexling's bolt spread, covers every cardinal
-escape so only a diagonal run / dash clears it.
-
-**Notifications & HUD** (`EventLogUI.ts`, `BossHealthUI.ts`, boss entities, `HotbarUI.ts`, `MainScene.ts`):
-- **Center-toast burst capped at 4 + repacked from the top** — a monotonic cursor let "Defeated X"
-  bursts march down over the player; now the oldest is evicted past 4 and the stack re-anchors at the top.
-  Verified: 8 toasts → 4 active, max Y 174px (well above the player).
-- **Bigger boss stagger bars**: mini-boss world poise bars 22×3 → **56×6** (Cinderwrought/Gloamwarden,
-  Duneshaper 64×6); the top `BossHealthUI` poise section **12→20px**.
-- **POI-respawn toasts only within 900px** (`notifyPoiRespawn`) — the respawn still happens, only the toast
-  is distance-gated (the user).
-- **Tier-aware bench art in the hotbar** — new optional `stationTexture` dep resolves `icon_workbench_t2`
-  etc. so an upgraded bench shows its tier sprite in the hotbar, matching the placed one.
-
-**World/flora** (`MainScene.spawnBadlandsFlora` + `spawnOuterBadlandsContent`): **Emberblooms + Dustblooms
-grow in patches of 3-5** around a shared center (jittered); Sunfruit (cactus) + Gloamcap (mushroom) stay
-scattered solo. Verified: 59/90 emberblooms have a close neighbor.
-
-**Answered:** food buffs cap at **3** concurrent (`BuffManager`, shared with the Bedroll rest effect).
-**Flagged non-repro (#9):** "duskrunner stacks to 98" — every stacking primitive (`add`,
-`topUpExistingHotbarStack`, `sortAndStack`, `moveSlot`) fills to the full 99; no off-by-one exists.
-
-Docs: `RECIPES.md` (relic-trophy table + boss-odds row, forged armor/weapon upgrade tables, weapon
-stamina) and the dashboard Enemies/Relics tabs updated. `tsc` clean; verified live via `preview_eval`
-(boss-trophy odds, 2-guards-per-forge + loot, forge menu open, hotbar reforge counting, ember-upgrade
-tables + stat invariants, toast cap, tier-aware hotbar texture, flora clustering); zero console errors.
-
-
