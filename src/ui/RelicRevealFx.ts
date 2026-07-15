@@ -8,6 +8,7 @@ import {
   type RelicRarity,
   type RollResult,
 } from "../systems/Relics";
+import type { SfxPlayer } from "../systems/Sfx";
 
 // Depths sit above the forge menu's own (3000/3001/3002/3010) so the reveal
 // always draws on top of the panel content.
@@ -62,6 +63,22 @@ export class RelicRevealFx {
 
   isActive(): boolean {
     return this.active;
+  }
+
+  // The owning scene IS the MainScene, which holds the SfxPlayer. Read it
+  // structurally so S5's forge cues stay contained to Sfx.ts + this file (no
+  // MainScene edit, no extra dep threading); no-ops safely if unavailable.
+  private sfx(): SfxPlayer | undefined {
+    return (this.scene as unknown as { sfx?: SfxPlayer }).sfx;
+  }
+
+  private playRevealCue(rarity: RelicRarity): void {
+    const s = this.sfx();
+    if (!s) return;
+    if (rarity === "common") s.relicCommon();
+    else if (rarity === "uncommon") s.relicUncommon();
+    else if (rarity === "rare") s.relicRare();
+    else s.relicMythic();
   }
 
   // Spin over a panel, then reveal `result` (null / !success = a "crumbled"
@@ -137,6 +154,7 @@ export class RelicRevealFx {
     const rarities: RelicRarity[] = ["common", "uncommon", "rare", "mythic"];
     const r = rarities[Math.floor(this.scene.time.now / 97) % rarities.length];
     this.reelGem?.setTexture(rarityIcon(r));
+    this.sfx()?.relicReelTick();
   }
 
   private reveal(
@@ -150,6 +168,7 @@ export class RelicRevealFx {
 
     if (!success) {
       // Fizzle — grey crumble, subdued. The contrast makes wins feel better.
+      this.sfx()?.relicCrumble();
       this.reelGem?.setTexture(rarityIcon("common")).setTint(0x6b7280);
       this.addText(cx, gemY + 70, "Crumbled to dust…", 13, "#c8a05a", D_BANNER, 0.5);
       const g = this.reelGem;
@@ -171,6 +190,10 @@ export class RelicRevealFx {
     const def = RELIC_DEFS[result!.id!];
     const cfg = REVEAL_CFG[rarity];
     const color = RARITY_COLOR[rarity];
+
+    // Per-rarity fanfare, fired here so the audio lands with the gem punch
+    // (not the much-later announceRoll after the hold).
+    this.playRevealCue(rarity);
 
     // Land the reel on the real result gem, then punch it in.
     this.reelGem?.setTexture(rarityIcon(rarity)).clearTint().setScale(0.2);

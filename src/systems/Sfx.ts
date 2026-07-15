@@ -139,4 +139,56 @@ export class SfxPlayer {
   death(): void {
     this.tone(300, 550, "sine", { toFreq: 80, gain: 0.12 });
   }
+
+  // --- Relic Forge (S5) ---------------------------------------------------
+  // The slot-machine reveal's payoff scales HARD by rarity: Common is a modest
+  // "nice" pop, Mythic is a layered, longer fanfare — matching RelicRevealFx's
+  // per-rarity visual escalation. All synthesized here at call time like every
+  // other cue (no asset files).
+
+  // Faint click on each reel-gem swap during the spin. Fires many times, so
+  // kept near-inaudible individually; together they read as a spinning reel.
+  relicReelTick(): void {
+    this.tone(1400, 14, "square", { gain: 0.018 });
+  }
+
+  // Common — a modest single rising blip.
+  relicCommon(): void {
+    this.tone(523, 130, "triangle", { toFreq: 784, gain: 0.09 });
+  }
+
+  // Uncommon — a brighter two-note rise, a touch louder.
+  relicUncommon(): void {
+    this.tone(523, 90, "triangle", { gain: 0.1 });
+    this.tone(698, 170, "triangle", { toFreq: 880, gain: 0.11, delaySec: 0.09 });
+  }
+
+  // Rare — a real fanfare: low body + ascending major arpeggio + bright sparkle.
+  relicRare(): void {
+    this.tone(131, 360, "triangle", { gain: 0.09 }); // low body
+    this.tone(523, 110, "square", { gain: 0.1, delaySec: 0.02 }); // C5
+    this.tone(659, 110, "square", { gain: 0.1, delaySec: 0.12 }); // E5
+    this.tone(784, 130, "square", { gain: 0.11, delaySec: 0.22 }); // G5
+    this.tone(1047, 300, "square", { toFreq: 1319, gain: 0.12, delaySec: 0.34 }); // C6 sparkle
+  }
+
+  // Mythic — MASSIVE + longer: a sub boom under a full ascending run, a
+  // sustained shimmer pad, and a high sparkle tail. The rarest payoff in game.
+  relicMythic(): void {
+    this.tone(98, 620, "sawtooth", { toFreq: 65, gain: 0.14 }); // sub boom
+    this.tone(523, 120, "square", { gain: 0.11, delaySec: 0.05 }); // C5
+    this.tone(659, 120, "square", { gain: 0.11, delaySec: 0.15 }); // E5
+    this.tone(784, 120, "square", { gain: 0.12, delaySec: 0.25 }); // G5
+    this.tone(1047, 130, "square", { gain: 0.12, delaySec: 0.35 }); // C6
+    this.tone(1319, 480, "square", { toFreq: 1568, gain: 0.13, delaySec: 0.45 }); // E6 rise
+    this.tone(1047, 760, "triangle", { gain: 0.06, delaySec: 0.35 }); // sustained pad
+    this.tone(2093, 300, "sine", { toFreq: 2637, gain: 0.08, delaySec: 0.7 }); // sparkle tail
+  }
+
+  // Failed roll — a dusty downward fizzle. Subdued so wins feel better by
+  // contrast (mirrors the "Crumbled to dust…" visual).
+  relicCrumble(): void {
+    this.tone(300, 280, "sawtooth", { toFreq: 90, gain: 0.05 });
+    this.tone(190, 380, "triangle", { toFreq: 70, gain: 0.04, delaySec: 0.06 });
+  }
 }

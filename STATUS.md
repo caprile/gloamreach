@@ -2,20 +2,23 @@
 
 ## Current State
 
-_Living snapshot — edit in place, never append. Last shipped: **Relic redesign —
-single-family + Rare/Mythic unique procs + additive buckets** (2026-07-15, Opus, plan
-`steady-humming-sphinx.md`). Every relic now touches ONE family axis; Common/Uncommon = a
-small flat stat that **plateaus at Uncommon**; **Rare/Mythic add a bespoke conditional proc**
-(8 procs: Onslaught/Fleetfoot/Guardian/Second Wind/Leech/Undying/Executioner/Prodigy —
-StS/Hades-style, curated not rolled). `compareInstances` now orders by rarity→tier so the flat
-stat can plateau. Net-new: player shield (+HP-bar overlay), enemy slow, `Stamina.restore`,
-dash-refund. **All buff categories made additive-within-category** (damage/reduction/move/XP
-add not compound; max HP/stamina linear — supersedes M-SS compounding) so nothing scales
-exponentially — the user's core worry. Dropped the boss-named "Gremlin King's Wrath" relic.
-`tsc` clean; verified live (`javascript_tool`) — additive 1.57 vs 1.605 mult, reduction 78 vs
-79, all 8 procs fire. See the entry below + [[survivor-rpg-relics]]. **Next in the 8-session
-plan:** S5 (forge SFX, Sonnet, parallel), S6 (Cinderwrought rebalance, Sonnet), S2 (onboarding,
-Sonnet), then S1/S3, S7→S8.
+_Living snapshot — edit in place, never append. Last shipped: **S5 — Relic forge SFX per
+rarity** (2026-07-15, Sonnet, plan `playtest-2026-07-15-session-plan.md`). Per-rarity relic-forge
+reveal cues added to `Sfx.ts` (`relicReelTick` faint slot-machine click per gem swap, escalating
+`relicCommon`→`relicUncommon`→`relicRare`→`relicMythic` fanfares — Mythic is a layered sub-boom +
+ascending run + shimmer pad + sparkle tail — and a `relicCrumble` fizzle for fails). Hooked in
+`RelicRevealFx.ts` at the **reveal landing** (synced to the gem punch, not the delayed
+`announceRoll`); the reel tick fires per swap during the spin. **Kept to Sfx.ts + RelicRevealFx.ts
+only** per the plan's parallel-safety note — RelicRevealFx reads the MainScene's `sfx` field via a
+structural cast (`this.scene` IS the MainScene), so no MainScene edit / dep threading. `tsc` clean;
+verified live via `javascript_tool` — real uncommon roll fired 7 reel ticks + `relicUncommon` at
+landing; a forced fail fired ticks + `relicCrumble`; no console errors. See the entry below.
+**Next in the 8-session plan:** S6 (Cinderwrought rebalance, Sonnet), S2 (onboarding, Sonnet), then
+Wave 2 S1/S3, Wave 3 S7→S8.
+Prior: **Relic redesign — single-family + Rare/Mythic unique procs + additive buckets**
+(2026-07-15, Opus): every relic touches ONE family axis; Common/Uncommon = a small flat stat
+plateauing at Uncommon; Rare/Mythic add a bespoke conditional proc (8 procs). All buff categories
+additive-within-category (nothing scales exponentially). Full entry below + [[survivor-rpg-relics]].
 Prior: **S4 — Relic economy rework**
 (2026-07-15, Opus): first of the 8-session 2026-07-15 playtest plan. Filled the **full 8×4 relic
 matrix** (net +11 — 12 added, the boss-named duplicate damage mythic "Gremlin King's Wrath" dropped
@@ -269,6 +272,30 @@ below + [[survivor-rpg-dev-console]].
 ## Recent Entries
 
 > Older entries in STATUS-archive.md.
+
+### S5 — Relic forge SFX per rarity (2026-07-15, Sonnet)
+Wave 1 of the 8-session 2026-07-15 playtest plan (`playtest-2026-07-15-session-plan.md`), the only
+session that never touches `MainScene.ts` (cleanest parallel-safe pick). Gave the Relic Forge's
+slot-machine reveal per-rarity audio to match its per-rarity visual escalation.
+- **`Sfx.ts`** — new "Relic Forge" cue group, all raw Web-Audio oscillator/gain envelopes synthesized
+  at call time (same ethos as every existing cue, no asset files): `relicReelTick()` (a faint 14ms
+  click, gain 0.018, per reel-gem swap — many fire per spin, near-inaudible individually, together
+  read as a spinning reel), and escalating reveal fanfares — `relicCommon()` (modest single rising
+  blip), `relicUncommon()` (brighter two-note rise), `relicRare()` (low body + ascending C-major
+  arpeggio + C6 sparkle), `relicMythic()` (MASSIVE: sub-boom + full ascending run + sustained shimmer
+  pad + high sparkle tail, ~1s layered) — plus `relicCrumble()` (dusty downward fizzle for fails).
+- **`RelicRevealFx.ts`** — fires the cues in sync with the visuals: reel tick on each `tickReel` swap;
+  the per-rarity fanfare (`playRevealCue`) at the **gem-land** inside `reveal()`'s success branch (NOT
+  the ~900ms-later `announceRoll`, so audio lands with the punch); `relicCrumble()` in the fail branch.
+- **Kept to just these two files** per the plan's parallel-safety constraint. `RelicRevealFx` only holds
+  `this.scene`, which IS the MainScene instance, so it reads the private `sfx` field via a structural
+  cast (`(this.scene as unknown as { sfx?: SfxPlayer }).sfx`) — no MainScene edit, no dep threading,
+  no second `AudioContext`; no-ops safely if unavailable. Also imports `type SfxPlayer` (type-only).
+- **Verified** (`tsc` clean + live `javascript_tool`): all 6 methods exist + call without throwing;
+  a real guaranteed-success first roll (landed `uncommon`) fired 7 `relicReelTick`s during the spin then
+  exactly `relicUncommon` at landing (rarity→method map correct); a forced `{success:false}` roll fired
+  reel ticks then `relicCrumble`; `revealFx.scene === MainScene` confirmed (accessor resolves); no
+  console errors. Audio itself is by-ear (can't be auto-verified). No `RECIPES.md`/dashboard change.
 
 ### Relic redesign — single-family purity + Rare/Mythic unique procs + additive buckets (2026-07-15, Opus)
 
