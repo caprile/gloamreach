@@ -60,4 +60,5 @@ export type ResourceType =
   | "refined_trophy_rare" // scaffold for deeper biomes — rolls Rare
   | "ember_shard" // Phase 5: Gloam Shards rendered down at the Relic Forge's Ember Kiln (Lvl 3) — the tier-2 refinement currency
   | "refined_trophy_uncommon_t2" // Phase 5: badlands (Tier 2) Common trophies refined via Ember Shards — rolls Uncommon
-  | "boss_refined_trophy"; // Boss drop (Gremlin King / Duneshaper) — rolls Rare with a 50% roll-up to Mythic at the Relic Forge
+  | "boss_refined_trophy" // Gremlin King drop (S4) — guaranteed Mythic (Tier 1) at the Relic Forge
+  | "boss_refined_trophy_t2"; // Duneshaper drop (S4) — guaranteed Mythic (Tier 2) at the Relic Forge

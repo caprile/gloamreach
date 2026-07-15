@@ -1666,9 +1666,11 @@ export class BootScene extends Phaser.Scene {
     };
     refinedTrophy("icon_refined_trophy_uncommon", 0x5ad06a);
     refinedTrophy("icon_refined_trophy_rare", 0x4a9fe8);
-    // Boss Refined Trophy — a gold ring marks its boss-tier pedigree (Rare with
-    // a 50% roll-up to Mythic), distinct from the vein-refined trophies.
+    // Boss Refined Trophy — a gold ring marks its boss-tier pedigree
+    // (guaranteed Mythic), distinct from the vein-refined trophies. The Tyrant
+    // Trophy (Duneshaper, Tier 2) gets a hotter ember-orange ring.
     refinedTrophy("icon_boss_refined_trophy", 0xe8a83c);
+    refinedTrophy("icon_boss_refined_trophy_t2", 0xff6a2a);
 
     // Ember Shard (Phase 5): a Gloam Shard rendered down at the Relic Forge's
     // Ember Kiln — same jagged-shard silhouette, recolored amber instead of

@@ -156,6 +156,7 @@ import {
   REFINE_RECIPES,
   refinableTrophyKeys,
   canAffordRefine,
+  powerTierMult,
   GLOAM_TO_EMBER_RATIO,
   type RollResult,
   type ChoiceResolution,
@@ -706,6 +707,7 @@ export class MainScene extends Phaser.Scene {
   private buffBarUI!: BuffBarUI;
   private healthBarBg!: Phaser.GameObjects.Rectangle;
   private healthBarFill!: Phaser.GameObjects.Rectangle;
+  private healthShieldFill!: Phaser.GameObjects.Rectangle; // Leech (Mythic) absorb overlay
   private healthBarText!: Phaser.GameObjects.Text;
   private xpBarBg!: Phaser.GameObjects.Rectangle;
   private xpBarFill!: Phaser.GameObjects.Rectangle; // player-level XP bar, under the hotbar
@@ -714,6 +716,18 @@ export class MainScene extends Phaser.Scene {
   private invulnerableUntil = 0; // this.time.now threshold; incoming damage skipped before this
   private readonly RESPAWN_DELAY_MS = 2000;
   private readonly POST_RESPAWN_INVULN_MS = 1500;
+
+  // --- relic unique-proc state (2026-07-15 redesign; all reset in create()) ---
+  private onslaughtHits = 0; // Onslaught (damage): attack counter for the every-Nth-hit bonus
+  private killMoveBurstUntil = 0; // Fleetfoot (move): burst end timestamp
+  private killMoveBurstPct = 0; //   ...and its move-speed bonus as a fraction (0.25 = +25%)
+  private guardianReadyAt = 0; // Guardian (defense): next time the hit-negate is ready
+  private freeAttackUntil = 0; // Second Wind (stamina, Mythic): zero-cost attacks until this ts
+  private playerShield = 0; // Leech (lifesteal, Mythic): overheal-banked absorb, consumed before HP
+  private undyingReadyAt = 0; // Undying (vitality, Rare): next time the low-HP emergency heal is ready
+  private reviveUsed = false; // Undying (vitality, Mythic): once-per-run fatal-hit save spent
+  private killStreak = 0; // Prodigy (xp): consecutive-kill counter
+  private lastKillAt = 0; //   ...and the last kill's timestamp (streak window)
 
   // Active full armor-set bonuses (biome 2 Phase 4 forged gear). Recomputed on
   // every equipment change (afterItemMove) + on run reset (create). Read at the
@@ -931,6 +945,17 @@ export class MainScene extends Phaser.Scene {
     // simultaneous food buffs for one of only 2 slots.
     this.buffs.setMaxBuffs(3);
     this.invulnerableUntil = 0;
+    // Relic unique-proc state (2026-07-15) — reset per run (scene.restart gotcha).
+    this.onslaughtHits = 0;
+    this.killMoveBurstUntil = 0;
+    this.killMoveBurstPct = 0;
+    this.guardianReadyAt = 0;
+    this.freeAttackUntil = 0;
+    this.playerShield = 0;
+    this.undyingReadyAt = 0;
+    this.reviveUsed = false;
+    this.killStreak = 0;
+    this.lastKillAt = 0;
     this.activeSetIds = new Set();
     this.placementMode = null;
     this.placementGhost = null;
@@ -1433,13 +1458,15 @@ export class MainScene extends Phaser.Scene {
     const canSprint = this.stamina.canAfford(sprintCost);
     const canDash = this.stamina.canAfford(DASH_STAMINA_COST);
     const sprintMultiplier = runningSprintMultiplier(this.skills);
-    // Relic move-speed bonus (M-RL) multiplies walk & sprint alike. Emberblink
-    // set bonus (Emberhide light set) lengthens the dash burst only.
+    // Relic move-speed bonus (M-RL) + Fleetfoot on-kill burst ADD into the move
+    // bucket (2026-07-15), applied to walk & sprint alike in Player.update.
+    // Emberblink set bonus (Emberhide light set) lengthens the dash burst only.
     const dashDistMult = this.hasSet("emberhide") ? SET_EMBERBLINK_DASH_MULT : 1;
     // Movement locks while the inventory search box is focused, so WASD routes
     // to the text field instead of walking the player.
     const inputEnabled = !this.inventoryMenu.isSearchFocused();
-    const frame = this.player.update(delta, canSprint, canDash, sprintMultiplier, this.relics.moveSpeedMult(), dashDistMult, inputEnabled);
+    const moveMult = this.relics.moveSpeedMult() + this.killMoveBurstBonus();
+    const frame = this.player.update(delta, canSprint, canDash, sprintMultiplier, moveMult, dashDistMult, inputEnabled);
     this.clampPlayerToWorld();
 
     if (frame.sprinting) {
@@ -1484,7 +1511,8 @@ export class MainScene extends Phaser.Scene {
       const died = this.health.takeDamage(appliedBleed);
       this.refreshHealthBar();
       this.spawnDamageNumber(this.player.x, this.player.y, bleedDmg, false, "weak");
-      if (died && !this.devGodMode) this.onPlayerDeath();
+      // Undying Mythic revive covers a bleed-out too, not just direct hits.
+      if (died && !this.devGodMode && !this.tryUndyingRevive()) this.onPlayerDeath();
     }
     this.player.syncEquippedIconPosition();
     this.updateAttackRangeRing();
@@ -4144,7 +4172,7 @@ export class MainScene extends Phaser.Scene {
 
     const cooldownMs = weaponCooldownMs(this.equippedWeapon);
     if (this.time.now - this.lastWeaponHitAt < cooldownMs) return;
-    const staminaCost = Math.round(weaponStaminaCost(this.equippedWeapon) * this.relics.staminaCostMult());
+    const staminaCost = Math.round(weaponStaminaCost(this.equippedWeapon) * this.effectiveStaminaCostMult());
     if (!this.stamina.canAfford(staminaCost)) return;
 
     this.lastWeaponHitAt = this.time.now;
@@ -4155,8 +4183,7 @@ export class MainScene extends Phaser.Scene {
     const dmgType = weaponPrimaryDamageType(this.equippedWeapon);
     const dmg =
       (weaponDamage(this.equippedWeapon) + weaponTierDamageBonus(this.equippedWeapon, this.equippedWeaponTier)) *
-      weaponSkillDamageMultiplier(dmgType, this.skills) *
-      this.relics.damageMult();
+      this.damageBonusMult(dmgType);
     this.sfx.hit();
     this.spawnDamageNumber(den.x, den.y, Math.round(dmg), false, "normal");
     if (den.takeHit(dmg)) {
@@ -5653,8 +5680,9 @@ export class MainScene extends Phaser.Scene {
       const cooldownMs = toolCooldownMs(this.equippedTool);
       if (this.time.now - this.lastToolHitAt < cooldownMs) return;
 
-      // Relic stamina-cost reduction (M-RL) applies to tool swings too.
-      const staminaCost = Math.round(toolStaminaCost(this.equippedTool) * this.relics.staminaCostMult());
+      // Relic stamina-cost reduction (M-RL) applies to tool swings too, and the
+      // Second Wind free-attack window (effectiveStaminaCostMult) covers tools.
+      const staminaCost = Math.round(toolStaminaCost(this.equippedTool) * this.effectiveStaminaCostMult());
       if (!this.stamina.canAfford(staminaCost)) return; // exhausted — silent, same as the guards above
 
       this.lastToolHitAt = this.time.now;
@@ -5749,7 +5777,7 @@ export class MainScene extends Phaser.Scene {
     // (Strength/Agility no longer discount stamina cost — retired in M-SS; only
     // relics do now.)
     const dmgType = weaponPrimaryDamageType(this.equippedWeapon);
-    const staminaCost = Math.round(weaponStaminaCost(this.equippedWeapon) * this.relics.staminaCostMult());
+    const staminaCost = Math.round(weaponStaminaCost(this.equippedWeapon) * this.effectiveStaminaCostMult());
     if (!this.stamina.canAfford(staminaCost)) return; // exhausted — silent, same as tool guard
 
     this.lastWeaponHitAt = this.time.now;
@@ -5765,9 +5793,10 @@ export class MainScene extends Phaser.Scene {
     // display; the true float is what actually damages the enemy, so small
     // skill increments always matter even when the displayed number doesn't
     // visibly change hit-to-hit.
-    // Weapon skill bonus + relic damage bonus (M-RL), pre-stagger/pre-crit —
-    // this "raw" value is shared by the primary hit and any AOE-arc secondaries.
-    const raw = baseDmg * weaponSkillDamageMultiplier(dmgType, this.skills) * this.relics.damageMult();
+    // Additive skill+relic damage bucket (2026-07-15) × the Onslaught every-Nth-
+    // hit spike (conditional). Pre-stagger/pre-crit — shared by the primary hit
+    // and any AOE-arc secondaries (the whole swing is empowered on an Onslaught).
+    const raw = baseDmg * this.damageBonusMult(dmgType) * this.onslaughtMult();
 
     // Primary hit: per-enemy stagger punish (poise-break bonus damage) then a
     // crit roll (the final multiplicative step, M-SS), rolled here where the
@@ -5842,7 +5871,7 @@ export class MainScene extends Phaser.Scene {
     if (this.time.now - this.lastWeaponHitAt < cooldownMs) return;
 
     const dmgType = weaponPrimaryDamageType(this.equippedWeapon);
-    const staminaCost = Math.round(weaponStaminaCost(this.equippedWeapon) * this.relics.staminaCostMult());
+    const staminaCost = Math.round(weaponStaminaCost(this.equippedWeapon) * this.effectiveStaminaCostMult());
     if (!this.stamina.canAfford(staminaCost)) return; // exhausted — silent, same as melee's guard
 
     // Ammo gate — unlike the stamina/cooldown guards above, this one DOES
@@ -5884,7 +5913,7 @@ export class MainScene extends Phaser.Scene {
     this.player.playEquippedSwing();
 
     const baseDmg = weaponDamage(this.equippedWeapon) + weaponTierDamageBonus(this.equippedWeapon, this.equippedWeaponTier);
-    const dmg = baseDmg * weaponSkillDamageMultiplier(dmgType, this.skills) * this.relics.damageMult() * this.staggerMultiplierFor(enemy);
+    const dmg = baseDmg * this.damageBonusMult(dmgType) * this.onslaughtMult() * this.staggerMultiplierFor(enemy);
     // Crit is rolled at fire time (same "captured at commit time" precedent as
     // the stagger multiplier) and carried by the projectile so the impact tints
     // correctly — resolveWeaponHit can't re-roll it (no weapon context there).
@@ -5934,6 +5963,10 @@ export class MainScene extends Phaser.Scene {
     const depleted = enemy.takeHit(finalDmg);
     this.awardSkillXp(dmgType, 30); // weapon-hit XP to the primary damage type's skill
     this.spawnDamageNumber(enemy.x, enemy.y, Math.round(finalDmg), isCrit, effectiveness);
+    // Leech relic (lifesteal): heal a % of the damage dealt (Mythic banks overheal
+    // as a shield). Executioner relic (crit): a crit splashes to nearby enemies.
+    this.applyLeech(finalDmg);
+    if (isCrit) this.applyCritSplash(enemy, finalDmg, dmgType);
     if (!depleted) return;
     this.resolveKill(enemy);
   }
@@ -6006,6 +6039,8 @@ export class MainScene extends Phaser.Scene {
       this.health.heal(killHeal);
       this.refreshHealthBar();
     }
+    // On-kill relic procs: Fleetfoot move burst, Second Wind stamina, Prodigy streak.
+    this.applyOnKillRelicProcs();
     for (const armorType of armorTypesWornPerPiece(EQUIP_SLOTS.map((s) => this.equipment.get(s.id)))) {
       this.awardSkillXp(armorType, 30);
     }
@@ -6043,7 +6078,11 @@ export class MainScene extends Phaser.Scene {
   // at each call site. The two stack additively-then-multiplied here; the
   // Player-XP feed downstream reads skill level-ups, so there's no double-count.
   private awardSkillXp(skill: SkillType, base: number): void {
-    this.skills.addXp(skill, base * this.relics.xpMult() * this.progression.xpMult());
+    // Additive XP bucket (2026-07-15): relic +%, Intelligence +%, and the Prodigy
+    // kill-streak +% ADD instead of compounding.
+    const bonus =
+      this.relics.xpMult() - 1 + (this.progression.xpMult() - 1) + (this.xpStreakMult() - 1);
+    this.skills.addXp(skill, base * (1 + bonus));
   }
 
   // Roll crit for one hit of `weapon` (M-SS). Chance = weapon base + Agility +
@@ -6061,6 +6100,133 @@ export class MainScene extends Phaser.Scene {
       weaponBaseCritMult(weapon) + this.progression.critMultBonus() + this.relics.critDamageBonus(),
     );
     return { dmg: dmg * mult, crit: true };
+  }
+
+  // --- Additive-within-category buckets + relic unique procs (2026-07-15) ---
+
+  // Additive damage bucket: the two always-on % sources (weapon skill + relic)
+  // ADD into one multiplier instead of compounding. Crit/stagger/Onslaught stay
+  // their own multipliers (conditional bursts). Future % damage sources add here.
+  private damageBonusMult(dmgType: DamageType): number {
+    return 1 + (weaponSkillDamageMultiplier(dmgType, this.skills) - 1) + (this.relics.damageMult() - 1);
+  }
+
+  // Onslaught (damage relic): count each attack; every Nth lands a bonus-damage
+  // spike (a conditional multiplier — NOT a permanent one). Call ONCE per attack.
+  private onslaughtMult(): number {
+    const u = this.relics.unique("onslaught");
+    if (!u) return 1;
+    this.onslaughtHits += 1;
+    if (this.onslaughtHits % u.params.interval !== 0) return 1;
+    return 1 + (u.params.bonusPct / 100) * powerTierMult(u.powerTier);
+  }
+
+  // Second Wind (stamina Mythic) free-attack window folds into the weapon/tool
+  // stamina-cost multiplier as a 0. Every weapon/tool cost site reads this.
+  private effectiveStaminaCostMult(): number {
+    return this.time.now < this.freeAttackUntil ? 0 : this.relics.staminaCostMult();
+  }
+
+  // Fleetfoot (move relic) on-kill move-speed burst, as a fraction added into the
+  // move bucket (0.25 = +25%).
+  private killMoveBurstBonus(): number {
+    return this.time.now < this.killMoveBurstUntil ? this.killMoveBurstPct : 0;
+  }
+
+  // Prodigy (xp relic) kill-streak XP multiplier, additive into the XP bucket.
+  // Decays to 1 once the streak window lapses (checked live so stale streaks
+  // don't buff a later weapon-hit's XP).
+  private xpStreakMult(): number {
+    const u = this.relics.unique("xpstreak");
+    if (!u || this.time.now - this.lastKillAt > u.params.windowMs) return 1;
+    const bonus = Math.min(u.params.maxPct, this.killStreak * u.params.perKillPct) * powerTierMult(u.powerTier);
+    return 1 + bonus / 100;
+  }
+
+  // On-kill relic procs (Fleetfoot burst, Second Wind stamina, Prodigy streak) —
+  // called once per kill from resolveKill().
+  private applyOnKillRelicProcs(): void {
+    const now = this.time.now;
+    const fr = this.relics.unique("killrush");
+    if (fr) {
+      this.killMoveBurstUntil = now + fr.params.ms;
+      this.killMoveBurstPct = (fr.params.movePct / 100) * powerTierMult(fr.powerTier);
+      if (fr.params.dashRefund) this.player.resetDashCooldown();
+    }
+    const sw = this.relics.unique("secondwind");
+    if (sw) {
+      this.stamina.restore((sw.params.restorePct / 100) * powerTierMult(sw.powerTier) * this.stamina.max);
+      this.refreshStaminaBar();
+      if (sw.params.freeMs) this.freeAttackUntil = now + sw.params.freeMs;
+    }
+    const xs = this.relics.unique("xpstreak");
+    if (xs) {
+      this.killStreak = now - this.lastKillAt <= xs.params.windowMs ? this.killStreak + 1 : 1;
+      this.lastKillAt = now;
+    }
+  }
+
+  // Leech (lifesteal relic): heal a % of damage dealt; the Mythic banks overheal
+  // as a shield (up to a cap). Called from resolveWeaponHit with the dealt damage.
+  private applyLeech(finalDmg: number): void {
+    const u = this.relics.unique("leech");
+    if (!u || finalDmg <= 0) return;
+    const heal = finalDmg * (u.params.healPct / 100) * powerTierMult(u.powerTier);
+    const before = this.health.value();
+    this.health.heal(heal);
+    const applied = this.health.value() - before;
+    this.refreshHealthBar();
+    if (u.params.shieldPct) {
+      const overheal = Math.max(0, heal - applied);
+      if (overheal > 0) {
+        const cap = this.health.max * (u.params.shieldPct / 100) * powerTierMult(u.powerTier);
+        this.playerShield = Math.min(cap, this.playerShield + overheal);
+        this.refreshHealthBar();
+      }
+    }
+  }
+
+  // Executioner (crit relic): a crit splashes a % of its damage to nearby enemies
+  // (Mythic also slows them). Deals damage directly (NOT via resolveWeaponHit — no
+  // recursion / no re-crit / no double weapon-XP), same pattern as the set-bonus
+  // bursts. Also slows the primary target when the relic has a slow.
+  private applyCritSplash(source: Enemy, primaryDmg: number, dmgType: DamageType): void {
+    const u = this.relics.unique("critsplash");
+    if (!u) return;
+    const now = this.time.now;
+    const slowFactor = u.params.slowPct ? 1 - (u.params.slowPct / 100) * powerTierMult(u.powerTier) : 1;
+    if (u.params.slowMs && slowFactor < 1 && source.active) source.applySlow(slowFactor, u.params.slowMs, now);
+    const splash = primaryDmg * (u.params.splashPct / 100) * powerTierMult(u.powerTier);
+    for (const other of [...this.enemies]) {
+      if (other === source || !other.active || other.depleted || !other.isTargetable()) continue;
+      const edge = Math.max(other.displayWidth, other.displayHeight) / 2;
+      if (Phaser.Math.Distance.Between(source.x, source.y, other.x, other.y) > u.params.radius + edge) continue;
+      const resistMult = other.resistMultiplier(dmgType);
+      const dealt = splash * resistMult;
+      const eff: DamageEffectiveness = resistMult > 1.001 ? "weak" : resistMult < 0.999 ? "resist" : "normal";
+      const depleted = other.takeHit(dealt);
+      this.spawnDamageNumber(other.x, other.y, Math.round(dealt), false, eff);
+      if (u.params.slowMs && slowFactor < 1) other.applySlow(slowFactor, u.params.slowMs, now);
+      if (depleted) this.resolveKill(other);
+    }
+  }
+
+  // Undying (vitality Mythic): survive one fatal hit per run, healing to
+  // revivePct% of max HP. Returns true if the death was prevented. Shared by the
+  // main and bleed-DoT death paths.
+  private tryUndyingRevive(): boolean {
+    const u = this.relics.unique("undying");
+    if (!u || !u.params.revivePct || this.reviveUsed) return false;
+    this.reviveUsed = true;
+    const healTo = Math.max(1, Math.round(this.health.max * (u.params.revivePct / 100) * powerTierMult(u.powerTier)));
+    this.health.reset(); // refill to max, then trim to the revive amount (avoids healMult)
+    this.health.takeDamage(this.health.max - healTo);
+    this.bleed.clear();
+    this.playerShield = 0;
+    this.invulnerableUntil = this.time.now + this.POST_RESPAWN_INVULN_MS;
+    this.refreshHealthBar();
+    this.spawnFeedbackText(this.player.x, this.player.y, "Undying!");
+    return true;
   }
 
   // Kill category for run scoring: the final boss, an elite variant, or a plain
@@ -6176,7 +6342,9 @@ export class MainScene extends Phaser.Scene {
     // update() ignores envSpeedMult, so the boss is exempt with no branch here.
     const envSpeedMult = this.dayNight.enemySpeedMultiplier();
     for (const enemy of this.enemies) {
-      enemy.envSpeedMult = envSpeedMult;
+      // Fold any temporary slow (Executioner crit relic) into the same envSpeedMult
+      // path every aggressive-movement velocity already reads — no per-subclass wiring.
+      enemy.envSpeedMult = envSpeedMult * enemy.slowMult(now);
       const bit = enemy.update(delta, this.player.x, this.player.y, now);
       if (bit) {
         // Most melee hits carry no knockback; a telegraphed attack that opts
@@ -6330,6 +6498,19 @@ export class MainScene extends Phaser.Scene {
   ): void {
     if (this.isDead) return;
     if (this.time.now < this.invulnerableUntil) return;
+
+    // Guardian relic (defense): fully negate this hit if the negate is off
+    // cooldown. Consumes it + starts a brief grace so a multi-hit frame can't
+    // burn it twice. No damage, no bleed.
+    const guardian = this.relics.unique("guardian");
+    if (guardian && this.time.now >= this.guardianReadyAt) {
+      this.guardianReadyAt = this.time.now + guardian.params.cooldownMs;
+      this.invulnerableUntil = Math.max(this.invulnerableUntil, this.time.now + 150);
+      this.sfx.hit();
+      this.spawnFeedbackText(this.player.x, this.player.y, "Blocked!");
+      return;
+    }
+
     this.sfx.hit();
     // Bleed rides the same i-frame guard above, so a dashed-through Cragscale
     // roll opens no wound (the whole attack is dodged, not just its direct hit).
@@ -6337,17 +6518,22 @@ export class MainScene extends Phaser.Scene {
       this.bleed.apply(bleed.dmgPerSec, bleed.durationMs);
       this.hints.trigger("bled");
     }
-    // Relic damage-taken reduction (M-RL) applies first (a percentage), then
-    // flat armor deduction. Magic AND fire damage (Biome 2) BYPASS the flat
-    // armor term — they give the badlands casters/forge-boss real teeth and seed
-    // a future elemental-resist-gear hook; the relic %-reduction still applies.
-    // Every biome-1 source deals physical, so the default path is unchanged.
-    // Molten Bulwark (Embersteel heavy set) layers a flat % cut on top of the
-    // relic reduction and BEFORE armor/bypass — it applies to every damage type,
-    // physical or elemental, so the tank set shrugs off casters too.
-    // Floored at 1 so no relic/armor combination grants full immunity.
+    // Additive damage-reduction bucket (2026-07-15): the relic %-reduction and
+    // Molten Bulwark's flat % (Embersteel heavy set) ADD into one reduction,
+    // capped at 75% so no combination reaches immunity — applied once, before
+    // flat armor. Magic AND fire (Biome 2) BYPASS the flat-armor term (badlands
+    // casters/forge-boss teeth); the %-reduction still applies. Floored at 1.
+    const relicRed = 1 - this.relics.damageTakenMult();
     const moltenDr = this.hasSet("embersteel") ? SET_MOLTEN_DAMAGE_REDUCTION : 0;
-    const relicAdjusted = amount * this.relics.damageTakenMult() * (1 - moltenDr);
+    const reductionPct = Math.min(0.75, Math.max(0, relicRed + moltenDr));
+    let relicAdjusted = amount * (1 - reductionPct);
+    // Guardian Mythic: cap any single hit at capPct% of max HP (post-%, pre-armor).
+    if (guardian && guardian.params.capPct) {
+      relicAdjusted = Math.min(
+        relicAdjusted,
+        this.health.max * (guardian.params.capPct / 100) * powerTierMult(guardian.powerTier),
+      );
+    }
     let reduced: number;
     if (dmgType && bypassesArmor(dmgType)) {
       // Magic/fire bypass the flat-armor term. Heavy armor's skill gives partial
@@ -6365,12 +6551,35 @@ export class MainScene extends Phaser.Scene {
     // clear") vs a physical bite. Shown at the true computed value even under
     // god mode, so damage numbers stay testable.
     this.spawnPlayerDamageNumber(reduced, dmgType);
+    // Leech shield (lifesteal Mythic) absorbs before HP.
+    let toHp = reduced;
+    if (this.playerShield > 0) {
+      const absorbed = Math.min(this.playerShield, toHp);
+      this.playerShield -= absorbed;
+      toHp -= absorbed;
+    }
     // DEV god mode: still take the hit (sfx/knockback/damage number all play
     // out normally above/below) but never drop below 1 HP or die.
-    const appliedDamage = this.devGodMode ? Math.min(reduced, Math.max(0, this.health.value() - 1)) : reduced;
+    const appliedDamage = this.devGodMode ? Math.min(toHp, Math.max(0, this.health.value() - 1)) : toHp;
     const died = this.health.takeDamage(appliedDamage);
     this.refreshHealthBar();
     this.hints.trigger("took_damage"); // first hit taken this run -> nudge toward healing
+    // Undying Rare (vitality): an emergency heal when this hit drops you below the
+    // threshold (on its own cooldown). Distinct from the Mythic once-per-run revive.
+    if (!died) {
+      const u = this.relics.unique("undying");
+      if (
+        u &&
+        u.params.lowHpHealPct &&
+        this.health.value() / this.health.max < u.params.thresholdPct / 100 &&
+        this.time.now >= this.undyingReadyAt
+      ) {
+        this.undyingReadyAt = this.time.now + u.params.cooldownMs;
+        this.health.heal(this.health.max * (u.params.lowHpHealPct / 100) * powerTierMult(u.powerTier));
+        this.refreshHealthBar();
+        this.spawnFeedbackText(this.player.x, this.player.y, "Second Breath!");
+      }
+    }
     // Knockback (bite shove, boss slam) always applies now — Molten Bulwark's
     // old knockback-immunity was traded for the flat damage reduction above
     // (decision 2), so the heavy set is pure mitigation, not a stance anchor.
@@ -6381,7 +6590,8 @@ export class MainScene extends Phaser.Scene {
       // Brief impulse, not a sustained shove — matches dash's own short-burst feel.
       this.time.delayedCall(150, () => body.setVelocity(0, 0));
     }
-    if (died && !this.devGodMode) this.onPlayerDeath();
+    // Undying Mythic can save one fatal hit per run before the death path fires.
+    if (died && !this.devGodMode && !this.tryUndyingRevive()) this.onPlayerDeath();
   }
 
   private onPlayerDeath(): void {
@@ -6778,15 +6988,23 @@ export class MainScene extends Phaser.Scene {
   // Push the current Endurance/Vitality bonuses into the Stamina/HP pools.
   // Called on create and after either is spent, so the max bars grow live.
   private syncStatBonuses(): void {
-    // M-SS: stat-built base compounds MULTIPLICATIVELY with relic percent
-    // bonuses (was a flat additive that dwarfed a few stat points). Flat relic
-    // maxHp/maxStamina (legacy channel — none in the current pool) folds into
-    // the base before the percent so it still works if a flat relic ever ships.
-    const baseMaxHp = 100 + this.progression.vitalityHealthBonus() + this.relics.maxHpBonus();
-    const finalMaxHp = baseMaxHp * this.relics.maxHpPctMult();
+    // Additive/linear (2026-07-15, supersedes M-SS compounding): the stat bonus
+    // (flat) and the relic % (of the 100 base) are INDEPENDENT linear adds, not
+    // relic% × stat-inflated-base — so HP/stamina can't compound exponentially.
+    // relics.maxHpPctMult() is (1 + sumMaxHpPct/100); (mult - 1) × 100 is the
+    // relic's flat HP contribution off the 100 base. Legacy flat maxHp/maxStamina
+    // still add directly if a flat relic ever ships.
+    const finalMaxHp =
+      100 +
+      this.progression.vitalityHealthBonus() +
+      this.relics.maxHpBonus() +
+      100 * (this.relics.maxHpPctMult() - 1);
     this.health.setBonusMax(finalMaxHp - 100);
-    const baseMaxStam = 100 + this.progression.enduranceStaminaBonus() + this.relics.maxStaminaBonus();
-    const finalMaxStam = baseMaxStam * this.relics.maxStaminaPctMult();
+    const finalMaxStam =
+      100 +
+      this.progression.enduranceStaminaBonus() +
+      this.relics.maxStaminaBonus() +
+      100 * (this.relics.maxStaminaPctMult() - 1);
     this.stamina.setBonusMax(finalMaxStam - 100);
     // Secondary stat axes (M-SS): Vitality healing-received, Endurance stamina
     // regen, Wisdom buff duration — pushed into the pools/managers that own each.
@@ -7753,8 +7971,9 @@ export class MainScene extends Phaser.Scene {
       };
     const dmgType = weaponPrimaryDamageType(this.equippedWeapon);
     const baseDmg = weaponDamage(this.equippedWeapon) + weaponTierDamageBonus(this.equippedWeapon, this.equippedWeaponTier);
-    // Include relic bonuses (M-RL) so the panel matches tryAttackEnemy's real math.
-    const damage = Math.round(baseDmg * weaponSkillDamageMultiplier(dmgType, this.skills) * this.relics.damageMult());
+    // Include relic bonuses (M-RL) so the panel matches the real math — the
+    // additive skill+relic damage bucket (2026-07-15), same as damageBonusMult().
+    const damage = Math.round(baseDmg * this.damageBonusMult(dmgType));
     // Stamina cost no longer scales with Strength/Agility (retired in M-SS) —
     // only relics discount it now.
     const staminaCost = Math.round(weaponStaminaCost(this.equippedWeapon) * this.relics.staminaCostMult());
@@ -8094,6 +8313,14 @@ export class MainScene extends Phaser.Scene {
       .setOrigin(0, 0)
       .setScrollFactor(0)
       .setDepth(2801);
+    // Leech (lifesteal Mythic) shield — a cyan overlay anchored to the bar's
+    // right edge, width proportional to the banked absorb.
+    this.healthShieldFill = this.add
+      .rectangle(barX + barW - 1, barY + 1, 0, barH - 2, 0x5ad6e8, 0.85)
+      .setOrigin(1, 0)
+      .setScrollFactor(0)
+      .setDepth(2801.5)
+      .setVisible(false);
     this.healthBarText = this.add
       .text(barX + barW / 2, barY + barH / 2, "", {
         fontFamily: "monospace",
@@ -8115,6 +8342,13 @@ export class MainScene extends Phaser.Scene {
     const frac = this.health.value() / this.health.max;
     this.layoutBar(this.healthBarBg, this.healthBarFill, this.healthBarText, barW, barY, frac);
     this.healthBarText.setText(`${Math.round(this.health.value())}`);
+    // Shield overlay (Leech Mythic): a cyan strip from the bar's right edge.
+    const shieldFrac = Phaser.Math.Clamp(this.playerShield / this.health.max, 0, 1);
+    const barX = Math.round(this.scale.width / 2 - barW / 2);
+    this.healthShieldFill
+      .setPosition(barX + barW - 1, barY + 1)
+      .setSize(shieldFrac * (barW - 2), 20 - 2)
+      .setVisible(shieldFrac > 0);
   }
 
   // Buff-icon strip: sits just above the HP bar, centered. HP bar Y mirrors the

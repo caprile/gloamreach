@@ -169,6 +169,24 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   // update() ignores it, so the boss stays exempt from the night speed buff.
   envSpeedMult = 1;
 
+  // Temporary slow (Executioner crit relic). A timestamp + factor (0.7 = 30%
+  // slower); the scene folds slowMult() into envSpeedMult each frame so it
+  // rides the same aggressive-movement path with no per-subclass wiring.
+  private slowUntil = 0;
+  private slowFactor = 1;
+  applySlow(factor: number, ms: number, now: number): void {
+    const cur = now < this.slowUntil ? this.slowFactor : 1;
+    this.slowFactor = Math.min(cur, factor); // keep the stronger slow
+    this.slowUntil = now + ms;
+  }
+  slowMult(now: number): number {
+    if (now >= this.slowUntil) {
+      this.slowFactor = 1;
+      return 1;
+    }
+    return this.slowFactor;
+  }
+
   // --- souls-like attack telegraph state (see AttackPhase above) ---
   // protected so subclasses driving their own attack (Boar charge, Snake
   // lunge, Gremlin claw) can read/advance the same phase clock and reuse the

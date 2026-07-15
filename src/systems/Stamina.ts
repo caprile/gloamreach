@@ -41,6 +41,12 @@ export class Stamina {
     return this.current >= amount;
   }
 
+  // Instantly add stamina (clamped to max) — the Second Wind relic's on-kill
+  // restore. Does NOT touch the regen-delay window.
+  restore(amount: number): void {
+    this.current = Math.min(this.max, this.current + amount);
+  }
+
   // Spends `amount` if affordable and re-arms the regen delay. Returns false
   // (no-op) if insufficient — callers should already guard with canAfford
   // before doing anything externally visible, but spend() is defensive too.

@@ -145,10 +145,22 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       body.setVelocity(0, 0);
     } else {
       const len = Math.hypot(vx, vy);
-      const speed = (sprinting ? PLAYER_WALK_SPEED * sprintMultiplier : PLAYER_WALK_SPEED) * moveMult;
+      // Additive move bucket (2026-07-15): the always-on move bonus (relic move%
+      // + Fleetfoot burst%, folded into moveMult by the scene) and the
+      // sprint-only running bonus ADD into one speed multiplier instead of
+      // compounding — WALK × (1 + move% [+ sprint%]). moveMult/sprintMultiplier
+      // arrive as (1 + %) multipliers; subtract 1 to get their % contribution.
+      const speedMult = 1 + (moveMult - 1) + (sprinting ? sprintMultiplier - 1 : 0);
+      const speed = PLAYER_WALK_SPEED * speedMult;
       body.setVelocity((vx / len) * speed, (vy / len) * speed);
     }
     return { moving, sprinting, dashStarted: false, facing: this.facing };
+  }
+
+  // Zero the dash cooldown so the next move can immediately dash — the Fleetfoot
+  // (Mythic) relic's on-kill dash refund.
+  resetDashCooldown(): void {
+    this.lastDashAt = 0;
   }
 
   getFacing(): Facing {

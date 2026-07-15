@@ -6101,3 +6101,145 @@ fresh server booted clean after an earlier contended/wedged boot state — the d
   + 4 shielded ore.
 
 **Remaining triage: S5–S6** (recipe/upgrade gating + dev-cmd bugs; UX/text polish).
+
+### S5 + S6 — Gating/dev-cmd fixes, UX polish + Inventory rework (2026-07-13, Opus)
+
+Final two triaged badlands-playtest sessions (`badlands-playtest-triage.md`), merged. The
+S6 "inventory sort" item grew — via a locked design conversation — into a full **inventory
+rework** (new data model + tabbed UI), which is why the session ran on Opus. Plan:
+`inventory-rework-and-s5-s6.md`.
+
+**Inventory rework** (locked via `AskUserQuestion`: auto-organized pages / effectively
+unlimited / tabs-by-biome). Backpack container grew **36 → 240** slots (`BACKPACK_CAPACITY`,
+effectively unlimited — a hardcore run can't overflow it). New `ItemDef` organization
+helpers in `Items.ts`: `itemBiome()` (forest/badlands, explicit badlands-key set; "first
+biome it appears in" — King heart/fang, Gloam shards + forest-POI refined trophies stay
+forest) and `itemCategory()` (material/gear/station/food/curio, derived from existing def
+flags + a curio/trophy key set). `ItemContainer.sortAndStack` now clusters by
+(biome, category, name). `InventoryMenu` backpack column rebuilt: a **biome tab strip**
+(All + each biome present), a **click-to-focus search box** (spans ALL items by name;
+typing locks player movement via a new `Player.update(inputEnabled)` param + `typingInSearch()`
+guards on every single-key hotkey 1-9/V/O/K/R/H/J/M + Esc-unfocuses-first), and a
+**sectioned, wheel-scrollable grid** (window-rendered — only in-viewport cells become
+GameObjects, mapped to real container indices via `visibleCells`; `handleWheel` consumes the
+wheel over the grid so the hotbar doesn't cycle). No free-arrange in the backpack (it's
+auto-organized) — drops anywhere over the grid route to the first free/merge slot
+(`isOverBackpackGrid` + `findAssignable`). **Equipment-slot → trash drag** added
+(`destroyEquippedSlot`, the last missing drag path). **Processor menus (Drying Rack/Smelter)
+now show ONLY compatible materials** (input/fuel the player owns) instead of the whole
+backpack dimmed — also fixes them for the bigger backpack (they used to iterate the first 36
+slots only). Verified live via `preview_eval`: tabs filter (all 25 / badlands 10 / forest 15),
+search spans biomes, scroll advances + consumes over grid, movement lock zeroes velocity,
+equipment→trash destroys w/o refund, processor shows 1 of 24 items; zero console errors.
+
+**S5 — gating & dev-command bugs.** WB Lvl 3+ recipes now gate discovery on a sticky
+`everMaxWorkbenchTier` (bumped on place/upgrade) via a new `Crafting.refresh` param, so
+Sunsteel/Embersteel recipes stay hidden until the bench is actually upgraded. Placing any
+station marks its key discovered (fixes Ember Crucible only appearing after picking the
+Smelter back up). `nobuildcost` de-inverted: dropped the permanent `unlockAll()` (verified:
+stays 7 recipes on/off) and made upgrades freely available (bypasses the upgrade
+ingredient-discovery gate; cost was already waived).
+
+**S6 — polish.** Molten Bulwark reworked (decision 2): knockback-immunity → **flat 15%
+damage reduction (all types) + fire thorns** (`SET_MOLTEN_DAMAGE_REDUCTION`, applied before
+armor/bypass in `applyDamageToPlayer`; knockback now always applies). Effigy text:
+`warren_fetish` "Gloam-Bone Fetish" → "Gloam-Bone Totem" + fixed the stale "warren fetishes"
+wording (Items/Recipes/RECIPES.md). Emberblink set-bonus desc now word-wraps to the Combat
+column (`addText` gained an optional wrap width). Placed stations get a soft dark postFX
+outline (WebGL-guarded) to read against the badlands floor. `tsc` clean throughout.
+
+### PB1 — Post-2nd-boss playtest fix batch, all 3 sessions (2026-07-14)
+
+A 3-session triage off a 21-item playtest dump from beating the Duneshaper (badlands final
+boss). **All 3 sessions shipped.** Session 1 = the fix/tuning slice, built as **4 parallel
+worktree agents** (disjoint files, merged into `main` with zero conflicts). Sessions 2-3 =
+enemy AI/Hexling and worldgen population, done inline. All `tsc` clean, verified live via
+`preview_eval`.
+
+- **Balance (A):** forged armor up — Sunsteel heavy 14→**20**, Duskhide light 13→**15**,
+  Embersteel heavy 23→**32**, Emberhide light 16→**23**. Stone costs down ~30-40% across
+  recipes + all station upgrades. Faster leveling — player curve `150·(L+1)^1.9` →
+  `110·(L+1)^1.8` (~1.6×), skill XP `100·(L+1)` → `70·(L+1)` (~1.4×). New **Duskrunner
+  Skewer** dish (Shishkabob + Duskrunner Meat @ Lvl-2 campfire → +2.5 HP/s 22s).
+- **Crafting-menu bugs (B):** equipped base pieces now count/consume toward reforge recipes
+  (`Crafting.setEquipment` + `availableFor`); long recipe names truncate (no more "Effigy of
+  the Duneshaper" overlap); set-bonus lines now shown in the crafting detail (e.g. Emberblink).
+- **Discovery/UI (C):** tool upgrades (Ironshod Axe) now fire the unlock toast like station
+  upgrades; war-camp hint reworded ("I'll need to gear up before I storm it."); Ctrl+Click on
+  the Smelter **fuel** slot now routes fuel correctly (was hardcoded to the input slot).
+- **Relic economy (D + follow-up):** per-tier roll buttons (Common **T1**/**T2** split, was
+  rarity-only); **refund exploit fixed**. Refund rule (locked with the user): upgrading/Keep-New
+  displaces the old relic for **nothing**; discarding the just-rolled relic refunds **50% of its
+  trophy's shard cost** — raw trophies free → 0, refined → 1 shard (`trophyDiscardRefund`,
+  keyed off a stored pending trophy). A refund is only ever half a *paid* cost, so rerolling
+  can't net shards. Verified live against the real `RelicManager` (raw→0, refined-T1→1 gloam,
+  refined-T2→1 ember). Also fixed the auto-declined path naming the wrong relic as discarded.
+- **Enemy wander-anchor (Session 2):** Boar/Cragscale drew each idle wander target relative to
+  their *current* position (incremental drift) and never returned toward spawn — a bad run of
+  targets walked them far off. They now sample wander targets from a stored **spawn point** each
+  cycle (the RangedGremlin/Hexling pattern; `WANDER_RADIUS` 90/70), so a pulled-away enemy gently
+  drifts home. Free `MeleeGremling`s now **default their `wanderAnchor` to spawn** (was null →
+  drift); shack guards' explicit anchor is unchanged.
+- **Hexling (Session 2):** neutral to physical now (dropped the flat 0.5 slash/blunt/pierce
+  resist that made an armor-bypassing caster un-killable with a normal weapon; keeps its magic
+  **and** fire ×1.5 weaknesses). The 3-bolt volley mixes damage types — **center bolt = fire**
+  (armor-bypassing, the shot to dodge), **outer two = physical** (armor applies), with a distinct
+  `hex_bolt_phys` texture. Drops **4-6** hex essence (elite **9-11**, was 1/2, then 3-5/6-8 —
+  bumped once more same day once the math on base biome-2 gear's total hex-essence cost, 23,
+  was actually worked out — see below). `Projectile.damageType`
+  widened `DamageType`→`IncomingDamageType` so a bolt can carry fire. Verified live (resist
+  multipliers, the fire/physical/texture split off a real `castBolt`, anchors on spawned enemies).
+- **Hex essence economy (same-day follow-up):** playtest — building base biome-2 gear (Forge
+  Anvil unlock 5 + all 3 Sunsteel weapons 10 + full Sunsteel heavy armor 8 = **23** ingots, at 1
+  hex essence per smelted ingot) shouldn't require looping the entire badlands ring. Hexlings
+  spawn uniformly across the whole ring (44 total, no literal quadrant split), so half the ring
+  ≈ ~22 of them; bumped the drop again (4-6/9-11, was 3-5/6-8) so clearing even a modest fraction
+  of that half comfortably clears the 23-essence target with real margin. Verified live off real
+  spawned Hexlings (normal 4-6, elite 9-11). `tsc` clean, no console errors.
+- **Populate the outer world (Session 3):** playtest — "lot of empty space in the verdant woods
+  outside of center" + "shouldn't have to loop around the whole Badlands ring." Two additive
+  spawn passes, both running after every POI position is set (unlike the pre-existing inner-band
+  passes, which run before POIs and don't get this benefit): `spawnOuterForestContent/Enemies`
+  populates forest patchwork blobs beyond `BIOME_RADIUS` (2000) with a lighter, ~half-density mix
+  of trees/rocks/branches/boulders/blackberries + Boar/Snake/RangedGremlin/MeleeGremling, via a new
+  `pickOuterForestPoint` sampler (mirrors `pickBadlandsPoint`'s structure — dominant-biome gate +
+  all 5 POI exclusions, returns `null` on exhaustion rather than an unvalidated fallback point).
+  `spawnOuterBadlandsContent/Enemies` extends the badlands band from `BADLANDS_R_MAX_INNER` (5200,
+  unchanged default) out to a new `BADLANDS_R_MAX_OUTER` (8500), reusing `pickBadlandsPoint` with
+  its new optional `rMax` param (every existing call site keeps the old default, unaffected).
+  Deliberately NOT filled to `WORLD_RADIUS` (14000) — the deep frontier stays reserved for a future
+  biome. Verified live via `preview_eval`: **100% placement success** for both new node passes (224
+  outer-forest nodes, 266 outer-badlands nodes — exact requested counts, meaning real coverage is
+  plentiful out there); 50 forest-species + 112 badlands-species enemies landed in their respective
+  new bands; sampled outer-forest positions confirmed `dominantBiomeAt() === "forest"`; zero
+  POI-exclusion violations traceable to the new code (all violations found trace to a pre-existing,
+  unrelated `pickSpawnPoint` fallback bug — flagged as a separate task, not fixed here). `tsc`
+  clean, no console errors even at the larger spawn count (554 enemies, 1447 nodes total).
+
+RECIPES.md + dashboard relic prose updated. See [[survivor-rpg-relics]].
+
+### S7 — Pre-push inventory/dev-cmd tweaks (2026-07-13, Opus)
+
+Four small final tweaks before push, no new mechanic:
+- **Taller backpack grid** — `BACKPACK_ROWS 6 → 15` (viewport ~252px → ~720px). Each
+  biome holds ~45-48 unique items (~9-11 rows at 6 cols), so a per-biome tab
+  (Forest/Badlands) now shows **every row with no scroll**; panel bottom lands ~y=898,
+  still clear of the bottom hotbar (~960). The "All" tab (93 unique items) still scrolls
+  a little (~284px) — expected for the everything-view; only a wider grid would make it
+  scroll-free too. Cols unchanged (6). Verified live with one of every item loaded.
+- **Search-box insta-clear button** — the Inventory search field now renders a `✕` at its
+  right edge whenever there's a query (`InventoryMenu.renderSearch`), wiping the search
+  instantly on click and keeping the box focused so the player can retype.
+- **Search state doesn't persist on close** — confirmed already handled: `teardown()`
+  (run on every close path via `toggle()`) resets `search`/`searchFocused`/`scrollY`/
+  `activeTab`. Verified live (`ore` → close → empty → reopen → empty).
+- **`nobuildcost` now TEMPORARILY unlocks all recipes** (reverses the S5 de-invert, but
+  cleanly): while the cheat is on, `CraftingMenu.visibleRecipes()` lists **all** `RECIPES`
+  instead of just `crafting.discoveredRecipes()` — display-only, so it never mutates the
+  discovered set. Toggling off snaps the list straight back (verified: 8 discovered → 41
+  all → 8, discovered set untouched). Free-craft/free-upgrade behavior unchanged.
+
+Verified live via `preview_eval` + screenshots (full inventory with all sections +
+wheel-scroll + paper-doll/Combat/Relics columns; clear button; recipe unlock revert).
+`tsc` clean, no console errors.
+

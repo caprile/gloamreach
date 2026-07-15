@@ -309,20 +309,19 @@ Run), shown in the bottom-left HUD relic bar **and** on a dedicated **Relics
 column** in the Inventory panel (Tab) — 8 fixed slots, one per family, so owned
 relics don't require opening the Relic Forge or squinting at the HUD strip.
 
-**Phase 5 — family loadout, not stacking.** Every relic belongs to one of 8
+**Family loadout, not stacking.** Every relic belongs to one of 8
 **families** (`damage`/`move`/`defense`/`stamina`/`lifesteal`/`vitality`/`crit`/`xp`)
 and a player holds **at most one relic per family** (8 relics max). Rolling into a
-family already owned compares the two relics (direction-normalized — "lower is
-better" stats like stamina cost compare correctly) and resolves automatically
-where possible:
-- **New relic strictly better** (≥ the old on every shared stat, better on at
-  least one) → **auto-replaces**; the displaced relic is discarded.
-- **Old relic strictly better or equal** → the new roll is **auto-declined**
-  (nothing changes).
-- **Neither dominates** (e.g. a differing secondary stat — one relic wins on
-  damage, the other on stamina cost) → **ambiguous**: the Relic Forge menu shows
-  a **Keep New / Keep Old** prompt and blocks further rolls until you choose; the
-  other is discarded.
+family already owned resolves by **rarity, then power tier** (2026-07-15 redesign —
+each family has exactly one curated relic per rarity, so a higher rarity is always
+a strict upgrade):
+- **Higher rarity** (or same rarity + higher tier) → **auto-replaces**; the
+  displaced relic is discarded.
+- **Lower rarity** (or the exact same relic + tier) → the new roll is
+  **auto-declined** (nothing changes).
+- The old "ambiguous → Keep New / Keep Old choice" path stays in the code for
+  safety but effectively never fires now (single-stat families can't tie
+  cross-stat).
 
 **Shard refund = 50% of a discarded roll's trophy cost** (playtest exploit fix).
 The old design refunded Gloam/Ember Shards on *any* displacement scaled by the
@@ -340,10 +339,17 @@ The rule now:
 Because a refund is only ever half of a *paid* cost, rerolling can never net
 shards, but a wasted refined-trophy roll returns some value.
 
-**Magnitudes were trimmed** this pass (locked decision 8) — every relic's effect
-numbers are scaled to ~0.625× their original values (e.g. Common damage
-+8%→+5%, Mythic +40%→+25%) so a Tier-1 relic is a modest edge with real headroom
-above it (Tier-2 badlands relics, future biomes).
+**Single-family + unique procs (2026-07-15 redesign).** Every relic touches only
+its own family's axis (no more cross-family duals). **Common/Uncommon** are a
+small flat stat; the number **PLATEAUS at Uncommon** — **Rare & Mythic reuse
+Uncommon's stat** and add a bespoke **conditional proc** (Mythic = a spicier
+version), so a relic is never a *growing* damage/HP multiplier (the anti-scaling
+goal — a Mythic damage relic is still only +7% raw damage). Procs are conditional
+bursts (every Nth hit, on kill, on crit, on cooldown), one per family — see the
+table below. **All buff categories are additive-within-category** now (skill% +
+relic% + streak% ADD, not compound; damage-reduction sources add with a 75% cap;
+max HP/stamina are linear stat-flat + relic-%-of-base) so nothing scales
+exponentially.
 
 Each elite drops a **unique trophy by species** (Boar → Boar Trophy, Snake →
 Snake Trophy, Gremlin/Gremling → Gremlin Trophy — all **Common / Tier 1**;
@@ -353,18 +359,29 @@ pity counter, so more elite variety just means more attempts — the badlands
 trophies' only difference is the **×1.5 power-tier multiplier** on whatever
 relic they produce.
 
-**Outcome odds by trophy rarity** (locked 2026-07-11):
+**Outcome odds by trophy rarity** (Common band softened + pity cut in S4,
+2026-07-15):
 
 | Trophy rarity | → Common | → Uncommon | → Rare | → Mythic | Fail | Pity (miss cap) |
 |---|---|---|---|---|---|---|
-| Common | 10% | 2.5% | 1% | — | 86.5% | 12 |
+| Common | 20% | 2.5% | 1% | — | 76.5% | 8 |
 | Uncommon | — | rest (94%) | 5% | 1% | 0% | 8 |
 | Rare | — | — | rest (90%) | 10% | 0% | — |
-| **Boss** (bespoke `outcomeOdds`) | — | — | 50% | 50% | 0% | — |
+| **Boss** (bespoke `outcomeOdds`) | — | — | — | 100% | 0% | — |
 
-The **Boss Refined Trophy** uses a per-trophy `outcomeOdds` override (not the
-shared Rare table): it always succeeds and rolls **Rare with a 50% chance to roll
-up to Mythic** — the standout relic payoff for killing a true boss.
+**S4 (2026-07-15) relic economy rework:**
+- The full **8×4 relic matrix** is filled — every family
+  (damage/move/defense/stamina/lifesteal/vitality/crit/xp) now has a
+  Common/Uncommon/Rare/Mythic (32 relics; damage keeps two mythics).
+- **Main-boss trophies guarantee a Mythic** of the boss's tier (bespoke
+  `outcomeOdds` = 100% Mythic). The **Boss Trophy** (Gremlin King) → Mythic
+  Tier 1; the **Tyrant Trophy** (Duneshaper) → Mythic Tier 2 (×1.5). Mini-bosses
+  keep their refined-trophy drops.
+- A **Rare/Mythic roll never repeats an id you already own** (the pool pick
+  filters owned ids for those rarities), so lucky high rolls are always fresh.
+- **Common crumble softened** (own-rarity band 10%→20%, success 13.5%→23.5%,
+  pity 12→8), and the **refined-trophy Mythic cap is lifted** — a mini-boss
+  refined (Uncommon) trophy can now gamba into a Mythic (1%), not just main bosses.
 
 | Trophy | Source | Rarity | Power Tier |
 |---|---|---|---|
@@ -375,10 +392,11 @@ up to Mythic** — the standout relic payoff for killing a true boss.
 | Cragscale Trophy | Elite Cragscale (badlands) | Common | **2** |
 | Hexling Trophy | Elite Hexling (badlands) | Common | **2** |
 | Sandmaw Trophy | Elite Sandmaw (badlands) | Common | **2** |
-| **Boss Trophy** | Gremlin King + Duneshaper (bosses) | Rare (bespoke — 50% → Mythic) | 1 |
+| **Boss Trophy** | Gremlin King (boss) | Mythic (bespoke — guaranteed) | 1 |
+| **Tyrant Trophy** | The Duneshaper (final boss) | Mythic (bespoke — guaranteed) | **2** |
 | ~~Gremlin King Fang~~ | — | — | Retired — the King now drops the **Gremlin King's Heart** (Phase-4 smelting gate) + the new **Boss Trophy** |
-| Refined Trophy | Refinement (Gloaming Vein, Gloam) | Uncommon | 1 (roll-only — never dropped/refined; **capped at Rare, no Mythic**) |
-| Ember-Refined Trophy | Refinement (badlands, Ember) | Uncommon | **2** (roll-only; **capped at Rare**) |
+| Refined Trophy | Refinement (Gloaming Vein, Gloam) | Uncommon | 1 (roll-only — never dropped/refined; **can roll up to Mythic** since S4) |
+| Ember-Refined Trophy | Refinement (badlands, Ember) | Uncommon | **2** (roll-only; **can roll up to Mythic** since S4) |
 | Radiant Trophy | Refinement (scaffold) | Rare | 1 (roll-only — deeper biomes) |
 
 **Mini-boss / boss guaranteed drops** (relic economy): **Gloamwarden** (forest) →
@@ -388,8 +406,9 @@ of the two** also drops 1 Ember-Refined Trophy (Tier 2) — the native Ember Sha
 source, so ember sites supply the tier-2 refine currency without hauling Gloam
 from the forest (both drop shards for supply; only one drops the trophy so a
 two-guard site doesn't flood refined trophies). **Gremlin King** → Gremlin King's Heart + 1
-**Boss Trophy**. **Duneshaper** → 5–8 Ember Shard + 1 Boss Trophy (its kill wins
-the run, so the trophy is unreachable in practice — kept for consistency).
+**Boss Trophy** (guaranteed Mythic, Tier 1). **Duneshaper** → 5–8 Ember Shard + 1
+**Tyrant Trophy** (guaranteed Mythic, Tier 2 — its kill wins the run, so the trophy
+is unreachable in practice; kept for consistency).
 
 **Replaced-relic refund** (Phase-5 family loadout): rolling a strictly-better
 relic that displaces an owned one now refunds a **small** shard amount for the old
@@ -429,12 +448,18 @@ Trophy.
 Effect numbers below are shown at **Power Tier 1** (biome 1); badlands (Tier 2)
 sources multiply every number by ×1.5.
 
-| Rarity | Relics (base effect, ×power-tier mult) | Family |
-|---|---|---|
-| Common | Warrior's Charm (+5% dmg) · Swift Charm (+5% move) · Stoneskin Charm (−5% dmg taken) · Tireless Charm (−8% stamina cost) · Bloodroot Charm (+1 HP/kill) · Stout Charm (+9% max HP) · Keen Charm (+3% crit chance) | damage · move · defense · stamina · lifesteal · vitality · crit |
-| Uncommon | Warrior's Idol (+10% dmg) · Swift Idol (+10% move) · Ironhide Idol (−9% dmg taken) · Vigor Idol (+13% HP, +11% stam) · Sanguine Idol (+3 HP/kill) · Scholar's Idol (+16% skill XP) · Savage Idol (+0.19× crit dmg) | damage · move · defense · vitality · lifesteal · xp · crit |
-| Rare | War Totem (+16% dmg, −8% stamina) · Phantom Totem (+14% move, −8% dmg taken) · Titan Totem (+25% HP, +19% stam) · Reaper Totem (+5 HP/kill, +9% dmg) | damage · move · vitality · lifesteal |
-| Mythic | Gremlin King's Wrath (+25% dmg, +11% move) · Undying Heart (+9 HP/kill, −14% dmg taken) · Avatar's Mantle (+19% dmg, +16% move, −13% stamina) | damage · defense · damage |
+Common/Uncommon = flat stat; Rare/Mythic = **Uncommon's stat (plateau) + a proc**.
+
+| Family | Common | Uncommon | Rare (stat + proc) | Mythic (stat + bigger proc) |
+|---|---|---|---|---|
+| **Damage** | Warrior's Charm +4% | Warrior's Idol +7% | Onslaught Totem +7% · every 5th hit +100% dmg | Berserker's Mantle +7% · every 4th hit +120% |
+| **Move** | Swift Charm +4% | Swift Idol +7% | Fleetfoot Totem +7% · on kill +25% move 2.5s | Windwalker's Mantle +7% · +35% move 3.5s + refunds dash |
+| **Defense** | Stoneskin Charm −4% taken | Ironhide Idol −7% | Aegis Totem −7% · negate next hit /8s | Bulwark Mantle −7% · negate /6s + cap any hit at 30% max HP |
+| **Stamina** | Tireless Charm −6% cost | Tireless Idol −10% | Second Wind Totem −10% · on kill restore 25% max stam | Perpetual Mantle −10% · restore 40% + 2s free attacks |
+| **Lifesteal** | Bloodroot Charm +1 HP/kill | Sanguine Idol +2 HP/kill | Reaper Totem +2 · leech 3% of dmg dealt | Bloodlord's Mantle +2 · leech 5% + overheal → shield (≤15% max HP) |
+| **Vitality** | Stout Charm +8% max HP | Vigor Idol +12% | Titan Totem +12% · heal 25% max HP below 25% HP (60s cd) | Colossus Mantle +12% · survive one fatal hit/run → 40% HP |
+| **Crit** | Keen Charm +3% chance | Savage Idol +5% chance | Deadeye Totem +5% · crits splash 35% within 70px | Assassin's Mantle +5% · splash 50% within 90px + 30% slow 1.5s |
+| **XP** | Scholar's Charm +8% | Scholar's Idol +14% | Sage Totem +14% · streak +8%/kill up to +50% (4s) | Enlightened Mantle +14% · +10%/kill up to +90% (5s) |
 
 A dual-stat relic (e.g. War Totem) claims one **primary** family; its secondary
 stat only matters when comparing against a same-family contender.

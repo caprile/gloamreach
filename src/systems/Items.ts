@@ -1059,8 +1059,16 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
   boss_refined_trophy: {
     key: "boss_refined_trophy",
     name: "Boss Trophy",
-    description: "A trophy torn from a true boss, blazing with power. Bound at a Relic Forge it never crumbles — and has a real chance of a Mythic relic.",
+    description: "A trophy torn from a true boss, blazing with power. Bound at a Relic Forge it never crumbles — it always yields a Mythic relic.",
     texture: "icon_boss_refined_trophy",
+    maxStack: 99,
+    hotbarable: false,
+  },
+  boss_refined_trophy_t2: {
+    key: "boss_refined_trophy_t2",
+    name: "Tyrant Trophy",
+    description: "A relic-grade trophy torn from a badlands tyrant. Bound at a Relic Forge it never crumbles — it always yields a Tier-2 Mythic relic.",
+    texture: "icon_boss_refined_trophy_t2",
     maxStack: 99,
     hotbarable: false,
   },

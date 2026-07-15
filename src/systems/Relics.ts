@@ -113,14 +113,17 @@ export function powerTierMult(tier: number): number {
 // per-rarity odds. A trophy whose bands don't sum to 1 can FAIL (crumble): only
 // Common does (13.5% total), since Uncommon/Rare have a 100% floor band at their
 // own rarity. Locked odds (the user, 2026-07-11):
-//   Common trophy   → 1% Rare, 2.5% Uncommon, 10% Common (else fail)
+//   Common trophy   → 1% Rare, 2.5% Uncommon, 20% Common (else fail)
 //   Uncommon trophy → 1% Mythic, 5% Rare, else Uncommon (never fails)
 //   Rare trophy     → 10% Mythic, else Rare (never fails)
+// S4 (2026-07-15): Common's own-rarity band bumped 10%→20% (success 13.5%→23.5%)
+// to soften the crumble tail — raw Common trophies drop free but crumbling most
+// rolls read as pure feel-bad. Pity also cut 12→8 (below).
 export const TROPHY_OUTCOME_ODDS: Record<RelicRarity, { rarity: RelicRarity; chance: number }[]> = {
   common: [
     { rarity: "rare", chance: 0.01 },
     { rarity: "uncommon", chance: 0.025 },
-    { rarity: "common", chance: 0.1 },
+    { rarity: "common", chance: 0.2 },
   ],
   uncommon: [
     { rarity: "mythic", chance: 0.01 },
@@ -156,7 +159,7 @@ function rollOutcomeRarity(bands: { rarity: RelicRarity; chance: number }[], rng
 // next roll is a guaranteed base-rarity success (kills the low-% feel-bad tail).
 // Only Common can miss, so only its value bites; the rest are moot (100% floor).
 export const PITY_THRESHOLD: Record<RelicRarity, number> = {
-  common: 12,
+  common: 8,
   uncommon: 8,
   rare: 1, // 100% floor anyway; pity is moot
   mythic: 1,
@@ -189,27 +192,30 @@ export interface RelicEffect {
   critDamagePct?: number;
 }
 
-// Which direction is "good" for a given effect key — used by the dominance
-// comparison. true = higher raw value is better; false = lower (more negative)
-// is better. Every RelicEffect key must appear here.
-const HIGHER_IS_BETTER: Record<keyof RelicEffect, boolean> = {
-  damagePct: true,
-  moveSpeedPct: true,
-  staminaCostPct: false,
-  damageTakenPct: false,
-  killHeal: true,
-  maxHp: true,
-  maxStamina: true,
-  xpPct: true,
-  maxHpPct: true,
-  maxStaminaPct: true,
-  critChancePct: true,
-  critDamagePct: true,
-};
-// A single "goodness" score per key (higher is always better after this),
-// so two effects can be compared key-by-key with one direction.
-function goodness(key: keyof RelicEffect, value: number): number {
-  return HIGHER_IS_BETTER[key] ? value : -value;
+// --- Unique effects (bespoke Rare/Mythic procs) ---
+//
+// The single-family redesign (2026-07-15): every relic touches only its own
+// family's axis, Common/Uncommon are a small flat stat, and Rare/Mythic carry a
+// bespoke CONDITIONAL proc (a periodic spike — every Nth hit, on kill, on crit,
+// on cooldown — NOT a permanent multiplier, which keeps them easy to balance).
+// One `UniqueKind` per family; the Rare and Mythic of a family share the kind
+// with scaled params. MainScene reads `RelicManager.unique(kind)` at the matching
+// hook point. Magnitude params (percent/flat) get × powerTierMult(tier) at the
+// use site; discrete params (Nth-hit interval, cooldown ms, revive count) stay
+// fixed.
+export type UniqueKind =
+  | "onslaught" // damage: every Nth hit deals +bonusPct
+  | "killrush" // move: on kill, movePct burst for ms (+ dash refund)
+  | "guardian" // defense: negate next hit every cooldownMs (+ hit cap)
+  | "secondwind" // stamina: on kill restore restorePct of max stam (+ free-attack window)
+  | "leech" // lifesteal: heal healPct of damage dealt (+ overheal shield)
+  | "undying" // vitality: low-HP emergency heal (+ once-per-run revive)
+  | "critsplash" // crit: crits splash splashPct within radius (+ slow)
+  | "xpstreak"; // xp: chained kills ramp XP up to maxPct
+
+export interface RelicUnique {
+  kind: UniqueKind;
+  params: Record<string, number>;
 }
 
 export interface RelicDef {
@@ -218,6 +224,8 @@ export interface RelicDef {
   rarity: RelicRarity;
   family: RelicFamily;
   effect: RelicEffect;
+  // Rare/Mythic only — the bespoke conditional proc (read by MainScene hooks).
+  unique?: RelicUnique;
 }
 
 // The relic pool. Effects scale up with rarity. PHASE 5: magnitudes trimmed to
@@ -227,34 +235,52 @@ export interface RelicDef {
 // tunable. Only the Common pool is reachable from biome-1 trophies; badlands
 // elites (Phase 5) source the same pool at Tier 2 (POWER_TIER_MULT ×1.5).
 export const RELIC_DEFS: Record<string, RelicDef> = {
-  // --- common (small single-stat) ---
-  relic_warriors_charm: { id: "relic_warriors_charm", name: "Warrior's Charm", rarity: "common", family: "damage", effect: { damagePct: 5 } },
-  relic_swift_charm: { id: "relic_swift_charm", name: "Swift Charm", rarity: "common", family: "move", effect: { moveSpeedPct: 5 } },
-  relic_stoneskin_charm: { id: "relic_stoneskin_charm", name: "Stoneskin Charm", rarity: "common", family: "defense", effect: { damageTakenPct: -5 } },
-  relic_tireless_charm: { id: "relic_tireless_charm", name: "Tireless Charm", rarity: "common", family: "stamina", effect: { staminaCostPct: -8 } },
+  // 2026-07-15 single-family redesign: every relic touches ONE family axis.
+  // Common/Uncommon = a small flat stat (conservative — the anti-scaling worry).
+  // Rare/Mythic REUSE Uncommon's stat number (the % plateaus) and add a bespoke
+  // conditional proc; Mythic = a spicier version of its family's proc. Rarity is
+  // ordered by rarity index (compareInstances), so the flat stat doesn't need to
+  // grow to keep auto-replace clean.
+
+  // --- common (small single stat) ---
+  relic_warriors_charm: { id: "relic_warriors_charm", name: "Warrior's Charm", rarity: "common", family: "damage", effect: { damagePct: 4 } },
+  relic_swift_charm: { id: "relic_swift_charm", name: "Swift Charm", rarity: "common", family: "move", effect: { moveSpeedPct: 4 } },
+  relic_stoneskin_charm: { id: "relic_stoneskin_charm", name: "Stoneskin Charm", rarity: "common", family: "defense", effect: { damageTakenPct: -4 } },
+  relic_tireless_charm: { id: "relic_tireless_charm", name: "Tireless Charm", rarity: "common", family: "stamina", effect: { staminaCostPct: -6 } },
   relic_bloodroot_charm: { id: "relic_bloodroot_charm", name: "Bloodroot Charm", rarity: "common", family: "lifesteal", effect: { killHeal: 1 } },
-  relic_stout_charm: { id: "relic_stout_charm", name: "Stout Charm", rarity: "common", family: "vitality", effect: { maxHpPct: 9 } },
+  relic_stout_charm: { id: "relic_stout_charm", name: "Stout Charm", rarity: "common", family: "vitality", effect: { maxHpPct: 8 } },
   relic_keen_charm: { id: "relic_keen_charm", name: "Keen Charm", rarity: "common", family: "crit", effect: { critChancePct: 3 } },
+  relic_scholars_charm: { id: "relic_scholars_charm", name: "Scholar's Charm", rarity: "common", family: "xp", effect: { xpPct: 8 } },
 
-  // --- uncommon (bigger single / small dual) ---
-  relic_warriors_idol: { id: "relic_warriors_idol", name: "Warrior's Idol", rarity: "uncommon", family: "damage", effect: { damagePct: 10 } },
-  relic_swift_idol: { id: "relic_swift_idol", name: "Swift Idol", rarity: "uncommon", family: "move", effect: { moveSpeedPct: 10 } },
-  relic_ironhide_idol: { id: "relic_ironhide_idol", name: "Ironhide Idol", rarity: "uncommon", family: "defense", effect: { damageTakenPct: -9 } },
-  relic_vigor_idol: { id: "relic_vigor_idol", name: "Vigor Idol", rarity: "uncommon", family: "vitality", effect: { maxHpPct: 13, maxStaminaPct: 11 } },
-  relic_sanguine_idol: { id: "relic_sanguine_idol", name: "Sanguine Idol", rarity: "uncommon", family: "lifesteal", effect: { killHeal: 3 } },
-  relic_scholars_idol: { id: "relic_scholars_idol", name: "Scholar's Idol", rarity: "uncommon", family: "xp", effect: { xpPct: 16 } },
-  relic_savage_idol: { id: "relic_savage_idol", name: "Savage Idol", rarity: "uncommon", family: "crit", effect: { critDamagePct: 19 } },
+  // --- uncommon (modestly bigger flat stat — the number PLATEAUS here) ---
+  relic_warriors_idol: { id: "relic_warriors_idol", name: "Warrior's Idol", rarity: "uncommon", family: "damage", effect: { damagePct: 7 } },
+  relic_swift_idol: { id: "relic_swift_idol", name: "Swift Idol", rarity: "uncommon", family: "move", effect: { moveSpeedPct: 7 } },
+  relic_ironhide_idol: { id: "relic_ironhide_idol", name: "Ironhide Idol", rarity: "uncommon", family: "defense", effect: { damageTakenPct: -7 } },
+  relic_tireless_idol: { id: "relic_tireless_idol", name: "Tireless Idol", rarity: "uncommon", family: "stamina", effect: { staminaCostPct: -10 } },
+  relic_sanguine_idol: { id: "relic_sanguine_idol", name: "Sanguine Idol", rarity: "uncommon", family: "lifesteal", effect: { killHeal: 2 } },
+  relic_vigor_idol: { id: "relic_vigor_idol", name: "Vigor Idol", rarity: "uncommon", family: "vitality", effect: { maxHpPct: 12 } },
+  relic_savage_idol: { id: "relic_savage_idol", name: "Savage Idol", rarity: "uncommon", family: "crit", effect: { critChancePct: 5 } },
+  relic_scholars_idol: { id: "relic_scholars_idol", name: "Scholar's Idol", rarity: "uncommon", family: "xp", effect: { xpPct: 14 } },
 
-  // --- rare (strong dual) ---
-  relic_war_totem: { id: "relic_war_totem", name: "War Totem", rarity: "rare", family: "damage", effect: { damagePct: 16, staminaCostPct: -8 } },
-  relic_phantom_totem: { id: "relic_phantom_totem", name: "Phantom Totem", rarity: "rare", family: "move", effect: { moveSpeedPct: 14, damageTakenPct: -8 } },
-  relic_titan_totem: { id: "relic_titan_totem", name: "Titan Totem", rarity: "rare", family: "vitality", effect: { maxHpPct: 25, maxStaminaPct: 19 } },
-  relic_reaper_totem: { id: "relic_reaper_totem", name: "Reaper Totem", rarity: "rare", family: "lifesteal", effect: { killHeal: 5, damagePct: 9 } },
+  // --- rare (Uncommon's stat + a family proc) ---
+  relic_war_totem: { id: "relic_war_totem", name: "Onslaught Totem", rarity: "rare", family: "damage", effect: { damagePct: 7 }, unique: { kind: "onslaught", params: { interval: 5, bonusPct: 100 } } },
+  relic_phantom_totem: { id: "relic_phantom_totem", name: "Fleetfoot Totem", rarity: "rare", family: "move", effect: { moveSpeedPct: 7 }, unique: { kind: "killrush", params: { movePct: 25, ms: 2500, dashRefund: 0 } } },
+  relic_aegis_totem: { id: "relic_aegis_totem", name: "Aegis Totem", rarity: "rare", family: "defense", effect: { damageTakenPct: -7 }, unique: { kind: "guardian", params: { cooldownMs: 8000, capPct: 0 } } },
+  relic_endless_totem: { id: "relic_endless_totem", name: "Second Wind Totem", rarity: "rare", family: "stamina", effect: { staminaCostPct: -10 }, unique: { kind: "secondwind", params: { restorePct: 25, freeMs: 0 } } },
+  relic_reaper_totem: { id: "relic_reaper_totem", name: "Reaper Totem", rarity: "rare", family: "lifesteal", effect: { killHeal: 2 }, unique: { kind: "leech", params: { healPct: 3, shieldPct: 0 } } },
+  relic_titan_totem: { id: "relic_titan_totem", name: "Titan Totem", rarity: "rare", family: "vitality", effect: { maxHpPct: 12 }, unique: { kind: "undying", params: { lowHpHealPct: 25, thresholdPct: 25, cooldownMs: 60000 } } },
+  relic_deadeye_totem: { id: "relic_deadeye_totem", name: "Deadeye Totem", rarity: "rare", family: "crit", effect: { critChancePct: 5 }, unique: { kind: "critsplash", params: { splashPct: 35, radius: 70, slowPct: 0, slowMs: 0 } } },
+  relic_sage_totem: { id: "relic_sage_totem", name: "Sage Totem", rarity: "rare", family: "xp", effect: { xpPct: 14 }, unique: { kind: "xpstreak", params: { perKillPct: 8, maxPct: 50, windowMs: 4000 } } },
 
-  // --- mythic (very strong / triple) ---
-  relic_gremlin_kings_wrath: { id: "relic_gremlin_kings_wrath", name: "Gremlin King's Wrath", rarity: "mythic", family: "damage", effect: { damagePct: 25, moveSpeedPct: 11 } },
-  relic_undying_heart: { id: "relic_undying_heart", name: "Undying Heart", rarity: "mythic", family: "defense", effect: { killHeal: 9, damageTakenPct: -14 } },
-  relic_avatars_mantle: { id: "relic_avatars_mantle", name: "Avatar's Mantle", rarity: "mythic", family: "damage", effect: { damagePct: 19, moveSpeedPct: 16, staminaCostPct: -13 } },
+  // --- mythic (Uncommon's stat + a spicier version of the family proc) ---
+  relic_avatars_mantle: { id: "relic_avatars_mantle", name: "Berserker's Mantle", rarity: "mythic", family: "damage", effect: { damagePct: 7 }, unique: { kind: "onslaught", params: { interval: 4, bonusPct: 120 } } },
+  relic_windwalkers_mantle: { id: "relic_windwalkers_mantle", name: "Windwalker's Mantle", rarity: "mythic", family: "move", effect: { moveSpeedPct: 7 }, unique: { kind: "killrush", params: { movePct: 35, ms: 3500, dashRefund: 1 } } },
+  relic_undying_heart: { id: "relic_undying_heart", name: "Bulwark Mantle", rarity: "mythic", family: "defense", effect: { damageTakenPct: -7 }, unique: { kind: "guardian", params: { cooldownMs: 6000, capPct: 30 } } },
+  relic_perpetual_mantle: { id: "relic_perpetual_mantle", name: "Perpetual Mantle", rarity: "mythic", family: "stamina", effect: { staminaCostPct: -10 }, unique: { kind: "secondwind", params: { restorePct: 40, freeMs: 2000 } } },
+  relic_bloodlords_mantle: { id: "relic_bloodlords_mantle", name: "Bloodlord's Mantle", rarity: "mythic", family: "lifesteal", effect: { killHeal: 2 }, unique: { kind: "leech", params: { healPct: 5, shieldPct: 15 } } },
+  relic_colossus_mantle: { id: "relic_colossus_mantle", name: "Colossus Mantle", rarity: "mythic", family: "vitality", effect: { maxHpPct: 12 }, unique: { kind: "undying", params: { revivePct: 40 } } },
+  relic_assassins_mantle: { id: "relic_assassins_mantle", name: "Assassin's Mantle", rarity: "mythic", family: "crit", effect: { critChancePct: 5 }, unique: { kind: "critsplash", params: { splashPct: 50, radius: 90, slowPct: 30, slowMs: 1500 } } },
+  relic_enlightened_mantle: { id: "relic_enlightened_mantle", name: "Enlightened Mantle", rarity: "mythic", family: "xp", effect: { xpPct: 14 }, unique: { kind: "xpstreak", params: { perKillPct: 10, maxPct: 90, windowMs: 5000 } } },
 };
 
 // Relic ids grouped by rarity (the roll pools). Built once from the def table.
@@ -299,29 +325,33 @@ export const TROPHY_ROLL: Record<string, TrophyRoll> = {
   // Dormant this milestone — killing the King wins the run, so a fang can't be
   // spent yet. Correct + ready for M-W1's mid-bosses.
   gremlin_king_fang: { rarity: "rare", powerTier: 1 },
-  // Boss Refined Trophy — dropped by true bosses (Gremlin King now, Duneshaper
-  // too though its drop is unreachable since that kill wins the run). Rolls
-  // RARE with a 50% chance to roll UP to Mythic (the user). One item/key; the
-  // Gremlin King is biome-1 so tier 1 is correct, and Duneshaper's is moot.
+  // Boss trophies — S4 (2026-07-15): a main-boss kill now GUARANTEES a Mythic of
+  // that boss's tier (locked with the user — main bosses only; mini-bosses keep
+  // their refined-trophy drops). The Gremlin King is a biome-1 mid-run boss you
+  // keep playing past, so its trophy (Tier 1) is spendable; the Duneshaper ends
+  // the run, so its Tier-2 trophy is kept for correctness / a future continue
+  // mode. Two keys so the tiers differ (T2 relics hit ×1.5).
   boss_refined_trophy: {
-    rarity: "rare",
+    rarity: "mythic",
     powerTier: 1,
-    outcomeOdds: [
-      { rarity: "mythic", chance: 0.5 },
-      { rarity: "rare", chance: 1.0 },
-    ],
+    outcomeOdds: [{ rarity: "mythic", chance: 1.0 }],
+  },
+  boss_refined_trophy_t2: {
+    rarity: "mythic",
+    powerTier: 2,
+    outcomeOdds: [{ rarity: "mythic", chance: 1.0 }],
   },
   // Refined trophies (Gloaming Vein loop, biome 1). Roll-only keys (produced
   // ONLY by refinement) so they climb trophies one rarity up into a
   // guaranteed-success roll. A Refined (Uncommon) trophy rolls the Uncommon
-  // outcome table (100% floor + a chance to roll up to Rare) but is CAPPED at
-  // Rare — refinement is a gated climb, not a Mythic gamba.
-  refined_trophy_uncommon: { rarity: "uncommon", powerTier: 1, maxRarity: "rare" },
+  // outcome table (100% floor + a 1% roll-up to Rare + a 1% Mythic band).
+  // S4 (2026-07-15): the old maxRarity:"rare" cap is LIFTED (locked with the user)
+  // so a mini-boss refined trophy can gamba into a Mythic, not just main bosses.
+  refined_trophy_uncommon: { rarity: "uncommon", powerTier: 1 },
   refined_trophy_rare: { rarity: "rare", powerTier: 1 },
   // Tier-2 refined trophy (Phase 5) — badlands raw Common (Tier 2) trophies
-  // refined via Ember Shards. Same "capped at Rare" gate as the biome-1
-  // refined trophy, just at Tier 2 magnitude.
-  refined_trophy_uncommon_t2: { rarity: "uncommon", powerTier: 2, maxRarity: "rare" },
+  // refined via Ember Shards. Cap also lifted (S4), at Tier 2 magnitude.
+  refined_trophy_uncommon_t2: { rarity: "uncommon", powerTier: 2 },
 };
 
 // --- Trophy refinement (Gloaming Vein / Ember Kiln) ---
@@ -478,33 +508,24 @@ function replaceRefund(oldId: string, oldTier: number): { refundShardKey: string
   return { refundShardKey: shardKeyForTier(oldTier), refundShardAmount: amt };
 }
 
-// Dominance comparison between two relic instances (already scaled to their
-// own power tier). Returns:
-//   "better"       — `a` is >= `b` on every effect key either touches, and
-//                     strictly greater on at least one (direction-normalized).
-//   "worse_or_equal" — `b` is >= `a` on everything (includes an exact tie).
-//   "ambiguous"    — some keys favor `a`, others favor `b` (e.g. a differing
-//                     secondary stat) — no clean winner.
+// Dominance comparison between two same-family relic instances. Since the
+// single-family redesign (2026-07-15) each family has exactly one CURATED relic
+// per rarity — a higher rarity is always a strict upgrade (same-or-bigger flat
+// stat PLUS the unique proc) — so we order by RARITY, then power tier, NOT by the
+// (now-plateau'd) numeric stat. This is what frees the flat stat to stop growing.
+// `compareInstances` is only ever called same-family (roll() looks up
+// instances[family]), so cross-family never reaches here.
+//   "better"         — `a` is a higher rarity than `b`, or same rarity + higher tier.
+//   "worse_or_equal" — `a` is lower rarity, or the exact same relic id + tier.
+//   "ambiguous"      — same rarity, differing tier the "wrong" way is handled above;
+//                      effectively never returned now (kept so callers stay total).
 function compareInstances(aId: string, aTier: number, bId: string, bTier: number): "better" | "worse_or_equal" | "ambiguous" {
-  const aEff = RELIC_DEFS[aId].effect;
-  const bEff = RELIC_DEFS[bId].effect;
-  const aMult = powerTierMult(aTier);
-  const bMult = powerTierMult(bTier);
-  const keys = new Set<keyof RelicEffect>([...Object.keys(aEff), ...Object.keys(bEff)] as (keyof RelicEffect)[]);
-  let aBetterCount = 0;
-  let bBetterCount = 0;
-  for (const key of keys) {
-    const aVal = (aEff[key] ?? 0) * aMult;
-    const bVal = (bEff[key] ?? 0) * bMult;
-    const aGood = goodness(key, aVal);
-    const bGood = goodness(key, bVal);
-    if (aGood > bGood) aBetterCount++;
-    else if (bGood > aGood) bBetterCount++;
-  }
-  if (aBetterCount > 0 && bBetterCount === 0) return "better";
-  if (bBetterCount > 0 && aBetterCount === 0) return "worse_or_equal";
-  if (aBetterCount === 0 && bBetterCount === 0) return "worse_or_equal"; // exact tie -> nothing gained, decline
-  return "ambiguous";
+  const aRank = RELIC_RARITIES.indexOf(RELIC_DEFS[aId].rarity);
+  const bRank = RELIC_RARITIES.indexOf(RELIC_DEFS[bId].rarity);
+  if (aRank !== bRank) return aRank > bRank ? "better" : "worse_or_equal";
+  // Same rarity (so same curated id within a family) — higher power tier wins.
+  if (aTier !== bTier) return aTier > bTier ? "better" : "worse_or_equal";
+  return "worse_or_equal"; // identical relic + tier -> nothing gained, decline
 }
 
 // A relic's effect numbers scaled to a power tier, for tooltip text.
@@ -526,8 +547,43 @@ function scaledEffectText(def: RelicDef, powerTier: number): string {
   if (e.critChancePct) parts.push(`+${pct(e.critChancePct)}% crit chance`);
   if (e.critDamagePct) parts.push(`+${(0.01 * e.critDamagePct * m).toFixed(2)}x crit damage`);
   if (e.xpPct) parts.push(`+${pct(e.xpPct)}% skill XP`);
-  return parts.join(", ");
+  const base = parts.join(", ");
+  const uq = uniqueText(def, powerTier);
+  return uq ? (base ? `${base} · ${uq}` : uq) : base;
 }
+
+// Human one-line description of a relic's unique proc, scaled to a power tier.
+// Magnitude params (percent/flat) scale by the tier mult; discrete params
+// (interval, cooldown, durations, radius) are fixed. Empty for a proc-less relic.
+export function uniqueText(def: RelicDef, powerTier = 1): string {
+  const u = def.unique;
+  if (!u) return "";
+  const m = powerTierMult(powerTier);
+  const p = u.params;
+  const pct = (v: number) => (Math.abs(v * m) % 1 === 0 ? (v * m).toFixed(0) : (v * m).toFixed(1));
+  const sec = (ms: number) => (ms % 1000 === 0 ? (ms / 1000).toFixed(0) : (ms / 1000).toFixed(1));
+  switch (u.kind) {
+    case "onslaught":
+      return `every ${p.interval}th hit +${pct(p.bonusPct)}% damage`;
+    case "killrush":
+      return `on kill +${pct(p.movePct)}% move ${sec(p.ms)}s${p.dashRefund ? " + refunds dash" : ""}`;
+    case "guardian":
+      return `negate the next hit every ${sec(p.cooldownMs)}s${p.capPct ? `, cap any hit at ${pct(p.capPct)}% max HP` : ""}`;
+    case "secondwind":
+      return `on kill restore ${pct(p.restorePct)}% max stamina${p.freeMs ? ` + ${sec(p.freeMs)}s free attacks` : ""}`;
+    case "leech":
+      return `heal ${pct(p.healPct)}% of damage dealt${p.shieldPct ? `, overheal → shield (≤${pct(p.shieldPct)}% max HP)` : ""}`;
+    case "undying":
+      return p.revivePct
+        ? `survive one fatal hit per run (heal to ${pct(p.revivePct)}% HP)`
+        : `heal ${pct(p.lowHpHealPct)}% max HP when below ${p.thresholdPct}% HP (every ${sec(p.cooldownMs)}s)`;
+    case "critsplash":
+      return `crits splash ${pct(p.splashPct)}% within ${p.radius}px${p.slowPct ? ` + ${pct(p.slowPct)}% slow ${sec(p.slowMs)}s` : ""}`;
+    case "xpstreak":
+      return `chained kills ramp +${pct(p.perKillPct)}%/kill up to +${pct(p.maxPct)}% XP`;
+  }
+}
+
 // Public wrapper — defaults to tier 1 (biome 1).
 export function relicEffectText(def: RelicDef, powerTier = 1): string {
   return scaledEffectText(def, powerTier);
@@ -631,8 +687,19 @@ export class RelicManager {
       return { success: false, rarity: t.rarity };
     }
     this.misses[t.rarity] = 0;
-    const pool = RELIC_POOLS[resultRarity];
+    let pool = RELIC_POOLS[resultRarity];
     if (!pool.length) return null; // every rarity has a pool; guard for safety
+    // S4: never hand back a Rare/Mythic id the player already owns — those are
+    // the "chase" relics, and a duplicate would only contest its own family slot
+    // (usually auto-declining), reading as a wasted lucky roll. Common/Uncommon
+    // can still repeat — they churn through the family-dominance compare fine and
+    // their pools are too small to reliably exclude. Guard the (unlikely) case of
+    // owning every id in the pool by falling back to the full pool.
+    if (resultRarity === "rare" || resultRarity === "mythic") {
+      const owned = new Set(Object.values(this.instances).map((i) => i.id));
+      const fresh = pool.filter((id) => !owned.has(id));
+      if (fresh.length) pool = fresh;
+    }
     const id = pool[Math.floor(rng() * pool.length)];
     const family = RELIC_DEFS[id].family;
     const base: RollResult = { success: true, rarity: resultRarity, id, powerTier: t.powerTier, pity: pityHit };
@@ -743,6 +810,19 @@ export class RelicManager {
       out.push({ key, label, total: fmt(total), sources });
     }
     return out;
+  }
+
+  // The active unique proc of a given kind (at most one — ≤1 relic per family and
+  // kind↔family), with its power tier so MainScene can scale magnitude params by
+  // powerTierMult() at the use site. null = no owned relic has this proc.
+  unique(kind: UniqueKind): { params: Record<string, number>; powerTier: number } | null {
+    for (const family of RELIC_FAMILIES) {
+      const inst = this.instances[family];
+      if (!inst) continue;
+      const u = RELIC_DEFS[inst.id].unique;
+      if (u && u.kind === kind) return { params: u.params, powerTier: inst.powerTier };
+    }
+    return null;
   }
 
   // Sum an effect channel across all owned instances (one per family), each

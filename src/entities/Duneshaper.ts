@@ -175,13 +175,13 @@ export class Duneshaper extends Enemy {
       y: cfg.y,
       texture: "duneshaper",
       displayName: "The Duneshaper",
-      // The final boss drops the Boss Refined Trophy (Rare, 50% roll-up to
-      // Mythic) for consistency with the Gremlin King — though killing the
-      // Duneshaper ENDS the run, so this drop is unreachable in practice (kept
-      // for correctness / a future continue-mode). Plus ember shards.
+      // The final boss drops a Tier-2 Boss Trophy (guaranteed Mythic, ×1.5
+      // magnitude — S4) — though killing the Duneshaper ENDS the run, so this
+      // drop is unreachable in practice (kept for correctness / a future
+      // continue-mode). Plus ember shards.
       loot: [
         { resource: "ember_shard", min: 5, max: 8 },
-        { resource: "boss_refined_trophy", min: 1, max: 1 },
+        { resource: "boss_refined_trophy_t2", min: 1, max: 1 },
       ],
       maxHealth: MAX_HEALTH,
       biteDamage: 0, // all damage flows through checkPlayerHit() / projectiles

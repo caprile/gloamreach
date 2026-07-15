@@ -223,7 +223,7 @@ const ENEMIES: EnemyStat[] = [
       { label: "Charge (line, dodgeable)", damage: 55, telegraphMs: 850 },
       { label: "Ground Slam (AoE 150px + knockback)", damage: 55, telegraphMs: 950 },
     ],
-    loot: "Gremlin King's Heart (Phase-4 smelting gate) + 1 Boss Trophy (Rare, 50% → Mythic)",
+    loot: "Gremlin King's Heart (Phase-4 smelting gate) + 1 Boss Trophy (S4: guaranteed Mythic, Tier 1)",
     notes:
       "Poise 100 (stagger → 1.5× dmg for 3s). Enrages <50% HP: shorter telegraphs, faster — not more damage. The one boss you kill mid-run, so its Boss Trophy is actually spendable.",
   },
@@ -265,7 +265,7 @@ const ENEMIES: EnemyStat[] = [
       { label: "Gloamfire Lance @70% HP (tracking-then-committed SWEEPING magic beam, 360px / ±11°, sweeps ±20° on strike)", damage: 54, telegraphMs: 640 },
       { label: "Sunscorch Barrage @50% HP (7-circle magic carpet)", damage: 34, telegraphMs: 1100 },
     ],
-    loot: "5-8 Ember Shard + 1 Boss Trophy (Rare, 50% → Mythic — unreachable, kill wins the run)",
+    loot: "5-8 Ember Shard + 1 Tyrant Trophy (S4: guaranteed Mythic, Tier 2 — unreachable, kill wins the run)",
     notes:
       "SUNSCORCH BADLANDS FINAL BOSS + WIN-CONDITION (demotes the Gremlin King to a mid-boss). Poise 170 (stagger → 1.35× dmg for 2.2s). Scale 2.3. Resists magic ×0.5, weak to melee (slash/blunt/pierce ×1.3). Phase-gated ESCALATION: 3 attacks at full HP, +Gloamfire Lance at 70% HP, +Sunscorch Barrage AND enrage timing at 50% HP. A caster — holds ~220px and casts, magic attacks bypass flat armor, only Sand Spikes is physical. Summoned by offering an Effigy of the Duneshaper at any of the 3 badlands Tyrant Altars (crafting the effigy reveals them all on the map). Regens 14 HP/s while deaggro'd. S3 (the user: felt easier than the mid-boss): HP 1050→1250; ATTACK_COOLDOWN 900→700ms; the LANCE now tracks the player through 60% of the wind-up then commits + SWEEPS ±20° on the strike (was locked at telegraph start — trivially sidesteppable); Sand Spikes reworked from 3 spaced circles to a tracked 5-circle CROSS (distinct from the Hexling, only a diagonal run/dash clears it).",
   },
@@ -529,16 +529,17 @@ function renderRelics(): string {
     badlands elite trophies are <b>Tier 2</b> (×1.5 magnitude, Phase 5). The run's <b>first
     roll is a guaranteed success</b>; beyond that a per-rarity pity counter guarantees a
     base-rarity success after N misses.</p>
-    <p class="note"><b>Phase 5 — family loadout, not stacking.</b> Every relic belongs to one
-    of 8 <b>families</b> and a player holds at most one relic per family. Rolling into an
-    owned family compares the two: the new relic <b>auto-replaces</b> if it's strictly better
-    on every shared stat, <b>auto-declines</b> if the old one is, or — if neither dominates
-    (e.g. a differing secondary stat) — the Relic Forge asks the player to pick Keep New /
-    Keep Old. Displacing/upgrading the OLD relic refunds nothing; discarding the just-rolled
-    relic refunds <b>50% of its trophy's shard cost</b> (raw trophies are free → 0; refined
-    trophies → 1 shard) — a refund is only ever half a <i>paid</i> cost, so rerolling can't net
-    shards (playtest exploit fix). Effect numbers below were <b>trimmed to ~0.625×</b> their
-    original values this pass (a Tier-1 relic is now a modest edge with headroom above it).</p>`;
+    <p class="note"><b>Family loadout, not stacking.</b> Every relic belongs to one of 8
+    <b>families</b> and a player holds at most one relic per family. Rolling into an owned
+    family resolves by <b>rarity, then power tier</b> (2026-07-15 redesign — one curated relic
+    per rarity per family, so higher rarity is always a strict upgrade): higher rarity
+    <b>auto-replaces</b>, lower <b>auto-declines</b>. Discarding the just-rolled relic refunds
+    <b>50% of its trophy's shard cost</b> (raw trophies free → 0; refined → 1 shard).
+    <b>Single-family + unique procs:</b> Common/Uncommon are a small flat stat that
+    <b>plateaus at Uncommon</b>; Rare/Mythic reuse that stat and add a bespoke conditional
+    proc (the effect text below shows both) — so a relic is never a growing damage/HP
+    multiplier, and all buff categories are additive-within-category (no exponential
+    compounding).</p>`;
 
   html += `<h3>Trophy → outcome odds</h3><table><thead><tr>
     <th>Trophy</th><th>Trophy rarity</th><th class="num">Any relic</th><th>Outcome breakdown</th>
@@ -553,7 +554,8 @@ function renderRelics(): string {
     hexling_trophy: "Elite Hexling (badlands)",
     sandmaw_trophy: "Elite Sandmaw (badlands)",
     gremlin_king_fang: "Retired — the King now drops the Gremlin King's Heart (a Phase-4 smelting material) + the Boss Trophy, not this",
-    boss_refined_trophy: "Bosses (Gremlin King + Duneshaper) — bespoke odds: Rare with a 50% roll-up to Mythic, never fails",
+    boss_refined_trophy: "Gremlin King (S4) — guaranteed Mythic, Tier 1, never fails",
+    boss_refined_trophy_t2: "The Duneshaper (S4) — guaranteed Mythic, Tier 2 (×1.5), never fails",
     refined_trophy_uncommon: "Refinement (Gloaming Vein, Gloam Shards) — roll-only",
     refined_trophy_uncommon_t2: "Refinement (badlands, Ember Shards) — roll-only",
     refined_trophy_rare: "Refinement (scaffold) — roll-only",
