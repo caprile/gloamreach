@@ -246,21 +246,21 @@ const ENEMIES: EnemyStat[] = [
   },
   {
     name: "Cinderwrought (MINI-BOSS)",
-    hp: 260,
-    // 2026-07-15: weakness REMOVED (fully neutral — weakness stacked too hard with crit/Onslaught); poise 45→60 (harder to stagger).
+    hp: 650,
+    // PB17: SOLO + tanky (260→650) + UNSTAGGERABLE (no poise mechanic). Fully neutral to every type.
     speed: 52,
     aggro: 260,
     attacks: [
-      { label: "Cinder Cone (locked-direction FIRE cone, 235px / ±32°, bypasses armor)", damage: 32, telegraphMs: 750 },
-      { label: "Forge Hammer (heavy PHYSICAL front-arc smash, 168px / ±70°, armor applies)", damage: 40, telegraphMs: 680 },
+      { label: "Cinder Cone (RE-AIMS at player on fire — locks at execute, FIRE cone 300px / ±44°, bypasses armor; can't walk out, must DASH)", damage: 44, telegraphMs: 720 },
+      { label: "Forge Hammer (heavy PHYSICAL front-arc smash, re-aims at execute, 235px / ±70°, armor applies; back-pedal fails at 95px/s, must DASH)", damage: 52, telegraphMs: 660 },
     ],
-    loot: "Each guard: 2-4 Ember Shard; ONE of the two also drops 1 Ember-Refined Trophy (Uncommon, Tier 2). Ore nodes crack open only once BOTH guards die.",
+    loot: "5-8 Ember Shard + 1 Ember-Refined Trophy (Uncommon, Tier 2). Its ring of shielded Ember Deposits cracks open on death.",
     notes:
-      "Sunken Forge guardian (badlands Phase 3 POI 2). 5 forges × 2 Cinderwroughts each = 10 (the user: 2 guards per forge so the ember sites reliably drop Ember Shards — the native Ember Shard source, was Gloam). Ore only cracks once BOTH guards die. S6 rebalance (the user: too tough with two perma-attacking overlapping guards): poise 70→45 (stagger comes up more often, still ×1.5 dmg for 2.5s), attack cooldown 650→1050ms (more downtime — stagger one while you 1v1 the other), telegraphs lengthened (cone 620→750ms, hammer 560→680ms), damage cut (cone 46→32, hammer 58→40). 2026-07-15: ALL WEAKNESS REMOVED — fully NEUTRAL to every type (weakness stacked too hard with crit/Onslaught on a mini-boss); poise 45→60 (harder to stagger). Only the Cinder Cone still deals FIRE (bypasses flat armor); the Forge Hammer is now PHYSICAL (armor applies) — one fire + one physical attack. Scale 1.8, scored as an elite kill. Bespoke attacks: the Cinder Cone locks its direction at telegraph START (sidestep the wind-up) — the game's only cone; the Forge Hammer re-locks at execute and hits a wide short front wedge (back out to dodge). Regens 12 HP/s while deaggro'd. On death, its ring of shielded Ember Deposits crack open into mineable Cinderforged Ore (Phase 4 hook).",
+      "Sunken Forge guardian (badlands Phase 3 POI 2). 5 forges × 1 Cinderwrought each = 5. PB17 REWORK (the user: the old 2v1 of stationary fire-swingers felt awkward/incohesive vs the solo Gloamwarden): now ONE solo boss, HP 260→650, and CANNOT be staggered (poise mechanic removed entirely — a pure survive-and-DPS wall). Both attacks now RE-AIM at the player at execute (lock at execute, track through the wind-up) with wide/long hitboxes, so a slow-walking player (95px/s) can't sidestep or back-pedal out — the only reliable dodge is a dash's i-frames. Attack cooldown 850ms (was 1050 for the 2v1). Cinder Cone deals FIRE (bypasses flat armor); Forge Hammer is PHYSICAL (armor applies) — one fire + one physical attack. Scale 1.8, scored as an elite kill. Regens 12 HP/s while deaggro'd. On death, its shielded Ember Deposits crack open into mineable Cinderforged Ore.",
   },
   {
     name: "The Duneshaper (FINAL BOSS)",
-    hp: 1250,
+    hp: 2500,
     speed: 48,
     aggro: 300,
     attacks: [
@@ -272,7 +272,7 @@ const ENEMIES: EnemyStat[] = [
     ],
     loot: "5-8 Ember Shard + 1 Tyrant Trophy (S4: guaranteed Mythic, Tier 2 — unreachable, kill wins the run)",
     notes:
-      "SUNSCORCH BADLANDS FINAL BOSS + WIN-CONDITION (demotes the Gremlin King to a mid-boss). Poise 170 (stagger → 1.35× dmg for 2.2s). Scale 2.3. 2026-07-15: physical weakness REMOVED and the magic resist DROPPED (the user: fire is a magic subtype + the Ember Brand deals fire — resisting magic while fire-weak was contradictory). Its ONLY resistance line now is FIRE ×1.25 (weak); everything else neutral — burning it down (Ember Brand / Emberblink / Molten set-bonus fire) is the intended counter. Phase-gated ESCALATION: 3 attacks at full HP, +Gloamfire Lance at 70% HP, +Sunscorch Barrage AND enrage timing at 50% HP. A caster — holds ~220px and casts, magic attacks bypass flat armor, only Sand Spikes is physical. Summoned by offering an Effigy of the Duneshaper at any of the 3 badlands Tyrant Altars (crafting the effigy reveals them all on the map). Regens 14 HP/s while deaggro'd. S3 (the user: felt easier than the mid-boss): HP 1050→1250; ATTACK_COOLDOWN 900→700ms; the LANCE now tracks the player through 60% of the wind-up then commits + SWEEPS ±20° on the strike (was locked at telegraph start — trivially sidesteppable); Sand Spikes reworked from 3 spaced circles to a tracked 5-circle CROSS (distinct from the Hexling, only a diagonal run/dash clears it).",
+      "SUNSCORCH BADLANDS FINAL BOSS + WIN-CONDITION (demotes the Gremlin King to a mid-boss). PB17 (the user): HP 1250→2500 (≥2× tankier — a real endurance fight) and poise 170→400 (scaled MORE than the HP bump so it staggers genuinely less often, not just over a longer fight). Poise 400 (stagger → 1.35× dmg for 2.2s). Scale 2.3. 2026-07-15: physical weakness REMOVED and the magic resist DROPPED (the user: fire is a magic subtype + the Ember Brand deals fire — resisting magic while fire-weak was contradictory). Its ONLY resistance line now is FIRE ×1.25 (weak); everything else neutral — burning it down (Ember Brand / Emberblink / Molten set-bonus fire) is the intended counter. Phase-gated ESCALATION: 3 attacks at full HP, +Gloamfire Lance at 70% HP, +Sunscorch Barrage AND enrage timing at 50% HP. A caster — holds ~220px and casts, magic attacks bypass flat armor, only Sand Spikes is physical. Summoned by offering an Effigy of the Duneshaper at any of the 3 badlands Tyrant Altars (crafting the effigy reveals them all on the map). Regens 14 HP/s while deaggro'd. S3 (the user: felt easier than the mid-boss): HP 1050→1250; ATTACK_COOLDOWN 900→700ms; the LANCE now tracks the player through 60% of the wind-up then commits + SWEEPS ±20° on the strike (was locked at telegraph start — trivially sidesteppable); Sand Spikes reworked from 3 spaced circles to a tracked 5-circle CROSS (distinct from the Hexling, only a diagonal run/dash clears it).",
   },
 ];
 

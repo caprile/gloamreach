@@ -6616,3 +6616,70 @@ cripples enemy movement"/"Focused …"; dashboard weapons tab renders the Arc co
 errors. No `RECIPES.md` change (no recipe/cost edits — weapon damage stats aren't in it). **Next in the
 plan:** S8 (biome-2 bow + arrows + ember material tweak, **Opus**) — the last session, and it should
 fit these finalized identities.
+
+### S8 — Biome-2 Warbow + arrows + ember material tweak (2026-07-15, Opus)
+The **final** session of the 8-session 2026-07-15 playtest plan
+(`playtest-2026-07-15-session-plan.md`) — with this, that plan is fully shipped. Adds the badlands
+**ranged gear tier** and enriches the ember reforge recipes. Locked/refined live with the user: **one
+bow → two via reforge** (base Sunsteel + Embersteel reforge, not two independent bows); arrow yields
+**50 per craft** from either metal; ember cores use **`hex_essence`, not `gloam_shard`** (gloam is
+relic currency).
+
+- **The bows (`Weapons.ts` — fully additive, compiler-forced rows in every `Record`):**
+  - `sunsteel_warbow` — forged ranged, dmg **11** / cd **750ms** / stam **12** / crit **7%×1.55** /
+    range **380px** / projectile **600px/s** / arc `{0,0,0}` (never sweeps).
+  - `embersteel_warbow` — the reforge, dmg **15** / cd **730ms** / stam **15** / crit **8%×1.6** /
+    range **400px** / projectile **640px/s**. DPS 14.7 → 20.5: a real tier above the Slingshot (2),
+    still below forged melee since safe range is the trade (locked "ranged is an opener" design).
+  - `RANGED_WEAPONS` entries `ammoItemKey: "arrows"`, `projectileTexture: "arrow_projectile"` (arrow
+    art points +x, so no `artAngleOffset`). No `WeaponUpgrades` right-click tiers — the reforge IS the
+    bow's upgrade path (consistent with the slingshot/javelin ranged precedent).
+- **Zero `MainScene.ts` changes.** An Explore pass confirmed the ranged pipeline (`tryRangedAttack`,
+  `spawnProjectile`, the player-projectile→enemy overlap that hardcodes `"ranged"`, the `"ammo"`
+  EquipSlot merge/decrement/auto-refill, hover/aim via `maxRangePx`, prompt gating) is entirely
+  data-driven and hardcodes no weapon key — a bow "just works" once in `RANGED_WEAPONS`. Bow &
+  slingshot **share the single `"ammo"` slot**: loading arrows evicts any pellets back to the backpack
+  (existing `equipArmorFromContainer` merge-by-key path, unchanged).
+- **Arrows (`Items.ts` + `Recipes.ts`):** `arrows` ammo item (`armorSlot: "ammo"`, maxStack 99,
+  not hotbarable). Two recipes, both output the same `arrows` and both `requiresDiscovered:
+  ["sunsteel_warbow"]` (mirrors the pellet→slingshot gate): **Sunsteel** `1 sunsteel_ingot + 5 wood →
+  50` (WB Lvl 3) and **Embersteel** `1 embersteel_ingot + 5 wood → 50` (WB Lvl 4) — same arrows, an
+  alt-metal convenience (ammo carries no damage in this engine; the bow does). `warbow`/`arrows` added
+  to `BADLANDS_ITEM_KEYS` so they file under the badlands inventory tab.
+- **BootScene:** `icon_sunsteel_warbow` (steel stave + string + nocked steel-tip arrow),
+  `icon_embersteel_warbow` (dark stave, ember-orange string/head, ironbark shaft), `icon_arrows`
+  (fletched bundle), `arrow_projectile` (16×6 horizontal shaft+head).
+- **Ember material tweak (the user: "ALL ember weapons AND armor should use other ingredients too, on
+  theme with their sunsteel precursor").** Each T2 reforge now mirrors its precursor's secondary
+  materials + upgrades wood→ironbark + adds `hex_essence`: helm `+hex1`; cuirass `+bones4 +hex2`;
+  greaves `+cragscale2 +hex1`; emberhide hood/vest/leggings each get their pelt/chitin(/bones) back
+  `+hex1`; warhammer `+hex2`; sword `wood2→ironbark2 +hex2`; pike `+hex2`; Ember Brand `+ironbark2`;
+  Embersteel Warbow `{ sunsteel_warbow, embersteel_ingot3, ironbark3, duskrunner_pelt2, hex_essence2 }`.
+  Sinks the under-used, non-relic `hex_essence` (Hexling drop) across the whole ember tier.
+
+`tsc` clean; verified live via `preview_start` + `javascript_tool`: all 4 textures exist; every
+Weapons/Recipes value matches spec; end-to-end fire (equip via hotbar → load arrows → fire a 200px
+enemy) = ammo 10→9, +1 `playerProjectiles`, cooldown set, and a direct `resolveWeaponHit(...,'ranged')`
+dealt 11 (HP 20→9); out-of-range (500>380), no-ammo, and wrong-ammo (pellets loaded) all no-op without
+consuming ammo or spawning a projectile; all icons render at readable size; zero console errors.
+`RECIPES.md` synced (recipe table + Ranged-weapons table + enhanced-tier note). Dashboard needs no
+manual edit — Items/Recipes tabs read the data modules live; its weapon-stats table is melee-only by
+design (slingshot/javelin were never listed there either).
+
+**Same-session follow-up — weapon-aware ammo slot.** Playtest: after arrows ran out, pellets left over
+from Slingshot use sat "loaded" in the shared `"ammo"` slot while a Warbow was equipped, and the bow
+couldn't fire them — reading as the game auto-loading the wrong ammo. (Traced exhaustively: no code
+path actually injects pellets — the fire-refill only tops up the *same* loaded key; the real issue was
+the generic slot accepting any `armorSlot:"ammo"` item regardless of the equipped weapon.) Fix: new
+`MainScene.reconcileAmmoSlot()`, called at the end of `recomputeEquipped()`, evicts any loaded ammo
+whose key ≠ the equipped ranged weapon's `ammoItemKey` back to the backpack and auto-loads the correct
+ammo from the backpack if carried. So a Warbow's slot only ever holds Arrows, the Slingshot's only
+Pellets; switching bow↔slingshot swaps ammo seamlessly; manually loading the wrong ammo into a bow
+bounces straight back; and with no matching ammo the slot goes empty (never the wrong type). No-op for
+melee/unarmed + the self-consuming Javelin (`ammoItemKey` null); guarded against pre-init/no-churn.
+`tsc` clean; verified live (4 scenarios: pellets→bow evicts+loads arrows; bow→slingshot swaps back;
+manual wrong-load bounces; no-matching-ammo → empty; then fires arrows 5→4 + projectile). Zero console
+errors.
+
+**The 8-session 2026-07-15 playtest plan is complete. Next up:** no locked milestone — likely a broader playtest/tuning pass or a biome-3 scoping
+session (master roadmap's "at least 5 total biomes").

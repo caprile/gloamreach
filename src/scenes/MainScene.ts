@@ -4930,16 +4930,15 @@ export class MainScene extends Phaser.Scene {
     pushLights: boolean,
   ): void {
     forge.cracked = false;
-    // Two Cinderwroughts guard each forge (the user) — flanking the ruin so they
-    // don't overlap. BOTH drop Ember Shards (reliable tier-2 refine currency),
-    // but only the first drops the refined trophy so a site doesn't flood them.
+    // ONE Cinderwrought guards each forge (PB17, the user) — a solo, tanky,
+    // unstaggerable mini-boss reads far more cohesive than the old 2v1 of
+    // stationary fire-swingers. The single drop is bumped (5-8 Ember Shards +
+    // the refined trophy) so the per-forge payoff stays high.
     forge.bosses = [];
-    [-70, 70].forEach((dx, i) => {
-      const wrought = new Cinderwrought(this, { x: forge.x + dx, y: forge.y, dropTrophy: i === 0 });
-      forge.bosses.push(wrought);
-      this.enemies.push(wrought);
-      this.enemyGroup.add(wrought);
-    });
+    const wrought = new Cinderwrought(this, { x: forge.x, y: forge.y, dropTrophy: true });
+    forge.bosses.push(wrought);
+    this.enemies.push(wrought);
+    this.enemyGroup.add(wrought);
 
     const oreNodes: ResourceNode[] = [];
     for (let i = 0; i < FORGE_ORE_COUNT; i++) {
@@ -7479,7 +7478,8 @@ export class MainScene extends Phaser.Scene {
       this.applyTierVisual(image, placedTier);
     }
     this.placedObjects.push(image);
-    this.sfx.craft(); // placing a crafted station is a "you built something" moment
+    // No SFX on placement (the user: "placing benches down doesn't need to make a
+    // noise") — the craft cue already plays for non-placeable crafts.
     // A placed station counts as "discovered" so its upgrades become visible
     // while it's on the ground. Previously a Smelter's Ember Crucible upgrade
     // only appeared once the Smelter was picked back up into the backpack

@@ -2,7 +2,14 @@
 
 ## Current State
 
-_Living snapshot — edit in place, never append. Last shipped: **PB16 — Playtest batch: crit/Onslaught
+_Living snapshot — edit in place, never append. Last shipped: **PB17 — Boss tuning + Cinderwrought solo
+rework + silent placement** (2026-07-16, Opus). A small badlands-playtest batch (the user: "felt really
+good"): (1) object **placement is now silent** (dropped the craft-cue on place); (2) the **Duneshaper**
+(final boss) is **HP 1250→2500 + poise 170→400** (tankier, staggers less); (3) the **Cinderwrought** was
+reworked from an awkward 2v1 into a **solo, tanky (260→650 HP), unstaggerable** mini-boss whose two attacks
+**re-aim at execute** (wide/long → can't be walked out of, must be dash-dodged), still dropping **5-8 Ember
+Shards + a Refined Trophy**. See PB17 below.
+Prior: **PB16 — Playtest batch: crit/Onslaught
 rework + 15 fixes** (2026-07-15, Opus). A 16-item playtest batch off the user's lvl-14 run. **Combat math
 rework (the headline):** crit and Onslaught are now **additive conditional bonuses on the normal hit**,
 never multiplied together (was crit×onslaught → the "17→84 / 196-dmg" spikes; now normal 24 → crit 56 →
@@ -387,6 +394,43 @@ below + [[survivor-rpg-dev-console]].
 
 > Older entries in STATUS-archive.md.
 
+### PB17 — Boss tuning + Cinderwrought solo rework + silent placement (2026-07-16, Opus)
+A small playtest batch off the user's badlands run ("felt really good" overall). Three items:
+1. **Silent bench placement** — removed the `sfx.craft()` cue that fired on every object
+   placement (`MainScene.attemptPlaceObject`, the user: "placing benches down doesn't need to make
+   a noise"). Actual crafting of non-placeables still plays the craft cue; only placement is now
+   silent.
+2. **Duneshaper (the "2nd boss") tankier + staggers less** — HP **1250→2500** (≥2× — a real
+   endurance fight) and poise **170→400** (scaled MORE than the HP bump so it staggers genuinely
+   less often, not just over a longer fight — the user: "shouldn't stagger so fast").
+3. **Cinderwrought rework — solo, tanky, unstaggerable, must-dash attacks** (the user: "emberwrought
+   fight still feels awkward… the Gloom guy is a much more cohesive mini boss"). **Diagnosis:** the
+   Sunken Forge spawned **two** Cinderwroughts (2v1) vs the Gloamwarden's clean solo fight, and both
+   its attacks were stationary front-swings that could be walked out of. **Fix (locked with the user):**
+   - **One** Cinderwrought per forge now (`armForge` spawns 1, was `[-70,70].forEach`). The 5 forges =
+     5 mini-bosses (was 10).
+   - **Way tankier:** HP **260→650**.
+   - **Can't be staggered:** the entire poise/stagger machinery was removed from `Cinderwrought.ts`
+     (poise field, poise bar, `updatePoiseRegen`, `enterStaggered`, the `staggered` state). It's a pure
+     survive-and-DPS wall now. `isStaggered()` kept (always `false`) for MainScene's shared
+     `staggerMultiplierFor` switch; `CINDERWROUGHT_STAGGER_DAMAGE_MULTIPLIER` kept exported (inert = 1).
+   - **Attacks force i-frames:** both the **Cinder Cone** (300px / ±44° fire, bypasses armor, 32→**44**)
+     and the **Forge Hammer** (235px / ±70° physical, 40→**52**) now **re-aim at the player at execute**
+     (lock at execute, track through the wind-up) with wide/long hitboxes — a slow-walking player (95px/s)
+     can't sidestep or back-pedal out, so the only reliable dodge is a dash's i-frames (`applyDamageToPlayer`
+     skips damage during `invulnerableUntil`, while `checkPlayerHit` still consumes the swing via
+     `hasHitThisAttack`). Attack cooldown 1050→**850ms** (solo cadence, matches the Gloamwarden).
+   - **Ember shards stay high** (the user: "gotta be worth it"): the single boss drops **5-8 Ember Shard +
+     1 Refined Trophy (Uncommon T2)** (was 2-4 across two guards). `onCinderwroughtKilled` already works with
+     a one-element `bosses` array (cracks the ore once the sole guard dies).
+
+   `tsc` clean; verified live via `javascript_tool`: 5 forges × 1 boss, Cinderwrought HP 650 / no poise bar /
+   `isStaggered()` false / loot 5-8 shards + trophy; Duneshaper HP 2500 / poiseMax 400; the Cinder Cone
+   re-aims (telegraph started with the player to the RIGHT, player moved DOWN mid-wind-up → attack locked to
+   90° and hit at the new position); Forge Hammer hits in-range/center (52 dmg) and correctly misses beyond
+   range and behind the boss; no console errors. Dashboard Enemies tab updated (both bosses). No `RECIPES.md`
+   change (enemy loot isn't tracked there). See [[survivor-rpg-biome-2-plan]].
+
 ### PB16 — Playtest batch: crit/Onslaught rework + 15 fixes (2026-07-15, Opus)
 Off the user's lvl-14 playtest ("almost 1-3 shotting everything by steel+embersteel; 17→84, 196 hits —
 crit feels bananas"). Root cause diagnosed live (not a math bug): **Onslaught (every-4th-hit +120%) was a
@@ -476,70 +520,3 @@ power tier. Fix locked with the user.
   Positioned off `hotbarUI.left`/`.bottom`, growing left + wrapping up. The timed food-buff bar
   (`BuffBarUI`, above HP) stays separate. Verified live: 5-icon strip (4 relics + Embersteel set),
   Onslaught count "3"+glow, Guardian 27px cooldown overlay, hover tooltips, no console errors.
-
-### S8 — Biome-2 Warbow + arrows + ember material tweak (2026-07-15, Opus)
-The **final** session of the 8-session 2026-07-15 playtest plan
-(`playtest-2026-07-15-session-plan.md`) — with this, that plan is fully shipped. Adds the badlands
-**ranged gear tier** and enriches the ember reforge recipes. Locked/refined live with the user: **one
-bow → two via reforge** (base Sunsteel + Embersteel reforge, not two independent bows); arrow yields
-**50 per craft** from either metal; ember cores use **`hex_essence`, not `gloam_shard`** (gloam is
-relic currency).
-
-- **The bows (`Weapons.ts` — fully additive, compiler-forced rows in every `Record`):**
-  - `sunsteel_warbow` — forged ranged, dmg **11** / cd **750ms** / stam **12** / crit **7%×1.55** /
-    range **380px** / projectile **600px/s** / arc `{0,0,0}` (never sweeps).
-  - `embersteel_warbow` — the reforge, dmg **15** / cd **730ms** / stam **15** / crit **8%×1.6** /
-    range **400px** / projectile **640px/s**. DPS 14.7 → 20.5: a real tier above the Slingshot (2),
-    still below forged melee since safe range is the trade (locked "ranged is an opener" design).
-  - `RANGED_WEAPONS` entries `ammoItemKey: "arrows"`, `projectileTexture: "arrow_projectile"` (arrow
-    art points +x, so no `artAngleOffset`). No `WeaponUpgrades` right-click tiers — the reforge IS the
-    bow's upgrade path (consistent with the slingshot/javelin ranged precedent).
-- **Zero `MainScene.ts` changes.** An Explore pass confirmed the ranged pipeline (`tryRangedAttack`,
-  `spawnProjectile`, the player-projectile→enemy overlap that hardcodes `"ranged"`, the `"ammo"`
-  EquipSlot merge/decrement/auto-refill, hover/aim via `maxRangePx`, prompt gating) is entirely
-  data-driven and hardcodes no weapon key — a bow "just works" once in `RANGED_WEAPONS`. Bow &
-  slingshot **share the single `"ammo"` slot**: loading arrows evicts any pellets back to the backpack
-  (existing `equipArmorFromContainer` merge-by-key path, unchanged).
-- **Arrows (`Items.ts` + `Recipes.ts`):** `arrows` ammo item (`armorSlot: "ammo"`, maxStack 99,
-  not hotbarable). Two recipes, both output the same `arrows` and both `requiresDiscovered:
-  ["sunsteel_warbow"]` (mirrors the pellet→slingshot gate): **Sunsteel** `1 sunsteel_ingot + 5 wood →
-  50` (WB Lvl 3) and **Embersteel** `1 embersteel_ingot + 5 wood → 50` (WB Lvl 4) — same arrows, an
-  alt-metal convenience (ammo carries no damage in this engine; the bow does). `warbow`/`arrows` added
-  to `BADLANDS_ITEM_KEYS` so they file under the badlands inventory tab.
-- **BootScene:** `icon_sunsteel_warbow` (steel stave + string + nocked steel-tip arrow),
-  `icon_embersteel_warbow` (dark stave, ember-orange string/head, ironbark shaft), `icon_arrows`
-  (fletched bundle), `arrow_projectile` (16×6 horizontal shaft+head).
-- **Ember material tweak (the user: "ALL ember weapons AND armor should use other ingredients too, on
-  theme with their sunsteel precursor").** Each T2 reforge now mirrors its precursor's secondary
-  materials + upgrades wood→ironbark + adds `hex_essence`: helm `+hex1`; cuirass `+bones4 +hex2`;
-  greaves `+cragscale2 +hex1`; emberhide hood/vest/leggings each get their pelt/chitin(/bones) back
-  `+hex1`; warhammer `+hex2`; sword `wood2→ironbark2 +hex2`; pike `+hex2`; Ember Brand `+ironbark2`;
-  Embersteel Warbow `{ sunsteel_warbow, embersteel_ingot3, ironbark3, duskrunner_pelt2, hex_essence2 }`.
-  Sinks the under-used, non-relic `hex_essence` (Hexling drop) across the whole ember tier.
-
-`tsc` clean; verified live via `preview_start` + `javascript_tool`: all 4 textures exist; every
-Weapons/Recipes value matches spec; end-to-end fire (equip via hotbar → load arrows → fire a 200px
-enemy) = ammo 10→9, +1 `playerProjectiles`, cooldown set, and a direct `resolveWeaponHit(...,'ranged')`
-dealt 11 (HP 20→9); out-of-range (500>380), no-ammo, and wrong-ammo (pellets loaded) all no-op without
-consuming ammo or spawning a projectile; all icons render at readable size; zero console errors.
-`RECIPES.md` synced (recipe table + Ranged-weapons table + enhanced-tier note). Dashboard needs no
-manual edit — Items/Recipes tabs read the data modules live; its weapon-stats table is melee-only by
-design (slingshot/javelin were never listed there either).
-
-**Same-session follow-up — weapon-aware ammo slot.** Playtest: after arrows ran out, pellets left over
-from Slingshot use sat "loaded" in the shared `"ammo"` slot while a Warbow was equipped, and the bow
-couldn't fire them — reading as the game auto-loading the wrong ammo. (Traced exhaustively: no code
-path actually injects pellets — the fire-refill only tops up the *same* loaded key; the real issue was
-the generic slot accepting any `armorSlot:"ammo"` item regardless of the equipped weapon.) Fix: new
-`MainScene.reconcileAmmoSlot()`, called at the end of `recomputeEquipped()`, evicts any loaded ammo
-whose key ≠ the equipped ranged weapon's `ammoItemKey` back to the backpack and auto-loads the correct
-ammo from the backpack if carried. So a Warbow's slot only ever holds Arrows, the Slingshot's only
-Pellets; switching bow↔slingshot swaps ammo seamlessly; manually loading the wrong ammo into a bow
-bounces straight back; and with no matching ammo the slot goes empty (never the wrong type). No-op for
-melee/unarmed + the self-consuming Javelin (`ammoItemKey` null); guarded against pre-init/no-churn.
-`tsc` clean; verified live (4 scenarios: pellets→bow evicts+loads arrows; bow→slingshot swaps back;
-manual wrong-load bounces; no-matching-ammo → empty; then fires arrows 5→4 + projectile). Zero console
-errors.
-
-**The 8-session 2026-07-15 playtest plan is complete. Next up:** no locked milestone — likely a broader playtest/tuning pass or a biome-3 scoping
-session (master roadmap's "at least 5 total biomes").

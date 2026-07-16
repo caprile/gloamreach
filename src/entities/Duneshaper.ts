@@ -24,7 +24,7 @@ import type { ProjectileConfig, ProjectileHost } from "./Projectile";
 export type TyrantState = "idle" | "telegraphing" | "executing" | "recovering" | "staggered";
 export type TyrantAttack = "volley" | "spikes" | "nova" | "lance" | "barrage";
 
-const MAX_HEALTH = 1250; // 1050→1250 (S3: the final boss felt easier than the mid-boss — more HP + sharper attacks, the user)
+const MAX_HEALTH = 2500; // 1250→2500 (PB17: the user wanted the final boss ≥2× tankier — a real endurance fight)
 export const DUNESHAPER_SCALE = 2.3;
 const AGGRO_RADIUS = 300;
 const LEASH_RADIUS = 580; // kited past this -> fully deaggros
@@ -32,10 +32,12 @@ const MOVE_SPEED = 48;
 const PREFERRED_RANGE = 220; // a caster: holds around here and casts, only closing if farther
 const DEAGGRO_REGEN_PER_SEC = 14; // claws HP back between engagements (roster precedent)
 
-// S2: harder to stagger-lock — poise up (170, more damage to break), the punish
-// window shorter (2.2s) and less rewarding (1.35× not 1.5×), and poise recovers
-// sooner + faster between engagements so it can't be chain-staggered.
-export const DUNESHAPER_MAX_POISE = 170;
+// S2: harder to stagger-lock — poise up, the punish window shorter (2.2s) and
+// less rewarding (1.35× not 1.5×), and poise recovers sooner + faster between
+// engagements so it can't be chain-staggered. PB17: poise 170→400 (the user:
+// "shouldn't stagger so fast") — scaled MORE than the 2× HP bump so staggers are
+// genuinely rarer, not just spread over a longer fight.
+export const DUNESHAPER_MAX_POISE = 400;
 export const DUNESHAPER_STAGGER_DAMAGE_MULTIPLIER = 1.35;
 const STAGGER_DURATION_MS = 2200;
 const POISE_REGEN_DELAY_MS = 3000;

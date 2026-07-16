@@ -3,74 +3,71 @@ import { Enemy } from "./Enemy";
 import type { IncomingDamageType } from "../systems/Weapons";
 
 // The Sunken Forge's guardian mini-boss (biome 2 Phase 3, POI 2). Bespoke AI
-// following the Gloamwarden/GremlinKing telegraph/poise pattern but a trimmed
-// sibling — two telegraphed attacks, a small poise/stagger bar, difficulty
-// sitting between an elite and the Gremlin King (per the "no shared boss
-// framework" lock). Extends Enemy for the HP-bar/loot/death machinery but
-// fully overrides update() (Snake/Boar/Gloamwarden precedent). Designed around
-// the player's existing dash/i-frame toolkit — no new player ability.
+// following the Gloamwarden/GremlinKing telegraph pattern but its OWN identity:
+// a SOLO, heavily-armored anvil-boss that CANNOT be staggered. Extends Enemy for
+// the HP-bar/loot/death machinery but fully overrides update() (Snake/Boar/
+// Gloamwarden precedent).
 //
-// Its two attacks are deliberately NOT Gloamwarden's leap-smash/eruption or the
-// Gremlin King's charge/radial-slam:
-//   • CINDER CONE — rears back, then exhales a fire cone in a LOCKED direction
-//     (the direction snaps to the player at telegraph START, so sidestepping
-//     during the long wind-up dodges it). No cone attack exists elsewhere in
-//     the game — this is the Cinderwrought's signature.
-//   • FORGE HAMMER — a heavy overhead front-arc smash that punishes standing at
-//     close range. Wide front wedge, short reach, big damage + knockback; the
-//     dodge is to back out of reach (or dash) during the wind-up.
-export type WroughtState = "idle" | "telegraphing" | "executing" | "recovering" | "staggered";
+// Reworked (PB17, the user): the old fight was a 2v1 of stationary fire-swingers
+// with attacks that could be walked out of — it read as chaotic, not cohesive
+// (unlike the solo Gloamwarden). Now it's ONE tanky boss whose attacks are
+// near-impossible to WALK out of and must be dashed through (i-frames):
+//   • CINDER CONE — rears back, then exhales a wide fire cone that RE-AIMS at the
+//     player at the moment it fires (locks at execute, tracks through the
+//     wind-up). You can't sidestep it — the fan follows you — so the dodge is a
+//     dash through the burst. No cone attack exists elsewhere in the game.
+//   • FORGE HAMMER — a heavy overhead front-arc smash with long reach; it locks
+//     onto the player at execute too, so backing out of the slow player-speed
+//     window doesn't clear it. Dash the overhead beat or eat it.
+// No stagger/poise mechanic: this boss is a straight survive-and-DPS wall, so the
+// player leans on their dash toolkit rather than a stagger-punish loop.
+export type WroughtState = "idle" | "telegraphing" | "executing" | "recovering";
 export type WroughtAttackType = "cone" | "hammer";
 
-const WROUGHT_MAX_HEALTH = 260; // 340→260 (PB2: now TWO guard each forge — trimmed so a two-boss fight is a step up, not an HP slog)
+const WROUGHT_MAX_HEALTH = 650; // solo & unstaggerable now — a real tanky wall (was 260 across two guards)
 export const CINDERWROUGHT_SCALE = 1.8;
 const AGGRO_RADIUS = 260;
 const LEASH_RADIUS = 520; // kited past this -> fully deaggros
 const MOVE_SPEED = 52;
 const DEAGGRO_REGEN_PER_SEC = 12; // claws HP back between engagements (GremlinKing/Gloamwarden precedent)
 
-export const WROUGHT_MAX_POISE = 60; // 70→45 (S6), 45→60 (2026-07-15: staggering too easy — nudged the threshold back up a bit)
-export const CINDERWROUGHT_STAGGER_DAMAGE_MULTIPLIER = 1.5; // punish-window bonus (mirrors the roster)
-const STAGGER_DURATION_MS = 2500;
-const POISE_REGEN_DELAY_MS = 4200; // 3500→4200 (S6: a stagger sticks a bit longer before poise starts clawing back)
-const POISE_REGEN_PER_SEC = 12;
-// A mini-boss stagger bar reads as a real mechanic — sits under the enlarged HP
-// bar (barScale) and matches its width (the user: "stagger bar too small").
-const POISE_BAR_H = 7;
+// Kept exported for MainScene's staggerMultiplierFor() switch — but this boss
+// can't stagger (isStaggered() always false), so the multiplier never applies.
+// The value is inert; left so the import/switch arm don't need churn.
+export const CINDERWROUGHT_STAGGER_DAMAGE_MULTIPLIER = 1;
 
-// Cinder Cone — locked-direction fire breath. Long readable wind-up; the cone
-// direction is fixed at telegraph start so a sidestep clears it.
-const CONE_TELEGRAPH_MS = 750; // 820→620 (S2), 620→750 (S6: lengthened back a bit — easier to read/dodge)
+// Cinder Cone — wide fire breath that RE-AIMS at the player when it fires. Long
+// readable wind-up; because it locks at execute (not telegraph start) and the
+// player walks slowly, you can't outrun the fan — dash through it.
+const CONE_TELEGRAPH_MS = 720;
 const CONE_IMPACT_MS = 420; // breath sustained; the hit lands once within this window
-const CONE_RECOVER_MS = 700;
-const CONE_RANGE = 235; // 210→235 (S2: reaches a step further so a lazy back-pedal doesn't clear it)
-const CONE_HALF_ANGLE = Phaser.Math.DegToRad(32); // ~64deg fan
+const CONE_RECOVER_MS = 650;
+const CONE_RANGE = 300; // long enough that a slow walk can't clear it in the wind-up
+const CONE_HALF_ANGLE = Phaser.Math.DegToRad(44); // ~88deg fan
 // Fire damage — bypasses flat armor (like magic), so it hurts even in full
-// plate. Bumped 30→46 (the user: "cinder guy damage is too low"): a forge boss
-// breathing fire should be a real threat, not a chip.
-const CONE_DAMAGE = 32; // 30→46 (S2), 46→32 (S6: too tough with two forges attacking at once)
+// plate. Solo boss now, so restored to a real threat (was nerfed to 32 for the
+// 2v1). Getting caught should really sting.
+const CONE_DAMAGE = 44;
 const CONE_KNOCKBACK = 140;
 
-// Forge Hammer — heavy overhead front-arc smash. Locks direction at execute;
-// the dodge is to leave the wide-but-short front wedge before it lands.
-const HAMMER_TELEGRAPH_MS = 680; // 720→560 (S2), 560→680 (S6: lengthened back a bit — easier to read/dodge)
+// Forge Hammer — heavy overhead front-arc smash. Locks direction at execute and
+// reaches far, so backing out at the slow player walk speed doesn't clear it;
+// dash the overhead beat instead.
+const HAMMER_TELEGRAPH_MS = 660;
 const HAMMER_IMPACT_MS = 150; // planted overhead beat — the strike window
-const HAMMER_RECOVER_MS = 780;
-const HAMMER_RANGE = 168; // 155→168 (S2: catches a player who only takes one step back)
+const HAMMER_RECOVER_MS = 720;
+const HAMMER_RANGE = 235; // long front reach — can't back-pedal out at 95px/s
 const HAMMER_HALF_ARC = Phaser.Math.DegToRad(70); // wide front wedge
-// Fire damage (the molten hammer) — bypasses armor; bumped 44→58 so getting
-// caught in the wedge is a genuine "you should have dodged" punish.
-const HAMMER_DAMAGE = 40; // 44→58 (S2), 58→40 (S6: too tough with two forges attacking at once)
-const HAMMER_KNOCKBACK = 240;
+// Physical (armor matters against the crushing blow) — restored to a solo-boss
+// value (was 40 for the 2v1). Big knockback.
+const HAMMER_DAMAGE = 52;
+const HAMMER_KNOCKBACK = 260;
 
 const MELEE_STOP_RANGE = 150; // both attacks reach from here; stops approaching inside it
 // Only START an attack when the player is actually reachable — the shorter attack
-// (Forge Hammer, 168) plus a margin, so whichever attack is picked can connect.
-// Previously it telegraphed the moment the cooldown was up REGARDLESS of distance
-// (2026-07-15 bug: it attacked/whiffed from up to AGGRO_RADIUS 260px). Out of
-// range now = keep approaching instead.
+// (Forge Hammer, 235) plus a margin, so whichever attack is picked can connect.
 const ATTACK_INIT_RANGE = HAMMER_RANGE + 24;
-const ATTACK_COOLDOWN_MS = 1050; // 850→650 (S2), 650→1050 (S6: more downtime — stagger one while you 1v1 the other)
+const ATTACK_COOLDOWN_MS = 850; // solo cadence (was 1050 to survive the 2v1) — matches the Gloamwarden
 // How close to spawn counts as "home" while wandering back deaggro'd (mirrors
 // GremlinKing/Gloamwarden) — below this it idles instead of micro-adjusting.
 const RETURN_HOME_EPS = 20;
@@ -93,17 +90,12 @@ export class Cinderwrought extends Enemy {
   private readonly spawnX: number;
   private readonly spawnY: number;
 
-  poise = WROUGHT_MAX_POISE;
-  private lastPoiseChipAt = -Infinity;
-
-  // The locked direction both attacks fire in (radians): the cone locks it at
-  // telegraph start, the hammer at execute.
+  // The locked direction both attacks fire in (radians) — both lock at EXECUTE
+  // (re-aim at the player when the attack fires) so neither can be sidestepped.
   private attackAngle = 0;
 
   private hasHitThisAttack = false;
 
-  private poiseBarBg: Phaser.GameObjects.Rectangle;
-  private poiseBarFill: Phaser.GameObjects.Rectangle;
   private telegraphGfx: Phaser.GameObjects.Graphics;
 
   constructor(scene: Phaser.Scene, cfg: { x: number; y: number; dropTrophy?: boolean }) {
@@ -113,71 +105,46 @@ export class Cinderwrought extends Enemy {
       texture: "cinderwrought",
       displayName: "Cinderwrought",
       // Guaranteed drop (the user): the badlands "ember guy" is the native Ember
-      // Shard source now (was Gloam — that never made sense for a badlands mob).
-      // BOTH guards of a Sunken Forge drop Ember Shards (the point of doubling
-      // them — reliable tier-2 refine currency), but only ONE drops the tier-2
-      // refined trophy (dropTrophy) so a two-guard site doesn't flood refined
-      // trophies at 2/site. Defaults true for a lone Cinderwrought.
+      // Shard source. Now a SOLO boss, so the single drop is bumped to keep the
+      // per-forge ember-shard payoff high — "gotta be worth it" (was 2-4 across
+      // two guards; now 5-8 from the one). Plus the tier-2 refined trophy.
       loot: [
-        { resource: "ember_shard", min: 2, max: 4 },
+        { resource: "ember_shard", min: 5, max: 8 },
         ...(cfg.dropTrophy ?? true ? [{ resource: "refined_trophy_uncommon_t2" as const, min: 1, max: 1 }] : []),
       ],
       maxHealth: WROUGHT_MAX_HEALTH,
       biteDamage: 0, // all damage flows through checkPlayerHit()
-      // No weaknesses (2026-07-15, playtest): weakness on a mini-boss stacked too
-      // hard with crit/Onslaught. Fully neutral to every physical type now — it's
-      // a straight DPS check, not a bring-the-right-weapon puzzle.
+      // No weaknesses (playtest): weakness on a mini-boss stacked too hard with
+      // crit/Onslaught. Fully neutral to every physical type — a straight DPS
+      // check, not a bring-the-right-weapon puzzle.
       resistances: {},
-      barScale: 2.4, // big overhead HP bar to match the 1.8× sprite (readable mini-boss bars)
+      barScale: 2.4, // big overhead HP bar to match the 1.8× sprite (readable mini-boss bar)
     });
     this.spawnX = cfg.x;
     this.spawnY = cfg.y;
     this.baseScale = CINDERWROUGHT_SCALE;
     this.setScale(CINDERWROUGHT_SCALE);
-    // Pack behavior (the user): the two forge guards spawn ~140px apart — aggroing
-    // (or hitting) one wakes the other. Radius covers the pair without cross-
-    // linking distant forges (≥900px apart). forceAggro() below flips our own
-    // `aggroed` field (not the base state machine).
-    this.packAggro = true;
-    this.packAggroRadius = 320;
 
-    // Poise bar sits directly under the (enlarged) HP bar and matches its width.
-    const barX = cfg.x - this.barW / 2;
-    const barY = cfg.y - this.barOffsetY + this.barH + 2;
-    this.poiseBarBg = scene.add.rectangle(barX, barY, this.barW, POISE_BAR_H, 0x2a1710, 0.85).setOrigin(0, 0.5);
-    this.poiseBarFill = scene.add.rectangle(barX, barY, this.barW, POISE_BAR_H, 0xff8a3a, 1).setOrigin(0, 0.5);
     this.telegraphGfx = scene.add.graphics();
-  }
-
-  preUpdate(time: number, delta: number): void {
-    super.preUpdate(time, delta);
-    const barX = this.x - this.barW / 2;
-    const barY = this.y - this.barOffsetY + this.barH + 2;
-    const aggro = this.isAggro();
-    this.poiseBarBg.setPosition(barX, barY).setDepth(this.depth + 1).setVisible(aggro);
-    this.poiseBarFill.setPosition(barX, barY).setDepth(this.depth + 1).setVisible(aggro);
-    this.poiseBarFill.setScale(Math.max(0, this.poise / WROUGHT_MAX_POISE), 1);
   }
 
   isAggro(): boolean {
     return this.aggroed;
   }
+  // No poise/stagger mechanic on this boss — kept for MainScene's shared
+  // staggerMultiplierFor() switch, always false.
   isStaggered(): boolean {
-    return this.wroughtState === "staggered";
+    return false;
   }
 
   update(delta: number, playerX: number, playerY: number, now: number): boolean {
     if (this.depleted) return false;
-    this.updatePoiseRegen(delta, now);
     if (!this.aggroed && this.health < this.maxHealth) {
       this.health = Math.min(this.maxHealth, this.health + DEAGGRO_REGEN_PER_SEC * (delta / 1000));
       this.applyHpTint();
     }
 
     switch (this.wroughtState) {
-      case "staggered":
-        this.updateStaggered(now);
-        return false;
       case "telegraphing":
         this.updateTelegraphing(playerX, playerY, now);
         return false;
@@ -190,15 +157,6 @@ export class Cinderwrought extends Enemy {
       default:
         this.updateIdle(playerX, playerY, now);
         return false;
-    }
-  }
-
-  private updateStaggered(now: number): void {
-    (this.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0);
-    if (now >= this.stateEnteredAt + STAGGER_DURATION_MS) {
-      this.wroughtState = "idle";
-      this.poise = WROUGHT_MAX_POISE;
-      this.nextAttackReadyAt = now + ATTACK_COOLDOWN_MS;
     }
   }
 
@@ -228,10 +186,10 @@ export class Cinderwrought extends Enemy {
     }
 
     // Only commit to an attack when the player is actually reachable; otherwise
-    // fall through and keep closing the gap (fixes telegraphing/whiffing from out
-    // of range). reachBonus() covers the 1.8× sprite's extra body radius.
+    // fall through and keep closing the gap. reachBonus() covers the 1.8× sprite's
+    // extra body radius.
     if (now >= this.nextAttackReadyAt && dist <= ATTACK_INIT_RANGE + this.reachBonus()) {
-      this.beginTelegraph(this.pickAttack(), now, playerX, playerY);
+      this.beginTelegraph(this.pickAttack(), now);
       return;
     }
 
@@ -256,25 +214,21 @@ export class Cinderwrought extends Enemy {
     return choice;
   }
 
-  private beginTelegraph(attack: WroughtAttackType, now: number, playerX: number, playerY: number): void {
+  private beginTelegraph(attack: WroughtAttackType, now: number): void {
     this.currentAttack = attack;
     this.wroughtState = "telegraphing";
     this.stateEnteredAt = now;
     this.currentStateDurationMs = telegraphMsFor(attack);
     (this.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0);
-    // The cone LOCKS its direction now (sidestep during the wind-up to dodge).
-    // The hammer re-locks at execute (below), so it tracks the player longer.
-    if (attack === "cone") {
-      this.attackAngle = Phaser.Math.Angle.Between(this.x, this.y, playerX, playerY);
-      this.applyFacing(Math.cos(this.attackAngle), Math.sin(this.attackAngle));
-    }
+    // Both attacks re-aim at the player at EXECUTE (see beginExecute), so the
+    // telegraph just tracks the player — nothing is locked yet.
   }
 
   private updateTelegraphing(playerX: number, playerY: number, now: number): void {
-    // The cone's direction is locked — keep the sprite pointed at the locked
-    // angle so the tell reads honestly; the hammer keeps tracking the player.
-    if (this.currentAttack === "cone") this.applyFacing(Math.cos(this.attackAngle), Math.sin(this.attackAngle));
-    else this.applyFacing(playerX - this.x, playerY - this.y);
+    // Both attacks track the player during the wind-up (direction locks at
+    // execute), so the tell honestly follows you — you can't pre-dodge by
+    // sidestepping, only by dashing when it fires.
+    this.applyFacing(playerX - this.x, playerY - this.y);
     this.drawTelegraph(playerX, playerY, now);
     if (now >= this.stateEnteredAt + this.currentStateDurationMs) this.beginExecute(now, playerX, playerY);
   }
@@ -285,15 +239,12 @@ export class Cinderwrought extends Enemy {
     this.hasHitThisAttack = false;
     this.telegraphGfx.clear();
     (this.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0);
-    if (this.currentAttack === "cone") {
-      this.currentStateDurationMs = CONE_IMPACT_MS;
-    } else {
-      // Forge Hammer: lock the swing direction at the player NOW, then the
-      // overhead beat lands.
-      this.attackAngle = Phaser.Math.Angle.Between(this.x, this.y, playerX, playerY);
-      this.applyFacing(Math.cos(this.attackAngle), Math.sin(this.attackAngle));
-      this.currentStateDurationMs = HAMMER_IMPACT_MS;
-    }
+    // Lock the direction at the player NOW (both attacks). Because the player
+    // walks slowly (95px/s) and the hitboxes are wide/long, they're inside the
+    // shape at this instant — the only escape is a dash's i-frames.
+    this.attackAngle = Phaser.Math.Angle.Between(this.x, this.y, playerX, playerY);
+    this.applyFacing(Math.cos(this.attackAngle), Math.sin(this.attackAngle));
+    this.currentStateDurationMs = this.currentAttack === "cone" ? CONE_IMPACT_MS : HAMMER_IMPACT_MS;
   }
 
   private updateExecuting(now: number): void {
@@ -316,13 +267,6 @@ export class Cinderwrought extends Enemy {
     }
   }
 
-  private updatePoiseRegen(delta: number, now: number): void {
-    if (this.wroughtState === "staggered") return;
-    if (now - this.lastPoiseChipAt < POISE_REGEN_DELAY_MS) return;
-    if (this.poise >= WROUGHT_MAX_POISE) return;
-    this.poise = Math.min(WROUGHT_MAX_POISE, this.poise + POISE_REGEN_PER_SEC * (delta / 1000));
-  }
-
   // Wedge helper: fill a fire-colored sector centered on `angle`.
   private fillWedge(
     g: Phaser.GameObjects.Graphics,
@@ -340,7 +284,7 @@ export class Cinderwrought extends Enemy {
     g.fillPath();
   }
 
-  private drawTelegraph(_playerX: number, _playerY: number, now: number): void {
+  private drawTelegraph(playerX: number, playerY: number, now: number): void {
     const g = this.telegraphGfx;
     g.clear();
     g.setDepth(this.depth + 0.5);
@@ -349,21 +293,21 @@ export class Cinderwrought extends Enemy {
       0,
       1,
     );
+    // Telegraph tracks the CURRENT player angle (both attacks lock at execute).
+    const facing = Phaser.Math.Angle.Between(this.x, this.y, playerX, playerY);
     if (this.currentAttack === "cone") {
-      // Growing ember fan in the LOCKED direction — a faint fill that brightens
-      // as the breath charges, with a crisp outline at the true reach so the
-      // dodge boundary reads.
-      this.fillWedge(g, this.attackAngle, CONE_HALF_ANGLE, CONE_RANGE, 0xff6a1a, 0.1 + 0.22 * frac);
+      // Growing ember fan toward the player — faint fill that brightens as the
+      // breath charges, with a crisp outline at the true reach so the dodge
+      // boundary reads.
+      this.fillWedge(g, facing, CONE_HALF_ANGLE, CONE_RANGE, 0xff6a1a, 0.1 + 0.22 * frac);
       g.lineStyle(2, 0xffb060, 0.55);
       g.beginPath();
       g.moveTo(this.x, this.y);
-      g.arc(this.x, this.y, CONE_RANGE, this.attackAngle - CONE_HALF_ANGLE, this.attackAngle + CONE_HALF_ANGLE);
+      g.arc(this.x, this.y, CONE_RANGE, facing - CONE_HALF_ANGLE, facing + CONE_HALF_ANGLE);
       g.closePath();
       g.strokePath();
     } else {
-      // Hammer: a short wide front wedge that fills as the overhead winds up.
-      // Tracks the player during the telegraph (direction locks at execute).
-      const facing = Phaser.Math.Angle.Between(this.x, this.y, _playerX, _playerY);
+      // Hammer: a wide front wedge that fills as the overhead winds up.
       this.fillWedge(g, facing, HAMMER_HALF_ARC, HAMMER_RANGE, 0xff4a1a, 0.12 + 0.3 * frac);
       g.lineStyle(2, 0xffa050, 0.6);
       g.beginPath();
@@ -374,7 +318,8 @@ export class Cinderwrought extends Enemy {
     }
   }
 
-  // The execute-phase visual: a bright burst of the attack's shape at full reach.
+  // The execute-phase visual: a bright burst of the attack's shape at full reach,
+  // in the LOCKED direction.
   private drawExecute(now: number): void {
     const g = this.telegraphGfx;
     g.clear();
@@ -405,8 +350,7 @@ export class Cinderwrought extends Enemy {
     const angleToPlayer = Phaser.Math.Angle.Between(this.x, this.y, playerX, playerY);
     const angleDiff = Math.abs(Phaser.Math.Angle.Wrap(angleToPlayer - this.attackAngle));
     // reachBonus() = the extra body-half the 1.8× scale adds, so a hit registers
-    // at the sprite's visual edge, not just its center (fixes "attacks don't
-    // connect sometimes" for the big sprite).
+    // at the sprite's visual edge, not just its center.
     const reach = this.reachBonus();
     if (this.currentAttack === "cone") {
       if (dist > CONE_RANGE + reach || angleDiff > CONE_HALF_ANGLE) return null;
@@ -415,24 +359,17 @@ export class Cinderwrought extends Enemy {
     }
     if (dist > HAMMER_RANGE + reach || angleDiff > HAMMER_HALF_ARC) return null;
     this.hasHitThisAttack = true;
-    // Physical (S6: one fire attack + one physical, so armor actually matters
-    // against the hammer) — the molten HEAD is fire-forged but the blow itself
-    // is a crushing impact, not a burn.
+    // Physical (armor matters against the crushing blow) — the molten HEAD is
+    // fire-forged but the impact itself is a crush, not a burn.
     return { damage: HAMMER_DAMAGE, knockback: HAMMER_KNOCKBACK };
   }
 
   takeHit(damage: number): boolean {
     // Being hit (incl. a ranged shot that out-ranges AGGRO_RADIUS) wakes it —
     // proximity was the ONLY aggro path before, so it ignored ranged pokes.
-    // Once aggro'd, MainScene.updatePackAggro wakes its forge-mate next frame.
+    // Once aggro'd, MainScene.updatePackAggro wakes any forge-mate next frame.
     this.aggroed = true;
-    const depleted = super.takeHit(damage);
-    if (depleted) return true;
-    if (this.wroughtState === "staggered") return false;
-    this.poise = Math.max(0, this.poise - damage);
-    this.lastPoiseChipAt = this.scene.time.now;
-    if (this.poise <= 0) this.enterStaggered(this.scene.time.now);
-    return false;
+    return super.takeHit(damage);
   }
 
   // Pack-aggro (MainScene.updatePackAggro) — flip OUR own aggro field, since the
@@ -442,17 +379,7 @@ export class Cinderwrought extends Enemy {
     this.aggroed = true;
   }
 
-  private enterStaggered(now: number): void {
-    this.wroughtState = "staggered";
-    this.stateEnteredAt = now;
-    this.currentAttack = null;
-    (this.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0);
-    this.telegraphGfx.clear();
-  }
-
   playDeathFeedback(onComplete: () => void): void {
-    this.poiseBarBg.destroy();
-    this.poiseBarFill.destroy();
     this.telegraphGfx.destroy();
     super.playDeathFeedback(onComplete);
   }
