@@ -78,11 +78,6 @@ export class EventLogUI {
   // bounded to MAX_CENTER_TOASTS worth of height, so a burst can't march down
   // over the player (the user), and closes gaps as toasts leave.
   private activeCenterToasts: CenterToast[] = [];
-  // Extra vertical offset for the center-toast stack, set by MainScene while
-  // the (separately-drawn) Player-Level-Up banner is on screen — that banner
-  // sits at a fixed y regardless of this stack's height, so without this a
-  // "Defeated X" combat toast could land right on top of it (playtest).
-  private topOffset = 0;
   private leftX: number;
   private topY: number;
   private recipeToastQueue: LogEntry[] = [];
@@ -110,12 +105,6 @@ export class EventLogUI {
 
     scene.input.on("wheel", this.onWheel, this);
     this.render();
-  }
-
-  // See `topOffset` above — MainScene calls this while its Level-Up banner
-  // is visible, and resets it to 0 once the banner fades.
-  setTopOffset(px: number): void {
-    this.topOffset = px;
   }
 
   private onNewEntry(entry: LogEntry): void {
@@ -300,7 +289,7 @@ export class EventLogUI {
   // Position every live center toast in a top-anchored stack, so it can never
   // grow past MAX_CENTER_TOASTS worth of height (and gaps close as toasts fade).
   private relayoutCenterToasts(): void {
-    let y = 72 + this.topOffset;
+    let y = 72;
     for (const t of this.activeCenterToasts) {
       t.text.setY(y);
       t.box.setY(y - 6);

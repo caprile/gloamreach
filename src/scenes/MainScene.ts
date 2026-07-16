@@ -8898,16 +8898,13 @@ export class MainScene extends Phaser.Scene {
       .setDepth(6000)
       .setAlpha(0);
 
-    // Push the EventLog's own center-toast stack (e.g. a "Defeated X" combat
-    // toast landing the same beat as the level-up that kill just caused)
-    // below this banner instead of overlapping it (playtest). Measured off
-    // the real rendered text heights (same "measure real Text heights" pattern
-    // as this codebase's other dynamic panels) rather than a fixed 80px guess,
-    // which undershot/overshot depending on font metrics. Cleared once the
-    // banner has fully faded (matches the fade tween's own timing below).
-    const bannerBottom = sub.y + sub.height / 2;
-    this.eventLogUI.setTopOffset(bannerBottom + 16);
-    this.time.delayedCall(2150, () => this.eventLogUI.setTopOffset(0));
+    // Center toasts ("Defeated X", skill level-ups) stay pinned to the TOP of
+    // the screen (their default y=72) — this banner lives at 30% screen height,
+    // so the two never collide and nothing clusters under the banner. An earlier
+    // pass pushed the toast stack DOWN to sit below the banner, but that just
+    // dropped the toasts into the center of the screen right under it (playtest:
+    // "messages popping up under the level-up text, blocking the center"), which
+    // is exactly what we're avoiding. No push — leave the stack at the top.
 
     // A whole-screen camera.flash was here for two prior tuning passes and
     // stayed "annoying" even dialed way down — per playtest feedback it's cut
