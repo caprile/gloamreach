@@ -1232,6 +1232,27 @@ export class BootScene extends Phaser.Scene {
     g.fillTriangle(1, 4, 7, 4, 4, 0);
     g.generateTexture("javelin_projectile", 8, 16);
 
+    // Arrows (ammo item) — a small bundle of steel-tipped, fletched arrows.
+    g.clear();
+    for (const ax of [7, 12, 17]) {
+      g.fillStyle(0x6b4a26, 1);
+      g.fillRect(ax, 6, 1, 14); // shaft
+      g.fillStyle(0xc0c6ce, 1);
+      g.fillTriangle(ax - 1, 6, ax + 2, 6, ax + 0.5, 2); // steel head
+      g.fillStyle(0xcfc8b0, 1);
+      g.fillRect(ax - 1, 18, 3, 2); // fletching
+    }
+    g.generateTexture("icon_arrows", ICON, ICON);
+
+    // In-flight arrow projectile — drawn pointing +x (rotation applied per-shot,
+    // so no artAngleOffset needed, unlike the upward-drawn javelin).
+    g.clear();
+    g.fillStyle(0x6b4a26, 1);
+    g.fillRect(0, 2, 12, 2); // shaft
+    g.fillStyle(0xc0c6ce, 1);
+    g.fillTriangle(12, 0, 12, 6, 16, 3); // steel head, pointing right
+    g.generateTexture("arrow_projectile", 16, 6);
+
     // Shishkabob: just a bare wooden skewer with a sharpened tip — no food
     // chunks. Playtest feedback: the old red+green-chunk version already
     // looked "full of stuff" before anything was cooked on it; chunks belong
@@ -2411,6 +2432,22 @@ export class BootScene extends Phaser.Scene {
     g.fillTriangle(12, 4, 10, 9, 12, 9);
     g.generateTexture("icon_sunsteel_pike", ICON, ICON);
 
+    g.clear(); // Sunsteel Warbow — a steel bow with a nocked arrow
+    g.lineStyle(2, 0x8a9098, 1);
+    g.beginPath();
+    g.arc(3, 12, 10, -Math.PI / 3, Math.PI / 3, false); // stave bulging right
+    g.strokePath();
+    g.lineStyle(1, 0xe6ecf2, 1);
+    g.beginPath();
+    g.moveTo(8, 3);
+    g.lineTo(8, 21); // string
+    g.strokePath();
+    g.fillStyle(0x6b4a26, 1);
+    g.fillRect(8, 11, 12, 2); // arrow shaft
+    g.fillStyle(0xc0c6ce, 1);
+    g.fillTriangle(20, 9, 20, 15, 23, 12); // steel head
+    g.generateTexture("icon_sunsteel_warbow", ICON, ICON);
+
     // --- forged HEAVY armor (Sunsteel — steel-grey) ---
     g.clear(); // Sunsteel Helm
     g.fillStyle(0x8a9098, 1);
@@ -2528,6 +2565,22 @@ export class BootScene extends Phaser.Scene {
     g.fillStyle(0xff7a2a, 1);
     g.fillTriangle(12, 4, 10, 9, 14, 9); // ember core
     g.generateTexture("icon_embersteel_pike", ICON, ICON);
+
+    g.clear(); // Embersteel Warbow — dark stave, ember string + ember arrowhead
+    g.lineStyle(2, 0x3a2e34, 1);
+    g.beginPath();
+    g.arc(3, 12, 10, -Math.PI / 3, Math.PI / 3, false);
+    g.strokePath();
+    g.lineStyle(1, 0xff7a2a, 1);
+    g.beginPath();
+    g.moveTo(8, 3);
+    g.lineTo(8, 21); // ember-glowing string
+    g.strokePath();
+    g.fillStyle(0x5a3a1c, 1);
+    g.fillRect(8, 11, 12, 2); // ironbark shaft
+    g.fillStyle(0xff7a2a, 1);
+    g.fillTriangle(20, 9, 20, 15, 23, 12); // ember head
+    g.generateTexture("icon_embersteel_warbow", ICON, ICON);
 
     // --- the first MAGIC weapon: Ember Brand (a searing fire-brand rod) ---
     g.clear();

@@ -1956,8 +1956,43 @@ export class MainScene extends Phaser.Scene {
     // the player at night. Data-driven per item key so a bigger-radius upgrade
     // just adds a row here. 0 = no light emitted.
     this.equippedLightRadius = stack ? (LIGHT_RADIUS_BY_ITEM[stack.key] ?? 0) : 0;
+    this.reconcileAmmoSlot();
     this.hotbarUI.refresh();
     this.refreshHud();
+  }
+
+  // Keep the shared Ammo slot consistent with the equipped ranged weapon: a
+  // Warbow only ever holds Arrows, the Slingshot only Pellets. The slot itself
+  // is generic (any `armorSlot:"ammo"` item fits), so without this a stack of
+  // pellets left over from Slingshot use would sit "loaded" while a bow is
+  // equipped — the bow can't fire them, which reads as the game loading the
+  // wrong ammo (playtest report). When what's loaded doesn't match the equipped
+  // weapon's required ammo, evict it to the backpack and auto-load the correct
+  // ammo from the backpack if any is carried, so switching bow<->slingshot swaps
+  // ammo seamlessly. No-op for melee/unarmed and for the self-consuming Javelin
+  // (ammoItemKey null). Called from recomputeEquipped, so it also blocks
+  // manually loading the wrong ammo type into a bow's slot.
+  private reconcileAmmoSlot(): void {
+    if (!this.equipment || !this.backpack || !this.inventoryMenu) return; // pre-init guard
+    const weapon = this.equippedWeapon;
+    if (!weapon) return;
+    const cfg = rangedWeaponConfig(weapon);
+    const required = cfg?.ammoItemKey;
+    if (!required) return; // melee, or a self-consuming ranged weapon (Javelin)
+    const eq = this.equipment.get("ammo");
+    if (eq && eq.key === required) return; // already correct — no churn
+    if (eq) {
+      this.returnArmorToBackpack(eq); // wrong ammo → back to the backpack
+      this.equipment.set("ammo", null);
+    }
+    const have = this.backpack.count(required);
+    if (have > 0) {
+      const take = Math.min(itemDef(required)?.maxStack ?? 0, have);
+      this.equipment.set("ammo", { key: required, tier: 0, count: take });
+      this.backpack.removeCount(required, take);
+    }
+    this.inventoryMenu.refresh();
+    this.hotbarUI.refresh();
   }
 
   // Subtle reach preview — visible whenever a tool or weapon is equipped

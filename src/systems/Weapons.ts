@@ -9,10 +9,14 @@ export type WeaponType =
   | "sunsteel_warhammer"
   | "sunsteel_sword"
   | "sunsteel_pike"
+  // forged RANGED (biome 2 Phase 4 / S8) — a badlands bow a tier above the Slingshot
+  | "sunsteel_warbow"
   // enhanced/T2 tier (biome 2 Phase 4 Session 2) — reforged with Embersteel
   | "embersteel_warhammer"
   | "embersteel_sword"
   | "embersteel_pike"
+  // enhanced/T2 RANGED (S8) — the Sunsteel Warbow reforged with ember-steel
+  | "embersteel_warbow"
   // the first MAGIC weapon — a rare-ore-exclusive melee fire brand
   | "ember_brand";
 
@@ -44,9 +48,11 @@ const WEAPON_DAMAGE_TYPES: Record<WeaponType, DamageType[]> = {
   sunsteel_warhammer: ["blunt"],
   sunsteel_sword: ["slash"],
   sunsteel_pike: ["pierce"],
+  sunsteel_warbow: ["ranged"],
   embersteel_warhammer: ["blunt"],
   embersteel_sword: ["slash"],
   embersteel_pike: ["pierce"],
+  embersteel_warbow: ["ranged"],
   ember_brand: ["magic"],
 };
 export function weaponDamageTypes(weapon: WeaponType): DamageType[] {
@@ -79,10 +85,15 @@ const WEAPON_DAMAGE: Record<WeaponType, number> = {
   sunsteel_warhammer: 17,
   sunsteel_sword: 14,
   sunsteel_pike: 19, // S7: pierce single-target king — edges out the sword's DPS
+  // Forged ranged (S8) — a real tier above the Slingshot's chip damage (2),
+  // but its DPS (~14.7) still sits well below forged melee: the 380px safe
+  // reach is what it's paying for, per the locked "ranged is an opener" design.
+  sunsteel_warbow: 11,
   // Enhanced tier: a real step over the base forged numbers (~+35-45%).
   embersteel_warhammer: 23,
   embersteel_sword: 19,
   embersteel_pike: 25, // S7: keeps pierce the single-target DPS leader at T2 (>= sunsteel_pike + 5 invariant)
+  embersteel_warbow: 15, // S8: ~+36% over the Sunsteel Warbow, the reforged ranged option
   // The magic brand's raw number sits mid-pack; its DPS lands near the
   // Embersteel Pike on a NEUTRAL target, but its "magic" type is shrugged off
   // (~x0.4-0.5) by the gloam-casters (Hexlings, the Duneshaper). It's the only
@@ -103,9 +114,11 @@ const WEAPON_COOLDOWN_MS: Record<WeaponType, number> = {
   sunsteel_warhammer: 800,
   sunsteel_sword: 480,
   sunsteel_pike: 620,
+  sunsteel_warbow: 750,
   embersteel_warhammer: 800,
   embersteel_sword: 470,
   embersteel_pike: 610,
+  embersteel_warbow: 730,
   ember_brand: 520,
 };
 export function weaponCooldownMs(weapon: WeaponType): number {
@@ -125,9 +138,11 @@ const WEAPON_STAMINA_COST: Record<WeaponType, number> = {
   sunsteel_warhammer: 22,
   sunsteel_sword: 15,
   sunsteel_pike: 18,
+  sunsteel_warbow: 12,
   embersteel_warhammer: 27,
   embersteel_sword: 18,
   embersteel_pike: 22,
+  embersteel_warbow: 15,
   ember_brand: 19,
 };
 export function weaponStaminaCost(weapon: WeaponType): number {
@@ -161,9 +176,12 @@ const WEAPON_BASE_CRIT_CHANCE: Record<WeaponType, number> = {
   stone_club: 0.04,
   sunsteel_warhammer: 0.05,
   embersteel_warhammer: 0.05,
-  // Ranged — unchanged.
+  // Ranged — slingshot/javelin unchanged; the forged bows crit a touch better
+  // than the starter launchers (a forged-tier perk), still below the pierce kings.
   slingshot: 0.05,
   javelin: 0.05,
+  sunsteel_warbow: 0.07,
+  embersteel_warbow: 0.08,
   // Pierce — the crit kings (single-target identity).
   primal_spear: 0.1,
   sunsteel_pike: 0.1,
@@ -181,6 +199,8 @@ const WEAPON_BASE_CRIT_MULT: Record<WeaponType, number> = {
   embersteel_warhammer: 1.6,
   slingshot: 1.5,
   javelin: 1.5,
+  sunsteel_warbow: 1.55,
+  embersteel_warbow: 1.6,
   // Pierce — highest crit multiplier too, so a pike crit is a genuine nuke.
   primal_spear: 1.7,
   sunsteel_pike: 1.7,
@@ -212,6 +232,12 @@ export interface RangedWeaponConfig {
 const RANGED_WEAPONS: Partial<Record<WeaponType, RangedWeaponConfig>> = {
   slingshot: { projectileSpeed: 420, maxRangePx: 260, ammoItemKey: "slingshot_pellets", projectileTexture: "pellet_projectile" },
   javelin: { projectileSpeed: 300, maxRangePx: 220, ammoItemKey: null, projectileTexture: "javelin_projectile", projectileArtAngleOffset: Math.PI / 2 },
+  // S8 bows — both fire the same `arrows` (shared with... nothing else; the
+  // single ammo slot means loading arrows evicts any slingshot pellets). The
+  // arrow art points +x, so no artAngleOffset. Longer reach + faster arrows
+  // than the slingshot: the bow is the badlands ranged upgrade.
+  sunsteel_warbow: { projectileSpeed: 600, maxRangePx: 380, ammoItemKey: "arrows", projectileTexture: "arrow_projectile" },
+  embersteel_warbow: { projectileSpeed: 640, maxRangePx: 400, ammoItemKey: "arrows", projectileTexture: "arrow_projectile" },
 };
 
 export function rangedWeaponConfig(weapon: WeaponType): RangedWeaponConfig | undefined {
@@ -260,6 +286,8 @@ const WEAPON_ARC: Record<WeaponType, WeaponArc> = {
   // Ranged — never sweeps.
   slingshot: { halfAngleDeg: 0, range: 0, falloff: 0 },
   javelin: { halfAngleDeg: 0, range: 0, falloff: 0 },
+  sunsteel_warbow: { halfAngleDeg: 0, range: 0, falloff: 0 },
+  embersteel_warbow: { halfAngleDeg: 0, range: 0, falloff: 0 },
   // Fire washes over nearby foes — a medium sweep despite its melee reach.
   ember_brand: { halfAngleDeg: 45, range: 52, falloff: 0.6 },
 };

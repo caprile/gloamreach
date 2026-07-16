@@ -2,22 +2,38 @@
 
 ## Current State
 
-_Living snapshot — edit in place, never append. Last shipped: **S7 — Weapon identity redesign**
-(2026-07-15, Opus, plan `playtest-2026-07-15-session-plan.md`). Reworked the three melee weapon
-identities (all locked via `AskUserQuestion`): **pierce (spear/pike) = lowest arc + highest
-single-target + best crit; slash (knife/sword) = biggest arc + best crowd AOE; blunt (club/warhammer)
-= medium arc + a NEW movement-slow/cripple debuff.** The old `WEAPON_ARC`/crit tables were largely
-inverted from this. Arc table rebalanced (slash widest, blunt medium, pierce near-single-target);
-forged pikes bumped so pierce is the single-target DPS leader (sunsteel_pike 15→19, embersteel_pike
-20→25, tier invariants preserved); pierce given the clearly-best base crit (spear/pike 10-11% / ×1.7).
-The **blunt debuff** reuses the existing `Enemy.applySlow`/`slowMult`→`envSpeedMult` path (built for
-the Executioner relic) — applied at the shared `MainScene.resolveWeaponHit` choke point when the
-weapon type is blunt (0.6× speed / 1.5s, refreshes per hit, also cripples AOE-swept enemies), so
-**zero new per-enemy state**; subtle icy-blue puff tell. New `weaponIdentityLine` surfaced on the
-Tooltip, the inventory Combat column, and the dashboard weapons tab (new Arc column + identity note).
-`tsc` clean; verified live (blunt slows 1→0.6 / pierce doesn't; sword sweeps a 45° secondary while
-pike/club don't; identity lines render everywhere). **Next: S8 (biome-2 bow + arrows, Opus) — the
-final session, fitting these finalized identities.** Full entry below.
+_Living snapshot — edit in place, never append. Last shipped: **S8 — Biome-2 Warbow + arrows +
+ember material tweak** (2026-07-15, Opus, plan `playtest-2026-07-15-session-plan.md`) — **the FINAL
+session of the 8-session 2026-07-15 playtest plan; that plan is now fully shipped.** Added the
+badlands ranged tier: a **Sunsteel Warbow** (forged, WB Lvl 3 — 11 dmg / 750ms / 12 stam / 380px)
+that reforges into an **Embersteel Warbow** (WB Lvl 4 — 15 dmg / 730ms / 15 stam / 400px), plus a new
+`arrows` ammo item (Sunsteel `1 ingot + 5 wood → 50`; Embersteel `1 embersteel_ingot + 5 wood → 50` —
+same arrows, alt metal; both gated behind the Warbow via `requiresDiscovered`). **Entirely
+data-driven — ZERO `MainScene.ts` changes** (the ranged pipeline reads all config from
+`Weapons.ts`/`Items.ts`; adding `warbow` to `WeaponType` compiler-forced a row in every table); bow &
+slingshot share the one `"ammo"` slot (loading arrows evicts pellets). New icons + `arrow_projectile`
+in `BootScene`. **Ember material tweak (the user-directed, expanded live):** every ember-tier reforge
+now carries its **precursor's secondary materials** (cragscale plate / duskrunner pelt / sandmaw
+chitin / bones), upgrades any plain `wood` haft to **`ironbark`**, and adds **`hex_essence`** as the
+ember-temper agent — chosen over `gloam_shard` specifically because gloam is relic currency (the user's
+call: "add something not used for relic creation"). So ember gear reads as its Sunsteel/Duskhide base
+plus the upgrade, not "base + ingot." `tsc` clean; verified live via `preview_start` +
+`javascript_tool` (all textures/data; end-to-end fire = ammo 10→9 + projectile spawn + cooldown + an
+11-dmg ranged hit HP 20→9; out-of-range / no-ammo / wrong-ammo all clean no-ops that don't consume;
+icons render; no console errors). `RECIPES.md` synced; dashboard auto-populates (Items/Recipes tabs)
+— its weapon-stats table stays melee-only as before (slingshot/javelin were never in it).
+**Same-session follow-up fix:** the shared `"ammo"` slot is now **weapon-aware** — a new
+`MainScene.reconcileAmmoSlot()` (called from `recomputeEquipped`) evicts any ammo that doesn't match
+the equipped ranged weapon's `ammoItemKey` back to the backpack and auto-loads the correct ammo, so a
+Warbow's slot only ever holds Arrows and the Slingshot's only Pellets (playtest: leftover pellets sat
+"loaded" while a bow was equipped and couldn't fire, reading as the game loading the wrong ammo).
+Switching bow↔slingshot now swaps ammo seamlessly; melee/Javelin are no-ops. Full entry
+below.
+Prior: **S7 — Weapon identity redesign**
+(2026-07-15, Opus). Reworked the three melee weapon identities: **pierce (spear/pike) = lowest arc +
+highest single-target + best crit; slash (knife/sword) = biggest arc + best crowd AOE; blunt
+(club/warhammer) = medium arc + a NEW movement-slow/cripple debuff** (reuses `Enemy.applySlow` at the
+`resolveWeaponHit` choke point, 0.6×/1.5s). Full entry below.
 Prior: **S3 — Inventory visuals +
 upgrade-ready indicators** (2026-07-15, Opus, plan `playtest-2026-07-15-session-plan.md`). Three
 parts. **(1) Bigger icons**: item icons were drawn at native texture size (~14-30px) and looked lost
@@ -336,6 +352,73 @@ below + [[survivor-rpg-dev-console]].
 ## Recent Entries
 
 > Older entries in STATUS-archive.md.
+
+### S8 — Biome-2 Warbow + arrows + ember material tweak (2026-07-15, Opus)
+The **final** session of the 8-session 2026-07-15 playtest plan
+(`playtest-2026-07-15-session-plan.md`) — with this, that plan is fully shipped. Adds the badlands
+**ranged gear tier** and enriches the ember reforge recipes. Locked/refined live with the user: **one
+bow → two via reforge** (base Sunsteel + Embersteel reforge, not two independent bows); arrow yields
+**50 per craft** from either metal; ember cores use **`hex_essence`, not `gloam_shard`** (gloam is
+relic currency).
+
+- **The bows (`Weapons.ts` — fully additive, compiler-forced rows in every `Record`):**
+  - `sunsteel_warbow` — forged ranged, dmg **11** / cd **750ms** / stam **12** / crit **7%×1.55** /
+    range **380px** / projectile **600px/s** / arc `{0,0,0}` (never sweeps).
+  - `embersteel_warbow` — the reforge, dmg **15** / cd **730ms** / stam **15** / crit **8%×1.6** /
+    range **400px** / projectile **640px/s**. DPS 14.7 → 20.5: a real tier above the Slingshot (2),
+    still below forged melee since safe range is the trade (locked "ranged is an opener" design).
+  - `RANGED_WEAPONS` entries `ammoItemKey: "arrows"`, `projectileTexture: "arrow_projectile"` (arrow
+    art points +x, so no `artAngleOffset`). No `WeaponUpgrades` right-click tiers — the reforge IS the
+    bow's upgrade path (consistent with the slingshot/javelin ranged precedent).
+- **Zero `MainScene.ts` changes.** An Explore pass confirmed the ranged pipeline (`tryRangedAttack`,
+  `spawnProjectile`, the player-projectile→enemy overlap that hardcodes `"ranged"`, the `"ammo"`
+  EquipSlot merge/decrement/auto-refill, hover/aim via `maxRangePx`, prompt gating) is entirely
+  data-driven and hardcodes no weapon key — a bow "just works" once in `RANGED_WEAPONS`. Bow &
+  slingshot **share the single `"ammo"` slot**: loading arrows evicts any pellets back to the backpack
+  (existing `equipArmorFromContainer` merge-by-key path, unchanged).
+- **Arrows (`Items.ts` + `Recipes.ts`):** `arrows` ammo item (`armorSlot: "ammo"`, maxStack 99,
+  not hotbarable). Two recipes, both output the same `arrows` and both `requiresDiscovered:
+  ["sunsteel_warbow"]` (mirrors the pellet→slingshot gate): **Sunsteel** `1 sunsteel_ingot + 5 wood →
+  50` (WB Lvl 3) and **Embersteel** `1 embersteel_ingot + 5 wood → 50` (WB Lvl 4) — same arrows, an
+  alt-metal convenience (ammo carries no damage in this engine; the bow does). `warbow`/`arrows` added
+  to `BADLANDS_ITEM_KEYS` so they file under the badlands inventory tab.
+- **BootScene:** `icon_sunsteel_warbow` (steel stave + string + nocked steel-tip arrow),
+  `icon_embersteel_warbow` (dark stave, ember-orange string/head, ironbark shaft), `icon_arrows`
+  (fletched bundle), `arrow_projectile` (16×6 horizontal shaft+head).
+- **Ember material tweak (the user: "ALL ember weapons AND armor should use other ingredients too, on
+  theme with their sunsteel precursor").** Each T2 reforge now mirrors its precursor's secondary
+  materials + upgrades wood→ironbark + adds `hex_essence`: helm `+hex1`; cuirass `+bones4 +hex2`;
+  greaves `+cragscale2 +hex1`; emberhide hood/vest/leggings each get their pelt/chitin(/bones) back
+  `+hex1`; warhammer `+hex2`; sword `wood2→ironbark2 +hex2`; pike `+hex2`; Ember Brand `+ironbark2`;
+  Embersteel Warbow `{ sunsteel_warbow, embersteel_ingot3, ironbark3, duskrunner_pelt2, hex_essence2 }`.
+  Sinks the under-used, non-relic `hex_essence` (Hexling drop) across the whole ember tier.
+
+`tsc` clean; verified live via `preview_start` + `javascript_tool`: all 4 textures exist; every
+Weapons/Recipes value matches spec; end-to-end fire (equip via hotbar → load arrows → fire a 200px
+enemy) = ammo 10→9, +1 `playerProjectiles`, cooldown set, and a direct `resolveWeaponHit(...,'ranged')`
+dealt 11 (HP 20→9); out-of-range (500>380), no-ammo, and wrong-ammo (pellets loaded) all no-op without
+consuming ammo or spawning a projectile; all icons render at readable size; zero console errors.
+`RECIPES.md` synced (recipe table + Ranged-weapons table + enhanced-tier note). Dashboard needs no
+manual edit — Items/Recipes tabs read the data modules live; its weapon-stats table is melee-only by
+design (slingshot/javelin were never listed there either).
+
+**Same-session follow-up — weapon-aware ammo slot.** Playtest: after arrows ran out, pellets left over
+from Slingshot use sat "loaded" in the shared `"ammo"` slot while a Warbow was equipped, and the bow
+couldn't fire them — reading as the game auto-loading the wrong ammo. (Traced exhaustively: no code
+path actually injects pellets — the fire-refill only tops up the *same* loaded key; the real issue was
+the generic slot accepting any `armorSlot:"ammo"` item regardless of the equipped weapon.) Fix: new
+`MainScene.reconcileAmmoSlot()`, called at the end of `recomputeEquipped()`, evicts any loaded ammo
+whose key ≠ the equipped ranged weapon's `ammoItemKey` back to the backpack and auto-loads the correct
+ammo from the backpack if carried. So a Warbow's slot only ever holds Arrows, the Slingshot's only
+Pellets; switching bow↔slingshot swaps ammo seamlessly; manually loading the wrong ammo into a bow
+bounces straight back; and with no matching ammo the slot goes empty (never the wrong type). No-op for
+melee/unarmed + the self-consuming Javelin (`ammoItemKey` null); guarded against pre-init/no-churn.
+`tsc` clean; verified live (4 scenarios: pellets→bow evicts+loads arrows; bow→slingshot swaps back;
+manual wrong-load bounces; no-matching-ammo → empty; then fires arrows 5→4 + projectile). Zero console
+errors.
+
+**The 8-session 2026-07-15 playtest plan is complete. Next up:** no locked milestone — likely a broader playtest/tuning pass or a biome-3 scoping
+session (master roadmap's "at least 5 total biomes").
 
 ### S7 — Weapon identity redesign (2026-07-15, Opus)
 Wave 3 of the 8-session 2026-07-15 playtest plan (`playtest-2026-07-15-session-plan.md`). A new

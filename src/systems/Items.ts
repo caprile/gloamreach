@@ -207,6 +207,15 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     hotbarable: false,
     armorSlot: "ammo",
   },
+  arrows: {
+    key: "arrows",
+    name: "Arrows",
+    description: "Metal-tipped arrows for a Warbow. Load them into the Ammo slot — one shared slot, so they swap out any loaded pellets.",
+    texture: "icon_arrows",
+    maxStack: 99,
+    hotbarable: false,
+    armorSlot: "ammo",
+  },
 
   // --- forged weapons (biome 2 Phase 4 — one per melee damage type) ---
   sunsteel_warhammer: {
@@ -257,6 +266,22 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
       { label: "Attack Speed", value: "1.6/s" },
     ],
   },
+  sunsteel_warbow: {
+    key: "sunsteel_warbow",
+    name: "Sunsteel Warbow",
+    description: "A forged badlands bow. Outranges the Slingshot and hits far harder — load it with Arrows from the backpack.",
+    texture: "icon_sunsteel_warbow",
+    maxStack: 1,
+    hotbarable: true,
+    weapon: "sunsteel_warbow",
+    stats: [
+      { label: "Type", value: "Weapon (Ranged)" },
+      { label: "Damage", value: "11" },
+      { label: "Damage Type", value: "Ranged" },
+      { label: "Stamina", value: "12" },
+      { label: "Attack Speed", value: "1.3/s" },
+    ],
+  },
 
   // --- enhanced/T2 weapons (biome 2 Phase 4 Session 2 — reforged with Embersteel) ---
   embersteel_warhammer: {
@@ -305,6 +330,22 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
       { label: "Damage Type", value: "Pierce" },
       { label: "Stamina", value: "16" },
       { label: "Attack Speed", value: "1.6/s" },
+    ],
+  },
+  embersteel_warbow: {
+    key: "embersteel_warbow",
+    name: "Embersteel Warbow",
+    description: "A Sunsteel Warbow reforged on an ironbark stave with ember-steel limbs — longer reach and a heavier draw.",
+    texture: "icon_embersteel_warbow",
+    maxStack: 1,
+    hotbarable: true,
+    weapon: "embersteel_warbow",
+    stats: [
+      { label: "Type", value: "Weapon (Ranged)" },
+      { label: "Damage", value: "15" },
+      { label: "Damage Type", value: "Ranged" },
+      { label: "Stamina", value: "15" },
+      { label: "Attack Speed", value: "1.4/s" },
     ],
   },
 
@@ -1159,6 +1200,8 @@ const BADLANDS_ITEM_KEYS = new Set<string>([
   // forged weapons
   "sunsteel_warhammer", "sunsteel_sword", "sunsteel_pike",
   "embersteel_warhammer", "embersteel_sword", "embersteel_pike", "ember_brand",
+  // forged ranged (S8) — bows + their arrows
+  "sunsteel_warbow", "embersteel_warbow", "arrows",
   // forged armor
   "sunsteel_helm", "sunsteel_cuirass", "sunsteel_greaves",
   "duskhide_hood", "duskhide_vest", "duskhide_leggings",

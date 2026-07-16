@@ -30,6 +30,9 @@ requires standing near a placed Workbench (`MainScene.isNearWorkbench`).
 | Slingshot | Weapons | 1 | Yes | 2 Wood, 2 Leather Scraps | — | Item (weapon, ranged — uses the Ammo slot) |
 | Slingshot Pellets | Weapons | 0 | No\* | 3 Stone | — | Item x25 (ammo) |
 | Javelin | Weapons | 1 | Yes | 3 Wood, 1 Stone | Pierce 5 | Item x2 (weapon, ranged, disposable — self-consuming stack) |
+| Sunsteel Warbow | Weapons | 1 | Yes (Lvl 3) | 2 Sunsteel Ingot, 3 Ironbark, 2 Duskrunner Pelt | Ranged 0 | Item (weapon, ranged — uses the Ammo slot, fires Arrows) |
+| Arrows | Weapons | 1 | Yes (Lvl 3) | 1 Sunsteel Ingot, 5 Wood | — (needs Warbow discovered) | Item x50 (ammo) |
+| Arrows (Embersteel) | Weapons | 1 | Yes (Lvl 4) | 1 Embersteel Ingot, 5 Wood | — (needs Warbow discovered) | Item x50 (ammo — same arrows, alt metal) |
 | Shishkabob | Misc | 0 | No | 1 Wood | — | Item x2 |
 | Campfire | Crafting | 0 | No | 5 Wood, 2 Stone | — | Item (placeable) |
 | Workbench | Crafting | 0 | No | 10 Wood | — | Item (placeable) |
@@ -51,16 +54,17 @@ requires standing near a placed Workbench (`MainScene.isNearWorkbench`).
 | Sunsteel Warhammer | Weapons | 1 | Yes (Lvl 3) | 4 Sunsteel Ingot, 2 Cragscale Plate, 4 Wood | Blunt 3 | Item (weapon, blunt — wide AOE sweep) |
 | Sunsteel Longsword | Weapons | 1 | Yes (Lvl 3) | 3 Sunsteel Ingot, 2 Wood | Slash 3 | Item (weapon, slash) |
 | Sunsteel Pike | Weapons | 1 | Yes (Lvl 3) | 3 Sunsteel Ingot, 3 Wood | Pierce 3 | Item (weapon, pierce) |
-| Embersteel Helm | Armor | 1 | Yes (Lvl 4) | 1 Sunsteel Helm, 2 Embersteel Ingot, 2 Cragscale Plate | Heavy Armor 0 | Item (armor, helmet, **heavy** — reforge) |
-| Embersteel Cuirass | Armor | 1 | Yes (Lvl 4) | 1 Sunsteel Cuirass, 4 Embersteel Ingot, 3 Cragscale Plate | Heavy Armor 0 | Item (armor, chest, **heavy** — reforge) |
-| Embersteel Greaves | Armor | 1 | Yes (Lvl 4) | 1 Sunsteel Greaves, 2 Embersteel Ingot, 2 Sandmaw Chitin | Heavy Armor 0 | Item (armor, legs, **heavy** — reforge) |
-| Emberhide Hood | Armor | 1 | Yes (Lvl 4) | 1 Duskhide Hood, 1 Embersteel Ingot, 2 Duskrunner Pelt | Light Armor 0 | Item (armor, helmet, light — reforge) |
-| Emberhide Vest | Armor | 1 | Yes (Lvl 4) | 1 Duskhide Vest, 2 Embersteel Ingot, 3 Duskrunner Pelt | Light Armor 0 | Item (armor, chest, light — reforge) |
-| Emberhide Leggings | Armor | 1 | Yes (Lvl 4) | 1 Duskhide Leggings, 1 Embersteel Ingot, 1 Sandmaw Chitin | Light Armor 0 | Item (armor, legs, light — reforge) |
-| Embersteel Warhammer | Weapons | 1 | Yes (Lvl 4) | 1 Sunsteel Warhammer, 3 Embersteel Ingot, 4 Ironbark, 2 Cragscale Plate | Blunt 3 | Item (weapon, blunt — reforge) |
-| Embersteel Longsword | Weapons | 1 | Yes (Lvl 4) | 1 Sunsteel Longsword, 2 Embersteel Ingot, 2 Wood | Slash 3 | Item (weapon, slash — reforge) |
-| Embersteel Pike | Weapons | 1 | Yes (Lvl 4) | 1 Sunsteel Pike, 2 Embersteel Ingot, 3 Ironbark | Pierce 3 | Item (weapon, pierce — reforge) |
-| Ember Brand | Weapons | 1 | Yes (Lvl 4) | 3 Embersteel Ingot, 4 Hex Essence | Magic 0 | Item (weapon, **magic** — first magic weapon) |
+| Embersteel Helm | Armor | 1 | Yes (Lvl 4) | 1 Sunsteel Helm, 2 Embersteel Ingot, 2 Cragscale Plate, 1 Hex Essence | Heavy Armor 0 | Item (armor, helmet, **heavy** — reforge) |
+| Embersteel Cuirass | Armor | 1 | Yes (Lvl 4) | 1 Sunsteel Cuirass, 4 Embersteel Ingot, 3 Cragscale Plate, 4 Bones, 2 Hex Essence | Heavy Armor 0 | Item (armor, chest, **heavy** — reforge) |
+| Embersteel Greaves | Armor | 1 | Yes (Lvl 4) | 1 Sunsteel Greaves, 2 Embersteel Ingot, 2 Sandmaw Chitin, 2 Cragscale Plate, 1 Hex Essence | Heavy Armor 0 | Item (armor, legs, **heavy** — reforge) |
+| Emberhide Hood | Armor | 1 | Yes (Lvl 4) | 1 Duskhide Hood, 1 Embersteel Ingot, 2 Duskrunner Pelt, 1 Sandmaw Chitin, 1 Hex Essence | Light Armor 0 | Item (armor, helmet, light — reforge) |
+| Emberhide Vest | Armor | 1 | Yes (Lvl 4) | 1 Duskhide Vest, 2 Embersteel Ingot, 3 Duskrunner Pelt, 2 Sandmaw Chitin, 3 Bones, 1 Hex Essence | Light Armor 0 | Item (armor, chest, light — reforge) |
+| Emberhide Leggings | Armor | 1 | Yes (Lvl 4) | 1 Duskhide Leggings, 1 Embersteel Ingot, 1 Sandmaw Chitin, 2 Duskrunner Pelt, 1 Hex Essence | Light Armor 0 | Item (armor, legs, light — reforge) |
+| Embersteel Warhammer | Weapons | 1 | Yes (Lvl 4) | 1 Sunsteel Warhammer, 3 Embersteel Ingot, 4 Ironbark, 2 Cragscale Plate, 2 Hex Essence | Blunt 3 | Item (weapon, blunt — reforge) |
+| Embersteel Longsword | Weapons | 1 | Yes (Lvl 4) | 1 Sunsteel Longsword, 2 Embersteel Ingot, 2 Ironbark, 2 Hex Essence | Slash 3 | Item (weapon, slash — reforge) |
+| Embersteel Pike | Weapons | 1 | Yes (Lvl 4) | 1 Sunsteel Pike, 2 Embersteel Ingot, 3 Ironbark, 2 Hex Essence | Pierce 3 | Item (weapon, pierce — reforge) |
+| Embersteel Warbow | Weapons | 1 | Yes (Lvl 4) | 1 Sunsteel Warbow, 3 Embersteel Ingot, 3 Ironbark, 2 Duskrunner Pelt, 2 Hex Essence | Ranged 0 | Item (weapon, ranged — reforge) |
+| Ember Brand | Weapons | 1 | Yes (Lvl 4) | 3 Embersteel Ingot, 4 Hex Essence, 2 Ironbark | Magic 0 | Item (weapon, **magic** — first magic weapon) |
 
 The base forged gear (Sunsteel/Duskhide) is **"Yes (Lvl 3)"** — tier 1 (any
 Workbench) **plus** `requiresWorkbenchTier: 2` (a Forge-Anvil-upgraded **Workbench
@@ -72,7 +76,11 @@ The **enhanced/T2 tier** (Embersteel/Emberhide + the Ember Brand) is **"Yes (Lvl
 4)"** — `requiresWorkbenchTier: 3` (an Emberforge-Anvil **Workbench Lvl 4**). Each
 enhanced piece **reforges its base piece** (the base item is consumed as an
 ingredient — it must be **unequipped / in the backpack**) plus Embersteel Ingot
-(rare-ore Smelter output). The Ember Brand is the first **magic** weapon,
+(rare-ore Smelter output). As of S8 each enhanced recipe also carries its
+**precursor's secondary materials** (Cragscale Plate / Duskrunner Pelt / Sandmaw
+Chitin / Bones), upgrades any plain `Wood` haft to **Ironbark**, and adds a bit
+of **Hex Essence** as the ember-temper agent — so ember gear reads as its
+Sunsteel/Duskhide base plus the ember upgrade, not just "base + ingot." The Ember Brand is the first **magic** weapon,
 rare-ore-exclusive; its `magic` hits swing hard through the damage-type resist
 layer (super-effective vs most badlands beasts, resisted by Hexlings/the
 Duneshaper).
@@ -223,16 +231,22 @@ making the axe upgrade a genuine prerequisite for the forged tier, not optional.
 
 ## Ranged weapons (`src/systems/Weapons.ts` `RANGED_WEAPONS`)
 
-Deliberately weak to start — an opener/softener, not a solo tool. No weapon-tier
-upgrade path yet (not in `WeaponUpgrades.ts`). Both feed the `ranged` weapon
-skill (dormant until this pass) via the same `weaponSkillDamageMultiplier`
-every melee weapon uses, so leveling it is what turns chip damage into real
-damage over a run.
+The starter launchers (Slingshot/Javelin) are deliberately weak — an opener/
+softener, not a solo tool — with no right-click tier path. The **Warbows** (S8)
+are the forged badlands ranged tier: a real step up in reach and damage, still
+below forged melee since range is the trade. No right-click tier path on the bows
+either — the Sunsteel → Embersteel **reforge** is their upgrade. All feed the
+`ranged` weapon skill via the same `weaponSkillDamageMultiplier` every melee
+weapon uses, so leveling it turns chip damage into real damage over a run.
 
 | Weapon | Dmg / Cooldown / Stamina | Projectile Speed | Range | Ammo |
 |---|---|---|---|---|
 | Slingshot | 2 / 650ms / 6 | 420 px/s | 260px | Slingshot Pellets, loaded into the new **Ammo** equipment slot |
 | Javelin | 5 / 900ms / 16 | 300 px/s | 220px | None — the equipped hotbar stack is the ammo (1 consumed per throw) |
+| Sunsteel Warbow | 11 / 750ms / 12 | 600 px/s | 380px | Arrows, loaded into the shared **Ammo** slot (evicts any pellets) |
+| Embersteel Warbow | 15 / 730ms / 15 | 640 px/s | 400px | Arrows (same slot) |
+
+One shared Ammo slot: loading Arrows swaps out Slingshot Pellets and vice versa.
 
 Aiming reuses the existing click-a-hovered-enemy-in-reach model (not free-aim),
 just with `maxRangePx` above replacing melee's reach.
