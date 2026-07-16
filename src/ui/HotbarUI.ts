@@ -6,10 +6,15 @@ import type { Skills } from "../systems/Skills";
 import type { PlayerProgression } from "../systems/Progression";
 import { Tooltip } from "./Tooltip";
 
-const SLOT_SIZE = 40;
+// Bumped 40->46 to match the InventoryMenu slot size (S3) — icons render the
+// same size whether they sit in the backpack or the hotbar.
+const SLOT_SIZE = 46;
 const SLOT_GAP = 6;
 const ROW_GAP = 6;
 const BOTTOM_MARGIN = 34;
+// Icons are generated tiny (native ~14-30px) and were drawn at native size, so
+// they looked lost in the slot. Fit each within this box (aspect preserved).
+const ICON_BOX = SLOT_SIZE - 12;
 const TOTAL_SLOTS = ROW1_COUNT + ROW2_COUNT;
 
 export interface HotbarUIDeps {
@@ -30,6 +35,11 @@ export interface HotbarUIDeps {
   // placed (the user: "art for benches needs to also show in the hotbar").
   // Returns null to fall back to the item's base icon.
   stationTexture?: (key: string, tier: number) => string | null;
+  // Whether the item (weapon/tool) at (key, tier) has a discovered + affordable
+  // next-tier upgrade the player could apply right now — drives the small
+  // pulsing "upgrade ready" arrow (S3). Materials only (position-independent),
+  // so it doesn't flicker as the player walks near/away from a Workbench.
+  upgradeReady?: (key: string, tier: number) => boolean;
 }
 
 // Always-visible bottom-center bar, TWO stacked rows of ROW1_COUNT slots
@@ -47,6 +57,10 @@ export class HotbarUI {
   private hotbar: Hotbar;
   private deps: HotbarUIDeps;
   private rows: Phaser.GameObjects.GameObject[] = [];
+  // Looping alpha tweens for the "upgrade ready" arrows — tracked so they're
+  // killed on every re-render (rows are destroyed each render; an orphaned
+  // repeat:-1 tween would leak, per the codebase's infinite-tween-leak note).
+  private indicatorTweens: Phaser.Tweens.Tween[] = [];
   private tooltipUI: Tooltip;
   private originX: number;
   private row1Y: number;
@@ -115,8 +129,24 @@ export class HotbarUI {
   }
 
   private clear(): void {
+    for (const t of this.indicatorTweens) t.remove();
+    this.indicatorTweens = [];
     for (const r of this.rows) r.destroy();
     this.rows = [];
+  }
+
+  // A small gold up-arrow at a slot's top-right corner with a gentle looping
+  // fade, shown when that slot's item has an affordable upgrade ready (S3).
+  private addUpgradeArrow(slotX: number, slotY: number): void {
+    const arrow = this.scene.add
+      .text(slotX + SLOT_SIZE - 2, slotY + 1, "▲", { fontFamily: "monospace", fontSize: "14px", color: "#ffd24a" })
+      .setOrigin(1, 0)
+      .setScrollFactor(0)
+      .setDepth(2902);
+    this.rows.push(arrow);
+    this.indicatorTweens.push(
+      this.scene.tweens.add({ targets: arrow, alpha: { from: 1, to: 0.25 }, duration: 620, yoyo: true, repeat: -1 }),
+    );
   }
 
   private render(): void {
@@ -177,8 +207,11 @@ export class HotbarUI {
             .image(x + SLOT_SIZE / 2, y + SLOT_SIZE / 2, tex)
             .setScrollFactor(0)
             .setDepth(2901);
+          const s = Math.min(ICON_BOX / icon.width, ICON_BOX / icon.height);
+          icon.setDisplaySize(icon.width * s, icon.height * s);
           this.rows.push(icon);
         }
+        if (this.deps.upgradeReady?.(stack.key, stack.tier ?? 0)) this.addUpgradeArrow(x, y);
         if (stack.count > 1) {
           const c = this.scene.add
             .text(x + SLOT_SIZE - 3, y + SLOT_SIZE - 2, `${stack.count}`, {

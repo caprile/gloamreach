@@ -6323,3 +6323,108 @@ stamina) and the dashboard Enemies/Relics tabs updated. `tsc` clean; verified li
 tables + stat invariants, toast cap, tier-aware hotbar texture, flora clustering); zero console errors.
 
 
+
+### Relic redesign — single-family purity + Rare/Mythic unique procs + additive buckets (2026-07-15, Opus)
+
+Plan: `.claude/plans/steady-humming-sphinx.md` (approved over a long design conversation).
+Off the user's dislike of relics mixing effects across families + wanting bespoke unique
+effects (reversing his earlier "only recipes are unique") + a balance worry about exponential
+scaling. Locked via `AskUserQuestion`: **single-family always; Rare/Mythic get curated
+within-family procs (StS/Hades-style, NOT Diablo rolled affixes); conservative %s, spicy
+uniques; additive-within-category across ALL buffs.**
+
+- **Single-family relics** (`Relics.ts`) — every relic touches one axis. Common/Uncommon = a
+  small flat stat; the number **PLATEAUS at Uncommon** (Rare/Mythic reuse it), so a relic is
+  never a *growing* damage/HP multiplier (a Mythic damage relic is still just +7% raw). New
+  `RelicUnique`/`UniqueKind` + `RelicDef.unique`; `RelicManager.unique(kind)` returns the
+  owned proc's params + tier; `uniqueText()` appended to `relicEffectText`. **`compareInstances`
+  reworked to order by rarity→tier** (not numeric) — that's what frees the stat to plateau
+  without breaking auto-replace; the "choice" verdict now effectively never fires.
+- **8 bespoke procs** (Rare→Mythic scaled), all reusing one existing hook each:
+  **Onslaught** (damage, every Nth hit +bonus), **Fleetfoot** (move, on-kill speed burst +
+  dash refund), **Guardian** (defense, negate-next-hit on cd + Mythic hit-cap), **Second
+  Wind** (stamina, on-kill % restore + Mythic free-attack window), **Leech** (lifesteal, heal
+  % of dmg dealt + Mythic overheal→shield), **Undying** (vitality, low-HP heal + Mythic
+  once-per-run revive), **Executioner** (crit, crit splash + Mythic slow), **Prodigy** (xp,
+  kill-streak ramp). Net-new: player shield (+ cyan HP-bar overlay), `Stamina.restore()`,
+  `Enemy.slowUntil`/`applySlow` (folded into `envSpeedMult`), `Player.resetDashCooldown()`,
+  10 per-run scene fields (all reset in `create()`).
+- **Additive-within-category (all buffs)** — no category compounds across % sources:
+  **damage** (`damageBonusMult` = 1 + skill% + relic%, replacing `× skill × relic` at all 3
+  damage sites + display); **damage reduction** (relic% + Molten add, capped 75%, in
+  `applyDamageToPlayer`); **move** (relic + Fleetfoot + sprint add in `Player.update`); **XP**
+  (relic + Intelligence + streak add in `awardSkillXp`); **max HP/stamina** (linear
+  `100 + statFlat + 100×relicPct%`, superseding M-SS's compounding — a minor high-stat nerf,
+  the anti-exponential choice). Crit chance/mult + stamina cost were already additive. Crit,
+  stagger, and the procs stay their own conditional multipliers.
+- Also: dropped the boss-named **Gremlin King's Wrath** relic (the user: no boss-named
+  relics) — the damage mythic is now just **Berserker's Mantle**, mythic pool a clean 8.
+
+**Verified live** (`javascript_tool`): all 8 unique() lookups; Onslaught fires every 4th hit
+(2.2×); Fleetfoot burst +35% + dash refund; Second Wind restores 40% max stam + free window
+(cost mult→0, →0.9 on expiry); Prodigy streak 1.10→1.20; Guardian negate + cooldown; Guardian
+cap (100→30); Leech shield absorb (20→12, HP unchanged) + HUD overlay renders; Undying revives
+once to 40% then dies; linear max HP 112; **additive damage 1.57 vs 1.605 multiplicative**;
+**additive reduction 78 vs 79 multiplicative** (relic-only 93). `tsc` clean; dashboard renders
+all proc text; no console errors. See [[survivor-rpg-relics]].
+
+### S4 — Relic economy rework (2026-07-15, Opus)
+
+First of the 8-session 2026-07-15 playtest plan (`playtest-2026-07-15-session-plan.md`).
+All changes in `src/systems/Relics.ts` + the two main-boss loot tables; `RECIPES.md` +
+dashboard Relics tab kept in sync. Four locked pieces:
+
+- **Full 8×4 relic matrix** — added **12 relics** so every family
+  (damage/move/defense/stamina/lifesteal/vitality/crit/xp) has a
+  Common/Uncommon/Rare/Mythic (**32 total, one per family per rarity** — the old boss-named
+  duplicate damage mythic "Gremlin King's Wrath" was dropped per the user so no relic is tied
+  to a specific boss; Avatar's Mantle stays the damage mythic). New: Scholar's Charm (xp C),
+  Tireless Idol (stamina U), Aegis/Endless/
+  Deadeye/Sage Totems (defense/stamina/crit/xp R), Windwalker's/Perpetual/Bloodlord's/
+  Colossus/Assassin's/Enlightened Mantles (move/stamina/lifesteal/vitality/crit/xp M).
+  Magnitudes follow the existing per-rarity curve (Charm→Idol→Totem→Mantle naming). This
+  closes the 50-rolls-no-stamina-relic complaint (only one stamina relic existed).
+- **Main bosses → guaranteed Mythic of their tier** (locked: main bosses only). The
+  shared `boss_refined_trophy` (Rare, 50%→Mythic) is now the **Gremlin King's** guaranteed
+  **Mythic Tier 1** (`outcomeOdds:[{mythic,1.0}]`); a new `boss_refined_trophy_t2` item —
+  **"Tyrant Trophy"** — is the **Duneshaper's** guaranteed **Mythic Tier 2** (×1.5), so the
+  two tiers don't share a key. New item def + `Inventory.ts` type + ember-orange BootScene
+  icon.
+- **Never re-roll an owned Rare/Mythic id** — the pool pick now filters out ids already in
+  the loadout when the produced rarity is rare/mythic (Common/Uncommon can still repeat —
+  small pools, churn through the family-dominance compare fine). Guards the own-everything
+  case by falling back to the full pool.
+- **Softened Common crumble + lifted refined cap** — Common own-rarity band **10%→20%**
+  (success **13.5%→23.5%**), pity **12→8**; the `maxRarity:"rare"` cap is removed from both
+  `refined_trophy_uncommon` + `_t2`, so a mini-boss refined (Uncommon) trophy can now gamba
+  into a **Mythic** (~1%), not just main bosses.
+
+**Verified live** (`javascript_tool` against the running `RelicManager`): boss trophy →
+100% Mythic T1 / tyrant → 100% Mythic T2 (300 each); pool sizes C8/U8/R8/M9 (full matrix);
+2713 rare rolls with an owned rare id → **0 leaked** the owned id; empty-pool fallback still
+returns a rare when all 8 are owned; Common success **23.55%** (200k rolls); refined Uncommon
++ refined-t2 both reach Mythic ~1.0%. `tsc` clean, dashboard boots with no console errors.
+
+### S5 — Relic forge SFX per rarity (2026-07-15, Sonnet)
+Wave 1 of the 8-session 2026-07-15 playtest plan (`playtest-2026-07-15-session-plan.md`), the only
+session that never touches `MainScene.ts` (cleanest parallel-safe pick). Gave the Relic Forge's
+slot-machine reveal per-rarity audio to match its per-rarity visual escalation.
+- **`Sfx.ts`** — new "Relic Forge" cue group, all raw Web-Audio oscillator/gain envelopes synthesized
+  at call time (same ethos as every existing cue, no asset files): `relicReelTick()` (a faint 14ms
+  click, gain 0.018, per reel-gem swap — many fire per spin, near-inaudible individually, together
+  read as a spinning reel), and escalating reveal fanfares — `relicCommon()` (modest single rising
+  blip), `relicUncommon()` (brighter two-note rise), `relicRare()` (low body + ascending C-major
+  arpeggio + C6 sparkle), `relicMythic()` (MASSIVE: sub-boom + full ascending run + sustained shimmer
+  pad + high sparkle tail, ~1s layered) — plus `relicCrumble()` (dusty downward fizzle for fails).
+- **`RelicRevealFx.ts`** — fires the cues in sync with the visuals: reel tick on each `tickReel` swap;
+  the per-rarity fanfare (`playRevealCue`) at the **gem-land** inside `reveal()`'s success branch (NOT
+  the ~900ms-later `announceRoll`, so audio lands with the punch); `relicCrumble()` in the fail branch.
+- **Kept to just these two files** per the plan's parallel-safety constraint. `RelicRevealFx` only holds
+  `this.scene`, which IS the MainScene instance, so it reads the private `sfx` field via a structural
+  cast (`(this.scene as unknown as { sfx?: SfxPlayer }).sfx`) — no MainScene edit, no dep threading,
+  no second `AudioContext`; no-ops safely if unavailable. Also imports `type SfxPlayer` (type-only).
+- **Verified** (`tsc` clean + live `javascript_tool`): all 6 methods exist + call without throwing;
+  a real guaranteed-success first roll (landed `uncommon`) fired 7 `relicReelTick`s during the spin then
+  exactly `relicUncommon` at landing (rarity→method map correct); a forced `{success:false}` roll fired
+  reel ticks then `relicCrumble`; `revealFx.scene === MainScene` confirmed (accessor resolves); no
+  console errors. Audio itself is by-ear (can't be auto-verified). No `RECIPES.md`/dashboard change.

@@ -89,6 +89,11 @@ export interface InventoryMenuDeps {
   // "Sort" button next to the Backpack label — re-flows the backpack into
   // fewer, merged, sorted stacks (ItemContainer.sortAndStack).
   sortBackpack: () => void;
+  // Whether the item at (key, tier) has a discovered + affordable next-tier
+  // upgrade the player could apply right now — drives the small pulsing
+  // "upgrade ready" arrow on backpack weapons/tools and worn armor (S3).
+  // Materials-only (position-independent) so it doesn't flicker with movement.
+  upgradeReady: (key: string, tier: number) => boolean;
 }
 
 export const PANEL_X = 16;
@@ -110,6 +115,9 @@ export const BACKPACK_ROWS = 15;
 // this flat container; tabs/sections/scroll organize the rest.
 export const BACKPACK_CAPACITY = 240;
 const ARMOR_COLS = 3;
+// Item icons are generated tiny (native ~14-30px); fit each within this box
+// (aspect preserved) so they fill the slot instead of floating small (S3).
+const ICON_BOX = SLOT - 12;
 
 // Fixed layout anchors so render() and slotIndexAt() stay in lockstep.
 // Backpack grid sits on the left, equipment grid to its right — both start
@@ -208,6 +216,10 @@ export class InventoryMenu {
   private bg: Phaser.GameObjects.Rectangle;
   private open = false;
   private rows: Phaser.GameObjects.GameObject[] = [];
+  // Looping alpha tweens for the "upgrade ready" arrows — killed on every
+  // re-render (rows are destroyed each render; an orphaned repeat:-1 tween
+  // would leak, per the codebase's infinite-tween-leak note).
+  private indicatorTweens: Phaser.Tweens.Tween[] = [];
   private tooltipUI: Tooltip;
   // A separate lightweight tooltip for the Relics column (relics aren't
   // items, so the shared item Tooltip class doesn't apply — mirrors the
@@ -415,8 +427,31 @@ export class InventoryMenu {
   }
 
   private clearRows(): void {
+    for (const t of this.indicatorTweens) t.remove();
+    this.indicatorTweens = [];
     for (const r of this.rows) r.destroy();
     this.rows = [];
+  }
+
+  // Fit an item icon within ICON_BOX (aspect preserved), so tiny generated
+  // textures fill the slot instead of floating small.
+  private fitIcon(icon: Phaser.GameObjects.Image): void {
+    const s = Math.min(ICON_BOX / icon.width, ICON_BOX / icon.height);
+    icon.setDisplaySize(icon.width * s, icon.height * s);
+  }
+
+  // A small gold up-arrow at a slot's top-right corner with a gentle looping
+  // fade, shown when that slot's item has an affordable upgrade ready (S3).
+  private addUpgradeArrow(slotX: number, slotY: number): void {
+    const arrow = this.scene.add
+      .text(slotX + SLOT - 2, slotY + 1, "▲", { fontFamily: "monospace", fontSize: "14px", color: "#ffd24a" })
+      .setOrigin(1, 0)
+      .setScrollFactor(0)
+      .setDepth(3003);
+    this.rows.push(arrow);
+    this.indicatorTweens.push(
+      this.scene.tweens.add({ targets: arrow, alpha: { from: 1, to: 0.25 }, duration: 620, yoyo: true, repeat: -1 }),
+    );
   }
 
   private render(): void {
@@ -585,6 +620,7 @@ export class InventoryMenu {
           .image(x + SLOT / 2, y + SLOT / 2 - 4, rarityIcon(slot.group.def.rarity))
           .setScrollFactor(0)
           .setDepth(3002);
+        this.fitIcon(gem);
         this.rows.push(gem);
         this.addText(x + 3, y + 3, `T${slot.group.powerTier}`, 9, "#9fd0ff");
       } else {
@@ -693,11 +729,13 @@ export class InventoryMenu {
             .image(x + SLOT / 2, y + SLOT / 2, def.texture)
             .setScrollFactor(0)
             .setDepth(3002);
+          this.fitIcon(icon);
           this.rows.push(icon);
         }
         if (slot.count && slot.count > 1) {
           this.addText(x + SLOT - 4, y + SLOT - 3, `${slot.count}`, 11, "#ffffff", 1, 1);
         }
+        if (this.deps.upgradeReady(slot.itemKey, slot.tier ?? 0)) this.addUpgradeArrow(x, y);
       } else {
         this.addText(x + SLOT / 2, y + SLOT / 2, slot.label, 10, "#5b6472", 0.5, 0.5);
       }
@@ -927,11 +965,13 @@ export class InventoryMenu {
         .image(x + SLOT / 2, y + SLOT / 2, def.texture)
         .setScrollFactor(0)
         .setDepth(3002);
+      this.fitIcon(icon);
       this.rows.push(icon);
     }
     if (stack.count > 1) {
       this.addText(x + SLOT - 4, y + SLOT - 3, `${stack.count}`, 11, "#ffffff", 1, 1);
     }
+    if (this.deps.upgradeReady(stack.key, stack.tier ?? 0)) this.addUpgradeArrow(x, y);
   }
 
   // Small up/down arrows at the grid's right edge when there's more above/below.

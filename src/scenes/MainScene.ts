@@ -647,6 +647,13 @@ export class MainScene extends Phaser.Scene {
   // at least one defined upgrade (see StationUpgrades.ts) — keyed by the
   // placed Image so it can be moved/updated/destroyed alongside it.
   private placedLabels = new Map<Phaser.GameObjects.Image, Phaser.GameObjects.Text>();
+  // A floating gold "▲" over any placed station that has an affordable,
+  // not-yet-applied upgrade ready (S3) — keyed by the placed Image like
+  // placedLabels, each with its own looping fade tween (killed on destroy).
+  private placedUpgradeGlyphs = new Map<
+    Phaser.GameObjects.Image,
+    { text: Phaser.GameObjects.Text; tween: Phaser.Tweens.Tween }
+  >();
   private hotbarUI!: HotbarUI;
   private eventLogUI!: EventLogUI;
   private keybindsUI!: KeybindsUI;
@@ -927,6 +934,7 @@ export class MainScene extends Phaser.Scene {
     this.forgeLightPoints = [];
     this.upgradeTarget = null;
     this.placedLabels = new Map();
+    this.placedUpgradeGlyphs = new Map();
     this.dragSource = null;
     this.dragGhost = null;
     this.lastClickKey = null;
@@ -1218,6 +1226,7 @@ export class MainScene extends Phaser.Scene {
       eatItem: (c, i) => this.eatItem(c, i),
       isDragging: () => this.dragSource !== null,
       stationTexture: (key, tier) => this.tieredStationTexture(key, tier),
+      upgradeReady: (key, tier) => this.hasReadyUpgrade(key, tier),
     });
     this.createStaminaBar();
     this.createHealthBar();
@@ -2407,6 +2416,12 @@ export class MainScene extends Phaser.Scene {
     this.recomputeSetBonuses();
     this.reconcileBackpackDiscovery();
     this.inventoryMenu.refresh();
+    // The hotbar's "upgrade ready" arrow depends on backpack materials, which
+    // this move may have changed even when nothing NEW was discovered (so
+    // reconcileBackpackDiscovery's refreshDiscovery path didn't fire) — refresh
+    // the hotbar + station glyphs here too so both track affordability (S3).
+    this.hotbarUI.refresh();
+    this.refreshStationUpgradeIndicators();
     this.dryingRackMenu.refresh();
     this.cookingMenu.refresh();
     this.chestMenu.refresh();
@@ -6975,6 +6990,7 @@ export class MainScene extends Phaser.Scene {
     this.craftingMenu?.refresh();
     this.inventoryMenu?.refresh();
     this.upgradeMenu?.refresh();
+    this.refreshStationUpgradeIndicators();
   }
 
   private createCharacterMenu(): void {
@@ -7375,6 +7391,9 @@ export class MainScene extends Phaser.Scene {
     // Placing from an owned stack changed a count — keep the hotbar display in
     // sync too (refreshHud only touches the crafting/inventory menus).
     if (itemSource) this.hotbarUI.refresh();
+    // A freshly placed station may already have an affordable upgrade — surface
+    // its glyph now (and a re-placed tiered station shows the right glyph state).
+    this.refreshStationUpgradeIndicators();
     // A single placement exits placement mode — per playtest feedback, "place
     // another one" auto-re-arming wasn't wanted (was built anticipating a
     // different use case that never landed). Explicit re-entry (a fresh Place
@@ -7835,6 +7854,12 @@ export class MainScene extends Phaser.Scene {
       label.destroy();
       this.placedLabels.delete(obj);
     }
+    const glyph = this.placedUpgradeGlyphs.get(obj);
+    if (glyph) {
+      glyph.tween.remove();
+      glyph.text.destroy();
+      this.placedUpgradeGlyphs.delete(obj);
+    }
 
     const rackIndex = this.dryingRacks.findIndex((r) => r.image === obj);
     if (rackIndex !== -1) {
@@ -7927,7 +7952,71 @@ export class MainScene extends Phaser.Scene {
         sortAndStack(this.backpack);
         this.inventoryMenu.refresh();
       },
+      upgradeReady: (key, tier) => this.hasReadyUpgrade(key, tier),
     });
+  }
+
+  // Whether the item at (itemKey, tier) has a discovered + affordable next-tier
+  // upgrade the player could apply right now — drives the inventory/hotbar/
+  // paper-doll "upgrade ready" arrow (S3). Weapons, tools, and armor all follow
+  // the resultTier ladder (next tier only), and a given itemKey matches at most
+  // one of the three tables. Deliberately materials-only: it does NOT consult
+  // upgradeBlockReason (Workbench-proximity), so the arrow is a stable "you have
+  // the mats" nudge that doesn't flicker as the player moves — clicking Upgrade
+  // still surfaces any proximity gate, exactly like the crafting menu does.
+  private hasReadyUpgrade(itemKey: string, tier: number): boolean {
+    const next = [
+      ...weaponUpgradesForItem(itemKey),
+      ...armorUpgradesForItem(itemKey),
+      ...toolUpgradesForItem(itemKey),
+    ].find((u) => u.resultTier === tier + 1);
+    if (!next) return false;
+    return this.upgradeIngredientsKnown(next) && this.canAffordUpgrade(next);
+  }
+
+  // Station equivalent: a placed station has an affordable upgrade ready if any
+  // discovered, not-yet-applied upgrade for its itemKey is affordable (no-ladder
+  // model — see UpgradeMenu). Drives the floating glyph over the placed object.
+  private stationHasReadyUpgrade(obj: Phaser.GameObjects.Image): boolean {
+    const key = obj.getData("itemKey") as string;
+    const applied = new Set((obj.getData("upgrades") as string[] | undefined) ?? []);
+    return upgradesForItem(key).some(
+      (u) => !applied.has(u.id) && this.upgradeIngredientsKnown(u) && this.canAffordUpgrade(u),
+    );
+  }
+
+  // Show/hide the floating "upgrade ready" glyph over each placed station,
+  // reconciling against stationHasReadyUpgrade(). Cheap — runs on the same item-
+  // move/discovery cadence affordability actually changes on, not per frame.
+  private refreshStationUpgradeIndicators(): void {
+    for (const obj of this.placedObjects) {
+      const ready = this.stationHasReadyUpgrade(obj);
+      const existing = this.placedUpgradeGlyphs.get(obj);
+      if (ready && !existing) {
+        const text = this.add
+          .text(obj.x + obj.displayWidth / 2 + 2, obj.y - obj.displayHeight / 2 - 6, "▲", {
+            fontFamily: "monospace",
+            fontSize: "16px",
+            color: "#ffd24a",
+          })
+          .setOrigin(0, 1)
+          // Above every world object but below the fixed HUD, matching the
+          // placed-label depth convention.
+          .setDepth(2500);
+        const tween = this.tweens.add({
+          targets: text,
+          alpha: { from: 1, to: 0.3 },
+          duration: 620,
+          yoyo: true,
+          repeat: -1,
+        });
+        this.placedUpgradeGlyphs.set(obj, { text, tween });
+      } else if (!ready && existing) {
+        existing.tween.remove();
+        existing.text.destroy();
+        this.placedUpgradeGlyphs.delete(obj);
+      }
+    }
   }
 
   private armorSlots(): ArmorSlotView[] {
