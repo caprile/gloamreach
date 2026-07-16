@@ -1132,6 +1132,23 @@ export class BootScene extends Phaser.Scene {
     g.fillRect(12, 4, 9, 7); // head
     g.generateTexture("icon_stone_axe", ICON, ICON);
 
+    // Ironshod Woodcutter's Axe (stone_axe tier 1): the upgraded look — a bigger
+    // sunsteel head with a bright bevel edge, and gold ingot bands on the haft,
+    // so an upgraded axe reads distinctly in the hotbar/on the player (the user:
+    // "axe upgrade needs to change art"). Base texture key + "_t1" per the
+    // tieredToolTexture convention.
+    g.clear();
+    g.fillStyle(0x6a3f1d, 1);
+    g.fillRect(10, 5, 4, 17); // darker haft
+    g.fillStyle(0xd8a838, 1); // gold ingot bands
+    g.fillRect(9, 9, 6, 2);
+    g.fillRect(9, 15, 6, 2);
+    g.fillStyle(0x8f8f96, 1); // steel head body
+    g.fillRect(11, 3, 11, 9);
+    g.fillStyle(0xe6e2d0, 1); // bright bevel edge
+    g.fillRect(19, 3, 3, 9);
+    g.generateTexture("icon_stone_axe_t1", ICON, ICON);
+
     // Stone Pickaxe: brown handle, gray double-pointed head.
     g.clear();
     g.fillStyle(0x7a4a22, 1);

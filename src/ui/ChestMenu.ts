@@ -224,7 +224,7 @@ export class ChestMenu {
     originY = 0,
   ): void {
     const t = this.scene.add
-      .text(x, y, str, { fontFamily: "monospace", fontSize: `${size}px`, color, align: "center" })
+      .text(x, y, str, { fontFamily: "monospace", fontSize: `${size + 1}px`, color, align: "center" })
       .setOrigin(originX, originY)
       .setScrollFactor(0)
       .setDepth(DEPTH_TEXT);

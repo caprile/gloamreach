@@ -6519,3 +6519,100 @@ game: `window.__dev.spawn('cinderwrought')`, then read the live instance's `pois
 `Enemy` — confirms the new numbers are actually wired, not just typed into the constants. Updated
 the dashboard's manual Enemies-tab mirror (damage/telegraph numbers, resist note, fire-vs-physical
 split, and the rebalance rationale) to match. No `RECIPES.md` change (no recipe/cost edits).
+
+### S3 — Inventory visuals + upgrade-ready indicators (2026-07-15, Opus)
+Wave 2 of the 8-session 2026-07-15 playtest plan (`playtest-2026-07-15-session-plan.md`). A new
+upgrade-affordance indicator system + an icon-size pass. Three parts:
+
+1. **Bigger icons.** Item icons are generated tiny (native ~14-30px, e.g. a 24px tool) and were
+   drawn at native size via `scene.add.image(...)` with no `setDisplaySize`, so they floated small in
+   the slot. Added a shared `InventoryMenu.fitIcon(img)` — scales each icon to fit within an `ICON_BOX`
+   = `SLOT - 12` (34px) box, aspect preserved — applied to backpack cells, equipment slots, and the
+   relic gem icons; `HotbarUI` does the same inline (its own `ICON_BOX = SLOT_SIZE - 12`). The hotbar
+   `SLOT_SIZE` was **bumped 40→46 to match the inventory `SLOT`** (the user: "hotbar size up a little
+   too, so things are the same size"), so an icon renders identically in the backpack or the hotbar.
+   The HP/stamina/XP bars and hotbar centering all derive from `HotbarUI`'s `top`/`bottom`/`left`/
+   `width` getters (which read `SLOT_SIZE`), so they re-layout automatically — verified intact at
+   native 1080p (hotbar top 948 / bottom 1046 / width 462, centered).
+2. **"Upgrade ready" arrow.** A small gold pulsing **▲** at a slot's top-right corner when that item
+   has a discovered + affordable next-tier upgrade the player could apply right now. Three surfaces:
+   backpack **weapons/tools** + worn **armor** (both via `MainScene.hasReadyUpgrade(itemKey, tier)` —
+   the resultTier ladder: the single next-tier upgrade across the weapon/armor/tool tables, a given
+   itemKey matching at most one), and placed **stations** (a floating world glyph over the object, via
+   `stationHasReadyUpgrade(obj)` — the no-ladder "any discovered, not-yet-applied, affordable upgrade"
+   model — reconciled by `refreshStationUpgradeIndicators()`, glyphs kept in a `placedUpgradeGlyphs`
+   map keyed by the placed Image like `placedLabels`, depth 2500). **Design decision (logged):** the
+   predicate is deliberately **materials-only** — it does NOT consult `upgradeBlockReason`
+   (Workbench-proximity), so the arrow is a stable "you have the mats" nudge that doesn't flicker as
+   the player walks near/away from a bench; clicking Upgrade still surfaces any proximity gate, exactly
+   like the crafting menu shows affordable-but-needs-workbench recipes. Refreshed from `afterItemMove`
+   (now also refreshes the hotbar, since a material change with nothing NEW discovered skips the
+   `refreshDiscovery` path), `refreshDiscovery`, placement (`attemptPlaceObject` tail), and every
+   upgrade-apply path. **Tween hygiene:** the looping fade tweens are tracked (`indicatorTweens[]` in
+   each UI; per-glyph `tween` in the station map) and killed on every re-render / on station destroy —
+   no orphaned `repeat:-1` tween (verified: no arrow-tween accumulation across 20 inventory toggles,
+   zero stray world glyph tweens after destroy).
+3. **Suppress armor-upgrade discovery toasts** — **already satisfied, no change.** Armor and weapon
+   upgrades never emitted a discovery toast; only station upgrades (`STATION_UPGRADES`) and tool
+   upgrades (`TOOL_UPGRADES`) do, in `refreshDiscovery`, and those are kept. The affordable-arrow is
+   the new signal the triage wanted in their place.
+
+`tsc` clean; verified live via `javascript_tool`: `hasReadyUpgrade('stone_club',0)` false with no
+mats → true with exactly `{wood:3,stone:3}` → false at max tier; inventory renders 1 backpack + 1
+equipment arrow at the correct slot top-right screen coords (72,253 / 402,105), each with a live fade
+tween; icon display width 24→34; hotbar arrow + enlarged icon (34) render; station glyph (workbench
+`tool_sharpener`, `{twine:3,wood:5,stone:2}`) appears with mats / clears on consume / recreates /
+`placedUpgradeGlyphs` cleaned to 0 on `destroyPlacedObject`; no console errors. No `RECIPES.md`/
+dashboard change (no recipes touched). **Next in the plan:** Wave 3 — S7 (weapon identity redesign,
+Opus) → S8 (biome-2 bow + arrows, Opus, after S7).
+
+
+### S7 — Weapon identity redesign (2026-07-15, Opus)
+Wave 3 of the 8-session 2026-07-15 playtest plan (`playtest-2026-07-15-session-plan.md`). A new
+mechanic (the blunt debuff) + a full rebalance of the three melee weapon identities, all locked via
+`AskUserQuestion`: **Spear/Pike (pierce) = lowest arc + highest single-target + best crit; Knife/Sword
+(slash) = biggest arc + best crowd AOE; Club/Warhammer (blunt) = medium arc + a movement-slow/cripple
+debuff.** The old tables were largely **inverted** from this — spears/pikes were the WIDEST sweepers
+and swords near single-target.
+
+- **`Weapons.ts` tables reworked:**
+  - **`WEAPON_ARC`** — slash now the widest (bone_knife ±50°/54px, sunsteel_sword ±60°/66px,
+    embersteel_sword ±62°/70px), blunt lower-medium (clubs ±35-38°, warhammers ±40-42°), pierce
+    near-single-target (primal_spear ±18°/30px, pikes ±20-22°/34-36px). Ranged unchanged (no sweep);
+    ember_brand stays a medium ±45° magic sweep.
+  - **`WEAPON_DAMAGE`** — bumped the forged pikes so pierce is the single-target DPS leader:
+    sunsteel_pike **15→19** (DPS 30.6, edges sunsteel_sword's 29.2), embersteel_pike **20→25** (DPS
+    41.0 > embersteel_sword's 40.4). starter primal_spear stays 8 (already its tier's top
+    single-target). Both bumps preserve the tier invariants (ember base ≥ steel base + 5; base forged
+    still clears the maxed Primal Spear's 13).
+  - **`WEAPON_BASE_CRIT_*`** — pierce is now clearly the crit king (spear/pike 10%/×1.70,
+    embersteel_pike 11%/×1.75) over blunt (4-5%) and slash (5-6%); previously the warhammers held the
+    highest base crit. Rationale comment updated: crit is a pierce-identity axis first, attack-speed
+    lean second.
+- **Blunt movement-slow debuff (net-new mechanic, but zero new state machine):** a blunt hit now calls
+  `enemy.applySlow(BLUNT_SLOW_FACTOR 0.6, BLUNT_SLOW_MS 1500, now)` at the single melee/ranged choke
+  point `MainScene.resolveWeaponHit` (only on a surviving enemy). This **reuses the exact
+  `Enemy.applySlow`/`slowMult` path already built for the Executioner crit relic** — the scene folds
+  `slowMult(now)` into `envSpeedMult` each frame, so the slow rides every aggressive-movement velocity
+  with no per-subclass wiring. The slow **refreshes on each blunt hit** (sustained bludgeoning keeps a
+  target crippled) and `applySlow` keeps the stronger of any overlapping slows. Because it's at the
+  shared choke point, a blunt AOE-arc *sweep* cripples every swept enemy too (thematic crowd-control
+  identity). Subtle tell: a one-shot icy-blue `light_soft` puff (`spawnSlowTell`) — deliberately NOT a
+  persistent tint (would fight `Enemy.applyHpTint`/the wind-up tell); the enemy visibly slowing is the
+  lasting feedback.
+- **Identity surfaced everywhere:** new `weaponIdentityLine(weapon)` (keyed off primary damage type) +
+  `weaponSlowsOnHit` helpers. Shown on the item **Tooltip** (a line under Crit), the inventory
+  **Combat column** (muted line under the weapon name, new `CombatStatsView.identity`), and the
+  **dashboard** weapons tab (new **Arc** column `±half° / range / falloff` + an "S7 weapon identities"
+  note block, drift-free off `BLUNT_SLOW_FACTOR`/`_MS`).
+
+`tsc` clean; verified live via `preview_start` + `javascript_tool` against the running game: a blunt
+`resolveWeaponHit` drops `enemy.slowMult` 1→0.6 while a pierce hit leaves it at 1; combatStats reads
+per-type (pike 19/25, pierce crit 10%/11%, correct identity strings); an end-to-end `tryMeleeAttack`
+sweep test confirmed a **sunsteel_sword hits a 45°-offset secondary for 10.5 (=14×0.75 falloff) while
+sunsteel_pike and stone_club do NOT** (pierce single-target; club's 38° cone excludes 45°); the Combat
+column renders "Focused — top single-target & crit, narrow arc" and the Tooltip appends "Crushing —
+cripples enemy movement"/"Focused …"; dashboard weapons tab renders the Arc column + notes; no console
+errors. No `RECIPES.md` change (no recipe/cost edits — weapon damage stats aren't in it). **Next in the
+plan:** S8 (biome-2 bow + arrows + ember material tweak, **Opus**) — the last session, and it should
+fit these finalized identities.

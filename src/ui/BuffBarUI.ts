@@ -7,7 +7,9 @@ const GAP = 6;
 // panels (3000+). Must clear WORLD_H so world objects never draw over it.
 const DEPTH_ICON = 2803;
 const DEPTH_BAR = 2804;
-const DEPTH_TIP = 2806;
+// Above the hotbar (2900-2902) so a hover tooltip renders IN FRONT of it, not
+// behind (the user); still below the 3000+ menus.
+const DEPTH_TIP = 2955;
 
 interface Entry {
   bg: Phaser.GameObjects.Rectangle;

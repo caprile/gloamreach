@@ -35,11 +35,9 @@ export const WARDEN_STAGGER_DAMAGE_MULTIPLIER = 1.5; // punish-window bonus (mir
 const STAGGER_DURATION_MS = 2500;
 const POISE_REGEN_DELAY_MS = 3500;
 const POISE_REGEN_PER_SEC = 12;
-const POISE_BAR_OFFSET_Y = 10;
-// A mini-boss stagger bar reads as a real mechanic — much bigger than the tiny
-// 22×3 regular-enemy bars (the user: "stagger bar too small").
-const POISE_BAR_W = 56;
-const POISE_BAR_H = 6;
+// A mini-boss stagger bar reads as a real mechanic — sits under the enlarged HP
+// bar (barScale) and matches its width (the user: "stagger bar too small").
+const POISE_BAR_H = 7;
 
 // Leaping smash — gap-closer: lock the player's spot, leap to it, AoE on landing
 // (ported from GremlinKing so it reads as a lighter preview of that fight).
@@ -121,23 +119,25 @@ export class Gloamwarden extends Enemy {
       ],
       maxHealth: WARDEN_MAX_HEALTH,
       biteDamage: 0, // all damage flows through checkPlayerHit()
+      barScale: 2.4, // big overhead HP bar to match the 1.7× sprite (readable mini-boss bars)
     });
     this.spawnX = cfg.x;
     this.spawnY = cfg.y;
     this.baseScale = GLOAMWARDEN_SCALE;
     this.setScale(GLOAMWARDEN_SCALE);
 
-    const barX = cfg.x - POISE_BAR_W / 2;
-    const barY = cfg.y - Enemy.BAR_OFFSET_Y + POISE_BAR_OFFSET_Y;
-    this.poiseBarBg = scene.add.rectangle(barX, barY, POISE_BAR_W, POISE_BAR_H, 0x1a1f2a, 0.85).setOrigin(0, 0.5);
-    this.poiseBarFill = scene.add.rectangle(barX, barY, POISE_BAR_W, POISE_BAR_H, 0xb069e8, 1).setOrigin(0, 0.5);
+    // Poise bar sits directly under the (enlarged) HP bar and matches its width.
+    const barX = cfg.x - this.barW / 2;
+    const barY = cfg.y - this.barOffsetY + this.barH + 2;
+    this.poiseBarBg = scene.add.rectangle(barX, barY, this.barW, POISE_BAR_H, 0x1a1f2a, 0.85).setOrigin(0, 0.5);
+    this.poiseBarFill = scene.add.rectangle(barX, barY, this.barW, POISE_BAR_H, 0xb069e8, 1).setOrigin(0, 0.5);
     this.telegraphGfx = scene.add.graphics();
   }
 
   preUpdate(time: number, delta: number): void {
     super.preUpdate(time, delta);
-    const barX = this.x - POISE_BAR_W / 2;
-    const barY = this.y - Enemy.BAR_OFFSET_Y + POISE_BAR_OFFSET_Y;
+    const barX = this.x - this.barW / 2;
+    const barY = this.y - this.barOffsetY + this.barH + 2;
     const aggro = this.isAggro();
     this.poiseBarBg.setPosition(barX, barY).setDepth(this.depth + 1).setVisible(aggro);
     this.poiseBarFill.setPosition(barX, barY).setDepth(this.depth + 1).setVisible(aggro);

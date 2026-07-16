@@ -4,6 +4,7 @@ import type { ItemContainer, ItemStack } from "../systems/ItemContainer";
 import { itemDef, itemBiome, itemCategory, type ItemBiome, type ItemCategory } from "../systems/Items";
 import type { Skills } from "../systems/Skills";
 import type { PlayerProgression } from "../systems/Progression";
+import type { WeaponType } from "../systems/Weapons";
 import { RARITY_COLOR, rarityIcon, rarityName, relicEffectText, relicFamilyName, type RelicEffectSummary, type RelicFamilySlot, type RelicGroup } from "../systems/Relics";
 import { Tooltip } from "./Tooltip";
 
@@ -50,6 +51,12 @@ export interface InventoryMenuDeps {
   backpack: ItemContainer;
   skills: Skills;
   progression: PlayerProgression;
+  // Live capped crit totals for a weapon (base + Strength/Agility + relics),
+  // shown on the weapon tooltip alongside its per-weapon base.
+  critTotals?: (weapon: WeaponType) => { chance: number; mult: number };
+  // Per-tier texture for an item (e.g. the Ironshod stone_axe at tier 1), so a
+  // backpack icon matches the hotbar's tiered art. Null → base icon.
+  stationTexture?: (key: string, tier: number) => string | null;
   armorSlots: () => ArmorSlotView[];
   combatStats: () => CombatStatsView;
   runSpeedBreakdown: () => RunSpeedView;
@@ -241,7 +248,7 @@ export class InventoryMenu {
   constructor(scene: Phaser.Scene, deps: InventoryMenuDeps) {
     this.scene = scene;
     this.deps = deps;
-    this.tooltipUI = new Tooltip(scene, deps.skills, deps.progression);
+    this.tooltipUI = new Tooltip(scene, deps.skills, deps.progression, deps.critTotals);
 
     this.bg = scene.add
       .rectangle(PANEL_X, PANEL_Y, PANEL_W, PANEL_H, 0x0a0a0a, 0.93)
@@ -970,8 +977,12 @@ export class InventoryMenu {
 
     const def = itemDef(stack.key);
     if (def) {
+      // Tiered art (e.g. the Ironshod stone_axe at tier 1) so an upgraded item
+      // shows the same upgraded icon in the backpack as in the hotbar.
+      const tiered = this.deps.stationTexture?.(stack.key, stack.tier ?? 0);
+      const tex = tiered && this.scene.textures.exists(tiered) ? tiered : def.texture;
       const icon = this.scene.add
-        .image(x + SLOT / 2, y + SLOT / 2, def.texture)
+        .image(x + SLOT / 2, y + SLOT / 2, tex)
         .setScrollFactor(0)
         .setDepth(3002);
       this.fitIcon(icon);
@@ -1003,7 +1014,9 @@ export class InventoryMenu {
   ): Phaser.GameObjects.Text {
     const style: Phaser.Types.GameObjects.Text.TextStyle = {
       fontFamily: "monospace",
-      fontSize: `${size}px`,
+      // +1 everywhere (2026-07-15: "text is too small especially menus") — one
+      // knob bumps every label this panel draws through addText.
+      fontSize: `${size + 1}px`,
       color,
     };
     if (wrapWidth !== undefined) style.wordWrap = { width: wrapWidth };

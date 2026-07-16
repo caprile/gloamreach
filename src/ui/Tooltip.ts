@@ -8,6 +8,7 @@ import {
   weaponDamage,
   weaponIdentityLine,
   weaponPrimaryDamageType,
+  type WeaponType,
 } from "../systems/Weapons";
 import { weaponSkillDamageMultiplier, type Skills } from "../systems/Skills";
 import { armorDefenseForTier } from "../systems/ArmorUpgrades";
@@ -33,11 +34,21 @@ export class Tooltip {
   private parts: Phaser.GameObjects.GameObject[] = [];
   private skills?: Skills;
   private progression?: PlayerProgression;
+  // Live capped crit totals (weapon base + Strength/Agility + relics) for a
+  // weapon, sourced from MainScene so the tooltip can't drift from actual combat
+  // math. Optional — tooltips without it (chest/cooking/rack) just show base.
+  private critTotals?: (weapon: WeaponType) => { chance: number; mult: number };
 
-  constructor(scene: Phaser.Scene, skills?: Skills, progression?: PlayerProgression) {
+  constructor(
+    scene: Phaser.Scene,
+    skills?: Skills,
+    progression?: PlayerProgression,
+    critTotals?: (weapon: WeaponType) => { chance: number; mult: number },
+  ) {
     this.scene = scene;
     this.skills = skills;
     this.progression = progression;
+    this.critTotals = critTotals;
   }
 
   // `tier` is only meaningful for stations with a defined upgrade path
@@ -54,12 +65,20 @@ export class Tooltip {
       lines.push("");
       for (const s of def.stats) lines.push(`${s.label}: ${this.statValue(def, s, tier ?? 0)}`);
     }
-    // Weapon base crit (M-SS) — the per-weapon floor; Strength/Agility + crit
-    // relics add on top (shown live in the inventory Combat column).
+    // Weapon crit — the per-weapon base floor AND the live total once Strength
+    // (crit damage), Agility (crit chance), and crit relics are folded in. The
+    // total is the capped value the real crit roll uses (via critTotals).
     if (def.weapon) {
-      lines.push(
-        `Crit: ${Math.round(weaponBaseCritChance(def.weapon) * 100)}% x${weaponBaseCritMult(def.weapon).toFixed(1)}`,
-      );
+      const baseChance = Math.round(weaponBaseCritChance(def.weapon) * 100);
+      const baseMult = weaponBaseCritMult(def.weapon);
+      const totals = this.critTotals?.(def.weapon);
+      if (totals) {
+        const totChance = Math.round(totals.chance * 100);
+        lines.push(`Crit chance: ${totChance}% (base ${baseChance}%)`);
+        lines.push(`Crit damage: x${totals.mult.toFixed(2)} (base x${baseMult.toFixed(2)})`);
+      } else {
+        lines.push(`Crit: ${baseChance}% x${baseMult.toFixed(1)}`);
+      }
       // S7 weapon-type identity — one line telling the player what this weapon
       // type is best at (wide AOE / cripple / single-target+crit).
       lines.push("");
@@ -75,7 +94,7 @@ export class Tooltip {
     const text = this.scene.add
       .text(0, 0, lines.join("\n"), {
         fontFamily: "monospace",
-        fontSize: "12px",
+        fontSize: "13px",
         color: "#e8ecf2",
         wordWrap: { width: 180 },
       })

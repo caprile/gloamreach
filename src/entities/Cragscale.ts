@@ -97,7 +97,8 @@ export class Cragscale extends Enemy {
       // ranged/magic left neutral (absent = 1).
       // fire ×0.5: a sun-baked rock-scale hide shrugs off flame (S2 decision 3 —
       // the counterweight to the player's Emberblink fire-nova being dominant).
-      resistances: { slash: 0.5, blunt: 1.0, pierce: 1.6, fire: 0.5 },
+      // Normalized (2026-07-15): weak = ×1.25, resist = ×0.5 across the biome.
+      resistances: { slash: 0.5, pierce: 1.25, fire: 0.5 },
     });
     this.spawnX = cfg.x;
     this.spawnY = cfg.y;

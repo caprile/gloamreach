@@ -160,7 +160,7 @@ export class TipsUI {
     return this.scene.add
       .text(x, y, str, {
         fontFamily: "monospace",
-        fontSize: `${size}px`,
+        fontSize: `${size + 1}px`,
         color,
         lineSpacing: 6,
         wordWrap: wrapWidth !== undefined ? { width: wrapWidth } : undefined,

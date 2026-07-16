@@ -123,6 +123,10 @@ export interface EnemyConfig {
   // for a sprite that genuinely wants to rotate to point along travel (nothing
   // does today) — that path keeps the old nose-first full-360° rotation.
   upright?: boolean;
+  // Multiplies the overhead HP-bar size (and a subclass's poise bar, which reads
+  // barW/barOffsetY). Default 1. Mini-bosses pass ~2.4 so their bars are readable
+  // over a large sprite. Purely cosmetic.
+  barScale?: number;
 }
 
 // A simple melee enemy (currently only "Boar"). Ranged attacks, ambush AI,
@@ -226,6 +230,13 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   protected static readonly BAR_W = 22;
   protected static readonly BAR_H = 3;
   protected static readonly BAR_OFFSET_Y = 16; // px above the sprite's center
+  // Per-instance bar size (2026-07-15): mini-bosses pass cfg.barScale so their
+  // HP + poise bars are big/overhead and readable over a 1.7–1.8× sprite instead
+  // of the tiny shared 22×3. Default 1 = every regular enemy is unchanged. A
+  // subclass drawing a second bar (poise) reads these instead of the statics.
+  protected readonly barW: number;
+  protected readonly barH: number;
+  protected readonly barOffsetY: number;
 
   constructor(scene: Phaser.Scene, cfg: EnemyConfig) {
     super(scene, cfg.x, cfg.y, cfg.texture);
@@ -255,13 +266,17 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
       this.setRotation(Phaser.Math.FloatBetween(0, Math.PI * 2));
     }
 
-    const barX = cfg.x - Enemy.BAR_W / 2;
-    const barY = cfg.y - Enemy.BAR_OFFSET_Y;
+    const scale = cfg.barScale ?? 1;
+    this.barW = Enemy.BAR_W * scale;
+    this.barH = scale > 1 ? Math.round(Enemy.BAR_H * scale) : Enemy.BAR_H;
+    this.barOffsetY = Enemy.BAR_OFFSET_Y * scale;
+    const barX = cfg.x - this.barW / 2;
+    const barY = cfg.y - this.barOffsetY;
     this.healthBarBg = scene.add
-      .rectangle(barX, barY, Enemy.BAR_W, Enemy.BAR_H, 0x1a1f2a, 0.85)
+      .rectangle(barX, barY, this.barW, this.barH, 0x1a1f2a, 0.85)
       .setOrigin(0, 0.5);
     this.healthBarFill = scene.add
-      .rectangle(barX, barY, Enemy.BAR_W, Enemy.BAR_H, 0xd02020, 1)
+      .rectangle(barX, barY, this.barW, this.barH, 0xd02020, 1)
       .setOrigin(0, 0.5);
   }
 
@@ -274,8 +289,8 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   preUpdate(time: number, delta: number): void {
     super.preUpdate(time, delta);
     this.setDepth(ysortDepth(this.y));
-    const barX = this.x - Enemy.BAR_W / 2;
-    const barY = this.y - Enemy.BAR_OFFSET_Y;
+    const barX = this.x - this.barW / 2;
+    const barY = this.y - this.barOffsetY;
     const aggro = this.isAggro();
     this.healthBarBg.setPosition(barX, barY).setDepth(this.depth + 1).setVisible(aggro);
     this.healthBarFill.setPosition(barX, barY).setDepth(this.depth + 1).setVisible(aggro);

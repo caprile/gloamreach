@@ -4,6 +4,7 @@ import type { ItemContainer } from "../systems/ItemContainer";
 import { itemDef } from "../systems/Items";
 import type { Skills } from "../systems/Skills";
 import type { PlayerProgression } from "../systems/Progression";
+import type { WeaponType } from "../systems/Weapons";
 import { Tooltip } from "./Tooltip";
 
 // Bumped 40->46 to match the InventoryMenu slot size (S3) — icons render the
@@ -40,6 +41,9 @@ export interface HotbarUIDeps {
   // pulsing "upgrade ready" arrow (S3). Materials only (position-independent),
   // so it doesn't flicker as the player walks near/away from a Workbench.
   upgradeReady?: (key: string, tier: number) => boolean;
+  // Live capped crit totals for a weapon (base + Strength/Agility + relics) —
+  // shown on the weapon tooltip alongside the per-weapon base.
+  critTotals?: (weapon: WeaponType) => { chance: number; mult: number };
 }
 
 // Always-visible bottom-center bar, TWO stacked rows of ROW1_COUNT slots
@@ -70,7 +74,7 @@ export class HotbarUI {
     this.scene = scene;
     this.hotbar = hotbar;
     this.deps = deps;
-    this.tooltipUI = new Tooltip(scene, deps.skills, deps.progression);
+    this.tooltipUI = new Tooltip(scene, deps.skills, deps.progression, deps.critTotals);
     const totalW = ROW1_COUNT * SLOT_SIZE + (ROW1_COUNT - 1) * SLOT_GAP;
     this.originX = (scene.scale.width - totalW) / 2;
     this.row2Y = scene.scale.height - SLOT_SIZE - BOTTOM_MARGIN;

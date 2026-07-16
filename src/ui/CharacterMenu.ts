@@ -312,7 +312,7 @@ export class CharacterMenu {
     originY = 0,
   ): Phaser.GameObjects.Text {
     const t = this.scene.add
-      .text(x, y, str, { fontFamily: "monospace", fontSize: `${size}px`, color })
+      .text(x, y, str, { fontFamily: "monospace", fontSize: `${size + 1}px`, color })
       .setOrigin(originX, originY)
       .setScrollFactor(0)
       .setDepth(DEPTH_TEXT);

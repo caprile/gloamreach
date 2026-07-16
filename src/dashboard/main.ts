@@ -190,7 +190,7 @@ const ENEMIES: EnemyStat[] = [
     ],
     loot: "1-2 Cragscale Plate",
     trophy: "Cragscale Trophy (elite)",
-    notes: "Biome 2 armored bruiser (tanky, slow). Signature ROLLING CHARGE closes on kiters + a point-blank basher. Roll reworked 2026-07-12: faster (240→300) + wider (30→40px hit) so it forces a real dash/dodge, and a connect opens a BLEED wound (5/s for 4s, stacks) + 230 shove — the heavy must-dodge threat vs the Duskrunner's light pounce. Resist profile: slash ×0.5, blunt ×1.0, pierce ×1.6, FIRE ×0.5 (S2) — teaches the damage-type layer (Primal Spear shreds it, blades bounce); fire-resistant so Emberblink's nova isn't a blanket answer.",
+    notes: "Biome 2 armored bruiser (tanky, slow). Signature ROLLING CHARGE closes on kiters + a point-blank basher. Roll reworked 2026-07-12: faster (240→300) + wider (30→40px hit) so it forces a real dash/dodge, and a connect opens a BLEED wound (5/s for 4s, stacks) + 230 shove — the heavy must-dodge threat vs the Duskrunner's light pounce. Resist profile (normalized 2026-07-15 — weak ×1.25 / resist ×0.5 across the biome): slash ×0.5, pierce ×1.25 (weak), FIRE ×0.5; blunt now neutral — teaches the damage-type layer (Primal Spear favored, blades bounce); fire-resistant so Emberblink's nova isn't a blanket answer.",
   },
   {
     name: "Hexling (BADLANDS)",
@@ -203,7 +203,7 @@ const ENEMIES: EnemyStat[] = [
     ],
     loot: "1 Hex Essence",
     trophy: "Hexling Trophy (elite)",
-    notes: "Biome 2 MAGE (redesigned 2026-07-12 — was a reskinned gremlin kiter). Distinct taller robed/staff texture. STANDS AND CASTS (no kite — only repositions via blink). Close-range punish: FLAME STRIKE calls down 3 delayed fire circles at your locked position (walk out to dodge) that detonate as magic AoE (18, bypasses armor), then it BLINKS ~220px away. Blink is also the cornered fallback. HP 30→55→95 (playtest: died too fast even in Woods-tier gear). Resist REWORKED 2026-07-13: magic ×1.5 (weak), slash/blunt/pierce ×0.5 (resists all physical), FIRE ×1.5 (S2, weak) — the inverse of the original tuning; magic AND fire weapons hurt it. S2: BLINK cooldown 2600→5200ms + no longer blinks after every flame strike (playtest: 'teleports too much') — commits to standing and casting far more.",
+    notes: "Biome 2 MAGE (redesigned 2026-07-12 — was a reskinned gremlin kiter). Distinct taller robed/staff texture. STANDS AND CASTS (no kite — only repositions via blink). Close-range punish: FLAME STRIKE calls down 3 delayed fire circles at your locked position (walk out to dodge) that detonate as magic AoE (18, bypasses armor), then it BLINKS ~220px away. Blink is also the cornered fallback. HP 30→55→95 (playtest: died too fast even in Woods-tier gear). Resist profile (normalized 2026-07-15 — weak ×1.25 across the biome): magic ×1.25 (weak), FIRE ×1.25 (weak), physical neutral — magic AND fire weapons hurt it. S2: BLINK cooldown 2600→5200ms + no longer blinks after every flame strike (playtest: 'teleports too much') — commits to standing and casting far more.",
   },
   {
     name: "Sandmaw (BADLANDS)",
@@ -211,11 +211,11 @@ const ENEMIES: EnemyStat[] = [
     speed: 30,
     aggro: 62,
     attacks: [
-      { label: "Sand Erupt (radial AoE, 95px burst, +220 knockback)", damage: 46, telegraphMs: 560 },
+      { label: "Sand Erupt (radial AoE, 95px burst, +220 knockback, +BLEED 4/s×5s)", damage: 46, telegraphMs: 470 },
     ],
     loot: "1-2 Sandmaw Chitin",
     trophy: "Sandmaw Trophy (elite)",
-    notes: "Biome 2 Phase 2b BURROWING AMBUSHER — the 4th native creature. Lurks submerged (near-invisible, alpha 0.18) until you enter its 62px ambush ring, then ERUPTS: a 560ms tremor telegraph (growing dust ring previews the 95px burst) → radial sand-burst (38 physical + 220 knockback, dodge by clearing the ring — movement/dash-dodgeable, i-frames negate) → planted 'exposed' punish window → burrows back under (2.6s re-ambush cooldown) and slow-stalks toward you (30px/s) to re-ambush. AoE routed through checkPlayerHit (like the bosses/Hexling flame), not a melee bite. Resist profile: pierce ×0.6, blunt ×1.4, FIRE ×0.5 (S2) — inverse of Cragscale, so clubs/warhammer shine here where the spear shines there; fire-resistant (at home in the heat). Attacked while submerged → surfaces & retaliates (like Snake). No pack.",
+    notes: "Biome 2 Phase 2b BURROWING AMBUSHER — the 4th native creature. Lurks submerged (near-invisible, alpha 0.18) until you enter its 62px ambush ring, then ERUPTS: a 560ms tremor telegraph (growing dust ring previews the 95px burst) → radial sand-burst (38 physical + 220 knockback, dodge by clearing the ring — movement/dash-dodgeable, i-frames negate) → planted 'exposed' punish window → burrows back under (2.6s re-ambush cooldown) and slow-stalks toward you (30px/s) to re-ambush. AoE routed through checkPlayerHit (like the bosses/Hexling flame), not a melee bite. Resist profile (normalized 2026-07-15): pierce ×0.5, blunt ×1.25 (weak), FIRE ×0.5 — inverse of Cragscale, so clubs/warhammer shine here where the spear shines there; fire-resistant (at home in the heat). Signature BLEED (4/s×5s) on the erupt hit + a snappier 470ms telegraph (2026-07-15). Attacked while submerged → surfaces & retaliates (like Snake). No pack.",
   },
   {
     name: "Gremlin King (BOSS)",
@@ -247,6 +247,7 @@ const ENEMIES: EnemyStat[] = [
   {
     name: "Cinderwrought (MINI-BOSS)",
     hp: 260,
+    // 2026-07-15: weakness REMOVED (fully neutral — weakness stacked too hard with crit/Onslaught); poise 45→60 (harder to stagger).
     speed: 52,
     aggro: 260,
     attacks: [
@@ -255,7 +256,7 @@ const ENEMIES: EnemyStat[] = [
     ],
     loot: "Each guard: 2-4 Ember Shard; ONE of the two also drops 1 Ember-Refined Trophy (Uncommon, Tier 2). Ore nodes crack open only once BOTH guards die.",
     notes:
-      "Sunken Forge guardian (badlands Phase 3 POI 2). 5 forges × 2 Cinderwroughts each = 10 (the user: 2 guards per forge so the ember sites reliably drop Ember Shards — the native Ember Shard source, was Gloam). Ore only cracks once BOTH guards die. S6 rebalance (the user: too tough with two perma-attacking overlapping guards): poise 70→45 (stagger comes up more often, still ×1.5 dmg for 2.5s), attack cooldown 650→1050ms (more downtime — stagger one while you 1v1 the other), telegraphs lengthened (cone 620→750ms, hammer 560→680ms), damage cut (cone 46→32, hammer 58→40), resists FIXED to actually resist blunt ×1.3 (was backwards, ×0.8 = weak) and weak to pierce ×1.25 unchanged. Only the Cinder Cone still deals FIRE (bypasses flat armor); the Forge Hammer is now PHYSICAL (armor applies) — one fire + one physical attack. Scale 1.8, scored as an elite kill. Bespoke attacks: the Cinder Cone locks its direction at telegraph START (sidestep the wind-up) — the game's only cone; the Forge Hammer re-locks at execute and hits a wide short front wedge (back out to dodge). Regens 12 HP/s while deaggro'd. On death, its ring of shielded Ember Deposits crack open into mineable Cinderforged Ore (Phase 4 hook).",
+      "Sunken Forge guardian (badlands Phase 3 POI 2). 5 forges × 2 Cinderwroughts each = 10 (the user: 2 guards per forge so the ember sites reliably drop Ember Shards — the native Ember Shard source, was Gloam). Ore only cracks once BOTH guards die. S6 rebalance (the user: too tough with two perma-attacking overlapping guards): poise 70→45 (stagger comes up more often, still ×1.5 dmg for 2.5s), attack cooldown 650→1050ms (more downtime — stagger one while you 1v1 the other), telegraphs lengthened (cone 620→750ms, hammer 560→680ms), damage cut (cone 46→32, hammer 58→40). 2026-07-15: ALL WEAKNESS REMOVED — fully NEUTRAL to every type (weakness stacked too hard with crit/Onslaught on a mini-boss); poise 45→60 (harder to stagger). Only the Cinder Cone still deals FIRE (bypasses flat armor); the Forge Hammer is now PHYSICAL (armor applies) — one fire + one physical attack. Scale 1.8, scored as an elite kill. Bespoke attacks: the Cinder Cone locks its direction at telegraph START (sidestep the wind-up) — the game's only cone; the Forge Hammer re-locks at execute and hits a wide short front wedge (back out to dodge). Regens 12 HP/s while deaggro'd. On death, its ring of shielded Ember Deposits crack open into mineable Cinderforged Ore (Phase 4 hook).",
   },
   {
     name: "The Duneshaper (FINAL BOSS)",
@@ -271,7 +272,7 @@ const ENEMIES: EnemyStat[] = [
     ],
     loot: "5-8 Ember Shard + 1 Tyrant Trophy (S4: guaranteed Mythic, Tier 2 — unreachable, kill wins the run)",
     notes:
-      "SUNSCORCH BADLANDS FINAL BOSS + WIN-CONDITION (demotes the Gremlin King to a mid-boss). Poise 170 (stagger → 1.35× dmg for 2.2s). Scale 2.3. Resists magic ×0.5, weak to melee (slash/blunt/pierce ×1.3). Phase-gated ESCALATION: 3 attacks at full HP, +Gloamfire Lance at 70% HP, +Sunscorch Barrage AND enrage timing at 50% HP. A caster — holds ~220px and casts, magic attacks bypass flat armor, only Sand Spikes is physical. Summoned by offering an Effigy of the Duneshaper at any of the 3 badlands Tyrant Altars (crafting the effigy reveals them all on the map). Regens 14 HP/s while deaggro'd. S3 (the user: felt easier than the mid-boss): HP 1050→1250; ATTACK_COOLDOWN 900→700ms; the LANCE now tracks the player through 60% of the wind-up then commits + SWEEPS ±20° on the strike (was locked at telegraph start — trivially sidesteppable); Sand Spikes reworked from 3 spaced circles to a tracked 5-circle CROSS (distinct from the Hexling, only a diagonal run/dash clears it).",
+      "SUNSCORCH BADLANDS FINAL BOSS + WIN-CONDITION (demotes the Gremlin King to a mid-boss). Poise 170 (stagger → 1.35× dmg for 2.2s). Scale 2.3. 2026-07-15: physical weakness REMOVED and the magic resist DROPPED (the user: fire is a magic subtype + the Ember Brand deals fire — resisting magic while fire-weak was contradictory). Its ONLY resistance line now is FIRE ×1.25 (weak); everything else neutral — burning it down (Ember Brand / Emberblink / Molten set-bonus fire) is the intended counter. Phase-gated ESCALATION: 3 attacks at full HP, +Gloamfire Lance at 70% HP, +Sunscorch Barrage AND enrage timing at 50% HP. A caster — holds ~220px and casts, magic attacks bypass flat armor, only Sand Spikes is physical. Summoned by offering an Effigy of the Duneshaper at any of the 3 badlands Tyrant Altars (crafting the effigy reveals them all on the map). Regens 14 HP/s while deaggro'd. S3 (the user: felt easier than the mid-boss): HP 1050→1250; ATTACK_COOLDOWN 900→700ms; the LANCE now tracks the player through 60% of the wind-up then commits + SWEEPS ±20° on the strike (was locked at telegraph start — trivially sidesteppable); Sand Spikes reworked from 3 spaced circles to a tracked 5-circle CROSS (distinct from the Hexling, only a diagonal run/dash clears it).",
   },
 ];
 

@@ -108,6 +108,16 @@ export class SfxPlayer {
     this.tone(660, 100, "triangle", { gain: 0.1, delaySec: 0.08 });
   }
 
+  // Applying an upgrade (station / armor / weapon) — a heftier, brighter cousin
+  // of craft(): a metallic two-note rise with a low body under it, so upgrading
+  // reads as a bigger deal than a plain craft (the user: "audio on upgrading
+  // stuff"). Still a call-time envelope, no asset files.
+  upgrade(): void {
+    this.tone(196, 200, "sawtooth", { toFreq: 130, gain: 0.06 }); // low anvil body
+    this.tone(587, 90, "triangle", { gain: 0.11, delaySec: 0.04 }); // D5
+    this.tone(880, 180, "triangle", { toFreq: 1047, gain: 0.12, delaySec: 0.13 }); // A5 → C6 shine
+  }
+
   // Three-note ascending arpeggio (A-C#-E major triad) — reserved for the
   // rarer Player Level-up (the "big deal" moment).
   levelUp(): void {

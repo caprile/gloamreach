@@ -117,7 +117,8 @@ export class Hexling extends Enemy {
       // to magic (magic weapons are its counter) and weak to fire (S2 decision 3 —
       // the one badlands enemy fire is meant to be strong against). Physical types
       // are omitted → default 1.0.
-      resistances: { magic: 1.5, fire: 1.5 },
+      // Normalized (2026-07-15): weak = ×1.25 across the biome.
+      resistances: { magic: 1.25, fire: 1.25 },
       upright: true, // humanoid mage — mirror left/right, never rotate upside-down
     });
     this.boltDamage = elite ? Math.round(BOLT_DAMAGE * 1.5) : BOLT_DAMAGE;

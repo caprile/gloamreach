@@ -215,7 +215,7 @@ export class CraftingMenu {
       const t = this.scene.add
         .text(x, tabY, cat.label, {
           fontFamily: "monospace",
-          fontSize: "12px",
+          fontSize: "13px",
           color: active ? "#ffffff" : "#8a93a3",
           backgroundColor: active ? "#2a3a55" : undefined,
           padding: { x: 4, y: 2 },
@@ -343,7 +343,7 @@ export class CraftingMenu {
 
     const desc = this.scene.add.text(x0, y, recipe.description, {
       fontFamily: "monospace",
-      fontSize: "12px",
+      fontSize: "13px",
       color: "#c8d0dc",
       wordWrap: { width: this.panelX + PANEL_W - 12 - x0 },
     });
@@ -362,7 +362,7 @@ export class CraftingMenu {
         `Set Bonus — ${set.bonusName}: ${set.bonusDesc}`,
         {
           fontFamily: "monospace",
-          fontSize: "12px",
+          fontSize: "13px",
           color: "#e3b25a",
           wordWrap: { width: this.panelX + PANEL_W - 12 - x0 },
         },
@@ -426,7 +426,7 @@ export class CraftingMenu {
     if (recipe.tier >= 1 && !this.deps.isNearWorkbench()) {
       const t = this.scene.add.text(x0, y, "Requires a nearby Workbench", {
         fontFamily: "monospace",
-        fontSize: "12px",
+        fontSize: "13px",
         color: "#e3b25a",
       });
       t.setScrollFactor(0).setDepth(3001);
@@ -439,7 +439,7 @@ export class CraftingMenu {
       // Near a Workbench, but not an upgraded-enough one (forged gear needs Lvl 3).
       const t = this.scene.add.text(x0, y, `Requires Workbench Lvl ${recipe.requiresWorkbenchTier + 1}`, {
         fontFamily: "monospace",
-        fontSize: "12px",
+        fontSize: "13px",
         color: "#e3b25a",
       });
       t.setScrollFactor(0).setDepth(3001);
@@ -454,7 +454,7 @@ export class CraftingMenu {
       const have = this.deps.backpack.count(outputKey(recipe));
       const t = this.scene.add.text(x0, y, `In inventory: ${have}`, {
         fontFamily: "monospace",
-        fontSize: "12px",
+        fontSize: "13px",
         color: "#9aa4b5",
       });
       t.setScrollFactor(0).setDepth(3001);
@@ -465,7 +465,7 @@ export class CraftingMenu {
     if (stackable) {
       const t = this.scene.add.text(x0, y, `Qty: ${qty} / ${maxQty}`, {
         fontFamily: "monospace",
-        fontSize: "12px",
+        fontSize: "13px",
         color: "#e8ecf2",
       });
       t.setScrollFactor(0).setDepth(3001);

@@ -156,6 +156,9 @@ import {
   TROPHY_ROLL,
   RELIC_DEFS,
   rarityName,
+  rarityIcon,
+  RARITY_COLOR,
+  relicEffectText,
   REFINE_RECIPES,
   refinableTrophyKeys,
   canAffordRefine,
@@ -163,9 +166,10 @@ import {
   GLOAM_TO_EMBER_RATIO,
   type RollResult,
   type ChoiceResolution,
+  type RelicGroup,
 } from "../systems/Relics";
 import { RelicForgeMenu } from "../ui/RelicForgeMenu";
-import { RelicBarUI } from "../ui/RelicBarUI";
+import { PassiveBarUI, type PassiveEntry } from "../ui/PassiveBarUI";
 
 const HOTBAR_KEYS = ["ONE", "TWO", "THREE", "FOUR", "FIVE", "SIX", "SEVEN", "EIGHT", "NINE"];
 
@@ -298,7 +302,7 @@ const SET_EMBERBLINK_DASH_MULT = 1.6;
 const SET_EMBERBLINK_BURST_RADIUS = 95;
 const SET_EMBERBLINK_BURST_DAMAGE = 16;
 // Crit (M-SS) soft caps on the COMBINED total (weapon base + Strength/Agility
-// stats + relic crit channels). Applied in applyCrit().
+// stats + relic crit channels). Applied in critChanceTotal()/critMultTotal().
 const CRIT_CHANCE_CAP = 0.6;
 const CRIT_MULT_CAP = 3.0;
 // How a weapon's damage type landed against a target's resistances (Biome 2
@@ -558,7 +562,7 @@ export class MainScene extends Phaser.Scene {
   // sourced-from-placedObjects-by-itemKey hover/open shape as the Campfire.
   private relics!: RelicManager;
   private relicForgeMenu!: RelicForgeMenu;
-  private relicBarUI!: RelicBarUI;
+  private passiveBarUI!: PassiveBarUI;
   private hoveredForge: Phaser.GameObjects.Image | null = null;
   private openForge: Phaser.GameObjects.Image | null = null; // the forge the relic menu is bound to
   private lastRollTrophyKey?: string; // for the deferred reveal's event-log icon
@@ -1230,12 +1234,13 @@ export class MainScene extends Phaser.Scene {
       isDragging: () => this.dragSource !== null,
       stationTexture: (key, tier) => this.tieredStationTexture(key, tier),
       upgradeReady: (key, tier) => this.hasReadyUpgrade(key, tier),
+      critTotals: (w) => ({ chance: this.critChanceTotal(w), mult: this.critMultTotal(w) }),
     });
     this.createStaminaBar();
     this.createHealthBar();
     this.createBuffBar();
     this.createXpBar();
-    this.createRelicBar();
+    this.createPassiveBar();
     this.createStatPointsBadge();
     // Sits beside the Keybinds panel (same top row), not stacked underneath
     // it — an open InventoryMenu panel occupies that same top-left column
@@ -1370,13 +1375,8 @@ export class MainScene extends Phaser.Scene {
     this.input.keyboard!.on("keydown-O", () => !this.runOver && !this.typingInSearch() && this.toggleRangeRing());
     this.input.keyboard!.on("keydown-K", () => {
       if (this.runOver || this.typingInSearch()) return;
-      // Mutually exclusive with the Tab combined menu — one full-screen panel
-      // at a time, so they can't overlap (the Relics column vs. the K panel).
-      if (!this.characterMenu.isOpen() && this.inventoryMenu.isOpen()) {
-        this.inventoryMenu.close();
-        this.craftingMenu.close();
-      }
-      this.characterMenu.toggle();
+      if (this.characterMenu.isOpen()) return this.characterMenu.close();
+      this.openCharacterMenu();
     });
     this.input.keyboard!.on("keydown-R", () => !this.runOver && !this.typingInSearch() && this.takeAllFromChest());
     this.input.keyboard!.on("keydown-H", () => !this.runOver && !this.typingInSearch() && this.toggleWheelSpansBothRows());
@@ -1511,6 +1511,7 @@ export class MainScene extends Phaser.Scene {
     // healed, and keep the buff HUD in sync each frame (countdown/expiry).
     if (this.buffs.tick(delta, this.health).healed) this.refreshHealthBar();
     this.buffBarUI.sync(this.buffs.active());
+    this.passiveBarUI.sync(this.passiveEntries());
     // Bleed DoT (Cragscale roll): ticks whole damage points regardless of
     // i-frames (it's applied inside the i-frame guard at wound time, not here)
     // and ignores armor. A small red number over the player reads as "bleeding".
@@ -1950,7 +1951,10 @@ export class MainScene extends Phaser.Scene {
     this.equippedWeapon = def?.weapon ?? null;
     this.equippedWeaponName = def?.weapon ? def.name : null;
     this.equippedWeaponTier = def?.weapon ? stack?.tier ?? 0 : 0;
-    const iconTexture = def && (def.tool || def.weapon) ? def.texture : null;
+    // Use the tiered texture so an upgraded tool/weapon (e.g. the Ironshod
+    // stone_axe) shows its upgraded art on the player, not the base icon.
+    const iconTexture =
+      def && (def.tool || def.weapon) ? this.tieredStationTexture(stack!.key, stack?.tier ?? 0) : null;
     this.player.setEquippedIcon(iconTexture);
     // Held light source (M-DN) — a Torch (future Lantern) casts light around
     // the player at night. Data-driven per item key so a bigger-radius upgrade
@@ -2596,6 +2600,7 @@ export class MainScene extends Phaser.Scene {
   private openRelicForgeMenu(image: Phaser.GameObjects.Image): void {
     this.craftingMenu.close();
     this.inventoryMenu.close();
+    this.characterMenu?.close(); // K panel is mutually exclusive with station menus
     this.closeUpgradeMenu();
     this.closeDryingRackMenu();
     this.closeCookingMenu();
@@ -2714,7 +2719,7 @@ export class MainScene extends Phaser.Scene {
   private afterRelicChange(): void {
     this.syncStatBonuses();
     this.relicForgeMenu.refresh();
-    this.relicBarUI.sync(this.relics.groupedForDisplay());
+    this.passiveBarUI.sync(this.passiveEntries());
     this.inventoryMenu.refresh();
     this.hotbarUI.refresh();
   }
@@ -5848,23 +5853,28 @@ export class MainScene extends Phaser.Scene {
     // display; the true float is what actually damages the enemy, so small
     // skill increments always matter even when the displayed number doesn't
     // visibly change hit-to-hit.
-    // Additive skill+relic damage bucket (2026-07-15) × the Onslaught every-Nth-
-    // hit spike (conditional). Pre-stagger/pre-crit — shared by the primary hit
-    // and any AOE-arc secondaries (the whole swing is empowered on an Onslaught).
-    const raw = baseDmg * this.damageBonusMult(dmgType) * this.onslaughtMult();
+    // "Normal hit" = base × the always-on additive bucket (weapon skill + relic
+    // damage). Crit and Onslaught are CONDITIONAL bonuses that ADD onto this
+    // (2026-07-15 rework — they no longer multiply each other). Onslaught is
+    // rolled ONCE per swing so the whole swing (primary + AOE secondaries) is
+    // empowered together; crit is rolled per target. Stagger/resist stay their
+    // own target-side multipliers.
+    const normalHit = baseDmg * this.damageBonusMult(dmgType);
+    const onsBonus = this.onslaughtBonus();
 
-    // Primary hit: per-enemy stagger punish (poise-break bonus damage) then a
-    // crit roll (the final multiplicative step, M-SS), rolled here where the
-    // weapon is known — carried into resolveWeaponHit only for the tint.
-    const primary = this.applyCrit(this.equippedWeapon, raw * this.staggerMultiplierFor(enemy));
-    this.resolveWeaponHit(enemy, primary.dmg, dmgType, primary.crit);
+    // Primary hit.
+    const critP = this.rollCrit(this.equippedWeapon);
+    const primaryDmg =
+      normalHit * (1 + onsBonus + (critP ? this.critBonus(this.equippedWeapon) : 0)) * this.staggerMultiplierFor(enemy);
+    this.resolveWeaponHit(enemy, primaryDmg, dmgType, critP);
 
     // AOE arc sweep (Biome 2 Phase 1, locked decision 6): wide weapons also hit
     // other live enemies within `range` and within ±halfAngle of the swing
-    // direction (player → primary target). Each secondary rolls its own
-    // stagger/crit and flows through the same resolveWeaponHit (own resist,
-    // kill/loot/XP). enemy may already be dead here (a lethal primary), but the
-    // arc is keyed off the swing direction, not the primary's live position.
+    // direction (player → primary target). Each secondary shares the swing's
+    // Onslaught roll but rolls its own crit/stagger and flows through the same
+    // resolveWeaponHit (own resist, kill/loot/XP). enemy may already be dead
+    // here (a lethal primary), but the arc is keyed off the swing direction, not
+    // the primary's live position.
     const arc = weaponArc(this.equippedWeapon);
     if (arc.range > 0) {
       const swingAngle = Phaser.Math.Angle.Between(this.player.x, this.player.y, enemy.x, enemy.y);
@@ -5875,8 +5885,13 @@ export class MainScene extends Phaser.Scene {
         if (d > arc.range + this.enemyRadiusBonus(other)) continue;
         const a = Phaser.Math.Angle.Between(this.player.x, this.player.y, other.x, other.y);
         if (Math.abs(Phaser.Math.Angle.Wrap(a - swingAngle)) > halfAngle) continue;
-        const sec = this.applyCrit(this.equippedWeapon, raw * this.staggerMultiplierFor(other) * arc.falloff);
-        this.resolveWeaponHit(other, sec.dmg, dmgType, sec.crit);
+        const critS = this.rollCrit(this.equippedWeapon);
+        const secDmg =
+          normalHit *
+          (1 + onsBonus + (critS ? this.critBonus(this.equippedWeapon) : 0)) *
+          this.staggerMultiplierFor(other) *
+          arc.falloff;
+        this.resolveWeaponHit(other, secDmg, dmgType, critS);
       }
     }
   }
@@ -5968,11 +5983,17 @@ export class MainScene extends Phaser.Scene {
     this.player.playEquippedSwing();
 
     const baseDmg = weaponDamage(this.equippedWeapon) + weaponTierDamageBonus(this.equippedWeapon, this.equippedWeaponTier);
-    const dmg = baseDmg * this.damageBonusMult(dmgType) * this.onslaughtMult() * this.staggerMultiplierFor(enemy);
-    // Crit is rolled at fire time (same "captured at commit time" precedent as
-    // the stagger multiplier) and carried by the projectile so the impact tints
-    // correctly — resolveWeaponHit can't re-roll it (no weapon context there).
-    const critResult = this.applyCrit(this.equippedWeapon, dmg);
+    // Same additive model as melee: normal hit × (1 + Onslaught + crit), then
+    // the target-side stagger multiplier. Crit is rolled at fire time (the
+    // "captured at commit time" precedent) and carried by the projectile so the
+    // impact tints correctly — resolveWeaponHit can't re-roll it (no weapon
+    // context there).
+    const normalHit = baseDmg * this.damageBonusMult(dmgType);
+    const crit = this.rollCrit(this.equippedWeapon);
+    const dmg =
+      normalHit *
+      (1 + this.onslaughtBonus() + (crit ? this.critBonus(this.equippedWeapon) : 0)) *
+      this.staggerMultiplierFor(enemy);
 
     const angle = Phaser.Math.Angle.Between(this.player.x, this.player.y, enemy.x, enemy.y);
     this.spawnProjectile({
@@ -5980,11 +6001,11 @@ export class MainScene extends Phaser.Scene {
       y: this.player.y,
       angle,
       speed: cfg.projectileSpeed,
-      damage: critResult.dmg,
+      damage: dmg,
       texture: cfg.projectileTexture,
       maxRangePx: cfg.maxRangePx,
       sourceIsPlayer: true,
-      isCrit: critResult.crit,
+      isCrit: crit,
       artAngleOffset: cfg.projectileArtAngleOffset,
     });
 
@@ -6172,40 +6193,55 @@ export class MainScene extends Phaser.Scene {
     this.skills.addXp(skill, base * (1 + bonus));
   }
 
-  // Roll crit for one hit of `weapon` (M-SS). Chance = weapon base + Agility +
-  // relics (cap CRIT_CHANCE_CAP); mult = weapon base + Strength + relics (cap
-  // CRIT_MULT_CAP). Shared by melee (rolled at hit) and ranged (rolled at fire,
-  // baked into the projectile). Uses Math.random — combat crit isn't seeded.
-  private applyCrit(weapon: WeaponType, dmg: number): { dmg: number; crit: boolean } {
-    const chance = Math.min(
+  // Total crit CHANCE for `weapon` (capped) — weapon base + Agility + relics.
+  private critChanceTotal(weapon: WeaponType): number {
+    return Math.min(
       CRIT_CHANCE_CAP,
       weaponBaseCritChance(weapon) + this.progression.critChanceBonus() + this.relics.critChanceBonus(),
     );
-    if (Math.random() >= chance) return { dmg, crit: false };
-    const mult = Math.min(
+  }
+  // Total crit MULTIPLIER for `weapon` (capped) — weapon base + Strength + relics.
+  private critMultTotal(weapon: WeaponType): number {
+    return Math.min(
       CRIT_MULT_CAP,
       weaponBaseCritMult(weapon) + this.progression.critMultBonus() + this.relics.critDamageBonus(),
     );
-    return { dmg: dmg * mult, crit: true };
+  }
+  // Roll whether one hit of `weapon` crits (M-SS). Uses Math.random — combat crit
+  // isn't seeded. Shared by melee (rolled at hit) and ranged (rolled at fire).
+  private rollCrit(weapon: WeaponType): boolean {
+    return Math.random() < this.critChanceTotal(weapon);
+  }
+  // Crit's ADDITIVE contribution to the conditional-damage bucket. As of the
+  // 2026-07-15 rework, crit is a bonus that ADDS with Onslaught on the normal
+  // hit rather than multiplying it — so a crit + Onslaught landing on the same
+  // swing no longer explodes (was crit×onslaught, now crit+onslaught).
+  private critBonus(weapon: WeaponType): number {
+    return this.critMultTotal(weapon) - 1;
   }
 
   // --- Additive-within-category buckets + relic unique procs (2026-07-15) ---
 
   // Additive damage bucket: the two always-on % sources (weapon skill + relic)
-  // ADD into one multiplier instead of compounding. Crit/stagger/Onslaught stay
-  // their own multipliers (conditional bursts). Future % damage sources add here.
+  // ADD into one multiplier instead of compounding. Crit/Onslaught are the
+  // conditional bonuses that ADD onto this (see conditionalDamageBonus); stagger
+  // + resist stay their own target-side multipliers. Future always-on % sources
+  // add here.
   private damageBonusMult(dmgType: DamageType): number {
     return 1 + (weaponSkillDamageMultiplier(dmgType, this.skills) - 1) + (this.relics.damageMult() - 1);
   }
 
-  // Onslaught (damage relic): count each attack; every Nth lands a bonus-damage
-  // spike (a conditional multiplier — NOT a permanent one). Call ONCE per attack.
-  private onslaughtMult(): number {
+  // Onslaught (damage relic): count each attack; every Nth adds a FLAT bonus to
+  // the conditional-damage bucket. 2026-07-15: +100% = "double the normal hit,"
+  // ADDITIVE with crit and NO power-tier amplification (a predictable spike, not
+  // a runaway one). Returns the bonus fraction (0 on most hits). Call ONCE per
+  // swing — the whole swing (primary + AOE-arc secondaries) shares one roll.
+  private onslaughtBonus(): number {
     const u = this.relics.unique("onslaught");
-    if (!u) return 1;
+    if (!u) return 0;
     this.onslaughtHits += 1;
-    if (this.onslaughtHits % u.params.interval !== 0) return 1;
-    return 1 + (u.params.bonusPct / 100) * powerTierMult(u.powerTier);
+    if (this.onslaughtHits % u.params.interval !== 0) return 0;
+    return u.params.bonusPct / 100;
   }
 
   // Second Wind (stamina Mythic) free-attack window folds into the weapon/tool
@@ -6327,11 +6363,11 @@ export class MainScene extends Phaser.Scene {
     return "normal";
   }
 
-  // Floating combat-text on a successful hit. A crit (M-SS) is tinted
-  // orange-yellow and drawn a bit larger with a "!" so the burst reads clearly.
-  // Effectiveness (Biome 2 Phase 1) recolors a non-crit number: weak =
-  // bright orange-red, resisted = dim blue (crit's yellow wins — it's the rarer,
-  // more important signal).
+  // Floating combat-text on a successful hit. Effectiveness is encoded purely by
+  // COLOR, no text label (the user): neutral = white, RESISTED = greyed out, WEAK =
+  // gold. A crit reads by its "!" + larger size + a hot-orange tint (distinct from
+  // weak's gold), and takes color precedence — it's the rarer, more important
+  // signal.
   private spawnDamageNumber(
     x: number,
     y: number,
@@ -6340,25 +6376,26 @@ export class MainScene extends Phaser.Scene {
     effectiveness: DamageEffectiveness = "normal",
   ): void {
     const color = isCrit
-      ? "#ffca3a"
+      ? "#ff8c1a" // crit — hot orange, distinct from weak's gold
       : effectiveness === "weak"
-        ? "#ff5a3a"
+        ? "#ffd24a" // weak — gold
         : effectiveness === "resist"
-          ? "#7db4ff"
-          : "#ffffff";
+          ? "#8a8f99" // resisted — greyed out
+          : "#ffffff"; // neutral — white
     const text = this.add
       .text(x, y - 14, isCrit ? `${amount}!` : `${amount}`, {
         fontFamily: "monospace",
-        fontSize: isCrit ? "20px" : "14px",
+        fontSize: isCrit ? "22px" : "16px",
         color,
         stroke: "#000000",
         strokeThickness: isCrit ? 4 : 3,
       })
       .setOrigin(0.5, 0.5)
+      .setAlpha(effectiveness === "resist" && !isCrit ? 0.85 : 1) // resisted reads a touch dimmer
       .setDepth(50);
     this.tweens.add({
       targets: text,
-      y: text.y - 24,
+      y: y - 38,
       alpha: 0,
       duration: 700,
       ease: "Cubic.easeOut",
@@ -6468,13 +6505,19 @@ export class MainScene extends Phaser.Scene {
         enemy instanceof Sandmaw
       ) {
         const areaHit = enemy.checkPlayerHit(this.player.x, this.player.y) as
-          | { damage: number; knockback?: number; dmgType?: IncomingDamageType }
+          | {
+              damage: number;
+              knockback?: number;
+              dmgType?: IncomingDamageType;
+              bleed?: { dmgPerSec: number; durationMs: number };
+            }
           | null;
         if (areaHit) {
           this.applyDamageToPlayer(
             areaHit.damage,
             areaHit.knockback ? { fromX: enemy.x, fromY: enemy.y, speed: areaHit.knockback } : undefined,
             areaHit.dmgType,
+            areaHit.bleed,
           );
         }
       }
@@ -7071,6 +7114,23 @@ export class MainScene extends Phaser.Scene {
     });
   }
 
+  // Open the Character/level-up panel, first closing any other full-screen or
+  // station menu so it can't render on top of (and hide) an open one — the
+  // Relic Forge menu in particular (playtest: K'd the forge open, the character
+  // panel just covered it). One full-screen panel at a time.
+  private openCharacterMenu(): void {
+    this.closeRelicForgeMenu();
+    this.closeDryingRackMenu();
+    this.closeCookingMenu();
+    this.closeChestMenu();
+    this.closeUpgradeMenu();
+    if (this.inventoryMenu.isOpen()) {
+      this.inventoryMenu.close();
+      this.craftingMenu.close();
+    }
+    this.characterMenu.openMenu();
+  }
+
   // --- Progression (player stats) ---
 
   // Push the current Endurance/Vitality bonuses into the Stamina/HP pools.
@@ -7419,6 +7479,7 @@ export class MainScene extends Phaser.Scene {
       this.applyTierVisual(image, placedTier);
     }
     this.placedObjects.push(image);
+    this.sfx.craft(); // placing a crafted station is a "you built something" moment
     // A placed station counts as "discovered" so its upgrades become visible
     // while it's on the ground. Previously a Smelter's Ember Crucible upgrade
     // only appeared once the Smelter was picked back up into the backpack
@@ -7820,6 +7881,7 @@ export class MainScene extends Phaser.Scene {
     if (applied.includes(upg.id)) return;
     if (!this.devNoBuildCost) for (const [r, n] of Object.entries(upg.costs)) this.backpack.removeCount(r, n ?? 0);
     applied.push(upg.id);
+    this.sfx.upgrade();
     const tier = applied.length;
     obj.setData("upgrades", applied);
     obj.setData("tier", tier);
@@ -7854,6 +7916,7 @@ export class MainScene extends Phaser.Scene {
     const eq = this.equipment.get(slot);
     if (!eq || !this.canAffordUpgrade(upg) || this.upgradeBlockReason(upg)) return;
     if (!this.devNoBuildCost) for (const [r, n] of Object.entries(upg.costs)) this.backpack.removeCount(r, n ?? 0);
+    this.sfx.upgrade();
     this.equipment.set(slot, { key: eq.key, tier: upg.resultTier });
     // Left-anchored "recipe" toast, not the top-center "info" one — the
     // Upgrade panel for a paper-doll slot opens right beside/over where the
@@ -7869,6 +7932,7 @@ export class MainScene extends Phaser.Scene {
     const stack = container.slot(index);
     if (!stack || !this.canAffordUpgrade(upg) || this.upgradeBlockReason(upg)) return;
     if (!this.devNoBuildCost) for (const [r, n] of Object.entries(upg.costs)) this.backpack.removeCount(r, n ?? 0);
+    this.sfx.upgrade();
     container.set(index, { ...stack, tier: upg.resultTier });
     this.eventLog.add("recipe", `${stationDisplayName(stack.key, upg.resultTier)} upgraded: ${upg.name}`, itemDef(stack.key)?.texture);
     // The upgraded weapon may be the currently-equipped hotbar item — refresh
@@ -7903,11 +7967,17 @@ export class MainScene extends Phaser.Scene {
   // The world texture for a Workbench/Smelter at `tier` — base at tier 0, then
   // `<icon>_t1`, `_t2`, ... (defined in BootScene). Null for stations without a
   // per-tier look (they keep the tint).
+  // Resolve the on-screen texture for an item at a given upgrade tier: if a
+  // `${base}_t{tier}` texture was generated (BootScene), use it; else fall back
+  // to the base icon. Covers placed stations (Workbench/Smelter) AND upgraded
+  // tools/weapons (e.g. the Ironshod stone_axe at tier 1) with one generic rule,
+  // so adding tiered art for any item is just drawing a `_t{n}` texture.
   private tieredStationTexture(key: string, tier: number): string | null {
-    if (key !== "workbench" && key !== "smelter") return null;
     const base = itemDef(key)?.texture;
     if (!base) return null;
-    return tier <= 0 ? base : `${base}_t${tier}`;
+    if (tier <= 0) return base;
+    const tiered = `${base}_t${tier}`;
+    return this.textures.exists(tiered) ? tiered : base;
   }
 
   // Minecraft-style destroy: the object vanishes and drops as a recoverable
@@ -8005,6 +8075,8 @@ export class MainScene extends Phaser.Scene {
       backpack: this.backpack,
       skills: this.skills,
       progression: this.progression,
+      critTotals: (w) => ({ chance: this.critChanceTotal(w), mult: this.critMultTotal(w) }),
+      stationTexture: (key, tier) => this.tieredStationTexture(key, tier),
       armorSlots: () => this.armorSlots(),
       combatStats: () => this.combatStats(),
       runSpeedBreakdown: () => this.runSpeedBreakdown(),
@@ -8140,16 +8212,10 @@ export class MainScene extends Phaser.Scene {
     // only relics discount it now.
     const staminaCost = Math.round(weaponStaminaCost(this.equippedWeapon) * this.relics.staminaCostMult());
     const attackRange = rangedWeaponConfig(this.equippedWeapon)?.maxRangePx ?? REACH;
-    // Crit rollup (M-SS) — same weapon-base + stat + relic math applyCrit uses,
-    // capped for display.
-    const critChance = Math.min(
-      CRIT_CHANCE_CAP,
-      weaponBaseCritChance(this.equippedWeapon) + this.progression.critChanceBonus() + this.relics.critChanceBonus(),
-    );
-    const critMult = Math.min(
-      CRIT_MULT_CAP,
-      weaponBaseCritMult(this.equippedWeapon) + this.progression.critMultBonus() + this.relics.critDamageBonus(),
-    );
+    // Crit rollup (M-SS) — the same total-crit helpers the real crit roll uses,
+    // so the panel can't drift from actual combat math.
+    const critChance = this.critChanceTotal(this.equippedWeapon);
+    const critMult = this.critMultTotal(this.equippedWeapon);
     return {
       weaponName: this.equippedWeaponName,
       damage,
@@ -8529,13 +8595,62 @@ export class MainScene extends Phaser.Scene {
     this.buffBarUI.sync(this.buffs.active());
   }
 
-  // Owned-relics HUD strip (M-RL) — bottom-left, growing right/wrapping up. Only
-  // changes on roll/combine (afterRelicChange re-syncs), so it's built once and
-  // synced with the run's current (empty at a fresh start) relic set.
-  private createRelicBar(): void {
-    this.relicBarUI = new RelicBarUI(this);
-    this.relicBarUI.layout(12, this.scale.height - 12);
-    this.relicBarUI.sync(this.relics.groupedForDisplay());
+  // Unified passive/proc HUD (the user: Dota-style icons LEFT of the hotbar) —
+  // relic passives + armor set-bonuses + proc counters/cooldowns, all as
+  // hoverable squares. Replaces the old bottom-left relic gem bar + mid-left proc
+  // bar. Synced every frame (cooldown sweeps need it); rebuilds structure only
+  // when the owned set changes.
+  private createPassiveBar(): void {
+    this.passiveBarUI = new PassiveBarUI(this);
+    this.passiveBarUI.layout(this.hotbarUI.left - 10, this.hotbarUI.bottom);
+    this.passiveBarUI.sync(this.passiveEntries());
+  }
+
+  // Build the current passive/proc icon list: one entry per owned relic (proc
+  // relics carry live count/cooldown state) + one per active armor set-bonus.
+  private passiveEntries(): PassiveEntry[] {
+    const entries: PassiveEntry[] = [];
+    for (const group of this.relics.groupedForDisplay() as RelicGroup[]) {
+      const def = group.def;
+      const entry: PassiveEntry = {
+        key: `relic:${group.id}@${group.powerTier}`,
+        texture: rarityIcon(def.rarity),
+        borderColor: RARITY_COLOR[def.rarity],
+        name: `${def.name} (${rarityName(def.rarity)} · T${group.powerTier})`,
+        desc: relicEffectText(def, group.powerTier),
+        badge: `T${group.powerTier}`,
+      };
+      const kind = def.unique?.kind;
+      if (kind === "onslaught") {
+        const u = this.relics.unique("onslaught");
+        if (u) {
+          const cur = this.onslaughtHits % u.params.interval;
+          entry.count = { cur, max: u.params.interval };
+          entry.ready = cur === u.params.interval - 1; // next hit is the empowered one
+        }
+      } else if (kind === "guardian") {
+        const u = this.relics.unique("guardian");
+        if (u) {
+          const remaining = Math.max(0, this.guardianReadyAt - this.time.now);
+          entry.cooldown01 = u.params.cooldownMs > 0 ? 1 - remaining / u.params.cooldownMs : 1;
+          entry.ready = remaining <= 0; // block is armed
+        }
+      }
+      entries.push(entry);
+    }
+    // Armor set-bonuses (always-on passives) — icon = the set's chest piece.
+    for (const id of this.activeSetIds) {
+      const set = setById(id);
+      const chest = set.pieces[1];
+      entries.push({
+        key: `set:${id}`,
+        texture: itemDef(chest)?.texture ?? rarityIcon("mythic"),
+        borderColor: 0xffb84a,
+        name: `${set.bonusName} · ${set.name} set`,
+        desc: set.bonusDesc,
+      });
+    }
+    return entries;
   }
 
   // Player-level XP bar: sits directly under the hotbar, spanning its exact
@@ -8839,7 +8954,7 @@ export class MainScene extends Phaser.Scene {
       .setDepth(3000)
       .setVisible(false)
       .setInteractive({ useHandCursor: true })
-      .on("pointerdown", () => this.characterMenu.openMenu());
+      .on("pointerdown", () => this.openCharacterMenu());
     this.tweens.add({
       targets: this.statPointsBadge,
       y: badgeY + 6,

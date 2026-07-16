@@ -29,16 +29,14 @@ const LEASH_RADIUS = 520; // kited past this -> fully deaggros
 const MOVE_SPEED = 52;
 const DEAGGRO_REGEN_PER_SEC = 12; // claws HP back between engagements (GremlinKing/Gloamwarden precedent)
 
-export const WROUGHT_MAX_POISE = 45; // 70→45 (S6: easier to stagger — the punish window should come up more often)
+export const WROUGHT_MAX_POISE = 60; // 70→45 (S6), 45→60 (2026-07-15: staggering too easy — nudged the threshold back up a bit)
 export const CINDERWROUGHT_STAGGER_DAMAGE_MULTIPLIER = 1.5; // punish-window bonus (mirrors the roster)
 const STAGGER_DURATION_MS = 2500;
 const POISE_REGEN_DELAY_MS = 4200; // 3500→4200 (S6: a stagger sticks a bit longer before poise starts clawing back)
 const POISE_REGEN_PER_SEC = 12;
-const POISE_BAR_OFFSET_Y = 10;
-// A mini-boss stagger bar reads as a real mechanic — much bigger than the tiny
-// 22×3 regular-enemy bars (the user: "stagger bar too small").
-const POISE_BAR_W = 56;
-const POISE_BAR_H = 6;
+// A mini-boss stagger bar reads as a real mechanic — sits under the enlarged HP
+// bar (barScale) and matches its width (the user: "stagger bar too small").
+const POISE_BAR_H = 7;
 
 // Cinder Cone — locked-direction fire breath. Long readable wind-up; the cone
 // direction is fixed at telegraph start so a sidestep clears it.
@@ -66,6 +64,12 @@ const HAMMER_DAMAGE = 40; // 44→58 (S2), 58→40 (S6: too tough with two forge
 const HAMMER_KNOCKBACK = 240;
 
 const MELEE_STOP_RANGE = 150; // both attacks reach from here; stops approaching inside it
+// Only START an attack when the player is actually reachable — the shorter attack
+// (Forge Hammer, 168) plus a margin, so whichever attack is picked can connect.
+// Previously it telegraphed the moment the cooldown was up REGARDLESS of distance
+// (2026-07-15 bug: it attacked/whiffed from up to AGGRO_RADIUS 260px). Out of
+// range now = keep approaching instead.
+const ATTACK_INIT_RANGE = HAMMER_RANGE + 24;
 const ATTACK_COOLDOWN_MS = 1050; // 850→650 (S2), 650→1050 (S6: more downtime — stagger one while you 1v1 the other)
 // How close to spawn counts as "home" while wandering back deaggro'd (mirrors
 // GremlinKing/Gloamwarden) — below this it idles instead of micro-adjusting.
@@ -120,28 +124,35 @@ export class Cinderwrought extends Enemy {
       ],
       maxHealth: WROUGHT_MAX_HEALTH,
       biteDamage: 0, // all damage flows through checkPlayerHit()
-      // A molten-slag brute: blunt cracks the hard crust (was backwards — RESISTED
-      // blunt before S6), the cracks between the plates still take a piercing
-      // weapon well (the inverse of a Sandmaw, so a spear/pick still shines
-      // somewhere).
-      resistances: { blunt: 1.3, pierce: 1.25 },
+      // No weaknesses (2026-07-15, playtest): weakness on a mini-boss stacked too
+      // hard with crit/Onslaught. Fully neutral to every physical type now — it's
+      // a straight DPS check, not a bring-the-right-weapon puzzle.
+      resistances: {},
+      barScale: 2.4, // big overhead HP bar to match the 1.8× sprite (readable mini-boss bars)
     });
     this.spawnX = cfg.x;
     this.spawnY = cfg.y;
     this.baseScale = CINDERWROUGHT_SCALE;
     this.setScale(CINDERWROUGHT_SCALE);
+    // Pack behavior (the user): the two forge guards spawn ~140px apart — aggroing
+    // (or hitting) one wakes the other. Radius covers the pair without cross-
+    // linking distant forges (≥900px apart). forceAggro() below flips our own
+    // `aggroed` field (not the base state machine).
+    this.packAggro = true;
+    this.packAggroRadius = 320;
 
-    const barX = cfg.x - POISE_BAR_W / 2;
-    const barY = cfg.y - Enemy.BAR_OFFSET_Y + POISE_BAR_OFFSET_Y;
-    this.poiseBarBg = scene.add.rectangle(barX, barY, POISE_BAR_W, POISE_BAR_H, 0x2a1710, 0.85).setOrigin(0, 0.5);
-    this.poiseBarFill = scene.add.rectangle(barX, barY, POISE_BAR_W, POISE_BAR_H, 0xff8a3a, 1).setOrigin(0, 0.5);
+    // Poise bar sits directly under the (enlarged) HP bar and matches its width.
+    const barX = cfg.x - this.barW / 2;
+    const barY = cfg.y - this.barOffsetY + this.barH + 2;
+    this.poiseBarBg = scene.add.rectangle(barX, barY, this.barW, POISE_BAR_H, 0x2a1710, 0.85).setOrigin(0, 0.5);
+    this.poiseBarFill = scene.add.rectangle(barX, barY, this.barW, POISE_BAR_H, 0xff8a3a, 1).setOrigin(0, 0.5);
     this.telegraphGfx = scene.add.graphics();
   }
 
   preUpdate(time: number, delta: number): void {
     super.preUpdate(time, delta);
-    const barX = this.x - POISE_BAR_W / 2;
-    const barY = this.y - Enemy.BAR_OFFSET_Y + POISE_BAR_OFFSET_Y;
+    const barX = this.x - this.barW / 2;
+    const barY = this.y - this.barOffsetY + this.barH + 2;
     const aggro = this.isAggro();
     this.poiseBarBg.setPosition(barX, barY).setDepth(this.depth + 1).setVisible(aggro);
     this.poiseBarFill.setPosition(barX, barY).setDepth(this.depth + 1).setVisible(aggro);
@@ -216,7 +227,10 @@ export class Cinderwrought extends Enemy {
       }
     }
 
-    if (now >= this.nextAttackReadyAt) {
+    // Only commit to an attack when the player is actually reachable; otherwise
+    // fall through and keep closing the gap (fixes telegraphing/whiffing from out
+    // of range). reachBonus() covers the 1.8× sprite's extra body radius.
+    if (now >= this.nextAttackReadyAt && dist <= ATTACK_INIT_RANGE + this.reachBonus()) {
       this.beginTelegraph(this.pickAttack(), now, playerX, playerY);
       return;
     }
@@ -390,12 +404,16 @@ export class Cinderwrought extends Enemy {
     const dist = Phaser.Math.Distance.Between(this.x, this.y, playerX, playerY);
     const angleToPlayer = Phaser.Math.Angle.Between(this.x, this.y, playerX, playerY);
     const angleDiff = Math.abs(Phaser.Math.Angle.Wrap(angleToPlayer - this.attackAngle));
+    // reachBonus() = the extra body-half the 1.8× scale adds, so a hit registers
+    // at the sprite's visual edge, not just its center (fixes "attacks don't
+    // connect sometimes" for the big sprite).
+    const reach = this.reachBonus();
     if (this.currentAttack === "cone") {
-      if (dist > CONE_RANGE || angleDiff > CONE_HALF_ANGLE) return null;
+      if (dist > CONE_RANGE + reach || angleDiff > CONE_HALF_ANGLE) return null;
       this.hasHitThisAttack = true;
       return { damage: CONE_DAMAGE, knockback: CONE_KNOCKBACK, dmgType: "fire" };
     }
-    if (dist > HAMMER_RANGE || angleDiff > HAMMER_HALF_ARC) return null;
+    if (dist > HAMMER_RANGE + reach || angleDiff > HAMMER_HALF_ARC) return null;
     this.hasHitThisAttack = true;
     // Physical (S6: one fire attack + one physical, so armor actually matters
     // against the hammer) — the molten HEAD is fire-forged but the blow itself
@@ -404,6 +422,10 @@ export class Cinderwrought extends Enemy {
   }
 
   takeHit(damage: number): boolean {
+    // Being hit (incl. a ranged shot that out-ranges AGGRO_RADIUS) wakes it —
+    // proximity was the ONLY aggro path before, so it ignored ranged pokes.
+    // Once aggro'd, MainScene.updatePackAggro wakes its forge-mate next frame.
+    this.aggroed = true;
     const depleted = super.takeHit(damage);
     if (depleted) return true;
     if (this.wroughtState === "staggered") return false;
@@ -411,6 +433,13 @@ export class Cinderwrought extends Enemy {
     this.lastPoiseChipAt = this.scene.time.now;
     if (this.poise <= 0) this.enterStaggered(this.scene.time.now);
     return false;
+  }
+
+  // Pack-aggro (MainScene.updatePackAggro) — flip OUR own aggro field, since the
+  // base forceAggro() drives the `state` machine this subclass doesn't use.
+  forceAggro(_now: number): void {
+    if (this.depleted) return;
+    this.aggroed = true;
   }
 
   private enterStaggered(now: number): void {

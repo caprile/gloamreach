@@ -61,8 +61,8 @@ requires standing near a placed Workbench (`MainScene.isNearWorkbench`).
 | Emberhide Vest | Armor | 1 | Yes (Lvl 4) | 1 Duskhide Vest, 2 Embersteel Ingot, 3 Duskrunner Pelt, 2 Sandmaw Chitin, 3 Bones, 1 Hex Essence | Light Armor 0 | Item (armor, chest, light — reforge) |
 | Emberhide Leggings | Armor | 1 | Yes (Lvl 4) | 1 Duskhide Leggings, 1 Embersteel Ingot, 1 Sandmaw Chitin, 2 Duskrunner Pelt, 1 Hex Essence | Light Armor 0 | Item (armor, legs, light — reforge) |
 | Embersteel Warhammer | Weapons | 1 | Yes (Lvl 4) | 1 Sunsteel Warhammer, 3 Embersteel Ingot, 4 Ironbark, 2 Cragscale Plate, 2 Hex Essence | Blunt 3 | Item (weapon, blunt — reforge) |
-| Embersteel Longsword | Weapons | 1 | Yes (Lvl 4) | 1 Sunsteel Longsword, 2 Embersteel Ingot, 2 Ironbark, 2 Hex Essence | Slash 3 | Item (weapon, slash — reforge) |
-| Embersteel Pike | Weapons | 1 | Yes (Lvl 4) | 1 Sunsteel Pike, 2 Embersteel Ingot, 3 Ironbark, 2 Hex Essence | Pierce 3 | Item (weapon, pierce — reforge) |
+| Embersteel Longsword | Weapons | 1 | Yes (Lvl 4) | 1 Sunsteel Longsword, 2 Embersteel Ingot, 2 Ironbark, 2 Sandmaw Chitin, 2 Hex Essence | Slash 3 | Item (weapon, slash — reforge) |
+| Embersteel Pike | Weapons | 1 | Yes (Lvl 4) | 1 Sunsteel Pike, 2 Embersteel Ingot, 3 Ironbark, 2 Cragscale Plate, 2 Hex Essence | Pierce 3 | Item (weapon, pierce — reforge) |
 | Embersteel Warbow | Weapons | 1 | Yes (Lvl 4) | 1 Sunsteel Warbow, 3 Embersteel Ingot, 3 Ironbark, 2 Duskrunner Pelt, 2 Hex Essence | Ranged 0 | Item (weapon, ranged — reforge) |
 | Ember Brand | Weapons | 1 | Yes (Lvl 4) | 3 Embersteel Ingot, 4 Hex Essence, 2 Ironbark | Magic 0 | Item (weapon, **magic** — first magic weapon) |
 
@@ -379,7 +379,7 @@ relic they produce.
 | Trophy rarity | → Common | → Uncommon | → Rare | → Mythic | Fail | Pity (miss cap) |
 |---|---|---|---|---|---|---|
 | Common | 20% | 2.5% | 1% | — | 76.5% | 8 |
-| Uncommon | — | rest (94%) | 5% | 1% | 0% | 8 |
+| Uncommon | — | rest (87%) | 12% | 1% | 0% | 8 |
 | Rare | — | — | rest (90%) | 10% | 0% | — |
 | **Boss** (bespoke `outcomeOdds`) | — | — | — | 100% | 0% | — |
 
@@ -466,7 +466,7 @@ Common/Uncommon = flat stat; Rare/Mythic = **Uncommon's stat (plateau) + a proc*
 
 | Family | Common | Uncommon | Rare (stat + proc) | Mythic (stat + bigger proc) |
 |---|---|---|---|---|
-| **Damage** | Warrior's Charm +4% | Warrior's Idol +7% | Onslaught Totem +7% · every 5th hit +100% dmg | Berserker's Mantle +7% · every 4th hit +120% |
+| **Damage** | Warrior's Charm +4% | Warrior's Idol +7% | Onslaught Totem +7% · every 5th hit +100% dmg | Berserker's Mantle +7% · every 4th hit +100% |
 | **Move** | Swift Charm +4% | Swift Idol +7% | Fleetfoot Totem +7% · on kill +25% move 2.5s | Windwalker's Mantle +7% · +35% move 3.5s + refunds dash |
 | **Defense** | Stoneskin Charm −4% taken | Ironhide Idol −7% | Aegis Totem −7% · negate next hit /8s | Bulwark Mantle −7% · negate /6s + cap any hit at 30% max HP |
 | **Stamina** | Tireless Charm −6% cost | Tireless Idol −10% | Second Wind Totem −10% · on kill restore 25% max stam | Perpetual Mantle −10% · restore 40% + 2s free attacks |

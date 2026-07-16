@@ -144,7 +144,7 @@ export class PauseMenuUI {
     originX = 0,
   ): Phaser.GameObjects.Text {
     const t = this.scene.add
-      .text(x, y, str, { fontFamily: "monospace", fontSize: `${size}px`, color })
+      .text(x, y, str, { fontFamily: "monospace", fontSize: `${size + 1}px`, color })
       .setOrigin(originX, 0)
       .setScrollFactor(0)
       .setDepth(DEPTH_TEXT);

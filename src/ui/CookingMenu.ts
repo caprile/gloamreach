@@ -586,7 +586,7 @@ export class CookingMenu {
     const t = this.scene.add
       .text(x, y, str, {
         fontFamily: "monospace",
-        fontSize: `${size}px`,
+        fontSize: `${size + 1}px`,
         color,
         wordWrap: wrapWidth ? { width: wrapWidth } : undefined,
       })

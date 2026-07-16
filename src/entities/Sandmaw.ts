@@ -33,12 +33,17 @@ const MAX_HEALTH = 45; // between Duskrunner (20) and Cragscale (60) — an ambu
 const ERUPT_DAMAGE = 46; // bumped 38→46 — a big committed ambush should really punish getting caught (badlands damage pass)
 const BURST_RADIUS = 95; // AoE radius around the Sandmaw (the tremor telegraph previews exactly this)
 const ERUPT_KNOCKBACK = 220; // a strong sand-blast shove (near-cosmetic today — see Player.update knockback note)
+// Signature bleed (2026-07-15): the sand-blast leaves grit in the wound — a DoT
+// on top of the direct hit, so getting caught keeps hurting after the shove.
+// Slightly under Cragscale's roll (5/s×4s) since the direct erupt hit is bigger.
+const ERUPT_BLEED_DPS = 4;
+const ERUPT_BLEED_MS = 5000;
 
-// 560ms tell before the burst detonates. A walking player (95px/s) covers ~52px
-// in that window; starting from AMBUSH_RADIUS (62px in) they can just clear
-// BURST_RADIUS (95) with a beat of reaction — greedy/advancing players eat it,
-// reactive ones (or a dash, which also grants i-frames) escape.
-const SURFACE_WINDUP_MS = 560;
+// Windup tell before the burst detonates. Tightened 560→470 (2026-07-15: the
+// ambush should snap out a bit faster — still dashable, and a walking player who
+// reacts on the surface can clear BURST_RADIUS, but greedy/advancing players now
+// eat it more reliably).
+const SURFACE_WINDUP_MS = 470;
 const ERUPT_STRIKE_MS = 340; // detonation window (long enough for the spikes to visibly shoot up + the per-frame hit query)
 const EXPOSED_MS = 850; // fully surfaced + planted after erupting — the vulnerable punish window (was 1100, playtest: whole cycle read too slow/infrequent)
 const BURROW_MS = 350; // dive-back-under animation
@@ -85,7 +90,8 @@ export class Sandmaw extends Enemy {
       // carrying more than one weapon into the badlands.
       // fire ×0.5: a sand-burrower is at home in the heat (S2 decision 3 — makes
       // the player's Emberblink fire-nova situational, not a blanket answer).
-      resistances: { pierce: 0.6, blunt: 1.4, fire: 0.5 },
+      // Normalized (2026-07-15): weak = ×1.25, resist = ×0.5.
+      resistances: { pierce: 0.5, blunt: 1.25, fire: 0.5 },
     });
     this.eruptDamage = elite ? Math.round(ERUPT_DAMAGE * 1.5) : ERUPT_DAMAGE;
     this.telegraphGfx = scene.add.graphics();
@@ -252,11 +258,18 @@ export class Sandmaw extends Enemy {
   // Queried each frame by MainScene.updateEnemies() (like the bosses / Hexling
   // flame). Physical radial burst with a strong knockback; one hit per eruption.
   // Rides applyDamageToPlayer, so dash i-frames/armor "just work" against it.
-  checkPlayerHit(playerX: number, playerY: number): { damage: number; knockback: number } | null {
+  checkPlayerHit(
+    playerX: number,
+    playerY: number,
+  ): { damage: number; knockback: number; bleed: { dmgPerSec: number; durationMs: number } } | null {
     if (this.mode !== "erupting" || this.eruptHit) return null;
     if (Phaser.Math.Distance.Between(this.x, this.y, playerX, playerY) <= BURST_RADIUS + this.reachBonus()) {
       this.eruptHit = true;
-      return { damage: this.eruptDamage, knockback: ERUPT_KNOCKBACK };
+      return {
+        damage: this.eruptDamage,
+        knockback: ERUPT_KNOCKBACK,
+        bleed: { dmgPerSec: ERUPT_BLEED_DPS, durationMs: ERUPT_BLEED_MS },
+      };
     }
     return null;
   }

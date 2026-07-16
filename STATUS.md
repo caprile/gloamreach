@@ -2,7 +2,41 @@
 
 ## Current State
 
-_Living snapshot — edit in place, never append. Last shipped: **S8 — Biome-2 Warbow + arrows +
+_Living snapshot — edit in place, never append. Last shipped: **PB16 — Playtest batch: crit/Onslaught
+rework + 15 fixes** (2026-07-15, Opus). A 16-item playtest batch off the user's lvl-14 run. **Combat math
+rework (the headline):** crit and Onslaught are now **additive conditional bonuses on the normal hit**,
+never multiplied together (was crit×onslaught → the "17→84 / 196-dmg" spikes; now normal 24 → crit 56 →
+onslaught 48 → both ~80). Onslaught trimmed to a flat **+100% (×2), no power-tier scaling**
+(Berserker's Mantle 120→100). Split `applyCrit` → `critChanceTotal`/`critMultTotal`/`rollCrit`/`critBonus`
+(one source of truth, shared by the tooltip). **Badlands resistances normalized** to weak ×1.25 / resist
+×0.5 (the user: "weak/resist numbers unclear"); **Cinderwrought lost all weakness** (fully neutral) + poise
+45→60; **Duneshaper** dropped physical weakness, gained **fire ×1.25** as its standout (magic-resist kept).
+Floating damage numbers now COLOR-code effectiveness (no text): neutral white / resisted greyed-out /
+weak gold / crit hot-orange+"!" + bigger. **Relic dominance** now prompts
+**Keep New/Old** when a roll's tier & rarity disagree (was rarity-first → a T2 Rare auto-deleted by a T1
+Mythic). **Refined-Uncommon Rare rate 5%→12%.** **Sandmaw** gained a signature **bleed** (4/s×5s) + faster
+erupt (560→470ms). **Mini-boss HP/stagger bars enlarged** (barScale 2.4 on Gloamwarden/Cinderwrought).
+New **ProcBarUI** (mid-left): Onslaught pip-counter (1..2..3..proc) + Guardian block-ready/cooldown.
+**Weapon tooltip** now shows total crit chance + crit damage (base + STR/AGI/relics) via a `critTotals`
+callback. **Ironshod axe** gets distinct tier-1 art (generic `${base}_t{tier}` texture resolver, now covers
+tools/weapons too). **Ember sword/pike** reforges consume a base creature-material (sandmaw_chitin /
+cragscale_plate). **Craft/upgrade SFX** (new `Sfx.upgrade()` + placement cue). **Menu text +1px** across
+all read-heavy panels. **Bug:** opening the Character/level-up menu now closes the Relic Forge menu (was
+rendering on top of it). `tsc` clean; verified live via `javascript_tool` (additive hit = 51.84 not 63.02;
+onslaught cycle [0,0,0,1]; all 5 badlands resist tables; Sandmaw bleed; mini-boss barW 52.8; proc bar
+pips/label; tiered axe texture; menus render no-overflow; no console errors).
+**Same-session follow-up (3 more):** (1) **Cinderwrought bugs** — now aggros from ranged hits
+(`takeHit` sets `aggroed`), only telegraphs when the player is actually in reach (was whiffing from up
+to 260px), `checkPlayerHit` adds `reachBonus()` for the 1.8× sprite, and gains **pack behavior** (hitting/
+aggroing one forge-guard wakes its mate via `packAggro` + a `forceAggro` override). (2) **Duneshaper** —
+dropped its magic resist entirely (the user: fire is a magic subtype + the Ember Brand deals fire), so its
+ONLY resist line is now fire ×1.25 weak. (3) **Unified passive/proc HUD** — the mid-left ProcBarUI +
+bottom-left relic-gem bar are REPLACED by one `PassiveBarUI` (Dota-style icons LEFT of the hotbar):
+relic passives + armor set-bonuses + proc counters (Onslaught count + ready-glow) / cooldowns (Guardian
+sweep), all hoverable, showing cleanly together. Verified live (5-icon strip renders; Onslaught count
+"3"+glow; Guardian 27px cooldown overlay; ranged-aggro + pack + in-range-gate all confirmed; no errors).
+Full entry below.
+Prior: **S8 — Biome-2 Warbow + arrows +
 ember material tweak** (2026-07-15, Opus, plan `playtest-2026-07-15-session-plan.md`) — **the FINAL
 session of the 8-session 2026-07-15 playtest plan; that plan is now fully shipped.** Added the
 badlands ranged tier: a **Sunsteel Warbow** (forged, WB Lvl 3 — 11 dmg / 750ms / 12 stam / 380px)
@@ -353,6 +387,96 @@ below + [[survivor-rpg-dev-console]].
 
 > Older entries in STATUS-archive.md.
 
+### PB16 — Playtest batch: crit/Onslaught rework + 15 fixes (2026-07-15, Opus)
+Off the user's lvl-14 playtest ("almost 1-3 shotting everything by steel+embersteel; 17→84, 196 hits —
+crit feels bananas"). Root cause diagnosed live (not a math bug): **Onslaught (every-4th-hit +120%) was a
+separate multiplier stacking multiplicatively with crit** (`~2.2× × ~2.2× ≈ 4.9×`), amplified further by
+power tier. Fix locked with the user.
+
+- **Combat math — additive conditional bonuses (`tryMeleeAttack`/`tryRangedAttack`, MainScene).** The
+  "normal hit" = `base × (1 + weaponSkill% + relic damage%)` (the always-on additive bucket). Crit and
+  Onslaught are now **conditional bonuses that ADD onto the normal hit** — `normalHit × (1 + onsBonus +
+  critBonus) × stagger × resist` — never multiplied by each other. So crit-alone and onslaught-alone are
+  unchanged, but the double-dip that produced the 149/196 spikes is gone (both together ≈ 80, not 149).
+  Onslaught is now a **flat +100% (×2), no power-tier scaling** (Berserker's Mantle bonusPct 120→100).
+  `applyCrit` split into `critChanceTotal`/`critMultTotal`/`rollCrit`/`critBonus` (one source of truth;
+  the combatStats panel + weapon tooltip now read the same helpers). Onslaught proc → `onslaughtBonus()`
+  (returns the flat fraction, still one roll per swing shared by the AOE-arc secondaries).
+  **Verified live:** a real melee hit with a forced crit on the 4th (Onslaught) swing dealt **51.84**, the
+  additive value — not the multiplicative 63.02. Onslaught cycle = `[0,0,0,1,0,0,0,1]`.
+- **Badlands resistances normalized** (the user: "weak/resist numbers unclear; too much damage on top of
+  weapon stuff"). Every weak → **×1.25**, every resist → **×0.5** (`Cragscale`/`Sandmaw`/`Hexling`/
+  `Duneshaper` tables). **Cinderwrought lost ALL weakness** (fully neutral — a mini-boss weakness stacked
+  too hard) + poise **45→60** (harder to stagger). **Duneshaper** dropped its physical weakness (now
+  neutral) and gained **fire ×1.25** as its one standout weakness (burning it down is the intended
+  counter; the magic-resist it initially kept was dropped in the same-session follow-up — see below).
+  Floating damage numbers COLOR-code effectiveness with **no text label** (the user): neutral **white** /
+  resisted **greyed-out** (dim) / weak **gold** / crit **hot-orange + "!"** (distinct from weak's gold),
+  and are a touch bigger (14→16 / 20→22 crit).
+- **Relic dominance (`compareInstances`, Relics.ts).** Was rarity-first (a Mythic always beat a Rare
+  regardless of tier), so a newly-rolled **T2 Rare was auto-declined by an owned T1 Mythic**. Now returns
+  **"ambiguous" → the Keep New / Keep Old prompt** whenever rarity and tier disagree (higher tier but
+  lower rarity, or vice versa); strict dominance on both axes still auto-replaces/declines. Locked with
+  the user ("not always want mythic over rare depending on tier").
+- **Refined-Uncommon Rare roll rate 5%→12%** (uncommon outcome table's Rare band). the user's ask.
+- **Sandmaw** (`Sandmaw.ts`) — signature **bleed** (4/s×5s) added to the erupt hit (returned from
+  `checkPlayerHit` + threaded through `applyDamageToPlayer`'s existing bleed param), and a **faster erupt**
+  (windup 560→470ms). No new vulnerability window (the user: "just bleed + faster").
+- **Mini-boss bars** — new per-enemy `EnemyConfig.barScale` (default 1); Gloamwarden/Cinderwrought pass
+  **2.4**, so their HP bar (22→52.8px) + poise bar sit big and overhead over the 1.7–1.8× sprite. The
+  poise bar now anchors under the enlarged HP bar via the instance `barW`/`barOffsetY`/`barH`.
+- **Proc counter HUD** (`src/ui/ProcBarUI.ts`, new) — mid-left (empty screen area; hints sit mid-right).
+  Onslaught row = a pip counter filling 1..2..3.. then resetting on the proc (glows gold on the pre-proc
+  hit); Guardian row = a shield bar that reads **BLOCK READY** (green) or **BLOCK N.Ns** with a cooldown
+  sweep. Rows hide entirely unless the player owns that proc's relic. Fed each frame by
+  `MainScene.procHudState()`.
+- **Weapon tooltip crit totals** (Task 6) — the tooltip now shows **total crit chance + crit damage**
+  (weapon base + Strength/Agility + relics, capped) alongside the per-weapon base, via a `critTotals`
+  callback threaded through HotbarUI/InventoryMenu → Tooltip (sourced from MainScene's own crit helpers).
+- **Ironshod axe art** — distinct tier-1 `icon_stone_axe_t1` texture (sunsteel head + gold ingot bands).
+  `tieredStationTexture` generalized from workbench/smelter-only to **any item with a `${base}_t{tier}`
+  texture**, so upgraded tools/weapons get their art in the hotbar, on the player, and in the backpack.
+- **Ember reforge ingredients** — the Embersteel **Longsword/Pike** were the only reforges consuming just
+  ingot+ironbark+hex; now also take a base creature-material (2 Sandmaw Chitin / 2 Cragscale Plate), like
+  the armor/warhammer/warbow already did.
+- **Craft/upgrade SFX** — new `Sfx.upgrade()` (a heftier metallic rise) fires on every station/armor/
+  weapon upgrade; a `craft()` cue now also plays when a placeable is placed.
+- **Menu text +1px** across every read-heavy panel (Crafting/Inventory/Character/RelicForge/Cooking/
+  DryingRack/Chest/Upgrade/Pause/Tooltip/Welcome/Tips) — the user: "text everywhere too small, especially
+  menus."
+- **Bug fix** — opening the Character/level-up menu (K or the stat-points badge) now closes the Relic
+  Forge menu first (and vice versa); it was rendering on top of an open forge menu.
+
+`tsc` clean; RECIPES.md + dashboard Enemies tab synced. See [[survivor-rpg-relics]] +
+[[survivor-rpg-stats-skills-relics-direction]].
+
+**Same-session follow-up (3 more items from the user):**
+- **Cinderwrought AI bugs** (`Cinderwrought.ts`). Three fixes + pack behavior: (1) **ranged aggro** —
+  `takeHit` now sets `aggroed = true` (proximity was the ONLY aggro path, so ranged pokes were ignored);
+  (2) **out-of-range / whiffing attacks** — `updateIdle` only begins a telegraph when
+  `dist <= ATTACK_INIT_RANGE (192) + reachBonus()`; it was telegraphing the instant the cooldown was up
+  regardless of distance, so it attacked/whiffed from up to `AGGRO_RADIUS` 260px while its attacks reach
+  only 168–235; out of range now = keep approaching; (3) `checkPlayerHit` adds `reachBonus()` (~17px for
+  the 1.8× sprite) to the cone/hammer range checks so a hit registers at the sprite's visual edge; (4)
+  **pack behavior** — `packAggro = true` / `packAggroRadius = 320` + a `forceAggro()` override (flips the
+  subclass's own `aggroed` field, since the base `forceAggro` drives the `state` machine it doesn't use),
+  so hitting or aggroing one forge-guard wakes its mate (the pair spawns 140px apart) via
+  `MainScene.updatePackAggro`. Verified live: hit-one-of-a-pair → both aggro; far player = idle/approach,
+  near player = telegraph.
+- **Duneshaper resist** (`Duneshaper.ts`). Dropped the magic resist ×0.5 — the user: fire is a subtype of
+  magic AND the Ember Brand deals fire, so resisting magic while being fire-weak punished the ember/fire
+  path it's meant to reward. Now its ONLY resist line is **fire ×1.25 (weak)**; everything else neutral.
+- **Unified passive/proc HUD** (`src/ui/PassiveBarUI.ts`, new — REPLACES `RelicBarUI` + `ProcBarUI`, both
+  deleted). the user wanted Dota-style passive/proc icons LEFT of the hotbar. One data-driven strip of
+  hoverable square icons: one per owned relic (proc relics carry live state — **Onslaught** shows the
+  1·2·3 count + a ready-glow on the pre-proc hit; **Guardian** shows a draining cooldown cover + a
+  BLOCK-armed glow) + one per active **armor set-bonus** (Molten Bulwark / Emberblink, icon = the set's
+  chest piece, hover = the bonus). Built each frame by `MainScene.passiveEntries()` (from
+  `relics.groupedForDisplay()` + `activeSetIds`), synced from the update loop + `afterRelicChange`.
+  Positioned off `hotbarUI.left`/`.bottom`, growing left + wrapping up. The timed food-buff bar
+  (`BuffBarUI`, above HP) stays separate. Verified live: 5-icon strip (4 relics + Embersteel set),
+  Onslaught count "3"+glow, Guardian 27px cooldown overlay, hover tooltips, no console errors.
+
 ### S8 — Biome-2 Warbow + arrows + ember material tweak (2026-07-15, Opus)
 The **final** session of the 8-session 2026-07-15 playtest plan
 (`playtest-2026-07-15-session-plan.md`) — with this, that plan is fully shipped. Adds the badlands
@@ -419,100 +543,3 @@ errors.
 
 **The 8-session 2026-07-15 playtest plan is complete. Next up:** no locked milestone — likely a broader playtest/tuning pass or a biome-3 scoping
 session (master roadmap's "at least 5 total biomes").
-
-### S7 — Weapon identity redesign (2026-07-15, Opus)
-Wave 3 of the 8-session 2026-07-15 playtest plan (`playtest-2026-07-15-session-plan.md`). A new
-mechanic (the blunt debuff) + a full rebalance of the three melee weapon identities, all locked via
-`AskUserQuestion`: **Spear/Pike (pierce) = lowest arc + highest single-target + best crit; Knife/Sword
-(slash) = biggest arc + best crowd AOE; Club/Warhammer (blunt) = medium arc + a movement-slow/cripple
-debuff.** The old tables were largely **inverted** from this — spears/pikes were the WIDEST sweepers
-and swords near single-target.
-
-- **`Weapons.ts` tables reworked:**
-  - **`WEAPON_ARC`** — slash now the widest (bone_knife ±50°/54px, sunsteel_sword ±60°/66px,
-    embersteel_sword ±62°/70px), blunt lower-medium (clubs ±35-38°, warhammers ±40-42°), pierce
-    near-single-target (primal_spear ±18°/30px, pikes ±20-22°/34-36px). Ranged unchanged (no sweep);
-    ember_brand stays a medium ±45° magic sweep.
-  - **`WEAPON_DAMAGE`** — bumped the forged pikes so pierce is the single-target DPS leader:
-    sunsteel_pike **15→19** (DPS 30.6, edges sunsteel_sword's 29.2), embersteel_pike **20→25** (DPS
-    41.0 > embersteel_sword's 40.4). starter primal_spear stays 8 (already its tier's top
-    single-target). Both bumps preserve the tier invariants (ember base ≥ steel base + 5; base forged
-    still clears the maxed Primal Spear's 13).
-  - **`WEAPON_BASE_CRIT_*`** — pierce is now clearly the crit king (spear/pike 10%/×1.70,
-    embersteel_pike 11%/×1.75) over blunt (4-5%) and slash (5-6%); previously the warhammers held the
-    highest base crit. Rationale comment updated: crit is a pierce-identity axis first, attack-speed
-    lean second.
-- **Blunt movement-slow debuff (net-new mechanic, but zero new state machine):** a blunt hit now calls
-  `enemy.applySlow(BLUNT_SLOW_FACTOR 0.6, BLUNT_SLOW_MS 1500, now)` at the single melee/ranged choke
-  point `MainScene.resolveWeaponHit` (only on a surviving enemy). This **reuses the exact
-  `Enemy.applySlow`/`slowMult` path already built for the Executioner crit relic** — the scene folds
-  `slowMult(now)` into `envSpeedMult` each frame, so the slow rides every aggressive-movement velocity
-  with no per-subclass wiring. The slow **refreshes on each blunt hit** (sustained bludgeoning keeps a
-  target crippled) and `applySlow` keeps the stronger of any overlapping slows. Because it's at the
-  shared choke point, a blunt AOE-arc *sweep* cripples every swept enemy too (thematic crowd-control
-  identity). Subtle tell: a one-shot icy-blue `light_soft` puff (`spawnSlowTell`) — deliberately NOT a
-  persistent tint (would fight `Enemy.applyHpTint`/the wind-up tell); the enemy visibly slowing is the
-  lasting feedback.
-- **Identity surfaced everywhere:** new `weaponIdentityLine(weapon)` (keyed off primary damage type) +
-  `weaponSlowsOnHit` helpers. Shown on the item **Tooltip** (a line under Crit), the inventory
-  **Combat column** (muted line under the weapon name, new `CombatStatsView.identity`), and the
-  **dashboard** weapons tab (new **Arc** column `±half° / range / falloff` + an "S7 weapon identities"
-  note block, drift-free off `BLUNT_SLOW_FACTOR`/`_MS`).
-
-`tsc` clean; verified live via `preview_start` + `javascript_tool` against the running game: a blunt
-`resolveWeaponHit` drops `enemy.slowMult` 1→0.6 while a pierce hit leaves it at 1; combatStats reads
-per-type (pike 19/25, pierce crit 10%/11%, correct identity strings); an end-to-end `tryMeleeAttack`
-sweep test confirmed a **sunsteel_sword hits a 45°-offset secondary for 10.5 (=14×0.75 falloff) while
-sunsteel_pike and stone_club do NOT** (pierce single-target; club's 38° cone excludes 45°); the Combat
-column renders "Focused — top single-target & crit, narrow arc" and the Tooltip appends "Crushing —
-cripples enemy movement"/"Focused …"; dashboard weapons tab renders the Arc column + notes; no console
-errors. No `RECIPES.md` change (no recipe/cost edits — weapon damage stats aren't in it). **Next in the
-plan:** S8 (biome-2 bow + arrows + ember material tweak, **Opus**) — the last session, and it should
-fit these finalized identities.
-
-### S3 — Inventory visuals + upgrade-ready indicators (2026-07-15, Opus)
-Wave 2 of the 8-session 2026-07-15 playtest plan (`playtest-2026-07-15-session-plan.md`). A new
-upgrade-affordance indicator system + an icon-size pass. Three parts:
-
-1. **Bigger icons.** Item icons are generated tiny (native ~14-30px, e.g. a 24px tool) and were
-   drawn at native size via `scene.add.image(...)` with no `setDisplaySize`, so they floated small in
-   the slot. Added a shared `InventoryMenu.fitIcon(img)` — scales each icon to fit within an `ICON_BOX`
-   = `SLOT - 12` (34px) box, aspect preserved — applied to backpack cells, equipment slots, and the
-   relic gem icons; `HotbarUI` does the same inline (its own `ICON_BOX = SLOT_SIZE - 12`). The hotbar
-   `SLOT_SIZE` was **bumped 40→46 to match the inventory `SLOT`** (the user: "hotbar size up a little
-   too, so things are the same size"), so an icon renders identically in the backpack or the hotbar.
-   The HP/stamina/XP bars and hotbar centering all derive from `HotbarUI`'s `top`/`bottom`/`left`/
-   `width` getters (which read `SLOT_SIZE`), so they re-layout automatically — verified intact at
-   native 1080p (hotbar top 948 / bottom 1046 / width 462, centered).
-2. **"Upgrade ready" arrow.** A small gold pulsing **▲** at a slot's top-right corner when that item
-   has a discovered + affordable next-tier upgrade the player could apply right now. Three surfaces:
-   backpack **weapons/tools** + worn **armor** (both via `MainScene.hasReadyUpgrade(itemKey, tier)` —
-   the resultTier ladder: the single next-tier upgrade across the weapon/armor/tool tables, a given
-   itemKey matching at most one), and placed **stations** (a floating world glyph over the object, via
-   `stationHasReadyUpgrade(obj)` — the no-ladder "any discovered, not-yet-applied, affordable upgrade"
-   model — reconciled by `refreshStationUpgradeIndicators()`, glyphs kept in a `placedUpgradeGlyphs`
-   map keyed by the placed Image like `placedLabels`, depth 2500). **Design decision (logged):** the
-   predicate is deliberately **materials-only** — it does NOT consult `upgradeBlockReason`
-   (Workbench-proximity), so the arrow is a stable "you have the mats" nudge that doesn't flicker as
-   the player walks near/away from a bench; clicking Upgrade still surfaces any proximity gate, exactly
-   like the crafting menu shows affordable-but-needs-workbench recipes. Refreshed from `afterItemMove`
-   (now also refreshes the hotbar, since a material change with nothing NEW discovered skips the
-   `refreshDiscovery` path), `refreshDiscovery`, placement (`attemptPlaceObject` tail), and every
-   upgrade-apply path. **Tween hygiene:** the looping fade tweens are tracked (`indicatorTweens[]` in
-   each UI; per-glyph `tween` in the station map) and killed on every re-render / on station destroy —
-   no orphaned `repeat:-1` tween (verified: no arrow-tween accumulation across 20 inventory toggles,
-   zero stray world glyph tweens after destroy).
-3. **Suppress armor-upgrade discovery toasts** — **already satisfied, no change.** Armor and weapon
-   upgrades never emitted a discovery toast; only station upgrades (`STATION_UPGRADES`) and tool
-   upgrades (`TOOL_UPGRADES`) do, in `refreshDiscovery`, and those are kept. The affordable-arrow is
-   the new signal the triage wanted in their place.
-
-`tsc` clean; verified live via `javascript_tool`: `hasReadyUpgrade('stone_club',0)` false with no
-mats → true with exactly `{wood:3,stone:3}` → false at max tier; inventory renders 1 backpack + 1
-equipment arrow at the correct slot top-right screen coords (72,253 / 402,105), each with a live fade
-tween; icon display width 24→34; hotbar arrow + enlarged icon (34) render; station glyph (workbench
-`tool_sharpener`, `{twine:3,wood:5,stone:2}`) appears with mats / clears on consume / recreates /
-`placedUpgradeGlyphs` cleaned to 0 on `destroyPlacedObject`; no console errors. No `RECIPES.md`/
-dashboard change (no recipes touched). **Next in the plan:** Wave 3 — S7 (weapon identity redesign,
-Opus) → S8 (biome-2 bow + arrows, Opus, after S7).
-

@@ -127,7 +127,7 @@ export const TROPHY_OUTCOME_ODDS: Record<RelicRarity, { rarity: RelicRarity; cha
   ],
   uncommon: [
     { rarity: "mythic", chance: 0.01 },
-    { rarity: "rare", chance: 0.05 },
+    { rarity: "rare", chance: 0.12 }, // 0.05→0.12 (2026-07-15: refined-uncommon rolls should hit Rare more)
     { rarity: "uncommon", chance: 1.0 },
   ],
   rare: [
@@ -273,7 +273,7 @@ export const RELIC_DEFS: Record<string, RelicDef> = {
   relic_sage_totem: { id: "relic_sage_totem", name: "Sage Totem", rarity: "rare", family: "xp", effect: { xpPct: 14 }, unique: { kind: "xpstreak", params: { perKillPct: 8, maxPct: 50, windowMs: 4000 } } },
 
   // --- mythic (Uncommon's stat + a spicier version of the family proc) ---
-  relic_avatars_mantle: { id: "relic_avatars_mantle", name: "Berserker's Mantle", rarity: "mythic", family: "damage", effect: { damagePct: 7 }, unique: { kind: "onslaught", params: { interval: 4, bonusPct: 120 } } },
+  relic_avatars_mantle: { id: "relic_avatars_mantle", name: "Berserker's Mantle", rarity: "mythic", family: "damage", effect: { damagePct: 7 }, unique: { kind: "onslaught", params: { interval: 4, bonusPct: 100 } } },
   relic_windwalkers_mantle: { id: "relic_windwalkers_mantle", name: "Windwalker's Mantle", rarity: "mythic", family: "move", effect: { moveSpeedPct: 7 }, unique: { kind: "killrush", params: { movePct: 35, ms: 3500, dashRefund: 1 } } },
   relic_undying_heart: { id: "relic_undying_heart", name: "Bulwark Mantle", rarity: "mythic", family: "defense", effect: { damageTakenPct: -7 }, unique: { kind: "guardian", params: { cooldownMs: 6000, capPct: 30 } } },
   relic_perpetual_mantle: { id: "relic_perpetual_mantle", name: "Perpetual Mantle", rarity: "mythic", family: "stamina", effect: { staminaCostPct: -10 }, unique: { kind: "secondwind", params: { restorePct: 40, freeMs: 2000 } } },
@@ -515,17 +515,28 @@ function replaceRefund(oldId: string, oldTier: number): { refundShardKey: string
 // (now-plateau'd) numeric stat. This is what frees the flat stat to stop growing.
 // `compareInstances` is only ever called same-family (roll() looks up
 // instances[family]), so cross-family never reaches here.
-//   "better"         — `a` is a higher rarity than `b`, or same rarity + higher tier.
-//   "worse_or_equal" — `a` is lower rarity, or the exact same relic id + tier.
-//   "ambiguous"      — same rarity, differing tier the "wrong" way is handled above;
-//                      effectively never returned now (kept so callers stay total).
+//   "better"         — `a` strictly dominates: higher-or-equal on BOTH rarity and
+//                      power tier (and strictly higher on at least one).
+//   "worse_or_equal" — `a` is dominated: lower-or-equal on both, or identical.
+//   "ambiguous"      — rarity and tier DISAGREE (one is higher rarity, the other
+//                      higher tier). 2026-07-15: a higher-tier lower-rarity roll is
+//                      no longer auto-declined — since rarity plateaus the flat stat
+//                      at Uncommon and higher tiers scale it ×1.5+, a T2 Rare can
+//                      genuinely out-stat a T1 Mythic (different proc) — so the
+//                      player picks (Keep New / Keep Old) instead of the game guessing.
 function compareInstances(aId: string, aTier: number, bId: string, bTier: number): "better" | "worse_or_equal" | "ambiguous" {
   const aRank = RELIC_RARITIES.indexOf(RELIC_DEFS[aId].rarity);
   const bRank = RELIC_RARITIES.indexOf(RELIC_DEFS[bId].rarity);
-  if (aRank !== bRank) return aRank > bRank ? "better" : "worse_or_equal";
-  // Same rarity (so same curated id within a family) — higher power tier wins.
-  if (aTier !== bTier) return aTier > bTier ? "better" : "worse_or_equal";
-  return "worse_or_equal"; // identical relic + tier -> nothing gained, decline
+  if (aRank === bRank) {
+    // Same rarity = the same curated id within a family — only power tier differs.
+    return aTier > bTier ? "better" : "worse_or_equal";
+  }
+  if (aRank > bRank) {
+    // New is higher rarity: a clean win only if its tier isn't behind.
+    return aTier >= bTier ? "better" : "ambiguous";
+  }
+  // New is lower rarity: dominated unless its tier is ahead, which makes it a toss-up.
+  return aTier > bTier ? "ambiguous" : "worse_or_equal";
 }
 
 // A relic's effect numbers scaled to a power tier, for tooltip text.
