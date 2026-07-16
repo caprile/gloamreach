@@ -6428,3 +6428,94 @@ slot-machine reveal per-rarity audio to match its per-rarity visual escalation.
   exactly `relicUncommon` at landing (rarity→method map correct); a forced `{success:false}` roll fired
   reel ticks then `relicCrumble`; `revealFx.scene === MainScene` confirmed (accessor resolves); no
   console errors. Audio itself is by-ear (can't be auto-verified). No `RECIPES.md`/dashboard change.
+
+### S1 — Quick HUD/UX fixes (2026-07-15, Sonnet)
+Wave 2 of the 8-session 2026-07-15 playtest plan (`playtest-2026-07-15-session-plan.md`). Four
+small independent fixes, no shared theme beyond "quick."
+1. **Sprint re-press latch** (`Player.ts`) — a new `sprintLocked` field. Previously, once stamina
+   emptied and vetoed sprint mid-hold, the instant stamina regenerated back up (while shift stayed
+   held) sprint would silently resume — felt like free auto-resume. Now: `canSprint` going false
+   while shift is down sets the lock; it only clears on a shift **release**, so the player has to
+   let go and re-press to sprint again even if stamina is already full.
+2. **Level-up banner / center-toast overlap** (`MainScene.showLevelUpBanner`) — the push-down
+   offset for the `EventLogUI` center-toast stack was a hardcoded `cy + 80` that never measured the
+   real banner. Now computed from the actual rendered `sub.y + sub.height/2` (same
+   "measure real Text heights, then shift" pattern as this codebase's dynamic-row-height panels)
+   + a 16px gap, so it tracks real font metrics instead of a guess.
+3. **Stagger bar** (`BossHealthUI.ts`) — `POISE_BAR_H` 20→16 (the ask was a bigger *number*, a
+   thicker bar overshot) plus a new centered `poiseText` ("42/120") readout drawn over the bar.
+   `Enemy.BAR_OFFSET_Y` was already at the target value (16) from a prior pass — no change needed.
+4. **Armor/weapon tooltip "base (adjusted)" display** (`Tooltip.ts`, `CraftingMenu.ts`) — both
+   `statValue()` helpers flipped their damage/armor line from `"5 (7)"` (upgraded value buried in
+   parens, read as "no effect") to `"7 (base 5)"` (upgraded value primary, base secondary) whenever
+   skill/upgrade adjustment differs from the raw base.
+
+`tsc` clean. Verified live via `javascript_tool` against a running preview: drained stamina to 0
+with `stamina.spend(stamina.max)`, dispatched real `keydown`/`keyup` events for Shift+D, and
+confirmed `player.sprintLocked` stays `true` (velocity pinned to walk speed, 95px/s) through a full
+0→100 stamina regen while shift stays held, then clears on shift release with sprint resuming on
+re-press. Injected a fake `BossBarTarget` into `bossHealthUI.update()` and confirmed the poise bar
+renders at height 16 with a `"42/120"` text label. Called `showLevelUpBanner(5, 5)` directly and
+confirmed the computed `eventLogUI.topOffset` (395 at the game's native 1080p canvas height) matches
+`sub.y + sub.height/2 + 16` exactly, not the old flat guess. **Next in the 8-session plan:** S3
+(inventory visuals + upgrade-ready indicators — **Opus**, new indicator system — switch model
+first), then Wave 3 (S7 → S8, sequential, both touch `Weapons.ts`/`Recipes.ts`).
+
+### S2 — Onboarding/Tutorial rework (2026-07-15, Sonnet)
+Wave 1 of the 8-session 2026-07-15 playtest plan (`playtest-2026-07-15-session-plan.md`). Locked:
+Tips → a static How-to-Play reference (core controls, no spoilers/win-condition), keep the
+existing specific one-off popups. **`TipsUI.ts` reworked**: the old body was a dynamic dump of
+every `Hints.discovered()` entry joined into one un-scrollable Text — fine early, but overflowed
+`PANEL_H 460` once a run had racked up more than a handful of hints. Replaced with a curated
+static block (movement/sprint/dash, mouse-only interact + right-click-to-upgrade,
+inventory/crafting + hotbar rows, food-buff stacking, character/map keys, and the goal stated in
+generic terms only — no win-condition spoilers). `show()` no longer takes a `tips` param (the
+content is static now); the now-unused `Hints.discovered()` method was removed rather than left
+dead. **Two new tutorial hints added to `Hints.ts`** (`HintId`/`HINT_DEFS`): `dash_tip` (fires on
+the player's first `frame.dashStarted`, teaching Spacebar-dash + its dodge window) and
+`multi_food_tip` (fires on the player's first `eatItem()` call, teaching that different food buffs
+stack rather than replace each other) — both follow the standing "once per run if enabled,
+idempotent" `HintManager.trigger()` contract, no new machinery. `KeybindsUI.ts` already listed
+both "Dash: Space (while moving)" and "Inspect / upgrade: Right Click" — no change needed there.
+**Playtest fix (same session):** a first pass used a fixed 600×520 panel that read fine in a
+scaled-down screenshot but actually undershot the real wrapped-text height at the game's native
+1920x1080 resolution, so the Close button rendered mid-paragraph. Fixed by measuring the title/body
+`Text` objects' real `.height` after wordWrap and sizing the panel (and re-centering + shifting
+content) to fit exactly, floored at a `PANEL_H_MIN` of 300 — same "measure real heights, then
+shift" pattern as this codebase's other dynamic-row-height panels. `tsc` clean; verified live via
+`javascript_tool` at the game's native 1920x1080 resolution (measured each object's real `y`/
+`height`, confirmed a real gap between the body text's bottom and the Close button's top with no
+overlap, then screenshotted to confirm visually); triggered both new hints, confirmed each fires
+exactly once and a repeat `trigger('dash_tip')` call is a no-op; confirmed pause/resume state stays
+correct after closing Tips). No `RECIPES.md` change (no recipe/cost changes). **Next in the plan:**
+Wave 2 (S1, S3), then Wave 3 (S7 → S8).
+
+### S6 — Cinderwrought rebalance (2026-07-15, Sonnet)
+Wave 1 of the 8-session 2026-07-15 playtest plan (`playtest-2026-07-15-session-plan.md`). the user's
+locked play-pattern goal for the Sunken Forge's two-guard fight: **stagger one while you 1v1 the
+other** — today it's too tough with both Cinderwroughts perma-attacking at once. All changes in
+`src/entities/Cinderwrought.ts`:
+- **Easier stagger:** `WROUGHT_MAX_POISE` 70→45, `POISE_REGEN_DELAY_MS` 3500→4200 (a stagger sticks
+  a little longer before poise starts clawing back).
+- **More downtime:** `ATTACK_COOLDOWN_MS` 650→1050 — meaningfully more idle time between telegraphs
+  so a 1v1 window actually opens up while the other guard is between attacks or staggered.
+- **Longer telegraphs (easier to read/dodge):** `CONE_TELEGRAPH_MS` 620→750, `HAMMER_TELEGRAPH_MS`
+  560→680.
+- **Less damage:** `CONE_DAMAGE` 46→32, `HAMMER_DAMAGE` 58→40.
+- **Resist fix (was backwards):** `resistances.blunt` 0.8→1.3 — the crust was accidentally
+  *resisting* blunt (0.8 = damage reduced); now it's correctly *weak* to blunt (1.3 = extra damage,
+  "blunt cracks the hard crust"), matching the in-code comment's own stated intent. `pierce: 1.25`
+  (weak) unchanged.
+- **One fire + one physical (was both fire):** `checkPlayerHit()`'s Forge Hammer branch dropped its
+  `dmgType: "fire"` so it's now plain physical (flat armor applies); **Cinder Cone stays fire**
+  (bypasses flat armor, like magic) — armor now matters against exactly one of the two attacks.
+- Did **not** add a per-forge attack-turn token (the plan's fallback if tuning alone didn't fix the
+  overlap feel) — the cooldown/telegraph/poise changes together should be enough; that's the thing
+  to watch for in the next playtest if the two guards still feel synced.
+
+`tsc --noEmit` clean. Verified live via `preview_start` + `javascript_tool` against the running
+game: `window.__dev.spawn('cinderwrought')`, then read the live instance's `poise` (45) and
+`resistMultiplier('blunt')`/`resistMultiplier('pierce')` (1.3 / 1.25) directly off the running
+`Enemy` — confirms the new numbers are actually wired, not just typed into the constants. Updated
+the dashboard's manual Enemies-tab mirror (damage/telegraph numbers, resist note, fire-vs-physical
+split, and the rebalance rationale) to match. No `RECIPES.md` change (no recipe/cost edits).

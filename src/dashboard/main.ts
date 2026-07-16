@@ -19,7 +19,11 @@ import {
   weaponPrimaryDamageType,
   weaponBaseCritChance,
   weaponBaseCritMult,
+  weaponArc,
+  weaponIdentityLine,
   damageTypeDisplayName,
+  BLUNT_SLOW_FACTOR,
+  BLUNT_SLOW_MS,
   type WeaponType,
 } from "../systems/Weapons";
 import { WEAPON_UPGRADES, weaponTierDamageBonus } from "../systems/WeaponUpgrades";
@@ -338,13 +342,19 @@ function renderWeapons(): string {
     weapon-skill damage multiplier of +0.5%/level). <b>Base crit</b> is the
     per-weapon floor (M-SS) — Agility adds chance, Strength adds multiplier, both
     all-weapon; <b>eff. DPS</b> folds base crit into Lvl 1 DPS
-    (×(1 + chance×(mult−1))). <b>Stamina/hit</b> gates sustained swinging against
-    the 100 base stamina pool.</p>
+    (×(1 + chance×(mult−1))). <b>Arc</b> is the AOE sweep (±half-angle / range px /
+    falloff) — a swing hits its primary target, then sweeps others in the cone.
+    <b>Stamina/hit</b> gates sustained swinging against the 100 base stamina pool.</p>
+    <p class="note"><b>S7 weapon identities:</b>
+    <span class="tag">Slash</span> knife/sword = widest arc, best crowd AOE ·
+    <span class="tag">Pierce</span> spear/pike = top single-target &amp; best crit, narrow arc ·
+    <span class="tag">Blunt</span> club/warhammer = medium arc + <b>movement-slow debuff</b>
+    (${Math.round((1 - BLUNT_SLOW_FACTOR) * 100)}% slower for ${round1(BLUNT_SLOW_MS / 1000)}s, drives <code>Enemy.applySlow</code>).</p>
     <table><thead><tr>
       <th>Weapon</th><th>Type</th><th class="num">Lvl 1 dmg</th><th class="num">Lvl 2</th>
       <th class="num">Lvl 3</th><th class="num">Atk/s</th><th class="num">Lvl 1 DPS</th>
       <th class="num">Lvl 3 DPS</th><th class="num">Base crit</th>
-      <th class="num">Eff. DPS</th><th class="num">Stam/hit</th>
+      <th class="num">Eff. DPS</th><th class="num">Arc</th><th class="num">Stam/hit</th>
       </tr></thead><tbody>`;
   for (const w of weapons) {
     const base = weaponDamage(w);
@@ -356,7 +366,9 @@ function renderWeapons(): string {
     const critChance = weaponBaseCritChance(w);
     const critMult = weaponBaseCritMult(w);
     const effDps = base * aps * (1 + critChance * (critMult - 1));
-    html += `<tr>
+    const arc = weaponArc(w);
+    const arcText = arc.range > 0 ? `±${arc.halfAngleDeg}° / ${arc.range}px / ${round1(arc.falloff)}` : "—";
+    html += `<tr title="${esc(weaponIdentityLine(w))}">
       <td><b>${esc(name(w))}</b></td>
       <td><span class="tag">${dtype}</span></td>
       <td class="num">${base}</td>
@@ -367,6 +379,7 @@ function renderWeapons(): string {
       <td class="num">${lvl3 != null ? round1(lvl3 * aps) : round1(base * aps)}</td>
       <td class="num">${Math.round(critChance * 100)}% ×${round1(critMult)}</td>
       <td class="num">${round1(effDps)}</td>
+      <td class="num">${arcText}</td>
       <td class="num">${weaponStaminaCost(w)}</td>
     </tr>`;
   }

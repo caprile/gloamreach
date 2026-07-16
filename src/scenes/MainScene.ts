@@ -63,7 +63,10 @@ import {
   weaponBaseCritChance,
   weaponBaseCritMult,
   weaponArc,
+  weaponIdentityLine,
   bypassesArmor,
+  BLUNT_SLOW_FACTOR,
+  BLUNT_SLOW_MS,
   type WeaponType,
   type DamageType,
   type IncomingDamageType,
@@ -5980,12 +5983,44 @@ export class MainScene extends Phaser.Scene {
     const depleted = enemy.takeHit(finalDmg);
     this.awardSkillXp(dmgType, 30); // weapon-hit XP to the primary damage type's skill
     this.spawnDamageNumber(enemy.x, enemy.y, Math.round(finalDmg), isCrit, effectiveness);
+    // Blunt weapon identity (S7): a blunt hit cripples the target's movement.
+    // Drives the same Enemy.applySlow/slowMult path the Executioner relic uses
+    // (folded into envSpeedMult each frame), so no per-enemy wiring — it just
+    // rides the aggressive-movement velocities. Refreshes on each hit; only
+    // meaningful on a survivor (a corpse doesn't move). A subtle icy puff tells
+    // the player the debuff landed (the enemy visibly slowing is the rest).
+    if (!depleted && dmgType === "blunt") {
+      enemy.applySlow(BLUNT_SLOW_FACTOR, BLUNT_SLOW_MS, this.time.now);
+      this.spawnSlowTell(enemy);
+    }
     // Leech relic (lifesteal): heal a % of the damage dealt (Mythic banks overheal
     // as a shield). Executioner relic (crit): a crit splashes to nearby enemies.
     this.applyLeech(finalDmg);
     if (isCrit) this.applyCritSplash(enemy, finalDmg, dmgType);
     if (!depleted) return;
     this.resolveKill(enemy);
+  }
+
+  // A brief icy-blue puff at a blunt-slowed enemy — the subtle "cripple landed"
+  // tell (S7). Deliberately one-shot rather than a persistent tint (which would
+  // fight Enemy.applyHpTint / the wind-up tell); the enemy visibly moving slower
+  // is the lasting feedback. Reuses the M-DN light_soft soft-gradient texture.
+  private spawnSlowTell(enemy: Enemy): void {
+    const fx = this.add
+      .image(enemy.x, enemy.y, "light_soft")
+      .setTint(0x8fd6ff)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setDepth(ysortDepth(enemy.y) + 1)
+      .setScale(0.12)
+      .setAlpha(0.7);
+    this.tweens.add({
+      targets: fx,
+      scale: 0.22,
+      alpha: 0,
+      duration: 300,
+      ease: "Cubic.easeOut",
+      onComplete: () => fx.destroy(),
+    });
   }
 
   // Fire damage dealt by an armor SET BONUS (Molten Bulwark thorns, Emberblink
@@ -8058,6 +8093,7 @@ export class MainScene extends Phaser.Scene {
         ammo,
         critChance: 0,
         critMult: 0,
+        identity: null,
         setBonuses,
       };
     const dmgType = weaponPrimaryDamageType(this.equippedWeapon);
@@ -8090,6 +8126,7 @@ export class MainScene extends Phaser.Scene {
       ammo,
       critChance,
       critMult,
+      identity: weaponIdentityLine(this.equippedWeapon),
       setBonuses,
     };
   }

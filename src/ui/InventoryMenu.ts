@@ -30,6 +30,7 @@ export interface CombatStatsView {
   ammo: { name: string; count: number } | null; // loaded ranged ammo, if any
   critChance: number; // 0..0.6 fraction (weapon base + Agility + relics), 0 if no weapon
   critMult: number; // crit damage multiplier (weapon base + Strength + relics), 0 if no weapon
+  identity: string | null; // S7 weapon-type identity line (e.g. "Focused — …"); null if no weapon
   setBonuses: { name: string; desc: string }[]; // active full armor-set bonuses (empty = none)
 }
 
@@ -544,7 +545,15 @@ export class InventoryMenu {
     let y = y0;
     const lineGap = 20;
     this.addText(x0, y, stats.weaponName ?? "No weapon equipped", 12, stats.weaponName ? "#e8ecf2" : "#5b6472");
-    y += lineGap + 4;
+    y += lineGap;
+    // S7 weapon-type identity line — a muted italic-toned hint under the name so
+    // the player reads what this weapon type is best at (AOE / cripple / burst).
+    if (stats.identity) {
+      const idT = this.addText(x0, y, stats.identity, 10, "#7f97b0", 0, 0, STATS_W);
+      y += idT.height + 4;
+    } else {
+      y += 4;
+    }
     // Neutral grey throughout (matches Attack Range/Move Speed below) — per
     // the user, red/green should be reserved for actual buff/debuff markers
     // (e.g. "boosted by an item"), not decorative per-stat coloring.

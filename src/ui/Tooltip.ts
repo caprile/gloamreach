@@ -6,6 +6,7 @@ import {
   weaponBaseCritChance,
   weaponBaseCritMult,
   weaponDamage,
+  weaponIdentityLine,
   weaponPrimaryDamageType,
 } from "../systems/Weapons";
 import { weaponSkillDamageMultiplier, type Skills } from "../systems/Skills";
@@ -59,6 +60,10 @@ export class Tooltip {
       lines.push(
         `Crit: ${Math.round(weaponBaseCritChance(def.weapon) * 100)}% x${weaponBaseCritMult(def.weapon).toFixed(1)}`,
       );
+      // S7 weapon-type identity — one line telling the player what this weapon
+      // type is best at (wide AOE / cripple / single-target+crit).
+      lines.push("");
+      lines.push(weaponIdentityLine(def.weapon));
     }
     // Food: derive the effect line from `edible` so the numbers live in one
     // place (Items.ts) rather than being re-authored as static stat strings.

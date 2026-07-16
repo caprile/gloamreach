@@ -2,7 +2,23 @@
 
 ## Current State
 
-_Living snapshot — edit in place, never append. Last shipped: **S3 — Inventory visuals +
+_Living snapshot — edit in place, never append. Last shipped: **S7 — Weapon identity redesign**
+(2026-07-15, Opus, plan `playtest-2026-07-15-session-plan.md`). Reworked the three melee weapon
+identities (all locked via `AskUserQuestion`): **pierce (spear/pike) = lowest arc + highest
+single-target + best crit; slash (knife/sword) = biggest arc + best crowd AOE; blunt (club/warhammer)
+= medium arc + a NEW movement-slow/cripple debuff.** The old `WEAPON_ARC`/crit tables were largely
+inverted from this. Arc table rebalanced (slash widest, blunt medium, pierce near-single-target);
+forged pikes bumped so pierce is the single-target DPS leader (sunsteel_pike 15→19, embersteel_pike
+20→25, tier invariants preserved); pierce given the clearly-best base crit (spear/pike 10-11% / ×1.7).
+The **blunt debuff** reuses the existing `Enemy.applySlow`/`slowMult`→`envSpeedMult` path (built for
+the Executioner relic) — applied at the shared `MainScene.resolveWeaponHit` choke point when the
+weapon type is blunt (0.6× speed / 1.5s, refreshes per hit, also cripples AOE-swept enemies), so
+**zero new per-enemy state**; subtle icy-blue puff tell. New `weaponIdentityLine` surfaced on the
+Tooltip, the inventory Combat column, and the dashboard weapons tab (new Arc column + identity note).
+`tsc` clean; verified live (blunt slows 1→0.6 / pierce doesn't; sword sweeps a 45° secondary while
+pike/club don't; identity lines render everywhere). **Next: S8 (biome-2 bow + arrows, Opus) — the
+final session, fitting these finalized identities.** Full entry below.
+Prior: **S3 — Inventory visuals +
 upgrade-ready indicators** (2026-07-15, Opus, plan `playtest-2026-07-15-session-plan.md`). Three
 parts. **(1) Bigger icons**: item icons were drawn at native texture size (~14-30px) and looked lost
 in the slots — now fit within a `SLOT-12` box (aspect preserved) via a shared `fitIcon` in
@@ -321,6 +337,56 @@ below + [[survivor-rpg-dev-console]].
 
 > Older entries in STATUS-archive.md.
 
+### S7 — Weapon identity redesign (2026-07-15, Opus)
+Wave 3 of the 8-session 2026-07-15 playtest plan (`playtest-2026-07-15-session-plan.md`). A new
+mechanic (the blunt debuff) + a full rebalance of the three melee weapon identities, all locked via
+`AskUserQuestion`: **Spear/Pike (pierce) = lowest arc + highest single-target + best crit; Knife/Sword
+(slash) = biggest arc + best crowd AOE; Club/Warhammer (blunt) = medium arc + a movement-slow/cripple
+debuff.** The old tables were largely **inverted** from this — spears/pikes were the WIDEST sweepers
+and swords near single-target.
+
+- **`Weapons.ts` tables reworked:**
+  - **`WEAPON_ARC`** — slash now the widest (bone_knife ±50°/54px, sunsteel_sword ±60°/66px,
+    embersteel_sword ±62°/70px), blunt lower-medium (clubs ±35-38°, warhammers ±40-42°), pierce
+    near-single-target (primal_spear ±18°/30px, pikes ±20-22°/34-36px). Ranged unchanged (no sweep);
+    ember_brand stays a medium ±45° magic sweep.
+  - **`WEAPON_DAMAGE`** — bumped the forged pikes so pierce is the single-target DPS leader:
+    sunsteel_pike **15→19** (DPS 30.6, edges sunsteel_sword's 29.2), embersteel_pike **20→25** (DPS
+    41.0 > embersteel_sword's 40.4). starter primal_spear stays 8 (already its tier's top
+    single-target). Both bumps preserve the tier invariants (ember base ≥ steel base + 5; base forged
+    still clears the maxed Primal Spear's 13).
+  - **`WEAPON_BASE_CRIT_*`** — pierce is now clearly the crit king (spear/pike 10%/×1.70,
+    embersteel_pike 11%/×1.75) over blunt (4-5%) and slash (5-6%); previously the warhammers held the
+    highest base crit. Rationale comment updated: crit is a pierce-identity axis first, attack-speed
+    lean second.
+- **Blunt movement-slow debuff (net-new mechanic, but zero new state machine):** a blunt hit now calls
+  `enemy.applySlow(BLUNT_SLOW_FACTOR 0.6, BLUNT_SLOW_MS 1500, now)` at the single melee/ranged choke
+  point `MainScene.resolveWeaponHit` (only on a surviving enemy). This **reuses the exact
+  `Enemy.applySlow`/`slowMult` path already built for the Executioner crit relic** — the scene folds
+  `slowMult(now)` into `envSpeedMult` each frame, so the slow rides every aggressive-movement velocity
+  with no per-subclass wiring. The slow **refreshes on each blunt hit** (sustained bludgeoning keeps a
+  target crippled) and `applySlow` keeps the stronger of any overlapping slows. Because it's at the
+  shared choke point, a blunt AOE-arc *sweep* cripples every swept enemy too (thematic crowd-control
+  identity). Subtle tell: a one-shot icy-blue `light_soft` puff (`spawnSlowTell`) — deliberately NOT a
+  persistent tint (would fight `Enemy.applyHpTint`/the wind-up tell); the enemy visibly slowing is the
+  lasting feedback.
+- **Identity surfaced everywhere:** new `weaponIdentityLine(weapon)` (keyed off primary damage type) +
+  `weaponSlowsOnHit` helpers. Shown on the item **Tooltip** (a line under Crit), the inventory
+  **Combat column** (muted line under the weapon name, new `CombatStatsView.identity`), and the
+  **dashboard** weapons tab (new **Arc** column `±half° / range / falloff` + an "S7 weapon identities"
+  note block, drift-free off `BLUNT_SLOW_FACTOR`/`_MS`).
+
+`tsc` clean; verified live via `preview_start` + `javascript_tool` against the running game: a blunt
+`resolveWeaponHit` drops `enemy.slowMult` 1→0.6 while a pierce hit leaves it at 1; combatStats reads
+per-type (pike 19/25, pierce crit 10%/11%, correct identity strings); an end-to-end `tryMeleeAttack`
+sweep test confirmed a **sunsteel_sword hits a 45°-offset secondary for 10.5 (=14×0.75 falloff) while
+sunsteel_pike and stone_club do NOT** (pierce single-target; club's 38° cone excludes 45°); the Combat
+column renders "Focused — top single-target & crit, narrow arc" and the Tooltip appends "Crushing —
+cripples enemy movement"/"Focused …"; dashboard weapons tab renders the Arc column + notes; no console
+errors. No `RECIPES.md` change (no recipe/cost edits — weapon damage stats aren't in it). **Next in the
+plan:** S8 (biome-2 bow + arrows + ember material tweak, **Opus**) — the last session, and it should
+fit these finalized identities.
+
 ### S3 — Inventory visuals + upgrade-ready indicators (2026-07-15, Opus)
 Wave 2 of the 8-session 2026-07-15 playtest plan (`playtest-2026-07-15-session-plan.md`). A new
 upgrade-affordance indicator system + an icon-size pass. Three parts:
@@ -367,93 +433,3 @@ tween; icon display width 24→34; hotbar arrow + enlarged icon (34) render; sta
 dashboard change (no recipes touched). **Next in the plan:** Wave 3 — S7 (weapon identity redesign,
 Opus) → S8 (biome-2 bow + arrows, Opus, after S7).
 
-### S1 — Quick HUD/UX fixes (2026-07-15, Sonnet)
-Wave 2 of the 8-session 2026-07-15 playtest plan (`playtest-2026-07-15-session-plan.md`). Four
-small independent fixes, no shared theme beyond "quick."
-1. **Sprint re-press latch** (`Player.ts`) — a new `sprintLocked` field. Previously, once stamina
-   emptied and vetoed sprint mid-hold, the instant stamina regenerated back up (while shift stayed
-   held) sprint would silently resume — felt like free auto-resume. Now: `canSprint` going false
-   while shift is down sets the lock; it only clears on a shift **release**, so the player has to
-   let go and re-press to sprint again even if stamina is already full.
-2. **Level-up banner / center-toast overlap** (`MainScene.showLevelUpBanner`) — the push-down
-   offset for the `EventLogUI` center-toast stack was a hardcoded `cy + 80` that never measured the
-   real banner. Now computed from the actual rendered `sub.y + sub.height/2` (same
-   "measure real Text heights, then shift" pattern as this codebase's dynamic-row-height panels)
-   + a 16px gap, so it tracks real font metrics instead of a guess.
-3. **Stagger bar** (`BossHealthUI.ts`) — `POISE_BAR_H` 20→16 (the ask was a bigger *number*, a
-   thicker bar overshot) plus a new centered `poiseText` ("42/120") readout drawn over the bar.
-   `Enemy.BAR_OFFSET_Y` was already at the target value (16) from a prior pass — no change needed.
-4. **Armor/weapon tooltip "base (adjusted)" display** (`Tooltip.ts`, `CraftingMenu.ts`) — both
-   `statValue()` helpers flipped their damage/armor line from `"5 (7)"` (upgraded value buried in
-   parens, read as "no effect") to `"7 (base 5)"` (upgraded value primary, base secondary) whenever
-   skill/upgrade adjustment differs from the raw base.
-
-`tsc` clean. Verified live via `javascript_tool` against a running preview: drained stamina to 0
-with `stamina.spend(stamina.max)`, dispatched real `keydown`/`keyup` events for Shift+D, and
-confirmed `player.sprintLocked` stays `true` (velocity pinned to walk speed, 95px/s) through a full
-0→100 stamina regen while shift stays held, then clears on shift release with sprint resuming on
-re-press. Injected a fake `BossBarTarget` into `bossHealthUI.update()` and confirmed the poise bar
-renders at height 16 with a `"42/120"` text label. Called `showLevelUpBanner(5, 5)` directly and
-confirmed the computed `eventLogUI.topOffset` (395 at the game's native 1080p canvas height) matches
-`sub.y + sub.height/2 + 16` exactly, not the old flat guess. **Next in the 8-session plan:** S3
-(inventory visuals + upgrade-ready indicators — **Opus**, new indicator system — switch model
-first), then Wave 3 (S7 → S8, sequential, both touch `Weapons.ts`/`Recipes.ts`).
-
-### S2 — Onboarding/Tutorial rework (2026-07-15, Sonnet)
-Wave 1 of the 8-session 2026-07-15 playtest plan (`playtest-2026-07-15-session-plan.md`). Locked:
-Tips → a static How-to-Play reference (core controls, no spoilers/win-condition), keep the
-existing specific one-off popups. **`TipsUI.ts` reworked**: the old body was a dynamic dump of
-every `Hints.discovered()` entry joined into one un-scrollable Text — fine early, but overflowed
-`PANEL_H 460` once a run had racked up more than a handful of hints. Replaced with a curated
-static block (movement/sprint/dash, mouse-only interact + right-click-to-upgrade,
-inventory/crafting + hotbar rows, food-buff stacking, character/map keys, and the goal stated in
-generic terms only — no win-condition spoilers). `show()` no longer takes a `tips` param (the
-content is static now); the now-unused `Hints.discovered()` method was removed rather than left
-dead. **Two new tutorial hints added to `Hints.ts`** (`HintId`/`HINT_DEFS`): `dash_tip` (fires on
-the player's first `frame.dashStarted`, teaching Spacebar-dash + its dodge window) and
-`multi_food_tip` (fires on the player's first `eatItem()` call, teaching that different food buffs
-stack rather than replace each other) — both follow the standing "once per run if enabled,
-idempotent" `HintManager.trigger()` contract, no new machinery. `KeybindsUI.ts` already listed
-both "Dash: Space (while moving)" and "Inspect / upgrade: Right Click" — no change needed there.
-**Playtest fix (same session):** a first pass used a fixed 600×520 panel that read fine in a
-scaled-down screenshot but actually undershot the real wrapped-text height at the game's native
-1920x1080 resolution, so the Close button rendered mid-paragraph. Fixed by measuring the title/body
-`Text` objects' real `.height` after wordWrap and sizing the panel (and re-centering + shifting
-content) to fit exactly, floored at a `PANEL_H_MIN` of 300 — same "measure real heights, then
-shift" pattern as this codebase's other dynamic-row-height panels. `tsc` clean; verified live via
-`javascript_tool` at the game's native 1920x1080 resolution (measured each object's real `y`/
-`height`, confirmed a real gap between the body text's bottom and the Close button's top with no
-overlap, then screenshotted to confirm visually); triggered both new hints, confirmed each fires
-exactly once and a repeat `trigger('dash_tip')` call is a no-op; confirmed pause/resume state stays
-correct after closing Tips). No `RECIPES.md` change (no recipe/cost changes). **Next in the plan:**
-Wave 2 (S1, S3), then Wave 3 (S7 → S8).
-
-### S6 — Cinderwrought rebalance (2026-07-15, Sonnet)
-Wave 1 of the 8-session 2026-07-15 playtest plan (`playtest-2026-07-15-session-plan.md`). the user's
-locked play-pattern goal for the Sunken Forge's two-guard fight: **stagger one while you 1v1 the
-other** — today it's too tough with both Cinderwroughts perma-attacking at once. All changes in
-`src/entities/Cinderwrought.ts`:
-- **Easier stagger:** `WROUGHT_MAX_POISE` 70→45, `POISE_REGEN_DELAY_MS` 3500→4200 (a stagger sticks
-  a little longer before poise starts clawing back).
-- **More downtime:** `ATTACK_COOLDOWN_MS` 650→1050 — meaningfully more idle time between telegraphs
-  so a 1v1 window actually opens up while the other guard is between attacks or staggered.
-- **Longer telegraphs (easier to read/dodge):** `CONE_TELEGRAPH_MS` 620→750, `HAMMER_TELEGRAPH_MS`
-  560→680.
-- **Less damage:** `CONE_DAMAGE` 46→32, `HAMMER_DAMAGE` 58→40.
-- **Resist fix (was backwards):** `resistances.blunt` 0.8→1.3 — the crust was accidentally
-  *resisting* blunt (0.8 = damage reduced); now it's correctly *weak* to blunt (1.3 = extra damage,
-  "blunt cracks the hard crust"), matching the in-code comment's own stated intent. `pierce: 1.25`
-  (weak) unchanged.
-- **One fire + one physical (was both fire):** `checkPlayerHit()`'s Forge Hammer branch dropped its
-  `dmgType: "fire"` so it's now plain physical (flat armor applies); **Cinder Cone stays fire**
-  (bypasses flat armor, like magic) — armor now matters against exactly one of the two attacks.
-- Did **not** add a per-forge attack-turn token (the plan's fallback if tuning alone didn't fix the
-  overlap feel) — the cooldown/telegraph/poise changes together should be enough; that's the thing
-  to watch for in the next playtest if the two guards still feel synced.
-
-`tsc --noEmit` clean. Verified live via `preview_start` + `javascript_tool` against the running
-game: `window.__dev.spawn('cinderwrought')`, then read the live instance's `poise` (45) and
-`resistMultiplier('blunt')`/`resistMultiplier('pierce')` (1.3 / 1.25) directly off the running
-`Enemy` — confirms the new numbers are actually wired, not just typed into the constants. Updated
-the dashboard's manual Enemies-tab mirror (damage/telegraph numbers, resist note, fire-vs-physical
-split, and the rebalance rationale) to match. No `RECIPES.md` change (no recipe/cost edits).
