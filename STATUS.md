@@ -2,7 +2,13 @@
 
 ## Current State
 
-_Living snapshot — edit in place, never append. Last shipped: **PB17 — Boss tuning + Cinderwrought solo
+_Living snapshot — edit in place, never append. Last shipped: **PB18 — Backpack armor upgrade fix +
+reforge-returns-to-slot** (2026-07-18, Opus). Two playtest bug fixes: (1) right-clicking armor in the
+inventory now opens its Upgrade panel (was a no-op — the branch only handled weapons/tools; the generic
+container-upgrade path is now named `gearSlot`/`openGearUpgrade`/`applyGearUpgrade`); (2) reforging a base
+gear piece (e.g. Sunsteel → Embersteel) that's equipped or in the hotbar now returns the result to that
+same slot instead of the backpack. See PB18 below.
+Prior: **PB17 — Boss tuning + Cinderwrought solo
 rework + silent placement** (2026-07-16, Opus). A small badlands-playtest batch (the user: "felt really
 good"): (1) object **placement is now silent** (dropped the craft-cue on place); (2) the **Duneshaper**
 (final boss) is **HP 1250→2500 + poise 170→400** (tankier, staggers less); (3) the **Cinderwrought** was
@@ -393,6 +399,28 @@ below + [[survivor-rpg-dev-console]].
 ## Recent Entries
 
 > Older entries in STATUS-archive.md.
+
+### PB18 — Backpack armor upgrade fix + reforge-returns-to-slot (2026-07-18, Opus)
+Two bug fixes off the user's playtest. **(1) Right-click armor in the inventory did nothing.**
+The InventoryMenu/HotbarUI right-click branch only handled `edible` / `weapon || tool` /
+`placeable` — armor (`armorSlot`, not `weapon`/`tool`) fell through with no branch, so a
+backpack armor piece could never open its Upgrade panel (weapons already worked via the
+container path). Fixed by adding an armor branch (`armorSlot && !== "ammo"`) in both the
+inventory and hotbar right-click handlers. The generic container-item upgrade plumbing was
+renamed `weaponSlot`/`openWeaponUpgrade*`/`isWeaponUpgradeTarget`/`applyWeaponUpgrade` →
+`gearSlot`/`openGearUpgrade*`/`isGearUpgradeTarget`/`applyGearUpgrade` so it reads honestly now
+that it handles weapons/tools AND armor (equipped armor still upgrades via the paper-doll slot,
+unchanged). `applyGearUpgrade` only reads `costs`+`resultTier`, so `WeaponUpgradeDef`/
+`ArmorUpgradeDef` are interchangeable through it. **(2) Reforging gear now returns the result to
+where the base piece was.** A single-craft recipe that outputs gear and consumes a base gear
+piece living ONLY equipped or in the hotbar now deposits the reforged result back into that same
+slot instead of the backpack (`reforgeReturnTarget`/`placeReforgeOutput` in `craftRecipe`;
+`craft()` frees the consumed slot first, so no backpack room is needed). A backpack copy is
+consumed first (craft's own priority), so the result stays in the backpack in that case —
+unchanged. Equip case also recomputes cached set bonuses. Verified live (`javascript_tool`):
+backpack armor right-click opens the menu bound to the piece + applies (tier 0→1); reforge with
+base equipped → embersteel equipped, hotbar → same hotbar slot, backpack → stays backpack, hotbar
+untouched. `tsc` clean, no console errors.
 
 ### PB17 — Boss tuning + Cinderwrought solo rework + silent placement (2026-07-16, Opus)
 A small playtest batch off the user's badlands run ("felt really good" overall). Three items:

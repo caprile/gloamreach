@@ -80,9 +80,9 @@ export interface InventoryMenuDeps {
   // Equip/Upgrade if empty) context menu — mirrors a placed station's
   // right-click Upgrade/Destroy popup.
   openArmorContextMenu: (slot: EquipSlot, screenX: number, screenY: number) => void;
-  // Right-click on a backpack slot holding a weapon with a defined upgrade
-  // path opens its Upgrade panel (see MainScene.openWeaponUpgradeMenu).
-  openWeaponUpgrade: (container: ItemContainer, index: number) => void;
+  // Right-click on a backpack slot holding gear (weapon/tool/armor) with a
+  // defined upgrade path opens its Upgrade panel (see MainScene.openGearUpgradeMenu).
+  openGearUpgrade: (container: ItemContainer, index: number) => void;
   // Right-click on a backpack slot holding a placeable (Workbench, Campfire,
   // ...) opens a tiny "Place" context menu — mirrors a placed station's own
   // right-click popup. A single left-click already enters placement mode too
@@ -966,7 +966,8 @@ export class InventoryMenu {
         if (pointer.rightButtonDown()) {
           const def = itemDef(stack.key);
           if (def?.edible) this.deps.eatItem(backpack, index);
-          else if (def?.weapon || def?.tool) this.deps.openWeaponUpgrade(backpack, index);
+          else if (def?.weapon || def?.tool || (def?.armorSlot && def.armorSlot !== "ammo"))
+            this.deps.openGearUpgrade(backpack, index);
           else if (def?.placeable) this.deps.openPlaceContextMenu(backpack, index, pointer.x, pointer.y);
           return;
         }

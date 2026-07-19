@@ -643,12 +643,13 @@ export class MainScene extends Phaser.Scene {
   // to it (null when closed).
   private upgradeMenu!: UpgradeMenu;
   private characterMenu!: CharacterMenu;
-  // Either a placed object (Workbench/Campfire/Drying Rack) or an equipped
-  // armor slot — the UpgradeMenu deps below branch on which one is set.
+  // Either a placed object (Workbench/Campfire/Drying Rack), an equipped
+  // armor slot, or a gear item (weapon/tool/armor) sitting in a container
+  // (backpack/hotbar) slot — the UpgradeMenu deps below branch on which one is set.
   private upgradeTarget:
     | Phaser.GameObjects.Image
     | { armorSlot: EquipSlot }
-    | { weaponSlot: { container: ItemContainer; index: number } }
+    | { gearSlot: { container: ItemContainer; index: number } }
     | null = null;
   // The floating "<Name> Lvl N" label shown above any placed object that has
   // at least one defined upgrade (see StationUpgrades.ts) — keyed by the
@@ -1229,7 +1230,7 @@ export class MainScene extends Phaser.Scene {
       skills: this.skills,
       progression: this.progression,
       beginDrag: (c, i, p) => this.beginItemDrag(c, i, p),
-      openWeaponUpgrade: (c, i) => this.openWeaponUpgradeMenu(c, i),
+      openGearUpgrade: (c, i) => this.openGearUpgradeMenu(c, i),
       eatItem: (c, i) => this.eatItem(c, i),
       isDragging: () => this.dragSource !== null,
       stationTexture: (key, tier) => this.tieredStationTexture(key, tier),
@@ -7228,13 +7229,20 @@ export class MainScene extends Phaser.Scene {
       !this.isNearWorkbenchAtTier(recipe.requiresWorkbenchTier, this.player.x, this.player.y)
     )
       return;
-    if (!this.backpack.hasRoomFor(key, totalOut)) {
+    // Reforge routing: a single-craft recipe that consumes a base gear piece
+    // (armor/weapon/tool) which currently lives EQUIPPED or in the HOTBAR should
+    // return its reforged result to that same spot, not dump it in the backpack
+    // (the user). The consumed slot is freed by craft() first, so no backpack
+    // room is needed in that case.
+    const reforgeTarget = batches === 1 ? this.reforgeReturnTarget(recipe) : null;
+    if (!reforgeTarget && !this.backpack.hasRoomFor(key, totalOut)) {
       this.eventLog.add("info", "Inventory full");
       return;
     }
     for (let i = 0; i < batches; i++) {
       this.crafting.craft(recipe, this.backpack, this.devNoBuildCost);
-      this.addToBackpack(key, outCount);
+      if (reforgeTarget) this.placeReforgeOutput(key, reforgeTarget);
+      else this.addToBackpack(key, outCount);
     }
     this.sfx.craft();
     this.recomputeEquipped();
@@ -7244,6 +7252,62 @@ export class MainScene extends Phaser.Scene {
     // by crafting the effigy, reveal ALL badlands altars on the map so a distant
     // one is never a dead end (the world is huge).
     if (key === "tyrant_totem") this.onTyrantTotemCrafted();
+  }
+
+  // Where a reforge's output should land so it returns to where the consumed
+  // base piece was. Returns null (→ normal backpack deposit) unless the recipe
+  // both OUTPUTS gear and CONSUMES a matching base gear piece that lives only
+  // in the hotbar or an equipped slot. craft() consumes backpack copies first,
+  // so if a backpack copy exists the result stays in the backpack (null here).
+  private reforgeReturnTarget(
+    recipe: Recipe,
+  ): { kind: "equip"; slot: EquipSlot } | { kind: "hotbar"; index: number } | null {
+    const outDef = itemDef(outputKey(recipe));
+    if (!outDef) return null;
+    const outIsGear =
+      !!outDef.weapon || !!outDef.tool || (!!outDef.armorSlot && outDef.armorSlot !== "ammo");
+    if (!outIsGear) return null;
+    for (const ingredient of Object.keys(recipe.costs)) {
+      const def = itemDef(ingredient);
+      if (!def) continue;
+      const isGear = !!def.weapon || !!def.tool || (!!def.armorSlot && def.armorSlot !== "ammo");
+      if (!isGear) continue;
+      // A backpack copy is consumed first — leave the result in the backpack.
+      if (this.backpack.count(ingredient) > 0) return null;
+      // Equipped? Only redirect if the output fits the same armor slot.
+      for (const s of EQUIP_SLOTS) {
+        if (this.equipment.get(s.id)?.key === ingredient) {
+          return outDef.armorSlot === s.id ? { kind: "equip", slot: s.id } : null;
+        }
+      }
+      // Hotbar?
+      for (let i = 0; i < this.hotbar.container.size; i++) {
+        if (this.hotbar.container.slot(i)?.key === ingredient) return { kind: "hotbar", index: i };
+      }
+      return null; // gear ingredient not found anywhere consumable — shouldn't happen
+    }
+    return null;
+  }
+
+  // Deposit a reforged result back into the slot the base piece occupied. The
+  // consumed slot was already emptied by craft() (equipped → unequipped, hotbar
+  // stack → removed), so it's free for the fresh tier-0 result here.
+  private placeReforgeOutput(
+    key: string,
+    target: { kind: "equip"; slot: EquipSlot } | { kind: "hotbar"; index: number },
+  ): void {
+    if (target.kind === "equip") {
+      this.equipment.set(target.slot, { key, tier: 0 });
+      this.recomputeSetBonuses(); // worn set changed — refresh cached set bonuses
+    } else if (this.hotbar.container.slot(target.index) === null) {
+      this.hotbar.container.set(target.index, { key, count: 1, tier: 0 });
+      this.hotbarUI?.refresh();
+    } else {
+      this.addToBackpack(key, 1); // slot unexpectedly taken — fall back to backpack
+      return;
+    }
+    this.discoverMaterial(key);
+    this.refreshDiscovery();
   }
 
   // Reveal every Duneshaper altar on the world map (one-time) + point the player
@@ -7672,10 +7736,10 @@ export class MainScene extends Phaser.Scene {
   private isArmorUpgradeTarget(t: NonNullable<MainScene["upgradeTarget"]>): t is { armorSlot: EquipSlot } {
     return "armorSlot" in t;
   }
-  private isWeaponUpgradeTarget(
+  private isGearUpgradeTarget(
     t: NonNullable<MainScene["upgradeTarget"]>,
-  ): t is { weaponSlot: { container: ItemContainer; index: number } } {
-    return "weaponSlot" in t;
+  ): t is { gearSlot: { container: ItemContainer; index: number } } {
+    return "gearSlot" in t;
   }
 
   private createUpgradeMenu(): void {
@@ -7687,8 +7751,8 @@ export class MainScene extends Phaser.Scene {
           const eq = this.equipment.get(t.armorSlot);
           return eq ? { itemKey: eq.key, tier: eq.tier } : null;
         }
-        if (this.isWeaponUpgradeTarget(t)) {
-          const stack = t.weaponSlot.container.slot(t.weaponSlot.index);
+        if (this.isGearUpgradeTarget(t)) {
+          const stack = t.gearSlot.container.slot(t.gearSlot.index);
           return stack ? { itemKey: stack.key, tier: stack.tier ?? 0 } : null;
         }
         return { itemKey: t.getData("itemKey") as string, tier: (t.getData("tier") as number | undefined) ?? 0 };
@@ -7709,7 +7773,7 @@ export class MainScene extends Phaser.Scene {
       // which keep the resultTier ladder.
       appliedUpgradeIds: () => {
         const t = this.upgradeTarget;
-        if (!t || this.isArmorUpgradeTarget(t) || this.isWeaponUpgradeTarget(t)) return null;
+        if (!t || this.isArmorUpgradeTarget(t) || this.isGearUpgradeTarget(t)) return null;
         return new Set((t.getData("upgrades") as string[] | undefined) ?? []);
       },
       extraBlockReason: (upg) => this.upgradeBlockReason(upg),
@@ -7719,8 +7783,8 @@ export class MainScene extends Phaser.Scene {
         const t = this.upgradeTarget;
         if (!t) return;
         if (this.isArmorUpgradeTarget(t)) this.applyArmorUpgrade(t.armorSlot, upg as ArmorUpgradeDef);
-        else if (this.isWeaponUpgradeTarget(t)) {
-          this.applyWeaponUpgrade(t.weaponSlot.container, t.weaponSlot.index, upg as WeaponUpgradeDef);
+        else if (this.isGearUpgradeTarget(t)) {
+          this.applyGearUpgrade(t.gearSlot.container, t.gearSlot.index, upg as WeaponUpgradeDef | ArmorUpgradeDef);
         } else this.applyStationUpgrade(t, upg as StationUpgradeDef);
       },
     });
@@ -7755,18 +7819,20 @@ export class MainScene extends Phaser.Scene {
     this.upgradeMenu.openMenu({ x: INVENTORY_PANEL_X + INVENTORY_PANEL_W + 12, y: INVENTORY_PANEL_Y });
   }
 
-  // Right-click on a weapon (backpack or hotbar) opens the same Upgrade
-  // panel, bound to that specific ItemStack — mirrors openArmorUpgradeMenu's
-  // "dock beside the inventory if it's open" behavior when it is, otherwise
-  // opens centered like a placed station's panel.
-  private openWeaponUpgradeMenu(container: ItemContainer, index: number): void {
+  // Right-click on a gear item — a weapon/tool OR an armor piece — sitting in a
+  // container (backpack or hotbar) opens the same Upgrade panel, bound to that
+  // specific ItemStack. (Equipped armor upgrades via the paper-doll slot instead;
+  // see openArmorUpgradeMenu.) Mirrors openArmorUpgradeMenu's "dock beside the
+  // inventory if it's open" behavior when it is, otherwise opens centered like a
+  // placed station's panel.
+  private openGearUpgradeMenu(container: ItemContainer, index: number): void {
     if (!container.slot(index)) return;
     this.craftingMenu.close();
     this.closeDryingRackMenu();
     this.closeCookingMenu();
     this.closeChestMenu();
     this.closeRelicForgeMenu();
-    this.upgradeTarget = { weaponSlot: { container, index } };
+    this.upgradeTarget = { gearSlot: { container, index } };
     if (this.inventoryMenu.isOpen()) {
       this.upgradeMenu.openMenu({ x: INVENTORY_PANEL_X + INVENTORY_PANEL_W + 12, y: INVENTORY_PANEL_Y });
     } else {
@@ -7926,9 +7992,11 @@ export class MainScene extends Phaser.Scene {
     this.afterItemMove();
   }
 
-  // Weapon's equivalent — deducts cost and bumps the specific ItemStack's
-  // tier in place, wherever it sits (backpack or hotbar).
-  private applyWeaponUpgrade(container: ItemContainer, index: number, upg: WeaponUpgradeDef): void {
+  // Container-item equivalent — deducts cost and bumps the specific ItemStack's
+  // tier in place, wherever it sits (backpack or hotbar). Handles both weapons/
+  // tools and armor pieces held in a container (equipped armor uses
+  // applyArmorUpgrade); only costs + resultTier are read, so either def works.
+  private applyGearUpgrade(container: ItemContainer, index: number, upg: WeaponUpgradeDef | ArmorUpgradeDef): void {
     const stack = container.slot(index);
     if (!stack || !this.canAffordUpgrade(upg) || this.upgradeBlockReason(upg)) return;
     if (!this.devNoBuildCost) for (const [r, n] of Object.entries(upg.costs)) this.backpack.removeCount(r, n ?? 0);
@@ -8086,7 +8154,7 @@ export class MainScene extends Phaser.Scene {
       beginArmorDrag: (slot, p) => this.beginArmorDrag(slot, p),
       unequipArmorSlot: (slot) => this.unequipArmorSlot(slot),
       openArmorContextMenu: (slot, x, y) => this.openArmorContextMenu(slot, x, y),
-      openWeaponUpgrade: (c, i) => this.openWeaponUpgradeMenu(c, i),
+      openGearUpgrade: (c, i) => this.openGearUpgradeMenu(c, i),
       openPlaceContextMenu: (c, i, x, y) => this.openPlaceContextMenu(c, i, x, y),
       eatItem: (c, i) => this.eatItem(c, i),
       isDragging: () => this.dragSource !== null,

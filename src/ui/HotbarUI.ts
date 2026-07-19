@@ -23,9 +23,9 @@ export interface HotbarUIDeps {
   progression: PlayerProgression;
   // Left-press on a slot begins dragging that slot's stack.
   beginDrag: (container: ItemContainer, index: number, pointer: Phaser.Input.Pointer) => void;
-  // Right-click on a slot holding a weapon with a defined upgrade path opens
-  // its Upgrade panel (see MainScene.openWeaponUpgradeMenu).
-  openWeaponUpgrade: (container: ItemContainer, index: number) => void;
+  // Right-click on a slot holding gear (weapon/tool/armor) with a defined
+  // upgrade path opens its Upgrade panel (see MainScene.openGearUpgradeMenu).
+  openGearUpgrade: (container: ItemContainer, index: number) => void;
   // Right-click on a slot holding an `edible` item eats one (Buffs.ts) — food
   // can sit in the hotbar for quick eating without opening the backpack.
   eatItem: (container: ItemContainer, index: number) => void;
@@ -181,11 +181,13 @@ export class HotbarUI {
         .on("pointerdown", (pointer: Phaser.Input.Pointer) => {
           // Right-click is a no-op now — quick-move-to-backpack moved to a
           // double-left-click-in-place, detected scene-side (see
-          // MainScene.resolveItemDrag) — except on a weapon/tool, which opens
-          // its Upgrade panel instead.
+          // MainScene.resolveItemDrag) — except on gear (weapon/tool/armor),
+          // which opens its Upgrade panel instead.
           if (pointer.rightButtonDown()) {
-            if (stack && itemDef(stack.key)?.edible) this.deps.eatItem(this.hotbar.container, i);
-            else if (stack && (itemDef(stack.key)?.weapon || itemDef(stack.key)?.tool)) this.deps.openWeaponUpgrade(this.hotbar.container, i);
+            const def = stack ? itemDef(stack.key) : undefined;
+            if (def?.edible) this.deps.eatItem(this.hotbar.container, i);
+            else if (def && (def.weapon || def.tool || (def.armorSlot && def.armorSlot !== "ammo")))
+              this.deps.openGearUpgrade(this.hotbar.container, i);
             return;
           }
           this.deps.beginDrag(this.hotbar.container, i, pointer);
