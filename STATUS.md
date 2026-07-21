@@ -22,6 +22,11 @@ tested but DORMANT — biome-3 miasma hook). `tsc` clean; verified live (`javasc
 zones (5 boulder + 5 thorn), slow 0.6× only in thornfields, themed enemies correct (5 Cragscale / 6
 Duskrunner per sampled zone), a player walking into a rock stops at its edge, zones render as distinct dense
 areas. No `RECIPES.md`/dashboard change (no recipes; enemy *placement* changed, stats didn't). See B3-P1 below.
+**Follow-up B3-P1a (2026-07-21):** enemies now **roll freely through boulderfield rocks** (player still
+collides) via a per-enemy `Enemy.collidesWithTerrain` flag (default false) gating the enemy↔solids collider
+— fixes the Cragscale wedging on rocks; the flag is the future hook for terrain-blocked enemies + their
+(deferred) stuck-response AI. Enemies were already never slowed by thornfields (terrain slow is player-only).
+See B3-P1a below.
 Prior: **PB18 — Backpack armor upgrade fix + reforge-returns-to-slot** (2026-07-18, Opus): right-clicking
 armor opens its Upgrade panel (generic `gearSlot`/`openGearUpgrade`/`applyGearUpgrade`); reforging an
 equipped/hotbar base piece returns the result to that slot. See PB18 below.
@@ -416,6 +421,31 @@ below + [[survivor-rpg-dev-console]].
 ## Recent Entries
 
 > Older entries in STATUS-archive.md.
+
+### B3-P1a — Enemy terrain-collision gate + roll-through (2026-07-21, Opus)
+Follow-up to B3-P1 off the user's playtest: the "spinny guys" (Cragscale rolling charge) got
+**wedged on boulderfield rocks**. B3-P1 added real solids to the `solids` group (rocks) for the
+first time since trees/boulders were made non-solid back in July, so the pre-existing
+`enemyGroup ↔ solids` collider (`MainScene.ts`) started blocking every enemy — and a
+straight-line chaser wedges (the exact zigzag-avoidance problem that got obstacles made
+non-solid originally; see [[feedback_enemy_obstacle_avoidance]] / [[feedback_boar_zigzag_movement]]).
+**Fix:** a new per-enemy `Enemy.collidesWithTerrain` flag (default **false**) gates that collider
+via a `processCallback` — every current enemy now **rolls freely through rocks; the player still
+collides** (its own `player ↔ solids` collider is unchanged, no callback). The callback resolves the
+Enemy by `instanceof` on both args (group-vs-static-group arg order isn't guaranteed). **This is
+also the future hook:** a terrain-blocked enemy just sets the flag `true` (verified: the gate then
+returns `true` → Arcade separates it). **Confirmed no change needed for the other ask** — enemies
+were never slowed by thornfield terrain: `BRAMBLE_SLOW_MULT`/`environmentEffectAt` is read only for
+the *player* (`Player.update` `envMult`); enemy speed uses `envSpeedMult` (day/night × relic slow),
+which is terrain-independent. `tsc` clean; verified live (`javascript_tool`): all 602 enemies default
+`collidesWithTerrain:false`; the enemy↔solids collider's process callback returns `false` for a
+default Cragscale (both arg orders) and `true` once the flag is flipped; the player↔solids collider
+has no callback; no console errors. **Deferred (needs a real consumer — Opus session):** the actual
+stuck-response AI for a future terrain-blocked enemy — recommended default is to keep most enemies
+roll-through and reserve blocking for a specific heavy archetype with a light slide-along-contact
+nudge, only building the full near-tangent wall-follow heuristic if a genuine maze-navigation enemy
+is ever designed (the deleted heuristic worked but read as "trash" zigzag — don't re-derive it
+blindly). No `RECIPES.md`/dashboard change.
 
 ### B3-P1 — Biome-3 Phase 1: Terrain-that-matters (2026-07-21, Opus)
 First milestone of the biome-3 (haunted bayou) + new-systems arc. Umbrella roadmap:

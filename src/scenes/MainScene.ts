@@ -1173,7 +1173,22 @@ export class MainScene extends Phaser.Scene {
     this.spawnOuterBadlandsContent();
     this.spawnOuterBadlandsEnemies();
     this.scatterDecor(); // purely-decorative immersion props across both biomes
-    this.physics.add.collider(this.enemyGroup, solids);
+    // Enemy↔solid-terrain collision is gated PER ENEMY on `collidesWithTerrain`
+    // (default false → every current enemy rolls freely through boulderfield
+    // rocks; the player still collides via the collider above). The process
+    // callback returns whether to perform Arcade separation for this pair, so a
+    // future terrain-blocked enemy just flips its flag — no new collider wiring.
+    // Arg slot is group-vs-static-group and not guaranteed, so we resolve the
+    // Enemy by instanceof on both args (see the group-overlap arg-order gotcha).
+    this.physics.add.collider(
+      this.enemyGroup,
+      solids,
+      undefined,
+      (a, b) => {
+        const enemy = a instanceof Enemy ? a : b instanceof Enemy ? b : null;
+        return enemy ? enemy.collidesWithTerrain : true;
+      },
+    );
     // Deliberately NO physics collider between the player and enemies — every
     // attempt at a "solid but not pushable" middle ground (immovable bodies,
     // then dash-only exemptions) still let an enemy's own chase/attack

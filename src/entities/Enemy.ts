@@ -173,6 +173,18 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   // update() ignores it, so the boss stays exempt from the night speed buff.
   envSpeedMult = 1;
 
+  // Whether this enemy is physically blocked by solid terrain (the `solids`
+  // group — boulderfield rocks, future walls/structures). Default FALSE: every
+  // current enemy rolls freely through rocks (the player still collides), which
+  // is what the user wants for boulderfields — the rocks are cover/a maze for the
+  // player, not an enemy trap (the Cragscale's rolling charge got wedged on
+  // them). A future enemy that SHOULD be blocked by terrain sets this true; the
+  // scene's enemy↔solids collider gates separation on it per-instance. NOTE:
+  // turning this on for an enemy also needs an AI response to being stuck (see
+  // the deleted zigzag-avoidance history in feedback_enemy_obstacle_avoidance /
+  // feedback_boar_zigzag_movement) — a plain straight-line chaser will wedge.
+  collidesWithTerrain = false;
+
   // Temporary slow (Executioner crit relic). A timestamp + factor (0.7 = 30%
   // slower); the scene folds slowMult() into envSpeedMult each frame so it
   // rides the same aggressive-movement path with no per-subclass wiring.
