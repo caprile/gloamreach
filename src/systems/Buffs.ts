@@ -67,12 +67,16 @@ export class BuffManager {
   // HUD rebuilds its icon row instead of only updating countdown text). Healing
   // is clamped to the window a buff actually had left this frame so an expiring
   // buff can't over-heal on its final tick.
-  tick(delta: number, health: Health): { healed: boolean; changed: boolean } {
+  //
+  // `suppressHeal` (Phase 1 — HP-regen-prevention zones, e.g. biome-3 miasma):
+  // when true, buffs still count DOWN (standing in the zone wastes the buff) but
+  // deal no healing — the "no regen" semantics without pausing the timer.
+  tick(delta: number, health: Health, suppressHeal = false): { healed: boolean; changed: boolean } {
     if (this.buffs.length === 0) return { healed: false, changed: false };
     let healed = false;
     for (const b of this.buffs) {
       const dt = Math.min(b.remainingMs, delta);
-      if (b.hpPerSec > 0 && dt > 0) {
+      if (!suppressHeal && b.hpPerSec > 0 && dt > 0) {
         health.heal(b.hpPerSec * (dt / 1000));
         healed = true;
       }

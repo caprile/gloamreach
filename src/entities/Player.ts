@@ -78,6 +78,10 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   // distance over the fixed window) — 1 normally, >1 with the Emberblink set
   // bonus (Emberhide light set); kept separate from moveMult so a relic move
   // buff never quietly lengthens the dash.
+  // `envMult` is an environmental terrain multiplier applied to NORMAL walk/sprint
+  // speed only (not the fixed dash burst) — 1 on open ground, <1 in a slowing zone
+  // (badlands bramble patch now; swamp water later). Kept separate from moveMult so
+  // a dash always escapes rough ground at full speed regardless of the terrain slow.
   update(
     delta: number,
     canSprint: boolean,
@@ -86,6 +90,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     moveMult = 1,
     dashDistMult = 1,
     inputEnabled = true,
+    envMult = 1,
   ): PlayerFrameResult {
     const now = this.scene.time.now;
     const body = this.body as Phaser.Physics.Arcade.Body;
@@ -161,7 +166,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       // compounding — WALK × (1 + move% [+ sprint%]). moveMult/sprintMultiplier
       // arrive as (1 + %) multipliers; subtract 1 to get their % contribution.
       const speedMult = 1 + (moveMult - 1) + (sprinting ? sprintMultiplier - 1 : 0);
-      const speed = PLAYER_WALK_SPEED * speedMult;
+      const speed = PLAYER_WALK_SPEED * speedMult * envMult;
       body.setVelocity((vx / len) * speed, (vy / len) * speed);
     }
     return { moving, sprinting, dashStarted: false, facing: this.facing };

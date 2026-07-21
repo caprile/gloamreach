@@ -2,12 +2,29 @@
 
 ## Current State
 
-_Living snapshot — edit in place, never append. Last shipped: **PB18 — Backpack armor upgrade fix +
-reforge-returns-to-slot** (2026-07-18, Opus). Two playtest bug fixes: (1) right-clicking armor in the
-inventory now opens its Upgrade panel (was a no-op — the branch only handled weapons/tools; the generic
-container-upgrade path is now named `gearSlot`/`openGearUpgrade`/`applyGearUpgrade`); (2) reforging a base
-gear piece (e.g. Sunsteel → Embersteel) that's equipped or in the hotbar now returns the result to that
-same slot instead of the backpack. See PB18 below.
+_Living snapshot — edit in place, never append. Last shipped: **B3-P1 — Biome-3 Phase 1:
+Terrain-that-matters + badlands macro-zones** (2026-07-21, Opus, roadmap
+`.claude/plans/biome-3-and-new-systems-roadmap.md`). First milestone of the biome-3 (haunted bayou) +
+new-systems arc: blocking terrain + a generic environmental-zone hook, **reworked same-session into a
+MACRO-ZONE system** (the user: the biome felt like uniform random scatter — give it structure). The badlands
+now places **~10 LARGE themed sub-zones** (`badlandsZones` / `subZoneAt`) that content keys off:
+**boulderfields** (dense grey-rock formations — ridge-lines of solid `badlands_rockwall`/`badlands_mesa_spire`
+added to the `solids` group so player+enemies collide; ~140 bodies/run) and **thornfields** (dense bramble
+scrub that slows the player 0.6× across the whole zone + rich foraging — ~630 bramble props + dense
+Dustbloom/Emberbloom). Each zone gets a bold ground decal (`zone_floor_*`) so it reads as a distinct place
+from a distance; wild flora/minerals/enemies AVOID zone cores (`subZoneAt` gate in `pickBadlandsPoint`) so
+zones are deliberate and the open ground between stays organically scattered; **themed enemies** fill each
+zone (Cragscale bruisers in boulderfields, Duskrunner swarms in thornfields). Grey rock + bold-bramble
+textures replace the old warm-brown "hard to distinguish" ones. **Generic env-zone hook (biome-3 consumes):**
+`environmentEffectAt → {moveMult, blockRegen}` — slow via a new `Player.update` `envMult` param (walk only,
+dash exempt); no-regen via `updateComfortRegen` early-return + `BuffManager.tick(…, suppressHeal)` (built +
+tested but DORMANT — biome-3 miasma hook). `tsc` clean; verified live (`javascript_tool` + screenshots): 10
+zones (5 boulder + 5 thorn), slow 0.6× only in thornfields, themed enemies correct (5 Cragscale / 6
+Duskrunner per sampled zone), a player walking into a rock stops at its edge, zones render as distinct dense
+areas. No `RECIPES.md`/dashboard change (no recipes; enemy *placement* changed, stats didn't). See B3-P1 below.
+Prior: **PB18 — Backpack armor upgrade fix + reforge-returns-to-slot** (2026-07-18, Opus): right-clicking
+armor opens its Upgrade panel (generic `gearSlot`/`openGearUpgrade`/`applyGearUpgrade`); reforging an
+equipped/hotbar base piece returns the result to that slot. See PB18 below.
 Prior: **PB17 — Boss tuning + Cinderwrought solo
 rework + silent placement** (2026-07-16, Opus). A small badlands-playtest batch (the user: "felt really
 good"): (1) object **placement is now silent** (dropped the craft-cue on place); (2) the **Duneshaper**
@@ -400,6 +417,58 @@ below + [[survivor-rpg-dev-console]].
 
 > Older entries in STATUS-archive.md.
 
+### B3-P1 — Biome-3 Phase 1: Terrain-that-matters (2026-07-21, Opus)
+First milestone of the biome-3 (haunted bayou) + new-systems arc. Umbrella roadmap:
+`.claude/plans/biome-3-and-new-systems-roadmap.md` (5 phases: Terrain → Abilities/gems economy →
+Bayou gear reforge → Bayou content → post-boss choice). Locked forks this session: terrain first;
+cooldown-only, equipment-granted Q/E/R abilities; melee-core bayou; big-boss-only post-boss choice.
+This phase = **blocking terrain + a generic environmental-zone hook** in biome 2, **reworked same-session
+into a badlands MACRO-ZONE system** after the user's feedback (the initial version — sparse "light-dressing"
+lone rocks + ~12 small bramble patches — read as "too random / hard to distinguish; the whole biome feels
+like uniform scatter with no structure"). the user chose "full biome macro-zones" + "ground decal + bold props".
+
+**Macro-zones.** `placeBadlandsZones()` drops **~10 LARGE themed sub-zones** (`badlandsZones: {type,x,y,r}[]`,
+radii 300–470, min-sep 720, placed after every POI — with the WHOLE zone radius kept clear of every POI's
+clearing via a `clearsPois` check, so a boss arena is never inside a slow/rock field: a same-session fix after
+the user saw a Sunken Forge inside a thornfield, since `pickBadlandsPoint` only excluded the zone's *center*);
+`subZoneAt(x,y)` resolves the zone under a point. **Zones are NON-circular:** each carries an angular-harmonic
+wobble (`zoneEdge`, same idiom as `WorldBiomes.seedCoverage`) that varies its edge radius ±16–24% by
+direction; `subZoneAt`, the prop fill, and the ground decal (`drawZoneFloor` — a wobbly Graphics blob, not a
+scaled circle) all share that one outline, so areas read as organic lumps. POI-clearance uses the outermost
+lobe (`r × (1 + wAmp·WOBBLE_MAX)`) so no lobe laps a boss arena. Two types:
+- **boulderfield** — `fillBoulderfield()` builds several rock RIDGE-LINES (barriers with walkable gaps) +
+  scattered rocks, all solid (`solids.create` static bodies → player+enemies collide, ~140/run) and recorded
+  in `obstaclePositions`. A navigable cover/maze formation, not an impassable disk.
+- **thornfield** — `fillThornfield()` densely fills the whole region with non-solid `bramble` scrub (~630
+  props/run across 5 zones) + dense Dustbloom/Emberbloom foraging. The slow applies across the ENTIRE zone.
+
+Each zone stamps a bold ground decal (`zone_floor_boulderfield`/`_thornfield`, big fairly-opaque radial at
+depth -7) so the area reads as a distinct place from afar. **Wild content avoids zones:** a `subZoneAt` gate in
+`pickBadlandsPoint` keeps wild flora/minerals/enemies out of zone cores (badlands flora/minerals/nodes were
+reordered to run AFTER `placeBadlandsZones` so they see the gate — safe because `sessionRng()` reseeds per
+call, so each pass is independent). **Themed enemies:** `spawnZoneEnemies()` fills boulderfields with Cragscale
+bruisers, thornfields with Duskrunner swarms (avoiding rock footprints). The open ground between zones stays
+organically scattered — structure AMID the randomness, reconciling with the standing organic-density preference.
+
+**Generic env-zone hook (biome-3 miasma/swamp consumes).** `environmentEffectAt(x,y): {moveMult, blockRegen}`:
+(1) **slow** — computed before `Player.update`, passed as a new `envMult` param (walk/sprint only, NOT the dash
+burst); (2) **no-regen** — `currentEnvBlockRegen` gates `updateComfortRegen()` + `BuffManager.tick(delta,
+health, suppressHeal)` (new param — buff counts DOWN but heals nothing). No-regen is built + tested but DORMANT
+(no biome-2 miasma yet).
+
+**Textures (the user: much more distinct).** Rock walls/spires redrawn COOL GREY (pops vs warm badlands) + bigger
+(40×30 / 26×46); bramble redrawn dark tangle + red berries; 2 new zone-floor decals. **Files:** `MainScene.ts`
+(zone model + `placeBadlandsZones`/`spawnBadlandsZoneContent`/`fillBoulderfield`/`fillThornfield`/
+`spawnZoneEnemies`/`subZoneAt`/`environmentEffectAt`; `pickBadlandsPoint` obstacle+zone gate; create() reorder;
+update-loop + regen wiring), `Player.ts` (`envMult`), `Buffs.ts` (`suppressHeal`), `BootScene.ts` (bolder
+rock/bramble + 2 zone-floor decals). `tsc` clean. **Verified live** (`javascript_tool` + screenshots, loop
+pumped past the backgrounded-render pause): 10 zones (5+5, radii 300–467); ~143 rock bodies + ~630 bramble
+props + 10 floor decals; slow 0.6× only inside thornfields (edge-in too), 1.0 in boulderfields/open; themed
+enemies correct (5 Cragscale in a sampled boulderfield / 6 Duskrunner in a thornfield); `subZoneAt` true inside
+/ false outside; a player walking into a boulderfield rock stops at its edge (collision works); screenshots
+confirm each zone reads as a distinct dense area (grey rocky basin / dark bramble thicket). **Next:** Phase 2
+(Abilities & gear economy) — new mechanic, Opus, its own plan/session.
+
 ### PB18 — Backpack armor upgrade fix + reforge-returns-to-slot (2026-07-18, Opus)
 Two bug fixes off the user's playtest. **(1) Right-click armor in the inventory did nothing.**
 The InventoryMenu/HotbarUI right-click branch only handled `edible` / `weapon || tool` /
@@ -458,93 +527,3 @@ A small playtest batch off the user's badlands run ("felt really good" overall).
    90° and hit at the new position); Forge Hammer hits in-range/center (52 dmg) and correctly misses beyond
    range and behind the boss; no console errors. Dashboard Enemies tab updated (both bosses). No `RECIPES.md`
    change (enemy loot isn't tracked there). See [[survivor-rpg-biome-2-plan]].
-
-### PB16 — Playtest batch: crit/Onslaught rework + 15 fixes (2026-07-15, Opus)
-Off the user's lvl-14 playtest ("almost 1-3 shotting everything by steel+embersteel; 17→84, 196 hits —
-crit feels bananas"). Root cause diagnosed live (not a math bug): **Onslaught (every-4th-hit +120%) was a
-separate multiplier stacking multiplicatively with crit** (`~2.2× × ~2.2× ≈ 4.9×`), amplified further by
-power tier. Fix locked with the user.
-
-- **Combat math — additive conditional bonuses (`tryMeleeAttack`/`tryRangedAttack`, MainScene).** The
-  "normal hit" = `base × (1 + weaponSkill% + relic damage%)` (the always-on additive bucket). Crit and
-  Onslaught are now **conditional bonuses that ADD onto the normal hit** — `normalHit × (1 + onsBonus +
-  critBonus) × stagger × resist` — never multiplied by each other. So crit-alone and onslaught-alone are
-  unchanged, but the double-dip that produced the 149/196 spikes is gone (both together ≈ 80, not 149).
-  Onslaught is now a **flat +100% (×2), no power-tier scaling** (Berserker's Mantle bonusPct 120→100).
-  `applyCrit` split into `critChanceTotal`/`critMultTotal`/`rollCrit`/`critBonus` (one source of truth;
-  the combatStats panel + weapon tooltip now read the same helpers). Onslaught proc → `onslaughtBonus()`
-  (returns the flat fraction, still one roll per swing shared by the AOE-arc secondaries).
-  **Verified live:** a real melee hit with a forced crit on the 4th (Onslaught) swing dealt **51.84**, the
-  additive value — not the multiplicative 63.02. Onslaught cycle = `[0,0,0,1,0,0,0,1]`.
-- **Badlands resistances normalized** (the user: "weak/resist numbers unclear; too much damage on top of
-  weapon stuff"). Every weak → **×1.25**, every resist → **×0.5** (`Cragscale`/`Sandmaw`/`Hexling`/
-  `Duneshaper` tables). **Cinderwrought lost ALL weakness** (fully neutral — a mini-boss weakness stacked
-  too hard) + poise **45→60** (harder to stagger). **Duneshaper** dropped its physical weakness (now
-  neutral) and gained **fire ×1.25** as its one standout weakness (burning it down is the intended
-  counter; the magic-resist it initially kept was dropped in the same-session follow-up — see below).
-  Floating damage numbers COLOR-code effectiveness with **no text label** (the user): neutral **white** /
-  resisted **greyed-out** (dim) / weak **gold** / crit **hot-orange + "!"** (distinct from weak's gold),
-  and are a touch bigger (14→16 / 20→22 crit).
-- **Relic dominance (`compareInstances`, Relics.ts).** Was rarity-first (a Mythic always beat a Rare
-  regardless of tier), so a newly-rolled **T2 Rare was auto-declined by an owned T1 Mythic**. Now returns
-  **"ambiguous" → the Keep New / Keep Old prompt** whenever rarity and tier disagree (higher tier but
-  lower rarity, or vice versa); strict dominance on both axes still auto-replaces/declines. Locked with
-  the user ("not always want mythic over rare depending on tier").
-- **Refined-Uncommon Rare roll rate 5%→12%** (uncommon outcome table's Rare band). the user's ask.
-- **Sandmaw** (`Sandmaw.ts`) — signature **bleed** (4/s×5s) added to the erupt hit (returned from
-  `checkPlayerHit` + threaded through `applyDamageToPlayer`'s existing bleed param), and a **faster erupt**
-  (windup 560→470ms). No new vulnerability window (the user: "just bleed + faster").
-- **Mini-boss bars** — new per-enemy `EnemyConfig.barScale` (default 1); Gloamwarden/Cinderwrought pass
-  **2.4**, so their HP bar (22→52.8px) + poise bar sit big and overhead over the 1.7–1.8× sprite. The
-  poise bar now anchors under the enlarged HP bar via the instance `barW`/`barOffsetY`/`barH`.
-- **Proc counter HUD** (`src/ui/ProcBarUI.ts`, new) — mid-left (empty screen area; hints sit mid-right).
-  Onslaught row = a pip counter filling 1..2..3.. then resetting on the proc (glows gold on the pre-proc
-  hit); Guardian row = a shield bar that reads **BLOCK READY** (green) or **BLOCK N.Ns** with a cooldown
-  sweep. Rows hide entirely unless the player owns that proc's relic. Fed each frame by
-  `MainScene.procHudState()`.
-- **Weapon tooltip crit totals** (Task 6) — the tooltip now shows **total crit chance + crit damage**
-  (weapon base + Strength/Agility + relics, capped) alongside the per-weapon base, via a `critTotals`
-  callback threaded through HotbarUI/InventoryMenu → Tooltip (sourced from MainScene's own crit helpers).
-- **Ironshod axe art** — distinct tier-1 `icon_stone_axe_t1` texture (sunsteel head + gold ingot bands).
-  `tieredStationTexture` generalized from workbench/smelter-only to **any item with a `${base}_t{tier}`
-  texture**, so upgraded tools/weapons get their art in the hotbar, on the player, and in the backpack.
-- **Ember reforge ingredients** — the Embersteel **Longsword/Pike** were the only reforges consuming just
-  ingot+ironbark+hex; now also take a base creature-material (2 Sandmaw Chitin / 2 Cragscale Plate), like
-  the armor/warhammer/warbow already did.
-- **Craft/upgrade SFX** — new `Sfx.upgrade()` (a heftier metallic rise) fires on every station/armor/
-  weapon upgrade; a `craft()` cue now also plays when a placeable is placed.
-- **Menu text +1px** across every read-heavy panel (Crafting/Inventory/Character/RelicForge/Cooking/
-  DryingRack/Chest/Upgrade/Pause/Tooltip/Welcome/Tips) — the user: "text everywhere too small, especially
-  menus."
-- **Bug fix** — opening the Character/level-up menu (K or the stat-points badge) now closes the Relic
-  Forge menu first (and vice versa); it was rendering on top of an open forge menu.
-
-`tsc` clean; RECIPES.md + dashboard Enemies tab synced. See [[survivor-rpg-relics]] +
-[[survivor-rpg-stats-skills-relics-direction]].
-
-**Same-session follow-up (3 more items from the user):**
-- **Cinderwrought AI bugs** (`Cinderwrought.ts`). Three fixes + pack behavior: (1) **ranged aggro** —
-  `takeHit` now sets `aggroed = true` (proximity was the ONLY aggro path, so ranged pokes were ignored);
-  (2) **out-of-range / whiffing attacks** — `updateIdle` only begins a telegraph when
-  `dist <= ATTACK_INIT_RANGE (192) + reachBonus()`; it was telegraphing the instant the cooldown was up
-  regardless of distance, so it attacked/whiffed from up to `AGGRO_RADIUS` 260px while its attacks reach
-  only 168–235; out of range now = keep approaching; (3) `checkPlayerHit` adds `reachBonus()` (~17px for
-  the 1.8× sprite) to the cone/hammer range checks so a hit registers at the sprite's visual edge; (4)
-  **pack behavior** — `packAggro = true` / `packAggroRadius = 320` + a `forceAggro()` override (flips the
-  subclass's own `aggroed` field, since the base `forceAggro` drives the `state` machine it doesn't use),
-  so hitting or aggroing one forge-guard wakes its mate (the pair spawns 140px apart) via
-  `MainScene.updatePackAggro`. Verified live: hit-one-of-a-pair → both aggro; far player = idle/approach,
-  near player = telegraph.
-- **Duneshaper resist** (`Duneshaper.ts`). Dropped the magic resist ×0.5 — the user: fire is a subtype of
-  magic AND the Ember Brand deals fire, so resisting magic while being fire-weak punished the ember/fire
-  path it's meant to reward. Now its ONLY resist line is **fire ×1.25 (weak)**; everything else neutral.
-- **Unified passive/proc HUD** (`src/ui/PassiveBarUI.ts`, new — REPLACES `RelicBarUI` + `ProcBarUI`, both
-  deleted). the user wanted Dota-style passive/proc icons LEFT of the hotbar. One data-driven strip of
-  hoverable square icons: one per owned relic (proc relics carry live state — **Onslaught** shows the
-  1·2·3 count + a ready-glow on the pre-proc hit; **Guardian** shows a draining cooldown cover + a
-  BLOCK-armed glow) + one per active **armor set-bonus** (Molten Bulwark / Emberblink, icon = the set's
-  chest piece, hover = the bonus). Built each frame by `MainScene.passiveEntries()` (from
-  `relics.groupedForDisplay()` + `activeSetIds`), synced from the update loop + `afterRelicChange`.
-  Positioned off `hotbarUI.left`/`.bottom`, growing left + wrapping up. The timed food-buff bar
-  (`BuffBarUI`, above HP) stays separate. Verified live: 5-icon strip (4 relics + Embersteel set),
-  Onslaught count "3"+glow, Guardian 27px cooldown overlay, hover tooltips, no console errors.

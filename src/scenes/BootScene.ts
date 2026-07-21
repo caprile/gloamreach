@@ -797,6 +797,68 @@ export class BootScene extends Phaser.Scene {
     g.fillRect(3, 10, 2, 2);
     g.generateTexture("slag_chunk", 16, 14);
 
+    // Phase 1 (terrain-that-matters) — badlands macro-zone props. Deliberately
+    // COOL GREY stone so it pops hard against the warm red-brown badlands ground
+    // (the user: the old warm-brown rock was "hard to distinguish").
+    // Rock wall (40x30): a chunky grey stone block the player/enemies collide with.
+    g.clear();
+    g.fillStyle(0x24272c, 1);
+    g.fillRect(2, 9, 36, 21); // base shadow mass
+    g.fillStyle(0x484d55, 1);
+    g.fillRect(2, 4, 34, 22); // main face
+    g.fillStyle(0x6d747f, 1);
+    g.fillRect(4, 4, 15, 10); // lit upper-left block
+    g.fillRect(22, 9, 12, 9); // lit right block
+    g.fillStyle(0x878f9b, 1);
+    g.fillRect(5, 5, 7, 5); // highlight
+    g.fillStyle(0x191b1f, 1);
+    g.fillRect(18, 6, 3, 22); // crack seam
+    g.fillRect(6, 20, 26, 3); // ledge shadow
+    g.generateTexture("badlands_rockwall", 40, 30);
+
+    // Mesa spire (26x46): a tall grey layered rock stack — vertical cover.
+    g.clear();
+    g.fillStyle(0x24272c, 1);
+    g.fillRect(4, 7, 18, 39); // body shadow
+    g.fillStyle(0x484d55, 1);
+    g.fillRect(5, 4, 15, 40); // main face
+    g.fillStyle(0x6d747f, 1);
+    g.fillRect(6, 6, 9, 8); // top lit band
+    g.fillStyle(0x878f9b, 1);
+    g.fillRect(7, 7, 5, 4); // highlight
+    g.fillStyle(0x33373d, 1);
+    g.fillRect(5, 18, 15, 3); // strata line
+    g.fillRect(5, 31, 15, 3); // strata line
+    g.fillStyle(0x191b1f, 1);
+    g.fillRect(13, 4, 3, 40); // vertical shadow seam
+    g.generateTexture("badlands_mesa_spire", 26, 46);
+
+    // Bramble (24x18): dense thorny scrub — a NON-solid tile that slows the player.
+    // Dark tangled thicket with red berries + pale thorns so a thornfield reads as
+    // a distinct dark patch against the pale ground (the user: much bolder + dense).
+    g.clear();
+    g.fillStyle(0x1f2915, 1);
+    g.fillRect(2, 8, 20, 10); // dark mound base
+    g.fillStyle(0x33461f, 1);
+    g.fillRect(4, 5, 16, 9); // tangle
+    g.fillStyle(0x46612a, 1);
+    g.fillRect(6, 6, 5, 4);
+    g.fillRect(13, 7, 5, 4);
+    g.fillStyle(0x8a1f2e, 1); // red berries
+    g.fillRect(8, 10, 2, 2);
+    g.fillRect(14, 9, 2, 2);
+    g.fillRect(11, 13, 2, 2);
+    g.fillStyle(0xc7c39a, 1); // pale thorn spikes
+    g.fillRect(3, 2, 1, 5);
+    g.fillRect(10, 1, 1, 6);
+    g.fillRect(17, 2, 1, 5);
+    g.fillRect(21, 5, 1, 4);
+    g.generateTexture("bramble", 24, 18);
+
+    // (Macro-zone ground decals are drawn per-zone at runtime as wobbly Graphics
+    // blobs in MainScene.drawZoneFloor — they follow each zone's organic outline, so
+    // there's no pre-baked circular texture for them.)
+
     // --- POI floor decals (soft radial circles) + ring markers ---
     // A distinct floor + a ring of props around every POI so each reads as a
     // deliberate, bounded place from a distance (the user). Floors are stretched

@@ -321,6 +321,28 @@ const BLACKBERRY_REGROW_MS = 3 * 60 * 1000; // a picked bush regrows berries aft
 // nearby doesn't block resting).
 const COMFORT_RANGE = 80; // px, player <-> Bedroll
 const COMFORT_CAMPFIRE_RANGE = 120; // px, Bedroll <-> Campfire
+// Phase 1 (terrain-that-matters): walk-speed multiplier while standing in a
+// bramble patch — noticeable but not punishing, the gentle intro to terrain
+// affecting movement. Dashing ignores it (Player.update's dash burst is separate).
+const BRAMBLE_SLOW_MULT = 0.6;
+
+// A badlands macro-zone (Phase 1). NON-circular: the effective edge radius varies
+// with angle via an angular harmonic wobble (same idiom as WorldBiomes.seedCoverage),
+// so zones read as organic lumpy blobs, not perfect circles. The one shape (zoneEdge)
+// is shared by subZoneAt (membership), the prop fill, and the ground decal so they
+// all line up. `wAmp` is the wobble amplitude as a fraction of the base radius `r`.
+interface BadlandsZone {
+  type: "boulderfield" | "thornfield";
+  x: number;
+  y: number;
+  r: number;
+  wK: number;
+  wPhase: number;
+  wAmp: number;
+}
+// Sum of the three harmonic weights below — the max |wobble|, used to bound a zone's
+// outermost lobe (rMax = r * (1 + wAmp * WOBBLE_MAX)) for POI-clearance checks.
+const WOBBLE_MAX = 0.6 + 0.28 + 0.16;
 // A player-dropped or destroyed-station item pickup ignores the magnet for
 // this long so it doesn't instantly fly back into the inventory/station that
 // just released it. Manual click-pickup is unaffected.
@@ -611,6 +633,18 @@ export class MainScene extends Phaser.Scene {
   private veinRespawnAt: number | null = null; // S4: armed once fully cleared (guardian dead + ore mined)
   private veinDiscoveredOnMap = false;
   private veinLightPoints: { x: number; y: number }[] = [];
+
+  // Phase 1 (terrain-that-matters) + macro-zones. badlandsZones: a handful of LARGE
+  // themed sub-zones (boulderfield = dense grey rock formations the player/enemies
+  // collide with; thornfield = dense brambles that slow + dense flora) that content
+  // keys off, so the badlands reads as distinct PLACES not uniform scatter (the user).
+  // obstaclePositions: every solid rock body's footprint (recorded so wild spawns
+  // avoid them). currentEnvBlockRegen caches this frame's HP-regen-suppression flag
+  // from environmentEffectAt (dormant in biome 2 — wired for biome-3 miasma). All
+  // reset per run (scene.restart field-init gotcha).
+  private badlandsZones: BadlandsZone[] = [];
+  private obstaclePositions: { x: number; y: number; r: number }[] = [];
+  private currentEnvBlockRegen = false;
 
   // Duskrunner Warrens (biome 2 Phase 3) — two-wave destructible den POIs.
   private badlandsDens: BadlandsDen[] = [];
@@ -934,6 +968,9 @@ export class MainScene extends Phaser.Scene {
     this.veinRespawnAt = null;
     this.veinDiscoveredOnMap = false;
     this.veinLightPoints = [];
+    this.badlandsZones = [];
+    this.obstaclePositions = [];
+    this.currentEnvBlockRegen = false;
     this.badlandsDens = [];
     this.hoveredDen = null;
     this.denLightPoints = [];
@@ -1093,9 +1130,8 @@ export class MainScene extends Phaser.Scene {
     // Trees and boulders are solid; the player bumps into them.
     const solids = this.physics.add.staticGroup();
     this.spawnNodes(solids);
-    this.spawnBadlandsFlora(); // biome 2 Phase 2 arid harvestables (free pickups, not solid)
-    this.spawnBadlandsMinerals(); // biome 2 Phase 4 — mineable ore + clay for smelting
-    this.spawnBadlandsNodes(); // wood/stone gatherables + gated Ironbark tree (every biome supplies the basics)
+    // Badlands wild flora/minerals/nodes are spawned LATER (after placeBadlandsZones,
+    // below) so they avoid the themed sub-zone cores — the zones own their content.
     this.physics.add.collider(this.player, solids);
 
     // Enemies: physical collision with solids and the player (separation
@@ -1117,7 +1153,17 @@ export class MainScene extends Phaser.Scene {
     this.spawnSunkenForges(); // biome 2 Phase 3 POI 2 — the Cinderwrought mini-boss landmarks
     this.spawnBadlandsDens(); // biome 2 Phase 3 POI — before wild packs so den clearings stay clear
     this.spawnTyrantAltars(); // biome 2 Phase 3 — the badlands final-boss altars
-    this.spawnBadlandsEnemies(); // biome 2 Phase 2 — out in the badlands patchwork
+    // Macro-zones (the user): place a few LARGE themed sub-zones after every POI,
+    // stamp their ground decals + dense props, THEN spawn the wild badlands content
+    // — which now avoids zone cores (subZoneAt gate in pickBadlandsPoint), so zones
+    // read as distinct places and the open ground between stays organically scattered.
+    this.placeBadlandsZones();
+    this.spawnBadlandsZoneContent(solids);
+    this.spawnBadlandsFlora(); // biome 2 Phase 2 arid harvestables (free pickups, not solid)
+    this.spawnBadlandsMinerals(); // biome 2 Phase 4 — mineable ore + clay for smelting
+    this.spawnBadlandsNodes(); // wood/stone gatherables + gated Ironbark tree (every biome supplies the basics)
+    this.spawnBadlandsEnemies(); // biome 2 Phase 2 — out in the badlands patchwork (avoids zones)
+    this.spawnZoneEnemies(); // themed enemies inside each sub-zone
     // PB1 Session 3 — populate the forest patchwork blobs beyond BIOME_RADIUS and
     // extend the badlands band beyond BADLANDS_R_MAX_INNER. Called last of the
     // content passes (every POI position is set by now) so their exclusion checks
@@ -1479,7 +1525,12 @@ export class MainScene extends Phaser.Scene {
     // to the text field instead of walking the player.
     const inputEnabled = !this.inventoryMenu.isSearchFocused();
     const moveMult = this.relics.moveSpeedMult() + this.killMoveBurstBonus();
-    const frame = this.player.update(delta, canSprint, canDash, sprintMultiplier, moveMult, dashDistMult, inputEnabled);
+    // Phase 1: terrain under the player this frame — the bramble slow feeds
+    // Player.update's env multiplier; blockRegen is cached for the regen gates
+    // later this frame (dormant in biome 2, live for biome-3 miasma).
+    const env = this.environmentEffectAt(this.player.x, this.player.y);
+    this.currentEnvBlockRegen = env.blockRegen;
+    const frame = this.player.update(delta, canSprint, canDash, sprintMultiplier, moveMult, dashDistMult, inputEnabled, env.moveMult);
     this.clampPlayerToWorld();
 
     if (frame.sprinting) {
@@ -1509,8 +1560,10 @@ export class MainScene extends Phaser.Scene {
     if (this.stamina.value() < 5) this.hints.trigger("stamina_empty");
     this.updateComfortRegen();
     // Food buffs heal over time; refresh the HP bar only when they actually
-    // healed, and keep the buff HUD in sync each frame (countdown/expiry).
-    if (this.buffs.tick(delta, this.health).healed) this.refreshHealthBar();
+    // healed, and keep the buff HUD in sync each frame (countdown/expiry). In a
+    // no-regen zone (Phase 1, biome-3 miasma) the buff still ticks down but heals
+    // nothing.
+    if (this.buffs.tick(delta, this.health, this.currentEnvBlockRegen).healed) this.refreshHealthBar();
     this.buffBarUI.sync(this.buffs.active());
     this.passiveBarUI.sync(this.passiveEntries());
     // Bleed DoT (Cragscale roll): ticks whole damage points regardless of
@@ -3320,6 +3373,14 @@ export class MainScene extends Phaser.Scene {
         )
       )
         continue;
+      // Phase 1 macro-zones: keep WILD scatter off a solid rock footprint AND out
+      // of a themed sub-zone's core (both empty until zones are placed, so the
+      // earlier flora/mineral passes that run before placeBadlandsZones are
+      // unaffected — zones own their content; the open ground between them stays
+      // organically scattered). Also spreads new zones off already-placed ones.
+      if (this.obstaclePositions.some((o) => Phaser.Math.Distance.Between(x, y, o.x, o.y) < o.r + 34))
+        continue;
+      if (this.subZoneAt(x, y)) continue;
       // Badlands must be the DOMINANT biome here, not merely present: near the
       // forest transition a point can carry >=0.4 badlands coverage while forest
       // (disc or an overlapping forest blob) still wins the blend — placing a
@@ -4309,6 +4370,251 @@ export class MainScene extends Phaser.Scene {
     scatterFlora("sunfruit_cactus", "sunfruit_cactus_picked", "sunfruit", "Sunfruit", 48);
     scatterFlora("gloamcap", "gloamcap_picked", "gloamcap", "Gloamcap", 44);
     scatterFlora("dustbloom", "dustbloom_picked", "dustbloom", "Dustbloom", 52, { min: 3, max: 5 });
+  }
+
+  // --- Badlands macro-zones (the user: the biome felt like uniform random scatter;
+  // give it structure — a few LARGE, visually-distinct themed regions content keys
+  // off, so it reads as deliberate PLACES). Two types: `boulderfield` (dense grey
+  // rock formations you weave through / take cover in — blocking) and `thornfield`
+  // (dense brambles that slow + rich foraging). Each gets a ground decal so the area
+  // is obvious from a distance. Placed after every POI so their clear radii exclude
+  // zones; wild scatter avoids zone cores (subZoneAt gate in pickBadlandsPoint), and
+  // each zone gets its own dense props + themed enemies, giving the biome structure
+  // amid the organic open ground between zones. ---
+
+  // The zone's organic (non-circular) edge distance in the direction `ang` (radians
+  // from the zone center) — base radius modulated by 3 angular harmonics, mirroring
+  // WorldBiomes.seedCoverage's blob-edge wobble.
+  private zoneEdge(z: BadlandsZone, ang: number): number {
+    const wob =
+      0.6 * Math.sin(ang * z.wK + z.wPhase) +
+      0.28 * Math.sin(ang * (z.wK * 2 + 1) + z.wPhase * 1.7) +
+      0.16 * Math.sin(ang * (z.wK * 3 + 2) - z.wPhase * 0.6);
+    return z.r * (1 + z.wAmp * wob);
+  }
+
+  private subZoneAt(x: number, y: number): BadlandsZone | null {
+    let best: BadlandsZone | null = null;
+    let bd = Infinity;
+    for (const z of this.badlandsZones) {
+      const dx = x - z.x;
+      const dy = y - z.y;
+      const d = Math.hypot(dx, dy);
+      if (d <= this.zoneEdge(z, Math.atan2(dy, dx)) && d < bd) {
+        best = z;
+        bd = d;
+      }
+    }
+    return best;
+  }
+
+  // Pick a handful of large themed sub-zones, roughly alternating type and kept far
+  // apart so each is its own recognizable area (not a merged mush). Run AFTER all
+  // POIs so pickBadlandsPoint's POI exclusions apply; the subZoneAt gate it also
+  // checks naturally spreads new zones off already-placed ones.
+  private placeBadlandsZones(): void {
+    const rng = this.sessionRng();
+    const TYPES = ["boulderfield", "thornfield"] as const;
+    const TARGET = 10;
+    const MIN_SEP = 720; // between zone centers — keep areas visually separate
+    // pickBadlandsPoint only excludes a zone's CENTER from POI clearings, but a
+    // zone's big radius can still sweep over a POI (the user saw a Sunken Forge
+    // inside a thornfield's slow). Require the WHOLE zone to clear every POI: the
+    // zone edge must stay at least the POI's clear radius from the POI center, so a
+    // boss arena is never inside a slow/rock field.
+    const clearsPois = (x: number, y: number, r: number): boolean => {
+      const far = (c: { x: number; y: number } | null | undefined, pad: number) =>
+        !c || Phaser.Math.Distance.Between(x, y, c.x, c.y) >= r + pad;
+      return (
+        far(this.altarPosition, WAR_CAMP_CLEAR_RADIUS) &&
+        far(this.veinPosition, VEIN_CLEAR_RADIUS) &&
+        this.forgePositions.every((f) => far(f, FORGE_CLEAR_RADIUS)) &&
+        this.badlandsDens.every((d) => far(d, DEN_CLEAR_RADIUS)) &&
+        this.tyrantAltarPositions.every((a) => far(a, TYRANT_ALTAR_CLEAR_RADIUS))
+      );
+    };
+    let guard = 0;
+    while (this.badlandsZones.length < TARGET && guard++ < 1200) {
+      const p = this.pickBadlandsPoint(rng);
+      if (!p) break;
+      if (this.badlandsZones.some((z) => Phaser.Math.Distance.Between(p.x, p.y, z.x, z.y) < MIN_SEP)) continue;
+      const type = TYPES[this.badlandsZones.length % TYPES.length];
+      const r = type === "boulderfield" ? rng.between(330, 470) : rng.between(300, 430);
+      const wAmp = rng.realInRange(0.16, 0.24); // ±16–24% organic lumpiness
+      // Clear POIs by the zone's OUTERMOST lobe so no lobe ever laps a boss arena.
+      if (!clearsPois(p.x, p.y, r * (1 + wAmp * WOBBLE_MAX))) continue;
+      this.badlandsZones.push({ type, x: p.x, y: p.y, r, wK: rng.between(2, 4), wPhase: rng.frac() * Math.PI * 2, wAmp });
+    }
+  }
+
+  // Stamp each zone's ground decal + fill it with dense, themed props.
+  private spawnBadlandsZoneContent(solids: Phaser.Physics.Arcade.StaticGroup): void {
+    const rng = this.sessionRng();
+    for (const z of this.badlandsZones) {
+      this.drawZoneFloor(z);
+      if (z.type === "boulderfield") this.fillBoulderfield(z, solids, rng);
+      else this.fillThornfield(z, rng);
+    }
+  }
+
+  // The zone's ground decal, drawn as a soft-edged ORGANIC blob that follows the
+  // wobbly zoneEdge outline (not a scaled circle), so the area itself reads as
+  // non-circular. Layered translucent fills give the soft radial look the old
+  // texture had. One Graphics per zone at depth -7 (above the ground overlay).
+  private drawZoneFloor(z: BadlandsZone): void {
+    const base = z.type === "boulderfield" ? 0x30343b : 0x1d160c;
+    const core = z.type === "boulderfield" ? 0x474d57 : 0x2a2612;
+    const gfx = this.add.graphics().setDepth(-7);
+    const STEP = 0.16; // angular sampling of the outline
+    const blob = (scale: number, color: number, alpha: number) => {
+      gfx.fillStyle(color, alpha);
+      gfx.beginPath();
+      let first = true;
+      for (let a = 0; a < Math.PI * 2; a += STEP) {
+        const e = this.zoneEdge(z, a) * scale;
+        const px = z.x + Math.cos(a) * e;
+        const py = z.y + Math.sin(a) * e;
+        if (first) {
+          gfx.moveTo(px, py);
+          first = false;
+        } else {
+          gfx.lineTo(px, py);
+        }
+      }
+      gfx.closePath();
+      gfx.fillPath();
+    };
+    for (let s = 7; s >= 1; s--) blob(s / 7, base, 0.06); // outer fade to the wobbly edge
+    for (let s = 4; s >= 1; s--) blob((s / 4) * 0.6, core, 0.07); // denser core
+  }
+
+  // Boulderfield: several rock RIDGE-LINES (barriers with walkable gaps) plus
+  // scattered rocks — a navigable maze/cover formation, not an impassable disk.
+  // All solid (added to `solids`; player + enemies collide) and recorded so wild
+  // spawns avoid them.
+  private fillBoulderfield(
+    z: BadlandsZone,
+    solids: Phaser.Physics.Arcade.StaticGroup,
+    rng: Phaser.Math.RandomDataGenerator,
+  ): void {
+    const place = (x: number, y: number) => {
+      // Clamp to the zone's organic outline, not a circle.
+      if (Math.hypot(x - z.x, y - z.y) > this.zoneEdge(z, Math.atan2(y - z.y, x - z.x))) return;
+      const tex = rng.frac() < 0.4 ? "badlands_mesa_spire" : "badlands_rockwall";
+      const img = solids.create(x, y, tex) as Phaser.Physics.Arcade.Image;
+      img.setDepth(ysortDepth(y));
+      this.obstaclePositions.push({ x, y, r: Math.max(img.width, img.height) / 2 });
+    };
+    const ridges = rng.between(3, 5);
+    for (let i = 0; i < ridges; i++) {
+      const ang = rng.frac() * Math.PI * 2;
+      // offset the ridge origin off-center so ridges don't all cross the middle
+      const off = rng.between(-Math.round(z.r * 0.55), Math.round(z.r * 0.55));
+      const ox = z.x + Math.cos(ang + Math.PI / 2) * off;
+      const oy = z.y + Math.sin(ang + Math.PI / 2) * off;
+      const len = rng.between(3, 6);
+      for (let j = 0; j < len; j++) {
+        const d = (j - len / 2) * rng.between(34, 44);
+        place(ox + Math.cos(ang) * d, oy + Math.sin(ang) * d);
+      }
+    }
+    const extra = rng.between(6, 12);
+    for (let i = 0; i < extra; i++) {
+      const a = rng.frac() * Math.PI * 2;
+      const d = Math.sqrt(rng.frac()) * this.zoneEdge(z, a) * 0.9;
+      place(z.x + Math.cos(a) * d, z.y + Math.sin(a) * d);
+    }
+  }
+
+  // Thornfield: fill the whole region densely with non-solid bramble scrub (the
+  // slow applies across the entire zone via environmentEffectAt) + dense foraging
+  // clusters of a badlands harvestable — crossing the slow is rewarded (the user).
+  private fillThornfield(z: BadlandsZone, rng: Phaser.Math.RandomDataGenerator): void {
+    const brambleCount = Math.min(150, Math.round((Math.PI * z.r * z.r) / 3200)); // dense fill
+    for (let i = 0; i < brambleCount; i++) {
+      const a = rng.frac() * Math.PI * 2;
+      const d = Math.sqrt(rng.frac()) * this.zoneEdge(z, a) * 0.96;
+      const x = z.x + Math.cos(a) * d;
+      const y = z.y + Math.sin(a) * d;
+      this.add.image(x, y, "bramble").setDepth(ysortDepth(y));
+    }
+    const flora = [
+      { tex: "dustbloom", picked: "dustbloom_picked", res: "dustbloom", name: "Dustbloom" },
+      { tex: "emberbloom", picked: "emberbloom_picked", res: "emberbloom", name: "Emberbloom" },
+    ];
+    const kind = flora[rng.between(0, flora.length - 1)];
+    const bloom = rng.between(14, 24);
+    for (let i = 0; i < bloom; i++) {
+      const a = rng.frac() * Math.PI * 2;
+      const d = Math.sqrt(rng.frac()) * this.zoneEdge(z, a) * 0.85;
+      const node = new ResourceNode(this, {
+        x: z.x + Math.cos(a) * d,
+        y: z.y + Math.sin(a) * d,
+        texture: kind.tex,
+        resource: kind.res as ResourceType,
+        amount: 1,
+        action: "pickup",
+        displayName: kind.name,
+        loose: false,
+        health: 1,
+        persistent: true,
+        pickedTexture: kind.picked,
+        regrowMs: BLACKBERRY_REGROW_MS,
+      });
+      this.nodes.push(node);
+    }
+  }
+
+  // Themed enemies per zone so a place feels inhabited with intent: armored bruisers
+  // (Cragscale) hold the rocky boulderfields, swarm packs (Duskrunner) roam the
+  // thornfields. Wild scatter already avoids zone cores, so these ARE the zone's
+  // enemies. Runs after the wild badlands roster (zones + POIs all placed).
+  private spawnZoneEnemies(): void {
+    const rng = this.sessionRng();
+    const add = (e: Enemy) => {
+      this.enemies.push(e);
+      this.enemyGroup.add(e);
+    };
+    // A point inside the zone that isn't sitting on a solid rock (so a bruiser
+    // doesn't spawn wedged in a wall).
+    const zonePoint = (z: BadlandsZone) => {
+      for (let t = 0; t < 20; t++) {
+        const a = rng.frac() * Math.PI * 2;
+        const d = Math.sqrt(rng.frac()) * this.zoneEdge(z, a) * 0.85;
+        const x = z.x + Math.cos(a) * d;
+        const y = z.y + Math.sin(a) * d;
+        if (!this.obstaclePositions.some((o) => Phaser.Math.Distance.Between(x, y, o.x, o.y) < o.r + 24)) {
+          return { x, y };
+        }
+      }
+      return { x: z.x, y: z.y };
+    };
+    for (const z of this.badlandsZones) {
+      if (z.type === "boulderfield") {
+        const n = rng.between(3, 5);
+        for (let i = 0; i < n; i++) {
+          const p = zonePoint(z);
+          add(new Cragscale(this, { x: p.x, y: p.y, elite: this.rollElite(rng) }));
+        }
+      } else {
+        const n = rng.between(4, 6);
+        for (let i = 0; i < n; i++) {
+          const p = zonePoint(z);
+          add(new Duskrunner(this, { x: p.x, y: p.y, elite: this.rollElite(rng) }));
+        }
+      }
+    }
+  }
+
+  // Phase 1 (terrain-that-matters): the generic per-frame environmental-zone query.
+  // Returns how the terrain under a world point affects the player right now — a
+  // movement multiplier (<1 slows) and whether HP regen is suppressed. Built generic
+  // so biome 3's swamp-water slow + miasma no-regen zones just add cases; today the
+  // only live case is a badlands thornfield (slow; regen unaffected).
+  private environmentEffectAt(x: number, y: number): { moveMult: number; blockRegen: boolean } {
+    const z = this.subZoneAt(x, y);
+    if (z && z.type === "thornfield") return { moveMult: BRAMBLE_SLOW_MULT, blockRegen: false };
+    return { moveMult: 1, blockRegen: false };
   }
 
   // Mineable badlands minerals (biome 2 Phase 4) — the smelting economy's raw
@@ -7660,6 +7966,8 @@ export class MainScene extends Phaser.Scene {
   // The instant a condition breaks, we simply stop refreshing it and it
   // expires on its own within its own short durationMs.
   private updateComfortRegen(): void {
+    // No-regen zone (Phase 1, biome-3 miasma) also blocks Comfort's Resting regen.
+    if (this.currentEnvBlockRegen) return;
     const resting = this.placedObjects.some(
       (obj) =>
         obj.getData("itemKey") === "comfort" &&
