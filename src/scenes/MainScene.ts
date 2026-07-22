@@ -32,6 +32,11 @@ import { GremlinKing, STAGGER_DAMAGE_MULTIPLIER } from "../entities/GremlinKing"
 import { Gloamwarden, WARDEN_STAGGER_DAMAGE_MULTIPLIER } from "../entities/Gloamwarden";
 import { Cinderwrought, CINDERWROUGHT_STAGGER_DAMAGE_MULTIPLIER } from "../entities/Cinderwrought";
 import { Duneshaper, DUNESHAPER_STAGGER_DAMAGE_MULTIPLIER } from "../entities/Duneshaper";
+import { Palewake, PALEWAKE_UNRAVEL_DAMAGE_MULTIPLIER } from "../entities/Palewake";
+import { Kilnborn, KILNBORN_VENT_DAMAGE_MULTIPLIER } from "../entities/Kilnborn";
+import { Sanguinarch, SANGUINARCH_ENGORGED_DAMAGE_MULTIPLIER } from "../entities/Sanguinarch";
+import { SunkenCrypt, CRYPT_THEMES, type CryptTheme } from "../entities/SunkenCrypt";
+import { generateCrypt, CRYPT_CELL, type CryptLayout } from "../systems/CryptLayout";
 import type { LootContainer, LootRollEntry } from "../systems/LootContainer";
 import type { ResourceType } from "../systems/Inventory";
 import {
@@ -569,6 +574,50 @@ const TYRANT_ALTAR_CLEAR_RADIUS = 360;
 const TYRANT_ALTAR_FLOOR_RADIUS = 300;
 const TYRANT_ALTAR_GUARD_COUNT = 4; // elite Hexlings guarding each altar
 
+// ===== Sunken Crypts (biome 3 Phase 4c — the dungeon mechanic) =====
+//
+// Interiors live in a POCKET OF THE SAME WORLD rather than a separate Phaser
+// Scene: every system the player carries (run state, HUD, inventory, physics
+// groups, day/night, relics) lives on MainScene, and a second scene would have
+// to duplicate or re-parent all of it. The pocket is the dead corner of the
+// world SQUARE that falls outside the world CIRCLE — physics/camera bounds
+// already cover it (setBounds is the square), drawWorldBoundary already paints
+// it near-black, and every spawn sampler already rejects it because content is
+// gated on biome coverage inside WORLD_RADIUS.
+//
+// Geometry check (do not shrink the margin casually): the corner of this rect
+// nearest world center is (3600, 2600), which is hypot(10400, 11400) ≈ 15432 px
+// from (WORLD_CX, WORLD_CY) — comfortably outside WORLD_RADIUS (14000). Every
+// other point of the rect is further out still.
+const CRYPT_REALM = { x: 200, y: 200, w: 3400, h: 2400 };
+const CRYPT_GRID_COLS = 3;
+const CRYPT_GRID_ROWS = 2;
+const CRYPT_COUNT = CRYPT_GRID_COLS * CRYPT_GRID_ROWS; // 6 — two per gem theme
+const CRYPT_CELL_PAD = 40; // gap between adjacent interiors inside the realm
+const CRYPT_ROOMS_MIN = 5;
+const CRYPT_ROOMS_MAX = 7;
+// Surface entrances: spread across the bayou, with the standing POI exclusion so
+// ordinary swamp content never scatters into a crypt's clearing.
+const CRYPT_MIN_SPACING = 1400;
+const CRYPT_CLEAR_RADIUS = 200;
+const CRYPT_LIGHT_RADIUS = 130; // entrance/brazier night-glow holes
+const CRYPT_VAULT_GEODE_COUNT = 3; // shielded gem geodes per vault
+const CRYPT_VAULT_SEAM_COUNT = 3; // shielded moonsilver seams per vault
+const CRYPT_EXIT_REACH = 46; // stairs are a fat target — never fight the exit
+
+// What a crypt's side-room chest can hold. Richer than a Warren cache (this is
+// the deepest content in the game so far) but deliberately NOT a gem source —
+// the gems are behind the warden, in the vault, always.
+const CRYPT_LOOT_TABLE: LootRollEntry[] = [
+  { key: "moonsilver", min: 1, max: 2, chance: 0.85 },
+  { key: "bog_ore", min: 3, max: 6, chance: 0.8 },
+  { key: "mirehide", min: 1, max: 2, chance: 0.5 },
+  { key: "gloam_shard", min: 1, max: 3, chance: 0.6 },
+  { key: "hex_essence", min: 1, max: 3, chance: 0.5 },
+  { key: "bones", min: 3, max: 6, chance: 0.6 },
+  { key: "refined_trophy_uncommon", min: 1, max: 1, chance: 0.25 },
+];
+
 // The main gameplay scene: build the world, spawn the player and resources,
 // follow the camera, and run the mouse-driven interaction + HUD.
 export class MainScene extends Phaser.Scene {
@@ -770,6 +819,24 @@ export class MainScene extends Phaser.Scene {
     respawnAt: number | null; // S4: armed once fully cleared (bosses dead + ore mined)
   }[] = [];
   private forgeLightPoints: { x: number; y: number }[] = [];
+
+  // Sunken Crypts (biome 3 Phase 4c — the dungeon mechanic). Surface entrances
+  // scattered through the bayou; interiors prebuilt at create() time in the
+  // CRYPT_REALM pocket (see that constant's note). `activeCrypt` is the one the
+  // player is currently inside — it gates the world systems that must not run
+  // in a dungeon (map reveal, surface respawns, the day/night sky). All reset
+  // per run in create() (scene.restart field-init gotcha).
+  private cryptPositions: { x: number; y: number; theme: CryptTheme }[] = [];
+  private crypts: SunkenCrypt[] = [];
+  private activeCrypt: SunkenCrypt | null = null;
+  private cryptReturn: { x: number; y: number } | null = null;
+  // Enemies living inside crypts, excluded from the surface respawn budget so
+  // ~60 dungeon dwellers can't eat RESPAWN_MAX_LIVE and starve the overworld.
+  private cryptEnemies = new Set<Enemy>();
+  private cryptLightPoints: { x: number; y: number }[] = [];
+  private hoveredCrypt: SunkenCrypt | null = null;
+  private hoveredCryptExit: SunkenCrypt | null = null;
+  private hoveredCryptChest: SunkenCrypt | null = null;
   // Right-click "Upgrade / Destroy" popup for any placed object (Workbench,
   // Campfire, Drying Rack, ...) — a single generic system, not per-type.
   private contextMenu!: ContextMenu;
@@ -1095,6 +1162,15 @@ export class MainScene extends Phaser.Scene {
     this.forgePositions = [];
     this.forges = [];
     this.forgeLightPoints = [];
+    this.cryptPositions = [];
+    this.crypts = [];
+    this.activeCrypt = null;
+    this.cryptReturn = null;
+    this.cryptEnemies = new Set();
+    this.cryptLightPoints = [];
+    this.hoveredCrypt = null;
+    this.hoveredCryptExit = null;
+    this.hoveredCryptChest = null;
     this.upgradeTarget = null;
     this.placedLabels = new Map();
     this.placedUpgradeGlyphs = new Map();
@@ -1189,6 +1265,10 @@ export class MainScene extends Phaser.Scene {
     // altars, chosen before spawning so their TYRANT_ALTAR_CLEAR_RADIUS exclusion
     // in pickBadlandsPoint keeps ordinary content off the altar clearings.
     this.tyrantAltarPositions = this.pickTyrantAltarPositions(this.sessionRng());
+    // Sunken Crypt entrances (biome 3 Phase 4c) — picked here, before any
+    // spawning, so CRYPT_CLEAR_RADIUS keeps ordinary bayou content out of each
+    // doorway's clearing (same reason every POI above picks its spot up front).
+    this.cryptPositions = this.pickCryptPositions(this.sessionRng());
 
     // Ground: a repeating grass texture only over the FOREST REGION (biome 1),
     // where it shows through the translucent forest bake. A world-sized tilesprite
@@ -1294,6 +1374,7 @@ export class MainScene extends Phaser.Scene {
     this.spawnBayouNodes();
     this.spawnBayouFlora();
     this.spawnBayouEnemies(); // Phase 4b — the melee-core roster (after the nodes, same as the badlands order)
+    this.spawnSunkenCrypts(solids); // Phase 4c — surface doorways + their prebuilt interiors
     // PB1 Session 3 — populate the forest patchwork blobs beyond BIOME_RADIUS and
     // extend the badlands band beyond BADLANDS_R_MAX_INNER. Called last of the
     // content passes (every POI position is set by now) so their exclusion checks
@@ -1813,6 +1894,16 @@ export class MainScene extends Phaser.Scene {
   // corner minimap and the full map read); a fresh reveal while the full map is
   // open marks its terrain dirty so it repaints.
   private updateMapReveal(): void {
+    // Underground: no fog reveal, no map. Painting the CRYPT_REALM pocket into
+    // the explored-world cache would smear a dungeon across the far corner of
+    // the world map, and a crypt is meant to be navigated by torchlight anyway.
+    if (this.activeCrypt) {
+      this.minimapUI.setHidden(true);
+      this.biomeLabel?.setText(this.activeCrypt.def.name);
+      this.currentBiome = "base"; // force a re-label on the way back out
+      return;
+    }
+    this.minimapUI.setHidden(false);
     this.exploredMap.reveal(this.player.x, this.player.y);
     const changed = this.exploredMap.drainRevealed();
     if (changed.length > 0) this.worldMapUI.markDirty();
@@ -1829,7 +1920,11 @@ export class MainScene extends Phaser.Scene {
   // only spawns while alive.
   private updateDayNight(delta: number): void {
     this.dayNight.tick(delta);
-    this.nightOverlay.render(this.dayNight.nightIntensity01(), this.collectLights());
+    // A crypt is always pitch dark regardless of the sky (biome 3 Phase 4c) —
+    // which is what finally makes the torch/light system load-bearing rather
+    // than a night-time convenience. The clock keeps running underneath.
+    const darkness = this.activeCrypt ? 1 : this.dayNight.nightIntensity01();
+    this.nightOverlay.render(darkness, this.collectLights(), !!this.activeCrypt);
     this.minimapUI.setNightIntensity(this.dayNight.nightIntensity01());
 
     const isNight = this.dayNight.isNight();
@@ -1876,6 +1971,24 @@ export class MainScene extends Phaser.Scene {
       if (!onScreen(shack.x, shack.y)) continue;
       const s = toScreen(shack.x, shack.y);
       lights.push({ x: s.x, y: s.y, radius: POI_LIGHT_RADIUS * z });
+    }
+    // Sunken Crypts — surface doorways glow with their gem's color at night.
+    for (const p of this.cryptLightPoints) {
+      if (!onScreen(p.x, p.y)) continue;
+      const s = toScreen(p.x, p.y);
+      lights.push({ x: s.x, y: s.y, radius: CRYPT_LIGHT_RADIUS * z });
+    }
+    // Interior braziers, but ONLY for the crypt you're standing in. The six
+    // interiors share one grid in CRYPT_REALM and a neighbour is within camera
+    // range, so lighting them all would hang the next dungeon's braziers in the
+    // void beside you — the one place the "it's pitch dark down here" illusion
+    // can actually break.
+    if (this.activeCrypt) {
+      for (const p of this.activeCrypt.braziers) {
+        if (!onScreen(p.x, p.y)) continue;
+        const s = toScreen(p.x, p.y);
+        lights.push({ x: s.x, y: s.y, radius: CRYPT_LIGHT_RADIUS * z });
+      }
     }
     for (const altar of this.bossAltars) {
       if (!onScreen(altar.x, altar.y)) continue;
@@ -1924,6 +2037,10 @@ export class MainScene extends Phaser.Scene {
   // unexplored cells around the player. Tracked in nightSpawns so dawn can cull
   // any that never engaged — density returns to baseline each morning.
   private spawnNightBatch(): void {
+    // Underground there is no nightfall to surge into — and the surge ring is
+    // measured around the PLAYER, so it would drop swamp creatures inside a
+    // sealed crypt.
+    if (this.activeCrypt) return;
     const rng = this.sessionRng();
     // Biome-aware surge (S4): pick each spawn point, then draw its species from
     // THAT point's biome roster via makeRespawnEnemy — so a nightfall out in the
@@ -1950,6 +2067,10 @@ export class MainScene extends Phaser.Scene {
   // out of nightSpawns tracking (now permanent roster). This is what keeps a
   // long multi-night run from accumulating ever-denser enemies.
   private cleanupNightSpawns(): void {
+    // Dawn can't reach a crypt: culling here would judge "off-screen" against a
+    // camera parked underground and quietly delete surface night-spawns the
+    // player never saw resolve. They're culled on the next dawn instead.
+    if (this.activeCrypt) return;
     const cam = this.cameras.main;
     const margin = 80;
     const onScreen = (e: Enemy) =>
@@ -1979,6 +2100,7 @@ export class MainScene extends Phaser.Scene {
   // MAX_LIVE, so a very long roaming run can eventually park at the cap — the cap
   // is generous enough that this stays a non-issue in practice.
   private updateRespawns(delta: number): void {
+    if (this.activeCrypt) return; // no surface top-ups into a dungeon
     this.respawnAccumMs += delta;
     if (this.respawnAccumMs < RESPAWN_TICK_MS) return;
     this.respawnAccumMs = 0;
@@ -1987,8 +2109,14 @@ export class MainScene extends Phaser.Scene {
       e instanceof GremlinKing ||
       e instanceof Gloamwarden ||
       e instanceof Cinderwrought ||
-      e instanceof Duneshaper;
-    const alive = this.enemies.filter((e) => !e.depleted && !isBoss(e));
+      e instanceof Duneshaper ||
+      e instanceof Palewake ||
+      e instanceof Kilnborn ||
+      e instanceof Sanguinarch;
+    // Crypt dwellers are excluded from the surface budget: six prebuilt
+    // interiors hold ~60 enemies that would otherwise permanently consume a
+    // third of RESPAWN_MAX_LIVE and starve the overworld's top-up.
+    const alive = this.enemies.filter((e) => !e.depleted && !isBoss(e) && !this.cryptEnemies.has(e));
     if (alive.length >= RESPAWN_MAX_LIVE) return;
 
     const r2 = RESPAWN_NEARBY_RADIUS * RESPAWN_NEARBY_RADIUS;
@@ -3305,6 +3433,7 @@ export class MainScene extends Phaser.Scene {
   private updateShackGlows(): void {
     for (const shack of this.gremlinShacks) shack.syncGlow();
     for (const den of this.badlandsDens) den.syncGlow();
+    for (const crypt of this.crypts) crypt.syncGlow();
   }
 
   // POI respawn (S4, locked decision 4): every badlands mini-boss POI re-arms
@@ -3678,6 +3807,10 @@ export class MainScene extends Phaser.Scene {
         )
       )
         continue;
+      // Sunken Crypt doorways (Phase 4c): same standing rule — a POI clearing
+      // stays clear, or it reads as visual noise rather than a place.
+      if (this.cryptPositions.some((c) => Phaser.Math.Distance.Between(x, y, c.x, c.y) < CRYPT_CLEAR_RADIUS))
+        continue;
       // Phase 1 macro-zones: keep WILD scatter off a solid rock footprint AND out
       // of a themed sub-zone's core (both empty until zones are placed, so the
       // earlier flora/mineral passes that run before placeBadlandsZones are
@@ -3739,6 +3872,10 @@ export class MainScene extends Phaser.Scene {
         )
       )
         continue;
+      // Sunken Crypt doorways (Phase 4c): same standing rule — a POI clearing
+      // stays clear, or it reads as visual noise rather than a place.
+      if (this.cryptPositions.some((c) => Phaser.Math.Distance.Between(x, y, c.x, c.y) < CRYPT_CLEAR_RADIUS))
+        continue;
       if (this.obstaclePositions.some((o) => Phaser.Math.Distance.Between(x, y, o.x, o.y) < o.r + 34)) continue;
       if (this.worldBiomes.dominantBiomeAt(x, y) !== "bayou") continue;
       if (this.worldBiomes.coverageAt(x, y, "bayou") < minCoverage) continue;
@@ -3792,6 +3929,10 @@ export class MainScene extends Phaser.Scene {
           (a) => Phaser.Math.Distance.Between(x, y, a.x, a.y) < TYRANT_ALTAR_CLEAR_RADIUS,
         )
       )
+        continue;
+      // Sunken Crypt doorways (Phase 4c): same standing rule — a POI clearing
+      // stays clear, or it reads as visual noise rather than a place.
+      if (this.cryptPositions.some((c) => Phaser.Math.Distance.Between(x, y, c.x, c.y) < CRYPT_CLEAR_RADIUS))
         continue;
       if (this.worldBiomes.dominantBiomeAt(x, y) !== "forest") continue;
       if (this.worldBiomes.coverageAt(x, y, "forest") < minCoverage) continue;
@@ -4054,6 +4195,13 @@ export class MainScene extends Phaser.Scene {
   // Keep the player inside the circular world (physics bounds are only the
   // bounding square). Re-pinned every frame — a soft wall at the water's edge.
   private clampPlayerToWorld(): void {
+    // Inside a Sunken Crypt the player is out in the CRYPT_REALM pocket, well
+    // outside the world circle — clamp to the interior's own footprint instead,
+    // or this would yank them back to the swamp every frame.
+    if (this.activeCrypt) {
+      this.clampPlayerToCrypt(this.activeCrypt);
+      return;
+    }
     const dx = this.player.x - WORLD_CX;
     const dy = this.player.y - WORLD_CY;
     const d = Math.hypot(dx, dy);
@@ -5334,6 +5482,10 @@ export class MainScene extends Phaser.Scene {
     x: number,
     y: number,
   ): { moveMult: number; regenMult: number; poisonDps?: number } {
+    // Crypt interiors sit outside every biome blob, so the samplers below would
+    // return neutral anyway — but say it explicitly: dungeon floors are plain
+    // stone, never swamp water or a miasma.
+    if (this.activeCrypt) return { moveMult: 1, regenMult: 1 };
     const z = this.subZoneAt(x, y);
     if (z && z.type === "thornfield") return { moveMult: BRAMBLE_SLOW_MULT, regenMult: 1 };
     // Biome 3 zones are resolved BEFORE the early return so a zone sitting over a
@@ -6065,6 +6217,343 @@ export class MainScene extends Phaser.Scene {
   // every landmark reads as a deliberate, bounded PLACE from a distance — not one
   // structure dropped on open ground. Floor sits just above the baked ground
   // (-7) and below all Y-sorted world objects; ring props Y-sort normally.
+  // ===== Sunken Crypts (biome 3 Phase 4c) =====
+
+  // Entrance positions, picked in create() BEFORE any spawning so
+  // CRYPT_CLEAR_RADIUS can keep ordinary swamp content out of every clearing
+  // (the standing "POI busy = missing exclusion zone" rule). Themes are dealt
+  // two-per-kind and shuffled, so a run always has two shots at each ability.
+  private pickCryptPositions(
+    rng: Phaser.Math.RandomDataGenerator,
+  ): { x: number; y: number; theme: CryptTheme }[] {
+    const themes: CryptTheme[] = ["gloam", "ember", "blood", "gloam", "ember", "blood"];
+    for (let i = themes.length - 1; i > 0; i--) {
+      const j = rng.between(0, i);
+      [themes[i], themes[j]] = [themes[j], themes[i]];
+    }
+    const picked: { x: number; y: number; theme: CryptTheme }[] = [];
+    for (let i = 0; i < CRYPT_COUNT; i++) {
+      let pt: { x: number; y: number } | null = null;
+      let fallback: { x: number; y: number } | null = null;
+      for (let a = 0; a < 90; a++) {
+        // avoidDeepWater: a stone doorway belongs on solid ground, not mid-channel.
+        const cand = this.pickBayouPoint(rng, 0.45, BAYOU_R_MIN, BAYOU_R_MAX, { avoidDeepWater: true });
+        if (!cand) break;
+        fallback = cand;
+        if (picked.every((p) => Phaser.Math.Distance.Between(p.x, p.y, cand.x, cand.y) >= CRYPT_MIN_SPACING)) {
+          pt = cand;
+          break;
+        }
+      }
+      pt = pt ?? fallback;
+      if (!pt) break;
+      picked.push({ x: pt.x, y: pt.y, theme: themes[i % themes.length] });
+    }
+    return picked;
+  }
+
+  // Build every crypt: the surface entrance + its prebuilt interior. Interiors
+  // are laid out on a grid inside CRYPT_REALM (see that constant) — one cell
+  // each, so no two dungeons can ever overlap or leak into each other.
+  private spawnSunkenCrypts(solids: Phaser.Physics.Arcade.StaticGroup): void {
+    const rng = this.sessionRng();
+    this.cryptPositions.forEach((pos, i) => {
+      const crypt = new SunkenCrypt(this, { x: pos.x, y: pos.y, theme: pos.theme });
+      this.crypts.push(crypt);
+      this.cryptLightPoints.push({ x: pos.x, y: pos.y });
+      // Surface dressing so the doorway reads as a place, like every other POI.
+      this.decoratePoi(rng, pos.x, pos.y, {
+        floorTexture: "poi_floor_crypt",
+        floorRadius: 140,
+        ringTexture: "poi_ring_crypt",
+        ringCount: 9,
+        ringRadius: 128,
+      });
+      this.buildCryptInterior(crypt, i, rng, solids);
+    });
+  }
+
+  // The interior itself. CryptLayout carves the floor plan; everything below is
+  // just turning its rects into floors, solid walls, props and content.
+  private buildCryptInterior(
+    crypt: SunkenCrypt,
+    index: number,
+    rng: Phaser.Math.RandomDataGenerator,
+    solids: Phaser.Physics.Arcade.StaticGroup,
+  ): void {
+    const col = index % CRYPT_GRID_COLS;
+    const row = Math.floor(index / CRYPT_GRID_COLS) % CRYPT_GRID_ROWS;
+    const cellW = CRYPT_REALM.w / CRYPT_GRID_COLS;
+    const cellH = CRYPT_REALM.h / CRYPT_GRID_ROWS;
+    const rect = {
+      x: CRYPT_REALM.x + col * cellW + CRYPT_CELL_PAD,
+      y: CRYPT_REALM.y + row * cellH + CRYPT_CELL_PAD,
+      w: cellW - CRYPT_CELL_PAD * 2,
+      h: cellH - CRYPT_CELL_PAD * 2,
+    };
+    const layout = generateCrypt(rng, rect, rng.between(CRYPT_ROOMS_MIN, CRYPT_ROOMS_MAX));
+    crypt.layout = layout;
+
+    // Floors: one TileSprite per room/corridor rect. Tiled (not a stretched
+    // image) so the flagstones keep their grain at room scale.
+    for (const r of [...layout.rooms, ...layout.corridors]) {
+      this.add.tileSprite(r.x, r.y, r.w, r.h, "crypt_floor").setOrigin(0, 0).setDepth(-7);
+    }
+
+    // Walls: merged runs from the layout, each one solid. The player collides
+    // via the existing player↔solids collider; enemies only if they opt in
+    // (collidesWithTerrain), exactly like boulderfield rock.
+    for (const w of layout.walls) {
+      const ts = this.add.tileSprite(w.x, w.y, w.w, w.h, "crypt_wall").setOrigin(0, 0);
+      ts.setDepth(ysortDepth(w.y + w.h));
+      solids.add(ts);
+    }
+
+    // Dressing. Pillars double as the Palewake's tether-breakers, so the gloam
+    // vault gets a few extra — a fight with nothing to hide behind isn't a fight.
+    const occluders: { x: number; y: number; w: number; h: number }[] = layout.walls.map((w) => ({ ...w }));
+    for (const room of layout.rooms) {
+      const isVault = room === layout.vault;
+      const pillars = isVault && crypt.theme === "gloam" ? 4 : rng.between(0, 2);
+      for (let i = 0; i < pillars; i++) {
+        const px = room.x + rng.between(40, Math.max(41, room.w - 40));
+        const py = room.y + rng.between(40, Math.max(41, room.h - 40));
+        const img = this.add.image(px, py, "crypt_pillar").setDepth(ysortDepth(py));
+        solids.add(img);
+        occluders.push({ x: px - 10, y: py - 10, w: 20, h: 20 });
+      }
+      for (let i = 0; i < rng.between(1, 3); i++) {
+        const px = room.x + rng.between(20, Math.max(21, room.w - 20));
+        const py = room.y + rng.between(20, Math.max(21, room.h - 20));
+        this.add.image(px, py, "crypt_rubble").setDepth(ysortDepth(py));
+      }
+      // One brazier per room: the only ambient light down here besides a torch.
+      const bx = room.cx + rng.between(-30, 30);
+      const by = room.y + 26;
+      this.add.image(bx, by, "crypt_brazier").setDepth(ysortDepth(by));
+      crypt.braziers.push({ x: bx, y: by }); // per-crypt, see SunkenCrypt.braziers
+    }
+
+    // Exit stairs in the entry room, and the arrival point right beside them.
+    const stairsX = layout.entry.cx;
+    const stairsY = layout.entry.y + 34;
+    crypt.exitStairs = this.add.image(stairsX, stairsY, "crypt_stairs").setDepth(ysortDepth(stairsY));
+    crypt.entryPoint = { x: stairsX, y: stairsY + 46 };
+
+    // Side-room chest (reuses LootContainer + ChestMenu verbatim).
+    const chest = this.add
+      .image(layout.side.cx, layout.side.cy, "shack_chest")
+      .setDepth(ysortDepth(layout.side.cy));
+    crypt.setChest(chest);
+
+    this.populateCrypt(crypt, rng, occluders);
+  }
+
+  // Stage the crypt's inhabitants: trash through the middle rooms, then the
+  // warden + the SHIELDED vault nodes. The materials are hard-gated on the
+  // encounter — shielded nodes are skipped by hover/prompt/interact entirely
+  // (ResourceNode), so there is no walking past the fight to the loot.
+  private populateCrypt(
+    crypt: SunkenCrypt,
+    rng: Phaser.Math.RandomDataGenerator,
+    occluders: { x: number; y: number; w: number; h: number }[],
+  ): void {
+    const layout = crypt.layout;
+    const addEnemy = (e: Enemy) => {
+      this.enemies.push(e);
+      this.enemyGroup.add(e);
+      this.cryptEnemies.add(e);
+      crypt.enemies.push(e);
+    };
+
+    for (const room of layout.rooms) {
+      if (room === layout.entry || room === layout.vault) continue; // arrival stays safe; the vault is the warden's
+      const spot = () => ({
+        x: room.x + rng.between(24, Math.max(25, room.w - 24)),
+        y: room.y + rng.between(24, Math.max(25, room.h - 24)),
+      });
+      // Deliberately uneven per room (the standing organic-density preference):
+      // some rooms are a swarm, some hold one bruiser, some are nearly empty.
+      const roll = rng.between(1, 10);
+      if (roll <= 4) {
+        for (let i = 0; i < rng.between(3, 5); i++) {
+          const p = spot();
+          addEnemy(new Murkling(this, { x: p.x, y: p.y, elite: this.rollElite(rng) }));
+        }
+      } else if (roll <= 7) {
+        for (let i = 0; i < rng.between(1, 2); i++) {
+          const p = spot();
+          addEnemy(new Blighttoad(this, { x: p.x, y: p.y, elite: this.rollElite(rng) }));
+        }
+      } else if (roll <= 9) {
+        const p = spot();
+        addEnemy(new Mosswretch(this, { x: p.x, y: p.y, elite: this.rollElite(rng, 2) }));
+      } else {
+        const p = spot();
+        addEnemy(new Fenlurker(this, { x: p.x, y: p.y, elite: this.rollElite(rng) }));
+      }
+    }
+
+    // The warden — one bespoke mini-boss per gem theme, each with its own state
+    // machine (see the entity files; they deliberately do NOT share a skeleton).
+    const vault = layout.vault;
+    let warden: Enemy;
+    if (crypt.theme === "gloam") {
+      const pw = new Palewake(this, { x: vault.cx, y: vault.cy });
+      pw.occluders = occluders; // walls + pillars are what break its tether
+      warden = pw;
+    } else if (crypt.theme === "ember") {
+      const kb = new Kilnborn(this, { x: vault.cx, y: vault.cy });
+      kb.arena = { x: vault.x, y: vault.y, w: vault.w, h: vault.h }; // its fire grid IS this room
+      warden = kb;
+    } else {
+      warden = new Sanguinarch(this, { x: vault.cx, y: vault.cy });
+    }
+    crypt.warden = warden;
+    addEnemy(warden);
+
+    // The vault's sealed payoff: gem geodes + moonsilver seams, all shielded
+    // until the warden falls (the Gloaming Vein mechanic, which is exactly why
+    // that mechanic exists). Sealed nodes wear the neutral husk texture and
+    // crack open into their real one.
+    const ring = (count: number, radius: number, phase: number, make: (x: number, y: number) => ResourceNode) => {
+      for (let i = 0; i < count; i++) {
+        const a = phase + (i / count) * Math.PI * 2;
+        const x = vault.cx + Math.cos(a) * radius;
+        const y = vault.cy + Math.sin(a) * radius;
+        const node = make(x, y);
+        this.nodes.push(node);
+        this.obstacleNodes.push(node);
+        crypt.vaultNodes.push(node);
+      }
+    };
+    ring(CRYPT_VAULT_GEODE_COUNT, 96, 0.4, (x, y) =>
+      new ResourceNode(this, {
+        x,
+        y,
+        texture: "gloaming_vein_shielded",
+        resource: crypt.def.gem as ResourceType,
+        amount: 1,
+        action: "mine",
+        displayName: crypt.def.gemLabel,
+        loose: false,
+        health: 3,
+        shielded: true,
+      }),
+    );
+    ring(CRYPT_VAULT_SEAM_COUNT, 132, 1.5, (x, y) =>
+      new ResourceNode(this, {
+        x,
+        y,
+        texture: "gloaming_vein_shielded",
+        resource: "moonsilver",
+        amount: rng.between(2, 3),
+        action: "mine",
+        displayName: "Moonsilver Seam",
+        loose: false,
+        health: 3,
+        shielded: true,
+      }),
+    );
+  }
+
+  // The warden is down: unseal this crypt's vault. Called from the kill tail,
+  // mirroring onGloamwardenKilled/onCinderwroughtKilled.
+  private onCryptWardenKilled(enemy: Enemy): void {
+    const crypt = this.crypts.find((c) => c.warden === enemy);
+    if (!crypt || crypt.vaultOpen) return;
+    crypt.vaultOpen = true;
+    for (const node of crypt.vaultNodes) {
+      const isGem = node.resource === crypt.def.gem;
+      node.crack(isGem ? crypt.def.geodeTexture : "moonsilver_node");
+    }
+    this.eventLog.add("info", `${crypt.def.wardenName} falls — the vault is unsealed`);
+    this.sfx.levelUp();
+  }
+
+  // Enter a crypt: remember where we came in, then teleport into its entry room.
+  // A short camera fade sells the transition (and hides the one-frame jump).
+  private enterCrypt(crypt: SunkenCrypt): void {
+    if (this.activeCrypt) return;
+    this.cryptReturn = { x: this.player.x, y: this.player.y };
+    this.activeCrypt = crypt;
+    this.player.setPosition(crypt.entryPoint.x, crypt.entryPoint.y);
+    (this.player.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0);
+    this.cameras.main.flash(260, 0, 0, 0);
+    this.clearHoverState();
+    this.eventLog.add("poi", `Entered the ${crypt.def.name}`);
+    this.hints.trigger("crypt_dark");
+  }
+
+  // Leave a crypt: back to the surface doorway we came in by. Anything killed or
+  // mined inside stays that way — the interior is prebuilt, never regenerated.
+  private exitCrypt(): void {
+    const crypt = this.activeCrypt;
+    if (!crypt) return;
+    const back = this.cryptReturn ?? { x: crypt.x, y: crypt.y + 40 };
+    this.activeCrypt = null;
+    this.cryptReturn = null;
+    this.player.setPosition(back.x, back.y + 30);
+    (this.player.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0);
+    this.cameras.main.flash(260, 0, 0, 0);
+    this.clearHoverState();
+  }
+
+  // Keep a crypt's inhabitants inside their crypt. Enemies deliberately do NOT
+  // collide with solid terrain by default (`Enemy.collidesWithTerrain` — the
+  // standing rule, so a chaser can't wedge itself on geometry), which means they
+  // can drift through interior walls exactly like they walk through boulders.
+  // That's fine INSIDE a dungeon — it stops doorways being a free escape — but a
+  // wanderer must never leak out into the black realm pocket between crypts, so
+  // each one is pinned to its own footprint. Cheap: 6 crypts × ~10 dwellers.
+  private containCryptEnemies(): void {
+    for (const crypt of this.crypts) {
+      const b = crypt.layout?.bounds;
+      if (!b) continue;
+      for (const e of crypt.enemies) {
+        if (e.depleted) continue;
+        const x = Phaser.Math.Clamp(e.x, b.x + 12, b.x + b.w - 12);
+        const y = Phaser.Math.Clamp(e.y, b.y + 12, b.y + b.h - 12);
+        if (x !== e.x || y !== e.y) e.setPosition(x, y);
+      }
+    }
+  }
+
+  // Drop every hover target + the prompt. Teleporting (crypt in/out) moves the
+  // player out from under the pointer without the pointer moving, so a stale
+  // hover would otherwise survive the transition and offer an interaction with
+  // something now on the other side of the world.
+  private clearHoverState(): void {
+    this.hoveredNode = null;
+    this.hoveredEnemy = null;
+    this.hoveredRack = null;
+    this.hoveredShack = null;
+    this.hoveredDen = null;
+    this.hoveredAltar = null;
+    this.hoveredWorkbench = null;
+    this.hoveredCampfire = null;
+    this.hoveredForge = null;
+    this.hoveredSmelter = null;
+    this.hoveredJewelry = null;
+    this.hoveredCrypt = null;
+    this.hoveredCryptExit = null;
+    this.hoveredCryptChest = null;
+    this.promptText.setVisible(false);
+    this.hoverHighlight.clear();
+  }
+
+  // Clamp the player to the interior's own footprint while inside (the world
+  // circle clamp is meaningless out in the realm pocket). Walls already stop
+  // ordinary movement; this catches a dash/blink through a corner.
+  private clampPlayerToCrypt(crypt: SunkenCrypt): void {
+    const b = crypt.layout.bounds;
+    const m = 16;
+    this.player.setPosition(
+      Phaser.Math.Clamp(this.player.x, b.x + m, b.x + b.w - m),
+      Phaser.Math.Clamp(this.player.y, b.y + m, b.y + b.h - m),
+    );
+  }
+
   private decoratePoi(
     rng: Phaser.Math.RandomDataGenerator,
     cx: number,
@@ -6188,6 +6677,23 @@ export class MainScene extends Phaser.Scene {
       // A prominent discovery popup, same beat as finding a new biome.
       this.eventLog.add("poi", "Discovered: Duskrunner Warren");
       this.hints.trigger("den_found");
+    }
+    // Sunken Crypts (Phase 4c) — one marker PER THEME, so the map itself tells
+    // the player which ability is buried where and a run can be steered toward
+    // the build they want.
+    for (const crypt of this.crypts) {
+      if (crypt.discoveredOnMap) continue;
+      if (!inPoiReveal(crypt.x, crypt.y)) continue;
+      crypt.discoveredOnMap = true;
+      this.exploredMap.addLandmark({
+        worldX: crypt.x,
+        worldY: crypt.y,
+        iconKey: crypt.def.mapMarker,
+        label: crypt.def.name,
+        tint: crypt.def.lightTint,
+      });
+      this.eventLog.add("poi", `Discovered: ${crypt.def.name}`);
+      this.hints.trigger("crypt_found");
     }
     // Sunken Forges (Phase 3 POI 2) — discovered fixed landmarks, fiery
     // orange-red markers, same one-shot treatment as the other POIs.
@@ -6493,6 +6999,66 @@ export class MainScene extends Phaser.Scene {
       }
     }
 
+    // Sunken Crypts (Phase 4c) — three targets sharing one loop: the surface
+    // doorway, and (while inside) the exit stairs + the crypt's chest. Runs last
+    // like the Warren so it respects `best` and wins by nulling the others.
+    let hoveredCrypt: SunkenCrypt | null = null;
+    let hoveredCryptExit: SunkenCrypt | null = null;
+    let hoveredCryptChest: SunkenCrypt | null = null;
+    const takeCryptHover = (d: number) => {
+      hoveredNode = null;
+      hoveredEnemy = null;
+      hoveredRack = null;
+      hoveredShack = null;
+      hoveredAltar = null;
+      hoveredWorkbench = null;
+      hoveredCampfire = null;
+      hoveredForge = null;
+      hoveredSmelter = null;
+      hoveredJewelry = null;
+      hoveredDen = null;
+      best = d;
+    };
+    const hits = (img: Phaser.GameObjects.Image) => {
+      const radius = Math.max(img.displayWidth, img.displayHeight) / 2 + 6;
+      const d = Phaser.Math.Distance.Between(world.x, world.y, img.x, img.y);
+      return d <= radius && d < best ? d : null;
+    };
+    if (this.activeCrypt) {
+      const crypt = this.activeCrypt;
+      if (crypt.exitStairs) {
+        const d = hits(crypt.exitStairs);
+        if (d !== null) {
+          hoveredCryptExit = crypt;
+          hoveredCrypt = null;
+          hoveredCryptChest = null;
+          takeCryptHover(d);
+        }
+      }
+      if (crypt.chestImage) {
+        const d = hits(crypt.chestImage);
+        if (d !== null) {
+          hoveredCryptChest = crypt;
+          hoveredCrypt = null;
+          hoveredCryptExit = null;
+          takeCryptHover(d);
+        }
+      }
+    } else {
+      for (const crypt of this.crypts) {
+        const d = hits(crypt.image);
+        if (d !== null) {
+          hoveredCrypt = crypt;
+          hoveredCryptExit = null;
+          hoveredCryptChest = null;
+          takeCryptHover(d);
+        }
+      }
+    }
+    this.hoveredCrypt = hoveredCrypt;
+    this.hoveredCryptExit = hoveredCryptExit;
+    this.hoveredCryptChest = hoveredCryptChest;
+
     this.hoveredNode = hoveredNode;
     this.hoveredEnemy = hoveredEnemy;
     this.hoveredRack = hoveredRack;
@@ -6536,7 +7102,13 @@ export class MainScene extends Phaser.Scene {
                         ? this.promptForJewelry(hoveredJewelry)
                         : hoveredDen
                           ? this.promptForDen(hoveredDen)
-                          : null;
+                          : hoveredCrypt
+                            ? this.promptForCrypt(hoveredCrypt)
+                            : hoveredCryptExit
+                              ? this.promptForCryptExit(hoveredCryptExit)
+                              : hoveredCryptChest
+                                ? this.promptForCryptChest(hoveredCryptChest)
+                                : null;
     if (prompt) {
       this.promptText.setText(prompt).setColor(this.promptColorFor()).setVisible(true);
       this.input.setDefaultCursor("pointer");
@@ -6559,6 +7131,9 @@ export class MainScene extends Phaser.Scene {
       this.hoveredRack ??
       this.hoveredShack?.chestImage ??
       this.hoveredDen?.target ??
+      this.hoveredCrypt?.image ??
+      this.hoveredCryptExit?.exitStairs ??
+      this.hoveredCryptChest?.chestImage ??
       this.hoveredAltar?.image ??
       this.hoveredWorkbench ??
       this.hoveredCampfire ??
@@ -6579,6 +7154,11 @@ export class MainScene extends Phaser.Scene {
   // - Chop/mine: show the verb ONLY when the matching tool KIND is equipped.
   //   We never reveal which tool/tier is required.
   private promptFor(node: ResourceNode): string | null {
+    // Sealed (Gloaming Vein ore, Sunken Crypt vault geodes) — inert until its
+    // guardian dies. updateHover() already skips shielded nodes so this is
+    // belt-and-braces, but the crypt vault's whole material gate rests on it,
+    // so the rule is stated here too rather than living in one loop's filter.
+    if (node.shielded || node.harvested) return null;
     const inReach =
       Phaser.Math.Distance.Between(this.player.x, this.player.y, node.x, node.y) <= REACH;
     if (!inReach) return null;
@@ -6641,7 +7221,10 @@ export class MainScene extends Phaser.Scene {
       e instanceof GremlinKing ||
       e instanceof Gloamwarden ||
       e instanceof Cinderwrought ||
-      e instanceof Duneshaper
+      e instanceof Duneshaper ||
+      e instanceof Palewake ||
+      e instanceof Kilnborn ||
+      e instanceof Sanguinarch
     )
       return "#ff5a5a";
     if (e.elite) return "#ff9d5c";
@@ -6678,6 +7261,31 @@ export class MainScene extends Phaser.Scene {
     if (!inReach) return null;
     if (!this.equippedWeapon || isRangedWeapon(this.equippedWeapon)) return null;
     return "[LMB] Smash the warren";
+  }
+
+  // A Sunken Crypt doorway: reach-only, like every other "open this" POI. The
+  // prompt names the crypt so the player knows which ability they're diving for
+  // (the entrance runes + map marker already say it in color).
+  private promptForCrypt(crypt: SunkenCrypt): string | null {
+    const inReach = Phaser.Math.Distance.Between(this.player.x, this.player.y, crypt.x, crypt.y) <= REACH;
+    return inReach ? `[LMB] Enter the ${crypt.def.name}` : null;
+  }
+
+  // The exit stairs inside a crypt. Deliberately a generous reach — nobody
+  // should have to fight the camera to leave a dungeon.
+  private promptForCryptExit(crypt: SunkenCrypt): string | null {
+    const stairs = crypt.exitStairs;
+    if (!stairs) return null;
+    const inReach =
+      Phaser.Math.Distance.Between(this.player.x, this.player.y, stairs.x, stairs.y) <= CRYPT_EXIT_REACH;
+    return inReach ? "[LMB] Climb back to the surface" : null;
+  }
+
+  private promptForCryptChest(crypt: SunkenCrypt): string | null {
+    const chest = crypt.chestImage;
+    if (!chest) return null;
+    const inReach = Phaser.Math.Distance.Between(this.player.x, this.player.y, chest.x, chest.y) <= REACH;
+    return inReach ? "[LMB] Open" : null;
   }
 
   // A placed Workbench: prompt to open the combined crafting menu when in
@@ -6767,6 +7375,19 @@ export class MainScene extends Phaser.Scene {
       } else if (den.phase === "attackable") {
         this.tryAttackDen(den);
       }
+      return;
+    }
+    if (this.hoveredCrypt) {
+      if (this.promptForCrypt(this.hoveredCrypt)) this.enterCrypt(this.hoveredCrypt);
+      return;
+    }
+    if (this.hoveredCryptExit) {
+      if (this.promptForCryptExit(this.hoveredCryptExit)) this.exitCrypt();
+      return;
+    }
+    if (this.hoveredCryptChest) {
+      const crypt = this.hoveredCryptChest;
+      if (this.promptForCryptChest(crypt)) this.openChestMenu(crypt.loot, CRYPT_LOOT_TABLE);
       return;
     }
     if (this.hoveredAltar) {
@@ -7021,6 +7642,13 @@ export class MainScene extends Phaser.Scene {
     if (enemy instanceof GremlinKing && enemy.isStaggered()) return STAGGER_DAMAGE_MULTIPLIER;
     if (enemy instanceof Gloamwarden && enemy.isStaggered()) return WARDEN_STAGGER_DAMAGE_MULTIPLIER;
     if (enemy instanceof Cinderwrought && enemy.isStaggered()) return CINDERWROUGHT_STAGGER_DAMAGE_MULTIPLIER;
+    // Crypt wardens (Phase 4c): each has its OWN opening rather than a shared
+    // poise bar — the Palewake's severed tether, the Kilnborn's post-backdraft
+    // vent, the Sanguinarch's engorged phase — but all three funnel through the
+    // same isStaggered() contract so the punish math stays in one place.
+    if (enemy instanceof Palewake && enemy.isStaggered()) return PALEWAKE_UNRAVEL_DAMAGE_MULTIPLIER;
+    if (enemy instanceof Kilnborn && enemy.isStaggered()) return KILNBORN_VENT_DAMAGE_MULTIPLIER;
+    if (enemy instanceof Sanguinarch && enemy.isStaggered()) return SANGUINARCH_ENGORGED_DAMAGE_MULTIPLIER;
     if (enemy instanceof Duneshaper && enemy.isStaggered()) return DUNESHAPER_STAGGER_DAMAGE_MULTIPLIER;
     return 1;
   }
@@ -7467,6 +8095,8 @@ export class MainScene extends Phaser.Scene {
     this.onDenGuardKilled(enemy);
     if (enemy instanceof Gloamwarden) this.onGloamwardenKilled();
     if (enemy instanceof Cinderwrought) this.onCinderwroughtKilled(enemy);
+    if (enemy instanceof Palewake || enemy instanceof Kilnborn || enemy instanceof Sanguinarch)
+      this.onCryptWardenKilled(enemy);
     this.eventLog.add("combat", `Defeated ${enemy.displayName}`);
     this.hoveredEnemy = null;
     this.promptText.setVisible(false);
@@ -7683,7 +8313,15 @@ export class MainScene extends Phaser.Scene {
     // The Gloamwarden/Cinderwrought are mini-bosses — no dedicated score band
     // exists, so they're scored at the elite tier (per the plan's "simplest"
     // open sub-decision).
-    if (enemy instanceof Gloamwarden || enemy instanceof Cinderwrought || enemy.elite) return "elite";
+    if (
+      enemy instanceof Gloamwarden ||
+      enemy instanceof Cinderwrought ||
+      enemy instanceof Palewake ||
+      enemy instanceof Kilnborn ||
+      enemy instanceof Sanguinarch ||
+      enemy.elite
+    )
+      return "elite";
     return "normal";
   }
 
@@ -7799,6 +8437,10 @@ export class MainScene extends Phaser.Scene {
       // Fold any temporary slow (Executioner crit relic) into the same envSpeedMult
       // path every aggressive-movement velocity already reads — no per-subclass wiring.
       enemy.envSpeedMult = envSpeedMult * enemy.slowMult(now);
+      // The Sanguinarch's whole phase machine runs on whether the PLAYER is
+      // bleeding, which update()'s (delta, x, y, now) signature can't express —
+      // so the scene pushes it, the same way envSpeedMult is pushed above.
+      if (enemy instanceof Sanguinarch) enemy.playerBleeding = this.bleed.isBleeding();
       const bit = enemy.update(delta, this.player.x, this.player.y, now);
       if (bit) {
         // Most melee hits carry no knockback; a telegraphed attack that opts
@@ -7837,7 +8479,10 @@ export class MainScene extends Phaser.Scene {
         enemy instanceof Cinderwrought ||
         enemy instanceof Duneshaper ||
         enemy instanceof Hexling ||
-        enemy instanceof Sandmaw
+        enemy instanceof Sandmaw ||
+        enemy instanceof Palewake ||
+        enemy instanceof Kilnborn ||
+        enemy instanceof Sanguinarch
       ) {
         const areaHit = enemy.checkPlayerHit(this.player.x, this.player.y) as
           | {
@@ -7859,6 +8504,7 @@ export class MainScene extends Phaser.Scene {
     }
     this.updatePackAggro(now);
     this.updateDuskrunnerPacks(now);
+    this.containCryptEnemies();
   }
 
   // Duskrunner pack-attack sync (the user: "attack as a pack"). When one dog is
@@ -10313,6 +10959,12 @@ export class MainScene extends Phaser.Scene {
   // blocking menu / the run-end or pause screens.
   private toggleWorldMap(): void {
     if (this.runOver || this.isPaused) return;
+    // No surface map underground — it would center on the CRYPT_REALM pocket,
+    // i.e. a black corner nowhere near the swamp you actually came from.
+    if (this.activeCrypt && !this.worldMapUI.isOpen()) {
+      this.eventLog.add("info", "No use for a map down here.");
+      return;
+    }
     if (!this.worldMapUI.isOpen() && this.anyMenuOpen()) return;
     this.worldMapUI.toggle(this.player.x, this.player.y);
   }
@@ -10477,7 +11129,10 @@ export class MainScene extends Phaser.Scene {
           e instanceof GremlinKing ||
           e instanceof Gloamwarden ||
           e instanceof Cinderwrought ||
-          e instanceof Duneshaper;
+          e instanceof Duneshaper ||
+          e instanceof Palewake ||
+          e instanceof Kilnborn ||
+          e instanceof Sanguinarch;
         const targets = this.enemies.filter(
           (e) => !isBossEnemy(e) && Phaser.Math.Distance.Between(this.player.x, this.player.y, e.x, e.y) <= radius,
         );

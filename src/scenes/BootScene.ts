@@ -1885,6 +1885,12 @@ export class BootScene extends Phaser.Scene {
     mapMarker("map_den", 0xe0a060, 0xc06a34); // Duskrunner Warren — dusty orange-brown
     mapMarker("map_forge", 0xffb050, 0xd6481a); // Sunken Forge — fiery orange-red
     mapMarker("map_tyrant_altar", 0xc79cf0, 0x7a2ec8); // Duneshaper's Altar — gloam violet (the badlands boss landmark)
+    // Sunken Crypts (biome 3 Phase 4c) — one marker PER THEME, because which
+    // crypt you found is the whole point: the map should tell you which ability
+    // is buried there without opening it.
+    mapMarker("map_crypt_gloam", 0xd8c0ff, 0x6a3ec8);
+    mapMarker("map_crypt_ember", 0xffc890, 0xd6601a);
+    mapMarker("map_crypt_blood", 0xff9aa8, 0xa8203a);
 
     // ===== Badlands (biome 2 Phase 2) content =====
 
@@ -3705,6 +3711,244 @@ export class BootScene extends Phaser.Scene {
     amulet("icon_amulet_channeling", 0x9fb0c4, 0x9a5cff, 0xc9a8ff);
     ring("icon_ring_forager", 0x9fb0c4, 0x5ad06a); // explorer — green
     amulet("icon_amulet_farsight", 0x9fb0c4, 0xd8e0ee, 0xffffff);
+
+    // ===== Sunken Crypts (biome 3 Phase 4c — the dungeon mechanic) =====
+    // Interior tiles are drawn as 32x32 SEAMLESS blocks because MainScene lays
+    // them with TileSprites over the generated room/corridor rects — a stretched
+    // single image would smear at crypt scale.
+
+    // Crypt wall block (32x32) — mortared dark stone, faintly wet.
+    g.clear();
+    g.fillStyle(0x24222c, 1);
+    g.fillRect(0, 0, 32, 32);
+    g.fillStyle(0x2e2b38, 1);
+    g.fillRect(1, 1, 14, 14);
+    g.fillRect(17, 1, 14, 14);
+    g.fillRect(1, 17, 30, 14);
+    g.fillStyle(0x191721, 1); // mortar shadow
+    g.fillRect(0, 15, 32, 2);
+    g.fillRect(15, 0, 2, 15);
+    g.fillStyle(0x3a3648, 1); // highlight chips
+    g.fillRect(3, 3, 5, 2);
+    g.fillRect(20, 19, 6, 2);
+    g.generateTexture("crypt_wall", 32, 32);
+
+    // Crypt floor tile (32x32) — worn flagstones, darker than the walls so the
+    // walkable space reads clearly in torchlight.
+    g.clear();
+    g.fillStyle(0x161520, 1);
+    g.fillRect(0, 0, 32, 32);
+    g.fillStyle(0x1e1d29, 1);
+    g.fillRect(1, 1, 30, 30);
+    g.fillStyle(0x141320, 1);
+    g.fillRect(0, 15, 32, 1);
+    g.fillRect(15, 0, 1, 32);
+    g.fillStyle(0x252435, 1);
+    g.fillRect(4, 5, 7, 1); // cracks
+    g.fillRect(21, 22, 6, 1);
+    g.generateTexture("crypt_floor", 32, 32);
+
+    // Burning floor tile (32x32) — Kilnborn's heat sets the flagstones alight;
+    // the tiles that are still cold are the safe ground during a backdraft.
+    g.clear();
+    g.fillStyle(0x2a1410, 1);
+    g.fillRect(0, 0, 32, 32);
+    g.fillStyle(0x8a2c10, 0.9);
+    g.fillRect(2, 2, 28, 28);
+    g.fillStyle(0xff6a1a, 0.85);
+    g.fillRect(6, 8, 20, 16);
+    g.fillStyle(0xffc060, 0.9);
+    g.fillRect(11, 13, 10, 7);
+    g.generateTexture("crypt_floor_burning", 32, 32);
+
+    // Crypt pillar (20x34) — carved column, cracked.
+    g.clear();
+    g.fillStyle(0x1a1822, 1);
+    g.fillRect(2, 28, 16, 6); // base
+    g.fillStyle(0x312e3e, 1);
+    g.fillRect(4, 4, 12, 26); // shaft
+    g.fillStyle(0x3e3a4e, 1);
+    g.fillRect(5, 5, 5, 24); // lit face
+    g.fillStyle(0x1a1822, 1);
+    g.fillRect(1, 0, 18, 5); // capital
+    g.fillRect(9, 12, 2, 9); // crack
+    g.generateTexture("crypt_pillar", 20, 34);
+
+    // Crypt rubble (18x12) — fallen masonry dressing.
+    g.clear();
+    g.fillStyle(0x24222c, 1);
+    g.fillRect(1, 5, 10, 7);
+    g.fillRect(9, 3, 8, 9);
+    g.fillStyle(0x312e3e, 1);
+    g.fillRect(2, 6, 6, 3);
+    g.fillRect(11, 5, 4, 3);
+    g.generateTexture("crypt_rubble", 18, 12);
+
+    // Crypt brazier (18x28) — the only light source down here besides your own
+    // torch; its position feeds collectLights() like the war camp's braziers.
+    g.clear();
+    g.fillStyle(0x1a1822, 1);
+    g.fillRect(7, 14, 4, 14); // stand
+    g.fillRect(4, 26, 10, 2); // foot
+    g.fillStyle(0x312e3e, 1);
+    g.fillRect(3, 10, 12, 6); // bowl
+    g.fillStyle(0xff8a2a, 0.95);
+    g.fillTriangle(4, 11, 14, 11, 9, 2); // flame
+    g.fillStyle(0xffd070, 1);
+    g.fillTriangle(6, 11, 12, 11, 9, 5);
+    g.generateTexture("crypt_brazier", 18, 28);
+
+    // Exit stairs (30x26) — the way back up to the swamp. Deliberately bright at
+    // the top step so it's findable in the dark.
+    g.clear();
+    g.fillStyle(0x14131c, 1);
+    g.fillRect(0, 0, 30, 26);
+    g.fillStyle(0x2e2b38, 1);
+    g.fillRect(2, 18, 26, 6);
+    g.fillStyle(0x3a3648, 1);
+    g.fillRect(5, 12, 20, 6);
+    g.fillStyle(0x4a465c, 1);
+    g.fillRect(8, 6, 14, 6);
+    g.fillStyle(0x8a9a6a, 0.55); // daylight spilling down the shaft
+    g.fillRect(10, 0, 10, 7);
+    g.generateTexture("crypt_stairs", 30, 26);
+
+    // Surface entrance (46x42) — a half-sunken stone doorway in the muck. One
+    // per theme: the lintel runes glow the color of the gem buried inside, so a
+    // player can tell from outside which ability this crypt is hiding.
+    const drawCryptEntrance = (key: string, rune: number, glow: number) => {
+      g.clear();
+      g.fillStyle(0x2a2c30, 1);
+      g.fillRect(2, 12, 42, 30); // sunken stone facade
+      g.fillStyle(0x35373d, 1);
+      g.fillRect(5, 8, 36, 8); // lintel
+      g.fillStyle(0x1f2126, 1);
+      g.fillRect(8, 4, 8, 8); // shoulder blocks
+      g.fillRect(30, 4, 8, 8);
+      g.fillStyle(0x07080a, 1);
+      g.fillRect(14, 16, 18, 26); // the dark doorway itself
+      g.fillStyle(glow, 0.35); // faint light bleeding out of the throat
+      g.fillRect(16, 30, 14, 12);
+      g.fillStyle(rune, 1); // lintel runes
+      g.fillRect(10, 10, 3, 4);
+      g.fillRect(16, 10, 3, 4);
+      g.fillRect(22, 10, 3, 4);
+      g.fillRect(28, 10, 3, 4);
+      g.fillRect(34, 10, 3, 4);
+      g.fillStyle(0x141a12, 1); // swamp muck creeping up the base
+      g.fillRect(0, 38, 46, 4);
+      g.generateTexture(key, 46, 42);
+    };
+    drawCryptEntrance("crypt_entrance_gloam", 0xb98cff, 0x9a5cff);
+    drawCryptEntrance("crypt_entrance_ember", 0xffb060, 0xff6a1a);
+    drawCryptEntrance("crypt_entrance_blood", 0xff8a9a, 0xc02a44);
+
+    // Entrance clearing dressing (soft radial decal + a ring stake), matching
+    // the poiFloor/poi_ring pattern every other POI uses.
+    g.clear();
+    {
+      const S = 160;
+      const c = S / 2;
+      for (let i = 12; i >= 1; i--) {
+        g.fillStyle(0x1a1a24, 0.05);
+        g.fillCircle(c, c, c * (i / 12));
+      }
+      for (let i = 5; i >= 1; i--) {
+        g.fillStyle(0x2e2b38, 0.06);
+        g.fillCircle(c, c, c * 0.42 * (i / 5));
+      }
+      g.generateTexture("poi_floor_crypt", S, S);
+    }
+    g.clear();
+    g.fillStyle(0x2a2c30, 1); // toppled grave marker
+    g.fillRect(3, 6, 8, 16);
+    g.fillStyle(0x35373d, 1);
+    g.fillRect(4, 8, 4, 12);
+    g.fillStyle(0x141a12, 1);
+    g.fillRect(2, 20, 10, 3);
+    g.generateTexture("poi_ring_crypt", 14, 24);
+
+    // --- The three crypt wardens ---
+    // One per gem, each with its own state machine (see the entity files). All
+    // drawn facing RIGHT per the roster convention; no elite recolors — these
+    // are named mini-bosses, not spawnable variants.
+
+    // Palewake (34x42) — the gloam crypt's stalker: a tall, gaunt, hooded shade,
+    // deliberately washed-out and low-contrast (it spends most of the fight
+    // half-there), with one bright tether-eye that is the only thing you can
+    // reliably see when it's stalking.
+    g.clear();
+    g.fillStyle(0x2e2a3e, 1);
+    g.fillTriangle(4, 42, 30, 42, 17, 20); // tattered skirt of the robe
+    g.fillStyle(0x3b3654, 1);
+    g.fillRect(9, 14, 16, 20); // torso
+    g.fillStyle(0x4a4470, 1);
+    g.fillTriangle(9, 16, 25, 16, 17, 2); // hood
+    g.fillStyle(0x07060c, 1);
+    g.fillRect(12, 10, 12, 8); // void under the hood
+    g.fillStyle(0xd8c0ff, 1);
+    g.fillCircle(21, 14, 2.5); // the tether-eye (right-facing)
+    g.fillStyle(0xb98cff, 0.9);
+    g.fillRect(24, 20, 8, 3); // reaching arm
+    g.fillRect(30, 21, 4, 8);
+    g.fillStyle(0x9a5cff, 0.5); // gloam bleed off the hem
+    g.fillRect(6, 36, 22, 3);
+    g.generateTexture("palewake", 34, 42);
+
+    // Kilnborn (40x38) — the ember crypt's furnace-husk: a squat, wide, cracked
+    // kiln of a body with a grated firebox mouth. Wide silhouette on purpose —
+    // it fights by owning the room, not by chasing.
+    g.clear();
+    g.fillStyle(0x2a1c18, 1);
+    g.fillRect(6, 30, 8, 8); // stumpy legs
+    g.fillRect(24, 30, 8, 8);
+    g.fillStyle(0x3d2a22, 1);
+    g.fillRect(4, 8, 32, 24); // kiln body
+    g.fillStyle(0x4d372c, 1);
+    g.fillRect(6, 10, 28, 8); // upper band
+    g.fillStyle(0x0d0806, 1);
+    g.fillRect(20, 18, 16, 10); // firebox mouth (right-facing)
+    g.fillStyle(0xff6a1a, 1);
+    g.fillRect(22, 20, 12, 6);
+    g.fillStyle(0xffd070, 1);
+    g.fillRect(25, 21, 6, 4); // white-hot core
+    g.fillStyle(0xff8a2a, 1); // molten seams cracking the shell
+    g.fillRect(8, 14, 10, 2);
+    g.fillRect(10, 22, 6, 2);
+    g.fillRect(6, 26, 12, 2);
+    g.fillStyle(0x1a120e, 1); // chimney stubs
+    g.fillRect(9, 2, 6, 7);
+    g.fillRect(24, 0, 6, 9);
+    g.fillStyle(0xff8a2a, 0.8);
+    g.fillRect(25, 0, 4, 3);
+    g.generateTexture("kilnborn", 40, 38);
+
+    // Sanguinarch (42x32) — the blood crypt's feeder: a bloated crimson sac of a
+    // body on spidery legs, with a long feeding proboscis at the right. The sac
+    // is the tell — it visibly swells as it drinks (the engorged phase).
+    g.clear();
+    g.fillStyle(0x2a0f16, 1); // spindly legs
+    g.fillRect(8, 22, 3, 10);
+    g.fillRect(15, 24, 3, 8);
+    g.fillRect(23, 24, 3, 8);
+    g.fillRect(29, 22, 3, 10);
+    g.fillStyle(0x7a1626, 1);
+    g.fillEllipse(18, 15, 30, 22); // blood sac
+    g.fillStyle(0xa8203a, 1);
+    g.fillEllipse(16, 13, 20, 14); // taut highlight
+    g.fillStyle(0xd6405a, 0.85);
+    g.fillEllipse(14, 11, 9, 6);
+    g.fillStyle(0x2a0f16, 1); // head + proboscis (right)
+    g.fillRect(30, 10, 8, 9);
+    g.fillTriangle(37, 12, 42, 15, 37, 18);
+    g.fillStyle(0xff9aa8, 1); // clustered eyes
+    g.fillRect(31, 12, 2, 2);
+    g.fillRect(34, 11, 2, 2);
+    g.fillRect(34, 15, 2, 2);
+    g.fillStyle(0x4a0d1a, 1); // gorged veins across the sac
+    g.fillRect(10, 18, 14, 1);
+    g.fillRect(13, 21, 10, 1);
+    g.generateTexture("sanguinarch", 42, 32);
 
     g.destroy();
     this.makeLightTexture();

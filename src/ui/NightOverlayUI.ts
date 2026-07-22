@@ -13,6 +13,12 @@ import Phaser from "phaser";
 const DEPTH = 2700;
 const NIGHT_COLOR = 0x0b1c3a;
 const MAX_NIGHT_ALPHA = 0.42; // "moderate" — clearly night, world stays playable
+// Underground (biome 3 Phase 4c) the same mask runs far darker and colder: a
+// Sunken Crypt should read as PITCH black past your torchlight, not as a dim
+// room. At night's 0.42 you could still make out the next crypt's floor across
+// the void, which is exactly the illusion the dungeon depends on.
+const CRYPT_COLOR = 0x05060a;
+const MAX_CRYPT_ALPHA = 0.94;
 
 export interface ScreenLight {
   x: number; // screen-space center
@@ -41,7 +47,7 @@ export class NightOverlayUI {
 
   // Called every frame. intensity01 0 = full day (overlay hidden, no cost),
   // ramping to 1 at deep night. `lights` are screen-space holes to carve.
-  render(intensity01: number, lights: ScreenLight[]): void {
+  render(intensity01: number, lights: ScreenLight[], underground = false): void {
     if (intensity01 <= 0) {
       if (this.rt.visible) {
         this.rt.clear();
@@ -51,7 +57,10 @@ export class NightOverlayUI {
     }
     this.rt.setVisible(true);
     this.rt.clear();
-    this.rt.fill(NIGHT_COLOR, intensity01 * MAX_NIGHT_ALPHA);
+    this.rt.fill(
+      underground ? CRYPT_COLOR : NIGHT_COLOR,
+      intensity01 * (underground ? MAX_CRYPT_ALPHA : MAX_NIGHT_ALPHA),
+    );
     for (const light of lights) {
       this.brush.setPosition(light.x, light.y).setDisplaySize(light.radius * 2, light.radius * 2);
       this.rt.erase(this.brush);

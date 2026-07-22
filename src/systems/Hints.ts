@@ -31,6 +31,8 @@ export type HintId =
   | "altar_found"
   | "totem_ready"
   | "den_found"
+  | "crypt_found"
+  | "crypt_dark"
   | "bled"
   | "poisoned"
   | "magic_damage";
@@ -107,6 +109,14 @@ const HINT_DEFS: Record<HintId, HintEntry> = {
   den_found: {
     kind: "hint",
     text: "I've found a Duskrunner warren. Something's denned up in there — if I can deal with whatever's guarding it, it might be worth cracking open.",
+  },
+  crypt_found: {
+    kind: "hint",
+    text: "A doorway, half-sunk in the muck, and the stone still humming. Whatever the swamp folk buried down there, they buried it deep — and behind something.",
+  },
+  crypt_dark: {
+    kind: "tutorial",
+    text: "It's pitch black down here. A lit torch in hand is the only way to see what's coming.",
   },
 };
 

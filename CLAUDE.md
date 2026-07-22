@@ -1581,13 +1581,33 @@ below.**
      easy — see [[feedback_size_enemies_against_player]]: size new enemies against the **player's
      measured envelope** (sprint 166-229px/s, dash 450, 220px blink, 45-70 per hit), never against
      the previous biome's roster.
-   - **Phase 4 is sliced into four sessions:** 4a and 4b are done; **4c = DUNGEONS (next)** — where
-     the 3 ability gems + Moonsilver actually live (they were pulled OFF the surface: locked
-     surface/dungeon split — surface = bulk gathering under threat, **dungeon = build-defining
-     materials**), ordered after the roster because a dungeon needs creatures to populate it; then
-     **4d = surface POIs + the Miretyrant boss**, which **becomes the new win-con**, demoting the
-     Duneshaper to a mid-boss and finally making its Heart obtainable. **Then Phase 5** (post-big-boss
-     RNG reward choice). See [[survivor-rpg-biome-3-roadmap]].
+   - **Phase 4 is sliced into four sessions:** 4a, 4b and **4c are done**.
+   - **Phase 4c (B3-P4c) — Sunken Crypts, the DUNGEON mechanic** (plan:
+     `.claude/plans/biome-3-phase-4c-crypts.md`): where the 3 ability gems + Moonsilver actually
+     live, now that they've been pulled OFF the surface (locked surface/dungeon split — surface =
+     bulk gathering under threat, **dungeon = build-defining materials**). **6 crypts, two per gem
+     theme** — which crypt you clear decides which ability you unlock. **Interiors are a pocket of
+     the same world, not a second Phaser Scene** (every system lives on MainScene): prebuilt at
+     `create()` in `CRYPT_REALM`, the dead corner of the world SQUARE that falls outside the world
+     CIRCLE, laid out by a new framework-free `src/systems/CryptLayout.ts` (rooms + L-corridors on a
+     32px grid, walls returned as **merged runs** so six dungeons cost ~600 static bodies, not
+     ~1800). An `activeCrypt` field gates everything that must not run underground (player clamp,
+     map reveal/minimap, surface respawns, nightfall surge, dawn cull), and `NightOverlayUI` gained
+     an **underground mode (0.94 alpha)** so a crypt is pitch black past your torch. **Materials are
+     hard-gated on the encounter**: vault geodes + moonsilver seams spawn `shielded` (the Gloaming
+     Vein mechanic — no prompt, un-mineable) and crack open only on the warden's death; an arena
+     lock was deliberately NOT added (hardcore + no escape = no counterplay). **Three bespoke
+     wardens with three genuinely DIFFERENT state machines** — locked by the user, since Gloamwarden
+     and Cinderwrought both run the same telegraph/poise skeleton where the punish is always "chip
+     the bar": **Palewake** (untargetable while stalking; the only opening is **breaking its
+     drain-tether with a wall/pillar** — a dodge verb interiors made possible), **Kilnborn** (a
+     **heat meter that rises as it acts**, igniting its own vault floor; the backdraft sweeps the
+     burning ground, so the dodge is **cold tiles**, and the punish window comes on the boss's
+     clock), **Sanguinarch** (**the player sets its phase** — its feed only lands while you're
+     bleeding, trading it a heal for your `engorged` punish window). See `STATUS.md`.
+   - Still to come: **4d = surface POIs + the Miretyrant boss**, which **becomes the new win-con**,
+     demoting the Duneshaper to a mid-boss and finally making its Heart obtainable. **Then Phase 5**
+     (post-big-boss RNG reward choice). See [[survivor-rpg-biome-3-roadmap]].
 
 **Not yet built — next up in rough order:**
 6. **World & discovery** — much bigger generated world, biomes, map, a single giant

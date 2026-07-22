@@ -7087,3 +7087,162 @@ fires + decrements 10→9 with Gloamsteel Arrows. Zero console errors.
 
 **Not built (deliberate):** no world source for Bog Ore/Mirehide/gems — that lands in Phase 4 with the
 bayou itself (same authored-dormant pattern as 2b; test via `__dev.give`).
+
+### B3-P4a — Biome-3 Phase 4a: Duskmire Bayou terrain, environment & material sources (2026-07-22, Opus)
+
+Phase 4 of the biome-3 roadmap (`.claude/plans/biome-3-and-new-systems-roadmap.md`), **sliced into
+three sessions** at the user's direction (`AskUserQuestion`): **4a = terrain + environment + sources
+(this)**, 4b = the melee enemy roster, 4c = POIs + the Miretyrant boss + the win-con swap. The bayou
+is now a real, walkable, harvestable third biome — and every material that shipped **dormant** in
+Phases 2b/3 finally has a world source.
+
+**Locked this session (the user):** water **slows by depth, never blocks**; the bayou boss **will**
+become the new win-con (4c); and — the notable one — **`poison` is a SUBTYPE OF MAGIC**.
+
+**Poison damage type.** `IncomingDamageType` gained `"poison"` alongside `fire`. Per the user's call it
+is mechanically a magic subtype, so a new `Weapons.isMagicFamily()` is the helper anything asking "is
+this magic?" for MITIGATION must use — poison bypasses flat armor and is reduced by the *same*
+heavy-armor magic mitigation + Gloamweave Lining channel as a Hexling bolt. Its own identity on top:
+it ticks over time and **suppresses HP regen while active**. New `src/systems/Poison.ts`
+(`PoisonManager`) **composes** `BleedManager` rather than duplicating its stack/tick math, and exposes
+**two application modes** — `apply()` for a discrete stacking dose (creature bites, 4b) and
+`sustain()` for a continuous environmental source (refresh-don't-stack, safe to call every frame).
+`currentEnvBlockRegen` now ORs in `poison.isPoisoned()`, so poison gates food-buff healing and
+Comfort exactly like a no-regen zone. Green damage numbers; a new `poisoned` tutorial hint.
+
+**`src/systems/Bayou.ts`** — palette + `bayouWaterAt()`, same shape as `Badlands.ts`/`Dunes.ts`. The
+shared feature Biome is reinterpreted a third way (forestWeight → cypress hammocks, grassy → open
+muck, creekWeight → deep gloam channels). The water thresholds drive **both** the color and the
+movement penalty, so what looks like deep water always is.
+
+**`WorldBiomes` registration.** `BiomeId` gained `"bayou"` at **tier 3** (unlock radius 6500); the
+content-less **Dunes placeholder was demoted to tier 4** (unlock 10500, the deep frontier) — where it
+always belonged, since it exists only to make the patchwork read as varied. `BIOME_NAMES` →
+"Duskmire Bayou"; ground, minimap, world map, HUD label and the first-entry discovery toast all
+followed automatically.
+
+**Sampler + environment.** `pickBayouPoint` mirrors `pickBadlandsPoint` (dominance-gated, honors every
+POI exclusion) plus an `avoidDeepWater` option so solid/mineable things never sit out in the heavy
+slow. `BadlandsZone` was split into a shared **`ZoneShape`** so the new `BayouZone` reuses `zoneEdge`
+and `drawZoneFloor` verbatim; 14 **miasma zones** (regen-suppressing + 3 dps poison) are the Phase-1
+environment hook's real payoff, each with a decal + fume props so the hazard is legible from outside.
+
+**Content (443 nodes).** Cypress/Mirestone/Driftwood/Shellrock supply the universal `wood`/`stone`
+keys (the "every biome supplies the basics" rule); **Bog Ore** (46) feeds the reforge tier;
+**Moonsilver** (22) the jewelry metal; and **three separate geodes** (9 each) each drop one specific
+ability gem — one node type per gem, honoring Phase 2b's locked "gem source dictates build" rather
+than one geode rolling randomly. Flora: **Swamp Moss** + **Water Lily** (new `ResourceType`s, no
+recipes yet — future ingredients like Emberbloom/Sunfruit), persistent on the Blackberry regrow path;
+lilies deliberately DO generate in deep water (wading for them is the point).
+
+**Two real bugs caught in verification, both fixed:**
+1. **Water slow used a raw coverage cutoff (0.5)** while content placement and the HUD label use
+   *dominance* — so water at the bayou's edge visibly rendered but didn't slow, and the badlands' DRY
+   RAVINE slowed wherever a bayou blob merely overlapped (8/300 samples). Now gated on
+   `dominantBiomeAt`, the one rule that makes "am I in the swamp?" mean the same thing everywhere.
+2. **The miasma stacked to the cap.** Re-applying every frame through the stacking `apply()` path
+   multiplied 3 dps into 15 and killed a full-HP idle test player in ~7s. That's what motivated
+   `sustain()`. Re-verified: 3 dps sustained = exactly 3 damage/sec.
+
+Also tuned: the shallow-water band was widened (0.30/0.62 → 0.22/0.70) after measuring ~80% of bayou
+water as deep, and a uniform **gloam wash** was added to the palette — the biome composited to an
+olive `#525b41` and read as "more green biome" next to the forest. Measured after: forest `#3f6a36`,
+badlands `#755f39`, bayou `#44454b` (cold violet-slate), dunes `#cab47e` — four distinct reads.
+
+**Verified live** (`javascript_tool`): the ceiling curve's unlock radii; biome dominance across the
+whole radial sweep (forest-only inside 2000 → badlands → bayou dominant 6000-10000 → dunes 10000+);
+all 443 nodes in-band with **0 in the wrong biome and 0 in the forest disc**; water multipliers
+(dry 1 / shallow 0.78 / deep 0.5) and **0/400 badlands dry-ravine false positives**; miasma env
+(`blockRegen` + 3 poisonDps) and the real update loop draining **22 HP over 7.53s (expected 22.6)**;
+poison vs magic under a full heavy set (physical 40→8, magic 40→32, **poison 40→32 — identical**,
+confirming the subtype contract); poison sustained/lapse/discrete-stacking math; and every node type
+depleted to its correct loose drop (all 3 gems, bog ore, moonsilver, stone, wood) plus the
+persistent-flora texture swap. `tsc` clean, zero console errors. Screenshot confirms the discovery
+toast, minimap label, violet ground and miasma field.
+
+**SAME-SESSION REDIRECT (the user) — the precious materials moved underground.** After reviewing
+4a, the user redirected: *"I want the key resource nodes to be part of the future Dungeon mechanic —
+think Valheim's burial chambers or sunken crypts. I don't want the most precious things to be found
+on the surface. I want the surface of the bayou to feel dangerous and murky while you look for these
+dungeons. I do still want surface POIs and diverse areas that give the bayou its signature looks."*
+Locked via `AskUserQuestion` and applied this session:
+
+- **Surface/dungeon split.** The three **ability geodes** and **Moonsilver seams** were removed from
+  `spawnBayouNodes` — they're **dungeon-only loot** now. **Bog Ore stays on the surface** on purpose:
+  it's the bulk metal behind the whole Gloamsteel/Mirehide reforge tier, so exploring the swamp still
+  pays while abilities + jewelry stay gated. Their **textures and ResourceNode shapes are kept**, so
+  the dungeon phase re-sites the exact same nodes rather than rebuilding them. `moonsilver` + the 3
+  gems are dormant again in the interim (`__dev.give`) — chosen over a placeholder surface trickle so
+  playtesters never learn the wrong acquisition loop.
+- **Dungeons are their own phase, ordered after 4b** (the enemy roster) and before the boss —
+  a dungeon needs the bayou creatures to populate it, or it's an empty crypt. Phase 4 is now
+  **4a terrain (done) → 4b roster → 4c dungeons → 4d POIs + Miretyrant + win-con swap**.
+- **Three themed macro-zones instead of one**, so the surface carries the biome's signature look now
+  that its payoff moved underground. `BayouZone` widened to `miasma | bonemire | hammock`, all reusing
+  the shared `ZoneShape`/`zoneEdge`/`drawZoneFloor` (6 of each, 18 total): **miasma** = the gloam-fog
+  hazard (no-regen + 3 dps poison); **bonemire** = a drowned boneyard of bleached dead trunks + bone
+  litter that slows to 0.62 (props non-solid, so it stays a place you can flee across); **hammock** =
+  a raised cypress island, **no penalty** and the swamp's densest foraging (cypress + moss/lilies) —
+  the counterweight that makes somewhere worth reaching. New `scatterInZone` helper shared by all
+  three fills. Verified visually: three unmistakably distinct areas.
+
+**Status-effect HUD (`src/ui/StatusBarUI.ts`, new).** the user: *"when you are affected by poison /
+slow there needs to be a symbol status effect on your character somewhere in the HUD."* Built
+**generic** rather than poison-specific — **bleed had shipped since the badlands with no HUD tell at
+all**, so this closes an existing gap and every future debuff gets an icon by adding one row to
+`MainScene.statusEffects()`. A centered row of icons in its own band directly **above** the buff bar
+(fixed offset, so debuff icons don't jump when a food buff starts/expires), in the red/amber that the
+standing "reserve red/green for buff/debuff deltas" convention was holding for exactly this case.
+Handles both flavors of debuff: **timed** ones (poison, bleed) get a depletion meter + a seconds
+countdown, **conditional** ones (slowed, no-regen) simply show while active. `BleedManager`/
+`PoisonManager` gained `remainingMs()`/`dps()` accessors; `currentEnvMoveMult` is now cached beside
+`currentEnvBlockRegen` so the HUD can report *why* you're slow (e.g. "Movement 38% slower here").
+**No Regen is deliberately suppressed while poisoned** — poison's own tooltip already says it stops
+healing, so pairing the icons every time would be pure noise. Verified live: correct set per zone
+type, the no-regen de-duplication both ways, 3 icons rendering with 0 overlap, row centered exactly
+on screen center, depth 2803 (clears WORLD_H), and the hover tooltip.
+
+**Poison regen penalty softened to 50% (the user).** *"Poison shouldn't completely negate regen but
+it should make it significantly worse (50% regen)."* The boolean `blockRegen` became a **multiplier**
+end-to-end: `environmentEffectAt` returns `regenMult`, `currentEnvBlockRegen` became
+`currentRegenMult`, and `BuffManager.tick`'s `suppressHeal` flag became a `regenMult` scalar (buffs
+still tick DOWN at full rate regardless, so a debuff can't be waited out under a food buff).
+`POISON_REGEN_MULT = 0.5`.
+- **The miasma zone's own regen effect moved from a total block to the same 50%.** Called out because
+  it's a change beyond the literal ask: the miasma is currently the game's ONLY poison source, so
+  leaving it at 0 would have made the new 50% rule unobservable in play. `regenMult: 0` is still
+  supported for a future genuine no-heal zone.
+- **Sources take the MINIMUM, not the product** — poisoned inside a miasma is 50%, not a compounded
+  25% the player was never told about.
+- **Bug caught in verification:** the first pass scaled Comfort's `hpPerSec` at apply time *and* let
+  `tick()` scale it again, double-penalizing it to 0.25 HP/s. Now the penalty is applied once,
+  centrally, so every heal source shares the same math.
+- HUD/wording followed: the poison tooltip reads "healing -50%", and the standalone environmental
+  icon is now **"Weakened Healing"** ("Healing 50% weaker here") when reduced-but-nonzero, still
+  "No Regen" at 0.
+- **Verified live:** a 10 HP/s buff heals exactly 10/s clean, 5/s poisoned, 0/s at `regenMult` 0;
+  Comfort 1.0/s clean and 0.5/s poisoned (not 0.25); and end-to-end through the real update loop in a
+  miasma with a food buff, **+19.4 HP over 9.69s against +19.4 expected** (+5/s healing −3/s poison).
+  Poison is now real pressure you can out-heal with good food rather than a hard shutoff.
+
+**Miasma made very common + large (the user).** Zone placement moved from an even 6/6/6 split to
+**per-type targets** (`PLAN` in `placeBayouZones`): **46 miasmas at r 520-780** (avg 652, up from 6 at
+avg 235) vs 8 bonemires + 8 hammocks. Miasma is placed **first** so it claims ground freely, and it's
+the only type allowed near its own kind (`selfSep` 520 vs 700) so neighbouring fog **merges into big
+irregular banks** rather than staying tidy separate discs. A separate, much larger `CROSS_SEP` (1250)
+keeps other types clear — it has to exceed the largest miasma radius plus the other zone's own radius,
+or a fog bank simply swallows the hammock it was meant to spare (and since miasma is placed first,
+`bayouZoneAt` would resolve that overlap in its favour). Fume density now scales with area under a
+cap of 120 — holding the old small-zone density across r-780 blobs would have put thousands of extra
+sprites in the world, and the ground decal already fills the whole organic outline, so fumes read as
+an accent on it rather than as the fog itself.
+**Tuned against measurement, not guesswork:** a first pass at 30 zones/avg r 459 covered only **13.1%**
+of the bayou — common, but not *very* common. At 46/avg 652 it's **34.8% miasma, 62.4% clear ground**,
+so the swamp reads as choked with gloam fog while staying navigable. All 8 hammocks verified intact
+(none swallowed). **No perf cost:** 60 fps standing inside the largest bank (r 777) vs 58 in the
+forest — an earlier 65-vs-71 reading was just an unsettled loop, not a regression.
+
+**Left out of 4a, deliberately:** **Mirehide** has no source yet — it's a *creature* hide, so a node
+source would be dishonest; it lands with the 4b roster. The bayou is also gated out of the
+enemy-respawn/nightfall top-up (`makeRespawnEnemy` returns null for it) so it doesn't spawn forest
+boars in a swamp before 4b ships. No `RECIPES.md`/dashboard change (no new recipes).

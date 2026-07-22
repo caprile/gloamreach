@@ -27,6 +27,8 @@ export class MinimapUI {
   private cy: number;
   private terrain: Phaser.GameObjects.Graphics; // repainted every frame (nearby window)
   private nightDim: Phaser.GameObjects.Rectangle;
+  private panelBg!: Phaser.GameObjects.Rectangle;
+  private hidden = false;
 
   constructor(scene: Phaser.Scene, map: ExploredMap) {
     this.map = map;
@@ -35,7 +37,7 @@ export class MinimapUI {
     this.cx = this.leftX + PANEL_W / 2;
     this.cy = this.topY + PANEL_H / 2;
 
-    scene.add
+    this.panelBg = scene.add
       .rectangle(this.leftX - 1, this.topY - 1, PANEL_W + 2, PANEL_H + 2, 0x000000, 0.5)
       .setOrigin(0, 0)
       .setStrokeStyle(1, BORDER_COLOR)
@@ -55,6 +57,17 @@ export class MinimapUI {
     this.nightDim.setAlpha(Math.min(1, Math.max(0, i01)) * 0.35);
   }
 
+  // Hide the whole panel (biome 3 Phase 4c: there's no surface map underground —
+  // a Sunken Crypt is navigated by torchlight). update() also early-returns while
+  // hidden so it doesn't repaint an off-world position behind the hidden panel.
+  setHidden(hidden: boolean): void {
+    if (hidden === this.hidden) return;
+    this.hidden = hidden;
+    this.panelBg.setVisible(!hidden);
+    this.terrain.setVisible(!hidden);
+    this.nightDim.setVisible(!hidden);
+  }
+
   // Fill a screen-space rect clipped to the panel — cells at the window edge
   // are cropped instead of overflowing into the rest of the HUD (avoids a
   // geometry mask, which is finicky with scrollFactor(0) fixed HUD).
@@ -69,6 +82,7 @@ export class MinimapUI {
   }
 
   update(playerX: number, playerY: number): void {
+    if (this.hidden) return;
     const cell = this.map.cellSize;
     const pcx = playerX / cell; // player position in fractional fog cells
     const pcy = playerY / cell;

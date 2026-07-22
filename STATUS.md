@@ -2,7 +2,36 @@
 
 ## Current State
 
-_Living snapshot — edit in place, never append. Last shipped: **B3-P4b — Biome-3 Phase 4b: the
+_Living snapshot — edit in place, never append. Last shipped: **B3-P4c — Biome-3 Phase 4c: Sunken
+Crypts, the DUNGEON mechanic** (2026-07-22, Opus, plan
+`.claude/plans/biome-3-phase-4c-crypts.md`). The payoff for 4a's locked surface/dungeon split:
+`moonsilver` + the 3 ability geodes had been pulled off the surface and had **no source at all**
+until now — so every jewelry recipe and all three Q/E/R abilities were unreachable. **6 crypts, two
+per gem theme, 5-7 rooms each.** Interiors are a **pocket of the same world**, not a second Scene:
+prebuilt at `create()` in `CRYPT_REALM`, the dead corner of the world SQUARE that lies outside the
+world CIRCLE (measured 15488px from center vs `WORLD_RADIUS` 14000). New framework-free
+`src/systems/CryptLayout.ts` carves rooms + L-corridors on a 32px grid and returns **merged
+horizontal wall runs** (601 static bodies across six dungeons instead of ~1800). `activeCrypt` gates
+everything that must not run underground — player clamp, map reveal + minimap, surface respawns,
+nightfall surge, dawn cull — and `NightOverlayUI` gained an **underground mode at 0.94 alpha** so a
+crypt is pitch black past your torch (at night's 0.42 you could see the next crypt's floor across
+the void); interior braziers are per-crypt so a neighbour's 7 in-range lights don't hang glowing
+beside you. **The materials are hard-gated on the encounter**: vault geodes + moonsilver seams spawn
+`shielded` (the Gloaming Vein mechanic) — no prompt, un-mineable — and crack open only when that
+crypt's warden dies. **Three bespoke wardens with three genuinely different state machines** (locked
+by the user: not one skeleton with new numbers, and different from every previous mini-boss, none of
+which reuse the shared poise-bar punish): **Palewake** (gloam — a stalker that's untargetable while
+stalking; its ONLY opening is **breaking its drain-tether with a wall or pillar**, a dodge verb that
+exists only because we now have interiors), **Kilnborn** (ember — a **heat meter that rises as it
+acts**, setting its own vault floor alight; the backdraft sweeps the burning ground so the dodge is
+**standing on cold tiles**, and the punish window arrives on the boss's clock), and **Sanguinarch**
+(blood — **the player sets its phase**: its feed only lands if you're bleeding, buying it a heal and
+you a fat `engorged` punish window; stay clean and it never opens up). Verified live end-to-end
+(walls hold, sealed→cracked→mined, all three warden loops incl. cold-vs-burning ground and
+bleeding-vs-clean feeds, zero spawns inside a crypt, containment); `tsc` clean, zero console errors.
+**Next: 4d — surface POIs + the Miretyrant boss (the new win-con).** See B3-P4c below +
+[[survivor-rpg-biome-3-roadmap]].
+Prior: **B3-P4b — Biome-3 Phase 4b: the
 Duskmire Bayou creature roster** (2026-07-22, Opus). Six bespoke melee-core creatures + one
 deliberately uncommon ranged haunt, dropped into 4a's terrain. Locked with the user up front: the
 **specced 6**, **Mirehide from the Mirejaw ONLY** (hunting the gator IS the reforge gate), and
@@ -42,8 +71,6 @@ a ~460px leash to ~1500px** (170px/s × 9s — still under a sprint, so running 
 the **Mirejaw gained "stalk patience"** (a real bug: its slow stalk meant a merely-walking player could
 never be ambushed — it fell 537px behind and never engaged; after 2.4s it now abandons stealth and
 hunts); and the **gator sprite is now the biggest common creature** (74×34 on screen).
-**Next: 4c — DUNGEONS.** See B3-P4b below +
-[[survivor-rpg-biome-3-roadmap]].
 Prior: **B3-P4a — Biome-3 Phase 4a:
 Duskmire Bayou terrain, environment & material sources** (2026-07-22, Opus, roadmap
 `.claude/plans/biome-3-and-new-systems-roadmap.md`). Phase 4 was **sliced into three sessions** by
@@ -94,75 +121,11 @@ Prior: **B3-P3 — Biome-3 Phase 3: Bayou gear progression (reforge tier + gem a
 per-instance `upgrades` field + `UpgradeMenu`, plus the Gloamsteel/Mirehide reforge tier, Workbench
 Lvl 5, Gloamsteel Arrows and the lifelink Gloamdrinker. Authored dormant; **4a now sources its Bog
 Ore + gems**; 4b's Mirejaw now sources Mirehide. See B3-P3 in STATUS-archive.md.
-Prior: **B3-P2b — Biome-3 Phase 2b:
-Jewelry-effect pipeline + Gemwright's Table (jewelry station)** (2026-07-21, Opus, plan
-`.claude/plans/biome-3-phase-2b-jewelry-station.md`). Makes 2a's abilities obtainable + lays the jewelry
-economy. **Built live (biome-agnostic):** `src/systems/EquipmentEffects.ts` — the first mechanical
-stat/effect path for equipped non-armor items (rings/amulet), summed on every equip. DELIBERATELY a
-different layer from relics (relics = raw-% combat stats): jewelry is **ability-augment** (−ability
-cooldown / +ability power — scales blink distance + nova dmg/radius) + **utility/explorer** (+magnet
-radius / +bonus-gather chance / +light radius), wired into the ability-cast + magnet/gather/light hooks,
-NOT the relic combat hooks. `ItemDef.passive` holds the data; `describePassive` feeds the Tooltip +
-menu. Rings now fill **either** ring slot (wear two). **New dedicated station** — the placeable
-**Gemwright's Table** (`src/systems/Jewelry.ts` + `src/ui/JewelryMenu.ts`, a near-clone of the
-Campfire+Cooking pattern): its own recipe-list menu, tier-gated by the station's own upgrades —
-**tier 0 = 4 passive rings/amulets; tier 1 = the 3 ability specials**, unlocked by a **Gloamheart
-Setting** upgrade gated on a NEW **Duneshaper's Heart** boss drop (mirrors Gremlin King's Heart →
-Smelter Ember Crucible). **DORMANT / biome-3:** the 4 new materials (Moonsilver + Gloam/Ember/Blood
-gems), all jewelry recipes, and the heart are authored now but have **no in-game source yet** — Moonsilver
-mining, gem drops, and the Duneshaper demotion (its kill currently ends the run, so the heart is
-unreachable) all land in the biome-3 content phases (3/4); test via `__dev.give`. Verified live
-(`javascript_tool`): two-ring resolution + all 5 effect channels exact; ability cooldown −15% on the real
-cast path (5100/6000ms) + HUD sweep match; station tier-gating + tier-0 craft + the heart-gated upgrade
-(0→1, Workbench-proximity-gated per the standing rule, heart consumed, ability recipes unlock) + menu
-render; `tsc` clean, zero console errors. `RECIPES.md` updated (dashboard picks recipes up live). See
-B3-P2b below + [[survivor-rpg-biome-3-roadmap]].
-Prior: **B3-P2a — Biome-3 Phase 2a:
-Activated abilities + Dota QER HUD** (2026-07-21, Opus, plan
-`.claude/plans/biome-3-and-new-systems-roadmap.md`). The Q/E/R **cooldown-only, equipment-granted**
-active-ability framework. An item in a special slot grants one active (`special1→Q`, `special2→E`,
-`back→R`, via `Abilities.SLOT_ABILITY_KEY`); `AbilityDef` is pure data (new `src/systems/Abilities.ts`,
-mirrors the relic-def pattern), effect logic lives in MainScene's `castAbility` dispatcher.
-**3 starter abilities:** **Gloamstep Blink** (Q — 220px teleport toward aim + 250ms i-frames, 6s CD),
-**Gloam Nova** (E — 150px radial magic burst, 30 dmg + 64px shove + brief slow, 10s CD), **Bloodpact**
-(R — a 6s timed **lifelink**: strikes heal 35% of damage dealt via the `resolveWeaponHit` tail, 24s CD;
-locked as lifelink, NOT heal-over-time — the user). New **`src/ui/AbilityBarUI.ts`** — a Dota-style fixed
-Q/E/R bar right of the hotbar (the passive bar owns the left): empty slots show a dim frame + key letter,
-filled slots the ability icon + top-down cooldown sweep + numeric seconds + active-window glow (Bloodpact)
-+ hover tooltip; depth clears WORLD_H. **Sourcing is deliberately dev-only for now** (new `__dev.give(key)`)
-— real sources (epic loot, biome-3 craftables, the post-boss reward picker) are Phase 2b / Phase 5, a
-locked call from the user (avoids pre-committing loot tables the later phases should own). Equip reuses the
-generic `armorSlot` path (zero new equip code); `recomputeAbilities()` runs from `afterItemMove`; **R is
-context-sensitive** (take-all when a chest is open, else cast). Deferred to 2b: gems/jewelry material
-class, epic-loot pool, ring/amulet passive stat aggregation, the 4th (T) slot. `tsc` clean; verified live
-(`javascript_tool`): equip→map, all 3 casts (blink 220px + i-frame + cooldown-gate, nova 20 dmg
-magic-resist-aware + 64px shove, bloodpact heal 35%), empty-slot no-op, run-over/menu guards, and the bar
-renders (icons / cooldown-numeric / active-glow) with no console errors. No `RECIPES.md`/dashboard change
-(dev-only items, no recipes). See B3-P2a below + [[survivor-rpg-biome-3-roadmap]].
-Prior: **B3-P1 / B3-P1a — Biome-3 Phase 1: Terrain-that-matters + badlands macro-zones** (2026-07-21,
-Opus). ~10 large themed sub-zones (`badlandsZones`/`subZoneAt`): boulderfields (solid grey rock in the
-`solids` group — player collides, enemies roll through via `Enemy.collidesWithTerrain`) + thornfields
-(0.6× player slow + rich foraging), each with a bold ground decal + themed enemies; wild content avoids
-zone cores. Generic `environmentEffectAt → {moveMult, blockRegen}` env-zone hook (slow live, no-regen
-DORMANT for the biome-3 miasma). See B3-P1 / B3-P1a below.
-Prior: **PB18 — Backpack armor upgrade fix + reforge-returns-to-slot** (2026-07-18, Opus): right-clicking
-armor opens its Upgrade panel (generic `gearSlot`/`openGearUpgrade`/`applyGearUpgrade`); reforging an
-equipped/hotbar base piece returns the result to that slot. See PB18 below.
-Prior milestones (newest first; full writeups in Recent Entries below or STATUS-archive.md): **PB17**
-(boss tuning + Cinderwrought solo rework + silent placement), **PB16** (crit/Onslaught additive rework
-+ 15 fixes), and the 2026-07-15 8-session playtest plan (**S1–S8**: HUD/UX, onboarding, relic economy +
-single-family redesign, weapon-identity redesign, biome-2 Warbow) — all shipped. Earlier: the entire
-**biome-2 (Sunscorch Badlands) umbrella (Phases 0–5)** — patchwork worldgen, the combat-systems layer,
-the 4-enemy roster (Duskrunner/Cragscale/Hexling/Sandmaw), the Duneshaper win-boss + Sunken Forge /
-Duskrunner Warren POIs, the smelting/forging gear tier (Sunsteel/Duskhide + Embersteel/Emberhide +
-Ember Brand), and the relic rework (family-loadout + tier-2 relics + Ember Shard). Full detail in
-STATUS-archive.md + the milestone plans.
-
-**Meta-loop** (`.claude/plans/roguelike-metaloop-master-plan.md`): M-FX / M-R1 /
-M-DN / Comfort(M-SB) / M-EL2 / M-RL / M-WC all shipped; M-FA cut. Hardcore one-life
-death ends a run and posts a `localStorage` high score; killing the Gremlin King =
-win. The world is now circular + much larger (M-W1 geometry prep, above); deterministic
-seeded world-gen and actual multi-biome content are still deferred to M-W1 proper.
+Prior, in brief (full entries in STATUS.md's Recent Entries or STATUS-archive.md — grep by id):
+**B3-P2b** jewelry-effect pipeline + the Gemwright's Table (a different effect layer from relics);
+**B3-P2a** the Q/E/R cooldown-only, equipment-granted ability framework + Dota-style HUD bar;
+**B3-P1/P1a** terrain-that-matters — large themed macro-zones + the generic `environmentEffectAt`
+env hook; **PB18** backpack armor-upgrade fix + reforge-returns-to-slot.
 
 **In progress / next.** The **biome-2 (Sunscorch Badlands) umbrella is COMPLETE** (all 6 phases 0–5 —
 patchwork worldgen through the relic rework; the badlands is a fully populated second biome with a
@@ -232,6 +195,124 @@ below + [[survivor-rpg-dev-console]].
 ## Recent Entries
 
 > Older entries in STATUS-archive.md.
+
+### B3-P4c — Biome-3 Phase 4c: Sunken Crypts (the dungeon mechanic) (2026-07-22, Opus)
+
+Plan: `.claude/plans/biome-3-phase-4c-crypts.md`. Phase 4c of the biome-3 roadmap — the **dungeon
+mechanic**, and the payoff for 4a's locked surface/dungeon split. In 4a the **most precious
+materials were pulled OFF the surface**: `moonsilver` + the three ability geodes
+(`gem_gloam`/`gem_ember`/`gem_blood`) were removed from the bayou scatter and their node textures
+kept in-repo specifically so this phase could re-site them. Until now those four materials — and
+therefore every jewelry recipe and all three Q/E/R abilities from 2a/2b — had **no in-game source
+at all** (`__dev.give` only). They do now.
+
+**Locked with the user via `AskUserQuestion` (+ two follow-up corrections):** materials come out as
+**mineable nodes deep inside** (re-site the kept geode/seam nodes, not a chest hand-out); **one gem
+per crypt, themed**, so *which crypt you clear decides which ability you unlock*; **6 crypts, ~5-7
+rooms each** (two per theme); **a unique bespoke mini-boss per gem type** — and, on his correction,
+**the materials are hard-gated on beating that encounter** and each warden must feel different
+**from each other AND from every previous mini-boss**, i.e. three genuinely different state machines,
+not one skeleton with new numbers.
+
+**Interiors are a pocket of the same world, not a second Scene.** Every system the player carries
+(run state, HUD, inventory, physics groups, day/night, relics) lives on `MainScene`; a second scene
+would duplicate or re-parent all of it. Instead interiors are prebuilt at `create()` in
+`CRYPT_REALM` — the dead corner of the world SQUARE that falls outside the world CIRCLE. Physics and
+camera bounds already cover it, `drawWorldBoundary()` already paints it near-black, and every spawn
+sampler already rejects it. Geometry is measured, not assumed: the rect's nearest corner is **15488
+px** from world center vs `WORLD_RADIUS` 14000 (verified live across reseeds). Six interiors sit on
+a 3×2 grid inside it, so no two can overlap. Prebuilt (not instanced on demand) means **a
+partially-cleared crypt stays cleared for the run**, matching how all world-gen already works.
+
+**New: `src/systems/CryptLayout.ts`** (framework-free, no Phaser) — carves rooms + L-bend corridors
+on a 32px cell grid, marks the floor, then turns every non-floor cell touching floor into wall.
+Walls come back as **merged horizontal runs**, which is the difference between ~1800 static bodies
+across six dungeons and the **601** actually created (measured live). Also picks `entry` (arrival +
+exit stairs), `vault` (furthest from entry — the payoff is always a real delve) and `side` (furthest
+from both — the loot detour is a detour).
+
+**New: `src/entities/SunkenCrypt.ts`** — the surface doorway + per-crypt state, `BadlandsDen`'s
+plain-data-class split (MainScene owns generation/population). `CRYPT_THEMES` is the single source
+for a theme's entrance art, map marker, geode texture, gem key, warden name and glow color, so one
+decision drives four consistent tells.
+
+**The gate.** Vault geodes + moonsilver seams spawn `shielded: true` — the exact Gloaming Vein
+mechanic (`ResourceNode.shielded` + `crack()`), which is why that mechanic exists. Shielded nodes
+are skipped by hover/prompt/interact entirely, so there is no walking past the fight to the loot;
+the warden's kill handler cracks them into their real textures. **Deliberately NOT done:** sealing
+the vault door behind the player. In a hardcore one-life run an arena lock turns "I misjudged this"
+into "the run is over with no counterplay" — shielding the reward gates the loot without removing
+retreat.
+
+**Three wardens, three different machines** (`src/entities/Palewake.ts` / `Kilnborn.ts` /
+`Sanguinarch.ts`). All extend `Enemy`, fully override `update()`, and route area damage through
+`checkPlayerHit()` → `applyDamageToPlayer` so dash i-frames and armor just work. That is where the
+similarity stops — `Gloamwarden` and `Cinderwrought` both run
+`idle → telegraphing → executing → recovering (+poise → staggered)` where **the punish window is
+always "chip the poise bar"**, and none of these three do that:
+- **Palewake** (gloam → Blink) — *a stalker you cannot always hit.* `stalking` (near-invisible AND
+  **untargetable**, the Sandmaw's rule) → `manifest` → `tether` (channels a draining beam that will
+  not stop on its own) → `unravel` → `vanish`. **No poise bar.** The only opening is **breaking the
+  tether by putting a wall or pillar between you** — a segment-vs-rect test against the crypt's own
+  wall list, i.e. a dodge verb that only exists because this phase introduced interiors. Riding the
+  channel to its natural end gives you nothing. Its vault seeds extra pillars, and it picks flanks
+  with **clear** line-of-sight (a fix caught in verification: without it, it could resolve behind a
+  pillar and hand out a free unravel).
+- **Kilnborn** (ember → Nova) — *the room is the boss.* Driven by a **heat meter that rises as it
+  acts**. Rising heat sets the vault floor alight tile by tile (32px grid, up to 62% of the room —
+  the tile size was cut from 48 after a live check showed a vault holding only 12 tiles, making
+  "cold ground" five chunky squares); at full heat the **backdraft sweeps exactly the burning
+  floor**, so the dodge is not a direction, it's standing on cold ground. The punish window is
+  `venting`, and it arrives on the **boss's** clock — you survive to it, you can't force it.
+- **Sanguinarch** (blood → Bloodpact) — *you set its phase.* Its flurry stacks bleed (existing
+  `pendingBleed`); every ~5s it channels a **feed that resolves against your state at the end** —
+  bleeding when it lands and it drinks (heals 45) and swells into `engorged`: slow, huge slams, and
+  1.7× incoming damage. Deny it and it just stays a fast, frantic, never-vulnerable frenzy. Bleeding
+  is the only way to buy an opening, and it costs you. (`MainScene` pushes `playerBleeding` each
+  frame, the same way `envSpeedMult` is pushed — `update()`'s signature can't express player state.)
+
+**Scene wiring.** `activeCrypt` gates the world systems that must not run underground: the player
+clamp (crypt footprint instead of the world circle), map reveal (no fog painting of the pocket;
+minimap hidden via a new `MinimapUI.setHidden`, biome label shows the crypt's name, world map
+refuses to open), the surface respawn tick, the nightfall surge, and the dawn cull. `NightOverlayUI`
+gained an `underground` mode — **0.94 alpha of near-black vs night's 0.42** — because at night's
+value you could still make out the neighbouring crypt's floor across the void. Interior braziers are
+kept **per crypt** (`SunkenCrypt.braziers`) and only lit for the crypt you're in: verification found
+**7 neighbouring braziers inside camera range** that would otherwise have hung glowing in the dark
+beside you. Crypt dwellers are tracked in a `cryptEnemies` set and **excluded from the surface
+respawn budget** (57 of them would have permanently eaten a third of `RESPAWN_MAX_LIVE`), and pinned
+to their own crypt each frame (`containCryptEnemies`) — enemies keep the standing
+"not blocked by terrain" rule, so doorways aren't a free escape, but a wanderer can never leak into
+the void. Entrance positions are picked before any spawning with a `CRYPT_CLEAR_RADIUS` exclusion in
+all three samplers (the standing "POI busy = missing exclusion zone" rule). Discovery reuses the POI
+quartet with a **per-theme map marker**, so the map itself tells you which ability is buried where.
+
+**Verified live** (`javascript_tool`, each test self-contained): 6 crypts, two per theme, 5-7 rooms,
+601 wall bodies of which **zero** overlap a room center; every interior **15488+ px** from world
+center (outside the 14000 radius); all 6 doorways in real bayou, min spacing 1745, **0 surface nodes
+inside the exclusion** (closest 204px) and 1 cluster-jittered Mosswretch at 190px (the bayou
+spawner jitters members after the exclusion check — noted, harmless, arguably a guard); enter →
+lands in the entry room, exit → back at the doorway; **shoving into a wall at 400px/s moved 10px,
+the same shove in open floor moved 166px**; darkness forced to 1 in-crypt while the sky read 0;
+sealed geodes gave **no prompt and could not be mined**, then cracked to the **correct themed gem**
+(gloam→`geode_gloam`, ember→`geode_ember`, blood→`geode_blood`) + moonsilver seams, and a cracked
+geode mined out in 3 hits to a real drop; chests rolled varied loot; Palewake ticked **10 magic**
+with clear LOS and **unravelled 400ms after a wall was interposed** (`isStaggered` 1.6×); Kilnborn
+lit 31/50 tiles at full heat and dealt **58 fire + 260 knockback on burning ground vs nothing on
+cold ground**, `venting` 1.7×; Sanguinarch **never engorged across 400 ticks while the player wasn't
+bleeding** (health flat) but healed 200→280 and engorged (scale 1.85, slam 50 + 220) when they were;
+all three classify as `elite` kills; a forced respawn tick + nightfall batch inside a crypt spawned
+**0**; a dweller shoved 900px outside its bounds was pinned back inside. `tsc` clean, **zero console
+errors**, screenshot captured of a torchlit interior.
+
+Also fixed in passing: `promptFor()` now refuses `shielded`/`harvested` nodes directly. `updateHover`
+already filtered them, but the crypt vault's entire material gate rests on that rule, so it's stated
+at the prompt layer too rather than living in one loop's filter.
+
+**Not done / next:** **4d — surface POIs + the Miretyrant boss**, which becomes the new win-con
+(demoting the Duneshaper to a mid-boss and finally making its Heart, and therefore the ability
+jewelry, obtainable). Crypts do not respawn once cleared, and there is no crypt-specific minimap —
+both deliberate.
 
 ### B3-P4b — Biome-3 Phase 4b: the Duskmire Bayou creature roster (2026-07-22, Opus)
 
@@ -347,163 +428,3 @@ on crit)**. Against that, the fastest creature in the roster was 104 px/s and th
 **Next: 4c — dungeons** (where the ability gems + Moonsilver actually live, ordered
 after the roster because a dungeon needs creatures), then 4d (surface POIs + the Miretyrant boss +
 the win-con swap).
-
-### B3-P4a — Biome-3 Phase 4a: Duskmire Bayou terrain, environment & material sources (2026-07-22, Opus)
-
-Phase 4 of the biome-3 roadmap (`.claude/plans/biome-3-and-new-systems-roadmap.md`), **sliced into
-three sessions** at the user's direction (`AskUserQuestion`): **4a = terrain + environment + sources
-(this)**, 4b = the melee enemy roster, 4c = POIs + the Miretyrant boss + the win-con swap. The bayou
-is now a real, walkable, harvestable third biome — and every material that shipped **dormant** in
-Phases 2b/3 finally has a world source.
-
-**Locked this session (the user):** water **slows by depth, never blocks**; the bayou boss **will**
-become the new win-con (4c); and — the notable one — **`poison` is a SUBTYPE OF MAGIC**.
-
-**Poison damage type.** `IncomingDamageType` gained `"poison"` alongside `fire`. Per the user's call it
-is mechanically a magic subtype, so a new `Weapons.isMagicFamily()` is the helper anything asking "is
-this magic?" for MITIGATION must use — poison bypasses flat armor and is reduced by the *same*
-heavy-armor magic mitigation + Gloamweave Lining channel as a Hexling bolt. Its own identity on top:
-it ticks over time and **suppresses HP regen while active**. New `src/systems/Poison.ts`
-(`PoisonManager`) **composes** `BleedManager` rather than duplicating its stack/tick math, and exposes
-**two application modes** — `apply()` for a discrete stacking dose (creature bites, 4b) and
-`sustain()` for a continuous environmental source (refresh-don't-stack, safe to call every frame).
-`currentEnvBlockRegen` now ORs in `poison.isPoisoned()`, so poison gates food-buff healing and
-Comfort exactly like a no-regen zone. Green damage numbers; a new `poisoned` tutorial hint.
-
-**`src/systems/Bayou.ts`** — palette + `bayouWaterAt()`, same shape as `Badlands.ts`/`Dunes.ts`. The
-shared feature Biome is reinterpreted a third way (forestWeight → cypress hammocks, grassy → open
-muck, creekWeight → deep gloam channels). The water thresholds drive **both** the color and the
-movement penalty, so what looks like deep water always is.
-
-**`WorldBiomes` registration.** `BiomeId` gained `"bayou"` at **tier 3** (unlock radius 6500); the
-content-less **Dunes placeholder was demoted to tier 4** (unlock 10500, the deep frontier) — where it
-always belonged, since it exists only to make the patchwork read as varied. `BIOME_NAMES` →
-"Duskmire Bayou"; ground, minimap, world map, HUD label and the first-entry discovery toast all
-followed automatically.
-
-**Sampler + environment.** `pickBayouPoint` mirrors `pickBadlandsPoint` (dominance-gated, honors every
-POI exclusion) plus an `avoidDeepWater` option so solid/mineable things never sit out in the heavy
-slow. `BadlandsZone` was split into a shared **`ZoneShape`** so the new `BayouZone` reuses `zoneEdge`
-and `drawZoneFloor` verbatim; 14 **miasma zones** (regen-suppressing + 3 dps poison) are the Phase-1
-environment hook's real payoff, each with a decal + fume props so the hazard is legible from outside.
-
-**Content (443 nodes).** Cypress/Mirestone/Driftwood/Shellrock supply the universal `wood`/`stone`
-keys (the "every biome supplies the basics" rule); **Bog Ore** (46) feeds the reforge tier;
-**Moonsilver** (22) the jewelry metal; and **three separate geodes** (9 each) each drop one specific
-ability gem — one node type per gem, honoring Phase 2b's locked "gem source dictates build" rather
-than one geode rolling randomly. Flora: **Swamp Moss** + **Water Lily** (new `ResourceType`s, no
-recipes yet — future ingredients like Emberbloom/Sunfruit), persistent on the Blackberry regrow path;
-lilies deliberately DO generate in deep water (wading for them is the point).
-
-**Two real bugs caught in verification, both fixed:**
-1. **Water slow used a raw coverage cutoff (0.5)** while content placement and the HUD label use
-   *dominance* — so water at the bayou's edge visibly rendered but didn't slow, and the badlands' DRY
-   RAVINE slowed wherever a bayou blob merely overlapped (8/300 samples). Now gated on
-   `dominantBiomeAt`, the one rule that makes "am I in the swamp?" mean the same thing everywhere.
-2. **The miasma stacked to the cap.** Re-applying every frame through the stacking `apply()` path
-   multiplied 3 dps into 15 and killed a full-HP idle test player in ~7s. That's what motivated
-   `sustain()`. Re-verified: 3 dps sustained = exactly 3 damage/sec.
-
-Also tuned: the shallow-water band was widened (0.30/0.62 → 0.22/0.70) after measuring ~80% of bayou
-water as deep, and a uniform **gloam wash** was added to the palette — the biome composited to an
-olive `#525b41` and read as "more green biome" next to the forest. Measured after: forest `#3f6a36`,
-badlands `#755f39`, bayou `#44454b` (cold violet-slate), dunes `#cab47e` — four distinct reads.
-
-**Verified live** (`javascript_tool`): the ceiling curve's unlock radii; biome dominance across the
-whole radial sweep (forest-only inside 2000 → badlands → bayou dominant 6000-10000 → dunes 10000+);
-all 443 nodes in-band with **0 in the wrong biome and 0 in the forest disc**; water multipliers
-(dry 1 / shallow 0.78 / deep 0.5) and **0/400 badlands dry-ravine false positives**; miasma env
-(`blockRegen` + 3 poisonDps) and the real update loop draining **22 HP over 7.53s (expected 22.6)**;
-poison vs magic under a full heavy set (physical 40→8, magic 40→32, **poison 40→32 — identical**,
-confirming the subtype contract); poison sustained/lapse/discrete-stacking math; and every node type
-depleted to its correct loose drop (all 3 gems, bog ore, moonsilver, stone, wood) plus the
-persistent-flora texture swap. `tsc` clean, zero console errors. Screenshot confirms the discovery
-toast, minimap label, violet ground and miasma field.
-
-**SAME-SESSION REDIRECT (the user) — the precious materials moved underground.** After reviewing
-4a, the user redirected: *"I want the key resource nodes to be part of the future Dungeon mechanic —
-think Valheim's burial chambers or sunken crypts. I don't want the most precious things to be found
-on the surface. I want the surface of the bayou to feel dangerous and murky while you look for these
-dungeons. I do still want surface POIs and diverse areas that give the bayou its signature looks."*
-Locked via `AskUserQuestion` and applied this session:
-
-- **Surface/dungeon split.** The three **ability geodes** and **Moonsilver seams** were removed from
-  `spawnBayouNodes` — they're **dungeon-only loot** now. **Bog Ore stays on the surface** on purpose:
-  it's the bulk metal behind the whole Gloamsteel/Mirehide reforge tier, so exploring the swamp still
-  pays while abilities + jewelry stay gated. Their **textures and ResourceNode shapes are kept**, so
-  the dungeon phase re-sites the exact same nodes rather than rebuilding them. `moonsilver` + the 3
-  gems are dormant again in the interim (`__dev.give`) — chosen over a placeholder surface trickle so
-  playtesters never learn the wrong acquisition loop.
-- **Dungeons are their own phase, ordered after 4b** (the enemy roster) and before the boss —
-  a dungeon needs the bayou creatures to populate it, or it's an empty crypt. Phase 4 is now
-  **4a terrain (done) → 4b roster → 4c dungeons → 4d POIs + Miretyrant + win-con swap**.
-- **Three themed macro-zones instead of one**, so the surface carries the biome's signature look now
-  that its payoff moved underground. `BayouZone` widened to `miasma | bonemire | hammock`, all reusing
-  the shared `ZoneShape`/`zoneEdge`/`drawZoneFloor` (6 of each, 18 total): **miasma** = the gloam-fog
-  hazard (no-regen + 3 dps poison); **bonemire** = a drowned boneyard of bleached dead trunks + bone
-  litter that slows to 0.62 (props non-solid, so it stays a place you can flee across); **hammock** =
-  a raised cypress island, **no penalty** and the swamp's densest foraging (cypress + moss/lilies) —
-  the counterweight that makes somewhere worth reaching. New `scatterInZone` helper shared by all
-  three fills. Verified visually: three unmistakably distinct areas.
-
-**Status-effect HUD (`src/ui/StatusBarUI.ts`, new).** the user: *"when you are affected by poison /
-slow there needs to be a symbol status effect on your character somewhere in the HUD."* Built
-**generic** rather than poison-specific — **bleed had shipped since the badlands with no HUD tell at
-all**, so this closes an existing gap and every future debuff gets an icon by adding one row to
-`MainScene.statusEffects()`. A centered row of icons in its own band directly **above** the buff bar
-(fixed offset, so debuff icons don't jump when a food buff starts/expires), in the red/amber that the
-standing "reserve red/green for buff/debuff deltas" convention was holding for exactly this case.
-Handles both flavors of debuff: **timed** ones (poison, bleed) get a depletion meter + a seconds
-countdown, **conditional** ones (slowed, no-regen) simply show while active. `BleedManager`/
-`PoisonManager` gained `remainingMs()`/`dps()` accessors; `currentEnvMoveMult` is now cached beside
-`currentEnvBlockRegen` so the HUD can report *why* you're slow (e.g. "Movement 38% slower here").
-**No Regen is deliberately suppressed while poisoned** — poison's own tooltip already says it stops
-healing, so pairing the icons every time would be pure noise. Verified live: correct set per zone
-type, the no-regen de-duplication both ways, 3 icons rendering with 0 overlap, row centered exactly
-on screen center, depth 2803 (clears WORLD_H), and the hover tooltip.
-
-**Poison regen penalty softened to 50% (the user).** *"Poison shouldn't completely negate regen but
-it should make it significantly worse (50% regen)."* The boolean `blockRegen` became a **multiplier**
-end-to-end: `environmentEffectAt` returns `regenMult`, `currentEnvBlockRegen` became
-`currentRegenMult`, and `BuffManager.tick`'s `suppressHeal` flag became a `regenMult` scalar (buffs
-still tick DOWN at full rate regardless, so a debuff can't be waited out under a food buff).
-`POISON_REGEN_MULT = 0.5`.
-- **The miasma zone's own regen effect moved from a total block to the same 50%.** Called out because
-  it's a change beyond the literal ask: the miasma is currently the game's ONLY poison source, so
-  leaving it at 0 would have made the new 50% rule unobservable in play. `regenMult: 0` is still
-  supported for a future genuine no-heal zone.
-- **Sources take the MINIMUM, not the product** — poisoned inside a miasma is 50%, not a compounded
-  25% the player was never told about.
-- **Bug caught in verification:** the first pass scaled Comfort's `hpPerSec` at apply time *and* let
-  `tick()` scale it again, double-penalizing it to 0.25 HP/s. Now the penalty is applied once,
-  centrally, so every heal source shares the same math.
-- HUD/wording followed: the poison tooltip reads "healing -50%", and the standalone environmental
-  icon is now **"Weakened Healing"** ("Healing 50% weaker here") when reduced-but-nonzero, still
-  "No Regen" at 0.
-- **Verified live:** a 10 HP/s buff heals exactly 10/s clean, 5/s poisoned, 0/s at `regenMult` 0;
-  Comfort 1.0/s clean and 0.5/s poisoned (not 0.25); and end-to-end through the real update loop in a
-  miasma with a food buff, **+19.4 HP over 9.69s against +19.4 expected** (+5/s healing −3/s poison).
-  Poison is now real pressure you can out-heal with good food rather than a hard shutoff.
-
-**Miasma made very common + large (the user).** Zone placement moved from an even 6/6/6 split to
-**per-type targets** (`PLAN` in `placeBayouZones`): **46 miasmas at r 520-780** (avg 652, up from 6 at
-avg 235) vs 8 bonemires + 8 hammocks. Miasma is placed **first** so it claims ground freely, and it's
-the only type allowed near its own kind (`selfSep` 520 vs 700) so neighbouring fog **merges into big
-irregular banks** rather than staying tidy separate discs. A separate, much larger `CROSS_SEP` (1250)
-keeps other types clear — it has to exceed the largest miasma radius plus the other zone's own radius,
-or a fog bank simply swallows the hammock it was meant to spare (and since miasma is placed first,
-`bayouZoneAt` would resolve that overlap in its favour). Fume density now scales with area under a
-cap of 120 — holding the old small-zone density across r-780 blobs would have put thousands of extra
-sprites in the world, and the ground decal already fills the whole organic outline, so fumes read as
-an accent on it rather than as the fog itself.
-**Tuned against measurement, not guesswork:** a first pass at 30 zones/avg r 459 covered only **13.1%**
-of the bayou — common, but not *very* common. At 46/avg 652 it's **34.8% miasma, 62.4% clear ground**,
-so the swamp reads as choked with gloam fog while staying navigable. All 8 hammocks verified intact
-(none swallowed). **No perf cost:** 60 fps standing inside the largest bank (r 777) vs 58 in the
-forest — an earlier 65-vs-71 reading was just an unsettled loop, not a regression.
-
-**Left out of 4a, deliberately:** **Mirehide** has no source yet — it's a *creature* hide, so a node
-source would be dishonest; it lands with the 4b roster. The bayou is also gated out of the
-enemy-respawn/nightfall top-up (`makeRespawnEnemy` returns null for it) so it doesn't spawn forest
-boars in a swamp before 4b ships. No `RECIPES.md`/dashboard change (no new recipes).
-

@@ -80,13 +80,16 @@ requires standing near a placed Workbench (`MainScene.isNearWorkbench`).
 | Gloamdrinker | Weapons | 1 | Yes (Lvl 5) | 3 Gloamsteel Ingot, 2 Blood Gem, 3 Hex Essence, 2 Moonsilver | Magic 0 | Item (weapon, **magic** — bespoke, **not** a reforge) |
 | Arrows (Gloamsteel) | Weapons | 1 | Yes (Lvl 5) | 1 Gloamsteel Ingot, 5 Wood | — | Item (60x **Gloamsteel Arrows** — its own ammo tier) |
 
-The **bayou (Gloamsteel/Mirehide) tier is now partly sourced.** **Bog Ore** is
+The **bayou (Gloamsteel/Mirehide) tier is now FULLY sourced.** **Bog Ore** is
 surface-mineable in the bayou (Phase 4a) and **Mirehide** drops from the
 **Mirejaw** — and ONLY the Mirejaw (Phase 4b, locked: hunting the gator IS the
-reforge gate). Still dormant: the **3 ability gems + Moonsilver**, which were
-deliberately pulled off the surface and are **dungeon-only loot** (Phase 4c —
-locked surface/dungeon split: surface = bulk gathering under threat, dungeon =
-build-defining materials); test those via `__dev.give`. Every one of the 11
+reforge gate). As of **Phase 4c** the last two dormant materials have a source:
+the **3 ability gems + Moonsilver** are **Sunken Crypt** loot, per the locked
+surface/dungeon split (surface = bulk gathering under threat, dungeon =
+build-defining materials). Each crypt is themed to ONE gem and holds it as
+**shielded geodes in its vault**, un-mineable until that crypt's bespoke warden
+(Palewake / Kilnborn / Sanguinarch) is killed; **Moonsilver** comes from vault
+seams behind the same gate, plus the crypt's side-room chest. Every one of the 11
 reforges consumes its Ember-tier counterpart (roadmap locked decision 6: no fresh
 base sets in biome 3).
 

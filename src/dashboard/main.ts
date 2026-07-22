@@ -284,6 +284,46 @@ const ENEMIES: EnemyStat[] = [
     notes: "Biome 3's ONE ranged creature and deliberately UNCOMMON (~1/3 of any melee species) — the exception that keeps the roster reading melee-core. Fires the game's FIRST HOMING projectile (Projectile.homing): a bounded reversal of the anti-kite governor — 110px/s (under a walking player), 1.5 rad/s turn rate (lateral movement out-turns it into a lazy overshoot), 9s hard lifetime / ~1500px of pursuit (an overshot orb expires instead of orbiting forever). The first pass paired 110px/s with a 4.2s lifetime = a ~460px leash, so orbs 'faded away really soon' and it read as harmless (the user). STANDING STILL is what gets you hit — 170px/s is still under a sprint, so running straight outruns it outright. Magic damage bypasses flat armor, so bayou plate is no answer — footwork is. Holds a ~210px standoff and drifts, but has NO blink/escape, so closing the gap really does beat it. Neutral to physical on purpose (the Hexling's old flat physical resist felt unkillable); weak fire ×1.25 + magic ×1.25. Also the bayou's local HEX ESSENCE source, so forging Gloamsteel doesn't require walking back to the badlands. TUNING PASS 2026-07-22 (the user: 'remember how powerful the player is - think about how fast players will be'): the first numbers were sized against the BADLANDS roster, not a bayou-ready player (sprint 166-229px/s, dash 450, 220px blink, hits for 45-70 / 130-200 crit). Speeds, HP and damage were all raised so the roster can actually reach and threaten that player.",
   },
   {
+    name: "The Palewake (CRYPT WARDEN — gloam)",
+    hp: 240,
+    speed: 96,
+    aggro: 300,
+    attacks: [
+      { label: "Gloam tether (channel, 10 dmg / 450ms, MAGIC — bypasses armor)", damage: 10, telegraphMs: 460 },
+    ],
+    loot: "2-3 Moonsilver + 2-4 Gloam Shard — and unseals the vault's Gloam Geodes + Moonsilver seams",
+    notes:
+      "Biome 3 Phase 4c. Guards a gloam Sunken Crypt. NO POISE BAR — deliberately not the Gloamwarden/Cinderwrought idle→telegraph→execute→recover skeleton (the user: each crypt warden must feel different from each other AND from every previous mini-boss). Loop: stalking (near-invisible AND untargetable, circles to a flank) → manifest → tether (drains you and will NOT stop on its own) → unravel (1.6× damage punish) → vanish. The ONLY way to open it is to BREAK THE TETHER by putting a wall or pillar between you — a dodge verb that only exists because 4c introduced interiors with real occluders. Ride the channel out and you get nothing. Its vault is seeded with extra pillars so there is always something to hide behind, and it picks flanks with clear line-of-sight so the break is the player's work, not a free gift.",
+  },
+  {
+    name: "The Kilnborn (CRYPT WARDEN — ember)",
+    hp: 300,
+    speed: 50,
+    aggro: 300,
+    attacks: [
+      { label: "Ember lash (fire jab)", damage: 30, telegraphMs: 440 },
+      { label: "BACKDRAFT (sweeps the burning floor — cold tiles are safe)", damage: 58, telegraphMs: 1600 },
+      { label: "Burning floor tick (standing in fire)", damage: 7 },
+    ],
+    loot: "2-3 Moonsilver + 2-4 Gloam Shard — and unseals the vault's Ember Geodes + Moonsilver seams",
+    notes:
+      "Biome 3 Phase 4c. Driven by a HEAT meter that RISES AS IT ACTS, not a poise meter that falls as you hit it. Rising heat sets its vault's floor alight tile by tile (32px grid, up to 62% of the room), so the arena shrinks as the fight runs; at full heat it detonates a backdraft that sweeps exactly the ground that is already burning — the dodge is not a direction, it's standing on COLD ground. The punish window is `venting` (1.7× damage), which arrives on the BOSS's clock: you survive to it, you can't force it early. All damage is `fire` (bypasses flat armor; heavy-armor magic/fire mitigation is the counter). Resists blunt ×0.75 / fire ×0.4, weak to pierce ×1.25.",
+  },
+  {
+    name: "The Sanguinarch (CRYPT WARDEN — blood)",
+    hp: 280,
+    speed: 88,
+    aggro: 300,
+    attacks: [
+      { label: "Flurry (fast, stacks BLEED 6 dps / 5s — the bleed is the payload)", damage: 15, telegraphMs: 300 },
+      { label: "Engorged slam (AoE 96px + 220 knockback)", damage: 50, telegraphMs: 720 },
+      { label: "Feed (channel — heals 45 ONLY if you are bleeding)", damage: 0, telegraphMs: 1500 },
+    ],
+    loot: "2-3 Moonsilver + 2-4 Gloam Shard — and unseals the vault's Blood Geodes + Moonsilver seams",
+    notes:
+      "Biome 3 Phase 4c. THE PLAYER sets its phase, not the boss. Its flurry stacks bleed; every ~5s it channels a feed that resolves against your state AT THE END — bleeding when it lands and it drinks (heals 45) and swells into `engorged`: slow, huge slams, and 1.7× incoming damage for 6.5s. Deny it (dodge the flurry, or outlast the stacks through the channel) and it simply stays a fast, frantic, never-vulnerable frenzy. So bleeding is the only way to buy an opening, and it costs you. Resists blunt ×0.75, weak slash ×1.3.",
+  },
+  {
     name: "Gremlin King (BOSS)",
     hp: 600,
     speed: 45,
