@@ -607,6 +607,26 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     maxStack: 99,
     hotbarable: false,
   },
+  // --- bayou harvestables (biome 3 Phase 4a). Like Emberbloom/Sunfruit these
+  // have NO recipe yet — they're authored as future alchemy/food ingredients and
+  // surface only via the discovered-material toast. ---
+  swamp_moss: {
+    key: "swamp_moss",
+    name: "Swamp Moss",
+    description: "A damp mat of moss that drinks the gloam out of the water. It keeps its cold long after you pull it free.",
+    texture: "icon_swamp_moss",
+    maxStack: 99,
+    hotbarable: false,
+  },
+  water_lily: {
+    key: "water_lily",
+    name: "Water Lily",
+    description: "A pale bloom floating on the black channels. It opens only where the water runs deepest.",
+    texture: "icon_water_lily",
+    maxStack: 99,
+    hotbarable: false,
+  },
+
   dustbloom: {
     key: "dustbloom",
     name: "Dustbloom",
@@ -1633,7 +1653,7 @@ const BAYOU_ITEM_KEYS = new Set<string>([
   "amulet_farsight", "special_gloamstep_band", "special_gloam_focus",
   "back_bloodpact_shroud",
   // bayou gear tier (Phase 3)
-  "bog_ore", "gloamsteel_ingot", "mirehide",
+  "bog_ore", "gloamsteel_ingot", "mirehide", "swamp_moss", "water_lily",
   "gloamsteel_helm", "gloamsteel_cuirass", "gloamsteel_greaves",
   "mirehide_hood", "mirehide_vest", "mirehide_leggings",
   "gloamsteel_warhammer", "gloamsteel_sword", "gloamsteel_pike",

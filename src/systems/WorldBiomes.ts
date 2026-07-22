@@ -4,6 +4,7 @@ import { blendColors, mottleColor } from "./colorUtil";
 import { forestTerrainColorAt } from "./ExploredMap";
 import { badlandsGroundColorAt } from "./Badlands";
 import { dunesGroundColorAt } from "./Dunes";
+import { bayouGroundColorAt } from "./Bayou";
 
 // The patchwork world map (biome-2 Phase 0). Decides WHICH biome type covers each
 // world point, Valheim-style: a universal base layer with biome "blobs" painted on
@@ -23,7 +24,7 @@ import { dunesGroundColorAt } from "./Dunes";
 // generator for its internal look. worldBiomeColorAt composites base + all biomes and
 // is the single source of truth for both the terrain bake and the map.
 
-export type BiomeId = "forest" | "badlands" | "dunes";
+export type BiomeId = "forest" | "badlands" | "bayou" | "dunes";
 
 // Every blob biome + the danger tier it sits at. Forest (tier 1) IS in the pool now
 // (it spawns as outer blobs too); the protected center chunk is additionally
@@ -31,7 +32,8 @@ export type BiomeId = "forest" | "badlands" | "dunes";
 const BIOMES: { id: BiomeId; tier: number }[] = [
   { id: "forest", tier: 1 },
   { id: "badlands", tier: 2 },
-  { id: "dunes", tier: 3 },
+  { id: "bayou", tier: 3 },
+  { id: "dunes", tier: 4 },
 ];
 
 const FOREST_CORE = 2000; // forest chunk is solid (coverage 1) within this radius
@@ -41,11 +43,16 @@ const FOREST_EDGE = 2300; // guaranteed forest chunk fully gone by here
 // tier T only becomes eligible once ceiling(r) >= T, giving each biome a hard
 // "unlock radius" (the ordering guarantee) while lower biomes stay eligible outward.
 // Tuned so: forest-only inside ~2400, badlands from ~2400, dunes from ~6500.
+// Biome 3 (bayou) TOOK tier 3 and its 6500 unlock radius; the content-less Dunes
+// placeholder was demoted to tier 4 / the deep frontier, which is where it always
+// belonged (it exists only to make the patchwork visibly varied, and everything
+// past ~10500 is deliberately reserved for a future biome).
 const CEILING_POINTS: [number, number][] = [
   [FOREST_EDGE, 1],
   [2400, 2], // badlands unlocks
-  [6500, 3], // dunes unlocks
-  [14000, 4], // headroom (dunes stays top biome until biome 4 exists)
+  [6500, 3], // bayou unlocks
+  [10500, 4], // dunes unlocks (deep frontier)
+  [14000, 5], // headroom (dunes stays top biome until biome 5 exists)
 ];
 // How fast a below-ceiling biome's weight falls off (bigger = lower biomes rarer).
 const LOWER_FALLOFF = 0.9;
@@ -247,6 +254,8 @@ export class WorldBiomes {
     let color = blendColors(BASE_GRASS, BASE_DUST, this.baseGrade(r));
     const bC = this.coverageAt(x, y, "badlands");
     if (bC > 0.01) color = blendColors(color, badlandsGroundColorAt(x, y, this.outerFeature), bC);
+    const yC = this.coverageAt(x, y, "bayou");
+    if (yC > 0.01) color = blendColors(color, bayouGroundColorAt(x, y, this.outerFeature), yC);
     const dC = this.coverageAt(x, y, "dunes");
     if (dC > 0.01) color = blendColors(color, dunesGroundColorAt(x, y, this.outerFeature), dC);
     // Forest: the guaranteed center chunk (real crisp features) OR an outer blob.

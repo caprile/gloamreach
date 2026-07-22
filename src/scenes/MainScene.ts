@@ -111,6 +111,7 @@ import { Hotbar, ROW1_COUNT } from "../systems/Hotbar";
 import { ProcessingStation, PROCESS_RECIPES, SMELT_RECIPES } from "../systems/Processing";
 import { BuffManager } from "../systems/Buffs";
 import { BleedManager } from "../systems/Bleed";
+import { PoisonManager } from "../systems/Poison";
 import { COOK_RECIPES, type CookRecipe } from "../systems/Cooking";
 import { CraftingMenu } from "../ui/CraftingMenu";
 import { ContextMenu, type ContextMenuItem } from "../ui/ContextMenu";
@@ -142,6 +143,7 @@ import { BossHealthUI, type BossBarTarget } from "../ui/BossHealthUI";
 import { FogOfWar, REVEAL_RADIUS } from "../systems/Fog";
 import { ExploredMap } from "../systems/ExploredMap";
 import { WorldBiomes, type BiomeId } from "../systems/WorldBiomes";
+import { bayouWaterAt } from "../systems/Bayou";
 
 // Display names for the current-biome HUD label + discovery toast. Placeholder
 // flavor (Gloamreach setting) — easy to rename. "base" = the open wilds between
@@ -149,6 +151,7 @@ import { WorldBiomes, type BiomeId } from "../systems/WorldBiomes";
 const BIOME_NAMES: Record<BiomeId | "base", string> = {
   forest: "Verdant Woods",
   badlands: "Sunscorch Badlands",
+  bayou: "Duskmire Bayou",
   dunes: "Windswept Dunes",
   base: "The Wilds",
 };
@@ -363,14 +366,23 @@ const BRAMBLE_SLOW_MULT = 0.6;
 // so zones read as organic lumpy blobs, not perfect circles. The one shape (zoneEdge)
 // is shared by subZoneAt (membership), the prop fill, and the ground decal so they
 // all line up. `wAmp` is the wobble amplitude as a fraction of the base radius `r`.
-interface BadlandsZone {
-  type: "boulderfield" | "thornfield";
+interface ZoneShape {
   x: number;
   y: number;
   r: number;
   wK: number;
   wPhase: number;
   wAmp: number;
+}
+interface BadlandsZone extends ZoneShape {
+  type: "boulderfield" | "thornfield";
+}
+// A bayou macro-zone (biome 3 Phase 4a). Same organic wobbly-blob shape as a
+// badlands zone — only the effect differs, so it shares ZoneShape/zoneEdge rather
+// than duplicating the geometry. "miasma" is the gloam fog: it suppresses HP regen
+// AND ticks poison, which is the biome's signature environmental threat.
+interface BayouZone extends ZoneShape {
+  type: "miasma";
 }
 // Sum of the three harmonic weights below — the max |wobble|, used to bound a zone's
 // outermost lobe (rMax = r * (1 + wAmp * WOBBLE_MAX)) for POI-clearance checks.
@@ -484,6 +496,18 @@ const BADLANDS_R_MAX_INNER = 5200; // the original "accessible inner band" ceili
 // biome per the roadmap, not silently backfilled with biome-1/2 content.
 const BADLANDS_R_MAX_OUTER = 8500;
 const OUTER_FOREST_R_MAX = 6000;
+// Bayou band (biome 3). Starts at its WorldBiomes unlock radius (6500) and runs
+// out to the deep frontier where the Dunes placeholder takes over — so a player
+// pushing past the badlands finds it, and it never laps the forest disc.
+const BAYOU_R_MIN = 6400;
+const BAYOU_R_MAX = 10500;
+// Water movement penalties (locked: slow BY DEPTH, never blocks — the swamp stays
+// fully traversable). Shallow muck is a nuisance; a deep gloam channel is a real
+// commitment you can be caught in.
+const BAYOU_SHALLOW_SLOW_MULT = 0.78;
+const BAYOU_DEEP_SLOW_MULT = 0.5;
+// Miasma: no HP regen inside, plus a slow poison tick (see Poison.ts).
+const MIASMA_POISON_DPS = 3;
 const POI_DEEP_R_MIN = 3600;
 // Keep distinct POI types from crowding each other (S4). Enforced in the pickers
 // against every already-placed POI center, on top of each POI's own clear radius.
@@ -687,6 +711,8 @@ export class MainScene extends Phaser.Scene {
   // from environmentEffectAt (dormant in biome 2 — wired for biome-3 miasma). All
   // reset per run (scene.restart field-init gotcha).
   private badlandsZones: BadlandsZone[] = [];
+  // Biome-3 miasma zones (see BayouZone) — the bayou's environmental hazard.
+  private bayouZones: BayouZone[] = [];
   private obstaclePositions: { x: number; y: number; r: number }[] = [];
   private currentEnvBlockRegen = false;
 
@@ -797,6 +823,7 @@ export class MainScene extends Phaser.Scene {
   // HUD strip above the HP bar. See Buffs.ts / BuffBarUI.ts.
   private buffs = new BuffManager();
   private bleed = new BleedManager();
+  private poison = new PoisonManager();
   private buffBarUI!: BuffBarUI;
   private healthBarBg!: Phaser.GameObjects.Rectangle;
   private healthBarFill!: Phaser.GameObjects.Rectangle;
@@ -1023,6 +1050,7 @@ export class MainScene extends Phaser.Scene {
     this.veinDiscoveredOnMap = false;
     this.veinLightPoints = [];
     this.badlandsZones = [];
+    this.bayouZones = [];
     this.obstaclePositions = [];
     this.currentEnvBlockRegen = false;
     this.badlandsDens = [];
@@ -1047,6 +1075,7 @@ export class MainScene extends Phaser.Scene {
     this.enemies = [];
     this.health = new Health();
     this.bleed = new BleedManager();
+    this.poison = new PoisonManager();
     this.buffs = new BuffManager();
     // 2 -> 3: Comfort's "Resting" buff shouldn't have to fight two
     // simultaneous food buffs for one of only 2 slots.
@@ -1222,6 +1251,12 @@ export class MainScene extends Phaser.Scene {
     this.spawnBadlandsNodes(); // wood/stone gatherables + gated Ironbark tree (every biome supplies the basics)
     this.spawnBadlandsEnemies(); // biome 2 Phase 2 — out in the badlands patchwork (avoids zones)
     this.spawnZoneEnemies(); // themed enemies inside each sub-zone
+    // Biome 3 (Duskmire Bayou) Phase 4a — terrain content + material sources.
+    // Zones first so their poison fields are placed before anything scatters.
+    this.placeBayouZones();
+    this.spawnBayouZoneContent();
+    this.spawnBayouNodes();
+    this.spawnBayouFlora();
     // PB1 Session 3 — populate the forest patchwork blobs beyond BIOME_RADIUS and
     // extend the badlands band beyond BADLANDS_R_MAX_INNER. Called last of the
     // content passes (every POI position is set by now) so their exclusion checks
@@ -1625,7 +1660,21 @@ export class MainScene extends Phaser.Scene {
     // Player.update's env multiplier; blockRegen is cached for the regen gates
     // later this frame (dormant in biome 2, live for biome-3 miasma).
     const env = this.environmentEffectAt(this.player.x, this.player.y);
-    this.currentEnvBlockRegen = env.blockRegen;
+    // Regen is suppressed by a no-regen zone (miasma) OR by being poisoned — the
+    // second half of poison's identity as a magic subtype (see Poison.ts). One
+    // cached flag drives every regen gate (food buffs + Comfort), so a new
+    // suppression source only ever has to OR in here.
+    this.currentEnvBlockRegen = env.blockRegen || this.poison.isPoisoned();
+    // Standing in a miasma keeps re-applying a short poison stack, so leaving the
+    // zone lets it lapse on its own rather than needing a separate "exit" event.
+    if (env.poisonDps && env.poisonDps > 0 && !this.isDead) {
+      // sustain(), NOT apply() — this runs every frame while the player stands in
+      // the fog, and a stacking application would multiply the intended DPS by
+      // the stack cap (see Poison.ts). The short duration is what makes leaving
+      // the zone self-cleaning: stop re-arming and it lapses on its own.
+      this.poison.sustain(env.poisonDps, 900);
+      this.hints.trigger("poisoned");
+    }
     const frame = this.player.update(delta, canSprint, canDash, sprintMultiplier, moveMult, dashDistMult, inputEnabled, env.moveMult);
     this.clampPlayerToWorld();
 
@@ -1666,6 +1715,27 @@ export class MainScene extends Phaser.Scene {
     // Bleed DoT (Cragscale roll): ticks whole damage points regardless of
     // i-frames (it's applied inside the i-frame guard at wound time, not here)
     // and ignores armor. A small red number over the player reads as "bleeding".
+    // Poison DoT (biome 3): same tick shape as bleed, but its damage is typed
+    // `poison` so it reads green and is mitigated like magic. Applied directly
+    // (not via applyDamageToPlayer) for the same reason bleed is — the wound was
+    // already gated by i-frames at application time, so a tick shouldn't be
+    // re-dodgeable. Elemental mitigation is applied here at tick time instead.
+    const poisonRaw = this.poison.tick(delta);
+    if (poisonRaw > 0 && !this.isDead) {
+      const mit = Math.min(
+        0.75,
+        (this.wearsHeavyArmor() ? heavyArmorMagicMitigation(this.skills) : 0) +
+          (equippedAugmentEffect(this.equipment).elementalMitigationPct ?? 0) / 100,
+      );
+      const poisonDmg = Math.max(1, Math.round(poisonRaw * (1 - mit)));
+      const applied = this.devGodMode
+        ? Math.min(poisonDmg, Math.max(0, this.health.value() - 1))
+        : poisonDmg;
+      const diedOfPoison = this.health.takeDamage(applied);
+      this.refreshHealthBar();
+      this.spawnPlayerDamageNumber(poisonDmg, "poison");
+      if (diedOfPoison && !this.devGodMode && !this.tryUndyingRevive()) this.onPlayerDeath();
+    }
     const bleedDmg = this.bleed.tick(delta);
     if (bleedDmg > 0 && !this.isDead) {
       // DEV god mode: same floor-at-1-HP guard applyDamageToPlayer() uses —
@@ -1930,6 +2000,10 @@ export class MainScene extends Phaser.Scene {
       return new Sandmaw(this, { x, y, elite });
     }
     if (biome === "dunes") return null; // placeholder biome, no roster yet
+    // Bayou (biome 3): terrain + sources shipped in Phase 4a, but its melee roster
+    // lands in 4b — so no top-up here yet. Without this the bayou would fall
+    // through to the forest branch and respawn boars in a swamp.
+    if (biome === "bayou") return null;
     // forest + base (the universal between-blobs layer) → the forest roster.
     const roll = rng.between(1, 82);
     if (roll <= 24) return new Boar(this, { x, y, elite });
@@ -3570,6 +3644,58 @@ export class MainScene extends Phaser.Scene {
     return last;
   }
 
+  // The bayou's content sampler (biome 3 Phase 4a) — the direct counterpart to
+  // pickBadlandsPoint, and it honors every one of the same POI exclusions (a
+  // bayou blob can in principle generate near any badlands landmark, since the
+  // patchwork mixes tiers outward). Sweeps the bayou band and requires bayou to
+  // be the DOMINANT biome, not merely present: near a badlands seam a point can
+  // carry >=0.4 bayou coverage while badlands still wins the blend, and content
+  // placed there reads as "spawned in the wrong biome" (the exact bug the user
+  // reported for the badlands/forest seam). Returns null if nothing is found in
+  // budget — callers skip that spawn attempt, same null contract as the others.
+  private pickBayouPoint(
+    rng: Phaser.Math.RandomDataGenerator,
+    minCoverage = 0.4,
+    rMin = BAYOU_R_MIN,
+    rMax = BAYOU_R_MAX,
+    opts: { avoidDeepWater?: boolean } = {},
+  ): { x: number; y: number } | null {
+    for (let attempt = 0; attempt < 400; attempt++) {
+      const ang = rng.frac() * Math.PI * 2;
+      const r = rMin + rng.frac() * (rMax - rMin); // uniform — blobs are patchy either way
+      const x = WORLD_CX + Math.cos(ang) * r;
+      const y = WORLD_CY + Math.sin(ang) * r;
+      if (
+        this.altarPosition &&
+        Phaser.Math.Distance.Between(x, y, this.altarPosition.x, this.altarPosition.y) < WAR_CAMP_CLEAR_RADIUS
+      )
+        continue;
+      if (
+        this.veinPosition &&
+        Phaser.Math.Distance.Between(x, y, this.veinPosition.x, this.veinPosition.y) < VEIN_CLEAR_RADIUS
+      )
+        continue;
+      if (this.badlandsDens.some((d) => Phaser.Math.Distance.Between(x, y, d.x, d.y) < DEN_CLEAR_RADIUS)) continue;
+      if (this.forgePositions.some((f) => Phaser.Math.Distance.Between(x, y, f.x, f.y) < FORGE_CLEAR_RADIUS))
+        continue;
+      if (
+        this.tyrantAltarPositions.some(
+          (a) => Phaser.Math.Distance.Between(x, y, a.x, a.y) < TYRANT_ALTAR_CLEAR_RADIUS,
+        )
+      )
+        continue;
+      if (this.obstaclePositions.some((o) => Phaser.Math.Distance.Between(x, y, o.x, o.y) < o.r + 34)) continue;
+      if (this.worldBiomes.dominantBiomeAt(x, y) !== "bayou") continue;
+      if (this.worldBiomes.coverageAt(x, y, "bayou") < minCoverage) continue;
+      // Solid, harvestable things (trees, ore) shouldn't generate out in a deep
+      // gloam channel where reaching them means eating the heavy slow. Flora and
+      // water lilies opt out of this so the water still has its own content.
+      if (opts.avoidDeepWater && bayouWaterAt(x, y, this.outerFeatureBiome) === "deep") continue;
+      return { x, y };
+    }
+    return null;
+  }
+
   // PB1 Session 3 — the forest-blob counterpart to pickBadlandsPoint. Beyond
   // BIOME_RADIUS, WorldBiomes paints forest as one of the patchwork "blobs" (it's
   // tier 1, so it stays eligible at any radius per the ceiling model), but nothing
@@ -4561,7 +4687,7 @@ export class MainScene extends Phaser.Scene {
   // The zone's organic (non-circular) edge distance in the direction `ang` (radians
   // from the zone center) — base radius modulated by 3 angular harmonics, mirroring
   // WorldBiomes.seedCoverage's blob-edge wobble.
-  private zoneEdge(z: BadlandsZone, ang: number): number {
+  private zoneEdge(z: ZoneShape, ang: number): number {
     const wob =
       0.6 * Math.sin(ang * z.wK + z.wPhase) +
       0.28 * Math.sin(ang * (z.wK * 2 + 1) + z.wPhase * 1.7) +
@@ -4623,11 +4749,168 @@ export class MainScene extends Phaser.Scene {
     }
   }
 
+  // --- Duskmire Bayou content (biome 3 Phase 4a) ---
+  //
+  // Everything here routes through pickBayouPoint, so it lands only where bayou
+  // is the dominant biome and every POI clearing is honored. This pass is
+  // deliberately TERRAIN-AND-SOURCES only — the melee roster (and Mirehide, which
+  // is a CREATURE hide and can't honestly come from a node) lands in Phase 4b.
+
+  // The bayou's basics + its material sources. Same "every biome supplies the
+  // universal wood/stone keys" rule the badlands follows (so all existing recipes
+  // work out here), plus the ore/gem nodes that finally give the Phase-2b/3
+  // dormant materials a real in-world source.
+  private spawnBayouNodes(): void {
+    const rng = this.sessionRng();
+    const scatter = (cfg: {
+      texture: string;
+      resource: ResourceType;
+      displayName: string;
+      action: NodeAction;
+      amountMin: number;
+      amountMax: number;
+      health: number;
+      count: number;
+    }) => {
+      for (let i = 0; i < cfg.count; i++) {
+        // Solid/mineable things avoid the deep channels (see pickBayouPoint) so
+        // harvesting never demands standing in the heavy water slow.
+        const pt = this.pickBayouPoint(rng, 0.4, BAYOU_R_MIN, BAYOU_R_MAX, { avoidDeepWater: true });
+        if (!pt) break;
+        const node = new ResourceNode(this, {
+          x: pt.x,
+          y: pt.y,
+          texture: cfg.texture,
+          resource: cfg.resource,
+          amount: rng.between(cfg.amountMin, cfg.amountMax),
+          action: cfg.action,
+          displayName: cfg.displayName,
+          loose: false,
+          health: cfg.health,
+        });
+        this.nodes.push(node);
+        if (cfg.action !== "pickup") this.obstacleNodes.push(node);
+      }
+    };
+    // Basics — the universal wood/stone keys under bayou skins.
+    scatter({ texture: "bayou_cypress", resource: "wood", displayName: "Cypress", action: "chop", amountMin: 5, amountMax: 5, health: 3, count: 56 });
+    scatter({ texture: "bayou_mirestone", resource: "stone", displayName: "Mirestone", action: "mine", amountMin: 5, amountMax: 5, health: 3, count: 48 });
+    scatter({ texture: "bayou_driftwood", resource: "wood", displayName: "Driftwood", action: "pickup", amountMin: 1, amountMax: 1, health: 1, count: 42 });
+    scatter({ texture: "bayou_shellrock", resource: "stone", displayName: "Shellrock", action: "pickup", amountMin: 1, amountMax: 1, health: 1, count: 42 });
+    // Bog Ore — the bayou's metal, plentiful like Sunscorch was in the badlands
+    // (it feeds a whole reforge tier, so it can't trickle).
+    scatter({ texture: "bog_ore_node", resource: "bog_ore", displayName: "Bog Ore", action: "mine", amountMin: 3, amountMax: 5, health: 3, count: 46 });
+    // Moonsilver — the jewelry metal. Rarer: it buys single rings/amulets and
+    // augments, not a full armor set.
+    scatter({ texture: "moonsilver_node", resource: "moonsilver", displayName: "Moonsilver Seam", action: "mine", amountMin: 2, amountMax: 3, health: 3, count: 22 });
+    // Ability gems — rarest of all, and each has its OWN node so the source
+    // dictates the build (locked in Phase 2b: "gem source dictates build") rather
+    // than one geode rolling a random gem. Phase 4b can add creature drops on top.
+    scatter({ texture: "geode_gloam", resource: "gem_gloam", displayName: "Gloam Geode", action: "mine", amountMin: 1, amountMax: 1, health: 4, count: 9 });
+    scatter({ texture: "geode_ember", resource: "gem_ember", displayName: "Ember Geode", action: "mine", amountMin: 1, amountMax: 1, health: 4, count: 9 });
+    scatter({ texture: "geode_blood", resource: "gem_blood", displayName: "Blood Geode", action: "mine", amountMin: 1, amountMax: 1, health: 4, count: 9 });
+  }
+
+  // Bayou flora — persistent free-pickups on the Blackberry regrow path (harvest
+  // swaps to a picked texture, regrows on a timer) so the swamp stays foragable.
+  // Water lilies deliberately DON'T avoid deep water: they belong on the channels,
+  // and wading out for them is the point (the slow is the cost of the harvest).
+  private spawnBayouFlora(): void {
+    const rng = this.sessionRng();
+    const scatterFlora = (cfg: {
+      texture: string;
+      pickedTexture: string;
+      resource: ResourceType;
+      displayName: string;
+      count: number;
+      avoidDeepWater: boolean;
+    }) => {
+      for (let i = 0; i < cfg.count; i++) {
+        const pt = this.pickBayouPoint(rng, 0.4, BAYOU_R_MIN, BAYOU_R_MAX, {
+          avoidDeepWater: cfg.avoidDeepWater,
+        });
+        if (!pt) break;
+        this.nodes.push(
+          new ResourceNode(this, {
+            x: pt.x,
+            y: pt.y,
+            texture: cfg.texture,
+            resource: cfg.resource,
+            amount: 1,
+            action: "pickup",
+            displayName: cfg.displayName,
+            loose: false,
+            health: 1,
+            persistent: true,
+            pickedTexture: cfg.pickedTexture,
+            regrowMs: BLACKBERRY_REGROW_MS,
+          }),
+        );
+      }
+    };
+    scatterFlora({ texture: "swamp_moss", pickedTexture: "swamp_moss_picked", resource: "swamp_moss", displayName: "Swamp Moss", count: 90, avoidDeepWater: true });
+    scatterFlora({ texture: "water_lily", pickedTexture: "water_lily_picked", resource: "water_lily", displayName: "Water Lily", count: 70, avoidDeepWater: false });
+  }
+
+  // Biome-3 miasma zones — the bayou's counterpart to the badlands macro-zones,
+  // and the payoff of Phase 1's generic environment hook: inside one, HP regen is
+  // suppressed and poison ticks (see environmentEffectAt). Deliberately SMALLER
+  // and more numerous than a badlands zone: a miasma is a pocket of bad air you
+  // route around or push through, not a region you live in. Run after every POI so
+  // pickBayouPoint's exclusions apply.
+  private placeBayouZones(): void {
+    const rng = this.sessionRng();
+    const TARGET = 14;
+    const MIN_SEP = 620;
+    let guard = 0;
+    while (this.bayouZones.length < TARGET && guard++ < 1400) {
+      const p = this.pickBayouPoint(rng);
+      if (!p) break;
+      if (this.bayouZones.some((z) => Phaser.Math.Distance.Between(p.x, p.y, z.x, z.y) < MIN_SEP)) continue;
+      this.bayouZones.push({
+        type: "miasma",
+        x: p.x,
+        y: p.y,
+        r: rng.between(190, 280),
+        wK: rng.between(2, 4),
+        wPhase: rng.frac() * Math.PI * 2,
+        wAmp: rng.realInRange(0.16, 0.24),
+      });
+    }
+  }
+
+  // Each miasma gets a sickly ground decal + a scatter of fume props, so the
+  // hazard is legible from outside it — the player should never walk into a
+  // regen-blocking poison field with no warning (the same "make the area obvious
+  // from a distance" rule the badlands zones follow).
+  private spawnBayouZoneContent(): void {
+    const rng = this.sessionRng();
+    for (const z of this.bayouZones) {
+      this.drawZoneFloor(z, 0x2c3a24, 0x4d6b2e);
+      const fumes = Math.min(70, Math.round((Math.PI * z.r * z.r) / 2600));
+      for (let i = 0; i < fumes; i++) {
+        const a = rng.frac() * Math.PI * 2;
+        const d = Math.sqrt(rng.frac()) * this.zoneEdge(z, a) * 0.94;
+        const x = z.x + Math.cos(a) * d;
+        const y = z.y + Math.sin(a) * d;
+        this.add
+          .image(x, y, "miasma_fume")
+          .setDepth(ysortDepth(y))
+          .setAlpha(0.5 + rng.frac() * 0.35)
+          .setScale(0.8 + rng.frac() * 0.9);
+      }
+    }
+  }
+
   // Stamp each zone's ground decal + fill it with dense, themed props.
   private spawnBadlandsZoneContent(solids: Phaser.Physics.Arcade.StaticGroup): void {
     const rng = this.sessionRng();
     for (const z of this.badlandsZones) {
-      this.drawZoneFloor(z);
+      this.drawZoneFloor(
+        z,
+        z.type === "boulderfield" ? 0x30343b : 0x1d160c,
+        z.type === "boulderfield" ? 0x474d57 : 0x2a2612,
+      );
       if (z.type === "boulderfield") this.fillBoulderfield(z, solids, rng);
       else this.fillThornfield(z, rng);
     }
@@ -4637,9 +4920,7 @@ export class MainScene extends Phaser.Scene {
   // wobbly zoneEdge outline (not a scaled circle), so the area itself reads as
   // non-circular. Layered translucent fills give the soft radial look the old
   // texture had. One Graphics per zone at depth -7 (above the ground overlay).
-  private drawZoneFloor(z: BadlandsZone): void {
-    const base = z.type === "boulderfield" ? 0x30343b : 0x1d160c;
-    const core = z.type === "boulderfield" ? 0x474d57 : 0x2a2612;
+  private drawZoneFloor(z: ZoneShape, base: number, core: number): void {
     const gfx = this.add.graphics().setDepth(-7);
     const STEP = 0.16; // angular sampling of the outline
     const blob = (scale: number, color: number, alpha: number) => {
@@ -4787,10 +5068,49 @@ export class MainScene extends Phaser.Scene {
   // movement multiplier (<1 slows) and whether HP regen is suppressed. Built generic
   // so biome 3's swamp-water slow + miasma no-regen zones just add cases; today the
   // only live case is a badlands thornfield (slow; regen unaffected).
-  private environmentEffectAt(x: number, y: number): { moveMult: number; blockRegen: boolean } {
+  private environmentEffectAt(
+    x: number,
+    y: number,
+  ): { moveMult: number; blockRegen: boolean; poisonDps?: number } {
     const z = this.subZoneAt(x, y);
     if (z && z.type === "thornfield") return { moveMult: BRAMBLE_SLOW_MULT, blockRegen: false };
-    return { moveMult: 1, blockRegen: false };
+    // Biome 3: a miasma zone suppresses regen and poisons. Checked before water so
+    // a miasma sitting over a channel still reports its poison; the water slow is
+    // then folded in below rather than being lost to the early return.
+    const m = this.miasmaAt(x, y);
+    const water = this.bayouWaterMult(x, y);
+    if (m) return { moveMult: water, blockRegen: true, poisonDps: MIASMA_POISON_DPS };
+    return { moveMult: water, blockRegen: false };
+  }
+
+  // The bayou's water movement multiplier at a point (1 = unaffected). Gated on
+  // real bayou coverage so the shared feature's creek pattern only means "water"
+  // inside the swamp — the same feature layer reads as a dry ravine in the
+  // badlands and a wind hollow in the dunes, and must NOT slow there.
+  private bayouWaterMult(x: number, y: number): number {
+    // Gate on DOMINANCE, not a raw coverage threshold. A coverage cutoff drifts
+    // out of step with everything else: content placement uses dominantBiomeAt,
+    // the HUD label uses dominantBiomeAt, but the ground COLOR blends bayou in at
+    // any coverage — so a fixed 0.5 cutoff both (a) failed to slow water the
+    // player could plainly see at the bayou's edge and (b) slowed the badlands'
+    // DRY RAVINE where a bayou blob merely overlapped (both caught in testing:
+    // 8/300 deep badlands ravine samples were slowing). Dominance is the one rule
+    // that makes "am I in the swamp?" mean the same thing everywhere.
+    if (this.worldBiomes.dominantBiomeAt(x, y) !== "bayou") return 1;
+    const w = bayouWaterAt(x, y, this.outerFeatureBiome);
+    if (w === "deep") return BAYOU_DEEP_SLOW_MULT;
+    if (w === "shallow") return BAYOU_SHALLOW_SLOW_MULT;
+    return 1;
+  }
+
+  // The miasma zone covering a point, if any (same organic-edge test as subZoneAt).
+  private miasmaAt(x: number, y: number): BayouZone | null {
+    for (const z of this.bayouZones) {
+      const dx = x - z.x;
+      const dy = y - z.y;
+      if (Math.hypot(dx, dy) <= this.zoneEdge(z, Math.atan2(dy, dx))) return z;
+    }
+    return null;
   }
 
   // Mineable badlands minerals (biome 2 Phase 4) — the smelting economy's raw
@@ -7076,6 +7396,7 @@ export class MainScene extends Phaser.Scene {
     this.health.reset(); // refill to max, then trim to the revive amount (avoids healMult)
     this.health.takeDamage(this.health.max - healTo);
     this.bleed.clear();
+    this.poison.clear();
     this.playerShield = 0;
     this.invulnerableUntil = this.time.now + this.POST_RESPAWN_INVULN_MS;
     this.refreshHealthBar();
@@ -7140,7 +7461,13 @@ export class MainScene extends Phaser.Scene {
   // player's head, rising and fading like the enemy-hit numbers.
   private spawnPlayerDamageNumber(amount: number, dmgType?: IncomingDamageType): void {
     const color =
-      dmgType === "fire" ? "#ff8a2a" : dmgType === "magic" ? "#c48aff" : "#ff5a5a";
+      dmgType === "fire"
+        ? "#ff8a2a"
+        : dmgType === "poison"
+          ? "#8fd94a" // sickly green — poison reads distinctly from its magic parent
+          : dmgType === "magic"
+            ? "#c48aff"
+            : "#ff5a5a";
     const text = this.add
       .text(this.player.x, this.player.y - 26, `-${amount}`, {
         fontFamily: "monospace",
@@ -7482,6 +7809,7 @@ export class MainScene extends Phaser.Scene {
     // Active food buffs + any bleed are lost on death (don't carry into respawn).
     this.buffs.clear();
     this.bleed.clear();
+    this.poison.clear();
     this.buffBarUI.sync(this.buffs.active());
     this.eventLog.add("combat", "You died...");
     // Hardcore: death is terminal — end the run and post the score after a beat.

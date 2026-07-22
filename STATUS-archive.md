@@ -6810,3 +6810,77 @@ A small playtest batch off the user's badlands run ("felt really good" overall).
    90° and hit at the new position); Forge Hammer hits in-range/center (52 dmg) and correctly misses beyond
    range and behind the boss; no console errors. Dashboard Enemies tab updated (both bosses). No `RECIPES.md`
    change (enemy loot isn't tracked there). See [[survivor-rpg-biome-2-plan]].
+
+### B3-P1 — Biome-3 Phase 1: Terrain-that-matters (2026-07-21, Opus)
+First milestone of the biome-3 (haunted bayou) + new-systems arc. Umbrella roadmap:
+`.claude/plans/biome-3-and-new-systems-roadmap.md` (5 phases: Terrain → Abilities/gems economy →
+Bayou gear reforge → Bayou content → post-boss choice). Locked forks this session: terrain first;
+cooldown-only, equipment-granted Q/E/R abilities; melee-core bayou; big-boss-only post-boss choice.
+This phase = **blocking terrain + a generic environmental-zone hook** in biome 2, **reworked same-session
+into a badlands MACRO-ZONE system** after the user's feedback (the initial version — sparse "light-dressing"
+lone rocks + ~12 small bramble patches — read as "too random / hard to distinguish; the whole biome feels
+like uniform scatter with no structure"). the user chose "full biome macro-zones" + "ground decal + bold props".
+
+**Macro-zones.** `placeBadlandsZones()` drops **~10 LARGE themed sub-zones** (`badlandsZones: {type,x,y,r}[]`,
+radii 300–470, min-sep 720, placed after every POI — with the WHOLE zone radius kept clear of every POI's
+clearing via a `clearsPois` check, so a boss arena is never inside a slow/rock field: a same-session fix after
+the user saw a Sunken Forge inside a thornfield, since `pickBadlandsPoint` only excluded the zone's *center*);
+`subZoneAt(x,y)` resolves the zone under a point. **Zones are NON-circular:** each carries an angular-harmonic
+wobble (`zoneEdge`, same idiom as `WorldBiomes.seedCoverage`) that varies its edge radius ±16–24% by
+direction; `subZoneAt`, the prop fill, and the ground decal (`drawZoneFloor` — a wobbly Graphics blob, not a
+scaled circle) all share that one outline, so areas read as organic lumps. POI-clearance uses the outermost
+lobe (`r × (1 + wAmp·WOBBLE_MAX)`) so no lobe laps a boss arena. Two types:
+- **boulderfield** — `fillBoulderfield()` builds several rock RIDGE-LINES (barriers with walkable gaps) +
+  scattered rocks, all solid (`solids.create` static bodies → player+enemies collide, ~140/run) and recorded
+  in `obstaclePositions`. A navigable cover/maze formation, not an impassable disk.
+- **thornfield** — `fillThornfield()` densely fills the whole region with non-solid `bramble` scrub (~630
+  props/run across 5 zones) + dense Dustbloom/Emberbloom foraging. The slow applies across the ENTIRE zone.
+
+Each zone stamps a bold ground decal (`zone_floor_boulderfield`/`_thornfield`, big fairly-opaque radial at
+depth -7) so the area reads as a distinct place from afar. **Wild content avoids zones:** a `subZoneAt` gate in
+`pickBadlandsPoint` keeps wild flora/minerals/enemies out of zone cores (badlands flora/minerals/nodes were
+reordered to run AFTER `placeBadlandsZones` so they see the gate — safe because `sessionRng()` reseeds per
+call, so each pass is independent). **Themed enemies:** `spawnZoneEnemies()` fills boulderfields with Cragscale
+bruisers, thornfields with Duskrunner swarms (avoiding rock footprints). The open ground between zones stays
+organically scattered — structure AMID the randomness, reconciling with the standing organic-density preference.
+
+**Generic env-zone hook (biome-3 miasma/swamp consumes).** `environmentEffectAt(x,y): {moveMult, blockRegen}`:
+(1) **slow** — computed before `Player.update`, passed as a new `envMult` param (walk/sprint only, NOT the dash
+burst); (2) **no-regen** — `currentEnvBlockRegen` gates `updateComfortRegen()` + `BuffManager.tick(delta,
+health, suppressHeal)` (new param — buff counts DOWN but heals nothing). No-regen is built + tested but DORMANT
+(no biome-2 miasma yet).
+
+**Textures (the user: much more distinct).** Rock walls/spires redrawn COOL GREY (pops vs warm badlands) + bigger
+(40×30 / 26×46); bramble redrawn dark tangle + red berries; 2 new zone-floor decals. **Files:** `MainScene.ts`
+(zone model + `placeBadlandsZones`/`spawnBadlandsZoneContent`/`fillBoulderfield`/`fillThornfield`/
+`spawnZoneEnemies`/`subZoneAt`/`environmentEffectAt`; `pickBadlandsPoint` obstacle+zone gate; create() reorder;
+update-loop + regen wiring), `Player.ts` (`envMult`), `Buffs.ts` (`suppressHeal`), `BootScene.ts` (bolder
+rock/bramble + 2 zone-floor decals). `tsc` clean. **Verified live** (`javascript_tool` + screenshots, loop
+pumped past the backgrounded-render pause): 10 zones (5+5, radii 300–467); ~143 rock bodies + ~630 bramble
+props + 10 floor decals; slow 0.6× only inside thornfields (edge-in too), 1.0 in boulderfields/open; themed
+enemies correct (5 Cragscale in a sampled boulderfield / 6 Duskrunner in a thornfield); `subZoneAt` true inside
+/ false outside; a player walking into a boulderfield rock stops at its edge (collision works); screenshots
+confirm each zone reads as a distinct dense area (grey rocky basin / dark bramble thicket). **Next:** Phase 2
+(Abilities & gear economy) — new mechanic, Opus, its own plan/session.
+
+### PB18 — Backpack armor upgrade fix + reforge-returns-to-slot (2026-07-18, Opus)
+Two bug fixes off the user's playtest. **(1) Right-click armor in the inventory did nothing.**
+The InventoryMenu/HotbarUI right-click branch only handled `edible` / `weapon || tool` /
+`placeable` — armor (`armorSlot`, not `weapon`/`tool`) fell through with no branch, so a
+backpack armor piece could never open its Upgrade panel (weapons already worked via the
+container path). Fixed by adding an armor branch (`armorSlot && !== "ammo"`) in both the
+inventory and hotbar right-click handlers. The generic container-item upgrade plumbing was
+renamed `weaponSlot`/`openWeaponUpgrade*`/`isWeaponUpgradeTarget`/`applyWeaponUpgrade` →
+`gearSlot`/`openGearUpgrade*`/`isGearUpgradeTarget`/`applyGearUpgrade` so it reads honestly now
+that it handles weapons/tools AND armor (equipped armor still upgrades via the paper-doll slot,
+unchanged). `applyGearUpgrade` only reads `costs`+`resultTier`, so `WeaponUpgradeDef`/
+`ArmorUpgradeDef` are interchangeable through it. **(2) Reforging gear now returns the result to
+where the base piece was.** A single-craft recipe that outputs gear and consumes a base gear
+piece living ONLY equipped or in the hotbar now deposits the reforged result back into that same
+slot instead of the backpack (`reforgeReturnTarget`/`placeReforgeOutput` in `craftRecipe`;
+`craft()` frees the consumed slot first, so no backpack room is needed). A backpack copy is
+consumed first (craft's own priority), so the result stays in the backpack in that case —
+unchanged. Equip case also recomputes cached set bonuses. Verified live (`javascript_tool`):
+backpack armor right-click opens the menu bound to the piece + applies (tier 0→1); reforge with
+base equipped → embersteel equipped, hotbar → same hotbar slot, backpack → stays backpack, hotbar
+untouched. `tsc` clean, no console errors.

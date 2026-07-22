@@ -2375,6 +2375,186 @@ export class BootScene extends Phaser.Scene {
     g.fillCircle(12, 8, 1);
     g.generateTexture("icon_dustbloom", ICON, ICON);
 
+    // === Duskmire Bayou (biome 3 Phase 4a) world textures ===
+    // Miasma fume — a translucent sickly-green wisp, scattered across a miasma
+    // zone so the regen-blocking poison field is legible from outside it.
+    g.clear();
+    g.fillStyle(0x5f7a34, 0.75);
+    g.fillCircle(9, 11, 7);
+    g.fillStyle(0x7d9c44, 0.6);
+    g.fillCircle(12, 8, 5);
+    g.fillCircle(6, 7, 4);
+    g.fillStyle(0xa8c46a, 0.45);
+    g.fillCircle(10, 9, 3);
+    g.generateTexture("miasma_fume", 20, 20);
+
+    // Cypress — the bayou's WOOD tree (chop, any axe). Tall pale-barked trunk
+    // with a flared root buttress and a drooping moss-hung canopy.
+    g.clear();
+    g.fillStyle(0x4a4033, 1);
+    g.fillRect(13, 14, 6, 26); // trunk
+    g.fillRect(9, 36, 14, 4); // flared root buttress
+    g.fillStyle(0x5c5142, 1);
+    g.fillRect(14, 16, 2, 22); // bark highlight
+    g.fillStyle(0x2f4230, 1);
+    g.fillEllipse(16, 10, 26, 14); // canopy
+    g.fillStyle(0x3b5439, 1);
+    g.fillEllipse(13, 8, 16, 9);
+    g.fillStyle(0x6b7a52, 1); // hanging moss strands
+    g.fillRect(6, 14, 2, 7);
+    g.fillRect(23, 13, 2, 8);
+    g.fillRect(18, 16, 2, 5);
+    g.generateTexture("bayou_cypress", 32, 42);
+
+    // Mirestone — the bayou's STONE node (mine). Wet dark rock, algae-slicked.
+    g.clear();
+    g.fillStyle(0x3a4048, 1);
+    g.fillRect(3, 11, 20, 15);
+    g.fillRect(6, 7, 14, 8);
+    g.fillStyle(0x4b525c, 1);
+    g.fillRect(6, 13, 11, 7);
+    g.fillStyle(0x4e6340, 1); // algae slick
+    g.fillRect(5, 10, 8, 3);
+    g.fillRect(15, 18, 6, 3);
+    g.generateTexture("bayou_mirestone", 26, 30);
+
+    // Driftwood — free-pickup WOOD, a pale waterlogged branch.
+    g.clear();
+    g.fillStyle(0x6e6656, 1);
+    g.fillRect(2, 8, 18, 4);
+    g.fillStyle(0x847a66, 1);
+    g.fillRect(4, 9, 12, 2);
+    g.fillRect(14, 5, 5, 3); // snapped fork
+    g.generateTexture("bayou_driftwood", 22, 16);
+
+    // Shellrock — free-pickup STONE, a shell-crusted wet pebble cluster.
+    g.clear();
+    g.fillStyle(0x434a52, 1);
+    g.fillCircle(8, 10, 6);
+    g.fillCircle(14, 12, 4);
+    g.fillStyle(0x5a626c, 1);
+    g.fillCircle(7, 8, 3);
+    g.fillStyle(0xb9b39a, 1); // shell fleck
+    g.fillCircle(13, 10, 2);
+    g.generateTexture("bayou_shellrock", 22, 18);
+
+    // Bog Ore vein (mine -> bog_ore). Peat-black rock bleeding violet gloam ore.
+    g.clear();
+    g.fillStyle(0x241f2b, 1);
+    g.fillRect(3, 10, 20, 17);
+    g.fillRect(6, 6, 14, 8);
+    g.fillStyle(0x352e40, 1);
+    g.fillRect(6, 12, 11, 8);
+    g.fillStyle(0x7a4fd0, 1); // gloam-soaked ore veins
+    g.fillRect(8, 13, 3, 6);
+    g.fillRect(13, 11, 3, 8);
+    g.fillRect(17, 16, 2, 5);
+    g.fillStyle(0xb694ff, 1);
+    g.fillRect(9, 15, 1, 2);
+    g.fillRect(14, 13, 1, 3);
+    g.generateTexture("bog_ore_node", 26, 30);
+
+    // Moonsilver seam (mine -> moonsilver). Pale grey rock with cold white metal.
+    g.clear();
+    g.fillStyle(0x4c5058, 1);
+    g.fillRect(3, 10, 20, 17);
+    g.fillRect(6, 6, 14, 8);
+    g.fillStyle(0x646a74, 1);
+    g.fillRect(6, 12, 11, 8);
+    g.fillStyle(0xd6e2ee, 1); // moonsilver seam
+    g.fillRect(8, 12, 2, 8);
+    g.fillRect(13, 14, 2, 6);
+    g.fillRect(16, 10, 2, 5);
+    g.fillStyle(0xffffff, 1);
+    g.fillRect(8, 14, 1, 2);
+    g.fillRect(13, 16, 1, 2);
+    g.generateTexture("moonsilver_node", 26, 30);
+
+    // Gem geodes (mine -> one ability gem each). Same cracked-shell silhouette in
+    // three colors, so "a geode" is instantly readable and the COLOR tells you
+    // which build gem is inside ("gem source dictates build").
+    const geode = (name: string, shell: number, crystal: number, spark: number) => {
+      g.clear();
+      g.fillStyle(shell, 1);
+      g.fillCircle(13, 16, 11);
+      g.fillStyle(0x1c1a20, 1);
+      g.fillEllipse(13, 14, 14, 12); // hollow interior
+      g.fillStyle(crystal, 1);
+      g.fillTriangle(9, 18, 12, 8, 15, 18);
+      g.fillTriangle(14, 19, 17, 11, 19, 19);
+      g.fillTriangle(7, 19, 9, 12, 11, 19);
+      g.fillStyle(spark, 1);
+      g.fillRect(12, 11, 1, 4);
+      g.fillRect(16, 14, 1, 3);
+      g.generateTexture(name, 26, 30);
+    };
+    geode("geode_gloam", 0x3b3348, 0x8a5ce0, 0xd0b6ff);
+    geode("geode_ember", 0x453026, 0xe0722a, 0xffc070);
+    geode("geode_blood", 0x3d2228, 0xc02a44, 0xff8a9a);
+
+    // Swamp Moss — a spreading damp moss mat (persistent harvestable).
+    g.clear();
+    g.fillStyle(0x3f5c34, 1);
+    g.fillEllipse(8, 15, 14, 8);
+    g.fillStyle(0x557a42, 1);
+    g.fillEllipse(7, 13, 10, 6);
+    g.fillStyle(0x7ea055, 1);
+    g.fillCircle(5, 11, 2.5);
+    g.fillCircle(10, 12, 2);
+    g.fillCircle(8, 9, 2);
+    g.generateTexture("swamp_moss", 16, 22);
+    g.clear(); // picked: a scraped bare patch
+    g.fillStyle(0x3a3a2e, 1);
+    g.fillEllipse(8, 16, 12, 6);
+    g.fillStyle(0x46503a, 1);
+    g.fillCircle(5, 15, 1.5);
+    g.generateTexture("swamp_moss_picked", 16, 22);
+
+    // Water Lily — a pad with a pale bloom (persistent harvestable; grows on water).
+    g.clear();
+    g.fillStyle(0x2f5340, 1);
+    g.fillEllipse(8, 16, 15, 8); // pad
+    g.fillStyle(0x3d6b4e, 1);
+    g.fillEllipse(7, 15, 11, 6);
+    g.fillStyle(0xe6dcf0, 1); // bloom
+    g.fillCircle(8, 10, 4);
+    g.fillStyle(0xc9a8ee, 1);
+    g.fillCircle(8, 10, 2);
+    g.fillStyle(0xfff4c0, 1);
+    g.fillCircle(8, 10, 1);
+    g.generateTexture("water_lily", 16, 22);
+    g.clear(); // picked: the bare pad
+    g.fillStyle(0x2f5340, 1);
+    g.fillEllipse(8, 16, 15, 8);
+    g.fillStyle(0x3d6b4e, 1);
+    g.fillEllipse(7, 15, 11, 6);
+    g.generateTexture("water_lily_picked", 16, 22);
+
+    // --- bayou resource icons (ICON=24) ---
+    g.clear(); // Swamp Moss icon
+    g.fillStyle(0x3f5c34, 1);
+    g.fillEllipse(12, 15, 18, 11);
+    g.fillStyle(0x557a42, 1);
+    g.fillEllipse(11, 13, 13, 8);
+    g.fillStyle(0x7ea055, 1);
+    g.fillCircle(8, 11, 3);
+    g.fillCircle(15, 13, 2.5);
+    g.fillCircle(12, 8, 2.5);
+    g.generateTexture("icon_swamp_moss", ICON, ICON);
+
+    g.clear(); // Water Lily icon
+    g.fillStyle(0x2f5340, 1);
+    g.fillEllipse(12, 16, 19, 10);
+    g.fillStyle(0x3d6b4e, 1);
+    g.fillEllipse(11, 15, 14, 7);
+    g.fillStyle(0xe6dcf0, 1);
+    g.fillCircle(12, 9, 5);
+    g.fillStyle(0xc9a8ee, 1);
+    g.fillCircle(12, 9, 3);
+    g.fillStyle(0xfff4c0, 1);
+    g.fillCircle(12, 9, 1.4);
+    g.generateTexture("icon_water_lily", ICON, ICON);
+
     g.clear(); // Sunfruit icon — a red fruit with a green nub
     g.fillStyle(0xd83a3a, 1);
     g.fillCircle(12, 13, 8);

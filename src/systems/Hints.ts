@@ -32,6 +32,7 @@ export type HintId =
   | "totem_ready"
   | "den_found"
   | "bled"
+  | "poisoned"
   | "magic_damage";
 
 export type HintKind = "tutorial" | "hint";
@@ -85,6 +86,10 @@ const HINT_DEFS: Record<HintId, HintEntry> = {
   bled: {
     kind: "tutorial",
     text: "You're bleeding — it ticks damage over time and ignores armor. Some badlands attacks open wounds like this on hit.",
+  },
+  poisoned: {
+    kind: "tutorial",
+    text: "You're poisoned — it ticks through armor like magic, and nothing will heal you until it wears off. Get clear of the fumes.",
   },
   magic_damage: {
     kind: "tutorial",

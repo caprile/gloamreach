@@ -1864,7 +1864,19 @@ interaction, verify in the live preview rather than just type-checking:
    (e.g. `window.__game.scene.getScene('MainScene')`, set `player` position, call
    `updateHover()` / `tryInteract()`, read `promptText.text` / `inventory.get(...)`)
    rather than trying to simulate real mouse coordinates — it's more precise and faster
-   to assert against.
+   to assert against. **But `updateHover()` is POINTER-driven, not player-position-driven**
+   — moving the player alone leaves the prompt empty. You must also place the fake pointer
+   over the target, and the naive `(worldX - cam.scrollX) * zoom` inverse is WRONG because
+   the canvas is FIT-scaled. Solve the transform numerically instead:
+   ```js
+   const p0 = cam.getWorldPoint(0, 0), p1 = cam.getWorldPoint(100, 100);
+   s.input.activePointer.x = (target.x - p0.x) / ((p1.x - p0.x) / 100);
+   s.input.activePointer.y = (target.y - p0.y) / ((p1.y - p0.y) / 100);
+   ```
+   Two more gather-testing gotchas: chopping/mining spawn **loose drops** and never credit
+   the backpack directly (assert on `nodes.filter(n => n.isDrop)`, not `backpack.count`),
+   and `lastToolHitAt` caps one swing per frame — reset it each iteration to deplete a node
+   inside a single synchronous eval.
 4. **Known preview quirk:** if the preview tab is backgrounded, Phaser's render loop can
    pause (`requestAnimationFrame` throttling), which can make `preview_eval` report scene
    state as not-yet-created (`MainScene`'s `sys.settings.status` stuck at `1`/INIT,

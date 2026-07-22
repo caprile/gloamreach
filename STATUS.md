@@ -2,27 +2,39 @@
 
 ## Current State
 
-_Living snapshot — edit in place, never append. Last shipped: **B3-P3 — Biome-3 Phase 3:
-Bayou gear progression (reforge tier + gem augments)** (2026-07-21, Opus, plan
-`.claude/plans/biome-3-phase-3-bayou-gear.md`). Two locked calls from the user: gem augments are
-**mix-and-match + CONSUMED** (no removable sockets, no ladder, **max 2 per gear instance**), and biome 3
-**does** add one reforge tier. New **`src/systems/GearAugments.ts`** reuses the existing per-instance
-`upgrades` field (`ItemStack` + a new `EquippedItem.upgrades`) and the existing `UpgradeMenu` — so tiers
-(Lvl 2/3) and gems compose on the same piece with **no new data model**. 9 gear-flavored augments
-(flat dmg / crit chance / crit dmg / arc reach / stamina; flat armor ×2 / magic-fire mitigation / move
-speed), each wired at the single existing chokepoint. Plus the **bayou reforge tier**: Bog Ore →
-**Gloamsteel Ingot** (Smelter), **Mirehide**, a Workbench **Lvl 5** (Gloamforge Anvil), and 11 recipes
-that each **consume their Ember counterpart** — Gloamsteel heavy (42 armor) / Mirehide light (30) sets
-with **Gloam Bulwark**/**Mireblink** set bonuses (the Ember mechanics turned up, superseding rather than
-stacking), and 5 bayou weapons. **DORMANT** like 2b: Bog Ore/Mirehide/gems get world sources in Phase 4
-(`__dev.give` to test). New **Bayou** inventory tab. Verified live; `tsc` clean, zero console errors.
-`RECIPES.md` + dashboard updated. **Same-session follow-up:** the **crafting menu** now sizes itself to
-the screen with a windowed/scrollable recipe list (its fixed 440px height was overflowing since the
-forged tiers landed); **gem slots are visible at a glance** (a `Gem augments: N/2` tooltip line + diamond
-pips on every backpack/hotbar/paper-doll slot); **Gloamsteel Arrows** are the bayou ammo tier (their own
-item — the Gloamsteel Warbow fires only them); and the **Gloamdrinker** is the bayou's bespoke magic
-weapon (not a reforge), the only weapon with **lifelink** — 12% of damage dealt, always on, via a new
-data-driven `WEAPON_LIFELINK_PCT`. See B3-P3 below + [[survivor-rpg-biome-3-roadmap]].
+_Living snapshot — edit in place, never append. Last shipped: **B3-P4a — Biome-3 Phase 4a:
+Duskmire Bayou terrain, environment & material sources** (2026-07-22, Opus, roadmap
+`.claude/plans/biome-3-and-new-systems-roadmap.md`). Phase 4 was **sliced into three sessions** by
+the user: **4a = terrain + environment + sources (this)**, **4b = the melee enemy roster**, **4c =
+POIs + the Miretyrant boss + the win-con swap**. The bayou is now a real walkable, harvestable third
+biome, and every material that shipped **dormant** in Phases 2b/3 finally has a world source.
+Locked this session: water **slows by depth, never blocks**; the bayou boss **will** become the new
+win-con (4c); and **`poison` is a SUBTYPE OF MAGIC** — a new `IncomingDamageType` that bypasses flat
+armor and takes the *same* heavy-armor magic mitigation (new `Weapons.isMagicFamily()`), while adding
+its own identity: it ticks over time and **suppresses HP regen**. New `src/systems/Poison.ts`
+**composes** `BleedManager` and exposes two modes — `apply()` (discrete stacking dose, for 4b's
+creatures) and `sustain()` (continuous environmental source, refresh-don't-stack). New
+`src/systems/Bayou.ts` palette + `bayouWaterAt()`; `WorldBiomes` gained **bayou at tier 3** (unlock
+6500) and **demoted the content-less Dunes placeholder to tier 4** (10500, deep frontier);
+`pickBayouPoint` mirrors `pickBadlandsPoint` with an `avoidDeepWater` option; `BadlandsZone` was split
+into a shared **`ZoneShape`** so 14 new **miasma zones** (regen-suppressing + 3 dps poison — the
+Phase-1 env hook's real payoff) reuse `zoneEdge`/`drawZoneFloor` verbatim. **443 nodes:** cypress/
+mirestone/driftwood/shellrock (universal wood/stone), **Bog Ore** 46, **Moonsilver** 22, and **three
+separate geodes** (9 each) that each drop one specific ability gem — one node per gem, honoring
+Phase 2b's "gem source dictates build". New Swamp Moss + Water Lily flora (persistent, no recipes
+yet). **Two real bugs caught in verification:** the water slow used a raw coverage cutoff instead of
+*dominance* (edge water didn't slow; the badlands DRY RAVINE did), and the miasma stacked to the cap
+(3 dps became 15 and killed an idle test player) — both fixed and re-verified. Palette also gained a
+uniform **gloam wash** after it composited olive and read as "more green biome": now forest `#3f6a36`
+/ badlands `#755f39` / bayou `#44454b` / dunes `#cab47e`. Verified live; `tsc` clean, zero console
+errors. **Deliberately left out:** **Mirehide** (a *creature* hide — it lands with 4b's roster, not a
+node), and the bayou is gated out of the enemy-respawn/nightfall top-up until 4b ships. No
+`RECIPES.md`/dashboard change. See B3-P4a below + [[survivor-rpg-biome-3-roadmap]].
+Prior: **B3-P3 — Biome-3 Phase 3: Bayou gear progression (reforge tier + gem augments)**
+(2026-07-21, Opus) — gem augments (mix-and-match, consumed, max 2/instance) reusing the existing
+per-instance `upgrades` field + `UpgradeMenu`, plus the Gloamsteel/Mirehide reforge tier, Workbench
+Lvl 5, Gloamsteel Arrows and the lifelink Gloamdrinker. Authored dormant; **4a now sources its Bog
+Ore + gems** (Mirehide still pending 4b). See B3-P3 below.
 Prior: **B3-P2b — Biome-3 Phase 2b:
 Jewelry-effect pipeline + Gemwright's Table (jewelry station)** (2026-07-21, Opus, plan
 `.claude/plans/biome-3-phase-2b-jewelry-station.md`). Makes 2a's abilities obtainable + lays the jewelry
@@ -99,17 +111,16 @@ patchwork worldgen through the relic rework; the badlands is a fully populated s
 current arc is the **biome-3 (haunted bayou, working name "Duskmire Bayou") + new-systems roadmap**
 (`.claude/plans/biome-3-and-new-systems-roadmap.md`, 5 phases). **Shipped so far:** **Phase 1**
 (terrain-that-matters + badlands macro-zones), **Phase 2a** (the activated-ability framework + Dota
-QER HUD), and **Phase 2b** (the jewelry-effect pipeline + the Gemwright's Table jewelry station, above —
-which built the equipment stat-aggregation path + the jewelry/gems material class as data, and the
-station+Duneshaper-Heart gate that will source the abilities in biome 3), and **Phase 3** (the bayou gear
-progression above — gem augments + the Gloamsteel/Mirehide reforge tier, also authored dormant).
-**the user scoped gems +
-jewelry crafting as biome-3+ content**, so 2b's materials/recipes/heart are authored **dormant** (test
-via `__dev.give`); their real sources — Moonsilver mining, gem drops, a game-wide epic-loot pool, and the
-Duneshaper demotion — move into the biome-3 content phase (4); Phase 3's Bog Ore / Mirehide / gem sources
-land there too. **Next:** **Phase 4** (the bayou content drop — a melee-core roster + a melee boss-with-adds, where the
-gem/metal/heart sources land), and **Phase 5** (post-**big-boss** RNG reward choice — a natural home for
-ability sourcing too). Ability/jewelry numbers and everything biome-3 are first-pass/tunable. The master-plan tail
+QER HUD), **Phase 2b** (the jewelry-effect pipeline + the Gemwright's Table), **Phase 3** (the bayou
+gear progression — gem augments + the Gloamsteel/Mirehide reforge tier), and now **Phase 4a** (the
+bayou's terrain, environment and material sources — above). **Phase 4 is sliced into three sessions;
+4a is done.** **Next: Phase 4b — the bayou's melee-core roster** (Mirejaw / Blighttoad / Mosswretch /
+Murkling / Fenlurker + the one ranged Corpselight haunt, per the roadmap), which is also where
+**Mirehide** gets its source and where the bayou re-enters the enemy-respawn top-up. **Then Phase 4c**
+(1-2 bayou POIs + the **Miretyrant** melee boss-with-adds, which **becomes the new win-con** — locked
+this session — demoting the Duneshaper to a mid-boss and finally making its **Heart** obtainable, which
+unlocks the Gemwright's ability recipes). **Then Phase 5** (post-big-boss RNG reward choice).
+Ability/jewelry numbers and everything biome-3 are first-pass/tunable. The master-plan tail
 **M-TE** (trophy-gated gear) is folded into the shipped biome-2 work; real pixel art/animations stay
 deliberately deferred until content/balance settle (roadmap item 8).
 
@@ -159,6 +170,83 @@ below + [[survivor-rpg-dev-console]].
 ## Recent Entries
 
 > Older entries in STATUS-archive.md.
+
+### B3-P4a — Biome-3 Phase 4a: Duskmire Bayou terrain, environment & material sources (2026-07-22, Opus)
+
+Phase 4 of the biome-3 roadmap (`.claude/plans/biome-3-and-new-systems-roadmap.md`), **sliced into
+three sessions** at the user's direction (`AskUserQuestion`): **4a = terrain + environment + sources
+(this)**, 4b = the melee enemy roster, 4c = POIs + the Miretyrant boss + the win-con swap. The bayou
+is now a real, walkable, harvestable third biome — and every material that shipped **dormant** in
+Phases 2b/3 finally has a world source.
+
+**Locked this session (the user):** water **slows by depth, never blocks**; the bayou boss **will**
+become the new win-con (4c); and — the notable one — **`poison` is a SUBTYPE OF MAGIC**.
+
+**Poison damage type.** `IncomingDamageType` gained `"poison"` alongside `fire`. Per the user's call it
+is mechanically a magic subtype, so a new `Weapons.isMagicFamily()` is the helper anything asking "is
+this magic?" for MITIGATION must use — poison bypasses flat armor and is reduced by the *same*
+heavy-armor magic mitigation + Gloamweave Lining channel as a Hexling bolt. Its own identity on top:
+it ticks over time and **suppresses HP regen while active**. New `src/systems/Poison.ts`
+(`PoisonManager`) **composes** `BleedManager` rather than duplicating its stack/tick math, and exposes
+**two application modes** — `apply()` for a discrete stacking dose (creature bites, 4b) and
+`sustain()` for a continuous environmental source (refresh-don't-stack, safe to call every frame).
+`currentEnvBlockRegen` now ORs in `poison.isPoisoned()`, so poison gates food-buff healing and
+Comfort exactly like a no-regen zone. Green damage numbers; a new `poisoned` tutorial hint.
+
+**`src/systems/Bayou.ts`** — palette + `bayouWaterAt()`, same shape as `Badlands.ts`/`Dunes.ts`. The
+shared feature Biome is reinterpreted a third way (forestWeight → cypress hammocks, grassy → open
+muck, creekWeight → deep gloam channels). The water thresholds drive **both** the color and the
+movement penalty, so what looks like deep water always is.
+
+**`WorldBiomes` registration.** `BiomeId` gained `"bayou"` at **tier 3** (unlock radius 6500); the
+content-less **Dunes placeholder was demoted to tier 4** (unlock 10500, the deep frontier) — where it
+always belonged, since it exists only to make the patchwork read as varied. `BIOME_NAMES` →
+"Duskmire Bayou"; ground, minimap, world map, HUD label and the first-entry discovery toast all
+followed automatically.
+
+**Sampler + environment.** `pickBayouPoint` mirrors `pickBadlandsPoint` (dominance-gated, honors every
+POI exclusion) plus an `avoidDeepWater` option so solid/mineable things never sit out in the heavy
+slow. `BadlandsZone` was split into a shared **`ZoneShape`** so the new `BayouZone` reuses `zoneEdge`
+and `drawZoneFloor` verbatim; 14 **miasma zones** (regen-suppressing + 3 dps poison) are the Phase-1
+environment hook's real payoff, each with a decal + fume props so the hazard is legible from outside.
+
+**Content (443 nodes).** Cypress/Mirestone/Driftwood/Shellrock supply the universal `wood`/`stone`
+keys (the "every biome supplies the basics" rule); **Bog Ore** (46) feeds the reforge tier;
+**Moonsilver** (22) the jewelry metal; and **three separate geodes** (9 each) each drop one specific
+ability gem — one node type per gem, honoring Phase 2b's locked "gem source dictates build" rather
+than one geode rolling randomly. Flora: **Swamp Moss** + **Water Lily** (new `ResourceType`s, no
+recipes yet — future ingredients like Emberbloom/Sunfruit), persistent on the Blackberry regrow path;
+lilies deliberately DO generate in deep water (wading for them is the point).
+
+**Two real bugs caught in verification, both fixed:**
+1. **Water slow used a raw coverage cutoff (0.5)** while content placement and the HUD label use
+   *dominance* — so water at the bayou's edge visibly rendered but didn't slow, and the badlands' DRY
+   RAVINE slowed wherever a bayou blob merely overlapped (8/300 samples). Now gated on
+   `dominantBiomeAt`, the one rule that makes "am I in the swamp?" mean the same thing everywhere.
+2. **The miasma stacked to the cap.** Re-applying every frame through the stacking `apply()` path
+   multiplied 3 dps into 15 and killed a full-HP idle test player in ~7s. That's what motivated
+   `sustain()`. Re-verified: 3 dps sustained = exactly 3 damage/sec.
+
+Also tuned: the shallow-water band was widened (0.30/0.62 → 0.22/0.70) after measuring ~80% of bayou
+water as deep, and a uniform **gloam wash** was added to the palette — the biome composited to an
+olive `#525b41` and read as "more green biome" next to the forest. Measured after: forest `#3f6a36`,
+badlands `#755f39`, bayou `#44454b` (cold violet-slate), dunes `#cab47e` — four distinct reads.
+
+**Verified live** (`javascript_tool`): the ceiling curve's unlock radii; biome dominance across the
+whole radial sweep (forest-only inside 2000 → badlands → bayou dominant 6000-10000 → dunes 10000+);
+all 443 nodes in-band with **0 in the wrong biome and 0 in the forest disc**; water multipliers
+(dry 1 / shallow 0.78 / deep 0.5) and **0/400 badlands dry-ravine false positives**; miasma env
+(`blockRegen` + 3 poisonDps) and the real update loop draining **22 HP over 7.53s (expected 22.6)**;
+poison vs magic under a full heavy set (physical 40→8, magic 40→32, **poison 40→32 — identical**,
+confirming the subtype contract); poison sustained/lapse/discrete-stacking math; and every node type
+depleted to its correct loose drop (all 3 gems, bog ore, moonsilver, stone, wood) plus the
+persistent-flora texture swap. `tsc` clean, zero console errors. Screenshot confirms the discovery
+toast, minimap label, violet ground and miasma field.
+
+**Left out of 4a, deliberately:** **Mirehide** has no source yet — it's a *creature* hide, so a node
+source would be dishonest; it lands with the 4b roster. The bayou is also gated out of the
+enemy-respawn/nightfall top-up (`makeRespawnEnemy` returns null for it) so it doesn't spawn forest
+boars in a swamp before 4b ships. No `RECIPES.md`/dashboard change (no new recipes).
 
 ### B3-P3 — Biome-3 Phase 3: Bayou gear progression (reforge tier + gem augments) (2026-07-21, Opus)
 
@@ -362,77 +450,3 @@ roll-through and reserve blocking for a specific heavy archetype with a light sl
 nudge, only building the full near-tangent wall-follow heuristic if a genuine maze-navigation enemy
 is ever designed (the deleted heuristic worked but read as "trash" zigzag — don't re-derive it
 blindly). No `RECIPES.md`/dashboard change.
-
-### B3-P1 — Biome-3 Phase 1: Terrain-that-matters (2026-07-21, Opus)
-First milestone of the biome-3 (haunted bayou) + new-systems arc. Umbrella roadmap:
-`.claude/plans/biome-3-and-new-systems-roadmap.md` (5 phases: Terrain → Abilities/gems economy →
-Bayou gear reforge → Bayou content → post-boss choice). Locked forks this session: terrain first;
-cooldown-only, equipment-granted Q/E/R abilities; melee-core bayou; big-boss-only post-boss choice.
-This phase = **blocking terrain + a generic environmental-zone hook** in biome 2, **reworked same-session
-into a badlands MACRO-ZONE system** after the user's feedback (the initial version — sparse "light-dressing"
-lone rocks + ~12 small bramble patches — read as "too random / hard to distinguish; the whole biome feels
-like uniform scatter with no structure"). the user chose "full biome macro-zones" + "ground decal + bold props".
-
-**Macro-zones.** `placeBadlandsZones()` drops **~10 LARGE themed sub-zones** (`badlandsZones: {type,x,y,r}[]`,
-radii 300–470, min-sep 720, placed after every POI — with the WHOLE zone radius kept clear of every POI's
-clearing via a `clearsPois` check, so a boss arena is never inside a slow/rock field: a same-session fix after
-the user saw a Sunken Forge inside a thornfield, since `pickBadlandsPoint` only excluded the zone's *center*);
-`subZoneAt(x,y)` resolves the zone under a point. **Zones are NON-circular:** each carries an angular-harmonic
-wobble (`zoneEdge`, same idiom as `WorldBiomes.seedCoverage`) that varies its edge radius ±16–24% by
-direction; `subZoneAt`, the prop fill, and the ground decal (`drawZoneFloor` — a wobbly Graphics blob, not a
-scaled circle) all share that one outline, so areas read as organic lumps. POI-clearance uses the outermost
-lobe (`r × (1 + wAmp·WOBBLE_MAX)`) so no lobe laps a boss arena. Two types:
-- **boulderfield** — `fillBoulderfield()` builds several rock RIDGE-LINES (barriers with walkable gaps) +
-  scattered rocks, all solid (`solids.create` static bodies → player+enemies collide, ~140/run) and recorded
-  in `obstaclePositions`. A navigable cover/maze formation, not an impassable disk.
-- **thornfield** — `fillThornfield()` densely fills the whole region with non-solid `bramble` scrub (~630
-  props/run across 5 zones) + dense Dustbloom/Emberbloom foraging. The slow applies across the ENTIRE zone.
-
-Each zone stamps a bold ground decal (`zone_floor_boulderfield`/`_thornfield`, big fairly-opaque radial at
-depth -7) so the area reads as a distinct place from afar. **Wild content avoids zones:** a `subZoneAt` gate in
-`pickBadlandsPoint` keeps wild flora/minerals/enemies out of zone cores (badlands flora/minerals/nodes were
-reordered to run AFTER `placeBadlandsZones` so they see the gate — safe because `sessionRng()` reseeds per
-call, so each pass is independent). **Themed enemies:** `spawnZoneEnemies()` fills boulderfields with Cragscale
-bruisers, thornfields with Duskrunner swarms (avoiding rock footprints). The open ground between zones stays
-organically scattered — structure AMID the randomness, reconciling with the standing organic-density preference.
-
-**Generic env-zone hook (biome-3 miasma/swamp consumes).** `environmentEffectAt(x,y): {moveMult, blockRegen}`:
-(1) **slow** — computed before `Player.update`, passed as a new `envMult` param (walk/sprint only, NOT the dash
-burst); (2) **no-regen** — `currentEnvBlockRegen` gates `updateComfortRegen()` + `BuffManager.tick(delta,
-health, suppressHeal)` (new param — buff counts DOWN but heals nothing). No-regen is built + tested but DORMANT
-(no biome-2 miasma yet).
-
-**Textures (the user: much more distinct).** Rock walls/spires redrawn COOL GREY (pops vs warm badlands) + bigger
-(40×30 / 26×46); bramble redrawn dark tangle + red berries; 2 new zone-floor decals. **Files:** `MainScene.ts`
-(zone model + `placeBadlandsZones`/`spawnBadlandsZoneContent`/`fillBoulderfield`/`fillThornfield`/
-`spawnZoneEnemies`/`subZoneAt`/`environmentEffectAt`; `pickBadlandsPoint` obstacle+zone gate; create() reorder;
-update-loop + regen wiring), `Player.ts` (`envMult`), `Buffs.ts` (`suppressHeal`), `BootScene.ts` (bolder
-rock/bramble + 2 zone-floor decals). `tsc` clean. **Verified live** (`javascript_tool` + screenshots, loop
-pumped past the backgrounded-render pause): 10 zones (5+5, radii 300–467); ~143 rock bodies + ~630 bramble
-props + 10 floor decals; slow 0.6× only inside thornfields (edge-in too), 1.0 in boulderfields/open; themed
-enemies correct (5 Cragscale in a sampled boulderfield / 6 Duskrunner in a thornfield); `subZoneAt` true inside
-/ false outside; a player walking into a boulderfield rock stops at its edge (collision works); screenshots
-confirm each zone reads as a distinct dense area (grey rocky basin / dark bramble thicket). **Next:** Phase 2
-(Abilities & gear economy) — new mechanic, Opus, its own plan/session.
-
-### PB18 — Backpack armor upgrade fix + reforge-returns-to-slot (2026-07-18, Opus)
-Two bug fixes off the user's playtest. **(1) Right-click armor in the inventory did nothing.**
-The InventoryMenu/HotbarUI right-click branch only handled `edible` / `weapon || tool` /
-`placeable` — armor (`armorSlot`, not `weapon`/`tool`) fell through with no branch, so a
-backpack armor piece could never open its Upgrade panel (weapons already worked via the
-container path). Fixed by adding an armor branch (`armorSlot && !== "ammo"`) in both the
-inventory and hotbar right-click handlers. The generic container-item upgrade plumbing was
-renamed `weaponSlot`/`openWeaponUpgrade*`/`isWeaponUpgradeTarget`/`applyWeaponUpgrade` →
-`gearSlot`/`openGearUpgrade*`/`isGearUpgradeTarget`/`applyGearUpgrade` so it reads honestly now
-that it handles weapons/tools AND armor (equipped armor still upgrades via the paper-doll slot,
-unchanged). `applyGearUpgrade` only reads `costs`+`resultTier`, so `WeaponUpgradeDef`/
-`ArmorUpgradeDef` are interchangeable through it. **(2) Reforging gear now returns the result to
-where the base piece was.** A single-craft recipe that outputs gear and consumes a base gear
-piece living ONLY equipped or in the hotbar now deposits the reforged result back into that same
-slot instead of the backpack (`reforgeReturnTarget`/`placeReforgeOutput` in `craftRecipe`;
-`craft()` frees the consumed slot first, so no backpack room is needed). A backpack copy is
-consumed first (craft's own priority), so the result stays in the backpack in that case —
-unchanged. Equip case also recomputes cached set bonuses. Verified live (`javascript_tool`):
-backpack armor right-click opens the menu bound to the piece + applies (tier 0→1); reforge with
-base equipped → embersteel equipped, hotbar → same hotbar slot, backpack → stays backpack, hotbar
-untouched. `tsc` clean, no console errors.

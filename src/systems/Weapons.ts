@@ -35,17 +35,29 @@ export type WeaponType =
 // allowed for future weapons with mixed damage; only the first counts today.
 export type DamageType = "slash" | "blunt" | "pierce" | "ranged" | "magic";
 
-// Damage types an ENEMY can deal to the player. A superset of the weapon
-// DamageType (which doubles as the weapon-skill keys) — enemies can also deal
-// elemental "fire" (the Cinderwrought), which is NOT a player weapon skill, so
-// it lives here rather than polluting DamageType/SkillType. Both `magic` and
-// `fire` bypass the player's flat armor (see MainScene.applyDamageToPlayer).
-export type IncomingDamageType = DamageType | "fire";
+// Damage types an ENEMY (or the environment) can deal to the player. A superset
+// of the weapon DamageType (which doubles as the weapon-skill keys) — the world
+// can also deal elemental "fire" (the Cinderwrought) and "poison" (biome 3's
+// miasma + bayou creatures), neither of which is a player weapon skill, so they
+// live here rather than polluting DamageType/SkillType. All three bypass the
+// player's flat armor (see MainScene.applyDamageToPlayer).
+export type IncomingDamageType = DamageType | "fire" | "poison";
+
+// Poison is a SUBTYPE OF MAGIC (locked, the user): mechanically it inherits every
+// magic rule — it bypasses flat armor and is reduced by the same heavy-armor
+// magic mitigation / Gloamweave Lining channel — while carrying its own identity
+// on top (it ticks over time and suppresses HP regen while active). Anything that
+// asks "is this magic?" for MITIGATION purposes must use this helper, not
+// `=== "magic"`, or poison silently escapes the magic defenses.
+export function isMagicFamily(type: IncomingDamageType): boolean {
+  return type === "magic" || type === "poison";
+}
 
 // Whether an incoming type ignores the flat-armor term (relic %-reduction +
-// floor-at-1 still apply). Magic and fire are the two "elemental" types.
+// floor-at-1 still apply). The elemental types: magic (and its poison subtype)
+// plus fire.
 export function bypassesArmor(type: IncomingDamageType): boolean {
-  return type === "magic" || type === "fire";
+  return isMagicFamily(type) || type === "fire";
 }
 
 const WEAPON_DAMAGE_TYPES: Record<WeaponType, DamageType[]> = {
