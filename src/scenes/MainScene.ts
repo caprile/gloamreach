@@ -105,7 +105,7 @@ import { ContextMenu, type ContextMenuItem } from "../ui/ContextMenu";
 import { DryingRackMenu } from "../ui/DryingRackMenu";
 import { CookingMenu } from "../ui/CookingMenu";
 import { JewelryMenu } from "../ui/JewelryMenu";
-import { EquipmentEffects } from "../systems/EquipmentEffects";
+import { EquipmentEffects, describePassive } from "../systems/EquipmentEffects";
 import { JEWELRY_RECIPES, type JewelryRecipe } from "../systems/Jewelry";
 import { BuffBarUI } from "../ui/BuffBarUI";
 import { ChestMenu } from "../ui/ChestMenu";
@@ -9399,6 +9399,21 @@ export class MainScene extends Phaser.Scene {
         borderColor: 0xffb84a,
         name: `${set.bonusName} · ${set.name} set`,
         desc: set.bonusDesc,
+      });
+    }
+    // Equipped jewelry (rings/amulet) — always-on ability-augment / utility
+    // passives (B3-P2b), so they read on the HUD like relics/set bonuses do. The
+    // ability specials (special1/2/back) have no `passive` and show on the QER bar.
+    for (const { id: slot } of EQUIP_SLOTS) {
+      const eq = this.equipment.get(slot);
+      const def = eq ? itemDef(eq.key) : undefined;
+      if (!def?.passive) continue;
+      entries.push({
+        key: `jewelry:${slot}:${eq!.key}`,
+        texture: def.texture,
+        borderColor: 0xb98cff, // gloam-violet — distinct from relic rarity + set gold
+        name: def.name,
+        desc: describePassive(def.passive).join("\n"),
       });
     }
     return entries;

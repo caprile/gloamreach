@@ -154,7 +154,9 @@ yet, this session built the biome-agnostic systems **live** and authored the mat
   sums equipped pieces (recomputed in `afterItemMove`, reset in `create`) and exposes getters modeled on
   the relic summer. **Distinct channels (never relic-overlapping):** `abilityCooldownPct` (clamped ≥0.4),
   `abilityPowerPct`, `magnetRadiusPct`, `gatherBonusPct`, `lightRadiusPct`. `describePassive()` feeds
-  both the Tooltip and the JewelryMenu row so display can't drift.
+  the Tooltip, the JewelryMenu row, AND the HUD passive strip so display can't drift. Equipped jewelry
+  shows on the shared **`PassiveBarUI`** (left of the hotbar, alongside relic passives + armor
+  set-bonuses) — one always-on icon per equipped ring/amulet, gloam-violet border + hover tooltip.
 - **Hook sites (bespoke, one edit each):** cooldown → `tryCastAbility` + `abilityEntries` (HUD sweep
   matches); power → `castBlink` distance + `castNova` dmg/radius; magnet → `MAGNET_RADIUS` gate; gather →
   the depleted-node bonus-drop roll (alongside the M-SS chopping/mining chance); light → the player term
