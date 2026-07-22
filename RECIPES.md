@@ -80,10 +80,15 @@ requires standing near a placed Workbench (`MainScene.isNearWorkbench`).
 | Gloamdrinker | Weapons | 1 | Yes (Lvl 5) | 3 Gloamsteel Ingot, 2 Blood Gem, 3 Hex Essence, 2 Moonsilver | Magic 0 | Item (weapon, **magic** — bespoke, **not** a reforge) |
 | Arrows (Gloamsteel) | Weapons | 1 | Yes (Lvl 5) | 1 Gloamsteel Ingot, 5 Wood | — | Item (60x **Gloamsteel Arrows** — its own ammo tier) |
 
-The **bayou (Gloamsteel/Mirehide) tier is biome-3 DORMANT** — Bog Ore, Mirehide and
-the gems have no in-game source until the biome-3 content phases (test via
-`__dev.give`). Every one of the 11 reforges consumes its Ember-tier counterpart
-(roadmap locked decision 6: no fresh base sets in biome 3).
+The **bayou (Gloamsteel/Mirehide) tier is now partly sourced.** **Bog Ore** is
+surface-mineable in the bayou (Phase 4a) and **Mirehide** drops from the
+**Mirejaw** — and ONLY the Mirejaw (Phase 4b, locked: hunting the gator IS the
+reforge gate). Still dormant: the **3 ability gems + Moonsilver**, which were
+deliberately pulled off the surface and are **dungeon-only loot** (Phase 4c —
+locked surface/dungeon split: surface = bulk gathering under threat, dungeon =
+build-defining materials); test those via `__dev.give`. Every one of the 11
+reforges consumes its Ember-tier counterpart (roadmap locked decision 6: no fresh
+base sets in biome 3).
 
 The base forged gear (Sunsteel/Duskhide) is **"Yes (Lvl 3)"** — tier 1 (any
 Workbench) **plus** `requiresWorkbenchTier: 2` (a Forge-Anvil-upgraded **Workbench
@@ -303,7 +308,7 @@ Upgrades).
 |---|---|---|---|---|
 | Sunscorch Ore (common, scattered badlands) | 1 Hex Essence | Sunsteel Ingot | 1 : 1 | Any (Lvl 1) |
 | Cinderforged Ore (rare veins + Sunken Forge POI) | 1 Hex Essence | Embersteel Ingot | 1 : 1 | Lvl 2 (Ember Crucible) |
-| Bog Ore (bayou — **no source yet**, biome-3 dormant) | 1 Hex Essence | Gloamsteel Ingot | 1 : 1 | Lvl 2 (Ember Crucible) |
+| Bog Ore (bayou — **surface-mineable since Phase 4a**) | 1 Hex Essence | Gloamsteel Ingot | 1 : 1 | Lvl 2 (Ember Crucible) |
 
 Ratio is **1 ore + 1 hex → 1 ingot** (S1 rebalance — the old 2:1 made forging
 grindy). Clay (Smelter build material), Sunscorch Ore, and rare Cinderforged
@@ -338,8 +343,9 @@ that spend a plentiful earlier-biome leftover (boar_meat).
 
 ## Jewelry — Gemwright's Table (`src/systems/Jewelry.ts`) — B3-P2b
 
-**Biome-3 DORMANT** (authored now; real sources — Moonsilver mining, gem drops,
-the Duneshaper demotion — land in the biome-3 content phases; test via `__dev.give`).
+**Still biome-3 DORMANT** — its inputs (Moonsilver + the 3 ability gems) were pulled
+off the bayou surface and are now **dungeon-only loot** (Phase 4c), and the Duneshaper
+demotion that makes its Heart reachable lands in Phase 4d; test via `__dev.give`.
 Multi-ingredient jewelry made at a placed **Gemwright's Table** (its own
 `JewelryMenu`, cloned from the Cooking pattern; instant-craft behind a short bar).
 A recipe's `requiredStationTier` gates it on the table's own level: **tier 0** (base

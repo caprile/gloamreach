@@ -210,8 +210,16 @@ augments.
 > **Dungeon mechanic** was added to the arc:
 >
 > - **4a — terrain, environment & surface sources. SHIPPED** (see STATUS.md B3-P4a).
-> - **4b — the melee-core roster** (next).
-> - **4c — DUNGEONS** (new): Valheim burial-chamber / sunken-crypt style interiors. **The most
+> - **4b — the melee-core roster. SHIPPED** (see STATUS.md B3-P4b). All six built: Mirejaw /
+>   Blighttoad / Mosswretch / Murkling / Fenlurker + the one ranged Corpselight haunt. Locked
+>   with the user: the **specced 6** (no 7th apex elite), **Mirehide from the Mirejaw ONLY**, and
+>   the **homing projectile built now** (`Projectile.homing`, the game's first tracking shot).
+>   Also added `Enemy.pendingPoison`, 3 creature materials, 6 elite trophies at Common/Tier 3,
+>   and re-enabled the bayou's respawn top-up (4a had it gated off). **A same-session tuning pass
+>   rescaled the entire roster** after the user flagged it as too easy/too slow — new enemies must
+>   be sized against the PLAYER's measured envelope (sprint 166-229px/s, dash 450, 220px blink,
+>   45-70 per hit), never against the previous biome's roster.
+> - **4c — DUNGEONS (NEXT)**: Valheim burial-chamber / sunken-crypt style interiors. **The most
 >   precious materials are NOT found on the surface.** The three ability geodes and Moonsilver were
 >   REMOVED from 4a's surface scatter and are now dungeon-only loot (their textures + ResourceNode
 >   shapes are kept in-repo, so the dungeon phase re-sites them rather than rebuilding). Ordered

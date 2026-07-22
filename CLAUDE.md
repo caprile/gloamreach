@@ -1539,6 +1539,56 @@ below.**
    console errors post-fix. **This completes the biome-2 umbrella plan — all 6 phases (0–5) are
    shipped.** See `STATUS.md` + [[survivor-rpg-relics]].
 
+5an. **Biome 3 (Duskmire Bayou) + new-systems arc — Phases 1, 2a, 2b, 3, 4a, 4b shipped.** Plan:
+   `.claude/plans/biome-3-and-new-systems-roadmap.md` (approved 2026-07-21, 5 phases). This entry
+   is a **summary only** — every phase has its own full writeup in `STATUS.md`/`STATUS-archive.md`,
+   which stays the source of truth for detail (this section deliberately tracks milestone level).
+   - **Phase 1 (B3-P1)** — *terrain that matters*: ~10 large themed **macro-zones** per biome
+     (`badlandsZones`/`subZoneAt`) — boulderfields (genuinely **solid** rock, the first use of the
+     `solids` group) and thornfields (0.6× slow + rich foraging) — each with a bold organic ground
+     decal and themed enemies; wild content avoids zone cores. Added the generic
+     `environmentEffectAt(x,y) → {moveMult, regenMult}` env hook. **This is the template for
+     structuring any biome.**
+   - **Phase 2a (B3-P2a)** — the **activated-ability framework**: cooldown-only, **equipment-granted**
+     actives (`special1→Q`, `special2→E`, `back→R`) with a Dota-style QER HUD bar
+     (`src/systems/Abilities.ts` + `src/ui/AbilityBarUI.ts`). Three starters: Gloamstep Blink,
+     Gloam Nova, Bloodpact (a timed **lifelink**, not a heal-over-time). Effect logic lives in
+     MainScene's `castAbility` dispatcher; `AbilityDef` is pure data.
+   - **Phase 2b (B3-P2b)** — `src/systems/EquipmentEffects.ts`, the first mechanical effect path for
+     equipped **non-armor** items, deliberately a **different layer from relics** (relics own raw-%
+     combat stats; jewelry is ability-augment + utility/explorer). New **Gemwright's Table** station
+     whose tier-1 recipes are gated behind a **Duneshaper's Heart** drop.
+   - **Phase 3 (B3-P3)** — **gem augments** (mix-and-match, consumed, max 2 per instance, reusing the
+     per-instance `upgrades` field + `UpgradeMenu`) + the **Gloamsteel/Mirehide reforge tier** and
+     Workbench Lvl 5. See [[survivor-rpg-gear-augments]].
+   - **Phase 4a (B3-P4a)** — the bayou's **terrain, environment and material sources**. Locked:
+     water **slows by depth, never blocks**; **`poison` is a SUBTYPE OF MAGIC** (new
+     `IncomingDamageType` — bypasses flat armor, takes heavy-armor magic mitigation, and adds its own
+     identity: ticks over time + **halves HP regen**, not a full block). New `src/systems/Poison.ts`
+     **composes** `BleedManager` with two modes — `apply()` (discrete **stacking** dose) and
+     `sustain()` (continuous environmental source, **refresh-don't-stack**). Three themed macro-zones
+     (miasma/bonemire/hammock), 443 nodes, and `src/ui/StatusBarUI.ts` (a generic debuff strip —
+     bleed had shipped with no HUD tell since the badlands).
+   - **Phase 4b (B3-P4b)** — the **creature roster**: six bespoke melee-core creatures (**Mirejaw**
+     the signature ambusher + sole Mirehide source, **Blighttoad** the poison carrier, **Mosswretch**
+     the bruiser + the roster's fire lesson, **Murkling** the swarm/AOE-arc payoff, **Fenlurker** the
+     burrower whose dodge verb is the *opposite* of the Sandmaw's) plus one deliberately uncommon
+     ranged haunt (**Corpselight**), which introduced the game's first **homing projectile**
+     (`Projectile.homing` + a **required** `maxLifetimeMs` — the default despawn measures distance
+     *from spawn*, which a curving orb never trips). Also `Enemy.pendingPoison`, 3 materials, and 6
+     elite trophies at **Common / Tier 3** (roll-only until a tier-3 shard currency exists).
+     **A same-session tuning pass** then rescaled the whole roster after the user flagged it as too
+     easy — see [[feedback_size_enemies_against_player]]: size new enemies against the **player's
+     measured envelope** (sprint 166-229px/s, dash 450, 220px blink, 45-70 per hit), never against
+     the previous biome's roster.
+   - **Phase 4 is sliced into four sessions:** 4a and 4b are done; **4c = DUNGEONS (next)** — where
+     the 3 ability gems + Moonsilver actually live (they were pulled OFF the surface: locked
+     surface/dungeon split — surface = bulk gathering under threat, **dungeon = build-defining
+     materials**), ordered after the roster because a dungeon needs creatures to populate it; then
+     **4d = surface POIs + the Miretyrant boss**, which **becomes the new win-con**, demoting the
+     Duneshaper to a mid-boss and finally making its Heart obtainable. **Then Phase 5** (post-big-boss
+     RNG reward choice). See [[survivor-rpg-biome-3-roadmap]].
+
 **Not yet built — next up in rough order:**
 6. **World & discovery** — much bigger generated world, biomes, map, a single giant
    circular Valheim-style map (spawn at center, danger increases outward). **The circular
