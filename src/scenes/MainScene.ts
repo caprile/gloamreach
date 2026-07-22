@@ -36,7 +36,14 @@ import { Palewake, PALEWAKE_UNRAVEL_DAMAGE_MULTIPLIER } from "../entities/Palewa
 import { Kilnborn, KILNBORN_VENT_DAMAGE_MULTIPLIER } from "../entities/Kilnborn";
 import { Sanguinarch, SANGUINARCH_ENGORGED_DAMAGE_MULTIPLIER } from "../entities/Sanguinarch";
 import { SunkenCrypt, CRYPT_THEMES, type CryptTheme } from "../entities/SunkenCrypt";
-import { generateCrypt, CRYPT_CELL, type CryptLayout } from "../systems/CryptLayout";
+import {
+  generateCrypt,
+  isCryptFloor,
+  nearestCryptFloorPoint,
+  cryptNavWaypoint,
+  CRYPT_CELL,
+  type CryptLayout,
+} from "../systems/CryptLayout";
 import type { LootContainer, LootRollEntry } from "../systems/LootContainer";
 import type { ResourceType } from "../systems/Inventory";
 import {
@@ -834,6 +841,8 @@ export class MainScene extends Phaser.Scene {
   // ~60 dungeon dwellers can't eat RESPAWN_MAX_LIVE and starve the overworld.
   private cryptEnemies = new Set<Enemy>();
   private cryptLightPoints: { x: number; y: number }[] = [];
+  // Committed nav waypoint per chasing crypt dweller (see steerCryptEnemy).
+  private cryptNav = new Map<Enemy, { x: number; y: number; at: number }>();
   private hoveredCrypt: SunkenCrypt | null = null;
   private hoveredCryptExit: SunkenCrypt | null = null;
   private hoveredCryptChest: SunkenCrypt | null = null;
@@ -1168,6 +1177,7 @@ export class MainScene extends Phaser.Scene {
     this.cryptReturn = null;
     this.cryptEnemies = new Set();
     this.cryptLightPoints = [];
+    this.cryptNav = new Map();
     this.hoveredCrypt = null;
     this.hoveredCryptExit = null;
     this.hoveredCryptChest = null;
@@ -6360,6 +6370,15 @@ export class MainScene extends Phaser.Scene {
   ): void {
     const layout = crypt.layout;
     const addEnemy = (e: Enemy) => {
+      // Crypt dwellers DO collide with solid terrain — the one place the standing
+      // "enemies walk through rock" default is wrong. Out in the world that rule
+      // exists so a chaser can't wedge on a boulder, and boulders are cover, not
+      // structure; a dungeon wall IS the structure, and enemies drifting through
+      // it read as broken (the user, first playtest: "enemies aren't respecting
+      // collision... moving outside of the walls"). The per-instance flag is
+      // exactly the hook the collider's process callback already gates on, so
+      // this needs no new wiring.
+      e.collidesWithTerrain = true;
       this.enemies.push(e);
       this.enemyGroup.add(e);
       this.cryptEnemies.add(e);
@@ -6401,6 +6420,7 @@ export class MainScene extends Phaser.Scene {
     if (crypt.theme === "gloam") {
       const pw = new Palewake(this, { x: vault.cx, y: vault.cy });
       pw.occluders = occluders; // walls + pillars are what break its tether
+      pw.arena = { x: vault.x, y: vault.y, w: vault.w, h: vault.h }; // keeps its flanks on open floor
       warden = pw;
     } else if (crypt.theme === "ember") {
       const kb = new Kilnborn(this, { x: vault.cx, y: vault.cy });
@@ -6416,18 +6436,26 @@ export class MainScene extends Phaser.Scene {
     // until the warden falls (the Gloaming Vein mechanic, which is exactly why
     // that mechanic exists). Sealed nodes wear the neutral husk texture and
     // crack open into their real one.
-    const ring = (count: number, radius: number, phase: number, make: (x: number, y: number) => ResourceNode) => {
+    // Ring radii are sized to the ROOM, not fixed: a fixed 132px seam ring fell
+    // outside a smaller vault entirely, leaving nodes embedded in the wall/void
+    // (the user's "things outside the walls"). `span` is the largest radius that
+    // still clears the room's tightest side, and each ring takes a fraction of it.
+    const span = Math.min(vault.w, vault.h) / 2 - 26;
+    const ring = (count: number, frac: number, phase: number, make: (x: number, y: number) => ResourceNode) => {
+      const radius = Math.max(46, span * frac);
       for (let i = 0; i < count; i++) {
         const a = phase + (i / count) * Math.PI * 2;
-        const x = vault.cx + Math.cos(a) * radius;
-        const y = vault.cy + Math.sin(a) * radius;
+        // Belt-and-braces: clamp into the room even if a radius math change ever
+        // over-reaches again, so a vault node can never end up un-minable in rock.
+        const x = Phaser.Math.Clamp(vault.cx + Math.cos(a) * radius, vault.x + 20, vault.x + vault.w - 20);
+        const y = Phaser.Math.Clamp(vault.cy + Math.sin(a) * radius, vault.y + 20, vault.y + vault.h - 20);
         const node = make(x, y);
         this.nodes.push(node);
         this.obstacleNodes.push(node);
         crypt.vaultNodes.push(node);
       }
     };
-    ring(CRYPT_VAULT_GEODE_COUNT, 96, 0.4, (x, y) =>
+    ring(CRYPT_VAULT_GEODE_COUNT, 0.62, 0.4, (x, y) =>
       new ResourceNode(this, {
         x,
         y,
@@ -6441,7 +6469,7 @@ export class MainScene extends Phaser.Scene {
         shielded: true,
       }),
     );
-    ring(CRYPT_VAULT_SEAM_COUNT, 132, 1.5, (x, y) =>
+    ring(CRYPT_VAULT_SEAM_COUNT, 0.95, 1.5, (x, y) =>
       new ResourceNode(this, {
         x,
         y,
@@ -6499,22 +6527,62 @@ export class MainScene extends Phaser.Scene {
     this.clearHoverState();
   }
 
-  // Keep a crypt's inhabitants inside their crypt. Enemies deliberately do NOT
-  // collide with solid terrain by default (`Enemy.collidesWithTerrain` — the
-  // standing rule, so a chaser can't wedge itself on geometry), which means they
-  // can drift through interior walls exactly like they walk through boulders.
-  // That's fine INSIDE a dungeon — it stops doorways being a free escape — but a
-  // wanderer must never leak out into the black realm pocket between crypts, so
-  // each one is pinned to its own footprint. Cheap: 6 crypts × ~10 dwellers.
+  // Redirect a chasing crypt dweller's movement along the corridor toward the
+  // player. Deliberately narrow: only inside the crypt the player is in, only
+  // while aggro'd, only when the enemy is ALREADY moving under its own AI (so a
+  // planted wind-up/recovery is never disturbed), and only when the player is in
+  // a different room. Preserves the AI's chosen speed — this is a heading
+  // change, not a movement system, and the enemy's own logic is untouched.
+  private static readonly CRYPT_NAV_REACHED = 34; // px — close enough, pick the next one
+  private static readonly CRYPT_NAV_REFRESH_MS = 1200; // re-plan even if not reached (the player moves)
+  private steerCryptEnemy(enemy: Enemy): void {
+    const crypt = this.activeCrypt;
+    if (!crypt?.layout || !this.cryptEnemies.has(enemy)) return;
+    if (!crypt.enemies.includes(enemy) || !enemy.isAggro() || enemy.isAttacking()) return;
+    const body = enemy.body as Phaser.Physics.Arcade.Body | undefined;
+    if (!body) return;
+    const speed = Math.hypot(body.velocity.x, body.velocity.y);
+    if (speed < 1) return; // it chose to stand still — respect that
+
+    // COMMIT to a waypoint rather than re-deriving a heading every frame. Rooms
+    // and corridors overlap, so at a junction an enemy sits inside three rects
+    // at once and "which rect am I in" flips frame to frame — re-planning each
+    // frame made the heading flip with it and the enemy vibrated in the doorway
+    // instead of walking through it (observed: velocity alternating ±25 while
+    // the position held still). It re-plans on arrival or on a timer instead.
+    const now = this.time.now;
+    let wp = this.cryptNav.get(enemy);
+    const reached = wp && Phaser.Math.Distance.Between(enemy.x, enemy.y, wp.x, wp.y) <= MainScene.CRYPT_NAV_REACHED;
+    if (!wp || reached || now - wp.at > MainScene.CRYPT_NAV_REFRESH_MS) {
+      const next = cryptNavWaypoint(crypt.layout, enemy.x, enemy.y, this.player.x, this.player.y);
+      if (!next) {
+        this.cryptNav.delete(enemy); // same room — chase directly from here
+        return;
+      }
+      wp = { x: next.x, y: next.y, at: now };
+      this.cryptNav.set(enemy, wp);
+    }
+    const a = Phaser.Math.Angle.Between(enemy.x, enemy.y, wp.x, wp.y);
+    body.setVelocity(Math.cos(a) * speed, Math.sin(a) * speed);
+  }
+
+  // Keep a crypt's inhabitants on their crypt's walkable floor. Dungeon dwellers
+  // DO collide with walls (see addEnemy), so this is no longer the thing keeping
+  // them in — it's the safety net for the movement that physics separation can't
+  // catch: a Fenlurker surfacing, a leap, a knockback, or an enemy spawned by a
+  // future path that doesn't know about interiors. Anything found off the floor
+  // plan is nudged to the NEAREST floor point (the smallest correction that
+  // works) rather than teleported to a room center. Cheap: 6 crypts × ~10.
   private containCryptEnemies(): void {
     for (const crypt of this.crypts) {
-      const b = crypt.layout?.bounds;
-      if (!b) continue;
+      const layout = crypt.layout;
+      if (!layout) continue;
       for (const e of crypt.enemies) {
         if (e.depleted) continue;
-        const x = Phaser.Math.Clamp(e.x, b.x + 12, b.x + b.w - 12);
-        const y = Phaser.Math.Clamp(e.y, b.y + 12, b.y + b.h - 12);
-        if (x !== e.x || y !== e.y) e.setPosition(x, y);
+        if (isCryptFloor(layout, e.x, e.y)) continue;
+        const p = nearestCryptFloorPoint(layout, e.x, e.y);
+        e.setPosition(p.x, p.y);
+        (e.body as Phaser.Physics.Arcade.Body | undefined)?.reset(p.x, p.y);
       }
     }
   }
@@ -8442,6 +8510,15 @@ export class MainScene extends Phaser.Scene {
       // so the scene pushes it, the same way envSpeedMult is pushed above.
       if (enemy instanceof Sanguinarch) enemy.playerBleeding = this.bleed.isBleeding();
       const bit = enemy.update(delta, this.player.x, this.player.y, now);
+      // Dungeon navigation (Phase 4c): re-aim whatever movement the AI just
+      // decided on down the corridor toward the player, so the whole roster
+      // pathfinds through a crypt unmodified. Applied AFTER update() on purpose
+      // — an earlier attempt fed the enemy a fake doorway TARGET instead, and
+      // every enemy with reach then thought it had arrived and stood swinging at
+      // air (a Mosswretch's ~100px reach froze it 710px away for 600 frames).
+      // Steering only redirects existing velocity: the AI still sees the real
+      // player for every range/attack/give-up decision.
+      this.steerCryptEnemy(enemy);
       if (bit) {
         // Most melee hits carry no knockback; a telegraphed attack that opts
         // into one (ranged Gremlin shove, Boar charge gore) sets it on the

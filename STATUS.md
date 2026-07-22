@@ -309,6 +309,48 @@ Also fixed in passing: `promptFor()` now refuses `shielded`/`harvested` nodes di
 already filtered them, but the crypt vault's entire material gate rests on that rule, so it's stated
 at the prompt layer too rather than living in one loop's filter.
 
+**SAME-SESSION FIX — dungeon collision + pathing (the user: "enemies aren't respecting collision and
+aren't pathing through the hallways/rooms... spawning/moving outside of the walls").** Two real bugs
+plus the design consequence of fixing the first:
+1. **Dwellers walked through walls.** `Enemy.collidesWithTerrain` defaults to FALSE — the standing
+   rule, because out in the world solid things are boulders (cover, not structure) and a straight-line
+   chaser wedges on them. In a dungeon the wall IS the structure, so crypt dwellers now set the flag,
+   which the existing collider's process callback already gates on (no new wiring).
+2. **Vault nodes could sit inside the walls.** The geode/seam rings used fixed 96/132px radii, but a
+   vault could be 192×160, so the outer ring landed in rock. Radii are now a fraction of the room's
+   tightest half-span (plus a clamp), and `CryptLayout` picks the vault from the FAR HALF of rooms by
+   **largest area** rather than distance alone (distance alone once handed the boss fight a cupboard).
+   Room minimums went 6×5 → 8×7. Measured after: **0 of 36 vault nodes and 0 of 43 live dwellers off
+   the floor plan.**
+3. **Turning collision on immediately reproduced exactly what the default protects against**: a
+   Murkling closed 545px → 276px and then pressed into a wall for 35 straight intervals. Rather than
+   revive the per-frame obstacle-avoidance heuristic this codebase deleted once already, crypt
+   dwellers now **navigate the structure that already exists** — `CryptLayout` gained a tiny nav
+   graph (rooms + corridors as nodes, adjacency = a ≥24px overlap, BFS memoized per layout) and
+   `MainScene.steerCryptEnemy` **re-aims the velocity the AI already chose** toward the next doorway.
+   Three iterations were needed and each failure is worth recording:
+   - **Substituting a fake doorway TARGET doesn't work.** Every enemy with reach thinks it has
+     arrived and plants, swinging at air (a Mosswretch's ~100px reach froze it 710px away). Steering
+     velocity after `update()` keeps the AI seeing the real player for every range/attack/give-up
+     decision.
+   - **Pushing the waypoint past the doorway breaks the safety property.** The overlap region is a
+     rectangle inside both rects, and rectangles are convex, so a straight line to it never leaves
+     the floor; a point 70px beyond it does, and enemies drove into a wall forever.
+   - **Re-planning every frame oscillates.** Rooms and corridors overlap, so at a junction an enemy
+     is inside three rects at once and "which rect am I in" flips frame to frame (velocity seen
+     alternating ±25 while the position held still). Fixed with `rectIndexAt` picking the DEEPEST
+     containing rect, a committed per-enemy waypoint (re-planned on arrival or after 1.2s), and a
+     look-ahead for the degenerate case where the first seam is the spot you're already standing on.
+   Verified: a Murkling pathed **503 → 424 → 325 → 264 → 157 → 20px** through two doorways onto the
+   player, and left running, **every** dweller in a crypt (7 Murklings + a Fenlurker) crossed the
+   dungeon and ended up within 9–36px of the player while the leashed Kilnborn stayed in its vault at
+   501px. Containment now snaps anything off the floor plan to the **nearest** floor point (a net for
+   burrows/leaps/knockback, not the thing keeping them in). The Palewake gained an `arena` so its
+   flanks are clamped to its vault (20/20 picks on floor) — with collision on, a flank in the rock
+   would leave it tethering with no line of sight, handing out a free unravel every cycle.
+   **Test-harness note:** the 30s `CHASE_GIVEUP_MS` deaggro silently confounds a long pumped chase
+   test — re-arm `forceAggro` each interval or you'll read "stuck" where the enemy simply gave up.
+
 **Not done / next:** **4d — surface POIs + the Miretyrant boss**, which becomes the new win-con
 (demoting the Duneshaper to a mid-boss and finally making its Heart, and therefore the ability
 jewelry, obtainable). Crypts do not respawn once cleared, and there is no crypt-specific minimap —

@@ -97,6 +97,12 @@ export class Palewake extends Enemy {
   // that must be wired or the fight loses its counterplay.
   occluders: Rect[] = [];
 
+  // Its vault room. Flanks are clamped into this, because the Palewake now
+  // collides with walls like every other crypt dweller — a flank picked inside
+  // the rock would leave it shoved against a wall, tethering with no line of
+  // sight, which hands the player a free unravel every cycle.
+  arena: Rect | null = null;
+
   private flankX = 0;
   private flankY = 0;
   private nextTetherTickAt = 0;
@@ -221,6 +227,11 @@ export class Palewake extends Enemy {
       const a = toPlayer + side * Phaser.Math.FloatBetween(1.4, 2.2);
       this.flankX = playerX + Math.cos(a) * FLANK_DIST;
       this.flankY = playerY + Math.sin(a) * FLANK_DIST;
+      if (this.arena) {
+        const m = 26;
+        this.flankX = Phaser.Math.Clamp(this.flankX, this.arena.x + m, this.arena.x + this.arena.w - m);
+        this.flankY = Phaser.Math.Clamp(this.flankY, this.arena.y + m, this.arena.y + this.arena.h - m);
+      }
       const blocked = this.occluders.some((r) =>
         segmentHitsRect(this.flankX, this.flankY, playerX, playerY, r),
       );
