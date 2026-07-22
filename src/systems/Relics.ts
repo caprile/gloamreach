@@ -322,6 +322,17 @@ export const TROPHY_ROLL: Record<string, TrophyRoll> = {
   cragscale_trophy: { rarity: "common", powerTier: 2 },
   hexling_trophy: { rarity: "common", powerTier: 2 },
   sandmaw_trophy: { rarity: "common", powerTier: 2 },
+  // Bayou (biome 3) elite trophies — Tier 3 (×2.25), same Common rarity/outcome
+  // table + shared pity as every other raw elite trophy. Deliberately NO tier-3
+  // REFINE_RECIPES row yet: refining needs a tier-3 shard currency, which the
+  // bayou's own POI/dungeon phases (4c/4d) will source — so these are roll-only
+  // for now, exactly as biome-2's trophies were before Phase 5 added Ember Shards.
+  mirejaw_trophy: { rarity: "common", powerTier: 3 },
+  blighttoad_trophy: { rarity: "common", powerTier: 3 },
+  mosswretch_trophy: { rarity: "common", powerTier: 3 },
+  murkling_trophy: { rarity: "common", powerTier: 3 },
+  fenlurker_trophy: { rarity: "common", powerTier: 3 },
+  corpselight_trophy: { rarity: "common", powerTier: 3 },
   // Dormant this milestone — killing the King wins the run, so a fang can't be
   // spent yet. Correct + ready for M-W1's mid-bosses.
   gremlin_king_fang: { rarity: "rare", powerTier: 1 },

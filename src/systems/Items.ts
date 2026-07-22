@@ -1398,6 +1398,82 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     hotbarable: false,
   },
 
+  // --- bayou creature drops (Phase 4b roster) ---
+  mirejaw_meat: {
+    key: "mirejaw_meat",
+    name: "Mirejaw Meat",
+    description: "A heavy cut of pale reptile tail. Rank raw, but it firms up beautifully over a fire.",
+    texture: "icon_mirejaw_meat",
+    maxStack: 99,
+    hotbarable: false,
+  },
+  blight_gland: {
+    key: "blight_gland",
+    name: "Blight Gland",
+    description: "A taut sac cut from a Blighttoad's back, still weeping something green. Handle it with the hide side out.",
+    texture: "icon_blight_gland",
+    maxStack: 99,
+    hotbarable: false,
+  },
+  gloam_dust: {
+    key: "gloam_dust",
+    name: "Gloam Dust",
+    description: "The violet motes a Murkling scatters when it comes apart. Cold to the touch, and it never quite settles.",
+    texture: "icon_gloam_dust",
+    maxStack: 99,
+    hotbarable: false,
+  },
+
+  // --- bayou elite trophies (Common rarity, Tier 3 — the deepest relic tier) ---
+  mirejaw_trophy: {
+    key: "mirejaw_trophy",
+    name: "Mirejaw Trophy",
+    description: "A curved tooth the length of a finger, pried from an Elite Mirejaw. Feed it to a Relic Forge.",
+    texture: "icon_mirejaw_trophy",
+    maxStack: 99,
+    hotbarable: false,
+  },
+  blighttoad_trophy: {
+    key: "blighttoad_trophy",
+    name: "Blighttoad Trophy",
+    description: "The swollen crown-gland of an Elite Blighttoad, dried hard. Feed it to a Relic Forge.",
+    texture: "icon_blighttoad_trophy",
+    maxStack: 99,
+    hotbarable: false,
+  },
+  mosswretch_trophy: {
+    key: "mosswretch_trophy",
+    name: "Mosswretch Trophy",
+    description: "A knot of heartwood from an Elite Mosswretch, still threaded with living moss. Feed it to a Relic Forge.",
+    texture: "icon_mosswretch_trophy",
+    maxStack: 99,
+    hotbarable: false,
+  },
+  murkling_trophy: {
+    key: "murkling_trophy",
+    name: "Murkling Trophy",
+    description: "The one shard of an Elite Murkling that didn't scatter — it still pulses. Feed it to a Relic Forge.",
+    texture: "icon_murkling_trophy",
+    maxStack: 99,
+    hotbarable: false,
+  },
+  fenlurker_trophy: {
+    key: "fenlurker_trophy",
+    name: "Fenlurker Trophy",
+    description: "A hooked digging claw off an Elite Fenlurker, packed with black silt. Feed it to a Relic Forge.",
+    texture: "icon_fenlurker_trophy",
+    maxStack: 99,
+    hotbarable: false,
+  },
+  corpselight_trophy: {
+    key: "corpselight_trophy",
+    name: "Corpselight Trophy",
+    description: "A guttering ember left where an Elite Corpselight unravelled. It gives no warmth. Feed it to a Relic Forge.",
+    texture: "icon_corpselight_trophy",
+    maxStack: 99,
+    hotbarable: false,
+  },
+
   // --- bayou HEAVY armor: Gloamsteel set (reforged from Embersteel) ---
   gloamsteel_helm: {
     key: "gloamsteel_helm",
@@ -1658,6 +1734,10 @@ const BAYOU_ITEM_KEYS = new Set<string>([
   "mirehide_hood", "mirehide_vest", "mirehide_leggings",
   "gloamsteel_warhammer", "gloamsteel_sword", "gloamsteel_pike",
   "gloamsteel_warbow", "gloam_brand", "gloamdrinker", "gloam_arrows",
+  // bayou creature drops + elite trophies (Phase 4b)
+  "mirejaw_meat", "blight_gland", "gloam_dust",
+  "mirejaw_trophy", "blighttoad_trophy", "mosswretch_trophy",
+  "murkling_trophy", "fenlurker_trophy", "corpselight_trophy",
 ]);
 
 export function itemBiome(key: string): ItemBiome {

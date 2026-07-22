@@ -26,6 +26,17 @@ export interface ProjectileConfig {
   // (-y), so it needs +90° to point along its flight; symmetric art (pellets)
   // leaves this 0.
   artAngleOffset?: number;
+  // Homing (biome 3 — the Corpselight's gloam orb, the game's first tracking
+  // projectile). Deliberately a BOUNDED reversal of the anti-kite governor: the
+  // turn rate is low enough that a moving player out-turns it, so it punishes
+  // standing still, not movement. `target` is a live ref (the player sprite) —
+  // read each frame, so it keeps tracking as the player moves.
+  homing?: { turnRateRadPerSec: number; target: { x: number; y: number } };
+  // Time-based despawn. Required for a homing projectile: the default despawn
+  // measures straight-line distance FROM SPAWN, which a curving orb may never
+  // exceed (it would orbit forever). Straight shots leave this unset and keep
+  // the distance rule, which is what makes per-weapon range honest.
+  maxLifetimeMs?: number;
 }
 
 // Whatever spawns projectiles (currently just MainScene) implements this —
@@ -46,6 +57,11 @@ export class Projectile extends Phaser.Physics.Arcade.Sprite {
   private readonly maxRangePx: number;
   private readonly velX: number;
   private readonly velY: number;
+  private readonly speed: number;
+  private readonly homing?: { turnRateRadPerSec: number; target: { x: number; y: number } };
+  private readonly maxLifetimeMs?: number;
+  private readonly artAngleOffset: number;
+  private spawnedAt = -1;
 
   constructor(scene: Phaser.Scene, cfg: ProjectileConfig) {
     super(scene, cfg.x, cfg.y, cfg.texture);
@@ -58,6 +74,10 @@ export class Projectile extends Phaser.Physics.Arcade.Sprite {
     this.maxRangePx = cfg.maxRangePx;
     this.velX = Math.cos(cfg.angle) * cfg.speed;
     this.velY = Math.sin(cfg.angle) * cfg.speed;
+    this.speed = cfg.speed;
+    this.homing = cfg.homing;
+    this.maxLifetimeMs = cfg.maxLifetimeMs;
+    this.artAngleOffset = cfg.artAngleOffset ?? 0;
     scene.add.existing(this);
     scene.physics.add.existing(this);
     this.setRotation(cfg.angle + (cfg.artAngleOffset ?? 0));
@@ -76,7 +96,30 @@ export class Projectile extends Phaser.Physics.Arcade.Sprite {
   // a timer would give faster projectiles more effective range than intended.
   preUpdate(time: number, delta: number): void {
     super.preUpdate(time, delta);
+    if (this.spawnedAt < 0) this.spawnedAt = time;
+    if (this.homing) {
+      this.steerToward(delta);
+      // A homing orb despawns on its lifetime, not on distance-from-spawn (see
+      // maxLifetimeMs) — the curve means it can circle inside maxRangePx forever.
+      if (this.maxLifetimeMs !== undefined && time - this.spawnedAt >= this.maxLifetimeMs) this.destroy();
+      return;
+    }
     const traveled = Phaser.Math.Distance.Between(this.spawnX, this.spawnY, this.x, this.y);
     if (traveled >= this.maxRangePx) this.destroy();
+    if (this.maxLifetimeMs !== undefined && time - this.spawnedAt >= this.maxLifetimeMs) this.destroy();
+  }
+
+  // Rotate the current velocity toward the target by at most turnRate·dt this
+  // frame (speed is preserved) — a bounded turn, so a player who keeps moving
+  // laterally can out-turn it and make it overshoot.
+  private steerToward(delta: number): void {
+    const body = this.body as Phaser.Physics.Arcade.Body | undefined;
+    if (!body || !this.homing) return;
+    const current = Math.atan2(body.velocity.y, body.velocity.x);
+    const desired = Phaser.Math.Angle.Between(this.x, this.y, this.homing.target.x, this.homing.target.y);
+    const maxTurn = this.homing.turnRateRadPerSec * (delta / 1000);
+    const next = current + Phaser.Math.Clamp(Phaser.Math.Angle.Wrap(desired - current), -maxTurn, maxTurn);
+    body.setVelocity(Math.cos(next) * this.speed, Math.sin(next) * this.speed);
+    this.setRotation(next + this.artAngleOffset);
   }
 }

@@ -458,10 +458,13 @@ exponentially.
 Each elite drops a **unique trophy by species** (Boar → Boar Trophy, Snake →
 Snake Trophy, Gremlin/Gremling → Gremlin Trophy — all **Common / Tier 1**;
 Duskrunner/Cragscale/Hexling/Sandmaw → their own Common trophy, all **Tier 2**
-since Phase 5). Same-rarity trophies always share the Common outcome table +
+since Phase 5; the six bayou elites → their own Common trophy, all **Tier 3**).
+Same-rarity trophies always share the Common outcome table +
 pity counter, so more elite variety just means more attempts — the badlands
 trophies' only difference is the **×1.5 power-tier multiplier** on whatever
-relic they produce.
+relic they produce, and the bayou's is **×2.25**. Bayou trophies are **roll-only
+for now**: refining needs a tier-3 shard currency, which the bayou's own POI /
+dungeon phases will source.
 
 **Outcome odds by trophy rarity** (Common band softened + pity cut in S4,
 2026-07-15):
@@ -496,6 +499,12 @@ relic they produce.
 | Cragscale Trophy | Elite Cragscale (badlands) | Common | **2** |
 | Hexling Trophy | Elite Hexling (badlands) | Common | **2** |
 | Sandmaw Trophy | Elite Sandmaw (badlands) | Common | **2** |
+| Mirejaw Trophy | Elite Mirejaw (bayou) | Common | **3** |
+| Blighttoad Trophy | Elite Blighttoad (bayou) | Common | **3** |
+| Mosswretch Trophy | Elite Mosswretch (bayou) | Common | **3** |
+| Murkling Trophy | Elite Murkling (bayou) | Common | **3** |
+| Fenlurker Trophy | Elite Fenlurker (bayou) | Common | **3** |
+| Corpselight Trophy | Elite Corpselight (bayou) | Common | **3** |
 | **Boss Trophy** | Gremlin King (boss) | Mythic (bespoke — guaranteed) | 1 |
 | **Tyrant Trophy** | The Duneshaper (final boss) | Mythic (bespoke — guaranteed) | **2** |
 | ~~Gremlin King Fang~~ | — | — | Retired — the King now drops the **Gremlin King's Heart** (Phase-4 smelting gate) + the new **Boss Trophy** |

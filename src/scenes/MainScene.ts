@@ -18,6 +18,12 @@ import { Duskrunner } from "../entities/Duskrunner";
 import { Cragscale } from "../entities/Cragscale";
 import { Hexling } from "../entities/Hexling";
 import { Sandmaw } from "../entities/Sandmaw";
+import { Mirejaw } from "../entities/Mirejaw";
+import { Blighttoad } from "../entities/Blighttoad";
+import { Mosswretch } from "../entities/Mosswretch";
+import { Murkling } from "../entities/Murkling";
+import { Fenlurker } from "../entities/Fenlurker";
+import { Corpselight } from "../entities/Corpselight";
 import { Projectile, type ProjectileConfig } from "../entities/Projectile";
 import { GremlinShack, SHACK_GUARD_RESPAWN_MS } from "../entities/GremlinShack";
 import { BadlandsDen } from "../entities/BadlandsDen";
@@ -1287,6 +1293,7 @@ export class MainScene extends Phaser.Scene {
     this.spawnBayouZoneContent();
     this.spawnBayouNodes();
     this.spawnBayouFlora();
+    this.spawnBayouEnemies(); // Phase 4b — the melee-core roster (after the nodes, same as the badlands order)
     // PB1 Session 3 — populate the forest patchwork blobs beyond BIOME_RADIUS and
     // extend the badlands band beyond BADLANDS_R_MAX_INNER. Called last of the
     // content passes (every POI position is set by now) so their exclusion checks
@@ -2035,10 +2042,22 @@ export class MainScene extends Phaser.Scene {
       return new Sandmaw(this, { x, y, elite });
     }
     if (biome === "dunes") return null; // placeholder biome, no roster yet
-    // Bayou (biome 3): terrain + sources shipped in Phase 4a, but its melee roster
-    // lands in 4b — so no top-up here yet. Without this the bayou would fall
-    // through to the forest branch and respawn boars in a swamp.
-    if (biome === "bayou") return null;
+    // Bayou (biome 3): the roster shipped in Phase 4b, so the top-up is live —
+    // weighted ~ spawnBayouEnemies()'s own counts (Murkling ~130 / Blighttoad ~65
+    // / Mirejaw 44 / Mosswretch ~45 / Fenlurker 42 / Corpselight 22 = 348).
+    // Murklings respawn as LONE stragglers, not a fresh nest, and the Mirejaw
+    // (the sole Mirehide source) keeps a real share so the reforge tier stays
+    // farmable — the same "the material source must replenish" reasoning that
+    // made Duskrunners dominate the badlands top-up.
+    if (biome === "bayou") {
+      const roll = rng.between(1, 348);
+      if (roll <= 130) return new Murkling(this, { x, y, elite });
+      if (roll <= 195) return new Blighttoad(this, { x, y, elite });
+      if (roll <= 239) return new Mirejaw(this, { x, y, elite });
+      if (roll <= 284) return new Mosswretch(this, { x, y, elite });
+      if (roll <= 326) return new Fenlurker(this, { x, y, elite });
+      return new Corpselight(this, { x, y, elite });
+    }
     // forest + base (the universal between-blobs layer) → the forest roster.
     const roll = rng.between(1, 82);
     if (roll <= 24) return new Boar(this, { x, y, elite });
@@ -4897,6 +4916,95 @@ export class MainScene extends Phaser.Scene {
     scatterFlora({ texture: "water_lily", pickedTexture: "water_lily_picked", resource: "water_lily", displayName: "Water Lily", count: 70, avoidDeepWater: false });
   }
 
+  // The Duskmire Bayou's creature roster (biome 3 Phase 4b) — MELEE-CORE by
+  // design (locked): five melee kits plus one deliberately uncommon ranged haunt.
+  // Everything routes through pickBayouPoint, so it can only land where the bayou
+  // actually dominates and never inside a POI clearing.
+  //
+  // Counts follow the badlands' hard-won density lesson (the user's "0 enemies
+  // found" report): the bayou band is a big annulus, so a count that looks large
+  // on paper still reads sparse on the ground. Roughly badlands-comparable per
+  // area, weighted toward the swarm — and everything except the Mirejaw and the
+  // Corpselight is uneven/clustered rather than evenly spread, per the standing
+  // organic-density preference. First-pass/tunable.
+  private spawnBayouEnemies(): void {
+    const rng = this.sessionRng();
+    const add = (e: Enemy) => {
+      this.enemies.push(e);
+      this.enemyGroup.add(e);
+    };
+    // Scatter a clustered group around one bayou anchor point — the shared shape
+    // for every packed species below (jitter is per-species, since a Murkling
+    // swarm boils out of one reed-bed while toads are just loosely neighborly).
+    const cluster = (count: number, jitter: number, make: (x: number, y: number) => Enemy) => {
+      const center = this.pickBayouPoint(rng, 0.4, BAYOU_R_MIN, BAYOU_R_MAX, { avoidDeepWater: true });
+      if (!center) return false;
+      for (let i = 0; i < count; i++) {
+        let x = Phaser.Math.Clamp(center.x + rng.between(-jitter, jitter), 60, WORLD_W - 60);
+        let y = Phaser.Math.Clamp(center.y + rng.between(-jitter, jitter), 60, WORLD_H - 60);
+        // The anchor is verified bayou, but jitter can push a member over a seam
+        // into the neighbouring biome — which reads exactly like the "spawned in
+        // the wrong biome" bug the badlands seam had. Fall back to the anchor
+        // rather than dropping the member (the badlands pack spawner doesn't do
+        // this check; this is the improved version).
+        if (this.worldBiomes.dominantBiomeAt(x, y) !== "bayou") {
+          x = center.x;
+          y = center.y;
+        }
+        add(make(x, y));
+      }
+      return true;
+    };
+
+    // Murkling swarms — the pack-aggro payoff. 4-6 per reed-bed, tightly
+    // clustered so updatePackAggro visibly cascades the whole nest awake.
+    const MURKLING_NESTS = 26;
+    for (let n = 0; n < MURKLING_NESTS; n++) {
+      if (!cluster(rng.between(4, 6), 60, (x, y) => new Murkling(this, { x, y, elite: this.rollElite(rng) }))) break;
+    }
+
+    // Blighttoads — loose semi-swarm clumps of 2-3 around still water.
+    const TOAD_CLUMPS = 26;
+    for (let c = 0; c < TOAD_CLUMPS; c++) {
+      if (!cluster(rng.between(2, 3), 110, (x, y) => new Blighttoad(this, { x, y, elite: this.rollElite(rng) }))) break;
+    }
+
+    // Mirejaws — LONE ambushers (a gator doesn't share a stretch of water), and
+    // the only Mirehide source, so there have to be enough of them that hunting
+    // for hide is a hunt rather than a scavenger sweep of the whole band.
+    const MIREJAW_COUNT = 44;
+    for (let i = 0; i < MIREJAW_COUNT; i++) {
+      const pt = this.pickBayouPoint(rng, 0.4, BAYOU_R_MIN, BAYOU_R_MAX);
+      if (!pt) break;
+      add(new Mirejaw(this, { x: pt.x, y: pt.y, elite: this.rollElite(rng) }));
+    }
+
+    // Mosswretches — mostly solitary, occasionally a pair of husks together.
+    const MOSSWRETCH_GROUPS = 30;
+    for (let g = 0; g < MOSSWRETCH_GROUPS; g++) {
+      if (!cluster(rng.between(1, 2), 90, (x, y) => new Mosswretch(this, { x, y, elite: this.rollElite(rng) }))) break;
+    }
+
+    // Fenlurkers — LONE buried ambushers (a lurker is a solo trap, same as the
+    // Sandmaw), spread so crossing open muck regularly trips one.
+    const FENLURKER_COUNT = 42;
+    for (let i = 0; i < FENLURKER_COUNT; i++) {
+      const pt = this.pickBayouPoint(rng, 0.4, BAYOU_R_MIN, BAYOU_R_MAX);
+      if (!pt) break;
+      add(new Fenlurker(this, { x: pt.x, y: pt.y, elite: this.rollElite(rng) }));
+    }
+
+    // Corpselights — the ONE ranged creature, kept genuinely uncommon (about a
+    // third of any melee species) so the biome still reads melee-core and a
+    // homing orb stays an event rather than ambient chip damage.
+    const CORPSELIGHT_COUNT = 22;
+    for (let i = 0; i < CORPSELIGHT_COUNT; i++) {
+      const pt = this.pickBayouPoint(rng, 0.4, BAYOU_R_MIN, BAYOU_R_MAX);
+      if (!pt) break;
+      add(new Corpselight(this, { x: pt.x, y: pt.y, elite: this.rollElite(rng) }));
+    }
+  }
+
   // Biome-3 miasma zones — the bayou's counterpart to the badlands macro-zones,
   // and the payoff of Phase 1's generic environment hook: inside one, HP regen is
   // suppressed and poison ticks (see environmentEffectAt). Deliberately SMALLER
@@ -7702,8 +7810,10 @@ export class MainScene extends Phaser.Scene {
           kb > 0 ? { fromX: enemy.x, fromY: enemy.y, speed: kb } : undefined,
           undefined,
           enemy.pendingBleed ?? undefined,
+          enemy.pendingPoison ?? undefined,
         );
         enemy.pendingBleed = null; // consumed this frame
+        enemy.pendingPoison = null;
         // Molten Bulwark (Embersteel heavy set): a melee attacker that lands a
         // hit is seared. Only the contact-bite path (this branch) procs it —
         // ranged projectiles never touch the plate. Note dealSetBonusDamage may
@@ -7863,6 +7973,7 @@ export class MainScene extends Phaser.Scene {
     knockback?: { fromX: number; fromY: number; speed: number },
     dmgType?: IncomingDamageType,
     bleed?: { dmgPerSec: number; durationMs: number },
+    poison?: { dmgPerSec: number; durationMs: number },
   ): void {
     if (this.isDead) return;
     if (this.time.now < this.invulnerableUntil) return;
@@ -7885,6 +7996,13 @@ export class MainScene extends Phaser.Scene {
     if (bleed) {
       this.bleed.apply(bleed.dmgPerSec, bleed.durationMs);
       this.hints.trigger("bled");
+    }
+    // Creature poison (biome 3) rides the same i-frame guard as bleed, and uses
+    // the DISCRETE apply() path — repeated Blighttoad bites are meant to ramp,
+    // unlike the miasma's refresh-don't-stack sustain().
+    if (poison) {
+      this.poison.apply(poison.dmgPerSec, poison.durationMs);
+      this.hints.trigger("poisoned");
     }
     // Additive damage-reduction bucket (2026-07-15): the relic %-reduction and
     // Molten Bulwark's flat % (Embersteel heavy set) ADD into one reduction,

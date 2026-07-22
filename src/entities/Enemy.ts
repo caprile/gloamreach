@@ -221,6 +221,12 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   // Rides the same i-frame guard as the hit's direct damage, so a dashed-through
   // roll applies neither.
   pendingBleed: { dmgPerSec: number; durationMs: number } | null = null;
+  // Poison (biome 3) to apply when the current attack connects — same contract
+  // as pendingBleed (read + cleared by MainScene.updateEnemies on the landing
+  // frame, so it rides the same i-frame guard). null = no poison. A creature
+  // dose is DISCRETE and stacks (PoisonManager.apply), unlike the miasma's
+  // sustained environmental slot. The Blighttoad is the first user.
+  pendingPoison: { dmgPerSec: number; durationMs: number } | null = null;
   // The unscaled/base display scale to restore after a wind-up scale-pulse.
   // Elites bump this to their own scale so the pulse throbs around the right
   // size (see each subclass's elite branch).

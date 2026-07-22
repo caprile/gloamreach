@@ -74,4 +74,15 @@ export type ResourceType =
   | "mirehide" // bayou creature hide — the light-armor half of the bayou reforge
   | "swamp_moss" // bayou harvestable — a future alchemy/food ingredient (no recipe yet)
   | "water_lily" // bayou harvestable, grows on the water — future alchemy/food ingredient
-  | "duneshaper_heart"; // the Duneshaper's guaranteed drop — upgrades the Gemwright's Table to craft ability jewelry (biome-3 gate)
+  | "duneshaper_heart" // the Duneshaper's guaranteed drop — upgrades the Gemwright's Table to craft ability jewelry (biome-3 gate)
+  // --- biome-3 (Phase 4b) bayou creature drops ---
+  | "mirejaw_meat" // the bayou's food source (Duskrunner-meat precedent) — dropped by Mirejaws, cooking recipes land later
+  | "blight_gland" // a Blighttoad's poison sac — a future alchemy/coated-ammo ingredient
+  | "gloam_dust" // motes shed by a slain Murkling — a future alchemy/augment ingredient
+  // Bayou elite trophies — Common / Tier 3 (the deepest tier so far, ×2.25 relic magnitude)
+  | "mirejaw_trophy"
+  | "blighttoad_trophy"
+  | "mosswretch_trophy"
+  | "murkling_trophy"
+  | "fenlurker_trophy"
+  | "corpselight_trophy";

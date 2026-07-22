@@ -7018,3 +7018,72 @@ upgrade** (with a Workbench nearby per the standing tier-≥1 rule) bumps the pl
 the Duneshaper's Heart, and unlocks the ability recipes; the menu opens/renders/closes cleanly. `tsc`
 clean; **zero console errors**. `RECIPES.md` updated (station recipe + upgrade + a new Jewelry section);
 dashboard reads recipes live.
+
+### B3-P3 — Biome-3 Phase 3: Bayou gear progression (reforge tier + gem augments) (2026-07-21, Opus)
+
+Plan: `.claude/plans/biome-3-phase-3-bayou-gear.md`. Two locked calls from the user (`AskUserQuestion`):
+gem augments are **mix-and-match and CONSUMED** (not removable sockets, not a linear ladder), and biome 3
+**does** add one reforge tier on top of them.
+
+**A. Gem augments — `src/systems/GearAugments.ts` (new).** `GearAugmentDef` mirrors `StationUpgradeDef`'s
+shape (so the existing `UpgradeMenu` serves it unchanged) plus an `augment: true` discriminator and an
+`AugmentEffect` payload. **No new per-instance data model:** applied ids reuse `ItemStack.upgrades` for
+gear in a container and a new `EquippedItem.upgrades` for a worn piece — and an augment never touches the
+item's `tier`, so the Lvl 2/3 right-click ladder and up to **2 augments** compose on the same piece.
+Deliberately its own effect layer (relics = raw-% combat stats, jewelry = ability/explorer utility), so
+augments stay gear-flavored: **Gloam Edge** +3 dmg, **Serrated Fang** +6% crit chance, **Cruel Weight**
++0.30x crit dmg, **Widened Sweep** +30% arc reach, **Swift Grip** −12% stamina (weapons); **Warded
+Plating** +2 armor, **Stoneheart Core** +3 armor, **Gloamweave Lining** −10% magic/fire, **Fleetfoot
+Stitching** +4% move (armor). Fit the **Ember + new Gloam tiers only** (gems are a late-game sink, not a
+way to keep a Wood Club alive) and gate on a **Workbench Lvl 4**. Every effect hooks the single existing
+chokepoint — a new `equippedWeaponBaseDamage()` (which also collapsed three copies of the
+`weaponDamage + weaponTierDamageBonus` expression), `critChanceTotal`/`critMultTotal`, the melee arc's
+range, `effectiveStaminaCostMult`, `ArmorUpgrades.totalPlayerDefense`, `applyDamageToPlayer`'s
+armor-bypass branch (summed with heavy-armor skill mitigation, capped 75%), and the `moveMult` bucket.
+`UpgradeMenu` gained an `appliedAugmentIds` dep: augment rows run the no-ladder model even while a tier
+ladder is listed above them, with a `Gem augments: N/2` header and a "Gem slots full" block at the cap.
+The item Tooltip lists a specific instance's gems.
+
+**B. The bayou reforge tier (dormant — sourced in Phase 4).** New materials **Bog Ore** → **Gloamsteel
+Ingot** (Smelter + Hex Essence, needs the tier-1 Ember Crucible) and **Mirehide**; new Workbench **Lvl 5**
+upgrade **Gloamforge Anvil**. 11 recipes at `requiresWorkbenchTier: 4`, each **consuming its Ember
+counterpart** (roadmap locked decision 6 — no fresh base sets): **Gloamsteel** heavy set (13/16/13 = 42)
++ **Mirehide** light set (9/12/9 = 30) + Gloamsteel Warhammer/Longsword/Pike/Warbow and the **Gloam
+Brand** (30/25/32/20/23), all holding the S7 identity invariants. Both sets get the existing two
+right-click levels (sunk in Gloamsteel) and their own set bonuses — **Gloam Bulwark** / **Mireblink**,
+deliberately the *same two mechanics* as the Ember sets turned up (22% DR + 15 thorns; 1.9x dash +
+120px/26 dmg nova); MainScene picks the stronger rather than stacking. New **Bayou** inventory tab
+(`ItemBiome`) covering this tier and 2b's jewelry economy.
+
+**Verified live** (`javascript_tool`): all 15 new textures generate; augment apply **blocked** without a
+Lvl-5 bench ("Requires nearby Workbench Lvl 4") and applies with one, exact costs deducted, a **third
+augment refused at the cap**; equipped weapon 30→33 dmg and crit 6%→12%; Swift Grip stamina mult 0.88;
+**Widened Sweep proven functionally** (a secondary enemy at 62px is OUT of the warhammer's 54px sweep and
+IN at +30%); armor 42→47 with two augments; a magic hit 60→48 with two Linings while physical stays
+60−30 armor = 30; `moveMult` 1→1.08 arriving at `Player.update` with dash 1.9 from the Mirehide set; all
+11 recipes gate at bench tier 4 (craft refused without, succeeds with, base piece consumed); Bog Ore
+smelts only at Smelter tier 1; equip→unequip round-trips both `tier` and `upgrades`. `tsc` clean, zero
+console errors. `RECIPES.md` + the dashboard (new Gem-augments table) updated.
+
+**Same-session follow-up pass (the user's feedback).** (1) **Crafting menu was too short** — its fixed
+440px height was authored when the Armor/Weapons tabs held a handful of recipes; the forged + bayou tiers
+ran the list straight out the bottom. It now **sizes itself** to the space between its top margin and the
+bottom HUD, and the recipe list is a **windowed scrollable viewport** (own wheel handler + ▲/▼ hints, only
+in-view rows created — `CookingMenu`'s pattern). At 1080p: 670 tall, full 24-row Armor tab fits with no
+scroll. (2) **Gem-slot visibility** — the Tooltip now shows `Gem augments: N/2` for *any* augmentable
+piece (filled or empty, so empty no longer reads like "takes no gems") plus the applied ones, and every
+slot icon (backpack / hotbar / paper-doll) draws **diamond pips** at its bottom-left, violet for used and
+hollow for free. (3) **This biome's arrows** — **Gloamsteel Arrows** (1 Gloamsteel Ingot + 5 Wood → 60);
+unlike the Sunsteel/Embersteel pair (which both make the same plain `arrows`), these are their own ammo
+item and the **Gloamsteel Warbow fires only them**. (4) **A bespoke bayou magic weapon — the
+Gloamdrinker** (not a reforge of anything): the only weapon with **lifelink**, a new data-driven
+`Weapons.WEAPON_LIFELINK_PCT` healing **12% of damage dealt** on every hit (arc-swept targets included) at
+the same `resolveWeaponHit` choke point Bloodpact uses — always on, no relic family slot, stacks with
+Leech/Bloodpact, paid for with 19 dmg (below the Gloam Brand's 23) and a tighter arc. Verified live:
+panel 670 tall / 0 overflowing rows / detail column bottoms at 722 vs 890, scroll path exercised by
+shrinking the panel; pips + tooltip exact (`0/2`, `2/2` + names, nothing on a Stone Club); Gloamdrinker
+19 dmg → heal 2 vs Gloam Brand 23 → heal 0; the bow refuses to fire with no ammo AND with plain arrows,
+fires + decrements 10→9 with Gloamsteel Arrows. Zero console errors.
+
+**Not built (deliberate):** no world source for Bog Ore/Mirehide/gems — that lands in Phase 4 with the
+bayou itself (same authored-dormant pattern as 2b; test via `__dev.give`).

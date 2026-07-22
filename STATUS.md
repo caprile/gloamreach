@@ -2,7 +2,39 @@
 
 ## Current State
 
-_Living snapshot — edit in place, never append. Last shipped: **B3-P4a — Biome-3 Phase 4a:
+_Living snapshot — edit in place, never append. Last shipped: **B3-P4b — Biome-3 Phase 4b: the
+Duskmire Bayou creature roster** (2026-07-22, Opus). Six bespoke melee-core creatures + one
+deliberately uncommon ranged haunt, dropped into 4a's terrain. Locked with the user up front: the
+**specced 6**, **Mirehide from the Mirejaw ONLY** (hunting the gator IS the reforge gate), and
+**build the homing projectile now**. Two shared hooks first: **`Enemy.pendingPoison`** (the
+`pendingBleed` contract exactly, routed to `PoisonManager.apply()` — the discrete **stacking**
+path, not the miasma's refresh-only `sustain()`) and **`Projectile.homing`** (re-aim velocity by
+at most `turnRate·dt` each `preUpdate`, plus a **required** `maxLifetimeMs` — the default
+despawn measures distance *from spawn*, which a curving orb never trips, so it would orbit
+forever). The six: **Mirejaw** (130 HP, sole Mirehide + the bayou's meat; lurks VISIBLE at alpha
+0.4, locked-line lunge chomp 85+bleed, then **surfaces and hunts** rather than re-burying);
+**Blighttoad** (poison carrier — the bite is eaten by plate, the **stacking armor-bypassing
+poison** is the payload, and it halves healing so you can't eat your way out); **Mosswretch**
+(190 HP bruiser, slowest enemy in the game + the longest wind-up — and **the roster's FIRE
+lesson at ×1.5**, the biggest weakness on any common enemy); **Murkling** (22 HP swarm, the
+**AOE-arc payoff**, wide pack-aggro on the base-state pattern, deliberately neutral to every
+damage type); **Fenlurker** (burrowing ambusher shipped alongside the Sandmaw because **the dodge
+verb is opposite** — ring vs **locked line** — and its resists are the **exact inverse of the
+Mirejaw**, so the two bayou ambushers want different weapons); **Corpselight** (the ONE ranged
+creature, the game's first **homing** projectile — 110px/s, 1.5 rad/s, 4.2s lifetime, magic —
+plus the bayou's **local Hex Essence** source, so Gloamsteel no longer means walking back to the
+badlands). **358 creatures** spawn clustered-per-species via `pickBayouPoint`, with cluster jitter
+now **re-checking biome per member** (an improvement on the badlands spawner, which can leak over
+a seam); the bayou **respawn top-up is live** (4a had it gated off), Mirejaw-weighted so the
+Mirehide tier stays farmable. 3 new materials + 6 elite trophies at **Common / Tier 3** (×2.25) —
+**roll-only** until a tier-3 shard currency exists (4c/4d), exactly as biome-2 was pre-Ember.
+Verified live: locked lunge dealt 85 standing still and **0 when sidestepped**; poison **stacked
+6→12→18→24 while the miasma held flat at 3**; one woken Murkling **cascaded to all 5**; the orb
+re-aimed at exactly its turn cap and **expired at 4224ms**, hitting for **20 through 42 armor vs 1
+untyped**. `tsc` clean, zero console errors. Dashboard Enemies tab + `RECIPES.md` trophy table
+updated; no recipe changes. **Next: 4c — DUNGEONS.** See B3-P4b below +
+[[survivor-rpg-biome-3-roadmap]].
+Prior: **B3-P4a — Biome-3 Phase 4a:
 Duskmire Bayou terrain, environment & material sources** (2026-07-22, Opus, roadmap
 `.claude/plans/biome-3-and-new-systems-roadmap.md`). Phase 4 was **sliced into three sessions** by
 the user: **4a = terrain + environment + sources (this)**, **4b = the melee enemy roster**, **4c =
@@ -51,7 +83,7 @@ Prior: **B3-P3 — Biome-3 Phase 3: Bayou gear progression (reforge tier + gem a
 (2026-07-21, Opus) — gem augments (mix-and-match, consumed, max 2/instance) reusing the existing
 per-instance `upgrades` field + `UpgradeMenu`, plus the Gloamsteel/Mirehide reforge tier, Workbench
 Lvl 5, Gloamsteel Arrows and the lifelink Gloamdrinker. Authored dormant; **4a now sources its Bog
-Ore + gems** (Mirehide still pending 4b). See B3-P3 below.
+Ore + gems**; 4b's Mirejaw now sources Mirehide. See B3-P3 in STATUS-archive.md.
 Prior: **B3-P2b — Biome-3 Phase 2b:
 Jewelry-effect pipeline + Gemwright's Table (jewelry station)** (2026-07-21, Opus, plan
 `.claude/plans/biome-3-phase-2b-jewelry-station.md`). Makes 2a's abilities obtainable + lays the jewelry
@@ -129,12 +161,13 @@ current arc is the **biome-3 (haunted bayou, working name "Duskmire Bayou") + ne
 (`.claude/plans/biome-3-and-new-systems-roadmap.md`, 5 phases). **Shipped so far:** **Phase 1**
 (terrain-that-matters + badlands macro-zones), **Phase 2a** (the activated-ability framework + Dota
 QER HUD), **Phase 2b** (the jewelry-effect pipeline + the Gemwright's Table), **Phase 3** (the bayou
-gear progression — gem augments + the Gloamsteel/Mirehide reforge tier), and now **Phase 4a** (the
-bayou's terrain, environment and material sources — above). **Phase 4 is now sliced into FOUR sessions**
-(the Dungeon mechanic was added mid-session): **4a terrain/env/surface-sources — DONE**; **4b — the
+gear progression — gem augments + the Gloamsteel/Mirehide reforge tier), **Phase 4a** (the
+bayou's terrain, environment and material sources), and now **Phase 4b** (the creature roster —
+above). **Phase 4 is sliced into FOUR sessions**
+(the Dungeon mechanic was added mid-4a): **4a terrain/env/surface-sources — DONE**; **4b — the
 melee-core roster** (Mirejaw / Blighttoad / Mosswretch / Murkling / Fenlurker + the one ranged
-Corpselight haunt), which also sources **Mirehide** and re-enables the bayou's respawn top-up;
-**4c — DUNGEONS** (Valheim burial-chamber/sunken-crypt interiors; where the ability gems + Moonsilver
+Corpselight haunt) — **DONE**, which sourced **Mirehide** and re-enabled the bayou's respawn top-up;
+**4c — DUNGEONS (NEXT)** (Valheim burial-chamber/sunken-crypt interiors; where the ability gems + Moonsilver
 actually live — ordered after the roster because a dungeon needs creatures to populate it); **4d —
 surface POIs + the **Miretyrant** melee boss-with-adds**, which **becomes the new win-con** (locked),
 demoting the Duneshaper to a mid-boss and finally making its **Heart** obtainable, unlocking the
@@ -189,6 +222,92 @@ below + [[survivor-rpg-dev-console]].
 ## Recent Entries
 
 > Older entries in STATUS-archive.md.
+
+### B3-P4b — Biome-3 Phase 4b: the Duskmire Bayou creature roster (2026-07-22, Opus)
+
+Phase 4b of the biome-3 roadmap (`.claude/plans/biome-3-and-new-systems-roadmap.md`) — the
+**melee-core bayou roster**, six bespoke creatures dropped into the terrain 4a built. Scope locked
+with the user up front via `AskUserQuestion`: **the specced 6** (not a trimmed 4-5, not a 7th
+apex elite); **Mirehide comes from the Mirejaw ONLY** (the signature ambusher — hunting it *is*
+the reforge gate, mirroring Bog Ore as the one surface metal); and **build the homing projectile
+now** rather than shipping the Corpselight with a straight bolt.
+
+**Two shared hooks first, both tiny, both built before the content that needs them:**
+- **`Enemy.pendingPoison`** — the exact contract `pendingBleed` already had (read + cleared by
+  `updateEnemies` on the landing frame, so it rides the same i-frame guard);
+  `applyDamageToPlayer` gained a matching optional `poison` param that routes to
+  `PoisonManager.apply()` — the **discrete, stacking** path, deliberately not the miasma's
+  refresh-only `sustain()`.
+- **`Projectile.homing`** — optional `{turnRateRadPerSec, target}` (a live ref, re-aimed each
+  `preUpdate` by rotating the current velocity toward the target by at most `turnRate·dt`, speed
+  preserved), plus an optional `maxLifetimeMs`. The lifetime is **required** for a homing shot:
+  the default despawn measures straight-line distance *from spawn*, which a curving orb may never
+  exceed — it would orbit forever. Straight shots are untouched and keep the distance rule.
+
+**The six (each a bespoke subclass with its own state machine/constants/loot + elite variant +
+per-species trophy, per the standing "own numbers, don't share one config table" rule):**
+- **Mirejaw** *(130 HP)* — the signature ambusher and sole **Mirehide** source. Lurks half-sunk at
+  **alpha 0.4 — visible**, unlike the Sandmaw's 0.18, so it's spottable — creeps into position,
+  then commits a **locked-line lunge chomp** (85 dmg + bleed 7/s×6s). Unlike the Sandmaw it does
+  NOT re-submerge after one attempt: it **surfaces and hunts** (62 chomp + bleed), re-lunging from
+  mid-range, and only re-buries once it loses you. Also drops **Mirejaw Meat** — the bayou's food
+  source, the Duskrunner-meat precedent. Resists pierce ×0.5 / weak slash ×1.25.
+- **Blighttoad** *(70 HP)* — the **poison** carrier, the creature half of the biome's signature
+  status. Its bite (52) is mostly eaten by bayou-tier plate; the **poison is the payload** —
+  armor-bypassing, **stacking per bite**, and it halves every heal source while it runs, so it
+  also stops you eating your way out. Semi-swarm (`packAggro` 200), clumps of 2-3, burst **hop**
+  locomotion.
+- **Mosswretch** *(190 HP)* — the bruiser. **Slowest common enemy in the game** (36px/s, always
+  outwalkable) with the **longest common wind-up** (780ms) and a 720ms recovery, so every hit it
+  lands is one you chose not to walk out of. **The roster's FIRE lesson:** fire **×1.5**, the
+  biggest weakness multiplier on any common enemy, which finally makes the player's fire sources a
+  deliberate answer to a specific creature. Resists blunt ×0.5.
+- **Murkling** *(22 HP)* — the fast melee swarm and the **AOE-arc payoff enemy**. Dies to one
+  bayou-tier hit; the threat is 4-6 at once, faster than the player's walk, with the shortest
+  telegraph in the game (150ms). Wide `packAggro` (300) on the **base `state` field** (the
+  Duskrunner's zero-override pattern). **Deliberately neutral to every damage type** — it's the
+  baseline you measure a weapon's sweep against.
+- **Fenlurker** *(85 HP)* — the muck-burrowing ambusher. Shipped alongside the Sandmaw on purpose
+  because **the dodge verb is opposite**: the Sandmaw detonates a *ring* (dodge by clearing
+  distance), the Fenlurker rakes a **locked line** out of the mud (dodge by stepping aside), and a
+  dodged maul leaves it planted a full second with no radial safety net. Invisible **and
+  untargetable** while buried (the Sandmaw's locked rule); AoE damage while buried arms a flag that
+  `update()` commits next frame (takeHit has no player coords and this attack has a direction to
+  lock). Resists slash ×0.5 / weak blunt ×1.25 — **the exact inverse of the Mirejaw**, so the two
+  bayou ambushers want different weapons.
+- **Corpselight** *(90 HP)* — the **one** ranged creature, kept genuinely uncommon (22 vs 42-139
+  for the melee species) so the biome still reads melee-core. Fires the **homing gloam orb**: 110
+  px/s, 1.5 rad/s, 4.2s lifetime, `magic` (bypasses flat armor). Neutral to physical on purpose
+  (the Hexling's old flat physical resist read as unkillable). Also the bayou's **local Hex Essence
+  source**, so forging Gloamsteel no longer means walking back to the badlands.
+
+**Spawning + economy.** `spawnBayouEnemies()` places **358 creatures** through `pickBayouPoint`
+(bayou-dominant only, POI exclusions honored), clustered per species rather than evenly spread per
+the organic-density preference — and cluster jitter now **re-checks the biome per member** and
+falls back to the anchor, an improvement on the badlands pack spawner, which can leak members over
+a seam. The bayou's **enemy-respawn top-up is live** (4a had it explicitly gated off), weighted to
+its own counts with a real Mirejaw share so the Mirehide tier stays farmable. 3 new materials
+(Mirejaw Meat / Blight Gland / Gloam Dust) + 6 elite trophies at **Common / Tier 3** — a new power
+tier (×2.25), **roll-only for now**: refining needs a tier-3 shard currency the bayou's own POI /
+dungeon phases will source, exactly as biome-2 trophies were before Phase 5 added Ember Shards.
+Mosswretch reuses existing keys (Swamp Moss + Wood) and Fenlurker drops **Bones**, giving the bayou
+a bone supply that previously only came from forest Boars.
+
+**Verified live** (`javascript_tool`; the backgrounded-preview loop had to be hand-stepped via
+`game.loop.step`): 358 bayou creatures, all inside the 6400-10500 band; every stat/resist/loot/
+trophy/elite-texture pair read off real instances; **Mirejaw's locked lunge dealt 85 + bleed 7/s
+standing still and ZERO damage when sidestepped during the tell**; poison **stacked 6→12→18→24 dps
+across repeated bites while the miasma's sustain path held flat at 3** (the two-mode contract);
+Mosswretch 800ms telegraph→95 dmg, planted at velocity 0; one woken Murkling **cascaded aggro to
+all 5** packmates; Fenlurker buried = untargetable/alpha 0.12/no HP bar, retaliates on AoE damage,
+maul 78 + bleed 5; the homing orb **re-aimed 0°→-55° chasing a moving player at exactly its
+1.5 rad/s cap** and **expired at 4224ms** (the anti-orbit safeguard), and hit for **20 through 42
+flat armor vs 1 for the same shot untyped** — magic bypass + heavy-armor mitigation both correct.
+`tsc` clean, zero console errors, all six render with distinct silhouettes (screenshot).
+Dashboard Enemies tab (the one hand-mirrored source) + `RECIPES.md`'s trophy table updated; no
+recipe changes. **Next: 4c — dungeons** (where the ability gems + Moonsilver actually live, ordered
+after the roster because a dungeon needs creatures), then 4d (surface POIs + the Miretyrant boss +
+the win-con swap).
 
 ### B3-P4a — Biome-3 Phase 4a: Duskmire Bayou terrain, environment & material sources (2026-07-22, Opus)
 
@@ -349,71 +468,3 @@ source would be dishonest; it lands with the 4b roster. The bayou is also gated 
 enemy-respawn/nightfall top-up (`makeRespawnEnemy` returns null for it) so it doesn't spawn forest
 boars in a swamp before 4b ships. No `RECIPES.md`/dashboard change (no new recipes).
 
-### B3-P3 — Biome-3 Phase 3: Bayou gear progression (reforge tier + gem augments) (2026-07-21, Opus)
-
-Plan: `.claude/plans/biome-3-phase-3-bayou-gear.md`. Two locked calls from the user (`AskUserQuestion`):
-gem augments are **mix-and-match and CONSUMED** (not removable sockets, not a linear ladder), and biome 3
-**does** add one reforge tier on top of them.
-
-**A. Gem augments — `src/systems/GearAugments.ts` (new).** `GearAugmentDef` mirrors `StationUpgradeDef`'s
-shape (so the existing `UpgradeMenu` serves it unchanged) plus an `augment: true` discriminator and an
-`AugmentEffect` payload. **No new per-instance data model:** applied ids reuse `ItemStack.upgrades` for
-gear in a container and a new `EquippedItem.upgrades` for a worn piece — and an augment never touches the
-item's `tier`, so the Lvl 2/3 right-click ladder and up to **2 augments** compose on the same piece.
-Deliberately its own effect layer (relics = raw-% combat stats, jewelry = ability/explorer utility), so
-augments stay gear-flavored: **Gloam Edge** +3 dmg, **Serrated Fang** +6% crit chance, **Cruel Weight**
-+0.30x crit dmg, **Widened Sweep** +30% arc reach, **Swift Grip** −12% stamina (weapons); **Warded
-Plating** +2 armor, **Stoneheart Core** +3 armor, **Gloamweave Lining** −10% magic/fire, **Fleetfoot
-Stitching** +4% move (armor). Fit the **Ember + new Gloam tiers only** (gems are a late-game sink, not a
-way to keep a Wood Club alive) and gate on a **Workbench Lvl 4**. Every effect hooks the single existing
-chokepoint — a new `equippedWeaponBaseDamage()` (which also collapsed three copies of the
-`weaponDamage + weaponTierDamageBonus` expression), `critChanceTotal`/`critMultTotal`, the melee arc's
-range, `effectiveStaminaCostMult`, `ArmorUpgrades.totalPlayerDefense`, `applyDamageToPlayer`'s
-armor-bypass branch (summed with heavy-armor skill mitigation, capped 75%), and the `moveMult` bucket.
-`UpgradeMenu` gained an `appliedAugmentIds` dep: augment rows run the no-ladder model even while a tier
-ladder is listed above them, with a `Gem augments: N/2` header and a "Gem slots full" block at the cap.
-The item Tooltip lists a specific instance's gems.
-
-**B. The bayou reforge tier (dormant — sourced in Phase 4).** New materials **Bog Ore** → **Gloamsteel
-Ingot** (Smelter + Hex Essence, needs the tier-1 Ember Crucible) and **Mirehide**; new Workbench **Lvl 5**
-upgrade **Gloamforge Anvil**. 11 recipes at `requiresWorkbenchTier: 4`, each **consuming its Ember
-counterpart** (roadmap locked decision 6 — no fresh base sets): **Gloamsteel** heavy set (13/16/13 = 42)
-+ **Mirehide** light set (9/12/9 = 30) + Gloamsteel Warhammer/Longsword/Pike/Warbow and the **Gloam
-Brand** (30/25/32/20/23), all holding the S7 identity invariants. Both sets get the existing two
-right-click levels (sunk in Gloamsteel) and their own set bonuses — **Gloam Bulwark** / **Mireblink**,
-deliberately the *same two mechanics* as the Ember sets turned up (22% DR + 15 thorns; 1.9x dash +
-120px/26 dmg nova); MainScene picks the stronger rather than stacking. New **Bayou** inventory tab
-(`ItemBiome`) covering this tier and 2b's jewelry economy.
-
-**Verified live** (`javascript_tool`): all 15 new textures generate; augment apply **blocked** without a
-Lvl-5 bench ("Requires nearby Workbench Lvl 4") and applies with one, exact costs deducted, a **third
-augment refused at the cap**; equipped weapon 30→33 dmg and crit 6%→12%; Swift Grip stamina mult 0.88;
-**Widened Sweep proven functionally** (a secondary enemy at 62px is OUT of the warhammer's 54px sweep and
-IN at +30%); armor 42→47 with two augments; a magic hit 60→48 with two Linings while physical stays
-60−30 armor = 30; `moveMult` 1→1.08 arriving at `Player.update` with dash 1.9 from the Mirehide set; all
-11 recipes gate at bench tier 4 (craft refused without, succeeds with, base piece consumed); Bog Ore
-smelts only at Smelter tier 1; equip→unequip round-trips both `tier` and `upgrades`. `tsc` clean, zero
-console errors. `RECIPES.md` + the dashboard (new Gem-augments table) updated.
-
-**Same-session follow-up pass (the user's feedback).** (1) **Crafting menu was too short** — its fixed
-440px height was authored when the Armor/Weapons tabs held a handful of recipes; the forged + bayou tiers
-ran the list straight out the bottom. It now **sizes itself** to the space between its top margin and the
-bottom HUD, and the recipe list is a **windowed scrollable viewport** (own wheel handler + ▲/▼ hints, only
-in-view rows created — `CookingMenu`'s pattern). At 1080p: 670 tall, full 24-row Armor tab fits with no
-scroll. (2) **Gem-slot visibility** — the Tooltip now shows `Gem augments: N/2` for *any* augmentable
-piece (filled or empty, so empty no longer reads like "takes no gems") plus the applied ones, and every
-slot icon (backpack / hotbar / paper-doll) draws **diamond pips** at its bottom-left, violet for used and
-hollow for free. (3) **This biome's arrows** — **Gloamsteel Arrows** (1 Gloamsteel Ingot + 5 Wood → 60);
-unlike the Sunsteel/Embersteel pair (which both make the same plain `arrows`), these are their own ammo
-item and the **Gloamsteel Warbow fires only them**. (4) **A bespoke bayou magic weapon — the
-Gloamdrinker** (not a reforge of anything): the only weapon with **lifelink**, a new data-driven
-`Weapons.WEAPON_LIFELINK_PCT` healing **12% of damage dealt** on every hit (arc-swept targets included) at
-the same `resolveWeaponHit` choke point Bloodpact uses — always on, no relic family slot, stacks with
-Leech/Bloodpact, paid for with 19 dmg (below the Gloam Brand's 23) and a tighter arc. Verified live:
-panel 670 tall / 0 overflowing rows / detail column bottoms at 722 vs 890, scroll path exercised by
-shrinking the panel; pips + tooltip exact (`0/2`, `2/2` + names, nothing on a Stone Club); Gloamdrinker
-19 dmg → heal 2 vs Gloam Brand 23 → heal 0; the bow refuses to fire with no ammo AND with plain arrows,
-fires + decrements 10→9 with Gloamsteel Arrows. Zero console errors.
-
-**Not built (deliberate):** no world source for Bog Ore/Mirehide/gems — that lands in Phase 4 with the
-bayou itself (same authored-dormant pattern as 2b; test via `__dev.give`).

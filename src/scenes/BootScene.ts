@@ -2595,6 +2595,346 @@ export class BootScene extends Phaser.Scene {
     g.fillCircle(12, 9, 1.4);
     g.generateTexture("icon_water_lily", ICON, ICON);
 
+    // ===== Duskmire Bayou creatures (biome 3 Phase 4b) =====
+    // Every creature is drawn facing RIGHT (the roster's non-rotating flipX
+    // convention) and every elite is the same silhouette in crimson/gold, so
+    // "elite" reads identically across all three biomes.
+
+    // Mirejaw (34x16) — a long, low gloam-gator: heavy tail at the left, ridged
+    // scutes down the back, and a long toothed snout at the right. The bayou's
+    // apex regular, and the silhouette that should read as "get out of the water."
+    const drawMirejaw = (
+      key: string,
+      hide: number,
+      belly: number,
+      scute: number,
+      teeth: number,
+      eye: number,
+    ) => {
+      g.clear();
+      // squat legs
+      g.fillStyle(0x2a3328, 1);
+      g.fillRect(8, 12, 3, 4);
+      g.fillRect(14, 13, 3, 3);
+      g.fillRect(20, 12, 3, 4);
+      // tail (left) + body
+      g.fillStyle(hide, 1);
+      g.fillTriangle(0, 8, 7, 5, 7, 12);
+      g.fillRect(6, 5, 18, 8);
+      // belly
+      g.fillStyle(belly, 1);
+      g.fillRect(6, 11, 18, 2);
+      // long snout (right), slightly tapered
+      g.fillStyle(hide, 1);
+      g.fillRect(23, 6, 9, 5);
+      g.fillRect(29, 7, 4, 3);
+      // teeth along the jaw line
+      g.fillStyle(teeth, 1);
+      for (let i = 0; i < 5; i++) g.fillTriangle(24 + i * 2, 11, 26 + i * 2, 11, 25 + i * 2, 13);
+      // dorsal scutes
+      g.fillStyle(scute, 1);
+      g.fillTriangle(8, 5, 11, 5, 9, 1);
+      g.fillTriangle(13, 5, 16, 5, 14, 0);
+      g.fillTriangle(18, 5, 21, 5, 19, 1);
+      g.fillRect(6, 4, 18, 1);
+      // raised eye ridge — the part that stays above the waterline
+      g.fillStyle(eye, 1);
+      g.fillRect(24, 5, 2, 2);
+      g.fillStyle(0x140f10, 1);
+      g.fillRect(25, 5, 1, 1);
+      g.generateTexture(key, 34, 16);
+    };
+    drawMirejaw("mirejaw", 0x4a5a44, 0x6a7358, 0x33402f, 0xe8e4c8, 0xc9d94a);
+    drawMirejaw("mirejaw_elite", 0x6a1f2a, 0x3f1020, 0xf0c040, 0xffe8a0, 0xf0c040);
+
+    // Blighttoad (22x16) — a bloated, squat toad facing RIGHT: wide sitting body,
+    // bulging eyes on top, and swollen poison glands down its back (the tell that
+    // its bite carries a dose).
+    const drawBlighttoad = (key: string, skin: number, belly: number, gland: number, eye: number) => {
+      g.clear();
+      // haunches + front feet
+      g.fillStyle(belly, 1);
+      g.fillEllipse(6, 13, 9, 5);
+      g.fillRect(16, 12, 5, 3);
+      // body
+      g.fillStyle(skin, 1);
+      g.fillEllipse(11, 9, 20, 12);
+      // pale throat/belly
+      g.fillStyle(belly, 1);
+      g.fillEllipse(13, 12, 12, 5);
+      // wide mouth line
+      g.fillStyle(0x1c2416, 1);
+      g.fillRect(15, 10, 6, 1);
+      // poison glands (bright, deliberately loud)
+      g.fillStyle(gland, 1);
+      g.fillCircle(6, 5, 2.5);
+      g.fillCircle(11, 4, 2);
+      g.fillCircle(15, 5, 2.2);
+      g.fillStyle(0xf0ffc0, 0.7);
+      g.fillCircle(6, 4, 1);
+      // bulging eyes
+      g.fillStyle(eye, 1);
+      g.fillCircle(17, 5, 2.6);
+      g.fillStyle(0x140f10, 1);
+      g.fillCircle(18, 5, 1.2);
+      g.generateTexture(key, 22, 16);
+    };
+    drawBlighttoad("blighttoad", 0x5c7a3c, 0x9aae66, 0x9fe03a, 0xe8d24a);
+    drawBlighttoad("blighttoad_elite", 0x6a1f2a, 0x3f1020, 0xf0c040, 0xffe8a0);
+
+    // Mosswretch (24x32) — a shambling husk: a hunched deadwood frame under a
+    // hanging moss shroud, with long heavy arms and two dim eye-lights in the
+    // hood of moss. Upright/humanoid (mirrors via flipX, never rotates).
+    const drawMosswretch = (key: string, wood: number, moss: number, mossLight: number, eye: number) => {
+      g.clear();
+      // legs — thick stumps
+      g.fillStyle(wood, 1);
+      g.fillRect(7, 24, 4, 8);
+      g.fillRect(14, 24, 4, 8);
+      // torso
+      g.fillRect(6, 12, 13, 13);
+      // long arms hanging past the knees (the smash reach, telegraphed by build)
+      g.fillRect(2, 13, 4, 13);
+      g.fillRect(19, 13, 4, 13);
+      // moss shroud over the shoulders/head
+      g.fillStyle(moss, 1);
+      g.fillEllipse(12, 9, 18, 12);
+      g.fillRect(4, 9, 17, 8);
+      // ragged moss hanging in strands
+      g.fillRect(5, 17, 2, 6);
+      g.fillRect(10, 17, 2, 8);
+      g.fillRect(16, 17, 2, 5);
+      g.fillStyle(mossLight, 1);
+      g.fillEllipse(11, 6, 12, 6); // sunlit top of the shroud
+      g.fillRect(6, 18, 1, 4);
+      // dim eye-lights under the moss
+      g.fillStyle(eye, 1);
+      g.fillRect(10, 10, 2, 2);
+      g.fillRect(15, 10, 2, 2);
+      g.generateTexture(key, 24, 32);
+    };
+    drawMosswretch("mosswretch", 0x4a3a2c, 0x3f5c34, 0x6a8a46, 0xc9f07a);
+    drawMosswretch("mosswretch_elite", 0x3f1020, 0x6a1f2a, 0xf0c040, 0xffe8a0);
+
+    // Murkling (14x12) — a small gloam-sprite: a dark hunched scrap of a body,
+    // one big glowing eye, and thin claws. Deliberately tiny and simple; you see
+    // five of these at once and must read the CLUSTER, not the individual.
+    const drawMurkling = (key: string, body: number, glow: number, claw: number) => {
+      g.clear();
+      g.fillStyle(body, 1);
+      g.fillEllipse(7, 7, 12, 9); // hunched body
+      g.fillTriangle(1, 3, 5, 6, 2, 8); // ragged trailing wisp
+      // claws (right — the business end)
+      g.fillStyle(claw, 1);
+      g.fillTriangle(11, 5, 14, 4, 12, 8);
+      g.fillTriangle(10, 9, 14, 10, 11, 11);
+      // one big eye
+      g.fillStyle(glow, 1);
+      g.fillCircle(9, 6, 2.4);
+      g.fillStyle(0xffffff, 0.85);
+      g.fillCircle(9, 5, 1);
+      g.generateTexture(key, 14, 12);
+    };
+    drawMurkling("murkling", 0x2e2a3e, 0xa87ce8, 0xc9c0d8);
+    drawMurkling("murkling_elite", 0x6a1f2a, 0xf0c040, 0xffe8a0);
+
+    // Fenlurker (26x16) — a slick, boneless muck-burrower facing RIGHT: a low
+    // segmented body ending in a fan of DIGGING CLAWS and a lamprey-ish maw. Kept
+    // visually distinct from the Sandmaw (plated/armored) by being smooth and
+    // wet-looking — armor vs. eel.
+    const drawFenlurker = (key: string, hide: number, hideDark: number, claw: number, maw: number, eye: number) => {
+      g.clear();
+      // wet underside
+      g.fillStyle(hideDark, 1);
+      g.fillEllipse(11, 11, 20, 6);
+      // segmented body + tapering tail (left)
+      g.fillStyle(hide, 1);
+      g.fillEllipse(11, 8, 21, 10);
+      g.fillTriangle(0, 8, 4, 5, 4, 11);
+      // segment grooves
+      g.fillStyle(hideDark, 1);
+      g.fillRect(7, 4, 1, 8);
+      g.fillRect(12, 4, 1, 8);
+      g.fillRect(16, 4, 1, 8);
+      // digging claws fanned at the front
+      g.fillStyle(claw, 1);
+      g.fillTriangle(19, 3, 26, 1, 22, 7);
+      g.fillTriangle(19, 12, 26, 15, 22, 9);
+      g.fillTriangle(21, 7, 26, 8, 21, 10);
+      // round rasping maw
+      g.fillStyle(maw, 1);
+      g.fillCircle(20, 8, 3.4);
+      g.fillStyle(0xe8e0c8, 1);
+      g.fillCircle(20, 8, 1.4);
+      // pale blind eye-spot
+      g.fillStyle(eye, 1);
+      g.fillRect(15, 5, 2, 2);
+      g.generateTexture(key, 26, 16);
+    };
+    drawFenlurker("fenlurker", 0x544a3e, 0x352f28, 0xb9b0a0, 0x241a1e, 0xd8e0b0);
+    drawFenlurker("fenlurker_elite", 0x6a1f2a, 0x3f1020, 0xf0c040, 0x3f1020, 0xffe8a0);
+
+    // Corpselight (18x26) — a floating swamp-haunt: a tattered hanging shroud
+    // under a bright wisp-flame, with no legs at all (the silhouette says "this
+    // one doesn't walk"). Upright, so it mirrors rather than rotating.
+    const drawCorpselight = (key: string, shroud: number, shroudDark: number, flame: number, core: number) => {
+      g.clear();
+      // ragged shroud, widening and fraying downward
+      g.fillStyle(shroud, 1);
+      g.fillRect(5, 10, 8, 6);
+      g.fillRect(4, 16, 10, 5);
+      g.fillStyle(shroudDark, 1);
+      g.fillRect(4, 21, 3, 4); // torn strips
+      g.fillRect(8, 21, 3, 5);
+      g.fillRect(12, 21, 2, 3);
+      // wisp-flame head
+      g.fillStyle(flame, 0.45);
+      g.fillCircle(9, 7, 7); // outer halo
+      g.fillStyle(flame, 1);
+      g.fillCircle(9, 7, 4.4);
+      g.fillTriangle(6, 6, 12, 6, 9, 0); // flame tip
+      g.fillStyle(core, 1);
+      g.fillCircle(9, 7, 2);
+      // two hollow eye-points inside the flame
+      g.fillStyle(0x1a1024, 1);
+      g.fillRect(7, 7, 1, 2);
+      g.fillRect(10, 7, 1, 2);
+      g.generateTexture(key, 18, 26);
+    };
+    drawCorpselight("corpselight", 0x3a3350, 0x272238, 0x8fd9c8, 0xeafff8);
+    drawCorpselight("corpselight_elite", 0x3f1020, 0x2a0c14, 0xf0c040, 0xfff4c0);
+
+    // Gloam orb — the Corpselight's slow HOMING projectile. A soft round mote
+    // with a trailing wisp (drawn pointing +x like every other projectile), read
+    // as "drifting", not "shot": it should look dodgeable, because it is.
+    g.clear();
+    g.fillStyle(0x8fd9c8, 0.35);
+    g.fillCircle(9, 6, 6); // halo
+    g.fillStyle(0x6fc0b0, 0.8);
+    g.fillTriangle(0, 4, 0, 8, 9, 6); // trailing wisp
+    g.fillStyle(0xa8ead8, 1);
+    g.fillCircle(10, 6, 3.4);
+    g.fillStyle(0xeafff8, 1);
+    g.fillCircle(11, 5, 1.6); // bright core
+    g.generateTexture("gloam_orb", 16, 12);
+
+    // --- bayou creature-drop icons (ICON=24) ---
+
+    g.clear(); // Mirejaw Meat — a pale, heavy reptile cut with a green hide edge
+    g.fillStyle(0xa8564a, 1);
+    g.fillRect(5, 7, 14, 10);
+    g.fillStyle(0xcf7a68, 1);
+    g.fillRect(7, 9, 8, 5);
+    g.fillStyle(0x4a5a44, 1);
+    g.fillRect(5, 7, 14, 2); // gator-hide edge
+    g.fillStyle(0x33402f, 1);
+    g.fillRect(6, 7, 2, 2); // scute nubs on the edge
+    g.fillRect(11, 7, 2, 2);
+    g.fillRect(16, 7, 2, 2);
+    g.generateTexture("icon_mirejaw_meat", ICON, ICON);
+
+    g.clear(); // Blight Gland — a taut green sac weeping a drip
+    g.fillStyle(0x6a8a3a, 1);
+    g.fillEllipse(12, 11, 15, 13);
+    g.fillStyle(0x9fe03a, 1);
+    g.fillEllipse(11, 9, 9, 7);
+    g.fillStyle(0xe4ffb0, 0.9);
+    g.fillCircle(9, 8, 2); // sheen
+    g.fillStyle(0x9fe03a, 1); // drip
+    g.fillCircle(13, 19, 2);
+    g.fillTriangle(11, 18, 15, 18, 13, 15);
+    g.generateTexture("icon_blight_gland", ICON, ICON);
+
+    g.clear(); // Gloam Dust — a scatter of violet motes over a dark pinch
+    g.fillStyle(0x2e2a3e, 1);
+    g.fillEllipse(12, 17, 14, 6); // the pinch it settles into
+    g.fillStyle(0xa87ce8, 1);
+    g.fillCircle(8, 12, 2);
+    g.fillCircle(14, 9, 2.4);
+    g.fillCircle(17, 14, 1.8);
+    g.fillCircle(11, 6, 1.5);
+    g.fillStyle(0xe0d0ff, 1);
+    g.fillCircle(14, 8, 1);
+    g.fillCircle(8, 11, 0.8);
+    g.generateTexture("icon_gloam_dust", ICON, ICON);
+
+    // --- bayou elite trophies (all on the shared crimson-shard + gold-cord
+    // template, so a trophy is instantly recognizable as one) ---
+
+    g.clear(); // Mirejaw Trophy — a long curved gator tooth
+    g.fillStyle(0x6a1f3a, 1);
+    g.fillTriangle(7, 3, 15, 6, 10, 17);
+    g.fillStyle(0xe8e4c8, 1);
+    g.fillTriangle(8, 4, 13, 6, 10, 14); // ivory tooth
+    g.fillStyle(0xc9d94a, 1);
+    g.fillRect(12, 9, 2, 2); // gloam fleck
+    g.fillStyle(0xf0c040, 1);
+    g.fillRect(7, 17, 10, 2); // gold cord
+    g.generateTexture("icon_mirejaw_trophy", ICON, ICON);
+
+    g.clear(); // Blighttoad Trophy — a dried crown-gland
+    g.fillStyle(0x6a1f3a, 1);
+    g.fillEllipse(12, 10, 15, 12);
+    g.fillStyle(0x9fe03a, 1);
+    g.fillCircle(9, 8, 2.5);
+    g.fillCircle(14, 7, 2);
+    g.fillCircle(13, 12, 2.2);
+    g.fillStyle(0xe4ffb0, 0.8);
+    g.fillCircle(9, 7, 1);
+    g.fillStyle(0xf0c040, 1);
+    g.fillRect(7, 17, 10, 2);
+    g.generateTexture("icon_blighttoad_trophy", ICON, ICON);
+
+    g.clear(); // Mosswretch Trophy — a knot of heartwood still growing moss
+    g.fillStyle(0x6a1f3a, 1);
+    g.fillCircle(12, 10, 7);
+    g.fillStyle(0x4a3a2c, 1);
+    g.fillCircle(12, 10, 5); // heartwood knot
+    g.fillStyle(0x6a8a46, 1);
+    g.fillCircle(9, 7, 2.4); // living moss
+    g.fillCircle(15, 12, 2);
+    g.fillStyle(0xc9f07a, 1);
+    g.fillCircle(9, 6, 1);
+    g.fillStyle(0xf0c040, 1);
+    g.fillRect(7, 17, 10, 2);
+    g.generateTexture("icon_mosswretch_trophy", ICON, ICON);
+
+    g.clear(); // Murkling Trophy — a single pulsing shard
+    g.fillStyle(0x6a1f3a, 1);
+    g.fillTriangle(6, 15, 12, 2, 18, 15);
+    g.fillStyle(0xa87ce8, 1);
+    g.fillTriangle(8, 14, 12, 5, 16, 14);
+    g.fillStyle(0xe0d0ff, 1);
+    g.fillTriangle(11, 12, 12, 7, 13, 12); // inner pulse
+    g.fillStyle(0xf0c040, 1);
+    g.fillRect(7, 17, 10, 2);
+    g.generateTexture("icon_murkling_trophy", ICON, ICON);
+
+    g.clear(); // Fenlurker Trophy — a hooked digging claw caked with silt
+    g.fillStyle(0x6a1f3a, 1);
+    g.fillTriangle(5, 6, 18, 4, 11, 16);
+    g.fillStyle(0xb9b0a0, 1);
+    g.fillTriangle(6, 6, 15, 5, 10, 13); // pale claw
+    g.fillStyle(0x352f28, 1);
+    g.fillCircle(9, 10, 1.8); // packed silt
+    g.fillCircle(12, 8, 1.4);
+    g.fillStyle(0xf0c040, 1);
+    g.fillRect(7, 17, 10, 2);
+    g.generateTexture("icon_fenlurker_trophy", ICON, ICON);
+
+    g.clear(); // Corpselight Trophy — a guttering cold ember
+    g.fillStyle(0x6a1f3a, 1);
+    g.fillCircle(12, 10, 7);
+    g.fillStyle(0x8fd9c8, 0.55);
+    g.fillCircle(12, 10, 5.5);
+    g.fillStyle(0xa8ead8, 1);
+    g.fillCircle(12, 10, 3);
+    g.fillStyle(0xeafff8, 1);
+    g.fillCircle(11, 9, 1.3);
+    g.fillStyle(0xf0c040, 1);
+    g.fillRect(7, 17, 10, 2);
+    g.generateTexture("icon_corpselight_trophy", ICON, ICON);
+
     // === Status-effect (debuff) icons — StatusBarUI ===
     // Bold, high-contrast silhouettes: these must read instantly at 26px in the
     // middle of a fight, so each is one distinct shape, not a detailed picture.
