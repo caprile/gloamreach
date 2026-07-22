@@ -2,6 +2,7 @@ import type { ToolType } from "../entities/ResourceNode";
 import type { WeaponType } from "./Weapons";
 import type { EquipSlot, EquippedItem } from "./Equipment";
 import type { AbilityId } from "./Abilities";
+import type { EquipPassive } from "./EquipmentEffects";
 
 // Armor material classes — double as the two armor Skill types (Skills.ts).
 export type ArmorType = "heavy_armor" | "light_armor";
@@ -41,6 +42,10 @@ export interface ItemDef {
   // bar — the slot decides the key (Abilities.SLOT_ABILITY_KEY). No stat/armor
   // value of its own in 2a.
   grantsAbility?: AbilityId;
+  // Set for passive jewelry (rings/amulet, B3-P2b). Ability-augment + utility/
+  // explorer effects (NOT raw-% combat stats — that's relics' layer), summed by
+  // EquipmentEffects while worn. See EquipmentEffects.EquipPassive.
+  passive?: EquipPassive;
 }
 
 export const ITEM_DEFS: Record<string, ItemDef> = {
@@ -1228,6 +1233,108 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
       { label: "Type", value: "Special (Back · R)" },
       { label: "Grants", value: "Bloodpact" },
     ],
+  },
+
+  // === Biome-3 Phase 2b: jewelry economy (DORMANT — real sources land in biome 3) ===
+
+  // --- materials: the jewelry metal + the three ability gems ---
+  moonsilver: {
+    key: "moonsilver",
+    name: "Moonsilver",
+    description: "A cool, gloam-veined precious metal — the base of all fine jewelry. Mined in the deeper wilds.",
+    texture: "icon_moonsilver",
+    maxStack: 99,
+    hotbarable: false,
+  },
+  gem_gloam: {
+    key: "gem_gloam",
+    name: "Gloam Gem",
+    description: "A violet gem humming with folded space. Set into a band, it grants the Gloamstep Blink.",
+    texture: "icon_gem_gloam",
+    maxStack: 99,
+    hotbarable: false,
+  },
+  gem_ember: {
+    key: "gem_ember",
+    name: "Ember Gem",
+    description: "An unstable orange gem straining to erupt. Set into a focus, it grants the Gloam Nova.",
+    texture: "icon_gem_ember",
+    maxStack: 99,
+    hotbarable: false,
+  },
+  gem_blood: {
+    key: "gem_blood",
+    name: "Blood Gem",
+    description: "A crimson gem that drinks the light. Set into a shroud, it grants the Bloodpact.",
+    texture: "icon_gem_blood",
+    maxStack: 99,
+    hotbarable: false,
+  },
+  duneshaper_heart: {
+    key: "duneshaper_heart",
+    name: "Duneshaper's Heart",
+    description: "The gloam-gorged core of the Duneshaper, still pulsing. Set it into a Gemwright's Table to bind gems into ability jewelry.",
+    texture: "icon_duneshaper_heart",
+    maxStack: 99,
+    hotbarable: false,
+  },
+
+  // --- the station itself ---
+  jewelry_station: {
+    key: "jewelry_station",
+    name: "Gemwright's Table",
+    description: "A jeweler's bench for setting gems into rings and amulets. Requires a nearby Workbench to build.",
+    texture: "icon_jewelry_station",
+    maxStack: 1,
+    hotbarable: true,
+    stats: [{ label: "Type", value: "Station" }],
+    placeable: true,
+  },
+
+  // --- passive jewelry (ability-augment + utility/explorer — NOT relic stats) ---
+  ring_quickening: {
+    key: "ring_quickening",
+    name: "Ring of Quickening",
+    description: "A moonsilver band that hurries the gloam back into your veins — your abilities recharge faster.",
+    texture: "icon_ring_quickening",
+    maxStack: 1,
+    hotbarable: false,
+    armorSlot: "ring1",
+    passive: { abilityCooldownPct: 15 },
+    stats: [{ label: "Type", value: "Ring" }],
+  },
+  amulet_channeling: {
+    key: "amulet_channeling",
+    name: "Amulet of Channeling",
+    description: "A focusing lens for raw gloam — your abilities strike harder and reach farther.",
+    texture: "icon_amulet_channeling",
+    maxStack: 1,
+    hotbarable: false,
+    armorSlot: "necklace",
+    passive: { abilityPowerPct: 20 },
+    stats: [{ label: "Type", value: "Amulet" }],
+  },
+  ring_forager: {
+    key: "ring_forager",
+    name: "Ring of the Forager",
+    description: "A woven-moonsilver band that draws loose spoils to your hand and coaxes an extra scrap from every harvest.",
+    texture: "icon_ring_forager",
+    maxStack: 1,
+    hotbarable: false,
+    armorSlot: "ring1",
+    passive: { gatherBonusPct: 15, magnetRadiusPct: 30 },
+    stats: [{ label: "Type", value: "Ring" }],
+  },
+  amulet_farsight: {
+    key: "amulet_farsight",
+    name: "Amulet of Farsight",
+    description: "A pale lantern-stone that pushes back the dark and pulls loose spoils a little closer.",
+    texture: "icon_amulet_farsight",
+    maxStack: 1,
+    hotbarable: false,
+    armorSlot: "necklace",
+    passive: { lightRadiusPct: 40, magnetRadiusPct: 20 },
+    stats: [{ label: "Type", value: "Amulet" }],
   },
 };
 

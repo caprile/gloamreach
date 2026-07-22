@@ -2,7 +2,30 @@
 
 ## Current State
 
-_Living snapshot — edit in place, never append. Last shipped: **B3-P2a — Biome-3 Phase 2a:
+_Living snapshot — edit in place, never append. Last shipped: **B3-P2b — Biome-3 Phase 2b:
+Jewelry-effect pipeline + Gemwright's Table (jewelry station)** (2026-07-21, Opus, plan
+`.claude/plans/biome-3-phase-2b-jewelry-station.md`). Makes 2a's abilities obtainable + lays the jewelry
+economy. **Built live (biome-agnostic):** `src/systems/EquipmentEffects.ts` — the first mechanical
+stat/effect path for equipped non-armor items (rings/amulet), summed on every equip. DELIBERATELY a
+different layer from relics (relics = raw-% combat stats): jewelry is **ability-augment** (−ability
+cooldown / +ability power — scales blink distance + nova dmg/radius) + **utility/explorer** (+magnet
+radius / +bonus-gather chance / +light radius), wired into the ability-cast + magnet/gather/light hooks,
+NOT the relic combat hooks. `ItemDef.passive` holds the data; `describePassive` feeds the Tooltip +
+menu. Rings now fill **either** ring slot (wear two). **New dedicated station** — the placeable
+**Gemwright's Table** (`src/systems/Jewelry.ts` + `src/ui/JewelryMenu.ts`, a near-clone of the
+Campfire+Cooking pattern): its own recipe-list menu, tier-gated by the station's own upgrades —
+**tier 0 = 4 passive rings/amulets; tier 1 = the 3 ability specials**, unlocked by a **Gloamheart
+Setting** upgrade gated on a NEW **Duneshaper's Heart** boss drop (mirrors Gremlin King's Heart →
+Smelter Ember Crucible). **DORMANT / biome-3:** the 4 new materials (Moonsilver + Gloam/Ember/Blood
+gems), all jewelry recipes, and the heart are authored now but have **no in-game source yet** — Moonsilver
+mining, gem drops, and the Duneshaper demotion (its kill currently ends the run, so the heart is
+unreachable) all land in the biome-3 content phases (3/4); test via `__dev.give`. Verified live
+(`javascript_tool`): two-ring resolution + all 5 effect channels exact; ability cooldown −15% on the real
+cast path (5100/6000ms) + HUD sweep match; station tier-gating + tier-0 craft + the heart-gated upgrade
+(0→1, Workbench-proximity-gated per the standing rule, heart consumed, ability recipes unlock) + menu
+render; `tsc` clean, zero console errors. `RECIPES.md` updated (dashboard picks recipes up live). See
+B3-P2b below + [[survivor-rpg-biome-3-roadmap]].
+Prior: **B3-P2a — Biome-3 Phase 2a:
 Activated abilities + Dota QER HUD** (2026-07-21, Opus, plan
 `.claude/plans/biome-3-and-new-systems-roadmap.md`). The Q/E/R **cooldown-only, equipment-granted**
 active-ability framework. An item in a special slot grants one active (`special1→Q`, `special2→E`,
@@ -54,12 +77,16 @@ patchwork worldgen through the relic rework; the badlands is a fully populated s
 4-enemy roster, POIs, the Duneshaper win-boss, and the smelting/forging gear + tier-2 relic tiers). The
 current arc is the **biome-3 (haunted bayou, working name "Duskmire Bayou") + new-systems roadmap**
 (`.claude/plans/biome-3-and-new-systems-roadmap.md`, 5 phases). **Shipped so far:** **Phase 1**
-(terrain-that-matters + badlands macro-zones) and **Phase 2a** (the activated-ability framework + Dota
-QER HUD, above). **Next:** **Phase 2b** — the jewelry/gems material class + a game-wide epic-loot pool +
-the equipment stat-aggregation path (the *real* ability sources, replacing 2a's dev-only `__dev.give`);
-then **Phase 3** (bayou gear reforge), **Phase 4** (the bayou content drop — a melee-core roster + a
-melee boss-with-adds), and **Phase 5** (post-**big-boss** RNG reward choice — a natural home for ability
-sourcing too). Ability numbers and everything biome-3 are first-pass/tunable. The master-plan tail
+(terrain-that-matters + badlands macro-zones), **Phase 2a** (the activated-ability framework + Dota
+QER HUD), and **Phase 2b** (the jewelry-effect pipeline + the Gemwright's Table jewelry station, above —
+which built the equipment stat-aggregation path + the jewelry/gems material class as data, and the
+station+Duneshaper-Heart gate that will source the abilities in biome 3). **the user scoped gems +
+jewelry crafting as biome-3+ content**, so 2b's materials/recipes/heart are authored **dormant** (test
+via `__dev.give`); their real sources — Moonsilver mining, gem drops, a game-wide epic-loot pool, and the
+Duneshaper demotion — move into the biome-3 content phases (3/4). **Next:** **Phase 3** (bayou gear
+reforge), **Phase 4** (the bayou content drop — a melee-core roster + a melee boss-with-adds, where the
+gem/metal/heart sources land), and **Phase 5** (post-**big-boss** RNG reward choice — a natural home for
+ability sourcing too). Ability/jewelry numbers and everything biome-3 are first-pass/tunable. The master-plan tail
 **M-TE** (trophy-gated gear) is folded into the shipped biome-2 work; real pixel art/animations stay
 deliberately deferred until content/balance settle (roadmap item 8).
 
@@ -109,6 +136,62 @@ below + [[survivor-rpg-dev-console]].
 ## Recent Entries
 
 > Older entries in STATUS-archive.md.
+
+### B3-P2b — Biome-3 Phase 2b: Jewelry-effect pipeline + Gemwright's Table (2026-07-21, Opus)
+
+Makes 2a's abilities obtainable and lays the jewelry/gems economy. Plan:
+`.claude/plans/biome-3-phase-2b-jewelry-station.md`. the user's scope corrections mid-planning: gems +
+jewelry crafting are **biome-3+ content** (gems not findable before biome 3; no badlands node); the
+station is a **dedicated new station with a Duneshaper-boss-drop-gated upgrade** (the Gremlin King's
+Heart → Smelter pattern); and passive jewelry must feel **distinct from relics** (which own raw-% combat
+stats) — so it's the **ability-augment + utility/explorer** layer. Since biome 3 has no world content
+yet, this session built the biome-agnostic systems **live** and authored the materials/recipes/heart as
+**dormant** biome-3 data (test via `__dev.give`).
+
+**Built live (biome-agnostic):**
+- **`src/systems/EquipmentEffects.ts` (new)** — the first mechanical effect path for equipped non-armor
+  items (`ItemDef.stats` was display-only). `ItemDef.passive?: EquipPassive` holds the data; the class
+  sums equipped pieces (recomputed in `afterItemMove`, reset in `create`) and exposes getters modeled on
+  the relic summer. **Distinct channels (never relic-overlapping):** `abilityCooldownPct` (clamped ≥0.4),
+  `abilityPowerPct`, `magnetRadiusPct`, `gatherBonusPct`, `lightRadiusPct`. `describePassive()` feeds
+  both the Tooltip and the JewelryMenu row so display can't drift.
+- **Hook sites (bespoke, one edit each):** cooldown → `tryCastAbility` + `abilityEntries` (HUD sweep
+  matches); power → `castBlink` distance + `castNova` dmg/radius; magnet → `MAGNET_RADIUS` gate; gather →
+  the depleted-node bonus-drop roll (alongside the M-SS chopping/mining chance); light → the player term
+  in `collectLights`. No `syncStatBonuses`/damage/crit change — that stays relics' turf.
+- **Ring-slot resolution** in `equipArmorFromContainer`: a ring (`armorSlot:"ring1"`) fills the first
+  empty of ring1/ring2, so two rings can be worn.
+- **4 passive pieces:** Ring of Quickening (−15% ability CD), Amulet of Channeling (+20% ability power),
+  Ring of the Forager (+15% gather, +30% magnet), Amulet of Farsight (+40% light, +20% magnet).
+
+**New dedicated jewelry station (built now, dormant recipes):**
+- **Gemwright's Table** — a placeable station (`Items.ts` def + `Recipes.ts` craft recipe, tier-1 /
+  Workbench-gated, costs Moonsilver) with its own recipe-list menu **`src/ui/JewelryMenu.ts` (new)** +
+  table **`src/systems/Jewelry.ts` (new)**, a near-clone of the Campfire+Cooking pattern (`craftAtJewelry`
+  / `maxJewelryBatches` / open/close mirror the campfire methods; hover/prompt/interact added to the
+  shared placed-station loop). Tier gates the recipes: **tier 0 = the 4 passives; tier 1 = the 3 ability
+  specials** (the existing 2a `special_*`/`back_*` items — 2b only adds their recipes).
+- **`Gloamheart Setting`** station upgrade (`StationUpgrades.ts`, resultTier 1) unlocks the tier-1
+  recipes, gated on a NEW **`duneshaper_heart`** guaranteed drop (`Duneshaper.ts` loot + `Items.ts` def +
+  BootScene icon) — mirroring `gremlin_king_heart` → Ember Crucible. Reuses the generic right-click
+  Upgrade/Pick-up ContextMenu + `applyStationUpgrade` verbatim (no new upgrade wiring).
+
+**Dormant / biome-3 (no in-game source this session):** 4 new materials (`moonsilver` +
+`gem_gloam`/`gem_ember`/`gem_blood`, `ResourceType` + `Items.ts` + BootScene icons via the `relicGem`
+helper), all jewelry recipes, and the heart. **Deferred to Phases 3/4:** Moonsilver mining, gem drops
+from bayou enemies/bosses, the epic-loot chest pool, and wiring the Duneshaper kill to continue-the-run
+(its demotion) so the heart is legitimately obtainable.
+
+**Verified live** (`javascript_tool` against `MainScene`; loop hand-stepped to boot the backgrounded
+preview): baseline effects neutral → equip 2 rings + amulet → **two-ring resolution** (ring1+ring2) and
+all 5 channels exact (0.85 CD / 1.2 power / 1.3 magnet / 0.15 gather / 1.4 light); equip a Q special +
+Ring of Quickening → real cast sets a **5100ms** cooldown (vs 6000 unringed) and the HUD `cooldownMs`
+reads 5100; station **tier 0** shows only the 4 passives, **tier 1** adds the 3 abilities, a tier-1
+craft at tier 0 is a **no-op**, a tier-0 passive craft lands in the bag; the **Gloamheart Setting
+upgrade** (with a Workbench nearby per the standing tier-≥1 rule) bumps the placed table 0→1, consumes
+the Duneshaper's Heart, and unlocks the ability recipes; the menu opens/renders/closes cleanly. `tsc`
+clean; **zero console errors**. `RECIPES.md` updated (station recipe + upgrade + a new Jewelry section);
+dashboard reads recipes live.
 
 ### B3-P2a — Biome-3 Phase 2a: Activated abilities + Dota QER HUD (2026-07-21, Opus)
 Plan: `.claude/plans/biome-3-and-new-systems-roadmap.md` (Phase 2, split 2a/2b — this is 2a). The

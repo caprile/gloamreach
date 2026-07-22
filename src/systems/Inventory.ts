@@ -61,4 +61,10 @@ export type ResourceType =
   | "ember_shard" // Phase 5: Gloam Shards rendered down at the Relic Forge's Ember Kiln (Lvl 3) — the tier-2 refinement currency
   | "refined_trophy_uncommon_t2" // Phase 5: badlands (Tier 2) Common trophies refined via Ember Shards — rolls Uncommon
   | "boss_refined_trophy" // Gremlin King drop (S4) — guaranteed Mythic (Tier 1) at the Relic Forge
-  | "boss_refined_trophy_t2"; // Duneshaper drop (S4) — guaranteed Mythic (Tier 2) at the Relic Forge
+  | "boss_refined_trophy_t2" // Duneshaper drop (S4) — guaranteed Mythic (Tier 2) at the Relic Forge
+  // --- biome-3 (Phase 2b) jewelry economy — DORMANT: authored now, real sources land in biome 3 ---
+  | "moonsilver" // the universal jewelry metal — mined in biome 3 (no node yet)
+  | "gem_gloam" // ability gem → Gloamstep Band (Q); "gem source dictates build"
+  | "gem_ember" // ability gem → Gloam Focus (E)
+  | "gem_blood" // ability gem → Bloodpact Shroud (R)
+  | "duneshaper_heart"; // the Duneshaper's guaranteed drop — upgrades the Gemwright's Table to craft ability jewelry (biome-3 gate)

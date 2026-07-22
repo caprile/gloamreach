@@ -45,6 +45,7 @@ requires standing near a placed Workbench (`MainScene.isNearWorkbench`).
 | Gremlin Totem | Misc | 1 | Yes | 3 Gremlin Trophy, 1 Wood, 1 Gremlin Guck | — | Item (ritual — summons the Gremlin King at the Boss Altar) |
 | Effigy of the Duneshaper | Misc | 1 | Yes | 3 Gloam-Bone Totem, 2 Gloam Shard, 8 Bones | — | Item (ritual — summons the Duneshaper at a badlands altar; crafting it reveals the altars on the map) |
 | Smelter | Crafting | 1 | Yes | 10 Clay, 10 Stone | — | Item (placeable, station — smelts ore into ingots) |
+| Gemwright's Table | Crafting | 1 | Yes | 4 Moonsilver, 10 Stone | — | Item (placeable, station — crafts jewelry; **biome-3 dormant**, needs Moonsilver) |
 | Sunsteel Helm | Armor | 1 | Yes (Lvl 3) | 2 Sunsteel Ingot, 2 Cragscale Plate | Heavy Armor 0 | Item (armor, helmet, **heavy**) |
 | Sunsteel Cuirass | Armor | 1 | Yes (Lvl 3) | 4 Sunsteel Ingot, 4 Cragscale Plate, 5 Bones | Heavy Armor 0 | Item (armor, chest, **heavy**) |
 | Sunsteel Greaves | Armor | 1 | Yes (Lvl 3) | 2 Sunsteel Ingot, 2 Cragscale Plate, 2 Sandmaw Chitin | Heavy Armor 0 | Item (armor, legs, **heavy**) |
@@ -112,6 +113,7 @@ fixed destination level.
 | Relic Forge | Lvl 2 | Gloam Conduit | 10 Stone, 1 Gloam Shard | Unlocks the Refine tab |
 | Relic Forge | Lvl 3 | Ember Kiln | 3 Embersteel Ingot, 13 Stone | Unlocks Gloam → Ember conversion (Convert tab) |
 | Smelter | Lvl 2 | Ember Crucible | 1 Gremlin King's Heart, 7 Stone | Smelt rare Cinderforged Ore → Embersteel Ingot |
+| Gemwright's Table | Lvl 2 | Gloamheart Setting | 1 Duneshaper's Heart, 3 Moonsilver | Unlocks ability-jewelry (Q/E/R specials) — **biome-3 dormant** (the Duneshaper's Heart is only reachable once biome 3 demotes the Duneshaper from win-boss) |
 
 Bench visuals change per tier (Workbench Lvl 2/3/4, Smelter Lvl 2 each get a
 distinct placeholder sprite). The Emberforge Anvil and Ember Kiln are only
@@ -306,6 +308,30 @@ that spend a plentiful earlier-biome leftover (boar_meat).
 | Emberbloom Broth | Lvl 3 | 2 Emberbloom, 1 Sunfruit, 1 Gloamcap | Emberbloom Broth | +2.5 HP/s for 34s |
 | Sunscorch Feast | Lvl 4 | 1 Shishkabob, 2 Duskrunner Meat, 1 Gloamcap, 1 Sunfruit | Sunscorch Feast | +3.5 HP/s for 30s |
 | Ember-Glazed Skewer | Lvl 4 | 1 Shishkabob, 1 Duskrunner Meat, 1 Emberbloom, 1 Boar Meat | Ember-Glazed Skewer | +3.5 HP/s for 28s |
+
+## Jewelry — Gemwright's Table (`src/systems/Jewelry.ts`) — B3-P2b
+
+**Biome-3 DORMANT** (authored now; real sources — Moonsilver mining, gem drops,
+the Duneshaper demotion — land in the biome-3 content phases; test via `__dev.give`).
+Multi-ingredient jewelry made at a placed **Gemwright's Table** (its own
+`JewelryMenu`, cloned from the Cooking pattern; instant-craft behind a short bar).
+A recipe's `requiredStationTier` gates it on the table's own level: **tier 0** (base
+station) = passive rings/amulets; **tier 1** (after the **Gloamheart Setting**
+upgrade, gated on the Duneshaper's Heart) = the ability-granting specials.
+
+Passive jewelry effects are the **ability-augment + utility/explorer** layer
+(`ItemDef.passive`, summed by `EquipmentEffects.ts`) — deliberately NOT raw-%
+combat stats (that's relics' layer). Rings fill either ring slot (wear two).
+
+| Item | Table | Inputs | Slot | Effect |
+|---|---|---|---|---|
+| Ring of Quickening | Lvl 1 | 2 Moonsilver, 2 Gloam Shard | Ring | −15% ability cooldown |
+| Amulet of Channeling | Lvl 1 | 3 Moonsilver, 3 Gloam Shard | Neck | +20% ability power (nova dmg/radius, blink distance) |
+| Ring of the Forager | Lvl 1 | 2 Moonsilver, 2 Twine | Ring | +15% bonus-gather chance, +30% pickup radius |
+| Amulet of Farsight | Lvl 1 | 3 Moonsilver, 2 Gloam Shard | Neck | +40% light radius, +20% pickup radius |
+| Gloamstep Band | Lvl 2 | 2 Moonsilver, 1 Gloam Gem | Spec1 (Q) | Grants Gloamstep Blink |
+| Gloam Focus | Lvl 2 | 2 Moonsilver, 1 Ember Gem | Spec2 (E) | Grants Gloam Nova |
+| Bloodpact Shroud | Lvl 2 | 3 Moonsilver, 1 Blood Gem | Back (R) | Grants Bloodpact |
 
 ## Relics (`src/systems/Relics.ts`) — M-RL, reworked in Phase 5
 

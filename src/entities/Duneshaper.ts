@@ -180,10 +180,13 @@ export class Duneshaper extends Enemy {
       // The final boss drops a Tier-2 Boss Trophy (guaranteed Mythic, ×1.5
       // magnitude — S4) — though killing the Duneshaper ENDS the run, so this
       // drop is unreachable in practice (kept for correctness / a future
-      // continue-mode). Plus ember shards.
+      // continue-mode). Plus ember shards. The Duneshaper's Heart (B3-P2b) gates
+      // the Gemwright's Table's ability-jewelry tier — likewise only reachable
+      // once biome 3 demotes the Duneshaper from the win-boss (dormant for now).
       loot: [
         { resource: "ember_shard", min: 5, max: 8 },
         { resource: "boss_refined_trophy_t2", min: 1, max: 1 },
+        { resource: "duneshaper_heart", min: 1, max: 1 },
       ],
       maxHealth: MAX_HEALTH,
       biteDamage: 0, // all damage flows through checkPlayerHit() / projectiles

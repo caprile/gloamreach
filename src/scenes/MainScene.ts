@@ -104,6 +104,9 @@ import { CraftingMenu } from "../ui/CraftingMenu";
 import { ContextMenu, type ContextMenuItem } from "../ui/ContextMenu";
 import { DryingRackMenu } from "../ui/DryingRackMenu";
 import { CookingMenu } from "../ui/CookingMenu";
+import { JewelryMenu } from "../ui/JewelryMenu";
+import { EquipmentEffects } from "../systems/EquipmentEffects";
+import { JEWELRY_RECIPES, type JewelryRecipe } from "../systems/Jewelry";
 import { BuffBarUI } from "../ui/BuffBarUI";
 import { ChestMenu } from "../ui/ChestMenu";
 import { UpgradeMenu, type UpgradeDef } from "../ui/UpgradeMenu";
@@ -589,6 +592,14 @@ export class MainScene extends Phaser.Scene {
   private hoveredCampfire: Phaser.GameObjects.Image | null = null;
   private cookingMenu!: CookingMenu;
   private openCampfire: Phaser.GameObjects.Image | null = null; // the campfire the cooking menu is bound to
+  // Gemwright's Table (B3-P2b) — a placed jewelry station, same placedObjects-
+  // by-itemKey hover/menu shape as the Campfire.
+  private hoveredJewelry: Phaser.GameObjects.Image | null = null;
+  private jewelryMenu!: JewelryMenu;
+  private openJewelry: Phaser.GameObjects.Image | null = null; // the table the jewelry menu is bound to
+  // Jewelry (ring/amulet) passive effects — recomputed on every equipment
+  // change (afterItemMove) + reset per run (create).
+  private equipEffects = new EquipmentEffects();
   // Relic Forge (M-RL) — trophies -> RNG relics + combine. Same
   // sourced-from-placedObjects-by-itemKey hover/open shape as the Campfire.
   private relics!: RelicManager;
@@ -959,6 +970,9 @@ export class MainScene extends Phaser.Scene {
     this.hoveredWorkbench = null;
     this.hoveredCampfire = null;
     this.openCampfire = null;
+    this.hoveredJewelry = null;
+    this.openJewelry = null;
+    this.equipEffects = new EquipmentEffects();
     this.relics = new RelicManager();
     this.hoveredForge = null;
     this.openForge = null;
@@ -1302,6 +1316,7 @@ export class MainScene extends Phaser.Scene {
     this.createInventoryMenu();
     this.createDryingRackMenu();
     this.createCookingMenu();
+    this.createJewelryMenu();
     this.createChestMenu();
     this.createUpgradeMenu();
     this.createCharacterMenu();
@@ -1385,12 +1400,16 @@ export class MainScene extends Phaser.Scene {
       if (this.cookingMenu.isOpen() && this.cookingMenu.isDraggingSlider()) {
         this.cookingMenu.updateSliderFromPointer(p.x);
       }
+      if (this.jewelryMenu.isOpen() && this.jewelryMenu.isDraggingSlider()) {
+        this.jewelryMenu.updateSliderFromPointer(p.x);
+      }
     });
     this.input.on("pointerup", (p: Phaser.Input.Pointer) => {
       this.resolveItemDrag(p);
       this.dryingRackMenu.endSliderDrag();
       this.craftingMenu.endSliderDrag();
       this.cookingMenu.endSliderDrag();
+      this.jewelryMenu.endSliderDrag();
     });
 
     // Mouse wheel cycles the hotbar selection (looping), unless the pointer is
@@ -1406,6 +1425,7 @@ export class MainScene extends Phaser.Scene {
       // The cooking menu scrolls its own recipe list on wheel — don't also
       // cycle the hotbar when the pointer is over it.
       if (this.cookingMenu.isOpen() && this.cookingMenu.containsPoint(p.x, p.y)) return;
+      if (this.jewelryMenu.isOpen() && this.jewelryMenu.containsPoint(p.x, p.y)) return;
       // The inventory's backpack grid scrolls on wheel when the pointer is over
       // it (consumes the wheel so the hotbar doesn't also cycle).
       if (this.inventoryMenu.handleWheel(p, dy)) return;
@@ -1436,6 +1456,7 @@ export class MainScene extends Phaser.Scene {
       if (this.anyMenuOpen()) {
         this.closeDryingRackMenu();
         this.closeCookingMenu();
+        this.closeJewelryMenu();
         this.closeChestMenu();
         this.closeRelicForgeMenu();
         this.craftingMenu.close();
@@ -1699,7 +1720,8 @@ export class MainScene extends Phaser.Scene {
     });
     if (this.equippedLightRadius > 0) {
       const p = toScreen(this.player.x, this.player.y);
-      lights.push({ x: p.x, y: p.y, radius: this.equippedLightRadius * z });
+      // Amulet of Farsight (B3-P2b) widens the player's own light at read time.
+      lights.push({ x: p.x, y: p.y, radius: this.equippedLightRadius * this.equipEffects.lightRadiusMult() * z });
     }
     // Cull against the zoomed visible world rect (worldView) plus a world-space
     // margin, so the erase list only holds POIs actually near the viewport.
@@ -1959,7 +1981,7 @@ export class MainScene extends Phaser.Scene {
       if (!node.isDrop || !node.loose || node.depleted || node.exploding) continue;
       if (this.time.now < node.magnetReadyAt) continue; // player-dropped cooldown
       const dist = Phaser.Math.Distance.Between(this.player.x, this.player.y, node.x, node.y);
-      if (dist > MAGNET_RADIUS) continue;
+      if (dist > MAGNET_RADIUS * this.equipEffects.magnetRadiusMult()) continue;
       // The idle bob tween keeps yoyo-ing `y` on its own schedule; kill it
       // once the magnet takes over the node's position, or it fights the
       // pull and the piece appears to hover at a fixed offset instead of
@@ -1996,6 +2018,7 @@ export class MainScene extends Phaser.Scene {
       this.inventoryMenu.isOpen() ||
       this.dryingRackMenu.isOpen() ||
       this.cookingMenu.isOpen() ||
+      this.jewelryMenu.isOpen() ||
       this.chestMenu.isOpen() ||
       this.contextMenu.isOpen() ||
       this.upgradeMenu.isOpen() ||
@@ -2559,6 +2582,7 @@ export class MainScene extends Phaser.Scene {
     this.recomputeEquipped();
     this.recomputeSetBonuses();
     this.recomputeAbilities();
+    this.equipEffects.recompute(this.equipment);
     this.reconcileBackpackDiscovery();
     this.inventoryMenu.refresh();
     // The hotbar's "upgrade ready" arrow depends on backpack materials, which
@@ -2569,6 +2593,7 @@ export class MainScene extends Phaser.Scene {
     this.refreshStationUpgradeIndicators();
     this.dryingRackMenu.refresh();
     this.cookingMenu.refresh();
+    this.jewelryMenu.refresh();
     this.chestMenu.refresh();
   }
 
@@ -2680,6 +2705,79 @@ export class MainScene extends Phaser.Scene {
   private closeCookingMenu(): void {
     this.cookingMenu.close();
     this.openCampfire = null;
+  }
+
+  // --- Gemwright's Table (jewelry crafting — B3-P2b) ---
+  // A dedicated station with its own recipe-list menu, cloned from the
+  // Campfire+Cooking pattern. Tier (== upgrade count) gates the recipes: tier 0
+  // = passive jewelry, tier 1 (Duneshaper's-Heart upgrade) = the ability specials.
+
+  private createJewelryMenu(): void {
+    this.jewelryMenu = new JewelryMenu(this, {
+      backpack: this.backpack,
+      skills: this.skills,
+      discovered: () => this.discovered,
+      stationTier: () =>
+        this.openJewelry ? ((this.openJewelry.getData("tier") as number | undefined) ?? 0) : null,
+      craft: (recipeId, batches) => this.craftAtJewelry(recipeId, batches),
+      maxBatches: (recipe) => this.maxJewelryBatches(recipe),
+      noBuildCost: () => this.devNoBuildCost,
+    });
+  }
+
+  private openJewelryMenu(image: Phaser.GameObjects.Image): void {
+    this.craftingMenu.close();
+    this.inventoryMenu.close();
+    this.closeUpgradeMenu();
+    this.closeDryingRackMenu();
+    this.closeCookingMenu();
+    this.closeChestMenu();
+    this.closeRelicForgeMenu();
+    this.openJewelry = image;
+    this.jewelryMenu.openMenu();
+  }
+
+  private closeJewelryMenu(): void {
+    this.jewelryMenu.close();
+    this.openJewelry = null;
+  }
+
+  // Craft `batches` of a jewelry recipe — consumes inputs, deposits the piece
+  // (overflow drops on the floor). Mirrors cookAtCampfire exactly.
+  private craftAtJewelry(recipeId: string, batches: number = 1): void {
+    const recipe = JEWELRY_RECIPES.find((r) => r.id === recipeId);
+    if (!recipe || !this.openJewelry) return;
+    const tier = (this.openJewelry.getData("tier") as number | undefined) ?? 0;
+    if (!this.devNoBuildCost && tier < recipe.requiredStationTier) return;
+    const affordable =
+      this.devNoBuildCost ||
+      Object.entries(recipe.inputs).every(([key, n]) => this.backpack.count(key) >= n * batches);
+    if (!affordable) return;
+    for (let i = 0; i < batches; i++) {
+      if (!this.devNoBuildCost) {
+        for (const [key, n] of Object.entries(recipe.inputs)) this.backpack.removeCount(key, n);
+      }
+      const leftover = this.addToBackpack(recipe.output, 1);
+      if (leftover > 0) {
+        this.spawnLooseDrop(recipe.output, leftover, this.player.x, this.player.y, DROPPED_ITEM_MAGNET_COOLDOWN_MS);
+        this.eventLog.add("info", "Backpack full — the piece landed on the floor");
+      }
+    }
+    this.eventLog.add("info", batches > 1 ? `Crafted ${batches}x ${recipe.name}` : `Crafted ${recipe.name}`);
+    this.sfx.craft();
+    this.afterItemMove();
+  }
+
+  private maxJewelryBatches(recipe: JewelryRecipe): number {
+    const roomBatches = this.backpack.roomFor(recipe.output);
+    if (this.devNoBuildCost) return Math.max(0, roomBatches);
+    let costBatches = Infinity;
+    for (const [key, n] of Object.entries(recipe.inputs)) {
+      if (n <= 0) continue;
+      costBatches = Math.min(costBatches, Math.floor(this.backpack.count(key) / n));
+    }
+    if (!Number.isFinite(costBatches)) costBatches = 0;
+    return Math.max(0, Math.min(costBatches, roomBatches));
   }
 
   // --- Relic Forge (M-RL) ---
@@ -5632,6 +5730,7 @@ export class MainScene extends Phaser.Scene {
     let hoveredCampfire: Phaser.GameObjects.Image | null = null;
     let hoveredForge: Phaser.GameObjects.Image | null = null;
     let hoveredSmelter: Phaser.GameObjects.Image | null = null;
+    let hoveredJewelry: Phaser.GameObjects.Image | null = null;
     let best = Infinity;
 
     for (const node of this.nodes) {
@@ -5724,7 +5823,14 @@ export class MainScene extends Phaser.Scene {
     // one loop since they share the same hover/reach/interact shape.
     for (const obj of this.placedObjects) {
       const key = obj.getData("itemKey");
-      if (key !== "workbench" && key !== "campfire" && key !== "relic_forge" && key !== "smelter") continue;
+      if (
+        key !== "workbench" &&
+        key !== "campfire" &&
+        key !== "relic_forge" &&
+        key !== "smelter" &&
+        key !== "jewelry_station"
+      )
+        continue;
       const radius = Math.max(obj.displayWidth, obj.displayHeight) / 2 + 6;
       const d = Phaser.Math.Distance.Between(world.x, world.y, obj.x, obj.y);
       if (d <= radius && d < best) {
@@ -5732,6 +5838,7 @@ export class MainScene extends Phaser.Scene {
         hoveredCampfire = key === "campfire" ? obj : null;
         hoveredForge = key === "relic_forge" ? obj : null;
         hoveredSmelter = key === "smelter" ? obj : null;
+        hoveredJewelry = key === "jewelry_station" ? obj : null;
         hoveredNode = null;
         hoveredEnemy = null;
         hoveredRack = null;
@@ -5760,6 +5867,7 @@ export class MainScene extends Phaser.Scene {
         hoveredCampfire = null;
         hoveredForge = null;
         hoveredSmelter = null;
+        hoveredJewelry = null;
         best = d;
       }
     }
@@ -5774,6 +5882,7 @@ export class MainScene extends Phaser.Scene {
     this.hoveredCampfire = hoveredCampfire;
     this.hoveredForge = hoveredForge;
     this.hoveredSmelter = hoveredSmelter;
+    this.hoveredJewelry = hoveredJewelry;
 
     // Station level labels are passive flavor, not part of the interact/
     // prompt system above — shown purely on hover, independent of the
@@ -5802,9 +5911,11 @@ export class MainScene extends Phaser.Scene {
                     ? this.promptForForge(hoveredForge)
                     : hoveredSmelter
                       ? this.promptForSmelter(hoveredSmelter)
-                      : hoveredDen
-                        ? this.promptForDen(hoveredDen)
-                        : null;
+                      : hoveredJewelry
+                        ? this.promptForJewelry(hoveredJewelry)
+                        : hoveredDen
+                          ? this.promptForDen(hoveredDen)
+                          : null;
     if (prompt) {
       this.promptText.setText(prompt).setColor(this.promptColorFor()).setVisible(true);
       this.input.setDefaultCursor("pointer");
@@ -5831,6 +5942,7 @@ export class MainScene extends Phaser.Scene {
       this.hoveredWorkbench ??
       this.hoveredCampfire ??
       this.hoveredForge ??
+      this.hoveredJewelry ??
       null;
     if (!target) return;
     const radius = Math.max(target.displayWidth, target.displayHeight) / 2 + 4;
@@ -5961,6 +6073,13 @@ export class MainScene extends Phaser.Scene {
     return inReach ? "[LMB] Cook" : null;
   }
 
+  // A placed Gemwright's Table: prompt to open its jewelry menu when in reach —
+  // reach-only gating, same as the Campfire/Workbench.
+  private promptForJewelry(image: Phaser.GameObjects.Image): string | null {
+    const inReach = Phaser.Math.Distance.Between(this.player.x, this.player.y, image.x, image.y) <= REACH;
+    return inReach ? "[LMB] Craft jewelry" : null;
+  }
+
   private promptForForge(image: Phaser.GameObjects.Image): string | null {
     const inReach = Phaser.Math.Distance.Between(this.player.x, this.player.y, image.x, image.y) <= REACH;
     return inReach ? "[LMB] Use Relic Forge" : null;
@@ -6045,6 +6164,10 @@ export class MainScene extends Phaser.Scene {
       if (this.promptForForge(this.hoveredForge)) this.openRelicForgeMenu(this.hoveredForge);
       return;
     }
+    if (this.hoveredJewelry) {
+      if (this.promptForJewelry(this.hoveredJewelry)) this.openJewelryMenu(this.hoveredJewelry);
+      return;
+    }
     if (this.hoveredSmelter) {
       if (this.promptForSmelter(this.hoveredSmelter)) this.openSmelterMenu(this.hoveredSmelter);
       return;
@@ -6113,7 +6236,10 @@ export class MainScene extends Phaser.Scene {
       this.spawnLooseDrop(node.resource, node.amount, node.x, node.y);
       // Chopping/Mining skill: rolled chance for a bonus +1 drop (M-SS). Routes
       // by tool kind (chop→chopping, mine→mining, incl. cracked Gloam ore).
-      const bonusChance = kind === "axe" ? choppingBonusChance(this.skills) : miningBonusChance(this.skills);
+      // Chopping/Mining skill chance + a Ring-of-the-Forager (B3-P2b) bonus.
+      const bonusChance =
+        (kind === "axe" ? choppingBonusChance(this.skills) : miningBonusChance(this.skills)) +
+        this.equipEffects.gatherBonusChance();
       if (Math.random() < bonusChance) this.spawnLooseDrop(node.resource, 1, node.x, node.y);
       node.deplete();
       this.nodes = this.nodes.filter((n) => n !== node);
@@ -6526,7 +6652,7 @@ export class MainScene extends Phaser.Scene {
         texture: def?.icon,
         name: def?.name,
         desc: def?.description,
-        cooldownMs: def?.cooldownMs ?? 0,
+        cooldownMs: (def?.cooldownMs ?? 0) * this.equipEffects.abilityCooldownMult(),
         cooldownRemainingMs: def ? Math.max(0, this.abilityReadyAt[key] - now) : 0,
         active,
       };
@@ -6549,7 +6675,9 @@ export class MainScene extends Phaser.Scene {
     if (this.time.now < this.abilityReadyAt[key]) return; // still on cooldown
     const def = ABILITY_DEFS[id];
     this.castAbility(id);
-    this.abilityReadyAt[key] = this.time.now + def.cooldownMs;
+    // Ring of Quickening (B3-P2b) shortens the cooldown; the HUD sweep reads the
+    // same reduced value in abilityEntries().
+    this.abilityReadyAt[key] = this.time.now + def.cooldownMs * this.equipEffects.abilityCooldownMult();
   }
 
   private castAbility(id: AbilityId): void {
@@ -6577,7 +6705,9 @@ export class MainScene extends Phaser.Scene {
       Phaser.Math.Distance.Between(fromX, fromY, world.x, world.y) >= 8
         ? Phaser.Math.Angle.Between(fromX, fromY, world.x, world.y)
         : this.facingAngle();
-    this.player.setPosition(fromX + Math.cos(ang) * ABILITY_BLINK_DISTANCE, fromY + Math.sin(ang) * ABILITY_BLINK_DISTANCE);
+    // Amulet of Channeling (B3-P2b) extends the blink reach.
+    const dist = ABILITY_BLINK_DISTANCE * this.equipEffects.abilityPowerMult();
+    this.player.setPosition(fromX + Math.cos(ang) * dist, fromY + Math.sin(ang) * dist);
     this.clampPlayerToWorld();
     this.invulnerableUntil = Math.max(this.invulnerableUntil, this.time.now + ABILITY_BLINK_IFRAME_MS);
     this.spawnBlinkFx(fromX, fromY, this.player.x, this.player.y);
@@ -6607,12 +6737,14 @@ export class MainScene extends Phaser.Scene {
   private castNova(): void {
     const cx = this.player.x;
     const cy = this.player.y;
-    const r = ABILITY_NOVA_RADIUS;
+    // Amulet of Channeling (B3-P2b) scales both the burst radius and its damage.
+    const power = this.equipEffects.abilityPowerMult();
+    const r = ABILITY_NOVA_RADIUS * power;
     for (const enemy of [...this.enemies]) {
       if (!enemy.active) continue;
       const edge = Math.max(enemy.displayWidth, enemy.displayHeight) / 2;
       if (Phaser.Math.Distance.Between(cx, cy, enemy.x, enemy.y) > r + edge) continue;
-      this.dealAbilityDamage(enemy, ABILITY_NOVA_DAMAGE, "magic");
+      this.dealAbilityDamage(enemy, ABILITY_NOVA_DAMAGE * power, "magic");
       if (!enemy.active) continue; // killed by the burst
       // Shove outward + a short disorienting slow. No per-enemy stun state exists,
       // so the pop-back + slow IS the "knockback".
@@ -7653,6 +7785,7 @@ export class MainScene extends Phaser.Scene {
     this.closeRelicForgeMenu();
     this.closeDryingRackMenu();
     this.closeCookingMenu();
+    this.closeJewelryMenu();
     this.closeChestMenu();
     this.closeUpgradeMenu();
     if (this.inventoryMenu.isOpen()) {
@@ -7728,6 +7861,7 @@ export class MainScene extends Phaser.Scene {
   private toggleCombinedMenu(): void {
     this.closeDryingRackMenu();
     this.closeCookingMenu();
+    this.closeJewelryMenu();
     this.closeChestMenu();
     this.closeUpgradeMenu();
     this.closeRelicForgeMenu();
@@ -7959,6 +8093,7 @@ export class MainScene extends Phaser.Scene {
     this.craftingMenu.close();
     this.closeDryingRackMenu();
     this.closeCookingMenu();
+    this.closeJewelryMenu();
     this.closeChestMenu();
     this.closeRelicForgeMenu();
     this.placementMode = { recipe, itemSource: { container, key: stack.key } };
@@ -8328,6 +8463,7 @@ export class MainScene extends Phaser.Scene {
     this.inventoryMenu.close();
     this.closeDryingRackMenu();
     this.closeCookingMenu();
+    this.closeJewelryMenu();
     this.closeChestMenu();
     this.closeRelicForgeMenu();
     this.upgradeTarget = obj;
@@ -8646,6 +8782,8 @@ export class MainScene extends Phaser.Scene {
 
     // Destroying the campfire whose cooking menu is open closes it too.
     if (this.openCampfire === obj) this.closeCookingMenu();
+    // Same for the Gemwright's Table.
+    if (this.openJewelry === obj) this.closeJewelryMenu();
     // Same for the Relic Forge.
     if (this.openForge === obj) this.closeRelicForgeMenu();
 
@@ -8888,8 +9026,19 @@ export class MainScene extends Phaser.Scene {
       return;
     }
 
-    const previous = this.equipment.get(slot);
-    this.equipment.set(slot, { key: stack.key, tier: stack.tier ?? 0 });
+    // Rings can occupy EITHER ring slot (B3-P2b): a ring item always declares
+    // armorSlot "ring1", so route it into the first empty of ring1/ring2 (falling
+    // back to swapping ring1 if both are full) — letting the player wear two rings.
+    const targetSlot: EquipSlot =
+      slot === "ring1" || slot === "ring2"
+        ? this.equipment.get("ring1") === null
+          ? "ring1"
+          : this.equipment.get("ring2") === null
+            ? "ring2"
+            : "ring1"
+        : slot;
+    const previous = this.equipment.get(targetSlot);
+    this.equipment.set(targetSlot, { key: stack.key, tier: stack.tier ?? 0 });
     container.set(index, null);
     if (previous) this.returnArmorToBackpack(previous);
     this.eventLog.add("info", `Equipped ${def.name}`);

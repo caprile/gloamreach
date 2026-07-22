@@ -104,6 +104,19 @@ export const STATION_UPGRADES: StationUpgradeDef[] = [
     deltaLabel: "Smelt rare ore",
   },
   {
+    // Gemwright's Table Lvl 2 (Biome-3 Phase 2b). The Duneshaper's Heart in the
+    // costs auto-gates discovery — the upgrade stays hidden until the player
+    // owns the heart, reachable only once biome 3 demotes the Duneshaper from
+    // the win-boss. Applying it unlocks the ability-granting jewelry recipes.
+    id: "gloamheart_setting",
+    name: "Gloamheart Setting",
+    description: "The Duneshaper's still-pulsing heart set into the bench — potent enough to bind gems into living abilities.",
+    appliesToItemKey: "jewelry_station",
+    resultTier: 1,
+    costs: { duneshaper_heart: 1, moonsilver: 3 },
+    deltaLabel: "Craft ability jewelry",
+  },
+  {
     // Workbench Lvl 4. Only DISCOVERED once Embersteel Ingot is known (i.e.
     // a rare ingot has actually been smelted) — canDiscoverUpgrade gates the
     // upgrade on every cost key being discovered.

@@ -209,6 +209,19 @@ export const RECIPES: Recipe[] = [
     output: { kind: "item", itemId: "smelter", itemName: "Smelter" },
   },
   {
+    // Biome-3 Phase 2b: the dedicated jewelry station. Tier 1 (Workbench-gated)
+    // like the Smelter. Costs moonsilver (a biome-3 material with no source yet),
+    // so it's dormant/dev-testable until biome 3 — its jewelry recipes live in
+    // Jewelry.ts (its own menu), not here.
+    id: "jewelry_station",
+    name: "Gemwright's Table",
+    description: "A jeweler's bench for setting gems into rings and amulets. Needs moonsilver to build.",
+    category: "crafting",
+    tier: 1,
+    costs: { moonsilver: 4, stone: 10 },
+    output: { kind: "item", itemId: "jewelry_station", itemName: "Gemwright's Table" },
+  },
+  {
     id: "gremlin_cap",
     name: "Gremlin Cap",
     description: "A light cap stitched from cured gremlin leather.",

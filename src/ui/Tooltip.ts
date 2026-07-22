@@ -11,6 +11,7 @@ import {
   type WeaponType,
 } from "../systems/Weapons";
 import { weaponSkillDamageMultiplier, type Skills } from "../systems/Skills";
+import { describePassive } from "../systems/EquipmentEffects";
 import { armorDefenseForTier } from "../systems/ArmorUpgrades";
 import { weaponTierDamageBonus } from "../systems/WeaponUpgrades";
 import type { PlayerProgression } from "../systems/Progression";
@@ -89,6 +90,12 @@ export class Tooltip {
     if (def.edible) {
       lines.push("");
       lines.push(`Effect: +${def.edible.hpPerSec} HP/s for ${Math.round(def.edible.durationMs / 1000)}s`);
+    }
+    // Jewelry (B3-P2b): its ability-augment / utility passives, derived from the
+    // `passive` record so the numbers live only in Items.ts.
+    if (def.passive) {
+      lines.push("");
+      for (const l of describePassive(def.passive)) lines.push(l);
     }
 
     const text = this.scene.add

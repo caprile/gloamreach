@@ -2816,6 +2816,73 @@ export class BootScene extends Phaser.Scene {
     g.fillRect(7, 16, 10, 2); // gold cord
     g.generateTexture("icon_sandmaw_trophy", ICON, ICON);
 
+    // --- Biome-3 Phase 2b: jewelry economy icons (dormant materials/gear) ---
+
+    // Ability gems — cut diamonds tinted per ability (reuse the relic-gem drawer).
+    relicGem("icon_gem_gloam", 0x9a5cff, 0xc9a8ff); // Q / blink — violet
+    relicGem("icon_gem_ember", 0xff8a3a, 0xffc078); // E / nova — orange
+    relicGem("icon_gem_blood", 0xc0303a, 0xf0808a); // R / bloodpact — crimson
+
+    g.clear(); // Moonsilver — a pale gloam-veined metal ingot
+    g.fillStyle(0x8f9fb4, 1);
+    g.fillRect(4, 10, 16, 7);
+    g.fillStyle(0xc4d0de, 1);
+    g.fillRect(5, 10, 14, 2); // top highlight
+    g.fillStyle(0x9a5cff, 0.7);
+    g.fillRect(8, 13, 6, 1); // gloam vein
+    g.generateTexture("icon_moonsilver", ICON, ICON);
+
+    g.clear(); // Duneshaper's Heart — a gloam-gorged violet heart with sand wisps
+    g.fillStyle(0x5a2ea8, 1);
+    g.fillCircle(9, 10, 4);
+    g.fillCircle(15, 10, 4);
+    g.fillTriangle(5, 12, 19, 12, 12, 20);
+    g.fillStyle(0xb98cff, 1);
+    g.fillCircle(9, 9, 1.5); // sheen
+    g.fillStyle(0xe8c27a, 1); // sand wisps
+    g.fillRect(11, 3, 2, 3);
+    g.fillRect(6, 6, 1, 2);
+    g.fillRect(17, 6, 1, 2);
+    g.generateTexture("icon_duneshaper_heart", ICON, ICON);
+
+    g.clear(); // Gemwright's Table — a bench with a mounted gem (world sprite + icon)
+    g.fillStyle(0x6a533a, 1);
+    g.fillRect(3, 12, 18, 4); // table top
+    g.fillStyle(0x4a3a28, 1);
+    g.fillRect(5, 16, 3, 6); // legs
+    g.fillRect(16, 16, 3, 6);
+    g.fillStyle(0x9a5cff, 1); // mounted gem
+    g.fillTriangle(12, 3, 8, 9, 16, 9);
+    g.fillTriangle(8, 9, 16, 9, 12, 13);
+    g.fillStyle(0xc9a8ff, 1);
+    g.fillTriangle(12, 5, 10, 9, 12, 9);
+    g.generateTexture("icon_jewelry_station", ICON, ICON);
+
+    // Rings (a metal band + a set gem) and amulets (a cord loop + a pendant stone).
+    const ring = (key: string, band: number, gem: number) => {
+      g.clear();
+      g.lineStyle(3, band, 1);
+      g.strokeCircle(12, 14, 7);
+      g.fillStyle(gem, 1);
+      g.fillTriangle(12, 2, 8, 8, 16, 8);
+      g.fillTriangle(8, 8, 16, 8, 12, 11);
+      g.generateTexture(key, ICON, ICON);
+    };
+    const amulet = (key: string, cord: number, gem: number, gemLight: number) => {
+      g.clear();
+      g.lineStyle(2, cord, 1);
+      g.strokeCircle(12, 8, 6);
+      g.fillStyle(gem, 1);
+      g.fillCircle(12, 16, 5);
+      g.fillStyle(gemLight, 1);
+      g.fillCircle(10, 14, 1.5);
+      g.generateTexture(key, ICON, ICON);
+    };
+    ring("icon_ring_quickening", 0x9fb0c4, 0xb98cff); // ability-augment — violet
+    amulet("icon_amulet_channeling", 0x9fb0c4, 0x9a5cff, 0xc9a8ff);
+    ring("icon_ring_forager", 0x9fb0c4, 0x5ad06a); // explorer — green
+    amulet("icon_amulet_farsight", 0x9fb0c4, 0xd8e0ee, 0xffffff);
+
     g.destroy();
     this.makeLightTexture();
     this.makeForestFeatherTexture();
