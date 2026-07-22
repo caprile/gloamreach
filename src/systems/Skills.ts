@@ -1,5 +1,8 @@
 import type { DamageType } from "./Weapons";
-import { PLAYER_WALK_SPEED } from "../entities/Player";
+// From the Phaser-free movement module, NOT entities/Player — importing the
+// engine here would leak it into the dashboard, which imports Skills via
+// Characters.ts.
+import { PLAYER_WALK_SPEED } from "./movement";
 
 // Skills are per-activity levels. For now they ONLY gate recipes (via
 // Recipe.requiredSkills) — a skill level has no stat/damage effect itself.

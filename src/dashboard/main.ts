@@ -31,7 +31,7 @@ import { TOOL_UPGRADES } from "../systems/ToolUpgrades";
 import { ARMOR_UPGRADES, armorDefenseForTier } from "../systems/ArmorUpgrades";
 import { STATION_UPGRADES } from "../systems/StationUpgrades";
 import { GEAR_AUGMENTS, MAX_AUGMENTS_PER_ITEM } from "../systems/GearAugments";
-import { CHARACTER_DEFS } from "../systems/Characters";
+import { CHARACTER_DEFS, affinityLines } from "../systems/Characters";
 import { ABILITY_DEFS } from "../systems/Abilities";
 import { EPIC_ITEM_KEYS, EPIC_POOL_T1, EPIC_POOL_T2, EPIC_POOL_T3 } from "../systems/EpicLoot";
 import type { EpicPool } from "../systems/LootContainer";
@@ -995,11 +995,15 @@ function renderCharacters(): string {
     <p class="note">The fixed roster offered at the start of every run
     (<code>Characters.ts</code>). Each card grants stats, a kit, and one
     ability-granting special item pre-equipped in its slot. The run modifier is
-    always double-edged and deliberately has <b>no</b> score effect.</p>
+    always double-edged and deliberately has <b>no</b> score effect. Affinity /
+    weakness (B4-P3) is the separate <i>class</i> axis — per-skill XP rate and
+    per-stat point value, shaping how a survivor grows rather than its flat
+    numbers. Locked rule: a character may never reduce drops, so Chopping and
+    Mining XP are never penalised.</p>
     <div class="searchwrap"><input type="search" data-filter="characters" placeholder="Filter characters…" /></div>
     <table data-table="characters"><thead><tr>
       <th>Character</th><th>Ability item</th><th>Stats</th><th>Kit</th>
-      <th>Modifier</th><th>Boon</th><th>Bane</th>
+      <th>Modifier</th><th>Boon</th><th>Bane</th><th>Affinity</th><th>Weakness</th>
       </tr></thead><tbody>`;
   for (const c of CHARACTER_DEFS) {
     const equip = c.startingEquip.map((e) => `${itemDef(e.key)?.name ?? e.key} (${e.slot})`).join(", ");
@@ -1015,6 +1019,8 @@ function renderCharacters(): string {
       <td><span class="tag">${esc(c.modifier.name)}</span></td>
       <td>${esc(c.modifier.boon)}</td>
       <td class="muted">${esc(c.modifier.bane)}</td>
+      <td>${esc(affinityLines(c).boons.join(" · ") || "—")}</td>
+      <td class="muted">${esc(affinityLines(c).banes.join(" · ") || "—")}</td>
     </tr>`;
   }
   html += `</tbody></table>`;

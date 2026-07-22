@@ -1699,6 +1699,43 @@ below.**
    **Characters** tab. All five characters' numbers are first-pass — expect tuning once played.
    See `STATUS.md` + [[survivor-rpg-start-of-run-character]].
 
+5ap. **B4-P3 — Class identity: skill affinities + stat potency** (plan:
+   `.claude/plans/b4-p3-class-identity.md`, built on Opus). B4-P1's five survivors all
+   differentiated on the **same shape** — eight global scalar `RunModifier` fields — so
+   nothing about a character shaped **how you grow**, only how big your flat numbers were.
+   Adds a second, separate channel, `ClassAffinity { skillXpMult, statPotency }`: a per-skill
+   XP rate and a per-stat multiplier on the value of each allocated point. Locked with
+   the user: **both** channels; double-edged but **mild** (favoured ×1.4–1.6, penalised
+   ×0.75–0.85 — nobody is crippled at anything); and **never reduce drops**, which has a
+   concrete consequence — `chopping`/`mining` levels roll the bonus-drop chance
+   (`Skills.choppingBonusChance`/`miningBonusChance`), so a gathering-XP *penalty* is an
+   indirect drop nerf and **no character may penalise those two skills** (enforced by a
+   module-load `console.warn` guard in `Characters.ts`, so a future editor trips it in the dev
+   console rather than in a playtest; the Warden is the only card with gathering affinity and
+   per the lock it can only ever be an upside there). **Each channel has exactly ONE hook
+   site**, per `Characters.ts`'s own "a new field means a new hook, which is a deliberate
+   decision" rule: skill affinity multiplies in `MainScene.awardSkillXp` **outside** the
+   additive XP bucket (deliberate — the bucket is the "global +% XP" category, and folding a
+   class's ×0.75 weakness in as −25 would let a couple of relics erase its defining downside
+   entirely), and stat potency lives **inside `PlayerProgression`** (`setStatPotency`/
+   `potency`) rather than at MainScene read sites, so all eight per-point getters *and* every
+   stat readout pick it up from one place with **zero** MainScene hooks changed. That also let
+   `statTotalEffect()` be refactored to read the getters instead of re-multiplying the raw
+   per-point constants, removing a standing duplication-drift risk. Because skills gate recipe
+   **discovery** (`Recipe.requiredSkills`), an affinity genuinely changes what a run can
+   build, not just how fast numbers climb. Display text is **derived** from the maps
+   (`affinityLines(def)`) so card/menu/dashboard copy can never drift from the numbers, unlike
+   the hand-written `boon`/`bane` strings. **Two incidental fixes:** the picker card now
+   **measures its own height** (`renderCard` returns its content bottom; `render()` grows every
+   rect to the tallest — the hand-tuned `CARD_H` constant was exactly the thing that breaks
+   when a section is added), and **`Skills.ts` was leaking Phaser** into the supposedly
+   Phaser-free balancing dashboard once `Characters.ts` imported `skillDisplayName` —
+   `PLAYER_WALK_SPEED` moved to a new Phaser-free `src/systems/movement.ts` with `Player.ts`
+   re-exporting it, so every existing import path still works (bundling `Characters.ts`
+   standalone went 6.4 MB → 7.5 KB). Note `vite.config.ts` does **not** list `dashboard.html`
+   as a build input — it is dev-server-only, so that leak cost the dashboard's dev page load,
+   not the shipped bundle. All numbers first-pass/tunable. See `STATUS.md`.
+
 **Not yet built — next up in rough order:**
 6. **World & discovery** — much bigger generated world, biomes, map, a single giant
    circular Valheim-style map (spawn at center, danger increases outward). **The circular

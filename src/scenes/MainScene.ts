@@ -9305,7 +9305,12 @@ export class MainScene extends Phaser.Scene {
       (this.progression.xpMult() - 1) +
       (this.xpStreakMult() - 1) +
       (this.character.xpMult() - 1);
-    this.skills.addXp(skill, base * (1 + bonus));
+    // The run character's PER-SKILL affinity (B4-P3) multiplies OUTSIDE that
+    // bucket on purpose. The bucket is the "global +% XP" category; folding a
+    // class's x0.75 weakness in as -25 would let a couple of relics erase its
+    // defining downside entirely. A per-skill class scalar is its own category,
+    // so it composes with the bucket instead of competing with it.
+    this.skills.addXp(skill, base * this.character.skillXpMult(skill) * (1 + bonus));
   }
 
   // Total crit CHANCE for `weapon` (capped) — weapon base + Agility + relics.
@@ -10041,6 +10046,9 @@ export class MainScene extends Phaser.Scene {
   private applyCharacter(def: CharacterDef): void {
     this.character = new RunCharacter(def);
 
+    // Potency must land BEFORE the starting stats, so the granted points are
+    // already worth the class rate the first time syncStatBonuses reads them.
+    this.progression.setStatPotency(this.character.statPotencyMap());
     for (const [stat, n] of Object.entries(def.startingStats)) {
       this.progression.setStat(stat as StatType, n as number);
     }
@@ -10403,6 +10411,7 @@ export class MainScene extends Phaser.Scene {
       skills: this.skills,
       progression: this.progression,
       allocate: (stat) => this.allocateStat(stat),
+      character: () => this.character,
     });
   }
 

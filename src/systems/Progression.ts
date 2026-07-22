@@ -52,22 +52,25 @@ export function statDescription(stat: StatType): string {
 // The CURRENT cumulative effect of every point already spent on `stat` — shown
 // on the Character menu's Stats tab so a player can see "how much +HP am I
 // actually getting" rather than just the per-point rate (playtest request).
+//
+// Reads the GETTERS rather than re-multiplying the per-point constants (B4-P3):
+// that removes a standing duplication-drift risk and means a class's stat
+// potency shows up here for free, with no second place to keep in sync.
 export function statTotalEffect(stat: StatType, p: PlayerProgression): string {
-  const n = p.statValue(stat);
   const pct = (v: number, dp = 0) => `${(v * 100).toFixed(dp)}%`;
   switch (stat) {
     case "endurance":
-      return `+${n * ENDURANCE_STAMINA_PER_POINT} max Stamina, +${pct(n * ENDURANCE_STAMINA_REGEN_PCT_PER_POINT)} regen`;
+      return `+${p.enduranceStaminaBonus()} max Stamina, +${pct(p.staminaRegenMult() - 1)} regen`;
     case "vitality":
-      return `+${n * VITALITY_HP_PER_POINT} max HP, +${pct(n * VITALITY_HEALING_PCT_PER_POINT, 1)} healing`;
+      return `+${p.vitalityHealthBonus()} max HP, +${pct(p.healingReceivedMult() - 1, 1)} healing`;
     case "strength":
-      return `+${(n * STRENGTH_CRIT_MULT_PER_POINT).toFixed(2)}x crit damage`;
+      return `+${p.critMultBonus().toFixed(2)}x crit damage`;
     case "agility":
-      return `+${pct(n * AGILITY_CRIT_CHANCE_PER_POINT, 1)} crit chance`;
+      return `+${pct(p.critChanceBonus(), 1)} crit chance`;
     case "intelligence":
-      return `+${pct(n * INT_XP_PCT_PER_POINT, 1)} skill XP`;
+      return `+${pct(p.xpMult() - 1, 1)} skill XP`;
     case "wisdom":
-      return `+${pct(n * WISDOM_BUFF_DURATION_PCT_PER_POINT)} buff duration`;
+      return `+${pct(p.buffDurationMult() - 1)} buff duration`;
   }
 }
 
@@ -113,6 +116,19 @@ export class PlayerProgression {
     wisdom: 0,
   };
   private listeners: LevelUpListener[] = [];
+  // B4-P3: per-stat multiplier on the value of each allocated point, set once
+  // from the run character. Living INSIDE this class (rather than at each
+  // MainScene read site) is the whole trick — every getter and every stat
+  // readout picks it up from one place, so no hook site had to change.
+  private statPotency: Partial<Record<StatType, number>> = {};
+
+  setStatPotency(map: Partial<Record<StatType, number>>): void {
+    this.statPotency = { ...map };
+  }
+
+  potency(stat: StatType): number {
+    return this.statPotency[stat] ?? 1;
+  }
 
   // Mirrors Skills.onLevelUp / EventLog.onAdd — array of listeners.
   onLevelUp(cb: LevelUpListener): void {
@@ -150,11 +166,13 @@ export class PlayerProgression {
     this.stats[stat] = Math.max(0, Math.round(value));
   }
 
+  // HP/stamina stay whole numbers (both feed bars the player reads as integers),
+  // so potency rounds the TOTAL rather than the per-point rate.
   enduranceStaminaBonus(): number {
-    return this.stats.endurance * ENDURANCE_STAMINA_PER_POINT;
+    return Math.round(this.stats.endurance * ENDURANCE_STAMINA_PER_POINT * this.potency("endurance"));
   }
   vitalityHealthBonus(): number {
-    return this.stats.vitality * VITALITY_HP_PER_POINT;
+    return Math.round(this.stats.vitality * VITALITY_HP_PER_POINT * this.potency("vitality"));
   }
 
   // --- M-SS secondary axes (multipliers/additives read at MainScene hooks) ---
@@ -163,28 +181,28 @@ export class PlayerProgression {
   // top; the total is soft-capped in MainScene's crit roll). Fraction, e.g.
   // 0.05 = +5%.
   critChanceBonus(): number {
-    return this.stats.agility * AGILITY_CRIT_CHANCE_PER_POINT;
+    return this.stats.agility * AGILITY_CRIT_CHANCE_PER_POINT * this.potency("agility");
   }
   // Strength's additive crit-multiplier contribution (e.g. 0.4 = +0.4x).
   critMultBonus(): number {
-    return this.stats.strength * STRENGTH_CRIT_MULT_PER_POINT;
+    return this.stats.strength * STRENGTH_CRIT_MULT_PER_POINT * this.potency("strength");
   }
   // Vitality amplifies ALL healing received (food/Comfort/kill-heal) — NOT
   // passive regen (there is none). Multiplier, e.g. 1.15 at 10 Vitality.
   healingReceivedMult(): number {
-    return 1 + this.stats.vitality * VITALITY_HEALING_PCT_PER_POINT;
+    return 1 + this.stats.vitality * VITALITY_HEALING_PCT_PER_POINT * this.potency("vitality");
   }
   // Endurance speeds stamina regen (an axis relics don't touch). Multiplier.
   staminaRegenMult(): number {
-    return 1 + this.stats.endurance * ENDURANCE_STAMINA_REGEN_PCT_PER_POINT;
+    return 1 + this.stats.endurance * ENDURANCE_STAMINA_REGEN_PCT_PER_POINT * this.potency("endurance");
   }
   // Intelligence boosts all skill-XP gain (stacks additively with the
   // Scholar's-Idol relic's xpPct at the MainScene award site). Multiplier.
   xpMult(): number {
-    return 1 + this.stats.intelligence * INT_XP_PCT_PER_POINT;
+    return 1 + this.stats.intelligence * INT_XP_PCT_PER_POINT * this.potency("intelligence");
   }
   // Wisdom lengthens buff/food durations (auto-covers future buff procs).
   buffDurationMult(): number {
-    return 1 + this.stats.wisdom * WISDOM_BUFF_DURATION_PCT_PER_POINT;
+    return 1 + this.stats.wisdom * WISDOM_BUFF_DURATION_PCT_PER_POINT * this.potency("wisdom");
   }
 }

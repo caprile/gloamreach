@@ -18,7 +18,8 @@
 //     mechanical role as any other equipment (swappable, occupies the slot,
 //     shows on the paper-doll). recomputeAbilities() already derives Q/E/R from
 //     ItemDef.grantsAbility, so this needed no new ability plumbing at all.
-import type { StatType } from "./Progression";
+import { statDisplayName, type StatType } from "./Progression";
+import { skillDisplayName, type SkillType } from "./Skills";
 import type { EquipSlot } from "./Equipment";
 
 // Every field is optional and defaults to neutral (1x, or 0 for the pct pair).
@@ -38,6 +39,18 @@ export interface RunModifier {
   maxStaminaPct?: number;
 }
 
+// B4-P3 — the CLASS identity axis, separate from RunModifier's flat identity.
+// A modifier says how big your numbers are; these two say how you GROW, which
+// is what makes a card read as a class rather than a stat line. Both default to
+// 1x per key, and each has exactly ONE hook site (see the class comment below).
+export interface ClassAffinity {
+  // Per-skill XP rate. Skills gate recipe DISCOVERY (Recipe.requiredSkills), so
+  // this changes what a run can build, not just how fast numbers climb.
+  skillXpMult?: Partial<Record<SkillType, number>>;
+  // Per-stat multiplier on the value of each allocated point.
+  statPotency?: Partial<Record<StatType, number>>;
+}
+
 export interface CharacterDef {
   id: string;
   name: string;
@@ -51,7 +64,15 @@ export interface CharacterDef {
   // MainScene.applyCharacter; everything else lands in the backpack.
   startingItems: { key: string; count: number }[];
   modifier: RunModifier;
+  affinity?: ClassAffinity;
 }
+
+// the user's locked rule (B4-P3): a character may never reduce DROPS. That has a
+// concrete consequence here — chopping/mining levels roll the bonus-drop chance
+// (Skills.choppingBonusChance/miningBonusChance), so a gathering-XP PENALTY is
+// an indirect drop nerf. Positive gathering affinity is fine. Kept as a runtime
+// guard rather than only a comment so a future editor trips it, not a playtest.
+const NO_PENALTY_SKILLS: SkillType[] = ["chopping", "mining"];
 
 // The roster. All numbers first-pass/tunable, like every other system here.
 // Each character carries one of the three existing ability specials; the three
@@ -75,6 +96,10 @@ export const CHARACTER_DEFS: CharacterDef[] = [
       moveSpeedMult: 1.1,
       maxStaminaPct: -10,
     },
+    affinity: {
+      skillXpMult: { running: 1.6, light_armor: 1.4, blunt: 0.8 },
+      statPotency: { agility: 1.5, strength: 0.85 },
+    },
   },
   {
     id: "reaver",
@@ -90,6 +115,10 @@ export const CHARACTER_DEFS: CharacterDef[] = [
       bane: "+25% damage taken",
       damageDealtMult: 1.25,
       damageTakenMult: 1.25,
+    },
+    affinity: {
+      skillXpMult: { blunt: 1.6, slash: 1.4, magic: 0.75 },
+      statPotency: { strength: 1.5, intelligence: 0.85 },
     },
   },
   {
@@ -110,6 +139,10 @@ export const CHARACTER_DEFS: CharacterDef[] = [
       xpMult: 1.3,
       maxHpPct: -15,
     },
+    affinity: {
+      skillXpMult: { magic: 1.6, ranged: 1.4, heavy_armor: 0.8 },
+      statPotency: { intelligence: 1.5, wisdom: 1.25, vitality: 0.85 },
+    },
   },
   {
     id: "warden",
@@ -129,6 +162,12 @@ export const CHARACTER_DEFS: CharacterDef[] = [
       maxHpPct: 20,
       staminaCostMult: 1.2,
     },
+    // The only gathering affinity on the roster — it fits "comes prepared", and
+    // per the drop lock it can only ever be an upside on those two skills.
+    affinity: {
+      skillXpMult: { heavy_armor: 1.6, chopping: 1.4, mining: 1.4, ranged: 0.8 },
+      statPotency: { vitality: 1.5, agility: 0.85 },
+    },
   },
   {
     id: "ascetic",
@@ -145,11 +184,51 @@ export const CHARACTER_DEFS: CharacterDef[] = [
       damageTakenMult: 0.8,
       eliteChanceMult: 2,
     },
+    affinity: {
+      skillXpMult: { light_armor: 1.6, pierce: 1.4, slash: 0.8 },
+      statPotency: { endurance: 1.5, wisdom: 0.85 },
+    },
   },
 ];
 
+// Enforce the drop lock at module load — cheap, and it fires in the dev console
+// the moment someone adds a gathering penalty rather than during a playtest.
+for (const def of CHARACTER_DEFS) {
+  for (const skill of NO_PENALTY_SKILLS) {
+    const v = def.affinity?.skillXpMult?.[skill];
+    if (v !== undefined && v < 1) {
+      console.warn(
+        `[Characters] ${def.id} penalises ${skill} XP (x${v}) — that reduces bonus-drop chance. Characters must never reduce drops.`,
+      );
+    }
+  }
+}
+
 export function characterById(id: string): CharacterDef | undefined {
   return CHARACTER_DEFS.find((c) => c.id === id);
+}
+
+// Display strings DERIVED from the affinity maps, so card/menu text can never
+// drift from the real numbers (unlike the hand-written boon/bane lines above).
+// Returns boons first, then banes, each already sorted strongest-first.
+export function affinityLines(def: CharacterDef): { boons: string[]; banes: string[] } {
+  const boons: string[] = [];
+  const banes: string[] = [];
+
+  const pct = (v: number) => `${v > 1 ? "+" : "-"}${Math.round(Math.abs(v - 1) * 100)}%`;
+  const push = (v: number, text: string) => (v > 1 ? boons : banes).push(text);
+
+  const skills = Object.entries(def.affinity?.skillXpMult ?? {}) as [SkillType, number][];
+  for (const [skill, v] of skills.sort((a, b) => Math.abs(b[1] - 1) - Math.abs(a[1] - 1))) {
+    if (v !== 1) push(v, `${pct(v)} ${skillDisplayName(skill)} XP`);
+  }
+
+  const stats = Object.entries(def.affinity?.statPotency ?? {}) as [StatType, number][];
+  for (const [stat, v] of stats.sort((a, b) => Math.abs(b[1] - 1) - Math.abs(a[1] - 1))) {
+    if (v !== 1) push(v, `${statDisplayName(stat)} points worth ${v.toFixed(2).replace(/\.?0+$/, "")}x`);
+  }
+
+  return { boons, banes };
 }
 
 // Aggregate accessor mirroring RelicManager's getter shape, so MainScene's hook
@@ -205,5 +284,23 @@ export class RunCharacter {
   }
   maxStaminaBonus(): number {
     return 100 * (this.pct("maxStaminaPct") / 100);
+  }
+
+  // --- B4-P3 class identity (one hook site each) ---
+
+  // Read by MainScene.awardSkillXp, MULTIPLIED outside the additive XP bucket
+  // there — see that call site for why this composes rather than folding in.
+  skillXpMult(skill: SkillType): number {
+    return this.def?.affinity?.skillXpMult?.[skill] ?? 1;
+  }
+
+  // Pushed into PlayerProgression once (setStatPotency, from applyCharacter),
+  // so every per-point getter AND every stat readout picks it up in one place.
+  statPotency(stat: StatType): number {
+    return this.def?.affinity?.statPotency?.[stat] ?? 1;
+  }
+
+  statPotencyMap(): Partial<Record<StatType, number>> {
+    return this.def?.affinity?.statPotency ?? {};
   }
 }

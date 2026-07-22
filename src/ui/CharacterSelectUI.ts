@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { CHARACTER_DEFS, type CharacterDef } from "../systems/Characters";
+import { CHARACTER_DEFS, affinityLines, type CharacterDef } from "../systems/Characters";
 import { statDisplayName, type StatType } from "../systems/Progression";
 import { itemDef } from "../systems/Items";
 import { ABILITY_DEFS, SLOT_ABILITY_KEY } from "../systems/Abilities";
@@ -18,13 +18,20 @@ const DEPTH_PANEL = 3621;
 const DEPTH_TEXT = 3622;
 
 const PANEL_W = 1500;
-const PANEL_H = 600;
+// Headroom for the self-sizing cards below (CARD_TOP + tallest card + the
+// Begin Run button). The canvas is a fixed 1920x1080, so this still centres.
+// Measured live: the tallest card (4 affinity boons) bottoms out 493px below
+// CARD_TOP, leaving a ~65px gap to the button at this height.
+const PANEL_H = 690;
 const CARD_W = 272;
 const CARD_GAP = 18;
 const CARD_TOP = 96;
-// Sized to the tallest card's real measured content (verified live) plus a
-// small margin — not guessed.
-const CARD_H = 400;
+// MINIMUM card height. The card box now measures itself: renderCard returns its
+// real content bottom and render() grows every rect to the tallest card + a
+// margin, so adding a section (as B4-P3's AFFINITIES block did) can never clip
+// content or need this constant re-guessed. PANEL_H just needs enough headroom.
+const CARD_MIN_H = 400;
+const CARD_PAD_BOTTOM = 14;
 
 // Boon/bane use amber/dim-grey, not green/red — red/green stay reserved for
 // buff/debuff deltas (standing convention).
@@ -110,17 +117,30 @@ export class CharacterSelectUI {
 
     const rowW = CHARACTER_DEFS.length * CARD_W + (CHARACTER_DEFS.length - 1) * CARD_GAP;
     const rowX = cx - rowW / 2;
+    const cardTop = this.panelY + CARD_TOP;
+    const cards: Phaser.GameObjects.Rectangle[] = [];
+    let maxBottom = cardTop + CARD_MIN_H;
     CHARACTER_DEFS.forEach((def, i) => {
-      this.renderCard(def, i, rowX + i * (CARD_W + CARD_GAP), this.panelY + CARD_TOP);
+      const { rect, bottom } = this.renderCard(def, i, rowX + i * (CARD_W + CARD_GAP), cardTop);
+      cards.push(rect);
+      maxBottom = Math.max(maxBottom, bottom + CARD_PAD_BOTTOM);
     });
+    // Uniform height across the row, driven by the tallest real content.
+    for (const rect of cards) rect.setSize(CARD_W, maxBottom - cardTop);
 
     this.button(cx, this.panelY + PANEL_H - 34, "Begin Run", () => this.confirm());
   }
 
-  private renderCard(def: CharacterDef, index: number, x: number, y: number): void {
+  // Returns its rect (so render() can grow it) and the y its content ends at.
+  private renderCard(
+    def: CharacterDef,
+    index: number,
+    x: number,
+    y: number,
+  ): { rect: Phaser.GameObjects.Rectangle; bottom: number } {
     const isSel = index === this.selected;
     const card = this.scene.add
-      .rectangle(x, y, CARD_W, CARD_H, isSel ? 0x1c1830 : 0x121319, 0.98)
+      .rectangle(x, y, CARD_W, CARD_MIN_H, isSel ? 0x1c1830 : 0x121319, 0.98)
       .setOrigin(0, 0)
       .setStrokeStyle(isSel ? 2 : 1, isSel ? 0xc9a4f0 : 0x3a4050)
       .setScrollFactor(0)
@@ -189,7 +209,20 @@ export class CharacterSelectUI {
     this.text(x + 14, cy, def.modifier.name.toUpperCase(), 11, "#8a6ec0");
     cy += 18;
     cy = this.block(x + 14, cy, def.modifier.boon, 12, BOON_COLOR, CARD_W - 28);
-    this.block(x + 14, cy + 2, def.modifier.bane, 12, BANE_COLOR, CARD_W - 28);
+    cy = this.block(x + 14, cy + 2, def.modifier.bane, 12, BANE_COLOR, CARD_W - 28);
+
+    // --- class identity (B4-P3): how this survivor GROWS, vs the modifier's
+    // flat numbers above. Derived from the affinity maps so it can't drift.
+    const { boons, banes } = affinityLines(def);
+    if (boons.length || banes.length) {
+      cy += 10;
+      this.text(x + 14, cy, "AFFINITIES", 10, "#5b6472");
+      cy += 16;
+      if (boons.length) cy = this.block(x + 14, cy, boons.join("\n"), 11, BOON_COLOR, CARD_W - 28);
+      if (banes.length) cy = this.block(x + 14, cy + 2, banes.join("\n"), 11, BANE_COLOR, CARD_W - 28);
+    }
+
+    return { rect: card, bottom: cy };
   }
 
   // Word-wrapped text block; returns the y just past it so callers can stack.

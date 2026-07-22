@@ -2,7 +2,32 @@
 
 ## Current State
 
-_Living snapshot — edit in place, never append. Last shipped: **B4-P2 — Epic loot pool +
+_Living snapshot — edit in place, never append. Last shipped: **B4-P3 — Class identity:
+skill affinities + stat potency** (2026-07-22, Opus, plan
+`.claude/plans/b4-p3-class-identity.md`). B4-P1's five survivors all differentiated on the
+**same shape** — eight global scalar `RunModifier` fields — so nothing about a character
+shaped **how you grow**, only how big your flat numbers were. Added a second, separate
+channel: `ClassAffinity { skillXpMult, statPotency }` — per-skill XP rate and per-stat point
+value. Locked with the user: both channels, double-edged but **mild** (×1.4–1.6 up,
+×0.75–0.85 down), and **never reduce drops** — which means `chopping`/`mining` XP may never
+be penalised (they roll the bonus-drop chance), enforced by a module-load guard. Each channel
+has **exactly one hook site**: affinity multiplies in `awardSkillXp` **outside** the additive
+XP bucket (so relics can't erase a class's defining weakness), and potency lives **inside
+`PlayerProgression`**, so all eight per-point getters and every stat readout pick it up with
+**zero** MainScene changes. Since skills gate recipe *discovery*, an affinity really changes
+what a run can build. Two incidental fixes: the picker card **measures its own height** now
+(the hand-tuned `CARD_H` was exactly the thing that breaks when a section is added), and
+`Skills.ts` was **leaking Phaser** into the supposedly-Phaser-free dashboard — extracted
+`PLAYER_WALK_SPEED` to a new `src/systems/movement.ts` (bundling `Characters.ts` standalone:
+6.4 MB → 7.5 KB). **Verified twice over**: 20/20 assertions in Node against the
+framework-free modules, then live in the browser end-to-end — picking the Warden gave exactly
+×1.6/×1.4/×1.4/×0.8 XP through the real `awardSkillXp`, vitality 3pts → 18 HP (×1.5) → 138
+max, the Character menu's markers sit 8px clear of their labels, all 11 skill rows hover with
+the affinity line on exactly the 4 affinity skills, `scene.restart()` → Reaver is a clean swap
+with zero carryover, and the dashboard page has `window.Phaser === undefined`. `tsc` +
+`npm run build` clean, zero console errors. **Next: a playtest — every number is
+first-pass.** See B4-P3 below.
+Prior: **B4-P2 — Epic loot pool +
 starter-ability nerf** (2026-07-22, Opus, plan
 `.claude/plans/b4-p2-epic-loot-and-starter-abilities.md`). Fixed a design bug B4-P1 shipped
 and built the biggest already-designed-but-unbuilt system in the game, which turned out to
@@ -215,6 +240,99 @@ below + [[survivor-rpg-dev-console]].
 
 > Older entries in STATUS-archive.md.
 
+### B4-P3 — Class identity: skill affinities + stat potency (2026-07-22, Opus)
+
+Plan: `.claude/plans/b4-p3-class-identity.md`. B4-P1 shipped the run-start picker, but all
+five survivors differentiated on the **same shape** — a `RunModifier` of eight global scalar
+fields. Nothing about a character shaped **how you grow**, only how big your flat numbers
+were, so the Reaver read as "the +25% damage one" rather than a class. This adds the missing
+axis as a second, separate channel: `ClassAffinity { skillXpMult, statPotency }`.
+
+**Locked with the user:** both channels; double-edged but **mild** (favoured ×1.4–1.6,
+penalised ×0.75–0.85 — nobody is crippled at anything); and **never reduce drops**. That
+last one has a concrete consequence — `chopping`/`mining` levels roll the bonus-drop chance
+(`Skills.choppingBonusChance`/`miningBonusChance`), so a gathering-XP *penalty* is an
+indirect drop nerf. **No character may penalise those two skills**, enforced by a
+module-load guard in `Characters.ts` (a `console.warn`, so a future editor trips it in the
+dev console rather than in a playtest). The Warden is the only card with gathering affinity,
+and per the lock it can only ever be an upside there.
+
+**Two channels, one hook site each** — the point of the design is that neither introduced
+new math:
+- **Skill affinity** → `MainScene.awardSkillXp` (already the single entry point for every XP
+  source). It multiplies **outside** the additive XP bucket on purpose: the bucket is the
+  "global +% XP" category, and folding a class's ×0.75 weakness in as −25 would let a couple
+  of relics erase its defining downside entirely. A per-skill class scalar is its own
+  category, so it composes rather than competes. **Verified**: with Intelligence at 40 the
+  favoured/neutral ratio is still exactly 1.6 and the penalised/neutral still 0.75, while all
+  three absolute values rose.
+- **Stat potency** → lives **inside `PlayerProgression`** (`setStatPotency`/`potency`), not at
+  MainScene read sites. That's the whole trick: all eight per-point getters and every stat
+  readout pick it up from one place, so **zero** MainScene hooks changed. It also let
+  `statTotalEffect()` be refactored to read the getters instead of re-multiplying the raw
+  per-point constants — that removed a standing duplication-drift risk *and* made the Stats
+  tab reflect potency for free.
+
+**Roster** (skill affinity / penalty · stat potency / penalty): **Vagabond** Running 1.6,
+Light Armor 1.4 / Blunt 0.8 · Agility 1.5 / Strength 0.85 — **Reaver** Blunt 1.6, Slash 1.4 /
+Magic 0.75 · Strength 1.5 / Intelligence 0.85 — **Ashcaller** Magic 1.6, Ranged 1.4 / Heavy
+Armor 0.8 · Intelligence 1.5, Wisdom 1.25 / Vitality 0.85 — **Warden** Heavy Armor 1.6,
+Chopping 1.4, Mining 1.4 / Ranged 0.8 · Vitality 1.5 / Agility 0.85 — **Ascetic** Light Armor
+1.6, Pierce 1.4 / Slash 0.8 · Endurance 1.5 / Wisdom 0.85. Because skills gate recipe
+**discovery** (`Recipe.requiredSkills`), an affinity genuinely changes what a run can build.
+
+**Display** (the feature is invisible otherwise): an `affinityLines(def)` helper **derives**
+the card/menu/dashboard text from the maps, so it can never drift from the numbers the way
+the hand-written `boon`/`bane` strings can. The picker card gained an `AFFINITIES` block; the
+Character menu marks potency-affected stat rows (`x1.5 per point`) and appends the class's XP
+affinity to each skill's hover; the dashboard Characters tab gained Affinity/Weakness columns.
+
+**Two things found along the way, both fixed:**
+- **The picker card no longer has a guessed height.** `CARD_H` was a hand-measured constant,
+  which is exactly the kind of thing that breaks when a section is added. `renderCard` now
+  returns its real content bottom and `render()` grows every rect to the tallest card, so the
+  box measures itself and a future section can't clip.
+- **`Skills.ts` was pulling Phaser in** (via `PLAYER_WALK_SPEED` from `entities/Player.ts`),
+  which mattered the moment `Characters.ts` imported `skillDisplayName` — the balancing
+  dashboard imports `Characters.ts` and is supposed to be **Phaser-free**. Extracted the
+  constant to a new Phaser-free `src/systems/movement.ts`, with `Player.ts` re-exporting it so
+  every existing import path still works. Bundling `Characters.ts` standalone went **6.4 MB →
+  7.5 KB**. (Worth noting for accuracy: `vite.config.ts` does *not* list `dashboard.html` as a
+  build input — it's dev-server-only — so this cost the dashboard page's dev load, not the
+  shipped bundle.)
+
+**Verification.** `tsc --noEmit` and `npm run build` clean; zero console errors.
+
+*Pass 1 — Node.* The dev-server slots were initially all held by **five orphaned Vite
+processes from closed chats** (nothing listening; this chat owned none to stop). Since every
+piece of new logic lives in the framework-free modules, they were bundled out of `src/` with
+esbuild and exercised directly — **20/20 assertions**: affinity math (1600/750/1000 off a
+1000 base), composes-not-folds (ratios exactly preserved with Intelligence at 40), potency
+(vitality 40→60 HP, agility crit 5%→4.25%, healing axis scaled, `statTotalEffect` **string**
+reading "+60 max HP, +22.5% healing"), the drop lock (no penalised gathering entry;
+bonus-drop chance identical across all five characters), the neutral no-character baseline
+(all six getters byte-identical), and per-character coverage/bounds. Score isolation holds
+structurally — `Run.ts` contains zero character references, so `score()` cannot see a class.
+
+*Pass 2 — live.* the user authorised killing the orphans, freeing the slots. Measured in the
+running game: the picker renders 5 cards each with an AFFINITIES block and **min slack
+exactly 14px** (= `CARD_PAD_BOTTOM`, i.e. the self-sizing is driven by the tallest card, no
+clipping) — `PANEL_H` was then tightened 800→690 to remove 158px of measured dead space above
+the Begin Run button, leaving a 48px gap. Committing the Warden gave exactly ×1.6 Heavy Armor
+/ ×1.4 Chopping / ×1.4 Mining / ×0.8 Ranged **through the real `awardSkillXp`**, and vitality
+3pts → 18 HP bonus (×1.5, neutral would be 12) → 138 max HP. The Character menu shows markers
+on exactly the 2 Warden stats, sitting **8px clear** of their labels and inside the panel;
+all 11 skill rows hover, with the affinity line on exactly the 4 affinity skills and neutral
+skills unchanged. `scene.restart()` resets to "Nameless"/potency 1/affinity 1/level 0, and
+picking the Reaver afterwards swaps cleanly — blunt 1600, magic 750, and the Warden's
+signature heavy_armor back to neutral 1000. The dashboard's Affinity/Weakness columns render
+for all five, and that page has **`window.Phaser === undefined`**, confirming the leak fix in
+the real dev server.
+
+**No screenshots** — the Browser pane isn't displayed in this environment, so the page never
+composites frames; everything above was measured from live render data instead. All numbers
+are first-pass and want a playtest.
+
 ### B4-P2 — Epic loot pool + starter-ability nerf (2026-07-22, Opus)
 
 Plan: `.claude/plans/b4-p2-epic-loot-and-starter-abilities.md`. Two problems that
@@ -359,68 +477,3 @@ space per card, so `CARD_H` was cut 512→400 against the real content bottom. `
 console errors. Dashboard gained a **Characters** tab importing `Characters.ts` live (drift-free);
 no `RECIPES.md` change (no recipes touched).
 
-### B3-P5 — Biome-3 Phase 5: the post-boss reward choice (boss-trophy relic pick) (2026-07-22, Opus)
-
-Plan: `.claude/plans/biome-3-phase-5-boss-relic-choice.md`. **The last phase of the biome-3 +
-new-systems arc — the umbrella is now COMPLETE.**
-
-**The umbrella's spec changed during the locking pass.** It called for a kill-time modal (a
-full-screen 3-card picker of relic / ability / stat boon / gem / special item). the user
-redirected: *"it can be a relic but now im thinking when you roll the boss trophy, instead of it
-outright giving you a single random relic, you get 3 random relics to pick from of the pool —
-within the relic forge menu."* So the choice moved **out of a kill-time modal and into the Relic
-Forge**, riding the boss trophy a big-boss kill already drops. That's strictly better here: the
-reward is still gated on a big-boss kill (`boss_refined_trophy` / `boss_refined_trophy_t2` drop
-from the Gremlin King / Duneshaper and nothing else), it reuses the forge's slot-machine reveal as
-the drum-roll instead of building a second modal that would compete with it, and it needs no new
-pause/freeze surface. It's also a **better decision than the original**: boss trophies already
-guarantee a Mythic and there is exactly **one Mythic per family** (8 total), so "pick 1 of 3" reads
-as **"which family gets your Mythic?"**.
-
-**Locked:** boss trophies only, but as **data** (`TrophyRoll.choiceCount`) rather than an
-`isBossTrophy` branch — any future trophy opts in, and an absent field means the original
-one-relic behaviour, so every existing trophy is untouched. **Commit — pick one, no skip, no
-reroll** (locked via `AskUserQuestion`). Candidates are **distinct ids**, reusing S4's existing
-rule that never re-offers an owned Rare/Mythic. **Ownership is not written until the pick**: the
-roll fixes the rarity + candidate set at click (so an interrupted spin still can't change the
-outcome — the existing "theatre over a known result" invariant), and the family slot is only
-written by `commitCandidate()`. Picking then runs the **normal family-dominance path**
-(replace/decline/ambiguous) rather than force-equipping, so a hand-written pool that broke the
-one-Mythic-per-family assumption still can't corrupt the loadout model.
-
-**Implementation.** `Relics.ts`: `TrophyRoll.choiceCount` (3 on both boss trophies),
-`RollResult.candidates`, the family-conflict tail of `roll()` extracted into a private
-`place(id, powerTier, trophyKey, base)` shared by both paths, plus `pendingCandidates` state +
-`hasPendingCandidates()` / `pendingCandidateIds()` / `commitCandidate(id)` (which **validates that
-`id` was actually offered**, so a stale or forged click can't grant an arbitrary relic).
-`RelicForgeMenu.ts`: a 3-row card picker in the result region — name, family, tier-scaled effect
-text, and **what it would displace** (`Replaces Titan Totem` vs `Fills your empty Stamina slot`),
-folded into `choicePending()` so it blocks further rolls + tab switches. `RelicRevealFx.ts`: its
-`success` test required `result.id`, which a pending pick doesn't have — widened, else a
-guaranteed Mythic played the **crumble fizzle**; the banner names the rarity only
-("Mythic — choose your relic") since the cards do the naming. `MainScene.ts`: a `commitCandidate`
-dep + `commitRelicCandidate()`, and `announceRelicResult` defers the "Relic forged" log to the
-pick (there's no relic to name until then).
-
-**Closing the forge mid-pick auto-takes the first card.** The trophy is already spent and the roll
-is a guaranteed Mythic — declining it the way an ambiguous family conflict declines would silently
-burn it. (The standing rule is "a spent trophy always yields something.")
-
-**Verification** (live, `preview_eval`; `tsc` clean, zero console errors). A boss roll yields 3
-distinct Mythics with **no** ownership change and `hasPendingCandidates()` true; committing grants
-**exactly** the picked id; a foreign id and a double-commit both return null without touching the
-loadout; 12 Common rolls never offer candidates and always carry an id on success (the normal path
-is unchanged); committing a candidate that contests an owned family cleanly **replaced** a Common
-Bloodroot Charm with the T2 Mythic Bloodlord's Mantle; the real card click commits the clicked card
-(not the first); a second roll while a pick is pending is refused with **no** trophy consumed; and
-closing mid-pick auto-commits candidate 0 and unblocks rolling. Trophy consumption is exactly 1.
-The reveal was confirmed to play `★ MYTHIC! ★` rather than "Crumbled to dust…".
-
-**One real bug caught in verification** — the same layout class that bit the Phase-5 relic rework:
-the result region's reserved height was 6px short, so the relic grid's own "Your Relics" header
-**overlapped the last card**. Re-measured (22px picker header + the card stack + 30 for the grid
-header) and re-asserted with exact pixel gaps: now a 14px gap, panel still fully on-screen.
-
-`RECIPES.md` + the dashboard's trophy-source notes updated (and a **stale RECIPES line** fixed
-along the way: the Tyrant Trophy was still documented as "unreachable in practice", which
-B3-P4d(2)'s win-con swap had already made false).

@@ -1,7 +1,10 @@
 import Phaser from "phaser";
 import { ysortDepth } from "../systems/depth";
+import { PLAYER_WALK_SPEED } from "../systems/movement";
 
-export const PLAYER_WALK_SPEED = 95; // pixels per second
+// Re-exported so existing importers keep their `from "../entities/Player"` path;
+// the constant itself now lives in a Phaser-free module (see movement.ts).
+export { PLAYER_WALK_SPEED };
 const DASH_SPEED = 450; // px/s during a dash burst — sharp snap, not a glide
 // Exported so MainScene can time the Emberblink set-bonus landing burst to the
 // exact frame the dash ends (fire erupts where the dash puts the player down).

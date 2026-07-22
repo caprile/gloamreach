@@ -7724,3 +7724,69 @@ the player had *died* in an earlier probe — hardcore's `runOver` guard early-r
 every polled system (including the rite) freezes while the scene still looks alive. Check
 `isDead`/`runOver` before trusting a "nothing happened" reading, and keep timed sequences inside a
 single eval.
+### B3-P5 — Biome-3 Phase 5: the post-boss reward choice (boss-trophy relic pick) (2026-07-22, Opus)
+
+Plan: `.claude/plans/biome-3-phase-5-boss-relic-choice.md`. **The last phase of the biome-3 +
+new-systems arc — the umbrella is now COMPLETE.**
+
+**The umbrella's spec changed during the locking pass.** It called for a kill-time modal (a
+full-screen 3-card picker of relic / ability / stat boon / gem / special item). the user
+redirected: *"it can be a relic but now im thinking when you roll the boss trophy, instead of it
+outright giving you a single random relic, you get 3 random relics to pick from of the pool —
+within the relic forge menu."* So the choice moved **out of a kill-time modal and into the Relic
+Forge**, riding the boss trophy a big-boss kill already drops. That's strictly better here: the
+reward is still gated on a big-boss kill (`boss_refined_trophy` / `boss_refined_trophy_t2` drop
+from the Gremlin King / Duneshaper and nothing else), it reuses the forge's slot-machine reveal as
+the drum-roll instead of building a second modal that would compete with it, and it needs no new
+pause/freeze surface. It's also a **better decision than the original**: boss trophies already
+guarantee a Mythic and there is exactly **one Mythic per family** (8 total), so "pick 1 of 3" reads
+as **"which family gets your Mythic?"**.
+
+**Locked:** boss trophies only, but as **data** (`TrophyRoll.choiceCount`) rather than an
+`isBossTrophy` branch — any future trophy opts in, and an absent field means the original
+one-relic behaviour, so every existing trophy is untouched. **Commit — pick one, no skip, no
+reroll** (locked via `AskUserQuestion`). Candidates are **distinct ids**, reusing S4's existing
+rule that never re-offers an owned Rare/Mythic. **Ownership is not written until the pick**: the
+roll fixes the rarity + candidate set at click (so an interrupted spin still can't change the
+outcome — the existing "theatre over a known result" invariant), and the family slot is only
+written by `commitCandidate()`. Picking then runs the **normal family-dominance path**
+(replace/decline/ambiguous) rather than force-equipping, so a hand-written pool that broke the
+one-Mythic-per-family assumption still can't corrupt the loadout model.
+
+**Implementation.** `Relics.ts`: `TrophyRoll.choiceCount` (3 on both boss trophies),
+`RollResult.candidates`, the family-conflict tail of `roll()` extracted into a private
+`place(id, powerTier, trophyKey, base)` shared by both paths, plus `pendingCandidates` state +
+`hasPendingCandidates()` / `pendingCandidateIds()` / `commitCandidate(id)` (which **validates that
+`id` was actually offered**, so a stale or forged click can't grant an arbitrary relic).
+`RelicForgeMenu.ts`: a 3-row card picker in the result region — name, family, tier-scaled effect
+text, and **what it would displace** (`Replaces Titan Totem` vs `Fills your empty Stamina slot`),
+folded into `choicePending()` so it blocks further rolls + tab switches. `RelicRevealFx.ts`: its
+`success` test required `result.id`, which a pending pick doesn't have — widened, else a
+guaranteed Mythic played the **crumble fizzle**; the banner names the rarity only
+("Mythic — choose your relic") since the cards do the naming. `MainScene.ts`: a `commitCandidate`
+dep + `commitRelicCandidate()`, and `announceRelicResult` defers the "Relic forged" log to the
+pick (there's no relic to name until then).
+
+**Closing the forge mid-pick auto-takes the first card.** The trophy is already spent and the roll
+is a guaranteed Mythic — declining it the way an ambiguous family conflict declines would silently
+burn it. (The standing rule is "a spent trophy always yields something.")
+
+**Verification** (live, `preview_eval`; `tsc` clean, zero console errors). A boss roll yields 3
+distinct Mythics with **no** ownership change and `hasPendingCandidates()` true; committing grants
+**exactly** the picked id; a foreign id and a double-commit both return null without touching the
+loadout; 12 Common rolls never offer candidates and always carry an id on success (the normal path
+is unchanged); committing a candidate that contests an owned family cleanly **replaced** a Common
+Bloodroot Charm with the T2 Mythic Bloodlord's Mantle; the real card click commits the clicked card
+(not the first); a second roll while a pick is pending is refused with **no** trophy consumed; and
+closing mid-pick auto-commits candidate 0 and unblocks rolling. Trophy consumption is exactly 1.
+The reveal was confirmed to play `★ MYTHIC! ★` rather than "Crumbled to dust…".
+
+**One real bug caught in verification** — the same layout class that bit the Phase-5 relic rework:
+the result region's reserved height was 6px short, so the relic grid's own "Your Relics" header
+**overlapped the last card**. Re-measured (22px picker header + the card stack + 30 for the grid
+header) and re-asserted with exact pixel gaps: now a 14px gap, panel still fully on-screen.
+
+`RECIPES.md` + the dashboard's trophy-source notes updated (and a **stale RECIPES line** fixed
+along the way: the Tyrant Trophy was still documented as "unreachable in practice", which
+B3-P4d(2)'s win-con swap had already made false).
+

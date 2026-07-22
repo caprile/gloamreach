@@ -19,11 +19,15 @@ import {
   type PlayerProgression,
   type StatType,
 } from "../systems/Progression";
+import type { RunCharacter } from "../systems/Characters";
 
 export interface CharacterMenuDeps {
   skills: Skills;
   progression: PlayerProgression;
   allocate: (stat: StatType) => void;
+  // A GETTER, not a reference: applyCharacter replaces MainScene's RunCharacter
+  // instance, so holding the object here would go stale after the picker.
+  character: () => RunCharacter;
 }
 
 const PANEL_W = 460;
@@ -218,7 +222,15 @@ export class CharacterMenu {
     // live-computed current impact (including an explicit "no effect yet"
     // message for skills that only gate recipes today) so leveling always
     // shows what it's actually doing, not just a generic per-level rate.
-    const impact = skillImpactDescription(skill, this.deps.skills);
+    // skillImpactDescription stays character-free (Skills.ts is a framework-free
+    // system file and shouldn't learn about run characters) — the class's XP
+    // affinity is appended here instead.
+    let impact = skillImpactDescription(skill, this.deps.skills);
+    const xpMult = this.deps.character().skillXpMult(skill);
+    if (xpMult !== 1) {
+      const pct = Math.round(Math.abs(xpMult - 1) * 100);
+      impact += `\n${this.deps.character().name()}: ${xpMult > 1 ? "+" : "-"}${pct}% XP gained in this skill`;
+    }
     const hit = this.scene.add
       .rectangle(x, y - 2, barX + barW + 60 - x, 20, 0x000000, 0)
       .setOrigin(0, 0)
@@ -277,7 +289,15 @@ export class CharacterMenu {
     const p = this.deps.progression;
     const canSpend = p.unspentPoints > 0;
 
-    this.text(x0, y, `${statDisplayName(stat)}: ${p.statValue(stat)}`, 13, "#ffffff");
+    // A class's stat potency changes what each point is WORTH, so mark the row
+    // — the "Now:" line below already reflects it (statTotalEffect reads the
+    // getters), but without this the player can't tell why the numbers differ.
+    const potency = p.potency(stat);
+    const label = this.text(x0, y, `${statDisplayName(stat)}: ${p.statValue(stat)}`, 13, "#ffffff");
+    if (potency !== 1) {
+      const mark = `x${potency.toFixed(2).replace(/\.?0+$/, "")} per point`;
+      this.text(x0 + label.width + 8, y + 1, mark, 11, "#8a6ec0");
+    }
     this.text(x0, y + 17, statDescription(stat), 10, "#5b6472");
     // Current cumulative effect of the points already spent (playtest ask) —
     // amber to set it apart from the grey per-point rate above it.
