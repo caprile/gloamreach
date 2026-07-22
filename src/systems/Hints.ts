@@ -116,7 +116,7 @@ const HINT_DEFS: Record<HintId, HintEntry> = {
   },
   crypt_dark: {
     kind: "tutorial",
-    text: "It's pitch black down here. A lit torch in hand is the only way to see what's coming.",
+    text: "Rooms light up as you step into them — the dark ahead is simply where you haven't been. A torch widens what you can see.",
   },
 };
 

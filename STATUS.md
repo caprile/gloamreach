@@ -351,6 +351,30 @@ plus the design consequence of fixing the first:
    **Test-harness note:** the 30s `CHASE_GIVEUP_MS` deaggro silently confounds a long pumped chase
    test — re-arm `forceAggro` each interval or you'll read "stuck" where the enemy simply gave up.
 
+**SAME-SESSION — room-discovery lighting, blink clipping, and dropping the torch tax (the user:
+"discovering a room should light up the whole room, sort of like a fog of war"; "how will the
+teleport work in here — should we just not allow it?"; "not a big fan of the requires-torch
+mechanic").** All three are the same decision from different angles, so they landed together:
+- **A crypt is lit by DISCOVERY, not by equipment.** Setting foot in a room or corridor lights that
+  whole space permanently (`SunkenCrypt.discovered`, a per-run set of layout rects), so an explored
+  crypt reads as a lit floor plan with the unexplored parts still black — fog of war, not a torch
+  radius. `ScreenLight` gained optional `width`/`height` so the existing soft brush can be stretched
+  to a room's footprint; each discovered space erases **twice** (a wide halo that softens onto the
+  walls, then a core pass at the room's own size), because the halo alone left room edges ~40% dark
+  and a "lit" room that reads murky defeats the point.
+- **The torch is now a bonus, not a toll.** The player carries `CRYPT_AMBIENT_LIGHT` (120px)
+  underground regardless of what's equipped; a torch/lantern widens that pool (180px+) instead of
+  being the price of seeing anything. The `crypt_dark` hint was reworded to teach the discovery rule
+  rather than sell torches.
+- **Gloamstep Blink is CLIPPED, not banned.** Forbidding it was the other option the user raised, but
+  the gem that grants it is crypt loot, so a dungeon is the last place it should stop working.
+  `clipBlinkToFloor` marches the blink line in 10px steps and lands on the furthest point still on
+  floor — stepping rather than testing the endpoint is the whole trick, since a destination can be
+  perfectly valid floor on the *far side* of a wall. Verified: all 8 directions from a room center
+  land on floor, clipped to 110–160px by the room's own walls, while a surface blink still travels
+  its full 220px. `clampPlayerToCrypt` also now snaps the player out of rock as a last resort, for
+  any future movement that doesn't ask permission.
+
 **Not done / next:** **4d — surface POIs + the Miretyrant boss**, which becomes the new win-con
 (demoting the Duneshaper to a mid-boss and finally making its Heart, and therefore the ability
 jewelry, obtainable). Crypts do not respawn once cleared, and there is no crypt-specific minimap —

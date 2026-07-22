@@ -1,7 +1,7 @@
 import Phaser from "phaser";
 import type { Enemy } from "./Enemy";
 import type { ResourceNode } from "./ResourceNode";
-import type { CryptLayout } from "../systems/CryptLayout";
+import type { CryptLayout, CryptRect } from "../systems/CryptLayout";
 import { LootContainer } from "../systems/LootContainer";
 import { ysortDepth } from "../systems/depth";
 
@@ -79,6 +79,12 @@ export class SunkenCrypt {
   // next dungeon's braziers glowing across the void while you stand in this one.
   // collectLights() only reads these for the crypt you're actually inside.
   braziers: { x: number; y: number }[] = [];
+  // Rooms/corridors the player has set foot in. Discovering a space lights the
+  // WHOLE space permanently (the user) — a fog-of-war reveal rather than a torch
+  // radius, so exploring a crypt leaves a map of lit rooms behind you and the
+  // unexplored parts stay black. Persists for the run, like everything else in
+  // a prebuilt interior.
+  discovered = new Set<CryptRect>();
   exitStairs: Phaser.GameObjects.Image | null = null;
   warden: Enemy | null = null;
   vaultNodes: ResourceNode[] = [];

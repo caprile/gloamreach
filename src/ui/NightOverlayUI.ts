@@ -24,6 +24,11 @@ export interface ScreenLight {
   x: number; // screen-space center
   y: number;
   radius: number; // px; light fades to nothing at this distance
+  // Optional rectangular light (biome 3 Phase 4c): a discovered crypt room is
+  // lit as a whole ROOM, not as a circle around a torch — same soft brush,
+  // stretched to the room's footprint. `radius` is ignored when these are set.
+  width?: number;
+  height?: number;
 }
 
 export class NightOverlayUI {
@@ -62,7 +67,9 @@ export class NightOverlayUI {
       intensity01 * (underground ? MAX_CRYPT_ALPHA : MAX_NIGHT_ALPHA),
     );
     for (const light of lights) {
-      this.brush.setPosition(light.x, light.y).setDisplaySize(light.radius * 2, light.radius * 2);
+      const w = light.width ?? light.radius * 2;
+      const h = light.height ?? light.radius * 2;
+      this.brush.setPosition(light.x, light.y).setDisplaySize(w, h);
       this.rt.erase(this.brush);
     }
   }

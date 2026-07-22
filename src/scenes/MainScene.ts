@@ -608,6 +608,18 @@ const CRYPT_ROOMS_MAX = 7;
 const CRYPT_MIN_SPACING = 1400;
 const CRYPT_CLEAR_RADIUS = 200;
 const CRYPT_LIGHT_RADIUS = 130; // entrance/brazier night-glow holes
+// A crypt is lit by DISCOVERY, not by equipment (the user: not a fan of "you must
+// hold a torch to see"). Setting foot in a room or corridor lights that whole
+// space for the rest of the run, so a explored crypt reads as a map of lit rooms
+// with the unexplored parts still black. The player also carries a modest
+// always-on glow so an unlit corridor is navigable — a torch/lantern then makes
+// it BETTER (a wider pool) instead of being the price of admission.
+const CRYPT_AMBIENT_LIGHT = 120; // player's own light underground, torch or not
+// The soft brush is a radial gradient — at 1× a room's edges would only be half
+// erased. Oversizing puts the brush's fully-opaque core over the room proper and
+// lets the falloff land on the walls, which is what makes a lit room read as a
+// room (walls included) rather than a blob in the middle of one.
+const CRYPT_ROOM_LIGHT_SCALE = 1.55;
 const CRYPT_VAULT_GEODE_COUNT = 3; // shielded gem geodes per vault
 const CRYPT_VAULT_SEAM_COUNT = 3; // shielded moonsilver seams per vault
 const CRYPT_EXIT_REACH = 46; // stairs are a fat target — never fight the exit
@@ -1911,6 +1923,7 @@ export class MainScene extends Phaser.Scene {
       this.minimapUI.setHidden(true);
       this.biomeLabel?.setText(this.activeCrypt.def.name);
       this.currentBiome = "base"; // force a re-label on the way back out
+      this.updateCryptDiscovery(this.activeCrypt);
       return;
     }
     this.minimapUI.setHidden(false);
@@ -1963,10 +1976,13 @@ export class MainScene extends Phaser.Scene {
       x: (wx - cam.midPoint.x) * z + halfW,
       y: (wy - cam.midPoint.y) * z + halfH,
     });
-    if (this.equippedLightRadius > 0) {
+    // The player's own light. Underground there's always SOME (see
+    // CRYPT_AMBIENT_LIGHT) — a torch widens it rather than being required.
+    const carried = this.equippedLightRadius * this.equipEffects.lightRadiusMult();
+    const ownLight = this.activeCrypt ? Math.max(CRYPT_AMBIENT_LIGHT, carried) : carried;
+    if (ownLight > 0) {
       const p = toScreen(this.player.x, this.player.y);
-      // Amulet of Farsight (B3-P2b) widens the player's own light at read time.
-      lights.push({ x: p.x, y: p.y, radius: this.equippedLightRadius * this.equipEffects.lightRadiusMult() * z });
+      lights.push({ x: p.x, y: p.y, radius: ownLight * z });
     }
     // Cull against the zoomed visible world rect (worldView) plus a world-space
     // margin, so the erase list only holds POIs actually near the viewport.
@@ -1998,6 +2014,21 @@ export class MainScene extends Phaser.Scene {
         if (!onScreen(p.x, p.y)) continue;
         const s = toScreen(p.x, p.y);
         lights.push({ x: s.x, y: s.y, radius: CRYPT_LIGHT_RADIUS * z });
+      }
+      // Discovered rooms/corridors stay lit — a stretched soft brush per space,
+      // so a whole room lights at once instead of a circle following the player.
+      // TWO passes each: a wide halo that softens onto the walls, then a core
+      // pass at the room's own size. The halo alone left room edges ~40% dark
+      // (the brush is a radial gradient), which read as murky rather than lit —
+      // and "lit" is the whole point of discovering a room.
+      for (const r of this.activeCrypt.discovered) {
+        const cx = r.x + r.w / 2;
+        const cy = r.y + r.h / 2;
+        if (!onScreen(cx, cy)) continue;
+        const s = toScreen(cx, cy);
+        for (const scale of [CRYPT_ROOM_LIGHT_SCALE, 1.05]) {
+          lights.push({ x: s.x, y: s.y, radius: 0, width: r.w * scale * z, height: r.h * scale * z });
+        }
       }
     }
     for (const altar of this.bossAltars) {
@@ -6527,6 +6558,51 @@ export class MainScene extends Phaser.Scene {
     this.clearHoverState();
   }
 
+  // March the blink line in small steps and return the furthest point still on
+  // crypt floor (the full destination when outside a crypt). Stepping rather
+  // than testing only the endpoint is what stops a blink from jumping THROUGH a
+  // wall into the next room — the endpoint alone can be perfectly valid floor on
+  // the far side of solid rock.
+  private clipBlinkToFloor(
+    fromX: number,
+    fromY: number,
+    angle: number,
+    dist: number,
+  ): { x: number; y: number } {
+    const crypt = this.activeCrypt;
+    const full = { x: fromX + Math.cos(angle) * dist, y: fromY + Math.sin(angle) * dist };
+    if (!crypt?.layout) return full;
+    const step = 10;
+    const margin = 10; // keep the landing clear of the wall face itself
+    let best = { x: fromX, y: fromY };
+    for (let d = step; d <= dist; d += step) {
+      const x = fromX + Math.cos(angle) * d;
+      const y = fromY + Math.sin(angle) * d;
+      if (!isCryptFloor(crypt.layout, x, y, margin)) break;
+      best = { x, y };
+    }
+    return best;
+  }
+
+  // Light every room/corridor the player sets foot in, permanently. This is the
+  // crypt's fog of war: the space you're standing in reveals as a whole (walls
+  // included), so a crypt you've walked reads as a lit floor plan and the parts
+  // you haven't stay black. A small margin means stepping just inside a doorway
+  // counts — nobody should have to walk to a room's center to light it.
+  private updateCryptDiscovery(crypt: SunkenCrypt): void {
+    const layout = crypt.layout;
+    if (!layout) return;
+    const px = this.player.x;
+    const py = this.player.y;
+    const m = 10;
+    for (const r of [...layout.rooms, ...layout.corridors]) {
+      if (crypt.discovered.has(r)) continue;
+      if (px >= r.x - m && px <= r.x + r.w + m && py >= r.y - m && py <= r.y + r.h + m) {
+        crypt.discovered.add(r);
+      }
+    }
+  }
+
   // Redirect a chasing crypt dweller's movement along the corridor toward the
   // player. Deliberately narrow: only inside the crypt the player is in, only
   // while aggro'd, only when the enemy is ALREADY moving under its own AI (so a
@@ -6620,6 +6696,15 @@ export class MainScene extends Phaser.Scene {
       Phaser.Math.Clamp(this.player.x, b.x + m, b.x + b.w - m),
       Phaser.Math.Clamp(this.player.y, b.y + m, b.y + b.h - m),
     );
+    // Last line of defence: if the player somehow ends up embedded in rock
+    // (knockback into a corner, a future movement ability that ignores walls),
+    // put them back on the nearest floor rather than leaving them stuck inside a
+    // static body. The blink is already clipped at cast time; this covers the
+    // cases nothing asked permission for.
+    if (!isCryptFloor(crypt.layout, this.player.x, this.player.y)) {
+      const p = nearestCryptFloorPoint(crypt.layout, this.player.x, this.player.y);
+      this.player.setPosition(p.x, p.y);
+    }
   }
 
   private decoratePoi(
@@ -8041,7 +8126,14 @@ export class MainScene extends Phaser.Scene {
         : this.facingAngle();
     // Amulet of Channeling (B3-P2b) extends the blink reach.
     const dist = ABILITY_BLINK_DISTANCE * this.equipEffects.abilityPowerMult();
-    this.player.setPosition(fromX + Math.cos(ang) * dist, fromY + Math.sin(ang) * dist);
+    // Underground the blink is CLIPPED to floor rather than disabled (the user
+    // asked whether to forbid it outright — but the gems that grant it are crypt
+    // loot, so a dungeon is the last place it should stop working). It walks the
+    // blink line and stops at the last point still on walkable floor, so it can
+    // cross a room or a doorway but never lands you inside rock or outside the
+    // crypt entirely. Above ground it's unchanged.
+    const dest = this.clipBlinkToFloor(fromX, fromY, ang, dist);
+    this.player.setPosition(dest.x, dest.y);
     this.clampPlayerToWorld();
     this.invulnerableUntil = Math.max(this.invulnerableUntil, this.time.now + ABILITY_BLINK_IFRAME_MS);
     this.spawnBlinkFx(fromX, fromY, this.player.x, this.player.y);
