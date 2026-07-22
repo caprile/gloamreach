@@ -2,6 +2,7 @@ import Phaser from "phaser";
 import type { Enemy } from "./Enemy";
 import { LootContainer } from "../systems/LootContainer";
 import { ysortDepth } from "../systems/depth";
+import { glowTintFor } from "../systems/EpicLoot";
 
 // A Drowned Lodge — the second bayou surface POI (biome 3 Phase 4d).
 //
@@ -103,6 +104,7 @@ export class DrownedLodge {
       } else {
         hut.glow.setVisible(!hut.loot.isEmpty());
       }
+      hut.glow.setTint(glowTintFor(hut.loot, hut.chief ? 0xffcf6a : 0xd8b48a)); // B4-P2: whiter with an epic inside
     }
   }
 

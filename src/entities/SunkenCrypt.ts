@@ -4,6 +4,7 @@ import type { ResourceNode } from "./ResourceNode";
 import type { CryptLayout, CryptRect } from "../systems/CryptLayout";
 import { LootContainer } from "../systems/LootContainer";
 import { ysortDepth } from "../systems/depth";
+import { glowTintFor } from "../systems/EpicLoot";
 
 // A Sunken Crypt (biome 3 Phase 4c — the dungeon mechanic). Plain data class
 // like BadlandsDen: it owns the surface entrance's GameObjects and the bundle of
@@ -161,5 +162,6 @@ export class SunkenCrypt {
 
   syncGlow(): void {
     this.chestGlow?.setVisible(!this.loot.isEmpty());
+    this.chestGlow?.setTint(glowTintFor(this.loot, 0xffcf6a)); // B4-P2: whiter with an epic inside
   }
 }

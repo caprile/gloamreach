@@ -1265,6 +1265,169 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     ],
   },
 
+  // --- B4-P2: LESSER ability specials. Start-of-run character grants ONLY —
+  // no recipe, no loot-table entry. These exist because B4-P1 was handing every
+  // character the full-power item above, which is the terminal output of the
+  // whole Duneshaper → Gemwright → crypt-warden → gem chain; the chain had no
+  // reward left at the end of it. Same slots and same abilities, one grade down,
+  // so clearing a crypt upgrades an ability the player already knows how to use. ---
+  special_gloamstep_band_lesser: {
+    key: "special_gloamstep_band_lesser",
+    name: "Worn Gloamstep Band",
+    description: "A band whose gloam has mostly leaked out. The step still works — just barely. Grants Lesser Gloamstep (Q).",
+    texture: "ability_blink_lesser",
+    maxStack: 1,
+    hotbarable: false,
+    armorSlot: "special1",
+    grantsAbility: "gloamstep_blink_lesser",
+    stats: [
+      { label: "Type", value: "Special (Spec1 · Q)" },
+      { label: "Grants", value: "Lesser Gloamstep" },
+    ],
+  },
+  special_gloam_focus_lesser: {
+    key: "special_gloam_focus_lesser",
+    name: "Cracked Gloam Focus",
+    description: "A fractured knot of gloam. What's left of it still pops. Grants Lesser Gloamburst (E).",
+    texture: "ability_nova_lesser",
+    maxStack: 1,
+    hotbarable: false,
+    armorSlot: "special2",
+    grantsAbility: "gloam_nova_lesser",
+    stats: [
+      { label: "Type", value: "Special (Spec2 · E)" },
+      { label: "Grants", value: "Lesser Gloamburst" },
+    ],
+  },
+  back_bloodpact_shroud_lesser: {
+    key: "back_bloodpact_shroud_lesser",
+    name: "Frayed Bloodpact Shroud",
+    description: "The pact sewn into it has come half undone. Grants Lesser Bloodpact (R).",
+    texture: "ability_bloodpact_lesser",
+    maxStack: 1,
+    hotbarable: false,
+    armorSlot: "back",
+    grantsAbility: "bloodpact_lesser",
+    stats: [
+      { label: "Type", value: "Special (Back · R)" },
+      { label: "Grants", value: "Lesser Bloodpact" },
+    ],
+  },
+
+  // === B4-P2: EPIC LOOT — found-only, craftable nowhere ===
+  //
+  // The pool the biome-3 roadmap specced in Phase 2b and 2b never shipped. Three
+  // ability specials whose actives exist in no recipe, plus six passive uniques
+  // on the jewelry/utility layer (never the relic combat-stat layer — that split
+  // is locked). All of them are rolled by LootContainer's epic pools, tiered by
+  // POI depth, so a first-5-minutes Gremlin Shack can't hand out an endgame active.
+
+  // --- found-only ability specials (tier-3 pool only) ---
+  special_gravebind_coil: {
+    key: "special_gravebind_coil",
+    name: "Gravebind Coil",
+    description: "A coil of grave-iron that drags the dead toward whoever holds it. Grants Gravebind (Q).",
+    texture: "ability_gravebind",
+    maxStack: 1,
+    hotbarable: false,
+    armorSlot: "special1",
+    grantsAbility: "gravebind",
+    stats: [
+      { label: "Type", value: "Special (Spec1 · Q)" },
+      { label: "Grants", value: "Gravebind" },
+    ],
+  },
+  special_pale_choir_lance: {
+    key: "special_pale_choir_lance",
+    name: "Lance of the Pale Choir",
+    description: "A reliquary shard that sings when pointed. Grants Spirit Lance (E).",
+    texture: "ability_lance",
+    maxStack: 1,
+    hotbarable: false,
+    armorSlot: "special2",
+    grantsAbility: "spirit_lance",
+    stats: [
+      { label: "Type", value: "Special (Spec2 · E)" },
+      { label: "Grants", value: "Spirit Lance" },
+    ],
+  },
+  back_drowned_king_shroud: {
+    key: "back_drowned_king_shroud",
+    name: "Shroud of the Drowned King",
+    description: "Still wet, and it never dries. Grants Drowned Aegis (R).",
+    texture: "ability_aegis",
+    maxStack: 1,
+    hotbarable: false,
+    armorSlot: "back",
+    grantsAbility: "aegis",
+    stats: [
+      { label: "Type", value: "Special (Back · R)" },
+      { label: "Grants", value: "Drowned Aegis" },
+    ],
+  },
+
+  // --- found-only passive uniques ---
+  ring_sparkbound: {
+    key: "ring_sparkbound",
+    name: "Sparkbound Band",
+    description: "A band that hums along with whatever power you're holding, and hurries it back.",
+    texture: "icon_ring_sparkbound",
+    maxStack: 1,
+    hotbarable: false,
+    armorSlot: "ring1",
+    passive: { abilityPowerPct: 18, abilityCooldownPct: 12 },
+  },
+  amulet_long_dark: {
+    key: "amulet_long_dark",
+    name: "Lantern of the Long Dark",
+    description: "A caged ember that refuses to go out, and pulls loose things toward its light.",
+    texture: "icon_amulet_long_dark",
+    maxStack: 1,
+    hotbarable: false,
+    armorSlot: "necklace",
+    passive: { lightRadiusPct: 60, magnetRadiusPct: 40 },
+  },
+  ring_gloamwrought_signet: {
+    key: "ring_gloamwrought_signet",
+    name: "Gloamwrought Signet",
+    description: "Gloam worked into a seal. Whatever you spend comes back to you faster.",
+    texture: "icon_ring_signet",
+    maxStack: 1,
+    hotbarable: false,
+    armorSlot: "ring1",
+    passive: { abilityCooldownPct: 25 },
+  },
+  ring_deep_vein: {
+    key: "ring_deep_vein",
+    name: "Ring of the Deep Vein",
+    description: "Set with a splinter of ore that knows where the rest of it is.",
+    texture: "icon_ring_deep_vein",
+    maxStack: 1,
+    hotbarable: false,
+    armorSlot: "ring1",
+    passive: { gatherBonusPct: 20 },
+  },
+  amulet_choirbone: {
+    key: "amulet_choirbone",
+    name: "Choirbone Amulet",
+    description: "Strung with the finger-bones of something that sang. Your powers land harder.",
+    texture: "icon_amulet_choirbone",
+    maxStack: 1,
+    hotbarable: false,
+    armorSlot: "necklace",
+    passive: { abilityPowerPct: 35 },
+  },
+  back_mireborn_cloak: {
+    key: "back_mireborn_cloak",
+    name: "Mireborn Cloak",
+    description: "Woven from something that lived its whole life in the poison and never minded it.",
+    texture: "icon_cloak_mireborn",
+    maxStack: 1,
+    hotbarable: false,
+    armorSlot: "back",
+    passive: { statusResistPct: 30 },
+  },
+
   // === Biome-3 Phase 2b: jewelry economy (DORMANT — real sources land in biome 3) ===
 
   // --- materials: the jewelry metal + the three ability gems ---
@@ -1748,6 +1911,10 @@ const BADLANDS_ITEM_KEYS = new Set<string>([
   // badlands trophies / currency / summon
   "duskrunner_trophy", "cragscale_trophy", "hexling_trophy", "sandmaw_trophy",
   "ember_shard", "refined_trophy_uncommon_t2", "warren_fetish", "tyrant_totem",
+  // B4-P2 epic loot: first reachable from the tier-2 pool (Warren caches
+  // onward). The two tier-1 epics stay untagged and fall through to "forest",
+  // which is exactly where a Gremlin Shack find belongs.
+  "ring_gloamwrought_signet", "ring_deep_vein", "back_mireborn_cloak",
 ]);
 
 // Biome-3 keys: the Phase-2b jewelry economy + the Phase-3 bayou gear tier.
@@ -1772,6 +1939,11 @@ const BAYOU_ITEM_KEYS = new Set<string>([
   "murkling_trophy", "fenlurker_trophy", "corpselight_trophy",
   // surface-POI spoils + the boss key (Phase 4d)
   "tyrant_sigil", "gorge_bone", "miretyrant_effigy",
+  // B4-P2 epic loot: tier-3 pool only (crypt chests / lodge chieftain), so the
+  // deepest biome's tab is where they belong. The shallower epics are tagged in
+  // the forest/badlands sets by the tier that can actually drop them.
+  "amulet_choirbone", "special_gravebind_coil", "special_pale_choir_lance",
+  "back_drowned_king_shroud",
 ]);
 
 export function itemBiome(key: string): ItemBiome {

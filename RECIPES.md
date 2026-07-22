@@ -591,3 +591,47 @@ Common/Uncommon = flat stat; Rare/Mythic = **Uncommon's stat (plateau) + a proc*
 
 A dual-stat relic (e.g. War Totem) claims one **primary** family; its secondary
 stat only matters when comparing against a same-family contender.
+
+---
+
+## Epic loot (B4-P2) — found only, craftable nowhere
+
+The shared special-item pool the biome-3 roadmap specced and never shipped. **One
+roll per container per empty-cycle** (never two at once), **tiered by POI depth**
+so a shallow chest can't produce a deep item. Each tier is a **superset** of the
+one above it. Source of truth: `src/systems/EpicLoot.ts` (and the dashboard's
+**Epic Loot** tab, which reads it live).
+
+| Pool | Chance | Containers | Adds |
+|---|---|---|---|
+| **Tier 1** | 4% | Gremlin Shack | Sparkbound Band, Lantern of the Long Dark |
+| **Tier 2** | 6% | Duskrunner Warren · Sunken Shrine bowl · Lodge hut | Gloamwrought Signet, Ring of the Deep Vein, Mireborn Cloak |
+| **Tier 3** | 8% | Sunken Crypt chest · Lodge chieftain's hut | Choirbone Amulet + **all three found-only actives** |
+
+| Item | Slot | Effect |
+|---|---|---|
+| Sparkbound Band | Ring | +18% ability power, −12% ability cooldown |
+| Lantern of the Long Dark | Neck | +60% light radius, +40% pickup radius |
+| Gloamwrought Signet | Ring | −25% ability cooldown |
+| Ring of the Deep Vein | Ring | +20% bonus-gather chance |
+| Choirbone Amulet | Neck | +35% ability power |
+| Mireborn Cloak | Back | −30% bleed/poison taken *(new `statusResistPct` channel)* |
+| Gravebind Coil | Spec1 · Q | Grants **Gravebind** — yank enemies within 260px to 90px + 45% slow, no damage. 14s |
+| Lance of the Pale Choir | Spec2 · E | Grants **Spirit Lance** — 420px line, 55 magic dmg to everything within 34px of it. 12s |
+| Shroud of the Drowned King | Back · R | Grants **Drowned Aegis** — 4s of −60% damage taken (into the shared 75%-capped bucket). 26s |
+
+### Abilities — lesser vs full
+
+Run-start characters now grant **lesser** variants; the Gemwright's Table
+recipes are unchanged and still produce the full-power items, so clearing a
+crypt is a visible upgrade to an ability you already have. `power` scales every
+magnitude (reach, damage, i-frames, active window); cooldown is set per-def.
+
+| Ability | Power | Cooldown | Reach / effect | Source |
+|---|---|---|---|---|
+| Lesser Gloamstep | 0.60 | 9.0s | 132px blink, 150ms i-frames | Run-start character |
+| Gloamstep Blink | 1.00 | 6.0s | 220px blink, 250ms i-frames | Gemwright (Moonsilver 2 + Gloam Gem 1) |
+| Lesser Gloamburst | 0.55 | 14.0s | 82px radius, 17 dmg | Run-start character |
+| Gloam Nova | 1.00 | 10.0s | 150px radius, 30 dmg | Gemwright (Moonsilver 2 + Ember Gem 1) |
+| Lesser Bloodpact | 0.50 | 30.0s | 3.0s window, 17.5% lifelink | Run-start character |
+| Bloodpact | 1.00 | 24.0s | 6.0s window, 35% lifelink | Gemwright (Moonsilver 3 + Blood Gem 1) |

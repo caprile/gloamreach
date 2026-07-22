@@ -3653,6 +3653,144 @@ export class BootScene extends Phaser.Scene {
     g.fillCircle(10, 13, 2); // glint
     g.generateTexture("ability_bloodpact", ICON, ICON);
 
+    // --- LESSER ability icons (B4-P2) — the run-start grants. Deliberately the
+    // SAME glyph in a drained, greyed palette with a visible break in it, so the
+    // relationship to the full-power version reads at a glance and finding the
+    // real one is legible as an upgrade rather than a different item. ---
+    g.clear(); // Lesser Gloamstep — shorter streak, no after-image, dull
+    g.fillStyle(0x6b6480, 1);
+    g.fillRect(8, 11, 6, 3); // stubby streak
+    g.fillTriangle(13, 8, 13, 17, 19, 12);
+    g.fillStyle(0x39344a, 1);
+    g.fillRect(11, 11, 1, 3); // crack through the streak
+    g.generateTexture("ability_blink_lesser", ICON, ICON);
+
+    g.clear(); // Lesser Gloamburst — smaller ring, two spikes missing
+    g.fillStyle(0x4a3f66, 1);
+    g.fillCircle(12, 12, 5);
+    g.fillStyle(0x8c85a3, 1);
+    g.fillCircle(12, 12, 2);
+    g.fillStyle(0x6b6480, 1);
+    g.fillRect(11, 3, 2, 4); // up spike
+    g.fillRect(17, 11, 4, 2); // right spike — the other two burnt out
+    g.generateTexture("ability_nova_lesser", ICON, ICON);
+
+    g.clear(); // Lesser Bloodpact — a half-empty droplet, thread coming undone
+    g.fillStyle(0x7a3a42, 1);
+    g.fillCircle(12, 15, 5);
+    g.fillTriangle(7, 14, 17, 14, 12, 5);
+    g.fillStyle(0x4a2b30, 1);
+    g.fillRect(9, 15, 7, 3); // drained lower half
+    g.fillStyle(0x6b6480, 1);
+    g.fillRect(15, 6, 4, 1); // frayed thread
+    g.generateTexture("ability_bloodpact_lesser", ICON, ICON);
+
+    // --- FOUND-ONLY ability icons (B4-P2 epic loot). Brighter and stranger than
+    // the craftable set — these exist in no recipe, so they shouldn't look like
+    // anything on the Gemwright's bench. ---
+    g.clear(); // Gravebind — a grave-iron coil dragging inward
+    g.fillStyle(0x3a3f4a, 1);
+    g.fillCircle(12, 12, 9);
+    g.fillStyle(0x1a1d24, 1);
+    g.fillCircle(12, 12, 6);
+    g.fillStyle(0x8ad0c0, 1);
+    g.fillCircle(12, 12, 2); // cold core
+    g.fillRect(11, 2, 2, 4); // inward barbs
+    g.fillRect(11, 18, 2, 4);
+    g.fillRect(2, 11, 4, 2);
+    g.fillRect(18, 11, 4, 2);
+    g.generateTexture("ability_gravebind", ICON, ICON);
+
+    g.clear(); // Spirit Lance — a pale beam driven point-first
+    g.fillStyle(0x8c7fc0, 0.55);
+    g.fillRect(2, 10, 20, 4); // beam haze
+    g.fillStyle(0xe8e0ff, 1);
+    g.fillRect(3, 11, 15, 2); // shaft
+    g.fillTriangle(16, 7, 16, 17, 23, 12); // point
+    g.generateTexture("ability_lance", ICON, ICON);
+
+    g.clear(); // Drowned Aegis — a barnacled kite shield under water
+    g.fillStyle(0x1f4a5c, 1);
+    g.fillTriangle(3, 4, 21, 4, 12, 22);
+    g.fillRect(3, 3, 18, 6);
+    g.fillStyle(0x4aa8c8, 1);
+    g.fillRect(5, 5, 14, 2); // waterline
+    g.fillStyle(0x9fe4f0, 1);
+    g.fillCircle(12, 11, 2); // pale core
+    g.generateTexture("ability_aegis", ICON, ICON);
+
+    // --- epic passive uniques (B4-P2). All share a gold rim so a found unique
+    // reads as one family across ring/amulet/cloak slots. ---
+    g.clear(); // Sparkbound Band — a ring with a live spark arcing across it
+    g.fillStyle(0xd8b048, 1);
+    g.fillCircle(12, 12, 8);
+    g.fillStyle(0x1a1d24, 1);
+    g.fillCircle(12, 12, 5);
+    g.fillStyle(0xfff0a0, 1);
+    g.fillRect(11, 5, 2, 3);
+    g.fillRect(8, 11, 3, 2); // arc
+    g.fillRect(14, 13, 3, 2);
+    g.generateTexture("icon_ring_sparkbound", ICON, ICON);
+
+    g.clear(); // Lantern of the Long Dark — a caged ember on a chain
+    g.fillStyle(0xd8b048, 1);
+    g.fillRect(10, 2, 4, 3); // bail
+    g.fillRect(6, 6, 12, 14); // cage
+    g.fillStyle(0x201a10, 1);
+    g.fillRect(8, 8, 8, 10);
+    g.fillStyle(0xffc35a, 1);
+    g.fillCircle(12, 13, 3); // ember
+    g.fillStyle(0xfff0c0, 1);
+    g.fillCircle(12, 13, 1);
+    g.generateTexture("icon_amulet_long_dark", ICON, ICON);
+
+    g.clear(); // Gloamwrought Signet — a flat seal ring, violet stone
+    g.fillStyle(0xd8b048, 1);
+    g.fillCircle(12, 14, 8);
+    g.fillStyle(0x1a1d24, 1);
+    g.fillCircle(12, 14, 5);
+    g.fillStyle(0xd8b048, 1);
+    g.fillRect(6, 3, 12, 6); // seal face
+    g.fillStyle(0x9a5cff, 1);
+    g.fillRect(9, 5, 6, 2);
+    g.generateTexture("icon_ring_signet", ICON, ICON);
+
+    g.clear(); // Ring of the Deep Vein — a band set with a raw ore splinter
+    g.fillStyle(0xd8b048, 1);
+    g.fillCircle(12, 14, 8);
+    g.fillStyle(0x1a1d24, 1);
+    g.fillCircle(12, 14, 5);
+    g.fillStyle(0x7a6a58, 1);
+    g.fillTriangle(8, 8, 16, 8, 12, 1); // ore splinter
+    g.fillStyle(0xc8a060, 1);
+    g.fillRect(11, 4, 2, 3);
+    g.generateTexture("icon_ring_deep_vein", ICON, ICON);
+
+    g.clear(); // Choirbone Amulet — finger-bones strung on a gold cord
+    g.fillStyle(0xd8b048, 1);
+    g.fillRect(4, 4, 16, 2); // cord
+    g.fillStyle(0xe8e0cc, 1);
+    g.fillRect(7, 6, 3, 12); // bones
+    g.fillRect(11, 6, 3, 15);
+    g.fillRect(15, 6, 3, 10);
+    g.fillStyle(0x9a5cff, 1);
+    g.fillRect(11, 18, 3, 2); // gloam stain at the tip
+    g.generateTexture("icon_amulet_choirbone", ICON, ICON);
+
+    g.clear(); // Mireborn Cloak — swamp-green weave with a gold clasp
+    g.fillStyle(0x2f4a34, 1);
+    g.fillTriangle(4, 5, 20, 5, 12, 22);
+    g.fillRect(4, 4, 16, 5);
+    g.fillStyle(0x4a6b46, 1);
+    g.fillRect(6, 9, 3, 8); // fold highlights
+    g.fillRect(15, 9, 3, 8);
+    g.fillStyle(0x7fc060, 1);
+    g.fillCircle(9, 14, 1); // spore flecks
+    g.fillCircle(15, 17, 1);
+    g.fillStyle(0xd8b048, 1);
+    g.fillRect(10, 3, 4, 3); // clasp
+    g.generateTexture("icon_cloak_mireborn", ICON, ICON);
+
     // Badlands elite trophies — crimson/gold to echo the elite palette (matches
     // the boar/snake/gremlin trophies), each with a species tell.
     g.clear(); // Duskrunner Trophy — a fanged canid skull on a gold cord

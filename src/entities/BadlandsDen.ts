@@ -2,6 +2,7 @@ import Phaser from "phaser";
 import type { Enemy } from "./Enemy";
 import { LootContainer } from "../systems/LootContainer";
 import { ysortDepth } from "../systems/depth";
+import { glowTintFor } from "../systems/EpicLoot";
 
 // A Duskrunner Warren — a badlands POI (biome 2 Phase 3). Unlike the Gremlin
 // Shack (a loot cache guarded by a respawning guard pair), a Warren is a
@@ -192,5 +193,6 @@ export class BadlandsDen {
   // frame by MainScene, same as GremlinShack.syncGlow.
   syncGlow(): void {
     this.glowImage?.setVisible(this.phase === "looted" && !this.loot.isEmpty());
+    this.glowImage?.setTint(glowTintFor(this.loot, 0xffcf6a)); // B4-P2: whiter with an epic inside
   }
 }

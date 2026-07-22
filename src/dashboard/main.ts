@@ -32,6 +32,9 @@ import { ARMOR_UPGRADES, armorDefenseForTier } from "../systems/ArmorUpgrades";
 import { STATION_UPGRADES } from "../systems/StationUpgrades";
 import { GEAR_AUGMENTS, MAX_AUGMENTS_PER_ITEM } from "../systems/GearAugments";
 import { CHARACTER_DEFS } from "../systems/Characters";
+import { ABILITY_DEFS } from "../systems/Abilities";
+import { EPIC_ITEM_KEYS, EPIC_POOL_T1, EPIC_POOL_T2, EPIC_POOL_T3 } from "../systems/EpicLoot";
+import type { EpicPool } from "../systems/LootContainer";
 import { PROCESS_RECIPES } from "../systems/Processing";
 import { COOK_RECIPES } from "../systems/Cooking";
 import {
@@ -1018,6 +1021,60 @@ function renderCharacters(): string {
   return html;
 }
 
+// Epic loot + abilities (B4-P2) — imported live from EpicLoot.ts / Abilities.ts,
+// so pool membership, drop chances and every ability's power/cooldown stay
+// drift-free. This is the one place the lesser-vs-full comparison is legible
+// side by side, which is exactly what needs tuning first.
+function renderEpicLoot(): string {
+  const pools: { label: string; pool: EpicPool; where: string }[] = [
+    { label: "Tier 1", pool: EPIC_POOL_T1, where: "Gremlin Shack" },
+    { label: "Tier 2", pool: EPIC_POOL_T2, where: "Duskrunner Warren · Sunken Shrine bowl · Lodge hut" },
+    { label: "Tier 3", pool: EPIC_POOL_T3, where: "Sunken Crypt chest · Lodge chieftain's hut" },
+  ];
+  let html = `<h2>Epic Loot</h2>
+    <p class="note">Found-only items. One roll per container per empty-cycle (never
+    two at once), tiered by POI depth so a shallow chest can't produce a deep
+    item. Each tier is a <b>superset</b> of the one above it. Craftable nowhere.</p>
+    <table><thead><tr><th>Pool</th><th>Chance</th><th>Containers</th><th>Contents</th></tr></thead><tbody>`;
+  for (const { label, pool, where } of pools) {
+    const names = pool.keys.map((k) => itemDef(k)?.name ?? k).join(", ");
+    html += `<tr>
+      <td><b>${esc(label)}</b></td>
+      <td>${(pool.chance * 100).toFixed(0)}%</td>
+      <td class="muted">${esc(where)}</td>
+      <td>${esc(names)}</td>
+    </tr>`;
+  }
+  html += `</tbody></table>
+    <h2>Abilities</h2>
+    <p class="note">A def's <code>family</code> picks the effect MainScene runs and
+    <code>power</code> scales every magnitude it reads — that's what lets a lesser
+    and a full version of one effect coexist as pure data. Cooldown is
+    <b>not</b> scaled by power; it's set per def.</p>
+    <div class="searchwrap"><input type="search" data-filter="epic" placeholder="Filter abilities…" /></div>
+    <table data-table="epic"><thead><tr>
+      <th>Ability</th><th>Family</th><th>Power</th><th>Cooldown</th><th>Active</th><th>Source</th>
+      </tr></thead><tbody>`;
+  for (const def of Object.values(ABILITY_DEFS)) {
+    const granting = Object.values(ITEM_DEFS).find((i) => i.grantsAbility === def.id);
+    const source = def.id.endsWith("_lesser")
+      ? "Run-start character"
+      : granting && EPIC_ITEM_KEYS.has(granting.key)
+        ? "Epic loot (T3)"
+        : "Gemwright's Table";
+    html += `<tr data-search="${esc((def.name + " " + def.family + " " + source).toLowerCase())}">
+      <td><b>${esc(def.name)}</b><div class="muted">${esc(def.description)}</div></td>
+      <td>${esc(def.family)}</td>
+      <td>${def.power.toFixed(2)}x</td>
+      <td>${(def.cooldownMs / 1000).toFixed(1)}s</td>
+      <td>${def.activeMs ? `${((def.activeMs * def.power) / 1000).toFixed(1)}s` : "—"}</td>
+      <td class="muted">${esc(source)}</td>
+    </tr>`;
+  }
+  html += `</tbody></table>`;
+  return html;
+}
+
 // ---------------------------------------------------------------------------
 // Shell: tabbed nav + live search filtering
 // ---------------------------------------------------------------------------
@@ -1029,6 +1086,7 @@ const TABS: { id: string; label: string; render: () => string }[] = [
   { id: "stations", label: "Stations & Food", render: renderStations },
   { id: "relics", label: "Relics", render: renderRelics },
   { id: "characters", label: "Characters", render: renderCharacters },
+  { id: "epic", label: "Epic Loot", render: renderEpicLoot },
   { id: "enemies", label: "Enemies", render: renderEnemies },
   { id: "balance", label: "Balance Overview", render: renderBalance },
   { id: "items", label: "All Items", render: renderItems },

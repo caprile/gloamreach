@@ -17,6 +17,10 @@ export interface EquipPassive {
   magnetRadiusPct?: number; // bigger loose-drop magnet radius
   gatherBonusPct?: number; // added chance for a bonus +1 on a depleted node (15 = +15%)
   lightRadiusPct?: number; // bigger equipped/night light radius
+  // B4-P2: status (bleed/poison) mitigation. A genuinely new axis — nothing in
+  // the game owned status resistance before, so it doesn't collide with the
+  // relic combat-stat layer OR with heavy armor's magic/fire mitigation.
+  statusResistPct?: number; // reduce incoming bleed/poison dose (30 = -30%)
 }
 
 const CHANNELS: (keyof EquipPassive)[] = [
@@ -25,6 +29,7 @@ const CHANNELS: (keyof EquipPassive)[] = [
   "magnetRadiusPct",
   "gatherBonusPct",
   "lightRadiusPct",
+  "statusResistPct",
 ];
 
 // Human-readable effect lines for a passive record — reused by the JewelryMenu
@@ -36,6 +41,7 @@ export function describePassive(p: EquipPassive): string[] {
   if (p.magnetRadiusPct) out.push(`+${p.magnetRadiusPct}% pickup radius`);
   if (p.gatherBonusPct) out.push(`+${p.gatherBonusPct}% bonus-gather chance`);
   if (p.lightRadiusPct) out.push(`+${p.lightRadiusPct}% light radius`);
+  if (p.statusResistPct) out.push(`-${p.statusResistPct}% bleed/poison taken`);
   return out;
 }
 
@@ -46,6 +52,7 @@ export class EquipmentEffects {
     magnetRadiusPct: 0,
     gatherBonusPct: 0,
     lightRadiusPct: 0,
+    statusResistPct: 0,
   };
 
   // Sum the `passive` records of every equipped item. Additive across pieces.
@@ -78,5 +85,11 @@ export class EquipmentEffects {
   }
   lightRadiusMult(): number {
     return 1 + this.sums.lightRadiusPct / 100;
+  }
+  // Scales an incoming bleed/poison dose. Floored at 0.25 so no stack of gear
+  // can make status effects a non-mechanic — same "never zero it out" instinct
+  // as the ability-cooldown clamp above.
+  statusResistMult(): number {
+    return Math.max(0.25, 1 - this.sums.statusResistPct / 100);
   }
 }

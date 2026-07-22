@@ -2,6 +2,7 @@ import Phaser from "phaser";
 import type { Enemy } from "./Enemy";
 import { LootContainer } from "../systems/LootContainer";
 import { ysortDepth } from "../systems/depth";
+import { glowTintFor } from "../systems/EpicLoot";
 
 export interface GremlinShackConfig {
   x: number;
@@ -82,5 +83,9 @@ export class GremlinShack {
   // visibility, so the glow resumes mid-pulse instead of restarting.
   syncGlow(): void {
     this.glowImage.setVisible(!this.loot.isEmpty());
+    // B4-P2: an epic waiting inside burns whiter than ordinary spoils. A tint
+    // swap rather than a second glow object, so there's no extra infinite tween
+    // to leak and the existing pulse just carries the new colour.
+    this.glowImage.setTint(glowTintFor(this.loot, 0xffd873));
   }
 }

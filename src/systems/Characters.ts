@@ -63,7 +63,7 @@ export const CHARACTER_DEFS: CharacterDef[] = [
     blurb: "A light-footed wanderer. Covers ground fast, tires faster.",
     icon: "ability_blink",
     startingStats: { endurance: 2, vitality: 2 },
-    startingEquip: [{ slot: "special1", key: "special_gloamstep_band" }],
+    startingEquip: [{ slot: "special1", key: "special_gloamstep_band_lesser" }],
     startingItems: [
       { key: "stone_axe", count: 1 },
       { key: "wood", count: 5 },
@@ -82,7 +82,7 @@ export const CHARACTER_DEFS: CharacterDef[] = [
     blurb: "Hits like a landslide and takes the return blow just as hard.",
     icon: "ability_bloodpact",
     startingStats: { strength: 4 },
-    startingEquip: [{ slot: "back", key: "back_bloodpact_shroud" }],
+    startingEquip: [{ slot: "back", key: "back_bloodpact_shroud_lesser" }],
     startingItems: [{ key: "stone_club", count: 1 }],
     modifier: {
       name: "Bloodthirst",
@@ -98,7 +98,7 @@ export const CHARACTER_DEFS: CharacterDef[] = [
     blurb: "Learns from everything. Frail, but grows quickly.",
     icon: "ability_nova",
     startingStats: { intelligence: 3, wisdom: 2 },
-    startingEquip: [{ slot: "special2", key: "special_gloam_focus" }],
+    startingEquip: [{ slot: "special2", key: "special_gloam_focus_lesser" }],
     startingItems: [
       { key: "wood_club", count: 1 },
       { key: "torch", count: 1 },
@@ -117,7 +117,7 @@ export const CHARACTER_DEFS: CharacterDef[] = [
     blurb: "Comes prepared and hard to put down — every swing costs more.",
     icon: "ability_blink",
     startingStats: { vitality: 3, endurance: 2 },
-    startingEquip: [{ slot: "special1", key: "special_gloamstep_band" }],
+    startingEquip: [{ slot: "special1", key: "special_gloamstep_band_lesser" }],
     startingItems: [
       { key: "stone_axe", count: 1 },
       { key: "stone_pickaxe", count: 1 },
@@ -136,7 +136,7 @@ export const CHARACTER_DEFS: CharacterDef[] = [
     blurb: "Starts with nothing but nerve. The world sends its worst.",
     icon: "ability_nova",
     startingStats: { agility: 3, strength: 2 },
-    startingEquip: [{ slot: "special2", key: "special_gloam_focus" }],
+    startingEquip: [{ slot: "special2", key: "special_gloam_focus_lesser" }],
     startingItems: [],
     modifier: {
       name: "Hunted",

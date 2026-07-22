@@ -53,7 +53,8 @@ import {
 } from "../entities/Miretyrant";
 import type { DungeonInterior } from "../systems/Dungeon";
 import { DrownedLodge } from "../entities/DrownedLodge";
-import type { LootContainer, LootRollEntry } from "../systems/LootContainer";
+import type { EpicPool, LootContainer, LootRollEntry } from "../systems/LootContainer";
+import { EPIC_ITEM_KEYS, EPIC_POOL_T1, EPIC_POOL_T2, EPIC_POOL_T3 } from "../systems/EpicLoot";
 import type { ResourceType } from "../systems/Inventory";
 import {
   Skills,
@@ -219,7 +220,7 @@ import {
 import { RelicForgeMenu } from "../ui/RelicForgeMenu";
 import { PassiveBarUI, type PassiveEntry } from "../ui/PassiveBarUI";
 import { AbilityBarUI, type AbilityBarEntry } from "../ui/AbilityBarUI";
-import { ABILITY_DEFS, SLOT_ABILITY_KEY, type AbilityId, type AbilityKey } from "../systems/Abilities";
+import { ABILITY_DEFS, SLOT_ABILITY_KEY, type AbilityFamily, type AbilityId, type AbilityKey } from "../systems/Abilities";
 
 const HOTBAR_KEYS = ["ONE", "TWO", "THREE", "FOUR", "FIVE", "SIX", "SEVEN", "EIGHT", "NINE"];
 
@@ -366,6 +367,17 @@ const ABILITY_NOVA_RADIUS = 150; // gloam-burst reach
 const ABILITY_NOVA_DAMAGE = 30; // magic damage per enemy in the burst
 const ABILITY_NOVA_KNOCKBACK = 64; // px each enemy is shoved outward
 const ABILITY_BLOODPACT_LIFELINK_PCT = 0.35; // fraction of damage healed while active
+// B4-P2 found-only actives (epic loot). Every magnitude here is scaled by the
+// casting def's `power` × the jewelry abilityPowerMult(), same as the originals.
+const ABILITY_GRAVEBIND_RADIUS = 260; // who gets yanked
+const ABILITY_GRAVEBIND_PULL = 170; // px dragged inward
+const ABILITY_GRAVEBIND_HOLD_RADIUS = 90; // never pulled closer than this
+const ABILITY_GRAVEBIND_SLOW = 0.45; // movement multiplier while staggering
+const ABILITY_GRAVEBIND_SLOW_MS = 900;
+const ABILITY_LANCE_RANGE = 420; // length of the beam
+const ABILITY_LANCE_HALF_W = 34; // how far off-axis still counts as hit
+const ABILITY_LANCE_DAMAGE = 55; // magic damage per enemy on the line
+const ABILITY_AEGIS_REDUCTION = 0.6; // damage cut while the window is open
 // Crit (M-SS) soft caps on the COMBINED total (weapon base + Strength/Agility
 // stats + relic crit channels). Applied in critChanceTotal()/critMultTotal().
 const CRIT_CHANCE_CAP = 0.6;
@@ -717,6 +729,21 @@ const LODGE_CHIEF_LOOT_TABLE: LootRollEntry[] = [
   { key: "corpselight_trophy", min: 1, max: 1, chance: 0.4 },
   { key: "refined_trophy_uncommon", min: 1, max: 1, chance: 0.2 },
 ];
+
+// Which epic pool a container draws from, keyed off the loot table it's already
+// being rolled with — the table IS the POI's identity, so no call site has to
+// carry (and none can get out of sync on) a separate tier argument.
+function epicPoolFor(table: LootRollEntry[]): EpicPool {
+  if (table === GREMLIN_SHACK_LOOT_TABLE) return EPIC_POOL_T1; // biome 1, minutes in
+  if (table === CRYPT_LOOT_TABLE || table === LODGE_CHIEF_LOOT_TABLE) return EPIC_POOL_T3; // deepest content
+  return EPIC_POOL_T2; // warren / shrine bowl / ordinary lodge hut
+}
+
+// Every roll of a world container goes through here so the epic pool can never
+// be forgotten at a call site (and so a future POI gets it by construction).
+function rollContainerLoot(loot: LootContainer, table: LootRollEntry[]): void {
+  loot.rollIfEmpty(table, { epics: epicPoolFor(table) });
+}
 
 // ===== The Sunken Gorge — the Miretyrant's lair (biome 3 Phase 4d session 2) =====
 //
@@ -1103,6 +1130,12 @@ export class MainScene extends Phaser.Scene {
   private abilityByKey: Partial<Record<AbilityKey, AbilityId>> = {}; // equipped special slots -> Q/E/R
   private abilityReadyAt: Record<AbilityKey, number> = { q: 0, e: 0, r: 0 }; // per-key cooldown gate (time.now)
   private bloodpactUntil = 0; // Bloodpact (R) lifelink active window — resolveWeaponHit heals during it
+  // Snapshotted at cast so a variant's `power` is baked into the window that's
+  // actually running, rather than re-read (and possibly re-scaled by a gear swap)
+  // on every hit mid-window.
+  private bloodpactLifelink = ABILITY_BLOODPACT_LIFELINK_PCT;
+  private aegisUntil = 0; // Drowned Aegis (found-only) damage-reduction window
+  private aegisReduction = 0; // fraction cut while that window is open
 
   // Active full armor-set bonuses (biome 2 Phase 4 forged gear). Recomputed on
   // every equipment change (afterItemMove) + on run reset (create). Read at the
@@ -1379,6 +1412,9 @@ export class MainScene extends Phaser.Scene {
     this.abilityByKey = {};
     this.abilityReadyAt = { q: 0, e: 0, r: 0 };
     this.bloodpactUntil = 0;
+    this.bloodpactLifelink = ABILITY_BLOODPACT_LIFELINK_PCT;
+    this.aegisUntil = 0;
+    this.aegisReduction = 0;
     this.placementMode = null;
     this.placementGhost = null;
     this.placedObjects = [];
@@ -2000,7 +2036,9 @@ export class MainScene extends Phaser.Scene {
       // the fog, and a stacking application would multiply the intended DPS by
       // the stack cap (see Poison.ts). The short duration is what makes leaving
       // the zone self-cleaning: stop re-arming and it lapses on its own.
-      this.poison.sustain(env.poisonDps, 900);
+      // Mireborn Cloak (B4-P2) thins the environmental dose too, not just
+      // creature bites — the cloak's whole flavour is living in the poison.
+      this.poison.sustain(env.poisonDps * this.equipEffects.statusResistMult(), 900);
       this.hints.trigger("poisoned");
     }
     const frame = this.player.update(delta, canSprint, canDash, sprintMultiplier, moveMult, dashDistMult, inputEnabled, env.moveMult);
@@ -3631,7 +3669,7 @@ export class MainScene extends Phaser.Scene {
     this.inventoryMenu.close();
     this.closeUpgradeMenu();
     this.closeRelicForgeMenu();
-    loot.rollIfEmpty(table);
+    rollContainerLoot(loot, table);
     this.openChest = loot.items;
     this.chestMenu.openMenu();
   }
@@ -3682,7 +3720,7 @@ export class MainScene extends Phaser.Scene {
     // it exists, without requiring the player to open it first to find out.
     // rollIfEmpty is idempotent — a no-op here if it's already rolled and
     // still holds unclaimed loot.
-    shack.loot.rollIfEmpty(GREMLIN_SHACK_LOOT_TABLE);
+    rollContainerLoot(shack.loot, GREMLIN_SHACK_LOOT_TABLE);
     shack.syncGlow();
     const ranged = new RangedGremlin(this, {
       x: shack.x + Phaser.Math.Between(-40, 40),
@@ -3777,7 +3815,7 @@ export class MainScene extends Phaser.Scene {
         lodge.reset(); // clears respawnAt, re-bars the chief hut, re-arms caches
         this.spawnLodgeResidents(lodge);
         for (const hut of lodge.huts) {
-          hut.loot.rollIfEmpty(hut.chief ? LODGE_CHIEF_LOOT_TABLE : LODGE_HUT_LOOT_TABLE);
+          rollContainerLoot(hut.loot, hut.chief ? LODGE_CHIEF_LOOT_TABLE : LODGE_HUT_LOOT_TABLE);
         }
         this.notifyPoiRespawn(lodge.x, lodge.y, "The lodge is occupied again — lights move on the water.");
       }
@@ -5056,7 +5094,7 @@ export class MainScene extends Phaser.Scene {
     this.sfx.hit();
     this.spawnDamageNumber(den.x, den.y, Math.round(dmg), false, "normal");
     if (den.takeHit(dmg)) {
-      den.loot.rollIfEmpty(DUSKRUNNER_WARREN_LOOT_TABLE);
+      rollContainerLoot(den.loot, DUSKRUNNER_WARREN_LOOT_TABLE);
       den.syncGlow();
       this.eventLog.add("info", "The warren collapses — search the remains");
     }
@@ -7352,7 +7390,7 @@ export class MainScene extends Phaser.Scene {
   private completeShrineRite(shrine: SunkenShrine): void {
     shrine.clearRite();
     shrine.setPhase("open");
-    shrine.loot.rollIfEmpty(SUNKEN_SHRINE_LOOT_TABLE);
+    rollContainerLoot(shrine.loot, SUNKEN_SHRINE_LOOT_TABLE);
     this.eventLog.add("info", "The rite holds — the bowl spills what it was keeping.");
   }
 
@@ -7411,7 +7449,7 @@ export class MainScene extends Phaser.Scene {
         const hy = pos.y + (i % 2 === 0 ? -LODGE_HUT_OFFSET : LODGE_HUT_OFFSET);
         const chief = i === hutCount - 1;
         const hut = lodge.addHut(hx, hy, chief);
-        hut.loot.rollIfEmpty(chief ? LODGE_CHIEF_LOOT_TABLE : LODGE_HUT_LOOT_TABLE);
+        rollContainerLoot(hut.loot, chief ? LODGE_CHIEF_LOOT_TABLE : LODGE_HUT_LOOT_TABLE);
         // A short spur of planking connecting the hut to the walk.
         this.add
           .tileSprite(hx - 10, Math.min(hy, pos.y), 20, Math.abs(hy - pos.y), "lodge_plank")
@@ -8799,7 +8837,7 @@ export class MainScene extends Phaser.Scene {
     // dealt while its active window lasts. Parallel to the Leech relic, its own
     // source; overheal at full HP is simply wasted (no shield bank).
     if (this.time.now < this.bloodpactUntil) {
-      this.health.heal(Math.max(1, Math.round(finalDmg * ABILITY_BLOODPACT_LIFELINK_PCT)));
+      this.health.heal(Math.max(1, Math.round(finalDmg * this.bloodpactLifelink)));
       this.refreshHealthBar();
     }
     // Weapon lifelink (the Gloamdrinker): an ALWAYS-on drain that costs no relic
@@ -8917,8 +8955,10 @@ export class MainScene extends Phaser.Scene {
     return keys.map((key) => {
       const id = this.abilityByKey[key];
       const def = id ? ABILITY_DEFS[id] : undefined;
-      // Only Bloodpact (R) has an active window today — keep the check explicit.
-      const active = key === "r" && !!def?.activeMs && now < this.bloodpactUntil;
+      // Which "until" field an active window reads is a property of the FAMILY,
+      // not of the key it happens to be bound to (this used to assume R ==
+      // Bloodpact, which stopped being true once Aegis shipped).
+      const active = !!def?.activeMs && now < this.activeUntilFor(def.family);
       return {
         key,
         abilityId: id,
@@ -8953,33 +8993,67 @@ export class MainScene extends Phaser.Scene {
     this.abilityReadyAt[key] = this.time.now + def.cooldownMs * this.equipEffects.abilityCooldownMult();
   }
 
+  // Dispatch on the FAMILY, never the id — that's what lets a lesser and a
+  // full variant of one effect coexist as pure data (Abilities.ts). `power`
+  // scales every magnitude the effect reads, alongside (not instead of) the
+  // jewelry abilityPowerMult() hook.
   private castAbility(id: AbilityId): void {
-    switch (id) {
-      case "gloamstep_blink":
-        this.castBlink();
+    const def = ABILITY_DEFS[id];
+    const power = def.power * this.equipEffects.abilityPowerMult();
+    switch (def.family) {
+      case "blink":
+        this.castBlink(power);
         break;
-      case "gloam_nova":
-        this.castNova();
+      case "nova":
+        this.castNova(power);
         break;
-      case "bloodpact":
-        this.castBloodpact();
+      case "lifelink":
+        this.castBloodpact(power, def.activeMs ?? 0);
+        break;
+      case "gravebind":
+        this.castGravebind(power);
+        break;
+      case "lance":
+        this.castSpiritLance(power);
+        break;
+      case "aegis":
+        this.castAegis(power, def.activeMs ?? 0);
         break;
     }
   }
 
-  // Q — Gloamstep Blink: teleport toward the aim point (mouse, else facing) and
-  // grant a brief untouchable window. Reuses the dash i-frame field + world clamp.
-  private castBlink(): void {
-    const fromX = this.player.x;
-    const fromY = this.player.y;
+  // How long the given family's active window runs, for the HUD's active glow.
+  // Families with no window return 0 (always in the past).
+  private activeUntilFor(family: AbilityFamily): number {
+    switch (family) {
+      case "lifelink":
+        return this.bloodpactUntil;
+      case "aegis":
+        return this.aegisUntil;
+      default:
+        return 0;
+    }
+  }
+
+  // Where the player is aiming: the pointer if it's meaningfully away from the
+  // player, else the facing direction. Shared by every aimed ability.
+  private aimAngle(): number {
     const pointer = this.input.activePointer;
     const world = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
-    const ang =
-      Phaser.Math.Distance.Between(fromX, fromY, world.x, world.y) >= 8
-        ? Phaser.Math.Angle.Between(fromX, fromY, world.x, world.y)
-        : this.facingAngle();
-    // Amulet of Channeling (B3-P2b) extends the blink reach.
-    const dist = ABILITY_BLINK_DISTANCE * this.equipEffects.abilityPowerMult();
+    return Phaser.Math.Distance.Between(this.player.x, this.player.y, world.x, world.y) >= 8
+      ? Phaser.Math.Angle.Between(this.player.x, this.player.y, world.x, world.y)
+      : this.facingAngle();
+  }
+
+  // Q — Gloamstep Blink: teleport toward the aim point (mouse, else facing) and
+  // grant a brief untouchable window. Reuses the dash i-frame field + world clamp.
+  private castBlink(power: number): void {
+    const fromX = this.player.x;
+    const fromY = this.player.y;
+    const ang = this.aimAngle();
+    // Amulet of Channeling (B3-P2b) extends the blink reach; `power` also
+    // carries the lesser variant's shorter hop.
+    const dist = ABILITY_BLINK_DISTANCE * power;
     // Underground the blink is CLIPPED to floor rather than disabled (the user
     // asked whether to forbid it outright — but the gems that grant it are crypt
     // loot, so a dungeon is the last place it should stop working). It walks the
@@ -8989,7 +9063,7 @@ export class MainScene extends Phaser.Scene {
     const dest = this.clipBlinkToFloor(fromX, fromY, ang, dist);
     this.player.setPosition(dest.x, dest.y);
     this.clampPlayerToWorld();
-    this.invulnerableUntil = Math.max(this.invulnerableUntil, this.time.now + ABILITY_BLINK_IFRAME_MS);
+    this.invulnerableUntil = Math.max(this.invulnerableUntil, this.time.now + ABILITY_BLINK_IFRAME_MS * power);
     this.spawnBlinkFx(fromX, fromY, this.player.x, this.player.y);
     this.sfx.pickup();
   }
@@ -9014,11 +9088,11 @@ export class MainScene extends Phaser.Scene {
   // E — Gloam Nova: a radial gloam burst around the player. Damages (magic) and
   // shoves every live enemy in range, plus a brief slow. Snapshots the enemy list
   // first since dealAbilityDamage mutates this.enemies on a kill (emberblink idiom).
-  private castNova(): void {
+  private castNova(power: number): void {
     const cx = this.player.x;
     const cy = this.player.y;
-    // Amulet of Channeling (B3-P2b) scales both the burst radius and its damage.
-    const power = this.equipEffects.abilityPowerMult();
+    // Amulet of Channeling (B3-P2b) scales both the burst radius and its damage;
+    // `power` also carries the lesser variant's smaller, weaker pop.
     const r = ABILITY_NOVA_RADIUS * power;
     for (const enemy of [...this.enemies]) {
       if (!enemy.active) continue;
@@ -9056,10 +9130,100 @@ export class MainScene extends Phaser.Scene {
 
   // R — Bloodpact: open a timed lifelink window (resolveWeaponHit heals during
   // it). A brief red pulse is the cast cue; the bar's R slot glows for the window.
-  private castBloodpact(): void {
-    this.bloodpactUntil = this.time.now + (ABILITY_DEFS.bloodpact.activeMs ?? 0);
+  // `power` scales BOTH the window length and the siphon fraction, so the lesser
+  // pact is shorter and thinner rather than just one or the other.
+  private castBloodpact(power: number, activeMs: number): void {
+    this.bloodpactUntil = this.time.now + activeMs * power;
+    this.bloodpactLifelink = ABILITY_BLOODPACT_LIFELINK_PCT * power;
     this.player.setTint(0xff5a6a);
     this.time.delayedCall(280, () => this.player.clearTint());
+    this.sfx.upgrade();
+  }
+
+  // Q (found-only) — Gravebind: drag everything nearby INTO your reach and leave
+  // it staggering. Deals no damage; it sets the table for a wide-arc weapon or a
+  // follow-up nova. Structurally castNova's loop with the shove inverted.
+  private castGravebind(power: number): void {
+    const cx = this.player.x;
+    const cy = this.player.y;
+    const r = ABILITY_GRAVEBIND_RADIUS * power;
+    for (const enemy of [...this.enemies]) {
+      if (!enemy.active) continue;
+      const d = Phaser.Math.Distance.Between(cx, cy, enemy.x, enemy.y);
+      if (d > r) continue;
+      // Pull inward to the hold ring, never past the player (a yank that
+      // overshoots reads as a shove and can drop an enemy behind you).
+      const pulled = Math.max(ABILITY_GRAVEBIND_HOLD_RADIUS, d - ABILITY_GRAVEBIND_PULL * power);
+      const ang = Phaser.Math.Angle.Between(cx, cy, enemy.x, enemy.y);
+      enemy.setPosition(cx + Math.cos(ang) * pulled, cy + Math.sin(ang) * pulled);
+      enemy.applySlow(ABILITY_GRAVEBIND_SLOW, ABILITY_GRAVEBIND_SLOW_MS, this.time.now);
+    }
+    const fx = this.add
+      .image(cx, cy, "light_soft")
+      .setTint(0x5c4a8a)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setDepth(ysortDepth(cy) + 1)
+      .setScale((r * 2) / 256)
+      .setAlpha(0.75);
+    // Collapses inward — the visual reads as a pull, the inverse of nova's bloom.
+    this.tweens.add({ targets: fx, scale: 0.1, alpha: 0, duration: 320, ease: "Cubic.easeIn", onComplete: () => fx.destroy() });
+    this.sfx.hit();
+  }
+
+  // E (found-only) — Spirit Lance: a line nuke along the aim. Every enemy within
+  // LANCE_HALF_W of the segment takes magic damage through the shared
+  // dealAbilityDamage helper, so resists + the damage-number tint come free.
+  private castSpiritLance(power: number): void {
+    const x0 = this.player.x;
+    const y0 = this.player.y;
+    const ang = this.aimAngle();
+    const len = ABILITY_LANCE_RANGE * power;
+    const x1 = x0 + Math.cos(ang) * len;
+    const y1 = y0 + Math.sin(ang) * len;
+    for (const enemy of [...this.enemies]) {
+      if (!enemy.active) continue;
+      const edge = Math.max(enemy.displayWidth, enemy.displayHeight) / 2;
+      if (this.distToSegment(enemy.x, enemy.y, x0, y0, x1, y1) > ABILITY_LANCE_HALF_W + edge) continue;
+      this.dealAbilityDamage(enemy, ABILITY_LANCE_DAMAGE * power, "magic");
+    }
+    this.spawnLanceFx(x0, y0, x1, y1);
+    this.sfx.hit();
+  }
+
+  // Shortest distance from a point to the segment (x0,y0)-(x1,y1). Only new
+  // geometry this milestone needs — every other ability is radial.
+  private distToSegment(px: number, py: number, x0: number, y0: number, x1: number, y1: number): number {
+    const dx = x1 - x0;
+    const dy = y1 - y0;
+    const lenSq = dx * dx + dy * dy;
+    // Degenerate segment (zero-length aim) — fall back to point distance.
+    const t = lenSq === 0 ? 0 : Phaser.Math.Clamp(((px - x0) * dx + (py - y0) * dy) / lenSq, 0, 1);
+    return Phaser.Math.Distance.Between(px, py, x0 + t * dx, y0 + t * dy);
+  }
+
+  // A pale beam laid along the lance, fading in place.
+  private spawnLanceFx(x0: number, y0: number, x1: number, y1: number): void {
+    const g = this.add.graphics().setDepth(ysortDepth(y0) + 1).setBlendMode(Phaser.BlendModes.ADD);
+    g.lineStyle(ABILITY_LANCE_HALF_W * 2, 0xd8c8ff, 0.55).lineBetween(x0, y0, x1, y1);
+    g.lineStyle(6, 0xffffff, 0.9).lineBetween(x0, y0, x1, y1);
+    this.tweens.add({ targets: g, alpha: 0, duration: 260, ease: "Cubic.easeOut", onComplete: () => g.destroy() });
+  }
+
+  // R (found-only) — Drowned Aegis: open a timed damage-reduction window. The
+  // reduction itself is read in applyDamageToPlayer, where it ADDS into the same
+  // bucket relic/Molten-Bulwark reduction uses — so it lands under the shared
+  // 0.75 cap and can never be stacked into immunity.
+  private castAegis(power: number, activeMs: number): void {
+    this.aegisUntil = this.time.now + activeMs * power;
+    this.aegisReduction = ABILITY_AEGIS_REDUCTION * power;
+    const fx = this.add
+      .image(this.player.x, this.player.y, "light_soft")
+      .setTint(0x6ad4ff)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setDepth(ysortDepth(this.player.y) + 1)
+      .setScale(0.1)
+      .setAlpha(0.85);
+    this.tweens.add({ targets: fx, scale: 0.42, alpha: 0, duration: 380, ease: "Cubic.easeOut", onComplete: () => fx.destroy() });
     this.sfx.upgrade();
   }
 
@@ -9675,15 +9839,19 @@ export class MainScene extends Phaser.Scene {
     this.sfx.hit();
     // Bleed rides the same i-frame guard above, so a dashed-through Cragscale
     // roll opens no wound (the whole attack is dodged, not just its direct hit).
+    // The Mireborn Cloak (B4-P2 epic passive) thins the DOSE rather than the
+    // duration, so a resisted wound still reads as a wound on the status bar —
+    // it just costs less. Same treatment for poison below.
+    const statusMult = this.equipEffects.statusResistMult();
     if (bleed) {
-      this.bleed.apply(bleed.dmgPerSec, bleed.durationMs);
+      this.bleed.apply(bleed.dmgPerSec * statusMult, bleed.durationMs);
       this.hints.trigger("bled");
     }
     // Creature poison (biome 3) rides the same i-frame guard as bleed, and uses
     // the DISCRETE apply() path — repeated Blighttoad bites are meant to ramp,
     // unlike the miasma's refresh-don't-stack sustain().
     if (poison) {
-      this.poison.apply(poison.dmgPerSec, poison.durationMs);
+      this.poison.apply(poison.dmgPerSec * statusMult, poison.durationMs);
       this.hints.trigger("poisoned");
     }
     // Additive damage-reduction bucket (2026-07-15): the relic %-reduction and
@@ -9693,7 +9861,11 @@ export class MainScene extends Phaser.Scene {
     // casters/forge-boss teeth); the %-reduction still applies. Floored at 1.
     const relicRed = 1 - this.relics.damageTakenMult();
     const moltenDr = this.moltenDamageReduction();
-    const reductionPct = Math.min(0.75, Math.max(0, relicRed + moltenDr));
+    // Drowned Aegis (B4-P2 found-only active) is a third contributor to the SAME
+    // additive bucket, deliberately — so a big timed cut still lands under the
+    // shared 0.75 cap and can't be stacked into immunity with relics/Bulwark.
+    const aegisDr = this.time.now < this.aegisUntil ? this.aegisReduction : 0;
+    const reductionPct = Math.min(0.75, Math.max(0, relicRed + moltenDr + aegisDr));
     // The run character's modifier scales incoming damage BEFORE the reduction
     // bucket — it's a property of the run, not another stackable resistance, so
     // a +25%-damage-taken card can't be cancelled out by the 75% reduction cap.
@@ -10170,7 +10342,21 @@ export class MainScene extends Phaser.Scene {
     this.discovered.add(key);
     if (CRAFTED_OUTPUT_KEYS.has(key)) return;
     const def = itemDef(key);
-    if (def) this.eventLog.add("material", `Discovered: ${def.name}`, def.texture);
+    if (!def) return;
+    // An epic find gets the loud gold center toast instead of the quiet blue
+    // material one. This rides discoverMaterial deliberately: it's already the
+    // choke point every container move reconciles through
+    // (reconcileBackpackDiscovery), so chest → backpack is covered for free.
+    // Known limitation: it dedupes on `discovered`, so a SECOND copy of the same
+    // epic won't re-toast. Epics are maxStack-1 uniques, so a duplicate is a
+    // non-event, and the container glow signals "there's something in here"
+    // independently of this.
+    if (EPIC_ITEM_KEYS.has(key)) {
+      this.eventLog.add("epic", `Epic find — ${def.name}!`, def.texture);
+      this.sfx.upgrade();
+      return;
+    }
+    this.eventLog.add("material", `Discovered: ${def.name}`, def.texture);
   }
 
   // Re-run recipe discovery and announce anything newly unlocked. Call after
@@ -12145,9 +12331,9 @@ export class MainScene extends Phaser.Scene {
         this.refreshHealthBar();
         this.eventLog.add("info", "[DEV] Healed to full");
       },
-      // Drop `count` of any item key into the backpack — the 2a way to obtain the
-      // ability-granting specials (special_gloamstep_band / special_gloam_focus /
-      // back_bloodpact_shroud), since they have no real source yet.
+      // Drop `count` of any item key into the backpack. Handy for testing the
+      // ability specials and the B4-P2 epic-loot uniques without farming the
+      // ~4-8% container rolls that are their only real source.
       give: (key: string, count = 1) => {
         const def = itemDef(key);
         if (!def) {

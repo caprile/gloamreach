@@ -19,6 +19,10 @@ const KIND_COLORS: Record<LogKind, { text: string; border: number; fill: number 
   // POI discovery (a found structure — e.g. a Duskrunner Warren) — a prominent
   // center toast like biome, tinted to match the POI's own map-marker color.
   poi: { text: "#e0a060", border: 0xe0a060, fill: 0x3a2612 },
+  // Epic find (B4-P2). The brightest gold in the palette, and routed to the
+  // prominent CENTER toast (not the side material queue) purely by not being
+  // "recipe"/"material" in onNewEntry — a ~5% drop should stop you for a beat.
+  epic: { text: "#ffe9a8", border: 0xffc94a, fill: 0x4a3608 },
 };
 
 // Recipe-unlock / material-discovery toast: a small card (icon + text) that
