@@ -71,13 +71,18 @@ export class BuffManager {
   // `suppressHeal` (Phase 1 — HP-regen-prevention zones, e.g. biome-3 miasma):
   // when true, buffs still count DOWN (standing in the zone wastes the buff) but
   // deal no healing — the "no regen" semantics without pausing the timer.
-  tick(delta: number, health: Health, suppressHeal = false): { healed: boolean; changed: boolean } {
+  // `regenMult` scales healing from buffs: 1 = normal, 0 = fully suppressed,
+  // and anything between is a partial penalty (poison sits at 0.5 — the user:
+  // poison should make regen "significantly worse", not switch it off). Buffs
+  // always tick DOWN at full rate regardless, so a debuff can never be waited
+  // out by parking under a food buff.
+  tick(delta: number, health: Health, regenMult = 1): { healed: boolean; changed: boolean } {
     if (this.buffs.length === 0) return { healed: false, changed: false };
     let healed = false;
     for (const b of this.buffs) {
       const dt = Math.min(b.remainingMs, delta);
-      if (!suppressHeal && b.hpPerSec > 0 && dt > 0) {
-        health.heal(b.hpPerSec * (dt / 1000));
+      if (regenMult > 0 && b.hpPerSec > 0 && dt > 0) {
+        health.heal(b.hpPerSec * regenMult * (dt / 1000));
         healed = true;
       }
       b.remainingMs -= delta;

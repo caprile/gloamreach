@@ -517,6 +517,10 @@ const BAYOU_SHALLOW_SLOW_MULT = 0.78;
 const BAYOU_DEEP_SLOW_MULT = 0.5;
 // Miasma: no HP regen inside, plus a slow poison tick (see Poison.ts).
 const MIASMA_POISON_DPS = 3;
+// How much healing survives while poisoned (the user: poison should make regen
+// "significantly worse", NOT negate it — a hard shutoff is a switch, a penalty
+// is pressure you can still play against).
+const POISON_REGEN_MULT = 0.5;
 // Bonemire: waterlogged boneyard muck. Harsher than shallow water, gentler than
 // a deep channel — crossing one is a real commitment.
 const BONEMIRE_SLOW_MULT = 0.62;
@@ -725,14 +729,17 @@ export class MainScene extends Phaser.Scene {
   // collide with; thornfield = dense brambles that slow + dense flora) that content
   // keys off, so the badlands reads as distinct PLACES not uniform scatter (the user).
   // obstaclePositions: every solid rock body's footprint (recorded so wild spawns
-  // avoid them). currentEnvBlockRegen caches this frame's HP-regen-suppression flag
+  // avoid them). currentRegenMult caches this frame's HP-regen multiplier
   // from environmentEffectAt (dormant in biome 2 — wired for biome-3 miasma). All
   // reset per run (scene.restart field-init gotcha).
   private badlandsZones: BadlandsZone[] = [];
   // Biome-3 miasma zones (see BayouZone) — the bayou's environmental hazard.
   private bayouZones: BayouZone[] = [];
   private obstaclePositions: { x: number; y: number; r: number }[] = [];
-  private currentEnvBlockRegen = false;
+  // 1 = normal healing, 0 = fully suppressed, 0.5 = the poison/miasma penalty.
+  // Cached each frame so every regen consumer (food buffs, Comfort) reads one
+  // value and a new suppression source only has to fold in below.
+  private currentRegenMult = 1;
 
   // Duskrunner Warrens (biome 2 Phase 3) — two-wave destructible den POIs.
   private badlandsDens: BadlandsDen[] = [];
@@ -845,7 +852,7 @@ export class MainScene extends Phaser.Scene {
   private buffBarUI!: BuffBarUI;
   private statusBarUI!: StatusBarUI;
   // This frame's environmental movement multiplier (<1 = slowed). Cached beside
-  // currentEnvBlockRegen purely so the status HUD can report WHY you're slow.
+  // currentRegenMult purely so the status HUD can report WHY you're slow.
   private currentEnvMoveMult = 1;
   private healthBarBg!: Phaser.GameObjects.Rectangle;
   private healthBarFill!: Phaser.GameObjects.Rectangle;
@@ -1074,7 +1081,7 @@ export class MainScene extends Phaser.Scene {
     this.badlandsZones = [];
     this.bayouZones = [];
     this.obstaclePositions = [];
-    this.currentEnvBlockRegen = false;
+    this.currentRegenMult = 1;
     this.currentEnvMoveMult = 1;
     this.badlandsDens = [];
     this.hoveredDen = null;
@@ -1680,14 +1687,17 @@ export class MainScene extends Phaser.Scene {
       this.killMoveBurstBonus() +
       (equippedAugmentEffect(this.equipment).moveSpeedPct ?? 0) / 100;
     // Phase 1: terrain under the player this frame — the bramble slow feeds
-    // Player.update's env multiplier; blockRegen is cached for the regen gates
+    // Player.update's env multiplier; regenMult is cached for the regen gates
     // later this frame (dormant in biome 2, live for biome-3 miasma).
     const env = this.environmentEffectAt(this.player.x, this.player.y);
-    // Regen is suppressed by a no-regen zone (miasma) OR by being poisoned — the
-    // second half of poison's identity as a magic subtype (see Poison.ts). One
-    // cached flag drives every regen gate (food buffs + Comfort), so a new
-    // suppression source only ever has to OR in here.
-    this.currentEnvBlockRegen = env.blockRegen || this.poison.isPoisoned();
+    // Regen is reduced by the terrain AND by being poisoned (the second half of
+    // poison's identity as a magic subtype — see Poison.ts). Sources take the
+    // MINIMUM rather than multiplying, so standing poisoned inside a miasma is
+    // still 50%, not a compounded 25% the player was never told about.
+    this.currentRegenMult = Math.min(
+      env.regenMult,
+      this.poison.isPoisoned() ? POISON_REGEN_MULT : 1,
+    );
     this.currentEnvMoveMult = env.moveMult;
     // Standing in a miasma keeps re-applying a short poison stack, so leaving the
     // zone lets it lapse on its own rather than needing a separate "exit" event.
@@ -1732,7 +1742,7 @@ export class MainScene extends Phaser.Scene {
     // healed, and keep the buff HUD in sync each frame (countdown/expiry). In a
     // no-regen zone (Phase 1, biome-3 miasma) the buff still ticks down but heals
     // nothing.
-    if (this.buffs.tick(delta, this.health, this.currentEnvBlockRegen).healed) this.refreshHealthBar();
+    if (this.buffs.tick(delta, this.health, this.currentRegenMult).healed) this.refreshHealthBar();
     this.buffBarUI.sync(this.buffs.active());
     this.statusBarUI.sync(this.statusEffects());
     this.passiveBarUI.sync(this.passiveEntries());
@@ -5193,20 +5203,26 @@ export class MainScene extends Phaser.Scene {
   private environmentEffectAt(
     x: number,
     y: number,
-  ): { moveMult: number; blockRegen: boolean; poisonDps?: number } {
+  ): { moveMult: number; regenMult: number; poisonDps?: number } {
     const z = this.subZoneAt(x, y);
-    if (z && z.type === "thornfield") return { moveMult: BRAMBLE_SLOW_MULT, blockRegen: false };
+    if (z && z.type === "thornfield") return { moveMult: BRAMBLE_SLOW_MULT, regenMult: 1 };
     // Biome 3 zones are resolved BEFORE the early return so a zone sitting over a
     // channel still reports both its own effect and the water slow — whichever
     // slow is harsher wins rather than one silently replacing the other.
     const water = this.bayouWaterMult(x, y);
     const bz = this.bayouZoneAt(x, y);
-    if (bz?.type === "miasma") return { moveMult: water, blockRegen: true, poisonDps: MIASMA_POISON_DPS };
-    if (bz?.type === "bonemire") return { moveMult: Math.min(water, BONEMIRE_SLOW_MULT), blockRegen: false };
+    // The miasma's regen penalty is now the SAME 50% poison carries, rather than
+    // the total block it originally shipped with. Keeping it at 0 would have made
+    // the new 50% rule unobservable in practice — the miasma is currently the only
+    // poison source in the game, so a full block there would always win. A future
+    // zone can still pass regenMult: 0 for a genuine no-heal area.
+    if (bz?.type === "miasma")
+      return { moveMult: water, regenMult: POISON_REGEN_MULT, poisonDps: MIASMA_POISON_DPS };
+    if (bz?.type === "bonemire") return { moveMult: Math.min(water, BONEMIRE_SLOW_MULT), regenMult: 1 };
     // A hammock is raised dry ground — explicitly no penalty, even where the
     // feature layer would otherwise read as shallow water.
-    if (bz?.type === "hammock") return { moveMult: 1, blockRegen: false };
-    return { moveMult: water, blockRegen: false };
+    if (bz?.type === "hammock") return { moveMult: 1, regenMult: 1 };
+    return { moveMult: water, regenMult: 1 };
   }
 
   // The bayou's water movement multiplier at a point (1 = unaffected). Gated on
@@ -8869,8 +8885,8 @@ export class MainScene extends Phaser.Scene {
   // The instant a condition breaks, we simply stop refreshing it and it
   // expires on its own within its own short durationMs.
   private updateComfortRegen(): void {
-    // No-regen zone (Phase 1, biome-3 miasma) also blocks Comfort's Resting regen.
-    if (this.currentEnvBlockRegen) return;
+    // Comfort's Resting regen takes the same penalty as every other heal source.
+    if (this.currentRegenMult <= 0) return;
     const resting = this.placedObjects.some(
       (obj) =>
         obj.getData("itemKey") === "comfort" &&
@@ -8878,6 +8894,10 @@ export class MainScene extends Phaser.Scene {
         this.isNearCampfire(obj.x, obj.y, COMFORT_CAMPFIRE_RANGE),
     );
     if (resting && !this.isAnyEnemyAggro()) {
+      // Applied at FULL rate — the regen penalty is applied once, centrally, in
+      // buffs.tick(). Pre-scaling here as well would penalize Comfort twice
+      // (0.5 x 0.5 = 0.25 while poisoned) and silently make it the one heal
+      // source with different math.
       this.buffs.apply({ id: "comfort_rest", name: "Resting", icon: "icon_comfort", hpPerSec: 1, durationMs: 400 });
     }
   }
@@ -9951,7 +9971,7 @@ export class MainScene extends Phaser.Scene {
         id: "poison",
         name: "Poisoned",
         icon: "icon_status_poison",
-        detail: `${this.poison.dps()} dmg/s · ignores armor · no healing`,
+        detail: `${this.poison.dps()} dmg/s · ignores armor · healing -${Math.round((1 - POISON_REGEN_MULT) * 100)}%`,
         color: 0x8fd94a,
         remainingMs: this.poison.remainingMs(),
         durationMs: POISON_METER_FULL_MS,
@@ -9981,12 +10001,13 @@ export class MainScene extends Phaser.Scene {
     // Only shown when regen is blocked by something OTHER than poison — poison's
     // own tooltip already says it stops healing, so pairing the two icons every
     // time would be pure noise.
-    if (this.currentEnvBlockRegen && !this.poison.isPoisoned()) {
+    if (this.currentRegenMult < 1 && !this.poison.isPoisoned()) {
+      const pct = Math.round((1 - this.currentRegenMult) * 100);
       out.push({
         id: "noregen",
-        name: "No Regen",
+        name: this.currentRegenMult <= 0 ? "No Regen" : "Weakened Healing",
         icon: "icon_status_noregen",
-        detail: "Healing is suppressed here",
+        detail: this.currentRegenMult <= 0 ? "Healing is suppressed here" : `Healing ${pct}% weaker here`,
         color: 0x9a3a46,
       });
     }

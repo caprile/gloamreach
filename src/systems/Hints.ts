@@ -89,7 +89,7 @@ const HINT_DEFS: Record<HintId, HintEntry> = {
   },
   poisoned: {
     kind: "tutorial",
-    text: "You're poisoned — it ticks through armor like magic, and nothing will heal you until it wears off. Get clear of the fumes.",
+    text: "You're poisoned — it ticks through armor like magic, and your healing is halved until it wears off. Get clear of the fumes.",
   },
   magic_damage: {
     kind: "tutorial",

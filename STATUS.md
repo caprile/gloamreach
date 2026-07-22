@@ -37,7 +37,11 @@ keep the surface characterful, `BayouZone` widened to **three themed macro-zones
 (raised cypress island, no penalty + the densest foraging). Also new: **`src/ui/StatusBarUI.ts`**, a
 **generic debuff strip** above the buff bar (poison/bleed/slow/no-regen — bleed had NO HUD tell since
 the badlands), timed effects get a meter + countdown, conditional ones just show; No Regen is
-suppressed while poisoned as redundant. **Deliberately left out:** **Mirehide** (a *creature* hide —
+suppressed while poisoned as redundant. **Poison's regen penalty is 50%, not a block** (the user):
+`blockRegen` became a `regenMult` multiplier end-to-end (`BuffManager.tick` included), the miasma
+zone moved to the same 50% (a full block would have made the rule unobservable, since miasma is the
+only poison source), sources take the MIN not the product, and Comfort's double-penalty bug was
+caught + fixed. Verified: +19.4 HP over 9.69s in a miasma under a food buff vs +19.4 expected. **Deliberately left out:** **Mirehide** (a *creature* hide —
 lands with 4b's roster, not a node), and the bayou is gated out of the enemy-respawn/nightfall top-up
 until 4b ships. No `RECIPES.md`/dashboard change. See B3-P4a below + [[survivor-rpg-biome-3-roadmap]].
 Prior: **B3-P3 — Biome-3 Phase 3: Bayou gear progression (reforge tier + gem augments)**
@@ -296,6 +300,29 @@ countdown, **conditional** ones (slowed, no-regen) simply show while active. `Bl
 healing, so pairing the icons every time would be pure noise. Verified live: correct set per zone
 type, the no-regen de-duplication both ways, 3 icons rendering with 0 overlap, row centered exactly
 on screen center, depth 2803 (clears WORLD_H), and the hover tooltip.
+
+**Poison regen penalty softened to 50% (the user).** *"Poison shouldn't completely negate regen but
+it should make it significantly worse (50% regen)."* The boolean `blockRegen` became a **multiplier**
+end-to-end: `environmentEffectAt` returns `regenMult`, `currentEnvBlockRegen` became
+`currentRegenMult`, and `BuffManager.tick`'s `suppressHeal` flag became a `regenMult` scalar (buffs
+still tick DOWN at full rate regardless, so a debuff can't be waited out under a food buff).
+`POISON_REGEN_MULT = 0.5`.
+- **The miasma zone's own regen effect moved from a total block to the same 50%.** Called out because
+  it's a change beyond the literal ask: the miasma is currently the game's ONLY poison source, so
+  leaving it at 0 would have made the new 50% rule unobservable in play. `regenMult: 0` is still
+  supported for a future genuine no-heal zone.
+- **Sources take the MINIMUM, not the product** — poisoned inside a miasma is 50%, not a compounded
+  25% the player was never told about.
+- **Bug caught in verification:** the first pass scaled Comfort's `hpPerSec` at apply time *and* let
+  `tick()` scale it again, double-penalizing it to 0.25 HP/s. Now the penalty is applied once,
+  centrally, so every heal source shares the same math.
+- HUD/wording followed: the poison tooltip reads "healing -50%", and the standalone environmental
+  icon is now **"Weakened Healing"** ("Healing 50% weaker here") when reduced-but-nonzero, still
+  "No Regen" at 0.
+- **Verified live:** a 10 HP/s buff heals exactly 10/s clean, 5/s poisoned, 0/s at `regenMult` 0;
+  Comfort 1.0/s clean and 0.5/s poisoned (not 0.25); and end-to-end through the real update loop in a
+  miasma with a food buff, **+19.4 HP over 9.69s against +19.4 expected** (+5/s healing −3/s poison).
+  Poison is now real pressure you can out-heal with good food rather than a hard shutoff.
 
 **Left out of 4a, deliberately:** **Mirehide** has no source yet — it's a *creature* hide, so a node
 source would be dishonest; it lands with the 4b roster. The bayou is also gated out of the

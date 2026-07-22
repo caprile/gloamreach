@@ -9,8 +9,10 @@ import { BleedManager } from "./Bleed";
 // armor and IS reduced by heavy armor's magic mitigation, exactly like a Hexling
 // bolt. What makes it poison rather than just "magic that ticks":
 //   1. it deals its damage over time, and
-//   2. it SUPPRESSES HP REGEN while active (isPoisoned() feeds the same
-//      blockRegen gate the miasma zone uses), so you can't simply out-heal it.
+//   2. it CRIPPLES HP REGEN while active — isPoisoned() feeds MainScene's
+//      currentRegenMult, halving every heal source (food buffs, Comfort). It is
+//      deliberately NOT a full shutoff (the user): "significantly worse" keeps it
+//      as pressure you can still play against, where 0% would just be a switch.
 //
 // TWO APPLICATION MODES, because poison has two very different sources:
 //
@@ -65,8 +67,8 @@ export class PoisonManager {
     return total;
   }
 
-  // True while any dose or environmental source is live — this is what blocks
-  // HP regen.
+  // True while any dose or environmental source is live — this is what drives the
+  // regen penalty and the status HUD icon.
   isPoisoned(): boolean {
     return this.doses.isBleeding() || this.env !== null;
   }
