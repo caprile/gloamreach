@@ -228,6 +228,17 @@ export class CookingMenu {
     return e ? e.hpPerSec * e.durationMs : 0;
   }
 
+  // Whether `recipe` is listed at all: normally the campfire must be high
+  // enough tier AND every ingredient discovered, but `nobuildcost` shows every
+  // dish (matching CraftingMenu.visibleRecipes) — otherwise a free-cook cheat
+  // still couldn't reach a locked dish, since it never rendered a row.
+  private isVisible(recipe: CookRecipe, tier: number, discovered: ReadonlySet<string>): boolean {
+    if (this.deps.noBuildCost()) return true;
+    return (
+      recipe.requiredCampfireTier <= tier && Object.keys(recipe.inputs).every((key) => discovered.has(key))
+    );
+  }
+
   // Discovered dishes at or below the open campfire's tier, grouped by tier
   // (DESC, best on top), each tier's dishes sorted by total heal DESC. Applies
   // the "show only cookable" filter when on.
@@ -235,10 +246,7 @@ export class CookingMenu {
     const tier = this.deps.campfireTier() ?? 0;
     const discovered = this.deps.discovered();
     const visible = COOK_RECIPES.filter(
-      (r) =>
-        r.requiredCampfireTier <= tier &&
-        Object.keys(r.inputs).every((key) => discovered.has(key)) &&
-        (!this.onlyCookable || this.isCookable(r)),
+      (r) => this.isVisible(r, tier, discovered) && (!this.onlyCookable || this.isCookable(r)),
     );
     const byTier = new Map<number, CookRecipe[]>();
     for (const r of visible) {
@@ -257,10 +265,7 @@ export class CookingMenu {
   private cookableCountForTier(tier: number): number {
     const discovered = this.deps.discovered();
     return COOK_RECIPES.filter(
-      (r) =>
-        r.requiredCampfireTier === tier &&
-        Object.keys(r.inputs).every((key) => discovered.has(key)) &&
-        this.isCookable(r),
+      (r) => r.requiredCampfireTier === tier && this.isVisible(r, tier, discovered) && this.isCookable(r),
     ).length;
   }
 

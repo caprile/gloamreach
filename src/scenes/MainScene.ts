@@ -3247,6 +3247,7 @@ export class MainScene extends Phaser.Scene {
       convert: () => this.convertGloamToEmber(),
       resolveFamilyChoice: (keepNew) => this.resolveRelicFamilyChoice(keepNew),
       hasDiscovered: (key) => this.discovered.has(key),
+      noBuildCost: () => this.devNoBuildCost,
     });
   }
 
@@ -3274,8 +3275,13 @@ export class MainScene extends Phaser.Scene {
   // empty backpack even though the menu gates its button. Returns the outcome so
   // the forge menu can show inline feedback.
   private rollRelic(trophyKey: string, announce = true): RollResult | null {
-    if (!TROPHY_ROLL[trophyKey] || this.backpack.count(trophyKey) < 1) return null;
-    this.backpack.removeCount(trophyKey, 1);
+    if (!TROPHY_ROLL[trophyKey]) return null;
+    // nobuildcost rolls without owning (or spending) a trophy — relic testing
+    // shouldn't require farming elites first.
+    if (!this.devNoBuildCost) {
+      if (this.backpack.count(trophyKey) < 1) return null;
+      this.backpack.removeCount(trophyKey, 1);
+    }
     this.lastRollTrophyKey = trophyKey;
     const result = this.relics.roll(trophyKey);
     // The forge menu defers this to the slot-machine reveal (announce=false) so
@@ -3353,9 +3359,11 @@ export class MainScene extends Phaser.Scene {
   // repeatedly for a batch. Re-guards tier + affordability defensively (the
   // menu already gates its button).
   private convertGloamToEmber(): void {
-    if (((this.openForge?.getData("tier") as number | undefined) ?? 0) < 2) return;
-    if (this.backpack.count("gloam_shard") < GLOAM_TO_EMBER_RATIO) return;
-    this.backpack.removeCount("gloam_shard", GLOAM_TO_EMBER_RATIO);
+    if (!this.devNoBuildCost) {
+      if (((this.openForge?.getData("tier") as number | undefined) ?? 0) < 2) return;
+      if (this.backpack.count("gloam_shard") < GLOAM_TO_EMBER_RATIO) return;
+      this.backpack.removeCount("gloam_shard", GLOAM_TO_EMBER_RATIO);
+    }
     const leftover = this.addToBackpack("ember_shard", 1);
     if (leftover > 0) {
       this.spawnLooseDrop("ember_shard", leftover, this.player.x, this.player.y, DROPPED_ITEM_MAGNET_COOLDOWN_MS);
@@ -3386,20 +3394,22 @@ export class MainScene extends Phaser.Scene {
     const recipe = REFINE_RECIPES.find((r) => r.id === recipeId);
     if (!recipe) return;
     // Gated on Relic Forge Lvl 2 (the menu already hides refine rows below it;
-    // re-guard defensively).
-    if (((this.openForge?.getData("tier") as number | undefined) ?? 0) < 1) return;
-    if (!canAffordRefine(recipe, (k) => this.backpack.count(k))) return;
+    // re-guard defensively). nobuildcost skips the tier gate + the inputs.
+    if (!this.devNoBuildCost) {
+      if (((this.openForge?.getData("tier") as number | undefined) ?? 0) < 1) return;
+      if (!canAffordRefine(recipe, (k) => this.backpack.count(k))) return;
 
-    let remaining = recipe.inputCount;
-    for (const key of refinableTrophyKeys(recipe.inputRarity, recipe.tier)) {
-      if (remaining <= 0) break;
-      const take = Math.min(remaining, this.backpack.count(key));
-      if (take > 0) {
-        this.backpack.removeCount(key, take);
-        remaining -= take;
+      let remaining = recipe.inputCount;
+      for (const key of refinableTrophyKeys(recipe.inputRarity, recipe.tier)) {
+        if (remaining <= 0) break;
+        const take = Math.min(remaining, this.backpack.count(key));
+        if (take > 0) {
+          this.backpack.removeCount(key, take);
+          remaining -= take;
+        }
       }
+      this.backpack.removeCount(recipe.shardKey, recipe.shardCount);
     }
-    this.backpack.removeCount(recipe.shardKey, recipe.shardCount);
 
     const leftover = this.addToBackpack(recipe.output, 1);
     if (leftover > 0) {
@@ -11750,6 +11760,11 @@ export class MainScene extends Phaser.Scene {
         this.devNoBuildCost = on ?? !this.devNoBuildCost;
         this.refreshDiscovery();
         this.craftingMenu?.refresh();
+        // Station menus each gate independently, so any open one needs a repaint
+        // to pick the flag up (a toggle mid-menu otherwise looks like a no-op).
+        this.cookingMenu?.refresh();
+        this.relicForgeMenu?.refresh();
+        this.jewelryMenu?.refresh();
         this.eventLog.add("info", `[DEV] Free craft ${this.devNoBuildCost ? "ON" : "OFF"}`);
       },
       // name = a SkillType (e.g. "blunt", "light_armor") or a StatType (e.g.

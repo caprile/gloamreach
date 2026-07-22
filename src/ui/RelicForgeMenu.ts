@@ -58,6 +58,11 @@ export interface RelicForgeMenuDeps {
   // whose shard currency (e.g. Ember Shard) the player hasn't seen yet — so the
   // Refine tab never asks for a currency that doesn't exist to the player.
   hasDiscovered: (key: string) => boolean;
+  // DEV `nobuildcost` cheat — when true every trophy type offers a roll button
+  // (with nothing consumed), both upgrade-gated tabs unlock, and refine/convert
+  // read as affordable. Without this the free-craft cheat stopped at the forge:
+  // relic testing still required farming elites for real trophies.
+  noBuildCost: () => boolean;
 }
 
 const DEPTH_BG = 3000;
@@ -253,7 +258,9 @@ export class RelicForgeMenu {
     // Key the map on "rarity@tier" so T1 and T2 Commons stay distinct.
     const byTuple = new Map<string, { rarity: RelicRarity; tier: number; keys: string[] }>();
     for (const key of Object.keys(TROPHY_ROLL)) {
-      if (this.deps.backpack.count(key) <= 0) continue;
+      // nobuildcost lists every rarity+tier group even at 0 held, so any roll
+      // can be tested without farming its trophy first.
+      if (!this.deps.noBuildCost() && this.deps.backpack.count(key) <= 0) continue;
       const { rarity, powerTier } = TROPHY_ROLL[key];
       const mapKey = `${rarity}@${powerTier}`;
       const g = byTuple.get(mapKey);
@@ -281,10 +288,10 @@ export class RelicForgeMenu {
   // The Refine tab only exists once the forge is Lvl 2 (Gloam Conduit
   // upgrade); Convert only exists at Lvl 3 (Ember Kiln upgrade).
   private refineUnlocked(): boolean {
-    return this.deps.forgeTier() >= 1;
+    return this.deps.noBuildCost() || this.deps.forgeTier() >= 1;
   }
   private convertUnlocked(): boolean {
-    return this.deps.forgeTier() >= 2;
+    return this.deps.noBuildCost() || this.deps.forgeTier() >= 2;
   }
 
   private render(): void {
@@ -438,7 +445,7 @@ export class RelicForgeMenu {
       const img = this.scene.add.image(x + 22, y + h / 2, emberDef.texture).setScrollFactor(0).setDepth(DEPTH_ITEM + 1);
       this.rows.push(img);
     }
-    const can = gloam >= GLOAM_TO_EMBER_RATIO && !this.convertBusy;
+    const can = (this.deps.noBuildCost() || gloam >= GLOAM_TO_EMBER_RATIO) && !this.convertBusy;
     this.addText(x + 44, y + 8, `${GLOAM_TO_EMBER_RATIO} Gloam Shard -> 1 Ember Shard`, 13, "#e8923c");
     this.addText(x + 44, y + 28, `Gloam Shards  ${gloam}/${GLOAM_TO_EMBER_RATIO}`, 11, gloam >= GLOAM_TO_EMBER_RATIO ? "#c8d0da" : "#e08a8a");
     this.addText(x + 44, y + 44, `Ember Shards owned: ${ember}`, 11, "#8a93a3");
@@ -493,9 +500,9 @@ export class RelicForgeMenu {
     // Surface a recipe only if the player owns eligible input trophies AND has
     // discovered its shard currency — otherwise a badlands run could see a
     // tier-2 (Ember Shard) refine row before ever finding an Ember Shard.
-    const recipes = REFINE_RECIPES.filter(
-      (r) => ownedRefineInput(r, count) > 0 && this.deps.hasDiscovered(r.shardKey),
-    );
+    const recipes = this.deps.noBuildCost()
+      ? REFINE_RECIPES
+      : REFINE_RECIPES.filter((r) => ownedRefineInput(r, count) > 0 && this.deps.hasDiscovered(r.shardKey));
     const ROW_H = 72;
     const listTop = 96;
 
@@ -545,7 +552,7 @@ export class RelicForgeMenu {
     this.addText(x + 44, y + 28, `${rarityName(recipe.inputRarity)} trophies  ${owned}/${recipe.inputCount}`, 11, trophyOk ? "#c8d0da" : "#e08a8a");
     this.addText(x + 44, y + 44, `${shardName}  ${shards}/${recipe.shardCount}`, 11, shardOk ? "#c8d0da" : "#e08a8a");
 
-    const can = canAffordRefine(recipe, count);
+    const can = this.deps.noBuildCost() || canAffordRefine(recipe, count);
     const isBusyRow = this.refineBusy && this.refineBusyId === recipe.id;
     const btnW = 110;
     const btnH = 30;
@@ -608,7 +615,7 @@ export class RelicForgeMenu {
       const by = y + 22 + rowN * (BTN_H + BTN_GAP_Y);
 
       const rarity = group.rarity;
-      const can = group.total >= 1 && !this.choicePending();
+      const can = (this.deps.noBuildCost() || group.total >= 1) && !this.choicePending();
       const overall = trophyOverallSuccessChance(rarity);
       const pct = Math.round(overall * 100);
       const pityLeft = Math.max(0, PITY_THRESHOLD[rarity] - this.deps.relics.missStreak(rarity));
@@ -639,7 +646,8 @@ export class RelicForgeMenu {
       this.rows.push(gem);
 
       this.addText(bx + 42, by + 8, `Roll a ${rarityName(rarity)} Trophy (T${group.tier})`, 12, can ? rarityHex(rarity) : "#5a6270");
-      this.addText(bx + 42, by + 26, `have ${group.total}`, 11, can ? "#c8d0da" : "#e08a8a");
+      const haveStr = this.deps.noBuildCost() ? `have ${group.total} — free (DEV)` : `have ${group.total}`;
+      this.addText(bx + 42, by + 26, haveStr, 11, can ? "#c8d0da" : "#e08a8a");
       this.addText(bx + 42, by + 42, pityStr, 10, "#8a93a3");
     });
   }
