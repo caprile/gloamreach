@@ -1,6 +1,7 @@
 import type { ToolType } from "../entities/ResourceNode";
 import type { WeaponType } from "./Weapons";
 import type { EquipSlot, EquippedItem } from "./Equipment";
+import type { AbilityId } from "./Abilities";
 
 // Armor material classes — double as the two armor Skill types (Skills.ts).
 export type ArmorType = "heavy_armor" | "light_armor";
@@ -35,6 +36,11 @@ export interface ItemDef {
   // timed heal-over-time buff (Buffs.ts). The Tooltip derives its "Effect"/
   // "Right-click to eat" lines from this, so the numbers live in one place.
   edible?: { hpPerSec: number; durationMs: number };
+  // Set for an ability-granting "special" item (equips to back/special1/
+  // special2). While equipped it contributes its active to the Q/E/R ability
+  // bar — the slot decides the key (Abilities.SLOT_ABILITY_KEY). No stat/armor
+  // value of its own in 2a.
+  grantsAbility?: AbilityId;
 }
 
 export const ITEM_DEFS: Record<string, ItemDef> = {
@@ -1175,6 +1181,53 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     texture: "icon_refined_trophy_uncommon_t2",
     maxStack: 99,
     hotbarable: false,
+  },
+
+  // --- B3-P2a: ability-granting "special" items (dev-only in 2a; real sources
+  // — epic loot, biome-3 craftables, the post-boss reward picker — come later).
+  // Each equips to its slot via the generic armor-equip path and lights up its
+  // Q/E/R bar slot. ---
+  special_gloamstep_band: {
+    key: "special_gloamstep_band",
+    name: "Gloamstep Band",
+    description: "A gloam-charged band that folds space around its wearer. Grants Gloamstep Blink (Q).",
+    texture: "ability_blink",
+    maxStack: 1,
+    hotbarable: false,
+    armorSlot: "special1",
+    grantsAbility: "gloamstep_blink",
+    stats: [
+      { label: "Type", value: "Special (Spec1 · Q)" },
+      { label: "Grants", value: "Gloamstep Blink" },
+    ],
+  },
+  special_gloam_focus: {
+    key: "special_gloam_focus",
+    name: "Gloam Focus",
+    description: "A knot of unstable gloam that erupts on command. Grants Gloam Nova (E).",
+    texture: "ability_nova",
+    maxStack: 1,
+    hotbarable: false,
+    armorSlot: "special2",
+    grantsAbility: "gloam_nova",
+    stats: [
+      { label: "Type", value: "Special (Spec2 · E)" },
+      { label: "Grants", value: "Gloam Nova" },
+    ],
+  },
+  back_bloodpact_shroud: {
+    key: "back_bloodpact_shroud",
+    name: "Bloodpact Shroud",
+    description: "A shroud steeped in a life-siphoning pact. Grants Bloodpact (R).",
+    texture: "ability_bloodpact",
+    maxStack: 1,
+    hotbarable: false,
+    armorSlot: "back",
+    grantsAbility: "bloodpact",
+    stats: [
+      { label: "Type", value: "Special (Back · R)" },
+      { label: "Grants", value: "Bloodpact" },
+    ],
   },
 };
 

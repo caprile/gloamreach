@@ -2,338 +2,46 @@
 
 ## Current State
 
-_Living snapshot — edit in place, never append. Last shipped: **B3-P1 — Biome-3 Phase 1:
-Terrain-that-matters + badlands macro-zones** (2026-07-21, Opus, roadmap
-`.claude/plans/biome-3-and-new-systems-roadmap.md`). First milestone of the biome-3 (haunted bayou) +
-new-systems arc: blocking terrain + a generic environmental-zone hook, **reworked same-session into a
-MACRO-ZONE system** (the user: the biome felt like uniform random scatter — give it structure). The badlands
-now places **~10 LARGE themed sub-zones** (`badlandsZones` / `subZoneAt`) that content keys off:
-**boulderfields** (dense grey-rock formations — ridge-lines of solid `badlands_rockwall`/`badlands_mesa_spire`
-added to the `solids` group so player+enemies collide; ~140 bodies/run) and **thornfields** (dense bramble
-scrub that slows the player 0.6× across the whole zone + rich foraging — ~630 bramble props + dense
-Dustbloom/Emberbloom). Each zone gets a bold ground decal (`zone_floor_*`) so it reads as a distinct place
-from a distance; wild flora/minerals/enemies AVOID zone cores (`subZoneAt` gate in `pickBadlandsPoint`) so
-zones are deliberate and the open ground between stays organically scattered; **themed enemies** fill each
-zone (Cragscale bruisers in boulderfields, Duskrunner swarms in thornfields). Grey rock + bold-bramble
-textures replace the old warm-brown "hard to distinguish" ones. **Generic env-zone hook (biome-3 consumes):**
-`environmentEffectAt → {moveMult, blockRegen}` — slow via a new `Player.update` `envMult` param (walk only,
-dash exempt); no-regen via `updateComfortRegen` early-return + `BuffManager.tick(…, suppressHeal)` (built +
-tested but DORMANT — biome-3 miasma hook). `tsc` clean; verified live (`javascript_tool` + screenshots): 10
-zones (5 boulder + 5 thorn), slow 0.6× only in thornfields, themed enemies correct (5 Cragscale / 6
-Duskrunner per sampled zone), a player walking into a rock stops at its edge, zones render as distinct dense
-areas. No `RECIPES.md`/dashboard change (no recipes; enemy *placement* changed, stats didn't). See B3-P1 below.
-**Follow-up B3-P1a (2026-07-21):** enemies now **roll freely through boulderfield rocks** (player still
-collides) via a per-enemy `Enemy.collidesWithTerrain` flag (default false) gating the enemy↔solids collider
-— fixes the Cragscale wedging on rocks; the flag is the future hook for terrain-blocked enemies + their
-(deferred) stuck-response AI. Enemies were already never slowed by thornfields (terrain slow is player-only).
-See B3-P1a below.
+_Living snapshot — edit in place, never append. Last shipped: **B3-P2a — Biome-3 Phase 2a:
+Activated abilities + Dota QER HUD** (2026-07-21, Opus, plan
+`.claude/plans/biome-3-and-new-systems-roadmap.md`). The Q/E/R **cooldown-only, equipment-granted**
+active-ability framework. An item in a special slot grants one active (`special1→Q`, `special2→E`,
+`back→R`, via `Abilities.SLOT_ABILITY_KEY`); `AbilityDef` is pure data (new `src/systems/Abilities.ts`,
+mirrors the relic-def pattern), effect logic lives in MainScene's `castAbility` dispatcher.
+**3 starter abilities:** **Gloamstep Blink** (Q — 220px teleport toward aim + 250ms i-frames, 6s CD),
+**Gloam Nova** (E — 150px radial magic burst, 30 dmg + 64px shove + brief slow, 10s CD), **Bloodpact**
+(R — a 6s timed **lifelink**: strikes heal 35% of damage dealt via the `resolveWeaponHit` tail, 24s CD;
+locked as lifelink, NOT heal-over-time — the user). New **`src/ui/AbilityBarUI.ts`** — a Dota-style fixed
+Q/E/R bar right of the hotbar (the passive bar owns the left): empty slots show a dim frame + key letter,
+filled slots the ability icon + top-down cooldown sweep + numeric seconds + active-window glow (Bloodpact)
++ hover tooltip; depth clears WORLD_H. **Sourcing is deliberately dev-only for now** (new `__dev.give(key)`)
+— real sources (epic loot, biome-3 craftables, the post-boss reward picker) are Phase 2b / Phase 5, a
+locked call from the user (avoids pre-committing loot tables the later phases should own). Equip reuses the
+generic `armorSlot` path (zero new equip code); `recomputeAbilities()` runs from `afterItemMove`; **R is
+context-sensitive** (take-all when a chest is open, else cast). Deferred to 2b: gems/jewelry material
+class, epic-loot pool, ring/amulet passive stat aggregation, the 4th (T) slot. `tsc` clean; verified live
+(`javascript_tool`): equip→map, all 3 casts (blink 220px + i-frame + cooldown-gate, nova 20 dmg
+magic-resist-aware + 64px shove, bloodpact heal 35%), empty-slot no-op, run-over/menu guards, and the bar
+renders (icons / cooldown-numeric / active-glow) with no console errors. No `RECIPES.md`/dashboard change
+(dev-only items, no recipes). See B3-P2a below + [[survivor-rpg-biome-3-roadmap]].
+Prior: **B3-P1 / B3-P1a — Biome-3 Phase 1: Terrain-that-matters + badlands macro-zones** (2026-07-21,
+Opus). ~10 large themed sub-zones (`badlandsZones`/`subZoneAt`): boulderfields (solid grey rock in the
+`solids` group — player collides, enemies roll through via `Enemy.collidesWithTerrain`) + thornfields
+(0.6× player slow + rich foraging), each with a bold ground decal + themed enemies; wild content avoids
+zone cores. Generic `environmentEffectAt → {moveMult, blockRegen}` env-zone hook (slow live, no-regen
+DORMANT for the biome-3 miasma). See B3-P1 / B3-P1a below.
 Prior: **PB18 — Backpack armor upgrade fix + reforge-returns-to-slot** (2026-07-18, Opus): right-clicking
 armor opens its Upgrade panel (generic `gearSlot`/`openGearUpgrade`/`applyGearUpgrade`); reforging an
 equipped/hotbar base piece returns the result to that slot. See PB18 below.
-Prior: **PB17 — Boss tuning + Cinderwrought solo
-rework + silent placement** (2026-07-16, Opus). A small badlands-playtest batch (the user: "felt really
-good"): (1) object **placement is now silent** (dropped the craft-cue on place); (2) the **Duneshaper**
-(final boss) is **HP 1250→2500 + poise 170→400** (tankier, staggers less); (3) the **Cinderwrought** was
-reworked from an awkward 2v1 into a **solo, tanky (260→650 HP), unstaggerable** mini-boss whose two attacks
-**re-aim at execute** (wide/long → can't be walked out of, must be dash-dodged), still dropping **5-8 Ember
-Shards + a Refined Trophy**. See PB17 below.
-Prior: **PB16 — Playtest batch: crit/Onslaught
-rework + 15 fixes** (2026-07-15, Opus). A 16-item playtest batch off the user's lvl-14 run. **Combat math
-rework (the headline):** crit and Onslaught are now **additive conditional bonuses on the normal hit**,
-never multiplied together (was crit×onslaught → the "17→84 / 196-dmg" spikes; now normal 24 → crit 56 →
-onslaught 48 → both ~80). Onslaught trimmed to a flat **+100% (×2), no power-tier scaling**
-(Berserker's Mantle 120→100). Split `applyCrit` → `critChanceTotal`/`critMultTotal`/`rollCrit`/`critBonus`
-(one source of truth, shared by the tooltip). **Badlands resistances normalized** to weak ×1.25 / resist
-×0.5 (the user: "weak/resist numbers unclear"); **Cinderwrought lost all weakness** (fully neutral) + poise
-45→60; **Duneshaper** dropped physical weakness, gained **fire ×1.25** as its standout (magic-resist kept).
-Floating damage numbers now COLOR-code effectiveness (no text): neutral white / resisted greyed-out /
-weak gold / crit hot-orange+"!" + bigger. **Relic dominance** now prompts
-**Keep New/Old** when a roll's tier & rarity disagree (was rarity-first → a T2 Rare auto-deleted by a T1
-Mythic). **Refined-Uncommon Rare rate 5%→12%.** **Sandmaw** gained a signature **bleed** (4/s×5s) + faster
-erupt (560→470ms). **Mini-boss HP/stagger bars enlarged** (barScale 2.4 on Gloamwarden/Cinderwrought).
-New **ProcBarUI** (mid-left): Onslaught pip-counter (1..2..3..proc) + Guardian block-ready/cooldown.
-**Weapon tooltip** now shows total crit chance + crit damage (base + STR/AGI/relics) via a `critTotals`
-callback. **Ironshod axe** gets distinct tier-1 art (generic `${base}_t{tier}` texture resolver, now covers
-tools/weapons too). **Ember sword/pike** reforges consume a base creature-material (sandmaw_chitin /
-cragscale_plate). **Craft/upgrade SFX** (new `Sfx.upgrade()` + placement cue). **Menu text +1px** across
-all read-heavy panels. **Bug:** opening the Character/level-up menu now closes the Relic Forge menu (was
-rendering on top of it). `tsc` clean; verified live via `javascript_tool` (additive hit = 51.84 not 63.02;
-onslaught cycle [0,0,0,1]; all 5 badlands resist tables; Sandmaw bleed; mini-boss barW 52.8; proc bar
-pips/label; tiered axe texture; menus render no-overflow; no console errors).
-**Same-session follow-up (3 more):** (1) **Cinderwrought bugs** — now aggros from ranged hits
-(`takeHit` sets `aggroed`), only telegraphs when the player is actually in reach (was whiffing from up
-to 260px), `checkPlayerHit` adds `reachBonus()` for the 1.8× sprite, and gains **pack behavior** (hitting/
-aggroing one forge-guard wakes its mate via `packAggro` + a `forceAggro` override). (2) **Duneshaper** —
-dropped its magic resist entirely (the user: fire is a magic subtype + the Ember Brand deals fire), so its
-ONLY resist line is now fire ×1.25 weak. (3) **Unified passive/proc HUD** — the mid-left ProcBarUI +
-bottom-left relic-gem bar are REPLACED by one `PassiveBarUI` (Dota-style icons LEFT of the hotbar):
-relic passives + armor set-bonuses + proc counters (Onslaught count + ready-glow) / cooldowns (Guardian
-sweep), all hoverable, showing cleanly together. Verified live (5-icon strip renders; Onslaught count
-"3"+glow; Guardian 27px cooldown overlay; ranged-aggro + pack + in-range-gate all confirmed; no errors).
-Full entry below.
-Prior: **S8 — Biome-2 Warbow + arrows +
-ember material tweak** (2026-07-15, Opus, plan `playtest-2026-07-15-session-plan.md`) — **the FINAL
-session of the 8-session 2026-07-15 playtest plan; that plan is now fully shipped.** Added the
-badlands ranged tier: a **Sunsteel Warbow** (forged, WB Lvl 3 — 11 dmg / 750ms / 12 stam / 380px)
-that reforges into an **Embersteel Warbow** (WB Lvl 4 — 15 dmg / 730ms / 15 stam / 400px), plus a new
-`arrows` ammo item (Sunsteel `1 ingot + 5 wood → 50`; Embersteel `1 embersteel_ingot + 5 wood → 50` —
-same arrows, alt metal; both gated behind the Warbow via `requiresDiscovered`). **Entirely
-data-driven — ZERO `MainScene.ts` changes** (the ranged pipeline reads all config from
-`Weapons.ts`/`Items.ts`; adding `warbow` to `WeaponType` compiler-forced a row in every table); bow &
-slingshot share the one `"ammo"` slot (loading arrows evicts pellets). New icons + `arrow_projectile`
-in `BootScene`. **Ember material tweak (the user-directed, expanded live):** every ember-tier reforge
-now carries its **precursor's secondary materials** (cragscale plate / duskrunner pelt / sandmaw
-chitin / bones), upgrades any plain `wood` haft to **`ironbark`**, and adds **`hex_essence`** as the
-ember-temper agent — chosen over `gloam_shard` specifically because gloam is relic currency (the user's
-call: "add something not used for relic creation"). So ember gear reads as its Sunsteel/Duskhide base
-plus the upgrade, not "base + ingot." `tsc` clean; verified live via `preview_start` +
-`javascript_tool` (all textures/data; end-to-end fire = ammo 10→9 + projectile spawn + cooldown + an
-11-dmg ranged hit HP 20→9; out-of-range / no-ammo / wrong-ammo all clean no-ops that don't consume;
-icons render; no console errors). `RECIPES.md` synced; dashboard auto-populates (Items/Recipes tabs)
-— its weapon-stats table stays melee-only as before (slingshot/javelin were never in it).
-**Same-session follow-up fix:** the shared `"ammo"` slot is now **weapon-aware** — a new
-`MainScene.reconcileAmmoSlot()` (called from `recomputeEquipped`) evicts any ammo that doesn't match
-the equipped ranged weapon's `ammoItemKey` back to the backpack and auto-loads the correct ammo, so a
-Warbow's slot only ever holds Arrows and the Slingshot's only Pellets (playtest: leftover pellets sat
-"loaded" while a bow was equipped and couldn't fire, reading as the game loading the wrong ammo).
-Switching bow↔slingshot now swaps ammo seamlessly; melee/Javelin are no-ops. Full entry
-below.
-Prior: **S7 — Weapon identity redesign**
-(2026-07-15, Opus). Reworked the three melee weapon identities: **pierce (spear/pike) = lowest arc +
-highest single-target + best crit; slash (knife/sword) = biggest arc + best crowd AOE; blunt
-(club/warhammer) = medium arc + a NEW movement-slow/cripple debuff** (reuses `Enemy.applySlow` at the
-`resolveWeaponHit` choke point, 0.6×/1.5s). Full entry below.
-Prior: **S3 — Inventory visuals +
-upgrade-ready indicators** (2026-07-15, Opus, plan `playtest-2026-07-15-session-plan.md`). Three
-parts. **(1) Bigger icons**: item icons were drawn at native texture size (~14-30px) and looked lost
-in the slots — now fit within a `SLOT-12` box (aspect preserved) via a shared `fitIcon` in
-`InventoryMenu` (backpack cells / equipment slots / relic gems) and inline in `HotbarUI`. The hotbar
-`SLOT_SIZE` was also bumped **40→46 to match the inventory slot** (the user's ask — "same size"), so an
-icon renders identically in the backpack or the hotbar. HP/stamina/XP bars and hotbar centering all
-derive from the getters, so they re-layout automatically. **(2) "Upgrade ready" arrow**: a small gold
-pulsing **▲** at a slot's top-right when the item has a discovered + affordable next-tier upgrade —
-on backpack **weapons/tools**, worn **armor** (both via `MainScene.hasReadyUpgrade(key,tier)`, the
-resultTier ladder), and placed **stations** (a floating world glyph over the object via
-`stationHasReadyUpgrade` + `refreshStationUpgradeIndicators`, depth 2500). Deliberately
-**materials-only** (ignores `upgradeBlockReason`/Workbench-proximity) so it's a stable "you have the
-mats" nudge that doesn't flicker as the player moves — clicking Upgrade still surfaces any proximity
-gate, like the crafting menu. Refreshed from `afterItemMove`/`refreshDiscovery`/placement/upgrade-
-apply. Looping fade tweens are tracked + killed on every re-render / on station destroy (no
-infinite-tween leak). **(3) Suppress armor-upgrade discovery toasts** — already satisfied: armor/weapon
-upgrades never emitted a discovery toast (only station + tool upgrades do, kept); the affordable-arrow
-is the new signal. `tsc` clean; verified live via `javascript_tool` (predicate false→true→false across
-mats add/remove and max-tier; 1 backpack + 1 equipment arrow render at correct slot top-right screen
-coords; hotbar arrow + icon enlarged 24→34 display px; station glyph appears/clears/recreates with mats
-and is cleaned on destroy; no arrow-tween accumulation across 20 inventory toggles; hotbar/bars layout
-intact at native 1080p; no console errors). **Next in the 8-session plan:** Wave 3 — S7 (weapon
-identity redesign, **Opus**) → S8 (biome-2 bow + arrows, **Opus**, after S7).
-Prior: **S1 — Quick HUD/UX fixes** (2026-07-15, Sonnet): sprint re-press latch (`Player.sprintLocked`),
-level-up banner→center-toast overlap fix (measured, not `cy+80`), stagger bar `POISE_BAR_H` 20→16 +
-numeric `"42/120"` readout, and armor/weapon tooltip flipped to `"7 (base 5)"` (upgraded value
-primary). Full entry below.
-Prior: **S2 — Onboarding/Tutorial rework**
-(2026-07-15, Sonnet, plan `playtest-2026-07-15-session-plan.md`). Replaced `TipsUI`'s dynamic
-discovered-hints dump (an un-scrollable joined Text that overflowed the panel) with a curated
-**static "How to Play" reference** (movement/sprint/dash, mouse-only interact/right-click-upgrade,
-inventory/hotbar rows, food-buff stacking, character/map keys, the goal stated in generic
-no-spoiler terms). **The panel is now dynamically sized to the real measured text height**
-(build title/body at panel-relative Y first, read their actual `.height` after wordWrap, then
-compute the panel's final height/centered Y and shift everything down in one pass — same
-"measure real Text heights, then shift" pattern as this codebase's other dynamic-row-height
-panels) rather than a fixed guess — a first pass used a fixed 600×520 that undershot the real
-wrapped-text height at the game's native 1920x1080 resolution (only visible full-size; a
-scaled-down screenshot hid it) and let the Close button render mid-paragraph. `Hints.discovered()` removed (no longer
-consumed). Added two new one-off tutorial hints to `Hints.ts`: `dash_tip` (fires on the player's
-first `frame.dashStarted`) and `multi_food_tip` (fires on the player's first `eatItem()` call,
-teaching that food buffs stack). `KeybindsUI` already covered dash + right-click-upgrade lines, no
-change needed there. `tsc` clean; verified live via `javascript_tool` (opened the pause-menu Tips
-panel, screenshotted the new static panel, confirmed both new hints fire exactly once and are
-idempotent on a repeat `trigger()` call). **Next in the 8-session plan:** Wave 2 (S1, S3), then
-Wave 3 (S7 → S8).
-Prior: **S6 — Cinderwrought rebalance**
-(2026-07-15, Sonnet, plan `playtest-2026-07-15-session-plan.md`). The Sunken Forge's two-guard
-fight was too tough with both Cinderwroughts perma-attacking at once; goal is stagger-one-while-
-you-1v1-the-other. Poise 70→45 (stagger comes up more), attack cooldown 650→1050ms (more downtime
-between telegraphs), both telegraphs lengthened (cone 620→750ms, hammer 560→680ms), damage cut
-(cone 46→32, hammer 58→40). Fixed a backwards resist: blunt was **resisted** (×0.8), now correctly
-**weak** (×1.3, "blunt cracks the crust"); pierce weak ×1.25 unchanged. Forge Hammer switched from
-fire→**physical** (armor now applies) so the pair is one fire attack (Cinder Cone, armor-bypass) +
-one physical (Forge Hammer) — was both fire. `tsc` clean; verified live via `javascript_tool`
-(spawned a Cinderwrought, confirmed `poise === 45` and `resistMultiplier('blunt') === 1.3`).
-Dashboard Enemies tab updated.
-Prior: **S5 — Relic forge SFX per rarity** (2026-07-15, Sonnet): per-rarity relic-forge reveal
-audio cues (`relicReelTick`/`relicCommon`/`relicUncommon`/`relicRare`/`relicMythic`/`relicCrumble`
-in `Sfx.ts`), hooked into `RelicRevealFx.ts` at the reveal landing. Full entry below.
-Prior: **Relic redesign — single-family + Rare/Mythic unique procs + additive buckets**
-(2026-07-15, Opus): every relic touches ONE family axis; Common/Uncommon = a small flat stat
-plateauing at Uncommon; Rare/Mythic add a bespoke conditional proc (8 procs). All buff categories
-additive-within-category (nothing scales exponentially). Full entry below + [[survivor-rpg-relics]].
-Prior: **S4 — Relic economy rework**
-(2026-07-15, Opus): first of the 8-session 2026-07-15 playtest plan. Filled the **full 8×4 relic
-matrix** (net +11 — 12 added, the boss-named duplicate damage mythic "Gremlin King's Wrath" dropped
-per the user — → **32 total, one per family per rarity**; closes the "no stamina relic" gap). **Main bosses guarantee a Mythic**: Gremlin King → Boss Trophy (Mythic T1),
-Duneshaper → new **Tyrant Trophy** (`boss_refined_trophy_t2`, Mythic T2 ×1.5). A **Rare/Mythic roll
-never repeats an owned id** (owned-id pool filter, full-pool fallback). **Common crumble softened**
-(band 10%→20%, success 13.5%→23.5%, pity 12→8) and the **refined-trophy Mythic cap lifted** (mini-boss
-refined trophies can gamba to Mythic ~1%). All in `Relics.ts` + the two boss loot tables; `RECIPES.md`
-+ dashboard synced. `tsc` clean; verified live via `javascript_tool`. **Next in the plan:** S5 (forge
-SFX, Sonnet, fully parallel), S6 (Cinderwrought rebalance, Sonnet), S2 (onboarding, Sonnet), then Wave
-2 S1/S3 and Wave 3 S7→S8. See the S4 entry below + [[survivor-rpg-relics]].
-Prior: **PB2 — post-Duneshaper playtest batch
-(15 items)** (2026-07-14, Opus): **Relic/trophy economy** — new **Boss Trophy** from Gremlin King +
-Duneshaper (bespoke odds: Rare with a 50% roll-up to Mythic, never fails); **Cinderwrought now drops
-Ember Shards** (2-4) + a tier-2 Ember-Refined Trophy (was Gloam + tier-1 — Gloam never made sense for
-a badlands mob), and there are now **2 Cinderwroughts per Sunken Forge** (**260 HP each**, trimmed
-340→260 for the two-boss fight; ore cracks only when both die; **both drop 2-4 Ember Shard, only one
-drops the refined trophy** so a two-guard site doesn't flood trophies); **replaced relics now partial-refund**
-(1/2/3/5 shards by rarity ×1.5 T2) on top of the declined-roll refund; **Ember-Shard refine recipe
-hidden until Ember Shard discovered** (`hasDiscovered` gate). **Gear** — **+2 right-click levels for
-ALL forged armor & weapons** (steel + ember, via ArmorUpgrades/WeaponUpgrades, tuned so Lvl-1 ember
-always out-stats Lvl-3 steel — Emberhide Legs base bumped 7→8), sunk in ingots; **hotbar items now
-count toward reforge recipes** (`Crafting.setHotbar` — a Sunsteel Pike in the hotbar is now visible to
-the Embersteel Pike reforge); higher-tier weapons cost **more stamina** (starter < Sunsteel < Ember).
-**Duneshaper sharpen pass** — HP 1050→1250, cooldown 900→700ms; the **Lance tracks the player through
-60% of the wind-up then commits + sweeps ±20° on the strike** (was locked at telegraph start,
-trivially sidesteppable); **Sand Spikes reworked from 3 spaced circles to a tracked 5-circle cross**
-(distinct from the Hexling, only a diagonal/dash clears it). **HUD** — bigger boss stagger bars
-(mini-boss world bars 22×3→56×6, top boss-bar poise 12→20px); **center-toast burst capped at 4 +
-repacked from the top** so "Defeated X" bursts no longer march over the player; **POI-respawn toasts
-only fire when within 900px**; **tier-aware bench art in the hotbar**. **World** — emberblooms +
-dustblooms grow in **patches of 3-5** (cactus/mushroom stay solo). `tsc` clean; verified live via
-`preview_eval`. **Flagged non-repro:** the "duskrunner stacks to 98" report — every stacking primitive
-(`add`/`sortAndStack`/`moveSlot`/hotbar top-up) fills to the full 99; no off-by-one found. See the
-PB2 entry below + [[survivor-rpg-relics]].
-Prior: **PB1 — post-2nd-boss playtest fix batch (3 sessions)** (2026-07-14): forged armor up
-(Emberhide 16→23, Embersteel 23→32), stone costs −30-40%, faster leveling, Duskrunner Skewer;
-equipped pieces count toward reforge; per-tier relic roll buttons; relic refund = 50% of a discarded
-roll's trophy cost; enemy **wander-anchor**; **Hexling** rework (hex-essence drops 4-6/elite 9-11);
-populated forest blobs + extended badlands band (`BADLANDS_R_MAX_OUTER` 8500). A pre-existing minor
-bug flagged (spawn task `task_c1db4f83`: `pickSpawnPoint` exhaustion fallback). See the PB1 entry below.
-Prior: **S7 — pre-push inventory/dev-cmd tweaks** (2026-07-13, Opus): search-box insta-clear `✕`
-button, `nobuildcost` TEMPORARILY lists all recipes (display-only), taller backpack grid
-(`BACKPACK_ROWS 6 → 15`). See the S7 entry below.
-Prior: **S5 + S6 — gating/dev-cmd fixes,
-UX polish + Inventory rework** (2026-07-13, Opus). The final two triaged badlands-playtest
-sessions (`.claude/plans/badlands-playtest-triage.md`), merged — **the entire 6-session triage
-batch (S1–S6) is now done.** The S6 "inventory sort" item grew into a full **inventory rework**
-(plan: `inventory-rework-and-s5-s6.md`): the backpack is now an **effectively-unlimited (240-slot)
-auto-organized tabbed inventory** — biome tabs (Forest/Badlands/All), a click-to-focus **search
-box** (spans all items; locks player movement + gameplay hotkeys while typing), and a
-**sectioned, wheel-scrollable grid** (window-rendered, no free-arrange — drops route to the first
-free slot). New `Items.ts` `itemBiome()`/`itemCategory()` helpers drive grouping; `sortAndStack`
-clusters by biome→category→name. **Equipment→trash drag** added (last missing drag path);
-**processor menus show only compatible materials** (fixing them for the bigger backpack too).
-**S5**: WB Lvl 3+ recipes gate discovery on a sticky `everMaxWorkbenchTier`; placing a station
-marks it discovered (Ember Crucible visible while placed); `nobuildcost` de-inverted (no
-permanent recipe unlock, upgrades now free). **S6**: Molten Bulwark → flat 15% DR + fire thorns
-(no more knockback-immunity); Effigy "Fetish"→"Totem" text; Emberblink tooltip wraps; placed
-stations get a dark postFX outline. `tsc` clean; verified live via `preview_eval`. Next: master-plan
-tail (a 3rd biome / deterministic seeded world-gen for M-W1 proper) or a fresh playtest pass.
-See the entry below + [[survivor-rpg-biome-2-plan]].
-Prior: **S4 — Badlands POI placement, respawn & spawn bugs** (2026-07-13, Sonnet). Fourth of the 6
-triaged badlands-playtest sessions — four fixes on the badlands POI/spawn systems: biome-aware
-night-surge, Warren wave-2 delay (`DEN_WAVE2_DELAY_MS`), Sunken Forges + Duneshaper altars pushed
-deeper (`POI_DEEP_R_MIN`/`POI_MIN_SEPARATION`), and general POI respawn (dens/Gloaming Vein/Sunken
-Forges re-arm 8 min after full clear; boss-summon altars stay one-shot via `updatePoiRespawns`).
-Prior: **S3 — Relic Forge menu UI + "all relic effects" panel** (2026-07-13, Sonnet). Third of the
-6 triaged badlands-playtest sessions — pure UI/wiring on the relic system, no new mechanic or data
-change. **Forge result-line/grid overlap fixed**; owned-relic grid groups by **power tier**
-(`COLS` 6→5); **new aggregated "all relic effects" list** in the Inventory Relics column
-(`RelicManager.effectSummary()`). See the entry below + [[survivor-rpg-relics]].
-Prior: **S2 — Badlands boss & enemy combat
-tuning** (2026-07-13, Opus). Second of the 6 triaged badlands-playtest sessions
-(`.claude/plans/badlands-playtest-triage.md`). **Duneshaper** made a real gate: HP 900→1050, the
-Gloam Volley reworked to a **beam-like 6-bolt spray** (was 3) — near-instant (bolt speed 240→460,
-wind-up 700→420ms) so it can't be lazily sidestepped, in a tight ±9° fan; Lance wind-up 900→700;
-damage up across attacks (spikes 50→56, nova 42→50, lance 46→54, barrage 30→34, volley 24→22/bolt);
-and **much harder to stagger-lock** (poise 120→170, punish 1.5×→1.35× / 3s→2.2s, poise regens sooner
-& faster). **Cinderwrought** harder to dodge (telegraphs cone 820→620 / hammer 720→560, reach cone
-210→235 / hammer 155→168, cooldown 850→650) + HP 300→340. **Hexling** teleports far less (blink
-cooldown 2600→5200 + no longer blinks after every flame strike). **Fire resistance layer** (decision
-3): `Enemy.resistances`/`resistMultiplier` widened to `IncomingDamageType` so **"fire" is
-resist-able**, and `MainScene.dealSetBonusDamage` now honors it (Emberblink nova / thorns) with an
-effectiveness-tinted damage number — **Cragscale + Sandmaw resist fire ×0.5, Hexling weak ×1.5, all
-others neutral** (the counterweight to Emberblink's fire-nova being a blanket answer). `tsc` clean;
-verified live (`preview_eval`: all stats + 6-bolt/460px volley + fire-scaled set-bonus damage 40→20
-Cragscale / 40→60 Hexling); dashboard Enemies tab updated. **Remaining triage: S3–S6** (relic UI, POI
-placement/respawn, recipe gating, UX polish). See the entry below + [[survivor-rpg-biome-2-plan]].
-Prior: **S1 — Badlands metal economy &
-forged-gear balance** (2026-07-13, Opus). First of the 6 triaged badlands-playtest sessions
-(`.claude/plans/badlands-playtest-triage.md`), the "not grindy" pass: **smelt ratio → 1 ore + 1 hex
-→ 1 ingot** (both ingots); **ore nodes yield a handful + scatter denser** (Sunscorch 60×3–5,
-Cinderforged 14×2–4 + Sunken Forge deposits 4–7); base **Sunsteel weapons bumped to 17/14/15** so
-they all clear the max-upgraded Primal Spear (13) — Embersteel 23/19/20, Ember Brand 17 to keep the
-T2 gap; **Duskhide light armor → 4/5/4 = 13** (matches maxed Gremlin Lvl 3) using **zero metal**
-(pelt/chitin/bone); and a **dedicated Fuel slot on the Smelter menu** (Hex Essence is loaded into its
-own slot rather than pulled silently from the backpack — `ProcessingStation.fuel` + a fuel-gated
-`maxPossibleOutput`/`process`; the shared Drying Rack menu is visually unchanged). `tsc` clean;
-verified live; `RECIPES.md` updated (dashboard reads the data modules live, so no manual edit).
-Prior: **Ember-tier armor set bonuses**
-(2026-07-13, Opus). The deferred payoff for building the best-in-biome forged gear: two full-set
-(3-piece) bonuses, both **unique mechanics** (not the raw-% channels relics own). **Embersteel (heavy)
-→ Molten Bulwark**: knockback immunity + fire thorns on melee attackers. **Emberhide (light) →
-Emberblink**: +60% dash distance + a fire nova at the landing point. New `src/systems/SetBonuses.ts`
-(membership only; magnitudes = `SET_*` consts in MainScene); a `resolveKill` extraction so set-bonus
-fire shares the weapon kill path; active bonuses shown in the inventory Combat column + a `Set (3)`
-tooltip line on each Ember piece. `tsc` clean; verified live. See the entry below. Prior:
-**Biome-aware enemy respawn** (2026-07-13, Sonnet). A small correctness fix on the fog-top-up respawn
-system (an open Biome-2 item): `makeRespawnEnemy` now picks the respawn roster from the biome at each
-spawn point (`worldBiomes.dominantBiomeAt`) — forest/base → the forest mix, badlands → the badlands
-roster (Duskrunner/Cragscale/Hexling/Sandmaw), dunes → nothing. Prior: **Biome-wide wood/stone + Ironbark
-axe-upgrade chain + relic-UI fixes** (2026-07-13, Opus). Off the master-plan build order — a mixed
-batch. **Relic-UI fixes:** the Character menu (K) and Tab combined menu are now mutually exclusive
-(they z-fought over the new Relics column), and the relic hover tooltip shows the relic's family/class.
-**Every biome now supplies wood + stone:** new badlands dead-tree/boulder/branch/scrap-rock gatherables
-(`spawnBadlandsNodes`) drop the same universal `wood`/`stone` keys. **Tool tiers are finally implemented**
-(the long-reserved hook): `ResourceNode.minToolTier` + a tracked `equippedToolTier` mean a too-weak tool
-bounces off (prompt still shows the verb — never reveals the tier). A new **Ironbark tree** (new `ironbark`
-wood, `minToolTier: 1`) needs an upgraded axe; the **Woodcutter's Axe now upgrades in place** via a new
-`ToolUpgrades.ts` (Ironshod Axe, `2 Sunsteel Ingot + 6 Stone`) that reuses the entire weapon-upgrade path.
-Ironbark feeds the **Forge Anvil / Emberforge Anvil** Workbench upgrades + the **Embersteel Warhammer/Pike**
-reforges (so the axe upgrade gates the forged tier). **Deferred to its own session (the user):** Ember-tier
-uniqueness + armor **set bonuses**, ungated ore-gear upgrades, and a **QERT activated-ability** system.
-Verified live; `tsc` clean; `RECIPES.md` + dashboard updated. See the entry below.
-[[survivor-rpg-biome-2-plan]] [[survivor-rpg-placed-object-management]]_
-
-_Prior: **Campfire tiers + cross-biome cooking +
-no-ladder station upgrades** (2026-07-13, Opus). **Station/processor upgrades are now no-ladder** (any
-discovered upgrade applies in any order; applying = +1 level; weapon/armor keep their ladder), plus
-Campfire Lvl 3/4, 5 new HP-regen dishes, and a collapsible/scrollable cooking-menu rework. Full detail
-in STATUS-archive.md + [[survivor-rpg-no-ladder-station-upgrades]] [[survivor-rpg-cooking-food-buffs]]._
-
-_Prior: **Biome 2 — Phase 5: Relics rework**
-(2026-07-13, Opus). The relic economy for biome 2 + the requested rebalance, closing out the biome-2
-umbrella plan's final milestone. Three parts, all locked via `AskUserQuestion`: **(1) Family loadout,
-not stacking.** Every relic now has a `family` (damage/move/defense/stamina/lifesteal/vitality/crit/xp,
-8 total) and a player holds **at most one relic per family**. Rolling into an owned family runs a
-direction-normalized **dominance comparison**: new relic strictly better on every shared stat →
-**auto-replaces** (old relic refunds Gloam/Ember Shards, scaled by its own rarity × power tier); old
-strictly better/equal → the new roll **auto-declines** (refunds itself instead); **neither dominates**
-(e.g. a differing secondary stat) → **ambiguous**, and the Relic Forge shows a **Keep New / Keep Old**
-prompt, blocking further rolls until resolved (closing the menu mid-choice defaults to declining the
-new one, so a spent trophy never yields literally nothing). **(2) Trimmed magnitudes** — every relic's
-effect numbers scaled to ~0.625× the original (Common dmg +8%→+5%, Mythic +40%→+25%) per the locked
-"Common damage +8%→~+5%, Mythic +40%→~+25%" spec. **(3) Tier-2 relics** — all four badlands elite
-trophies (Duskrunner/Cragscale/Hexling/Sandmaw) bumped from Tier 1 → **Tier 2** (×1.5 magnitude), and a
-new **Ember Shard** currency (Gloam Shards rendered down at the Relic Forge's new **Ember Kiln**
-upgrade, Lvl 3, `{embersteel_ingot:3, stone:20}`, 3 Gloam → 1 Ember) feeds a new tier-2 refine recipe
-(`refine_common_t2`: 3 Common-T2 trophies + 2 Ember → 1 Ember-Refined Trophy, rolls Uncommon capped at
-Rare). New **Relics column on the Inventory panel** (Tab) — 8 fixed paper-doll-style slots, one per
-family, filled or empty with hover tooltips — addresses playtester confusion (they were checking the
-Equipment tab for relics instead of the HUD bar). `RelicManager` internals moved from an array of
-stackable instances to `Partial<Record<RelicFamily, RelicInstance>>`; the aggregate effect getters
-(`damageMult()` etc.) are unchanged, so every `MainScene` call site kept working with zero edits.
-Verified via `tsc --noEmit` (clean) and live `preview_eval` (all three roll verdicts, tier-scaling
-dominance, refund math, Ember conversion + its tier gating, both new UI panels rendered and measured
-for overlap — caught and fixed a real layout bug where a 2-line "replaced/declined" result or the
-choice-button block could overlap the relic grid below it). See the Phase 5 entry
-below. **This completes the biome-2 umbrella plan (`.claude/plans/biome-2-sunscorch-badlands.md`).**
-[[survivor-rpg-relics]]_
-
-_Earlier milestones (full writeups in STATUS-archive.md): Biome 2 Phase 4a/4b (smelting + base/enhanced
-forged gear + Gremlin King's Heart + Ember Brand), the 19-item badlands playtest batch, Phase 3
-(Duneshaper boss + win-swap, Sunken Forge, Duskrunner Warren), Phase 2b Sandmaw, Phase 2 badlands roster,
-Phase 0/1 patchwork worldgen + combat-systems layer, and the whole roguelike meta-loop._
+Prior milestones (newest first; full writeups in Recent Entries below or STATUS-archive.md): **PB17**
+(boss tuning + Cinderwrought solo rework + silent placement), **PB16** (crit/Onslaught additive rework
++ 15 fixes), and the 2026-07-15 8-session playtest plan (**S1–S8**: HUD/UX, onboarding, relic economy +
+single-family redesign, weapon-identity redesign, biome-2 Warbow) — all shipped. Earlier: the entire
+**biome-2 (Sunscorch Badlands) umbrella (Phases 0–5)** — patchwork worldgen, the combat-systems layer,
+the 4-enemy roster (Duskrunner/Cragscale/Hexling/Sandmaw), the Duneshaper win-boss + Sunken Forge /
+Duskrunner Warren POIs, the smelting/forging gear tier (Sunsteel/Duskhide + Embersteel/Emberhide +
+Ember Brand), and the relic rework (family-loadout + tier-2 relics + Ember Shard). Full detail in
+STATUS-archive.md + the milestone plans.
 
 **Meta-loop** (`.claude/plans/roguelike-metaloop-master-plan.md`): M-FX / M-R1 /
 M-DN / Comfort(M-SB) / M-EL2 / M-RL / M-WC all shipped; M-FA cut. Hardcore one-life
@@ -341,44 +49,24 @@ death ends a run and posts a `localStorage` high score; killing the Gremlin King
 win. The world is now circular + much larger (M-W1 geometry prep, above); deterministic
 seeded world-gen and actual multi-biome content are still deferred to M-W1 proper.
 
-**In progress / next.** **Biome 2 (Sunscorch Badlands) is underway** — a phased umbrella
-plan (`.claude/plans/biome-2-sunscorch-badlands.md`) drives it. **Phases 0–2b have shipped:**
-Phase 0 (patchwork worldgen — world grew to 28000px for ~5 biomes), Phase 1 (combat systems
-layer — resist/weak, AOE arcs, pack-aggro, magic-bypass, all dormant hooks), **Phase 2**
-(the core badlands roster — Duskrunner/Cragscale/Hexling + Emberbloom/Sunfruit flora, which
-light up those hooks; plan `.claude/plans/biome-2-phase-2-enemies.md`), and **Phase 2b**
-(the 4th native creature — the **Sandmaw** burrowing ambusher; plan
-`.claude/plans/biome-2-phase-2b-sandmaw.md`). The badlands is now **walkable + populated with a
-complete 4-enemy roster**. **Phase 3 is underway** — the user chose "two POIs first," which shipped
-(Duskrunner Warren + Sunken Forge), and now the **badlands final boss has shipped too: the
-Duneshaper** (`src/entities/Duneshaper.ts`), the **new win-condition** (a Duneshaper kill wins the
-run; the Gremlin King is demoted to a mid-boss). Summoned via **3 scattered badlands Tyrant Altars**
-+ an **Effigy of the Duneshaper** crafted from **Warren-cache fetishes**, with a **clue system**
-(reveal-all-altars-on-craft + night glow + map landmarks). **Phase 3 is complete** (the King
-critical-drop rework, its one deferred item, shipped as part of Phase 4a below). **Phase 4
-(smelting/forging gear tier) is COMPLETE (both sessions shipped).** **Session 1 (Phase 4a):** the
-Smelter station (ore + Hex Essence = ingot), Clay + scattered ore mining, the **Gremlin King's Heart**
-(replaces the fang — it upgrades the Smelter to melt rare ore), Workbench Lvl 3 + a new
-`requiresWorkbenchTier` recipe gate, and the **base forged gear** (Sunsteel heavy set wiring the dormant
-`heavy_armor` skill w/ magic-fire mitigation; Duskhide light set; blunt/slash/pierce weapons).
-**Session 2 (Phase 4b):** Workbench Lvl 4 (**Emberforge Anvil**) + the 9 T2 **enhanced**
-reforge recipes (each consumes its base forged piece + Embersteel Ingot → Embersteel heavy set / Emberhide
-light set / three enhanced weapons) + the first **magic weapon** (the **Ember Brand**, rare-ore-exclusive
-melee, `magic` damage type). **Phase 5 (just shipped): the relic rework** — family-loadout
-(one relic per family, dominance-based auto-replace/decline/choice), trimmed biome-1 magnitudes (~0.625×),
-tier-2 badlands relics (Duskrunner/Cragscale/Hexling/Sandmaw trophies now Tier 2), and a new Ember Shard
-currency (Gloam→Ember at the Relic Forge's new Ember Kiln upgrade) feeding a tier-2 refine recipe. Also
-added a dedicated Relics column on the Inventory panel. **This completes the biome-2 umbrella plan
-(`.claude/plans/biome-2-sunscorch-badlands.md`) — all 6 phases (0–5) are shipped.** The master-plan tail
-**M-TE** (trophy-gated gear) is folded into this biome-2 work and is done. Real pixel art/animations stay
-deliberately deferred until content/balance settle (roadmap item 8). Badlands stats/counts + the
-forged-tier + relic numbers are all first-pass — expect a tuning pass once outside playtesters weigh in.
-**Next up:** no locked next milestone — likely a broader playtest/tuning pass, or a new biome-3 scoping
-session per the master roadmap's "at least 5 total biomes" note.
+**In progress / next.** The **biome-2 (Sunscorch Badlands) umbrella is COMPLETE** (all 6 phases 0–5 —
+patchwork worldgen through the relic rework; the badlands is a fully populated second biome with a
+4-enemy roster, POIs, the Duneshaper win-boss, and the smelting/forging gear + tier-2 relic tiers). The
+current arc is the **biome-3 (haunted bayou, working name "Duskmire Bayou") + new-systems roadmap**
+(`.claude/plans/biome-3-and-new-systems-roadmap.md`, 5 phases). **Shipped so far:** **Phase 1**
+(terrain-that-matters + badlands macro-zones) and **Phase 2a** (the activated-ability framework + Dota
+QER HUD, above). **Next:** **Phase 2b** — the jewelry/gems material class + a game-wide epic-loot pool +
+the equipment stat-aggregation path (the *real* ability sources, replacing 2a's dev-only `__dev.give`);
+then **Phase 3** (bayou gear reforge), **Phase 4** (the bayou content drop — a melee-core roster + a
+melee boss-with-adds), and **Phase 5** (post-**big-boss** RNG reward choice — a natural home for ability
+sourcing too). Ability numbers and everything biome-3 are first-pass/tunable. The master-plan tail
+**M-TE** (trophy-gated gear) is folded into the shipped biome-2 work; real pixel art/animations stay
+deliberately deferred until content/balance settle (roadmap item 8).
 
 **Dev tooling (2026-07-13, Sonnet):** `window.__dev` browser-console commands for playtesting without a
 full playthrough — `god()` (still takes damage/knockback/shows real damage numbers, just floors HP at 1
 and never dies), `heal()`, `nobuildcost()`, `setstat(name|"all", value)`, `spawn(name, elite?)`,
+`give(key, count?)` (drop any item into the backpack — B3-P2a, the way to obtain the ability specials),
 `killall(radius?)`, `exploremap()`, `list()` (dumps valid skill/stat/enemy names), plus a
 `run("spawn duneshaper")`-style one-line parser. DEV-build-gated (`import.meta.env.DEV`, new
 `src/vite-env.d.ts`) — unreachable in a production build. `nobuildcost` also fixed a real latent bug: the
@@ -421,6 +109,57 @@ below + [[survivor-rpg-dev-console]].
 ## Recent Entries
 
 > Older entries in STATUS-archive.md.
+
+### B3-P2a — Biome-3 Phase 2a: Activated abilities + Dota QER HUD (2026-07-21, Opus)
+Plan: `.claude/plans/biome-3-and-new-systems-roadmap.md` (Phase 2, split 2a/2b — this is 2a). The
+**cooldown-only, equipment-granted** activated-ability framework, built as the reusable system that
+Phase 2b's gems/epic-loot and Phase 5's post-boss picker will feed. Locked with the user via
+`AskUserQuestion`: **2a only** this session; abilities should come from **epic loot / biome-3
+craftables / boss "special" drops — NOT easy early craftables**, so 2a ships the framework + HUD + how
+gear plugs in and is **granted dev-only for now** (his call — building a real source now would force the
+epic-loot or picker prematurely); **R = Bloodpact lifelink, NOT heal-over-time** (HoT stays a food-buff
+thing).
+
+- **`src/systems/Abilities.ts`** (new, pure data, mirrors the relic-def pattern): `AbilityDef {id,
+  name, description, cooldownMs, activeMs?, icon}` + `ABILITY_DEFS` for the 3 starters +
+  `SLOT_ABILITY_KEY` (`special1→q`, `special2→e`, `back→r`). Effect logic lives in MainScene's
+  `castAbility()` dispatcher (like relic uniques) — an `AbilityDef` never reaches into the scene.
+- **3 starter abilities:** **Gloamstep Blink** (Q) — teleport 220px toward the aim point (mouse world
+  point, else facing) + a 250ms i-frame window (reuses `invulnerableUntil` + `clampPlayerToWorld`), 6s
+  CD. **Gloam Nova** (E) — 150px radial `magic` burst, 30 dmg (resist-aware, new `dealAbilityDamage`
+  mirroring `dealSetBonusDamage`) + a 64px outward shove + 500ms slow per enemy (no per-enemy stun state
+  exists, so the pop-back + slow IS the knockback), reuses the `emberblinkBurst` snapshot-loop + flash
+  idiom, 10s CD. **Bloodpact** (R) — opens a 6s **lifelink** window; `resolveWeaponHit` heals 35% of
+  each hit's damage while `time.now < bloodpactUntil` (parallel to the Leech relic), 24s CD.
+- **`src/ui/AbilityBarUI.ts`** (new) — a Dota-style fixed Q/E/R bar anchored right of the hotbar (the
+  passive bar owns the left). Fixed 3-slot set (built once, updated per frame — no structural rebuild):
+  empty = dim frame + key letter; equipped = ability icon + a top-down cooldown sweep + centered numeric
+  seconds; Bloodpact's active window shows a crimson glow instead of the sweep; hover tooltip
+  (name/desc/cooldown/state). Flat `scrollFactor(0)` objects, depth 2836-2839 / tip 2955 (clears
+  WORLD_H). T reserved (not rendered).
+- **Wiring (`MainScene.ts`):** `grantsAbility?: AbilityId` on `ItemDef`; 3 dev-only special items
+  (`special_gloamstep_band`/`special_gloam_focus`/`back_bloodpact_shroud`, `special1`/`special2`/`back`
+  slots) that equip via the existing generic `armorSlot` path — **zero new equip code**.
+  `recomputeAbilities()` scans the 3 slots → `abilityByKey {q,e,r}`, called from `afterItemMove()` +
+  reset in `create()` (with `abilityReadyAt`/`bloodpactUntil`, the `scene.restart()` gotcha). Input:
+  `keydown-Q/E/R` → `tryCastAbility` (guards run-over/pause/dead/any-menu/cooldown); **R is
+  context-sensitive** — take-all when a chest is open, else cast (no relearn). New `__dev.give(key,
+  count?)` to obtain the specials; 3 gloam-violet ability icons in `BootScene` (shared by item + bar);
+  KeybindsUI gains the Q/E/R + updated take-all lines.
+- **Same-session UI polish (the user playtest):** the ability-bar key letters were too small to read
+  (an empty slot's "E" looked like "F"). Fixed by enlarging them and **moving them into a chip
+  centered BELOW each slot** (own `LABEL_H` band, the whole bar still bottom-aligns to the hotbar) so
+  they're off the slot face entirely and never overlap the cooldown numeric/sweep. The Inventory
+  equipment paper-doll also shows a large **Q/E/R badge** on the `special1`/`special2`/`back` slots
+  (shown even when empty) so it's clear which slot feeds which key when choosing a special to equip.
+- **Deferred to 2b / Phase 5:** gems/jewelry material class, the game-wide epic-loot pool, ring/amulet
+  passive stat aggregation, the 4th (T) slot, and every *real* ability source.
+- **Verified live** (`preview_start` + `javascript_tool`): equip → `abilityByKey` maps Q/E/R correctly;
+  Blink moved exactly 220px + i-frame active + second cast blocked by cooldown; Nova dealt 20 (magic,
+  resist-default-1) + 64px shove + cooldown; Bloodpact healed exactly 7 on a 20-dmg hit (35%);
+  empty-slot cast is a safe no-op; run-over/menu guards block casting; the bar renders (Q "6"s cooldown
+  overlay, R active-glow) with icons visible and **no console errors**; `tsc --noEmit` clean. No
+  `RECIPES.md`/dashboard change (dev-only items, no recipes).
 
 ### B3-P1a — Enemy terrain-collision gate + roll-through (2026-07-21, Opus)
 Follow-up to B3-P1 off the user's playtest: the "spinny guys" (Cragscale rolling charge) got

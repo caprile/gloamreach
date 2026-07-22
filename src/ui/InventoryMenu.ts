@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import { EQUIP_SLOTS, type EquipSlot } from "../systems/Equipment";
+import { SLOT_ABILITY_KEY } from "../systems/Abilities";
 import type { ItemContainer, ItemStack } from "../systems/ItemContainer";
 import { itemDef, itemBiome, itemCategory, type ItemBiome, type ItemCategory } from "../systems/Items";
 import type { Skills } from "../systems/Skills";
@@ -754,6 +755,31 @@ export class InventoryMenu {
         if (this.deps.upgradeReady(slot.itemKey, slot.tier ?? 0)) this.addUpgradeArrow(x, y);
       } else {
         this.addText(x + SLOT / 2, y + SLOT / 2, slot.label, 10, "#5b6472", 0.5, 0.5);
+      }
+
+      // Q/E/R key badge on the ability-granting special slots (special1/special2/
+      // back) so it's clear which slot maps to which ability when choosing a
+      // special to equip (the user). Shown whether the slot is occupied or empty.
+      const abilityKey = SLOT_ABILITY_KEY[slot.id];
+      if (abilityKey) {
+        const chip = this.scene.add
+          .rectangle(x + 1, y + 1, 17, 18, 0x0a0d12, 0.85)
+          .setOrigin(0, 0)
+          .setScrollFactor(0)
+          .setDepth(3003);
+        const lbl = this.scene.add
+          .text(x + 9, y + 10, abilityKey.toUpperCase(), {
+            fontFamily: "monospace",
+            fontSize: "15px",
+            fontStyle: "bold",
+            color: "#bfe0ff",
+            stroke: "#000000",
+            strokeThickness: 2,
+          })
+          .setOrigin(0.5, 0.5)
+          .setScrollFactor(0)
+          .setDepth(3004);
+        this.rows.push(chip, lbl);
       }
     });
   }

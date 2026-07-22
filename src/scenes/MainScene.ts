@@ -170,6 +170,8 @@ import {
 } from "../systems/Relics";
 import { RelicForgeMenu } from "../ui/RelicForgeMenu";
 import { PassiveBarUI, type PassiveEntry } from "../ui/PassiveBarUI";
+import { AbilityBarUI, type AbilityBarEntry } from "../ui/AbilityBarUI";
+import { ABILITY_DEFS, SLOT_ABILITY_KEY, type AbilityId, type AbilityKey } from "../systems/Abilities";
 
 const HOTBAR_KEYS = ["ONE", "TWO", "THREE", "FOUR", "FIVE", "SIX", "SEVEN", "EIGHT", "NINE"];
 
@@ -301,6 +303,13 @@ const SET_MOLTEN_DAMAGE_REDUCTION = 0.15; // 15% off every hit (physical/magic/f
 const SET_EMBERBLINK_DASH_MULT = 1.6;
 const SET_EMBERBLINK_BURST_RADIUS = 95;
 const SET_EMBERBLINK_BURST_DAMAGE = 16;
+// --- Activated-ability tuning (B3-P2a). First-pass/tunable. ---
+const ABILITY_BLINK_DISTANCE = 220; // px teleported toward aim
+const ABILITY_BLINK_IFRAME_MS = 250; // untouchable window on blink (> the 150ms dash)
+const ABILITY_NOVA_RADIUS = 150; // gloam-burst reach
+const ABILITY_NOVA_DAMAGE = 30; // magic damage per enemy in the burst
+const ABILITY_NOVA_KNOCKBACK = 64; // px each enemy is shoved outward
+const ABILITY_BLOODPACT_LIFELINK_PCT = 0.35; // fraction of damage healed while active
 // Crit (M-SS) soft caps on the COMBINED total (weapon base + Strength/Agility
 // stats + relic crit channels). Applied in critChanceTotal()/critMultTotal().
 const CRIT_CHANCE_CAP = 0.6;
@@ -778,6 +787,12 @@ export class MainScene extends Phaser.Scene {
   private killStreak = 0; // Prodigy (xp): consecutive-kill counter
   private lastKillAt = 0; //   ...and the last kill's timestamp (streak window)
 
+  // --- B3-P2a activated-ability state (all reset in create()) ---
+  private abilityBarUI!: AbilityBarUI;
+  private abilityByKey: Partial<Record<AbilityKey, AbilityId>> = {}; // equipped special slots -> Q/E/R
+  private abilityReadyAt: Record<AbilityKey, number> = { q: 0, e: 0, r: 0 }; // per-key cooldown gate (time.now)
+  private bloodpactUntil = 0; // Bloodpact (R) lifelink active window — resolveWeaponHit heals during it
+
   // Active full armor-set bonuses (biome 2 Phase 4 forged gear). Recomputed on
   // every equipment change (afterItemMove) + on run reset (create). Read at the
   // relevant combat hook points via hasSet(). Effect magnitudes are the SET_*
@@ -1010,6 +1025,10 @@ export class MainScene extends Phaser.Scene {
     this.killStreak = 0;
     this.lastKillAt = 0;
     this.activeSetIds = new Set();
+    // B3-P2a ability state (scene.restart gotcha).
+    this.abilityByKey = {};
+    this.abilityReadyAt = { q: 0, e: 0, r: 0 };
+    this.bloodpactUntil = 0;
     this.placementMode = null;
     this.placementGhost = null;
     this.placedObjects = [];
@@ -1303,6 +1322,7 @@ export class MainScene extends Phaser.Scene {
     this.createBuffBar();
     this.createXpBar();
     this.createPassiveBar();
+    this.createAbilityBar();
     this.createStatPointsBadge();
     // Sits beside the Keybinds panel (same top row), not stacked underneath
     // it — an open InventoryMenu panel occupies that same top-left column
@@ -1440,7 +1460,19 @@ export class MainScene extends Phaser.Scene {
       if (this.characterMenu.isOpen()) return this.characterMenu.close();
       this.openCharacterMenu();
     });
-    this.input.keyboard!.on("keydown-R", () => !this.runOver && !this.typingInSearch() && this.takeAllFromChest());
+    // Q/E/R activated abilities (B3-P2a). R is context-sensitive: with a chest
+    // open it still means "take all" (no relearn); otherwise it casts the R
+    // ability. tryCastAbility() applies the remaining menu/pause/cooldown guards.
+    this.input.keyboard!.on("keydown-Q", () => !this.runOver && !this.typingInSearch() && this.tryCastAbility("q"));
+    this.input.keyboard!.on("keydown-E", () => !this.runOver && !this.typingInSearch() && this.tryCastAbility("e"));
+    this.input.keyboard!.on("keydown-R", () => {
+      if (this.runOver || this.typingInSearch()) return;
+      if (this.chestMenu.isOpen()) {
+        this.takeAllFromChest();
+        return;
+      }
+      this.tryCastAbility("r");
+    });
     this.input.keyboard!.on("keydown-H", () => !this.runOver && !this.typingInSearch() && this.toggleWheelSpansBothRows());
     this.input.keyboard!.on("keydown-J", () => !this.typingInSearch() && this.runHudUI.toggleMinimized());
     this.input.keyboard!.on("keydown-M", (e: KeyboardEvent) => {
@@ -1581,6 +1613,7 @@ export class MainScene extends Phaser.Scene {
     if (this.buffs.tick(delta, this.health, this.currentEnvBlockRegen).healed) this.refreshHealthBar();
     this.buffBarUI.sync(this.buffs.active());
     this.passiveBarUI.sync(this.passiveEntries());
+    this.abilityBarUI.update(this.abilityEntries());
     // Bleed DoT (Cragscale roll): ticks whole damage points regardless of
     // i-frames (it's applied inside the i-frame guard at wound time, not here)
     // and ignores armor. A small red number over the player reads as "bleeding".
@@ -2525,6 +2558,7 @@ export class MainScene extends Phaser.Scene {
   private afterItemMove(): void {
     this.recomputeEquipped();
     this.recomputeSetBonuses();
+    this.recomputeAbilities();
     this.reconcileBackpackDiscovery();
     this.inventoryMenu.refresh();
     // The hotbar's "upgrade ready" arrow depends on backpack materials, which
@@ -6373,6 +6407,13 @@ export class MainScene extends Phaser.Scene {
     // Leech relic (lifesteal): heal a % of the damage dealt (Mythic banks overheal
     // as a shield). Executioner relic (crit): a crit splashes to nearby enemies.
     this.applyLeech(finalDmg);
+    // Bloodpact (R ability): a timed lifelink — heal a fraction of the damage
+    // dealt while its active window lasts. Parallel to the Leech relic, its own
+    // source; overheal at full HP is simply wasted (no shield bank).
+    if (this.time.now < this.bloodpactUntil) {
+      this.health.heal(Math.max(1, Math.round(finalDmg * ABILITY_BLOODPACT_LIFELINK_PCT)));
+      this.refreshHealthBar();
+    }
     if (isCrit) this.applyCritSplash(enemy, finalDmg, dmgType);
     if (!depleted) return;
     this.resolveKill(enemy);
@@ -6453,6 +6494,175 @@ export class MainScene extends Phaser.Scene {
       ease: "Cubic.easeOut",
       onComplete: () => fx.destroy(),
     });
+  }
+
+  // === B3-P2a: activated abilities (Q/E/R, cooldown-only, equipment-granted) ===
+
+  // A special item in special1/special2/back grants its ability to the matching
+  // key. Recomputed on every equipment change (afterItemMove) + on run reset.
+  private recomputeAbilities(): void {
+    const next: Partial<Record<AbilityKey, AbilityId>> = {};
+    for (const slot of Object.keys(SLOT_ABILITY_KEY) as EquipSlot[]) {
+      const key = SLOT_ABILITY_KEY[slot]!;
+      const eq = this.equipment.get(slot);
+      const def = eq ? itemDef(eq.key) : undefined;
+      if (def?.grantsAbility) next[key] = def.grantsAbility;
+    }
+    this.abilityByKey = next;
+  }
+
+  // Live Q/E/R state for the ability bar (icon / cooldown sweep / active glow).
+  private abilityEntries(): AbilityBarEntry[] {
+    const now = this.time.now;
+    const keys: AbilityKey[] = ["q", "e", "r"];
+    return keys.map((key) => {
+      const id = this.abilityByKey[key];
+      const def = id ? ABILITY_DEFS[id] : undefined;
+      // Only Bloodpact (R) has an active window today — keep the check explicit.
+      const active = key === "r" && !!def?.activeMs && now < this.bloodpactUntil;
+      return {
+        key,
+        abilityId: id,
+        texture: def?.icon,
+        name: def?.name,
+        desc: def?.description,
+        cooldownMs: def?.cooldownMs ?? 0,
+        cooldownRemainingMs: def ? Math.max(0, this.abilityReadyAt[key] - now) : 0,
+        active,
+      };
+    });
+  }
+
+  private createAbilityBar(): void {
+    this.abilityBarUI = new AbilityBarUI(this);
+    // Right of the hotbar (the passive bar owns the left), bottom-aligned to it.
+    this.abilityBarUI.layout(this.hotbarUI.left + this.hotbarUI.width + 12, this.hotbarUI.bottom);
+    this.abilityBarUI.update(this.abilityEntries());
+  }
+
+  // Fire the ability bound to `key` if one is equipped and off cooldown. Every
+  // menu/pause/death guard lives here so the three keydown handlers stay thin.
+  private tryCastAbility(key: AbilityKey): void {
+    if (this.isDead || this.isPaused || this.runOver || this.anyMenuOpen()) return;
+    const id = this.abilityByKey[key];
+    if (!id) return; // nothing equipped in that slot
+    if (this.time.now < this.abilityReadyAt[key]) return; // still on cooldown
+    const def = ABILITY_DEFS[id];
+    this.castAbility(id);
+    this.abilityReadyAt[key] = this.time.now + def.cooldownMs;
+  }
+
+  private castAbility(id: AbilityId): void {
+    switch (id) {
+      case "gloamstep_blink":
+        this.castBlink();
+        break;
+      case "gloam_nova":
+        this.castNova();
+        break;
+      case "bloodpact":
+        this.castBloodpact();
+        break;
+    }
+  }
+
+  // Q — Gloamstep Blink: teleport toward the aim point (mouse, else facing) and
+  // grant a brief untouchable window. Reuses the dash i-frame field + world clamp.
+  private castBlink(): void {
+    const fromX = this.player.x;
+    const fromY = this.player.y;
+    const pointer = this.input.activePointer;
+    const world = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
+    const ang =
+      Phaser.Math.Distance.Between(fromX, fromY, world.x, world.y) >= 8
+        ? Phaser.Math.Angle.Between(fromX, fromY, world.x, world.y)
+        : this.facingAngle();
+    this.player.setPosition(fromX + Math.cos(ang) * ABILITY_BLINK_DISTANCE, fromY + Math.sin(ang) * ABILITY_BLINK_DISTANCE);
+    this.clampPlayerToWorld();
+    this.invulnerableUntil = Math.max(this.invulnerableUntil, this.time.now + ABILITY_BLINK_IFRAME_MS);
+    this.spawnBlinkFx(fromX, fromY, this.player.x, this.player.y);
+    this.sfx.pickup();
+  }
+
+  // A violet gloam poof at both the blink origin and the destination.
+  private spawnBlinkFx(x0: number, y0: number, x1: number, y1: number): void {
+    for (const [x, y] of [
+      [x0, y0],
+      [x1, y1],
+    ] as const) {
+      const fx = this.add
+        .image(x, y, "light_soft")
+        .setTint(0x9a5cff)
+        .setBlendMode(Phaser.BlendModes.ADD)
+        .setDepth(ysortDepth(y1) + 1)
+        .setScale(0.14)
+        .setAlpha(0.8);
+      this.tweens.add({ targets: fx, scale: 0.32, alpha: 0, duration: 240, ease: "Cubic.easeOut", onComplete: () => fx.destroy() });
+    }
+  }
+
+  // E — Gloam Nova: a radial gloam burst around the player. Damages (magic) and
+  // shoves every live enemy in range, plus a brief slow. Snapshots the enemy list
+  // first since dealAbilityDamage mutates this.enemies on a kill (emberblink idiom).
+  private castNova(): void {
+    const cx = this.player.x;
+    const cy = this.player.y;
+    const r = ABILITY_NOVA_RADIUS;
+    for (const enemy of [...this.enemies]) {
+      if (!enemy.active) continue;
+      const edge = Math.max(enemy.displayWidth, enemy.displayHeight) / 2;
+      if (Phaser.Math.Distance.Between(cx, cy, enemy.x, enemy.y) > r + edge) continue;
+      this.dealAbilityDamage(enemy, ABILITY_NOVA_DAMAGE, "magic");
+      if (!enemy.active) continue; // killed by the burst
+      // Shove outward + a short disorienting slow. No per-enemy stun state exists,
+      // so the pop-back + slow IS the "knockback".
+      const ang = Phaser.Math.Angle.Between(cx, cy, enemy.x, enemy.y);
+      enemy.setPosition(enemy.x + Math.cos(ang) * ABILITY_NOVA_KNOCKBACK, enemy.y + Math.sin(ang) * ABILITY_NOVA_KNOCKBACK);
+      enemy.applySlow(0.5, 500, this.time.now);
+    }
+    const fx = this.add
+      .image(cx, cy, "light_soft")
+      .setTint(0x9a5cff)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setDepth(ysortDepth(cy) + 1)
+      .setScale(((r * 2) / 256) * 0.4)
+      .setAlpha(0.9);
+    this.tweens.add({ targets: fx, scale: (r * 2) / 256, alpha: 0, duration: 280, ease: "Cubic.easeOut", onComplete: () => fx.destroy() });
+    this.sfx.hit();
+  }
+
+  // Ability AoE damage — mirrors dealSetBonusDamage but honors the given damage
+  // type's resist (gloam nova = "magic") and runs the shared kill tail.
+  private dealAbilityDamage(enemy: Enemy, dmg: number, dmgType: DamageType): void {
+    const resistMult = enemy.resistMultiplier(dmgType);
+    const finalDmg = dmg * resistMult;
+    const effectiveness: DamageEffectiveness = resistMult > 1.001 ? "weak" : resistMult < 0.999 ? "resist" : "normal";
+    const depleted = enemy.takeHit(finalDmg);
+    this.spawnDamageNumber(enemy.x, enemy.y, Math.round(finalDmg), false, effectiveness);
+    if (depleted) this.resolveKill(enemy);
+  }
+
+  // R — Bloodpact: open a timed lifelink window (resolveWeaponHit heals during
+  // it). A brief red pulse is the cast cue; the bar's R slot glows for the window.
+  private castBloodpact(): void {
+    this.bloodpactUntil = this.time.now + (ABILITY_DEFS.bloodpact.activeMs ?? 0);
+    this.player.setTint(0xff5a6a);
+    this.time.delayedCall(280, () => this.player.clearTint());
+    this.sfx.upgrade();
+  }
+
+  // Aim fallback when the pointer is basically on the player: the facing dir.
+  private facingAngle(): number {
+    switch (this.player.getFacing()) {
+      case "up":
+        return -Math.PI / 2;
+      case "down":
+        return Math.PI / 2;
+      case "left":
+        return Math.PI;
+      default:
+        return 0; // right
+    }
   }
 
   // The shared kill-resolution tail — relic on-kill heal, per-worn-piece armor
@@ -8806,7 +9016,8 @@ export class MainScene extends Phaser.Scene {
         "Range ring: O",
         "Station row: Alt+1-9",
         "Row2 scroll toggle: H",
-        "Take all (chest): R",
+        "Abilities: Q / E / R",
+        "Take all (chest open): R",
         "Run info toggle: J",
         "Fullscreen: F11",
         "Pause / close: Esc",
@@ -9191,6 +9402,23 @@ export class MainScene extends Phaser.Scene {
         this.refreshHealthBar();
         this.eventLog.add("info", "[DEV] Healed to full");
       },
+      // Drop `count` of any item key into the backpack — the 2a way to obtain the
+      // ability-granting specials (special_gloamstep_band / special_gloam_focus /
+      // back_bloodpact_shroud), since they have no real source yet.
+      give: (key: string, count = 1) => {
+        const def = itemDef(key);
+        if (!def) {
+          console.warn(`[DEV] Unknown item "${key}".`);
+          return;
+        }
+        if (!this.backpack.addStack({ key, count })) {
+          console.warn("[DEV] Backpack full.");
+          return;
+        }
+        this.discoverMaterial(key);
+        this.afterItemMove();
+        this.eventLog.add("info", `[DEV] Gave ${count} ${def.name}`);
+      },
       // A cost + temporary-unlock cheat: while on, crafting/upgrading is free
       // (no ingredient deduction, affordability checks pass), station/armor/
       // weapon upgrades become available even without their mats discovered, AND
@@ -9308,6 +9536,9 @@ export class MainScene extends Phaser.Scene {
           case "spawn":
             dev.spawn(args[0], args[1] === "elite");
             break;
+          case "give":
+            dev.give(args[0], args[1] === undefined ? 1 : Number(args[1]));
+            break;
           case "killall":
             dev.killall(args[0] === undefined ? undefined : Number(args[0]));
             break;
@@ -9325,8 +9556,8 @@ export class MainScene extends Phaser.Scene {
     (window as unknown as { __dev: typeof dev }).__dev = dev;
     console.log(
       '[DEV] Console commands ready: __dev.god() / __dev.heal() / __dev.nobuildcost() / ' +
-        '__dev.setstat(name|"all", value) / __dev.spawn(name, elite?) / __dev.killall(radius?) / ' +
-        '__dev.exploremap() / __dev.list() -- or __dev.run("...") for one-liners.',
+        '__dev.setstat(name|"all", value) / __dev.spawn(name, elite?) / __dev.give(key, count?) / ' +
+        '__dev.killall(radius?) / __dev.exploremap() / __dev.list() -- or __dev.run("...") for one-liners.',
     );
   }
 

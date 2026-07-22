@@ -2739,6 +2739,38 @@ export class BootScene extends Phaser.Scene {
     g.fillRect(13, 12, 5, 1);
     g.generateTexture("icon_emberhide_leggings", ICON, ICON);
 
+    // --- ability icons (B3-P2a) — gloam-violet glyphs; each doubles as the
+    // granting "special" item's icon AND the Q/E/R ability-bar icon. ---
+    g.clear(); // Gloamstep Blink — a violet dash-streak arrow with a faint echo
+    g.fillStyle(0x5a2ea8, 0.5);
+    g.fillRect(3, 14, 8, 3); // after-image trail
+    g.fillStyle(0xb98cff, 1);
+    g.fillRect(6, 11, 10, 3); // streak
+    g.fillTriangle(15, 7, 15, 18, 22, 12); // arrowhead
+    g.generateTexture("ability_blink", ICON, ICON);
+
+    g.clear(); // Gloam Nova — a radial burst (ring + bright core + spikes)
+    g.fillStyle(0x6a2fd0, 1);
+    g.fillCircle(12, 12, 6);
+    g.fillStyle(0xb98cff, 1);
+    g.fillCircle(12, 12, 3);
+    g.fillStyle(0x9a5cff, 1);
+    g.fillRect(11, 1, 2, 5); // up spike
+    g.fillRect(11, 18, 2, 5); // down
+    g.fillRect(1, 11, 5, 2); // left
+    g.fillRect(18, 11, 5, 2); // right
+    g.generateTexture("ability_nova", ICON, ICON);
+
+    g.clear(); // Bloodpact — a crimson lifelink droplet with a gloam sheen
+    g.fillStyle(0xc0303a, 1);
+    g.fillCircle(12, 15, 6);
+    g.fillTriangle(6, 13, 18, 13, 12, 2); // pointed top
+    g.fillStyle(0x9a5cff, 1);
+    g.fillRect(9, 12, 2, 5); // violet gloam streak
+    g.fillStyle(0xf0a0a8, 1);
+    g.fillCircle(10, 13, 2); // glint
+    g.generateTexture("ability_bloodpact", ICON, ICON);
+
     // Badlands elite trophies — crimson/gold to echo the elite palette (matches
     // the boar/snake/gremlin trophies), each with a species tell.
     g.clear(); // Duskrunner Trophy — a fanged canid skull on a gold cord
