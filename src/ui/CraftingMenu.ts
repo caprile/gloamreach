@@ -33,7 +33,17 @@ const CATEGORIES: { id: RecipeCategory; label: string }[] = [
 // accordingly; LIST_COL_W is the list column's width before the detail
 // column starts.
 const PANEL_W = 620;
-const PANEL_H = 440;
+// A FLOOR, not the height: the panel now sizes itself to the space between its
+// top margin and the bottom HUD (see panelH in the constructor). The old fixed
+// 440 was authored when the Armor/Weapons tabs held a handful of recipes each;
+// the forged + bayou tiers pushed those lists past it and the rows ran out the
+// bottom edge.
+const PANEL_H_MIN = 360;
+// Clearance kept below the panel for the HP/stamina bars + hotbar + XP bar.
+const BOTTOM_CLEARANCE = 190;
+// Row pitch of the recipe list, and the wheel step for scrolling it.
+const ROW_H = 22;
+const SCROLL_STEP = ROW_H * 3;
 const LIST_COL_W = 190;
 const DETAIL_GAP = 20;
 const MARGIN_RIGHT = 16;
@@ -107,16 +117,27 @@ export class CraftingMenu {
   private batchAmount = 1;
   private sliderDragging = false;
   private sliderTrack: { x: number; y: number; w: number } = { x: 0, y: 0, w: SLIDER_W };
+  // Panel height is computed from the available screen space (see constructor)
+  // rather than fixed, and the recipe list scrolls inside it when a category
+  // holds more rows than fit — the same windowed-render + own-wheel-handler
+  // pattern CookingMenu uses (only in-view rows are created).
+  private panelH: number;
+  private listScroll = 0;
+  private maxListScroll = 0;
+  private listTop = 0;
+  private listViewH = 0;
 
   constructor(scene: Phaser.Scene, deps: CraftingMenuDeps) {
     this.scene = scene;
     this.deps = deps;
     this.panelX = scene.scale.width - PANEL_W - MARGIN_RIGHT;
     this.panelY = MARGIN_TOP;
+    this.panelH = Math.max(PANEL_H_MIN, scene.scale.height - this.panelY - BOTTOM_CLEARANCE);
     this.progressBar = new ProgressBar(scene, { width: 96, height: 26, depth: 3005 });
+    scene.input.on("wheel", this.onWheel, this);
 
     this.bg = scene.add
-      .rectangle(this.panelX, this.panelY, PANEL_W, PANEL_H, 0x0a0a0a, 0.93)
+      .rectangle(this.panelX, this.panelY, PANEL_W, this.panelH, 0x0a0a0a, 0.93)
       .setOrigin(0, 0)
       .setScrollFactor(0)
       .setDepth(3000)
@@ -140,6 +161,18 @@ export class CraftingMenu {
     if (this.open) this.toggle();
   }
 
+  // Scrolls the recipe list while the pointer is over the open panel. Own
+  // handler (CookingMenu's pattern) rather than a MainScene branch, so the
+  // hotbar-cycling wheel is only overridden where this panel actually is.
+  private onWheel(pointer: Phaser.Input.Pointer, _o: unknown, _dx: number, dy: number): void {
+    if (!this.open || this.maxListScroll <= 0) return;
+    if (!this.containsPoint(pointer.x, pointer.y)) return;
+    const next = Phaser.Math.Clamp(this.listScroll + (dy > 0 ? SCROLL_STEP : -SCROLL_STEP), 0, this.maxListScroll);
+    if (next === this.listScroll) return;
+    this.listScroll = next;
+    this.render();
+  }
+
   isOpen(): boolean {
     return this.open;
   }
@@ -153,7 +186,7 @@ export class CraftingMenu {
       screenX >= this.panelX &&
       screenX <= this.panelX + PANEL_W &&
       screenY >= this.panelY &&
-      screenY <= this.panelY + PANEL_H
+      screenY <= this.panelY + this.panelH
     );
   }
 
@@ -239,7 +272,9 @@ export class CraftingMenu {
       x += t.width + 8;
     }
 
-    let y = tabY + 28;
+    const listTop = tabY + 28;
+    this.listTop = listTop;
+    this.listViewH = this.panelY + this.panelH - listTop - 12;
     const recipes = this.visibleRecipes()
       .filter((r) => r.category === this.activeCategory)
       .sort((a, b) => {
@@ -249,8 +284,15 @@ export class CraftingMenu {
         return a.name.localeCompare(b.name);
       });
 
+    // Only the rows inside the viewport are created (a long Armor tab would
+    // otherwise run straight out the bottom of the panel).
+    this.maxListScroll = Math.max(0, recipes.length * ROW_H - this.listViewH);
+    this.listScroll = Phaser.Math.Clamp(this.listScroll, 0, this.maxListScroll);
+    const firstRow = Math.floor(this.listScroll / ROW_H);
+    const lastRow = Math.min(recipes.length - 1, Math.ceil((this.listScroll + this.listViewH) / ROW_H));
+
     if (recipes.length === 0) {
-      const t = this.scene.add.text(x0, y, "No known recipes yet.", {
+      const t = this.scene.add.text(x0, listTop, "No known recipes yet.", {
         fontFamily: "monospace",
         fontSize: "13px",
         color: "#6b7280",
@@ -260,7 +302,9 @@ export class CraftingMenu {
     }
 
     const iconSize = 18;
-    for (const recipe of recipes) {
+    for (let i = firstRow; i <= lastRow && i < recipes.length; i++) {
+      const recipe = recipes[i];
+      const y = listTop + i * ROW_H - this.listScroll;
       const affordable = isCraftable(this.deps, recipe);
       const isSelected = this.selected?.id === recipe.id;
       const label = recipe.name;
@@ -307,14 +351,27 @@ export class CraftingMenu {
         }
       }
       this.rows.push(t);
-      y += 22;
+    }
+
+    // "more above/below" affordances — the list has no visible scrollbar.
+    if (this.listScroll > 0) this.addScrollHint(x0 + LIST_COL_W - 14, listTop - 2, "\u25b2");
+    if (this.listScroll < this.maxListScroll) {
+      this.addScrollHint(x0 + LIST_COL_W - 14, listTop + this.listViewH - 10, "\u25bc");
     }
 
     if (this.selected && this.selected.category === this.activeCategory) {
       // Detail column sits BESIDE the list, starting at the same height as
       // the list itself (not below it) — see LIST_COL_W above.
-      this.renderDetail(this.selected, x0 + LIST_COL_W + DETAIL_GAP, tabY + 28);
+      this.renderDetail(this.selected, x0 + LIST_COL_W + DETAIL_GAP, listTop);
     }
+  }
+
+  private addScrollHint(x: number, y: number, glyph: string): void {
+    const t = this.scene.add
+      .text(x, y, glyph, { fontFamily: "monospace", fontSize: "11px", color: "#5b6472" })
+      .setScrollFactor(0)
+      .setDepth(3002);
+    this.rows.push(t);
   }
 
   // Mirrors Tooltip.statValue — a freshly crafted item is always tier 0

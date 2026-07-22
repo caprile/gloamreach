@@ -16,7 +16,13 @@ that each **consume their Ember counterpart** — Gloamsteel heavy (42 armor) / 
 with **Gloam Bulwark**/**Mireblink** set bonuses (the Ember mechanics turned up, superseding rather than
 stacking), and 5 bayou weapons. **DORMANT** like 2b: Bog Ore/Mirehide/gems get world sources in Phase 4
 (`__dev.give` to test). New **Bayou** inventory tab. Verified live; `tsc` clean, zero console errors.
-`RECIPES.md` + dashboard updated. See B3-P3 below + [[survivor-rpg-biome-3-roadmap]].
+`RECIPES.md` + dashboard updated. **Same-session follow-up:** the **crafting menu** now sizes itself to
+the screen with a windowed/scrollable recipe list (its fixed 440px height was overflowing since the
+forged tiers landed); **gem slots are visible at a glance** (a `Gem augments: N/2` tooltip line + diamond
+pips on every backpack/hotbar/paper-doll slot); **Gloamsteel Arrows** are the bayou ammo tier (their own
+item — the Gloamsteel Warbow fires only them); and the **Gloamdrinker** is the bayou's bespoke magic
+weapon (not a reforge), the only weapon with **lifelink** — 12% of damage dealt, always on, via a new
+data-driven `WEAPON_LIFELINK_PCT`. See B3-P3 below + [[survivor-rpg-biome-3-roadmap]].
 Prior: **B3-P2b — Biome-3 Phase 2b:
 Jewelry-effect pipeline + Gemwright's Table (jewelry station)** (2026-07-21, Opus, plan
 `.claude/plans/biome-3-phase-2b-jewelry-station.md`). Makes 2a's abilities obtainable + lays the jewelry
@@ -199,6 +205,26 @@ IN at +30%); armor 42→47 with two augments; a magic hit 60→48 with two Linin
 11 recipes gate at bench tier 4 (craft refused without, succeeds with, base piece consumed); Bog Ore
 smelts only at Smelter tier 1; equip→unequip round-trips both `tier` and `upgrades`. `tsc` clean, zero
 console errors. `RECIPES.md` + the dashboard (new Gem-augments table) updated.
+
+**Same-session follow-up pass (the user's feedback).** (1) **Crafting menu was too short** — its fixed
+440px height was authored when the Armor/Weapons tabs held a handful of recipes; the forged + bayou tiers
+ran the list straight out the bottom. It now **sizes itself** to the space between its top margin and the
+bottom HUD, and the recipe list is a **windowed scrollable viewport** (own wheel handler + ▲/▼ hints, only
+in-view rows created — `CookingMenu`'s pattern). At 1080p: 670 tall, full 24-row Armor tab fits with no
+scroll. (2) **Gem-slot visibility** — the Tooltip now shows `Gem augments: N/2` for *any* augmentable
+piece (filled or empty, so empty no longer reads like "takes no gems") plus the applied ones, and every
+slot icon (backpack / hotbar / paper-doll) draws **diamond pips** at its bottom-left, violet for used and
+hollow for free. (3) **This biome's arrows** — **Gloamsteel Arrows** (1 Gloamsteel Ingot + 5 Wood → 60);
+unlike the Sunsteel/Embersteel pair (which both make the same plain `arrows`), these are their own ammo
+item and the **Gloamsteel Warbow fires only them**. (4) **A bespoke bayou magic weapon — the
+Gloamdrinker** (not a reforge of anything): the only weapon with **lifelink**, a new data-driven
+`Weapons.WEAPON_LIFELINK_PCT` healing **12% of damage dealt** on every hit (arc-swept targets included) at
+the same `resolveWeaponHit` choke point Bloodpact uses — always on, no relic family slot, stacks with
+Leech/Bloodpact, paid for with 19 dmg (below the Gloam Brand's 23) and a tighter arc. Verified live:
+panel 670 tall / 0 overflowing rows / detail column bottoms at 722 vs 890, scroll path exercised by
+shrinking the panel; pips + tooltip exact (`0/2`, `2/2` + names, nothing on a Stone Club); Gloamdrinker
+19 dmg → heal 2 vs Gloam Brand 23 → heal 0; the bow refuses to fire with no ammo AND with plain arrows,
+fires + decrements 10→9 with Gloamsteel Arrows. Zero console errors.
 
 **Not built (deliberate):** no world source for Bog Ore/Mirehide/gems — that lands in Phase 4 with the
 bayou itself (same authored-dormant pattern as 2b; test via `__dev.give`).

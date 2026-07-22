@@ -7,6 +7,7 @@ import type { Skills } from "../systems/Skills";
 import type { PlayerProgression } from "../systems/Progression";
 import type { WeaponType } from "../systems/Weapons";
 import { RARITY_COLOR, rarityIcon, rarityName, relicEffectText, relicFamilyName, type RelicEffectSummary, type RelicFamilySlot, type RelicGroup } from "../systems/Relics";
+import { appliedAugmentIds, isAugmentableItem, MAX_AUGMENTS_PER_ITEM } from "../systems/GearAugments";
 import { Tooltip } from "./Tooltip";
 
 export interface ArmorSlotView {
@@ -465,6 +466,27 @@ export class InventoryMenu {
     );
   }
 
+
+  // Gem-slot pips at a slot's bottom-left: one small diamond per augment slot,
+  // filled (violet) for used and hollow for free — the at-a-glance answer to
+  // "how many gems does this piece have left" without opening its panel. Only
+  // drawn for augmentable gear (biome 3 Phase 3).
+  private addGemPips(slotX: number, slotY: number, key: string, upgrades?: string[]): void {
+    if (!isAugmentableItem(key)) return;
+    const used = appliedAugmentIds({ upgrades }).length;
+    for (let i = 0; i < MAX_AUGMENTS_PER_ITEM; i++) {
+      const filled = i < used;
+      const pip = this.scene.add
+        .rectangle(slotX + 5 + i * 8, slotY + SLOT - 6, 5, 5, filled ? 0x9a5cff : 0x2b3040, 1)
+        .setOrigin(0, 1)
+        .setStrokeStyle(1, filled ? 0xc9a8ff : 0x4a5262)
+        .setAngle(45)
+        .setScrollFactor(0)
+        .setDepth(3003);
+      this.rows.push(pip);
+    }
+  }
+
   private render(): void {
     this.clearRows();
     this.hideTooltip();
@@ -755,6 +777,7 @@ export class InventoryMenu {
           this.addText(x + SLOT - 4, y + SLOT - 3, `${slot.count}`, 11, "#ffffff", 1, 1);
         }
         if (this.deps.upgradeReady(slot.itemKey, slot.tier ?? 0)) this.addUpgradeArrow(x, y);
+        this.addGemPips(x, y, slot.itemKey, slot.upgrades);
       } else {
         this.addText(x + SLOT / 2, y + SLOT / 2, slot.label, 10, "#5b6472", 0.5, 0.5);
       }
@@ -1027,6 +1050,7 @@ export class InventoryMenu {
       this.addText(x + SLOT - 4, y + SLOT - 3, `${stack.count}`, 11, "#ffffff", 1, 1);
     }
     if (this.deps.upgradeReady(stack.key, stack.tier ?? 0)) this.addUpgradeArrow(x, y);
+    this.addGemPips(x, y, stack.key, stack.upgrades);
   }
 
   // Small up/down arrows at the grid's right edge when there's more above/below.

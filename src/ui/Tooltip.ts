@@ -1,7 +1,7 @@
 import Phaser from "phaser";
 import { itemDef, type ItemDef, type ItemStat } from "../systems/Items";
 import { stationDisplayName } from "../systems/StationUpgrades";
-import { augmentDef } from "../systems/GearAugments";
+import { augmentDef, isAugmentableItem, MAX_AUGMENTS_PER_ITEM } from "../systems/GearAugments";
 import {
   weaponAttacksPerSecond,
   weaponBaseCritChance,
@@ -98,13 +98,17 @@ export class Tooltip {
       lines.push("");
       lines.push(`Effect: +${def.edible.hpPerSec} HP/s for ${Math.round(def.edible.durationMs / 1000)}s`);
     }
-    // Applied gem augments on THIS instance (biome 3 Phase 3) — per-instance, so
-    // they come from the hovered stack rather than the shared ItemDef.
-    if (augments?.length) {
+    // Gem augments (biome 3 Phase 3). The COUNT line shows for any augmentable
+    // piece, filled or not — otherwise an empty item looked identical to one
+    // that can't take gems at all. Applied ones are per-instance, so they come
+    // from the hovered stack rather than the shared ItemDef.
+    if (isAugmentableItem(key)) {
+      const used = augments?.length ?? 0;
       lines.push("");
-      for (const id of augments) {
+      lines.push(`Gem augments: ${used}/${MAX_AUGMENTS_PER_ITEM}`);
+      for (const id of augments ?? []) {
         const a = augmentDef(id);
-        if (a) lines.push(`Gem: ${a.name} (${a.deltaLabel})`);
+        if (a) lines.push(`  ${a.name} (${a.deltaLabel})`);
       }
     }
     // Jewelry (B3-P2b): its ability-augment / utility passives, derived from the

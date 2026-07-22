@@ -1332,6 +1332,39 @@ export class BootScene extends Phaser.Scene {
     g.fillTriangle(12, 0, 12, 6, 16, 3); // steel head, pointing right
     g.generateTexture("arrow_projectile", 16, 6);
 
+    // Gloamsteel Arrows (bayou ammo) + their in-flight projectile — the same
+    // shafts with violet-lit heads, so the tier reads at a glance.
+    g.clear();
+    for (const ax of [7, 12, 17]) {
+      g.fillStyle(0x4a4030, 1);
+      g.fillRect(ax, 6, 1, 14); // shaft
+      g.fillStyle(0x9a5cff, 1);
+      g.fillTriangle(ax - 1, 6, ax + 2, 6, ax + 0.5, 2); // gloamsteel head
+      g.fillStyle(0xc9a8ff, 1);
+      g.fillRect(ax - 1, 18, 3, 2); // fletching
+    }
+    g.generateTexture("icon_gloam_arrows", ICON, ICON);
+
+    g.clear();
+    g.fillStyle(0x4a4030, 1);
+    g.fillRect(0, 2, 12, 2);
+    g.fillStyle(0x9a5cff, 1);
+    g.fillTriangle(12, 0, 12, 6, 16, 3);
+    g.generateTexture("gloam_arrow_projectile", 16, 6);
+
+    // Gloamdrinker — a bound censer: chain, violet-lit bowl, blood-gem core.
+    g.clear();
+    g.fillStyle(0x574d5f, 1);
+    g.fillRect(11, 2, 2, 7); // chain
+    g.fillStyle(0x39323f, 1);
+    g.fillRect(6, 9, 12, 4); // censer cap
+    g.fillTriangle(6, 13, 18, 13, 12, 22); // bowl
+    g.fillStyle(0x9a5cff, 1);
+    g.fillRect(8, 14, 8, 2); // gloam glow
+    g.fillStyle(0xc0303a, 1);
+    g.fillCircle(12, 17, 2); // blood-gem core
+    g.generateTexture("icon_gloamdrinker", ICON, ICON);
+
     // Shishkabob: just a bare wooden skewer with a sharpened tip — no food
     // chunks. Playtest feedback: the old red+green-chunk version already
     // looked "full of stuff" before anything was cooked on it; chunks belong

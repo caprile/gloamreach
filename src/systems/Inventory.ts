@@ -70,5 +70,6 @@ export type ResourceType =
   // --- biome-3 (Phase 3) bayou gear economy — DORMANT: authored now, real sources land in biome 3 ---
   | "bog_ore" // gloam-soaked bayou ore — smelts into Gloamsteel (no node yet)
   | "gloamsteel_ingot" // the bayou forged ingot: Bog Ore + Hex Essence at a Lvl 2 Smelter
+  | "gloam_arrows" // the bayou arrow tier - Gloamsteel-headed shafts for a Warbow
   | "mirehide" // bayou creature hide — the light-armor half of the bayou reforge
   | "duneshaper_heart"; // the Duneshaper's guaranteed drop — upgrades the Gemwright's Table to craft ability jewelry (biome-3 gate)

@@ -66,6 +66,7 @@ import {
   weaponIdentityLine,
   bypassesArmor,
   BLUNT_SLOW_FACTOR,
+  weaponLifelinkPct,
   BLUNT_SLOW_MS,
   type WeaponType,
   type DamageType,
@@ -6572,6 +6573,15 @@ export class MainScene extends Phaser.Scene {
     // source; overheal at full HP is simply wasted (no shield bank).
     if (this.time.now < this.bloodpactUntil) {
       this.health.heal(Math.max(1, Math.round(finalDmg * ABILITY_BLOODPACT_LIFELINK_PCT)));
+      this.refreshHealthBar();
+    }
+    // Weapon lifelink (the Gloamdrinker): an ALWAYS-on drain that costs no relic
+    // family slot and needs no ability window. Data-driven per weapon, and read
+    // off the equipped weapon so it covers the melee swing + its arc sweep;
+    // ranged weapons have no lifelink row today.
+    const lifelink = this.equippedWeapon ? weaponLifelinkPct(this.equippedWeapon) : 0;
+    if (lifelink > 0) {
+      this.health.heal(Math.max(1, Math.round(finalDmg * lifelink)));
       this.refreshHealthBar();
     }
     if (isCrit) this.applyCritSplash(enemy, finalDmg, dmgType);

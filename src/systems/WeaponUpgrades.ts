@@ -129,6 +129,7 @@ WEAPON_UPGRADES.push(
   ...forgedWeaponUpgrades("gloamsteel_pike", "Gloamsteel Pike", "gloamsteel_ingot"),
   ...forgedWeaponUpgrades("gloamsteel_warbow", "Gloamsteel Warbow", "gloamsteel_ingot"),
   ...forgedWeaponUpgrades("gloam_brand", "Gloam Brand", "gloamsteel_ingot"),
+  ...forgedWeaponUpgrades("gloamdrinker", "Gloamdrinker", "gloamsteel_ingot"),
 );
 
 // The upgrades that could apply to a given weapon item, ordered by the tier

@@ -93,6 +93,40 @@ two augments; magic hit 60 → 48 with two Linings; physical 60 - 30 armor = 30.
 tier 4 (craft refused without, succeeds with, base piece consumed); Bog Ore smelts only at
 Smelter tier 1. Equip → unequip round-trip preserves both `tier` and `upgrades`.
 
+## Follow-up pass (same session, off the user's feedback)
+
+1. **Crafting menu was too short** — its 440px height was fixed, authored when the Armor/
+   Weapons tabs held a handful of recipes; the forged + bayou tiers pushed those lists
+   straight out the bottom edge. The panel now **sizes itself** to the space between its
+   top margin and the bottom HUD (`PANEL_H_MIN` floor + `BOTTOM_CLEARANCE`), and the recipe
+   list is a **windowed, scrollable viewport** — only in-view rows are created, with its own
+   wheel handler and ▲/▼ hints, the same pattern `CookingMenu` uses. At 1080p the panel is
+   670 tall and the full 24-row Armor tab fits with no scrolling at all.
+2. **Gem-slot visibility** (both fixes from the earlier assessment): the item **Tooltip**
+   now shows `Gem augments: N/2` for *any* augmentable piece — filled or empty, so an empty
+   one no longer reads identically to gear that can't take gems — followed by the applied
+   ones; and every **slot icon** (backpack, hotbar, and the paper-doll) draws a row of small
+   **diamond pips** at its bottom-left, violet for used and hollow for free.
+3. **This biome's arrows** — **Gloamsteel Arrows** (1 Gloamsteel Ingot + 5 Wood → 60).
+   Unlike the Sunsteel/Embersteel pair (both make the same plain `arrows`), these are their
+   own ammo item and the **Gloamsteel Warbow fires only them**, so the bayou bow has a real
+   ammo tier rather than riding the badlands stock.
+4. **A bespoke bayou magic weapon — the Gloamdrinker** (3 Gloamsteel Ingot, 2 Blood Gem,
+   3 Hex Essence, 2 Moonsilver). Deliberately **not** a reforge of anything, and the only
+   weapon with **lifelink**: a new data-driven `WEAPON_LIFELINK_PCT` table heals **12% of
+   damage dealt** on every hit (including each arc-swept target) at the same
+   `resolveWeaponHit` choke point the Bloodpact ability uses. Always on, costs no relic
+   family slot, stacks with Leech/Bloodpact — paid for with 19 damage (below the Gloam
+   Brand's 23) and a tighter arc so a wide drain sweep can't trivialize crowds.
+
+Verified live: crafting panel 670 tall with 0 overflowing rows and the detail column
+bottoming out at 722 vs a panel bottom of 890 (scroll path exercised by shrinking the panel
+— clamps and windows correctly); pips 2-per-item with the right filled count and none on
+non-augmentable gear; tooltip reads `0/2`, `2/2` + names, and nothing for a Stone Club;
+Gloamdrinker deals 19 and heals 2 (12%) while the Gloam Brand deals 23 and heals 0;
+Gloamsteel Warbow refuses to fire with no ammo AND with plain arrows, fires and decrements
+10→9 with Gloamsteel Arrows. Zero console errors.
+
 ## Deliberately NOT built
 
 - **No bayou content sources.** Bog Ore, Mirehide and the gems have no world source yet —

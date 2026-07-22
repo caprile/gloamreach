@@ -74,6 +74,7 @@ const AUGMENTABLE_WEAPONS = [
   "gloamsteel_pike",
   "gloamsteel_warbow",
   "gloam_brand",
+  "gloamdrinker",
 ];
 
 const AUGMENTABLE_ARMOR = [

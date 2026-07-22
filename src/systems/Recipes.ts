@@ -578,6 +578,32 @@ export const RECIPES: Recipe[] = [
 
   // --- bayou HEAVY armor: Gloamsteel set ---
   {
+    id: "arrows_gloamsteel",
+    name: "Arrows (Gloamsteel)",
+    // NOT interchangeable with the badlands stock, unlike the Sunsteel/Embersteel
+    // pair (which both make plain `arrows`): a Gloamsteel Warbow's draw needs a
+    // gloamsteel shaft, so these are their own ammo item and the only thing that
+    // bow will fire — see RANGED_WEAPONS.gloamsteel_warbow.
+    description: "Warbow arrows headed and shafted in gloamsteel. Only a Gloamsteel Warbow can draw them — and it will draw nothing else.",
+    category: "weapons",
+    tier: 1,
+    requiresWorkbenchTier: 4,
+    costs: { gloamsteel_ingot: 1, wood: 5 },
+    requiresDiscovered: ["sunsteel_warbow"],
+    output: { kind: "item", itemId: "gloam_arrows", itemName: "Gloamsteel Arrows", count: 60 },
+  },
+  {
+    id: "gloamdrinker",
+    name: "Gloamdrinker",
+    description: "A censer bound from bog-iron and a blood gem. Its strikes land as raw gloam and feed a little of the wound back to you.",
+    category: "weapons",
+    tier: 1,
+    requiresWorkbenchTier: 4,
+    costs: { gloamsteel_ingot: 3, gem_blood: 2, hex_essence: 3, moonsilver: 2 },
+    requiredSkills: [{ skill: "magic", level: 0 }],
+    output: { kind: "item", itemId: "gloamdrinker", itemName: "Gloamdrinker" },
+  },
+  {
     id: "gloamsteel_helm",
     name: "Gloamsteel Helm",
     description: "Drown an Embersteel Helm in gloam and beat it out again.",

@@ -354,6 +354,11 @@ const MELEE_WEAPONS: WeaponType[] = [
   "embersteel_sword",
   "embersteel_pike",
   "ember_brand",
+  "gloamsteel_warhammer",
+  "gloamsteel_sword",
+  "gloamsteel_pike",
+  "gloam_brand",
+  "gloamdrinker",
 ];
 
 function renderWeapons(): string {

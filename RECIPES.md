@@ -77,6 +77,8 @@ requires standing near a placed Workbench (`MainScene.isNearWorkbench`).
 | Gloamsteel Pike | Weapons | 1 | Yes (Lvl 5) | 1 Embersteel Pike, 2 Gloamsteel Ingot, 3 Ironbark, 1 Ember Gem | Pierce 0 | Item (weapon, pierce — reforge) |
 | Gloamsteel Warbow | Weapons | 1 | Yes (Lvl 5) | 1 Embersteel Warbow, 3 Gloamsteel Ingot, 3 Mirehide, 1 Ember Gem | Ranged 0 | Item (weapon, ranged — reforge) |
 | Gloam Brand | Weapons | 1 | Yes (Lvl 5) | 1 Ember Brand, 3 Gloamsteel Ingot, 4 Hex Essence, 2 Gloam Gem | Magic 0 | Item (weapon, **magic** — reforge) |
+| Gloamdrinker | Weapons | 1 | Yes (Lvl 5) | 3 Gloamsteel Ingot, 2 Blood Gem, 3 Hex Essence, 2 Moonsilver | Magic 0 | Item (weapon, **magic** — bespoke, **not** a reforge) |
+| Arrows (Gloamsteel) | Weapons | 1 | Yes (Lvl 5) | 1 Gloamsteel Ingot, 5 Wood | — | Item (60x **Gloamsteel Arrows** — its own ammo tier) |
 
 The **bayou (Gloamsteel/Mirehide) tier is biome-3 DORMANT** — Bog Ore, Mirehide and
 the gems have no in-game source until the biome-3 content phases (test via
@@ -226,6 +228,7 @@ starter < Sunsteel < Ember. AOE arc widths in `Weapons.ts` `WEAPON_ARC`.
 | Gloamsteel Warhammer | 30 / 800ms / 31 | Blunt | 44° / 54 / 0.58 |
 | Gloamsteel Longsword | 25 / 470ms / 21 | Slash | 64° / 74 / 0.8 |
 | Gloamsteel Pike | 32 / 610ms / 25 | Pierce | 24° / 38 / 0.44 |
+| Gloamdrinker | 19 / 560ms / 20 | **Magic** | 34° / 46 / 0.5 — **12% lifelink on every hit** |
 | Gloam Brand | 23 / 520ms / 22 | **Magic** | 46° / 54 / 0.62 |
 
 The **Ember Brand** is the first magic weapon (rare-ore-exclusive). Its raw 17 is
@@ -356,6 +359,18 @@ combat stats (that's relics' layer). Rings fill either ring slot (wear two).
 | Gloamstep Band | Lvl 2 | 2 Moonsilver, 1 Gloam Gem | Spec1 (Q) | Grants Gloamstep Blink |
 | Gloam Focus | Lvl 2 | 2 Moonsilver, 1 Ember Gem | Spec2 (E) | Grants Gloam Nova |
 | Bloodpact Shroud | Lvl 2 | 3 Moonsilver, 1 Blood Gem | Back (R) | Grants Bloodpact |
+
+The **Gloamdrinker** is the bayou's bespoke magic weapon — the only one that is NOT a
+reforge of an earlier piece, and the only weapon in the game with **lifelink**
+(`Weapons.ts` `WEAPON_LIFELINK_PCT`): every hit, including each target its arc sweeps,
+heals **12% of the damage dealt**. It's always on, costs no relic family slot, and stacks
+with the Leech relic + the Bloodpact ability — paid for with a raw damage number below the
+Gloam Brand's and a deliberately tighter arc.
+
+**Ammo tiers.** Sunsteel and Embersteel arrow recipes both produce the same plain
+`arrows` (either metal, one stock). The bayou breaks that: **Gloamsteel Arrows** are their
+own item, and the **Gloamsteel Warbow fires only them** (it will not draw plain arrows) —
+the same single-ammo-slot swap the Slingshot/Warbow split already asks for.
 
 ## Gem Augments (`src/systems/GearAugments.ts`) — B3-P3
 

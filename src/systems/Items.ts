@@ -228,6 +228,16 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     armorSlot: "ammo",
   },
 
+  gloam_arrows: {
+    key: "gloam_arrows",
+    name: "Gloamsteel Arrows",
+    description: "Gloamsteel-headed arrows, cut for a Gloamsteel Warbow — nothing lighter will hold the draw. Load them into the Ammo slot.",
+    texture: "icon_gloam_arrows",
+    maxStack: 99,
+    hotbarable: false,
+    armorSlot: "ammo",
+  },
+
   // --- forged weapons (biome 2 Phase 4 — one per melee damage type) ---
   sunsteel_warhammer: {
     key: "sunsteel_warhammer",
@@ -1539,6 +1549,23 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
       { label: "Attack Speed", value: "1.4/s" },
     ],
   },
+  gloamdrinker: {
+    key: "gloamdrinker",
+    name: "Gloamdrinker",
+    description: "A bound censer of bog-iron and blood-gem. Every blow it lands drinks a little of the wound and gives it back to you.",
+    texture: "icon_gloamdrinker",
+    maxStack: 1,
+    hotbarable: true,
+    weapon: "gloamdrinker",
+    stats: [
+      { label: "Type", value: "Weapon" },
+      { label: "Damage", value: "19" },
+      { label: "Damage Type", value: "Magic" },
+      { label: "Stamina", value: "20" },
+      { label: "Attack Speed", value: "1.8/s" },
+      { label: "Lifelink", value: "12% of damage dealt" },
+    ],
+  },
   gloam_brand: {
     key: "gloam_brand",
     name: "Gloam Brand",
@@ -1610,7 +1637,7 @@ const BAYOU_ITEM_KEYS = new Set<string>([
   "gloamsteel_helm", "gloamsteel_cuirass", "gloamsteel_greaves",
   "mirehide_hood", "mirehide_vest", "mirehide_leggings",
   "gloamsteel_warhammer", "gloamsteel_sword", "gloamsteel_pike",
-  "gloamsteel_warbow", "gloam_brand",
+  "gloamsteel_warbow", "gloam_brand", "gloamdrinker", "gloam_arrows",
 ]);
 
 export function itemBiome(key: string): ItemBiome {

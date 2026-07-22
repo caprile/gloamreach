@@ -25,7 +25,10 @@ export type WeaponType =
   | "gloamsteel_sword"
   | "gloamsteel_pike"
   | "gloamsteel_warbow"
-  | "gloam_brand";
+  | "gloam_brand"
+  // the bayou's bespoke magic weapon (NOT a reforge of anything) - the only
+  // weapon that lifelinks on every hit
+  | "gloamdrinker";
 
 // Damage types double as the 5 weapon Skill types (Skills.ts) — a weapon's
 // primary (first) type routes its on-hit skill XP. Multiple types are
@@ -66,6 +69,7 @@ const WEAPON_DAMAGE_TYPES: Record<WeaponType, DamageType[]> = {
   gloamsteel_pike: ["pierce"],
   gloamsteel_warbow: ["ranged"],
   gloam_brand: ["magic"],
+  gloamdrinker: ["magic"],
 };
 export function weaponDamageTypes(weapon: WeaponType): DamageType[] {
   return WEAPON_DAMAGE_TYPES[weapon];
@@ -119,6 +123,9 @@ const WEAPON_DAMAGE: Record<WeaponType, number> = {
   gloamsteel_pike: 32,
   gloamsteel_warbow: 20,
   gloam_brand: 23,
+  // Deliberately BELOW the Gloam Brand: its per-hit lifelink is the payoff,
+  // so it trades raw numbers for sustain rather than adding both.
+  gloamdrinker: 19,
 };
 export function weaponDamage(weapon: WeaponType): number {
   return WEAPON_DAMAGE[weapon];
@@ -145,6 +152,7 @@ const WEAPON_COOLDOWN_MS: Record<WeaponType, number> = {
   gloamsteel_pike: 610,
   gloamsteel_warbow: 720,
   gloam_brand: 520,
+  gloamdrinker: 560,
 };
 export function weaponCooldownMs(weapon: WeaponType): number {
   return WEAPON_COOLDOWN_MS[weapon];
@@ -175,6 +183,7 @@ const WEAPON_STAMINA_COST: Record<WeaponType, number> = {
   gloamsteel_pike: 25,
   gloamsteel_warbow: 17,
   gloam_brand: 22,
+  gloamdrinker: 20,
 };
 export function weaponStaminaCost(weapon: WeaponType): number {
   return WEAPON_STAMINA_COST[weapon];
@@ -225,6 +234,7 @@ const WEAPON_BASE_CRIT_CHANCE: Record<WeaponType, number> = {
   gloamsteel_warbow: 0.09,
   gloamsteel_pike: 0.12,
   gloam_brand: 0.08,
+  gloamdrinker: 0.07,
 };
 const WEAPON_BASE_CRIT_MULT: Record<WeaponType, number> = {
   bone_knife: 1.5,
@@ -248,6 +258,7 @@ const WEAPON_BASE_CRIT_MULT: Record<WeaponType, number> = {
   gloamsteel_warbow: 1.62,
   gloamsteel_pike: 1.8,
   gloam_brand: 1.62,
+  gloamdrinker: 1.6,
 };
 export function weaponBaseCritChance(weapon: WeaponType): number {
   return WEAPON_BASE_CRIT_CHANCE[weapon];
@@ -280,7 +291,10 @@ const RANGED_WEAPONS: Partial<Record<WeaponType, RangedWeaponConfig>> = {
   // than the slingshot: the bow is the badlands ranged upgrade.
   sunsteel_warbow: { projectileSpeed: 600, maxRangePx: 380, ammoItemKey: "arrows", projectileTexture: "arrow_projectile" },
   embersteel_warbow: { projectileSpeed: 640, maxRangePx: 400, ammoItemKey: "arrows", projectileTexture: "arrow_projectile" },
-  gloamsteel_warbow: { projectileSpeed: 680, maxRangePx: 420, ammoItemKey: "arrows", projectileTexture: "arrow_projectile" },
+  // Its own ammo tier: a gloamsteel head needs a gloamsteel shaft, so the bayou
+  // bow burns Gloamsteel Arrows rather than sharing the badlands stock (the same
+  // single-ammo-slot swap the slingshot/bow split already asks for).
+  gloamsteel_warbow: { projectileSpeed: 680, maxRangePx: 420, ammoItemKey: "gloam_arrows", projectileTexture: "gloam_arrow_projectile" },
 };
 
 export function rangedWeaponConfig(weapon: WeaponType): RangedWeaponConfig | undefined {
@@ -339,9 +353,25 @@ const WEAPON_ARC: Record<WeaponType, WeaponArc> = {
   gloamsteel_pike: { halfAngleDeg: 24, range: 38, falloff: 0.44 },
   gloamsteel_warbow: { halfAngleDeg: 0, range: 0, falloff: 0 },
   gloam_brand: { halfAngleDeg: 46, range: 54, falloff: 0.62 },
+  // Every swept target lifelinks too, so the arc is kept tighter than the
+  // Brand's - a wide drain sweep would trivialize crowds.
+  gloamdrinker: { halfAngleDeg: 34, range: 46, falloff: 0.5 },
 };
 export function weaponArc(weapon: WeaponType): WeaponArc {
   return WEAPON_ARC[weapon];
+}
+
+// Per-hit LIFELINK: the fraction of damage dealt healed back to the player,
+// applied at the single melee/ranged hit choke point (MainScene.resolveWeaponHit).
+// Data-driven rather than hardcoded to one key so a future drain weapon is a
+// row here. Parallel to - and stacking with - the Leech relic and the Bloodpact
+// ability, but unlike either it is ALWAYS on and costs no relic family slot.
+// Absent = no lifelink (every other weapon).
+const WEAPON_LIFELINK_PCT: Partial<Record<WeaponType, number>> = {
+  gloamdrinker: 0.12,
+};
+export function weaponLifelinkPct(weapon: WeaponType): number {
+  return WEAPON_LIFELINK_PCT[weapon] ?? 0;
 }
 
 // Blunt weapon movement-slow debuff (S7 identity, locked: "movement slow /
@@ -373,6 +403,6 @@ export function weaponIdentityLine(weapon: WeaponType): string {
     case "ranged":
       return "Ranged — strike from a distance";
     case "magic":
-      return "Arcane — fire, ignores armor, medium sweep";
+      return "Arcane — ignores armor, medium sweep";
   }
 }
