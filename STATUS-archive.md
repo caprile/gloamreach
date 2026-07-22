@@ -6884,3 +6884,79 @@ unchanged. Equip case also recomputes cached set bonuses. Verified live (`javasc
 backpack armor right-click opens the menu bound to the piece + applies (tier 0→1); reforge with
 base equipped → embersteel equipped, hotbar → same hotbar slot, backpack → stays backpack, hotbar
 untouched. `tsc` clean, no console errors.
+
+### B3-P1a — Enemy terrain-collision gate + roll-through (2026-07-21, Opus)
+Follow-up to B3-P1 off the user's playtest: the "spinny guys" (Cragscale rolling charge) got
+**wedged on boulderfield rocks**. B3-P1 added real solids to the `solids` group (rocks) for the
+first time since trees/boulders were made non-solid back in July, so the pre-existing
+`enemyGroup ↔ solids` collider (`MainScene.ts`) started blocking every enemy — and a
+straight-line chaser wedges (the exact zigzag-avoidance problem that got obstacles made
+non-solid originally; see [[feedback_enemy_obstacle_avoidance]] / [[feedback_boar_zigzag_movement]]).
+**Fix:** a new per-enemy `Enemy.collidesWithTerrain` flag (default **false**) gates that collider
+via a `processCallback` — every current enemy now **rolls freely through rocks; the player still
+collides** (its own `player ↔ solids` collider is unchanged, no callback). The callback resolves the
+Enemy by `instanceof` on both args (group-vs-static-group arg order isn't guaranteed). **This is
+also the future hook:** a terrain-blocked enemy just sets the flag `true` (verified: the gate then
+returns `true` → Arcade separates it). **Confirmed no change needed for the other ask** — enemies
+were never slowed by thornfield terrain: `BRAMBLE_SLOW_MULT`/`environmentEffectAt` is read only for
+the *player* (`Player.update` `envMult`); enemy speed uses `envSpeedMult` (day/night × relic slow),
+which is terrain-independent. `tsc` clean; verified live (`javascript_tool`): all 602 enemies default
+`collidesWithTerrain:false`; the enemy↔solids collider's process callback returns `false` for a
+default Cragscale (both arg orders) and `true` once the flag is flipped; the player↔solids collider
+has no callback; no console errors. **Deferred (needs a real consumer — Opus session):** the actual
+stuck-response AI for a future terrain-blocked enemy — recommended default is to keep most enemies
+roll-through and reserve blocking for a specific heavy archetype with a light slide-along-contact
+nudge, only building the full near-tangent wall-follow heuristic if a genuine maze-navigation enemy
+is ever designed (the deleted heuristic worked but read as "trash" zigzag — don't re-derive it
+blindly). No `RECIPES.md`/dashboard change.
+
+### B3-P2a — Biome-3 Phase 2a: Activated abilities + Dota QER HUD (2026-07-21, Opus)
+Plan: `.claude/plans/biome-3-and-new-systems-roadmap.md` (Phase 2, split 2a/2b — this is 2a). The
+**cooldown-only, equipment-granted** activated-ability framework, built as the reusable system that
+Phase 2b's gems/epic-loot and Phase 5's post-boss picker will feed. Locked with the user via
+`AskUserQuestion`: **2a only** this session; abilities should come from **epic loot / biome-3
+craftables / boss "special" drops — NOT easy early craftables**, so 2a ships the framework + HUD + how
+gear plugs in and is **granted dev-only for now** (his call — building a real source now would force the
+epic-loot or picker prematurely); **R = Bloodpact lifelink, NOT heal-over-time** (HoT stays a food-buff
+thing).
+
+- **`src/systems/Abilities.ts`** (new, pure data, mirrors the relic-def pattern): `AbilityDef {id,
+  name, description, cooldownMs, activeMs?, icon}` + `ABILITY_DEFS` for the 3 starters +
+  `SLOT_ABILITY_KEY` (`special1→q`, `special2→e`, `back→r`). Effect logic lives in MainScene's
+  `castAbility()` dispatcher (like relic uniques) — an `AbilityDef` never reaches into the scene.
+- **3 starter abilities:** **Gloamstep Blink** (Q) — teleport 220px toward the aim point (mouse world
+  point, else facing) + a 250ms i-frame window (reuses `invulnerableUntil` + `clampPlayerToWorld`), 6s
+  CD. **Gloam Nova** (E) — 150px radial `magic` burst, 30 dmg (resist-aware, new `dealAbilityDamage`
+  mirroring `dealSetBonusDamage`) + a 64px outward shove + 500ms slow per enemy (no per-enemy stun state
+  exists, so the pop-back + slow IS the knockback), reuses the `emberblinkBurst` snapshot-loop + flash
+  idiom, 10s CD. **Bloodpact** (R) — opens a 6s **lifelink** window; `resolveWeaponHit` heals 35% of
+  each hit's damage while `time.now < bloodpactUntil` (parallel to the Leech relic), 24s CD.
+- **`src/ui/AbilityBarUI.ts`** (new) — a Dota-style fixed Q/E/R bar anchored right of the hotbar (the
+  passive bar owns the left). Fixed 3-slot set (built once, updated per frame — no structural rebuild):
+  empty = dim frame + key letter; equipped = ability icon + a top-down cooldown sweep + centered numeric
+  seconds; Bloodpact's active window shows a crimson glow instead of the sweep; hover tooltip
+  (name/desc/cooldown/state). Flat `scrollFactor(0)` objects, depth 2836-2839 / tip 2955 (clears
+  WORLD_H). T reserved (not rendered).
+- **Wiring (`MainScene.ts`):** `grantsAbility?: AbilityId` on `ItemDef`; 3 dev-only special items
+  (`special_gloamstep_band`/`special_gloam_focus`/`back_bloodpact_shroud`, `special1`/`special2`/`back`
+  slots) that equip via the existing generic `armorSlot` path — **zero new equip code**.
+  `recomputeAbilities()` scans the 3 slots → `abilityByKey {q,e,r}`, called from `afterItemMove()` +
+  reset in `create()` (with `abilityReadyAt`/`bloodpactUntil`, the `scene.restart()` gotcha). Input:
+  `keydown-Q/E/R` → `tryCastAbility` (guards run-over/pause/dead/any-menu/cooldown); **R is
+  context-sensitive** — take-all when a chest is open, else cast (no relearn). New `__dev.give(key,
+  count?)` to obtain the specials; 3 gloam-violet ability icons in `BootScene` (shared by item + bar);
+  KeybindsUI gains the Q/E/R + updated take-all lines.
+- **Same-session UI polish (the user playtest):** the ability-bar key letters were too small to read
+  (an empty slot's "E" looked like "F"). Fixed by enlarging them and **moving them into a chip
+  centered BELOW each slot** (own `LABEL_H` band, the whole bar still bottom-aligns to the hotbar) so
+  they're off the slot face entirely and never overlap the cooldown numeric/sweep. The Inventory
+  equipment paper-doll also shows a large **Q/E/R badge** on the `special1`/`special2`/`back` slots
+  (shown even when empty) so it's clear which slot feeds which key when choosing a special to equip.
+- **Deferred to 2b / Phase 5:** gems/jewelry material class, the game-wide epic-loot pool, ring/amulet
+  passive stat aggregation, the 4th (T) slot, and every *real* ability source.
+- **Verified live** (`preview_start` + `javascript_tool`): equip → `abilityByKey` maps Q/E/R correctly;
+  Blink moved exactly 220px + i-frame active + second cast blocked by cooldown; Nova dealt 20 (magic,
+  resist-default-1) + 64px shove + cooldown; Bloodpact healed exactly 7 on a 20-dmg hit (35%);
+  empty-slot cast is a safe no-op; run-over/menu guards block casting; the bar renders (Q "6"s cooldown
+  overlay, R active-glow) with icons visible and **no console errors**; `tsc --noEmit` clean. No
+  `RECIPES.md`/dashboard change (dev-only items, no recipes).

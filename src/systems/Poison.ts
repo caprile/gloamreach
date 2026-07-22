@@ -71,6 +71,18 @@ export class PoisonManager {
     return this.doses.isBleeding() || this.env !== null;
   }
 
+  // Remaining ms across doses AND the environmental slot — the status HUD's
+  // countdown. A sustained source keeps re-arming, so while you stand in a
+  // miasma this simply holds near its full duration, which is the honest read.
+  remainingMs(): number {
+    return Math.max(this.doses.remainingMs(), this.env?.remainingMs ?? 0);
+  }
+
+  // Total dps in effect right now (doses + environment), for the HUD tooltip.
+  dps(): number {
+    return this.doses.dps() + (this.env?.dmgPerSec ?? 0);
+  }
+
   clear(): void {
     this.doses.clear();
     this.env = null;

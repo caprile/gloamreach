@@ -206,6 +206,27 @@ augments.
 
 ## Phase 4 — Biome 3: the bayou (working name Duskmire Bayou) *(Opus, content drop)*
 
+> **SCOPE UPDATE 2026-07-22 (the user, locked).** Phase 4 is **sliced into four sessions**, and a
+> **Dungeon mechanic** was added to the arc:
+>
+> - **4a — terrain, environment & surface sources. SHIPPED** (see STATUS.md B3-P4a).
+> - **4b — the melee-core roster** (next).
+> - **4c — DUNGEONS** (new): Valheim burial-chamber / sunken-crypt style interiors. **The most
+>   precious materials are NOT found on the surface.** The three ability geodes and Moonsilver were
+>   REMOVED from 4a's surface scatter and are now dungeon-only loot (their textures + ResourceNode
+>   shapes are kept in-repo, so the dungeon phase re-sites them rather than rebuilding). Ordered
+>   after 4b because a dungeon needs the bayou roster to populate it — building it first yields an
+>   empty crypt. Until it ships, `moonsilver` + the 3 gems are dormant again (`__dev.give`).
+> - **4d — surface POIs + the Miretyrant boss + the win-con swap.**
+>
+> **Locked surface/dungeon split:** SURFACE = bulk gathering + foraging under threat (wood, stone,
+> **Bog Ore**, moss, lilies) — Bog Ore stays above ground on purpose so the Gloamsteel/Mirehide
+> reforge tier is still reachable by exploring. DUNGEON = build-defining materials (ability gems,
+> Moonsilver). **The surface's job is to feel dangerous and murky while you hunt for a way in** —
+> which is why 4a shipped three themed macro-zones (miasma / bonemire / hammock) and why surface
+> POIs + diverse signature areas remain explicitly wanted, not replaced by dungeons.
+
+
 Depends on Phase 1 (blocking water + zone effects); richer with Phase 2 (abilities). Follows the
 biome-2 content template (register biome → samplers → bespoke enemies → POIs → boss), honoring the
 "no shared boss framework" + "per-enemy own numbers" + organic/uneven-density rules.

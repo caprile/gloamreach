@@ -2388,6 +2388,46 @@ export class BootScene extends Phaser.Scene {
     g.fillCircle(10, 9, 3);
     g.generateTexture("miasma_fume", 20, 20);
 
+    // Bonemire dead tree — a bleached, limbless drowned trunk. Pale on purpose:
+    // a bonemire should read as a stark white thicket against the dark swamp.
+    g.clear();
+    g.fillStyle(0x9a9382, 1);
+    g.fillRect(10, 6, 5, 30); // trunk
+    g.fillStyle(0xb5ae9b, 1);
+    g.fillRect(11, 8, 2, 26); // highlight
+    g.fillStyle(0x8a8372, 1);
+    g.fillRect(4, 12, 7, 2); // snapped limbs
+    g.fillRect(14, 18, 7, 2);
+    g.fillRect(15, 9, 5, 2);
+    g.fillStyle(0x6f6a5c, 1);
+    g.fillRect(8, 34, 9, 3); // waterlogged base
+    g.generateTexture("bayou_deadtree", 26, 38);
+
+    // Bone litter — a small scatter of ribs and a skull fragment.
+    g.clear();
+    g.fillStyle(0xd8d2c0, 1);
+    g.fillCircle(6, 11, 4); // skull
+    g.fillRect(10, 12, 9, 2); // long bone
+    g.fillRect(11, 8, 7, 2);
+    g.fillStyle(0x9d9784, 1);
+    g.fillCircle(5, 10, 1.4); // eye socket
+    g.fillRect(12, 15, 6, 1); // rib
+    g.generateTexture("bayou_bones", 22, 20);
+
+    // Hammock reeds — a tall tuft of marsh grass, the dry-island signature.
+    g.clear();
+    g.fillStyle(0x4e6340, 1);
+    g.fillRect(5, 8, 2, 14);
+    g.fillRect(9, 5, 2, 17);
+    g.fillRect(13, 9, 2, 13);
+    g.fillStyle(0x6c8452, 1);
+    g.fillRect(7, 11, 2, 11);
+    g.fillRect(11, 7, 2, 15);
+    g.fillStyle(0x8a9a5e, 1); // seed heads
+    g.fillRect(9, 3, 2, 3);
+    g.fillRect(13, 7, 2, 3);
+    g.generateTexture("bayou_reeds", 20, 24);
+
     // Cypress — the bayou's WOOD tree (chop, any axe). Tall pale-barked trunk
     // with a flared root buttress and a drooping moss-hung canopy.
     g.clear();
@@ -2554,6 +2594,51 @@ export class BootScene extends Phaser.Scene {
     g.fillStyle(0xfff4c0, 1);
     g.fillCircle(12, 9, 1.4);
     g.generateTexture("icon_water_lily", ICON, ICON);
+
+    // === Status-effect (debuff) icons — StatusBarUI ===
+    // Bold, high-contrast silhouettes: these must read instantly at 26px in the
+    // middle of a fight, so each is one distinct shape, not a detailed picture.
+    const SICON = 22;
+
+    g.clear(); // Poisoned — a skull over a rising bubble, sickly green
+    g.fillStyle(0x8fd94a, 1);
+    g.fillCircle(11, 9, 6); // cranium
+    g.fillRect(8, 13, 6, 4); // jaw
+    g.fillStyle(0x14200c, 1);
+    g.fillCircle(9, 8, 2); // eye sockets
+    g.fillCircle(13, 8, 2);
+    g.fillRect(10, 13, 2, 3); // teeth gap
+    g.fillStyle(0xbdf07a, 0.85);
+    g.fillCircle(17, 16, 3); // bubble
+    g.fillCircle(5, 17, 2);
+    g.generateTexture("icon_status_poison", SICON, SICON);
+
+    g.clear(); // Bleeding — a falling blood drop
+    g.fillStyle(0xd42a2a, 1);
+    g.fillCircle(11, 14, 6);
+    g.fillTriangle(5, 12, 11, 2, 17, 12); // pointed top
+    g.fillStyle(0xff7a7a, 1);
+    g.fillCircle(9, 13, 2); // highlight
+    g.generateTexture("icon_status_bleed", SICON, SICON);
+
+    g.clear(); // Slowed — a boot sunk in muck (down-chevrons under a heavy mass)
+    g.fillStyle(0x6a7a8a, 1);
+    g.fillRect(6, 4, 10, 8); // heavy block
+    g.fillStyle(0x8fa0b0, 1);
+    g.fillRect(7, 5, 8, 3);
+    g.fillStyle(0xc9a24a, 1); // downward chevrons = being dragged down
+    g.fillTriangle(4, 13, 18, 13, 11, 18);
+    g.fillTriangle(6, 17, 16, 17, 11, 21);
+    g.generateTexture("icon_status_slow", SICON, SICON);
+
+    g.clear(); // No Regen — a heart with a bar through it
+    g.fillStyle(0x9a3a46, 1);
+    g.fillCircle(8, 9, 4);
+    g.fillCircle(14, 9, 4);
+    g.fillTriangle(4, 11, 18, 11, 11, 19);
+    g.fillStyle(0xe8e0e0, 1); // the "barred" slash
+    g.fillRect(2, 10, 18, 3);
+    g.generateTexture("icon_status_noregen", SICON, SICON);
 
     g.clear(); // Sunfruit icon — a red fruit with a green nub
     g.fillStyle(0xd83a3a, 1);

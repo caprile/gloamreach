@@ -52,6 +52,21 @@ export class BleedManager {
     return this.stacks.length > 0;
   }
 
+  // Longest-lived stack's remaining ms (0 if clean) — what the status HUD shows
+  // as "time left", since that's when the effect actually ends.
+  remainingMs(): number {
+    let max = 0;
+    for (const s of this.stacks) if (s.remainingMs > max) max = s.remainingMs;
+    return max;
+  }
+
+  // Current total damage-per-second across live stacks, for the HUD tooltip.
+  dps(): number {
+    let total = 0;
+    for (const s of this.stacks) total += s.dmgPerSec;
+    return total;
+  }
+
   clear(): void {
     this.stacks = [];
     this.accum = 0;

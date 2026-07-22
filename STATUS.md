@@ -27,9 +27,19 @@ yet). **Two real bugs caught in verification:** the water slow used a raw covera
 (3 dps became 15 and killed an idle test player) — both fixed and re-verified. Palette also gained a
 uniform **gloam wash** after it composited olive and read as "more green biome": now forest `#3f6a36`
 / badlands `#755f39` / bayou `#44454b` / dunes `#cab47e`. Verified live; `tsc` clean, zero console
-errors. **Deliberately left out:** **Mirehide** (a *creature* hide — it lands with 4b's roster, not a
-node), and the bayou is gated out of the enemy-respawn/nightfall top-up until 4b ships. No
-`RECIPES.md`/dashboard change. See B3-P4a below + [[survivor-rpg-biome-3-roadmap]].
+errors. **SAME-SESSION REDIRECT (the user):** the **most precious materials moved off the
+surface** — the 3 ability geodes + Moonsilver are now **dungeon-only loot** (a Valheim
+burial-chamber/sunken-crypt mechanic, added to the arc as its own phase); **Bog Ore stays
+surface-mineable** so the reforge tier is still reachable by exploring. Their textures/node shapes
+are KEPT for the dungeon phase to re-site; the gems + moonsilver are dormant again meanwhile. To
+keep the surface characterful, `BayouZone` widened to **three themed macro-zones** (6 each):
+**miasma** (no-regen + poison), **bonemire** (bleached dead-tree boneyard, 0.62 slow), **hammock**
+(raised cypress island, no penalty + the densest foraging). Also new: **`src/ui/StatusBarUI.ts`**, a
+**generic debuff strip** above the buff bar (poison/bleed/slow/no-regen — bleed had NO HUD tell since
+the badlands), timed effects get a meter + countdown, conditional ones just show; No Regen is
+suppressed while poisoned as redundant. **Deliberately left out:** **Mirehide** (a *creature* hide —
+lands with 4b's roster, not a node), and the bayou is gated out of the enemy-respawn/nightfall top-up
+until 4b ships. No `RECIPES.md`/dashboard change. See B3-P4a below + [[survivor-rpg-biome-3-roadmap]].
 Prior: **B3-P3 — Biome-3 Phase 3: Bayou gear progression (reforge tier + gem augments)**
 (2026-07-21, Opus) — gem augments (mix-and-match, consumed, max 2/instance) reusing the existing
 per-instance `upgrades` field + `UpgradeMenu`, plus the Gloamsteel/Mirehide reforge tier, Workbench
@@ -113,13 +123,15 @@ current arc is the **biome-3 (haunted bayou, working name "Duskmire Bayou") + ne
 (terrain-that-matters + badlands macro-zones), **Phase 2a** (the activated-ability framework + Dota
 QER HUD), **Phase 2b** (the jewelry-effect pipeline + the Gemwright's Table), **Phase 3** (the bayou
 gear progression — gem augments + the Gloamsteel/Mirehide reforge tier), and now **Phase 4a** (the
-bayou's terrain, environment and material sources — above). **Phase 4 is sliced into three sessions;
-4a is done.** **Next: Phase 4b — the bayou's melee-core roster** (Mirejaw / Blighttoad / Mosswretch /
-Murkling / Fenlurker + the one ranged Corpselight haunt, per the roadmap), which is also where
-**Mirehide** gets its source and where the bayou re-enters the enemy-respawn top-up. **Then Phase 4c**
-(1-2 bayou POIs + the **Miretyrant** melee boss-with-adds, which **becomes the new win-con** — locked
-this session — demoting the Duneshaper to a mid-boss and finally making its **Heart** obtainable, which
-unlocks the Gemwright's ability recipes). **Then Phase 5** (post-big-boss RNG reward choice).
+bayou's terrain, environment and material sources — above). **Phase 4 is now sliced into FOUR sessions**
+(the Dungeon mechanic was added mid-session): **4a terrain/env/surface-sources — DONE**; **4b — the
+melee-core roster** (Mirejaw / Blighttoad / Mosswretch / Murkling / Fenlurker + the one ranged
+Corpselight haunt), which also sources **Mirehide** and re-enables the bayou's respawn top-up;
+**4c — DUNGEONS** (Valheim burial-chamber/sunken-crypt interiors; where the ability gems + Moonsilver
+actually live — ordered after the roster because a dungeon needs creatures to populate it); **4d —
+surface POIs + the **Miretyrant** melee boss-with-adds**, which **becomes the new win-con** (locked),
+demoting the Duneshaper to a mid-boss and finally making its **Heart** obtainable, unlocking the
+Gemwright's ability recipes. **Then Phase 5** (post-big-boss RNG reward choice).
 Ability/jewelry numbers and everything biome-3 are first-pass/tunable. The master-plan tail
 **M-TE** (trophy-gated gear) is folded into the shipped biome-2 work; real pixel art/animations stay
 deliberately deferred until content/balance settle (roadmap item 8).
@@ -242,6 +254,48 @@ confirming the subtype contract); poison sustained/lapse/discrete-stacking math;
 depleted to its correct loose drop (all 3 gems, bog ore, moonsilver, stone, wood) plus the
 persistent-flora texture swap. `tsc` clean, zero console errors. Screenshot confirms the discovery
 toast, minimap label, violet ground and miasma field.
+
+**SAME-SESSION REDIRECT (the user) — the precious materials moved underground.** After reviewing
+4a, the user redirected: *"I want the key resource nodes to be part of the future Dungeon mechanic —
+think Valheim's burial chambers or sunken crypts. I don't want the most precious things to be found
+on the surface. I want the surface of the bayou to feel dangerous and murky while you look for these
+dungeons. I do still want surface POIs and diverse areas that give the bayou its signature looks."*
+Locked via `AskUserQuestion` and applied this session:
+
+- **Surface/dungeon split.** The three **ability geodes** and **Moonsilver seams** were removed from
+  `spawnBayouNodes` — they're **dungeon-only loot** now. **Bog Ore stays on the surface** on purpose:
+  it's the bulk metal behind the whole Gloamsteel/Mirehide reforge tier, so exploring the swamp still
+  pays while abilities + jewelry stay gated. Their **textures and ResourceNode shapes are kept**, so
+  the dungeon phase re-sites the exact same nodes rather than rebuilding them. `moonsilver` + the 3
+  gems are dormant again in the interim (`__dev.give`) — chosen over a placeholder surface trickle so
+  playtesters never learn the wrong acquisition loop.
+- **Dungeons are their own phase, ordered after 4b** (the enemy roster) and before the boss —
+  a dungeon needs the bayou creatures to populate it, or it's an empty crypt. Phase 4 is now
+  **4a terrain (done) → 4b roster → 4c dungeons → 4d POIs + Miretyrant + win-con swap**.
+- **Three themed macro-zones instead of one**, so the surface carries the biome's signature look now
+  that its payoff moved underground. `BayouZone` widened to `miasma | bonemire | hammock`, all reusing
+  the shared `ZoneShape`/`zoneEdge`/`drawZoneFloor` (6 of each, 18 total): **miasma** = the gloam-fog
+  hazard (no-regen + 3 dps poison); **bonemire** = a drowned boneyard of bleached dead trunks + bone
+  litter that slows to 0.62 (props non-solid, so it stays a place you can flee across); **hammock** =
+  a raised cypress island, **no penalty** and the swamp's densest foraging (cypress + moss/lilies) —
+  the counterweight that makes somewhere worth reaching. New `scatterInZone` helper shared by all
+  three fills. Verified visually: three unmistakably distinct areas.
+
+**Status-effect HUD (`src/ui/StatusBarUI.ts`, new).** the user: *"when you are affected by poison /
+slow there needs to be a symbol status effect on your character somewhere in the HUD."* Built
+**generic** rather than poison-specific — **bleed had shipped since the badlands with no HUD tell at
+all**, so this closes an existing gap and every future debuff gets an icon by adding one row to
+`MainScene.statusEffects()`. A centered row of icons in its own band directly **above** the buff bar
+(fixed offset, so debuff icons don't jump when a food buff starts/expires), in the red/amber that the
+standing "reserve red/green for buff/debuff deltas" convention was holding for exactly this case.
+Handles both flavors of debuff: **timed** ones (poison, bleed) get a depletion meter + a seconds
+countdown, **conditional** ones (slowed, no-regen) simply show while active. `BleedManager`/
+`PoisonManager` gained `remainingMs()`/`dps()` accessors; `currentEnvMoveMult` is now cached beside
+`currentEnvBlockRegen` so the HUD can report *why* you're slow (e.g. "Movement 38% slower here").
+**No Regen is deliberately suppressed while poisoned** — poison's own tooltip already says it stops
+healing, so pairing the icons every time would be pure noise. Verified live: correct set per zone
+type, the no-regen de-duplication both ways, 3 icons rendering with 0 overlap, row centered exactly
+on screen center, depth 2803 (clears WORLD_H), and the hover tooltip.
 
 **Left out of 4a, deliberately:** **Mirehide** has no source yet — it's a *creature* hide, so a node
 source would be dishonest; it lands with the 4b roster. The bayou is also gated out of the
@@ -374,79 +428,3 @@ upgrade** (with a Workbench nearby per the standing tier-≥1 rule) bumps the pl
 the Duneshaper's Heart, and unlocks the ability recipes; the menu opens/renders/closes cleanly. `tsc`
 clean; **zero console errors**. `RECIPES.md` updated (station recipe + upgrade + a new Jewelry section);
 dashboard reads recipes live.
-
-### B3-P2a — Biome-3 Phase 2a: Activated abilities + Dota QER HUD (2026-07-21, Opus)
-Plan: `.claude/plans/biome-3-and-new-systems-roadmap.md` (Phase 2, split 2a/2b — this is 2a). The
-**cooldown-only, equipment-granted** activated-ability framework, built as the reusable system that
-Phase 2b's gems/epic-loot and Phase 5's post-boss picker will feed. Locked with the user via
-`AskUserQuestion`: **2a only** this session; abilities should come from **epic loot / biome-3
-craftables / boss "special" drops — NOT easy early craftables**, so 2a ships the framework + HUD + how
-gear plugs in and is **granted dev-only for now** (his call — building a real source now would force the
-epic-loot or picker prematurely); **R = Bloodpact lifelink, NOT heal-over-time** (HoT stays a food-buff
-thing).
-
-- **`src/systems/Abilities.ts`** (new, pure data, mirrors the relic-def pattern): `AbilityDef {id,
-  name, description, cooldownMs, activeMs?, icon}` + `ABILITY_DEFS` for the 3 starters +
-  `SLOT_ABILITY_KEY` (`special1→q`, `special2→e`, `back→r`). Effect logic lives in MainScene's
-  `castAbility()` dispatcher (like relic uniques) — an `AbilityDef` never reaches into the scene.
-- **3 starter abilities:** **Gloamstep Blink** (Q) — teleport 220px toward the aim point (mouse world
-  point, else facing) + a 250ms i-frame window (reuses `invulnerableUntil` + `clampPlayerToWorld`), 6s
-  CD. **Gloam Nova** (E) — 150px radial `magic` burst, 30 dmg (resist-aware, new `dealAbilityDamage`
-  mirroring `dealSetBonusDamage`) + a 64px outward shove + 500ms slow per enemy (no per-enemy stun state
-  exists, so the pop-back + slow IS the knockback), reuses the `emberblinkBurst` snapshot-loop + flash
-  idiom, 10s CD. **Bloodpact** (R) — opens a 6s **lifelink** window; `resolveWeaponHit` heals 35% of
-  each hit's damage while `time.now < bloodpactUntil` (parallel to the Leech relic), 24s CD.
-- **`src/ui/AbilityBarUI.ts`** (new) — a Dota-style fixed Q/E/R bar anchored right of the hotbar (the
-  passive bar owns the left). Fixed 3-slot set (built once, updated per frame — no structural rebuild):
-  empty = dim frame + key letter; equipped = ability icon + a top-down cooldown sweep + centered numeric
-  seconds; Bloodpact's active window shows a crimson glow instead of the sweep; hover tooltip
-  (name/desc/cooldown/state). Flat `scrollFactor(0)` objects, depth 2836-2839 / tip 2955 (clears
-  WORLD_H). T reserved (not rendered).
-- **Wiring (`MainScene.ts`):** `grantsAbility?: AbilityId` on `ItemDef`; 3 dev-only special items
-  (`special_gloamstep_band`/`special_gloam_focus`/`back_bloodpact_shroud`, `special1`/`special2`/`back`
-  slots) that equip via the existing generic `armorSlot` path — **zero new equip code**.
-  `recomputeAbilities()` scans the 3 slots → `abilityByKey {q,e,r}`, called from `afterItemMove()` +
-  reset in `create()` (with `abilityReadyAt`/`bloodpactUntil`, the `scene.restart()` gotcha). Input:
-  `keydown-Q/E/R` → `tryCastAbility` (guards run-over/pause/dead/any-menu/cooldown); **R is
-  context-sensitive** — take-all when a chest is open, else cast (no relearn). New `__dev.give(key,
-  count?)` to obtain the specials; 3 gloam-violet ability icons in `BootScene` (shared by item + bar);
-  KeybindsUI gains the Q/E/R + updated take-all lines.
-- **Same-session UI polish (the user playtest):** the ability-bar key letters were too small to read
-  (an empty slot's "E" looked like "F"). Fixed by enlarging them and **moving them into a chip
-  centered BELOW each slot** (own `LABEL_H` band, the whole bar still bottom-aligns to the hotbar) so
-  they're off the slot face entirely and never overlap the cooldown numeric/sweep. The Inventory
-  equipment paper-doll also shows a large **Q/E/R badge** on the `special1`/`special2`/`back` slots
-  (shown even when empty) so it's clear which slot feeds which key when choosing a special to equip.
-- **Deferred to 2b / Phase 5:** gems/jewelry material class, the game-wide epic-loot pool, ring/amulet
-  passive stat aggregation, the 4th (T) slot, and every *real* ability source.
-- **Verified live** (`preview_start` + `javascript_tool`): equip → `abilityByKey` maps Q/E/R correctly;
-  Blink moved exactly 220px + i-frame active + second cast blocked by cooldown; Nova dealt 20 (magic,
-  resist-default-1) + 64px shove + cooldown; Bloodpact healed exactly 7 on a 20-dmg hit (35%);
-  empty-slot cast is a safe no-op; run-over/menu guards block casting; the bar renders (Q "6"s cooldown
-  overlay, R active-glow) with icons visible and **no console errors**; `tsc --noEmit` clean. No
-  `RECIPES.md`/dashboard change (dev-only items, no recipes).
-
-### B3-P1a — Enemy terrain-collision gate + roll-through (2026-07-21, Opus)
-Follow-up to B3-P1 off the user's playtest: the "spinny guys" (Cragscale rolling charge) got
-**wedged on boulderfield rocks**. B3-P1 added real solids to the `solids` group (rocks) for the
-first time since trees/boulders were made non-solid back in July, so the pre-existing
-`enemyGroup ↔ solids` collider (`MainScene.ts`) started blocking every enemy — and a
-straight-line chaser wedges (the exact zigzag-avoidance problem that got obstacles made
-non-solid originally; see [[feedback_enemy_obstacle_avoidance]] / [[feedback_boar_zigzag_movement]]).
-**Fix:** a new per-enemy `Enemy.collidesWithTerrain` flag (default **false**) gates that collider
-via a `processCallback` — every current enemy now **rolls freely through rocks; the player still
-collides** (its own `player ↔ solids` collider is unchanged, no callback). The callback resolves the
-Enemy by `instanceof` on both args (group-vs-static-group arg order isn't guaranteed). **This is
-also the future hook:** a terrain-blocked enemy just sets the flag `true` (verified: the gate then
-returns `true` → Arcade separates it). **Confirmed no change needed for the other ask** — enemies
-were never slowed by thornfield terrain: `BRAMBLE_SLOW_MULT`/`environmentEffectAt` is read only for
-the *player* (`Player.update` `envMult`); enemy speed uses `envSpeedMult` (day/night × relic slow),
-which is terrain-independent. `tsc` clean; verified live (`javascript_tool`): all 602 enemies default
-`collidesWithTerrain:false`; the enemy↔solids collider's process callback returns `false` for a
-default Cragscale (both arg orders) and `true` once the flag is flipped; the player↔solids collider
-has no callback; no console errors. **Deferred (needs a real consumer — Opus session):** the actual
-stuck-response AI for a future terrain-blocked enemy — recommended default is to keep most enemies
-roll-through and reserve blocking for a specific heavy archetype with a light slide-along-contact
-nudge, only building the full near-tangent wall-follow heuristic if a genuine maze-navigation enemy
-is ever designed (the deleted heuristic worked but read as "trash" zigzag — don't re-derive it
-blindly). No `RECIPES.md`/dashboard change.

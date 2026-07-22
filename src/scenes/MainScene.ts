@@ -121,6 +121,7 @@ import { JewelryMenu } from "../ui/JewelryMenu";
 import { EquipmentEffects, describePassive } from "../systems/EquipmentEffects";
 import { JEWELRY_RECIPES, type JewelryRecipe } from "../systems/Jewelry";
 import { BuffBarUI } from "../ui/BuffBarUI";
+import { StatusBarUI, type StatusEffect } from "../ui/StatusBarUI";
 import { ChestMenu } from "../ui/ChestMenu";
 import { UpgradeMenu, type UpgradeDef } from "../ui/UpgradeMenu";
 import { CharacterMenu } from "../ui/CharacterMenu";
@@ -381,8 +382,16 @@ interface BadlandsZone extends ZoneShape {
 // badlands zone — only the effect differs, so it shares ZoneShape/zoneEdge rather
 // than duplicating the geometry. "miasma" is the gloam fog: it suppresses HP regen
 // AND ticks poison, which is the biome's signature environmental threat.
+// The bayou's themed macro-zones — the same organic wobbly-blob shape as a
+// badlands zone (shared ZoneShape/zoneEdge), differing only in effect + dressing.
+// These carry the biome's signature LOOK now that its precious materials moved
+// underground (the user): the surface has to be characterful and threatening on
+// its own, since it's no longer where the payoff is.
+//   miasma   — gloam fog: suppresses HP regen AND ticks poison. The hazard.
+//   bonemire — a drowned boneyard of pale dead trees; waterlogged, so it slows.
+//   hammock  — a raised cypress island: no penalty, dense foraging. The respite.
 interface BayouZone extends ZoneShape {
-  type: "miasma";
+  type: "miasma" | "bonemire" | "hammock";
 }
 // Sum of the three harmonic weights below — the max |wobble|, used to bound a zone's
 // outermost lobe (rMax = r * (1 + wAmp * WOBBLE_MAX)) for POI-clearance checks.
@@ -508,6 +517,15 @@ const BAYOU_SHALLOW_SLOW_MULT = 0.78;
 const BAYOU_DEEP_SLOW_MULT = 0.5;
 // Miasma: no HP regen inside, plus a slow poison tick (see Poison.ts).
 const MIASMA_POISON_DPS = 3;
+// Bonemire: waterlogged boneyard muck. Harsher than shallow water, gentler than
+// a deep channel — crossing one is a real commitment.
+const BONEMIRE_SLOW_MULT = 0.62;
+// Denominator for the status-HUD depletion meters. Neither DoT has one single
+// "duration" (each is a bag of stacks with their own timers), so the meter shows
+// remaining time against a fixed reference window rather than pretending to know
+// a total — full bar = this long or more left, draining as it runs out.
+const POISON_METER_FULL_MS = 900;
+const BLEED_METER_FULL_MS = 4000;
 const POI_DEEP_R_MIN = 3600;
 // Keep distinct POI types from crowding each other (S4). Enforced in the pickers
 // against every already-placed POI center, on top of each POI's own clear radius.
@@ -825,6 +843,10 @@ export class MainScene extends Phaser.Scene {
   private bleed = new BleedManager();
   private poison = new PoisonManager();
   private buffBarUI!: BuffBarUI;
+  private statusBarUI!: StatusBarUI;
+  // This frame's environmental movement multiplier (<1 = slowed). Cached beside
+  // currentEnvBlockRegen purely so the status HUD can report WHY you're slow.
+  private currentEnvMoveMult = 1;
   private healthBarBg!: Phaser.GameObjects.Rectangle;
   private healthBarFill!: Phaser.GameObjects.Rectangle;
   private healthShieldFill!: Phaser.GameObjects.Rectangle; // Leech (Mythic) absorb overlay
@@ -1053,6 +1075,7 @@ export class MainScene extends Phaser.Scene {
     this.bayouZones = [];
     this.obstaclePositions = [];
     this.currentEnvBlockRegen = false;
+    this.currentEnvMoveMult = 1;
     this.badlandsDens = [];
     this.hoveredDen = null;
     this.denLightPoints = [];
@@ -1665,6 +1688,7 @@ export class MainScene extends Phaser.Scene {
     // cached flag drives every regen gate (food buffs + Comfort), so a new
     // suppression source only ever has to OR in here.
     this.currentEnvBlockRegen = env.blockRegen || this.poison.isPoisoned();
+    this.currentEnvMoveMult = env.moveMult;
     // Standing in a miasma keeps re-applying a short poison stack, so leaving the
     // zone lets it lapse on its own rather than needing a separate "exit" event.
     if (env.poisonDps && env.poisonDps > 0 && !this.isDead) {
@@ -1710,6 +1734,7 @@ export class MainScene extends Phaser.Scene {
     // nothing.
     if (this.buffs.tick(delta, this.health, this.currentEnvBlockRegen).healed) this.refreshHealthBar();
     this.buffBarUI.sync(this.buffs.active());
+    this.statusBarUI.sync(this.statusEffects());
     this.passiveBarUI.sync(this.passiveEntries());
     this.abilityBarUI.update(this.abilityEntries());
     // Bleed DoT (Cragscale roll): ticks whole damage points regardless of
@@ -3149,6 +3174,7 @@ export class MainScene extends Phaser.Scene {
       durationMs: def.edible.durationMs,
     });
     this.buffBarUI.sync(this.buffs.active());
+    this.statusBarUI.sync(this.statusEffects());
     this.eventLog.add("info", `Ate ${def.name}`);
     this.afterItemMove();
   }
@@ -4800,15 +4826,24 @@ export class MainScene extends Phaser.Scene {
     // Bog Ore — the bayou's metal, plentiful like Sunscorch was in the badlands
     // (it feeds a whole reforge tier, so it can't trickle).
     scatter({ texture: "bog_ore_node", resource: "bog_ore", displayName: "Bog Ore", action: "mine", amountMin: 3, amountMax: 5, health: 3, count: 46 });
-    // Moonsilver — the jewelry metal. Rarer: it buys single rings/amulets and
-    // augments, not a full armor set.
-    scatter({ texture: "moonsilver_node", resource: "moonsilver", displayName: "Moonsilver Seam", action: "mine", amountMin: 2, amountMax: 3, health: 3, count: 22 });
-    // Ability gems — rarest of all, and each has its OWN node so the source
-    // dictates the build (locked in Phase 2b: "gem source dictates build") rather
-    // than one geode rolling a random gem. Phase 4b can add creature drops on top.
-    scatter({ texture: "geode_gloam", resource: "gem_gloam", displayName: "Gloam Geode", action: "mine", amountMin: 1, amountMax: 1, health: 4, count: 9 });
-    scatter({ texture: "geode_ember", resource: "gem_ember", displayName: "Ember Geode", action: "mine", amountMin: 1, amountMax: 1, health: 4, count: 9 });
-    scatter({ texture: "geode_blood", resource: "gem_blood", displayName: "Blood Geode", action: "mine", amountMin: 1, amountMax: 1, health: 4, count: 9 });
+    // DELIBERATELY ABSENT: Moonsilver seams and the three ability geodes.
+    //
+    // Locked by the user (2026-07-22): the most precious materials are NOT found on
+    // the surface — they're **dungeon loot** (a Valheim burial-chamber/sunken-crypt
+    // mechanic, its own upcoming phase). The surface bayou's job is to feel
+    // dangerous and murky while you hunt for a way IN; its reward is bulk
+    // gathering (wood/stone/Bog Ore) and foraging, not build-defining materials.
+    //
+    // Bog Ore stays above ground on purpose: it's the bulk metal behind the whole
+    // Gloamsteel/Mirehide reforge tier, so keeping it surface-mineable means
+    // exploring the swamp still pays, while abilities + jewelry stay gated.
+    //
+    // `moonsilver_node` / `geode_gloam` / `geode_ember` / `geode_blood` textures
+    // and their ResourceNode shapes are intentionally KEPT (BootScene + the
+    // scatter helper above) — the dungeon phase places these exact nodes inside
+    // interiors, so nothing here needs rebuilding, only re-siting. Until then
+    // `moonsilver` + the three gems are dormant again (test via `__dev.give`),
+    // which is the same state Phase 2b shipped them in.
   }
 
   // Bayou flora — persistent free-pickups on the Blackberry regrow path (harvest
@@ -4860,18 +4895,24 @@ export class MainScene extends Phaser.Scene {
   // pickBayouPoint's exclusions apply.
   private placeBayouZones(): void {
     const rng = this.sessionRng();
-    const TARGET = 14;
+    const TYPES = ["miasma", "bonemire", "hammock"] as const;
+    const TARGET = 18; // ~6 of each — enough that crossing the bayou hits several
     const MIN_SEP = 620;
     let guard = 0;
-    while (this.bayouZones.length < TARGET && guard++ < 1400) {
+    while (this.bayouZones.length < TARGET && guard++ < 1800) {
       const p = this.pickBayouPoint(rng);
       if (!p) break;
       if (this.bayouZones.some((z) => Phaser.Math.Distance.Between(p.x, p.y, z.x, z.y) < MIN_SEP)) continue;
+      const type = TYPES[this.bayouZones.length % TYPES.length];
+      // Miasmas stay the smallest — a pocket of bad air you route around or push
+      // through, not a region you live in.
+      const r =
+        type === "miasma" ? rng.between(190, 280) : type === "bonemire" ? rng.between(240, 330) : rng.between(250, 350);
       this.bayouZones.push({
-        type: "miasma",
+        type,
         x: p.x,
         y: p.y,
-        r: rng.between(190, 280),
+        r,
         wK: rng.between(2, 4),
         wPhase: rng.frac() * Math.PI * 2,
         wAmp: rng.realInRange(0.16, 0.24),
@@ -4886,19 +4927,100 @@ export class MainScene extends Phaser.Scene {
   private spawnBayouZoneContent(): void {
     const rng = this.sessionRng();
     for (const z of this.bayouZones) {
-      this.drawZoneFloor(z, 0x2c3a24, 0x4d6b2e);
-      const fumes = Math.min(70, Math.round((Math.PI * z.r * z.r) / 2600));
-      for (let i = 0; i < fumes; i++) {
-        const a = rng.frac() * Math.PI * 2;
-        const d = Math.sqrt(rng.frac()) * this.zoneEdge(z, a) * 0.94;
-        const x = z.x + Math.cos(a) * d;
-        const y = z.y + Math.sin(a) * d;
-        this.add
-          .image(x, y, "miasma_fume")
-          .setDepth(ysortDepth(y))
-          .setAlpha(0.5 + rng.frac() * 0.35)
-          .setScale(0.8 + rng.frac() * 0.9);
+      if (z.type === "miasma") {
+        // Sickly green floor + fume props, so a regen-blocking poison field is
+        // legible from OUTSIDE it — the player should never walk into one blind
+        // (the same "obvious from a distance" rule the badlands zones follow).
+        this.drawZoneFloor(z, 0x2c3a24, 0x4d6b2e);
+        this.scatterInZone(z, rng, Math.min(70, Math.round((Math.PI * z.r * z.r) / 2600)), (x, y) => {
+          this.add
+            .image(x, y, "miasma_fume")
+            .setDepth(ysortDepth(y))
+            .setAlpha(0.5 + rng.frac() * 0.35)
+            .setScale(0.8 + rng.frac() * 0.9);
+        });
+      } else if (z.type === "bonemire") {
+        // A drowned boneyard: pale bleached floor, a thicket of dead trunks and
+        // bone litter. Purely decorative props (non-solid) — the zone's teeth are
+        // its slow, not physical blockers, so it stays a place you can flee across.
+        this.drawZoneFloor(z, 0x2a2b33, 0x585a66);
+        this.scatterInZone(z, rng, Math.min(48, Math.round((Math.PI * z.r * z.r) / 4200)), (x, y) => {
+          this.add
+            .image(x, y, "bayou_deadtree")
+            .setDepth(ysortDepth(y))
+            .setFlipX(rng.frac() < 0.5)
+            .setScale(0.85 + rng.frac() * 0.4);
+        });
+        this.scatterInZone(z, rng, Math.min(40, Math.round((Math.PI * z.r * z.r) / 5200)), (x, y) => {
+          this.add
+            .image(x, y, "bayou_bones")
+            .setDepth(ysortDepth(y))
+            .setFlipX(rng.frac() < 0.5)
+            .setAlpha(0.85);
+        });
+      } else {
+        // A cypress hammock: raised dry ground, dense reeds, and the swamp's best
+        // foraging. The counterweight to the other two — somewhere worth reaching.
+        this.drawZoneFloor(z, 0x2b3a2c, 0x4a6b40);
+        this.scatterInZone(z, rng, Math.min(60, Math.round((Math.PI * z.r * z.r) / 3600)), (x, y) => {
+          this.add
+            .image(x, y, "bayou_reeds")
+            .setDepth(ysortDepth(y))
+            .setFlipX(rng.frac() < 0.5)
+            .setScale(0.8 + rng.frac() * 0.5);
+        });
+        // Real cypress (chop for wood) + rich flora — the hammock is the one place
+        // the surface reliably pays, now that ore/gems live underground.
+        this.scatterInZone(z, rng, rng.between(7, 12), (x, y) => {
+          const node = new ResourceNode(this, {
+            x,
+            y,
+            texture: "bayou_cypress",
+            resource: "wood",
+            amount: 5,
+            action: "chop",
+            displayName: "Cypress",
+            loose: false,
+            health: 3,
+          });
+          this.nodes.push(node);
+          this.obstacleNodes.push(node);
+        });
+        this.scatterInZone(z, rng, rng.between(12, 20), (x, y) => {
+          const moss = rng.frac() < 0.55;
+          this.nodes.push(
+            new ResourceNode(this, {
+              x,
+              y,
+              texture: moss ? "swamp_moss" : "water_lily",
+              resource: (moss ? "swamp_moss" : "water_lily") as ResourceType,
+              amount: 1,
+              action: "pickup",
+              displayName: moss ? "Swamp Moss" : "Water Lily",
+              loose: false,
+              health: 1,
+              persistent: true,
+              pickedTexture: moss ? "swamp_moss_picked" : "water_lily_picked",
+              regrowMs: BLACKBERRY_REGROW_MS,
+            }),
+          );
+        });
       }
+    }
+  }
+
+  // Scatter `count` items uniformly inside a zone's ORGANIC outline (not a
+  // circle), shared by every zone-fill pass.
+  private scatterInZone(
+    z: ZoneShape,
+    rng: Phaser.Math.RandomDataGenerator,
+    count: number,
+    place: (x: number, y: number) => void,
+  ): void {
+    for (let i = 0; i < count; i++) {
+      const a = rng.frac() * Math.PI * 2;
+      const d = Math.sqrt(rng.frac()) * this.zoneEdge(z, a) * 0.94;
+      place(z.x + Math.cos(a) * d, z.y + Math.sin(a) * d);
     }
   }
 
@@ -5074,12 +5196,16 @@ export class MainScene extends Phaser.Scene {
   ): { moveMult: number; blockRegen: boolean; poisonDps?: number } {
     const z = this.subZoneAt(x, y);
     if (z && z.type === "thornfield") return { moveMult: BRAMBLE_SLOW_MULT, blockRegen: false };
-    // Biome 3: a miasma zone suppresses regen and poisons. Checked before water so
-    // a miasma sitting over a channel still reports its poison; the water slow is
-    // then folded in below rather than being lost to the early return.
-    const m = this.miasmaAt(x, y);
+    // Biome 3 zones are resolved BEFORE the early return so a zone sitting over a
+    // channel still reports both its own effect and the water slow — whichever
+    // slow is harsher wins rather than one silently replacing the other.
     const water = this.bayouWaterMult(x, y);
-    if (m) return { moveMult: water, blockRegen: true, poisonDps: MIASMA_POISON_DPS };
+    const bz = this.bayouZoneAt(x, y);
+    if (bz?.type === "miasma") return { moveMult: water, blockRegen: true, poisonDps: MIASMA_POISON_DPS };
+    if (bz?.type === "bonemire") return { moveMult: Math.min(water, BONEMIRE_SLOW_MULT), blockRegen: false };
+    // A hammock is raised dry ground — explicitly no penalty, even where the
+    // feature layer would otherwise read as shallow water.
+    if (bz?.type === "hammock") return { moveMult: 1, blockRegen: false };
     return { moveMult: water, blockRegen: false };
   }
 
@@ -5103,8 +5229,8 @@ export class MainScene extends Phaser.Scene {
     return 1;
   }
 
-  // The miasma zone covering a point, if any (same organic-edge test as subZoneAt).
-  private miasmaAt(x: number, y: number): BayouZone | null {
+  // The bayou zone covering a point, if any (same organic-edge test as subZoneAt).
+  private bayouZoneAt(x: number, y: number): BayouZone | null {
     for (const z of this.bayouZones) {
       const dx = x - z.x;
       const dy = y - z.y;
@@ -7811,6 +7937,7 @@ export class MainScene extends Phaser.Scene {
     this.bleed.clear();
     this.poison.clear();
     this.buffBarUI.sync(this.buffs.active());
+    this.statusBarUI.sync(this.statusEffects());
     this.eventLog.add("combat", "You died...");
     // Hardcore: death is terminal — end the run and post the score after a beat.
     // This holds even after a "Continue" into in-progress content: death always
@@ -9813,6 +9940,59 @@ export class MainScene extends Phaser.Scene {
   // strip's bottom edge is a small gap above it. HP/stamina bar Y is fixed
   // (only their WIDTH grows with max pool), so this anchor never needs
   // recomputing.
+  // The live debuff list for StatusBarUI, rebuilt each frame from real system
+  // state (never cached), so an effect can never linger on the HUD after it ends.
+  // Adding a future debuff = one more row here; the UI is generic.
+  private statusEffects(): StatusEffect[] {
+    if (this.isDead) return [];
+    const out: StatusEffect[] = [];
+    if (this.poison.isPoisoned()) {
+      out.push({
+        id: "poison",
+        name: "Poisoned",
+        icon: "icon_status_poison",
+        detail: `${this.poison.dps()} dmg/s · ignores armor · no healing`,
+        color: 0x8fd94a,
+        remainingMs: this.poison.remainingMs(),
+        durationMs: POISON_METER_FULL_MS,
+      });
+    }
+    if (this.bleed.isBleeding()) {
+      out.push({
+        id: "bleed",
+        name: "Bleeding",
+        icon: "icon_status_bleed",
+        detail: `${this.bleed.dps()} dmg/s · ignores armor`,
+        color: 0xd42a2a,
+        remainingMs: this.bleed.remainingMs(),
+        durationMs: BLEED_METER_FULL_MS,
+      });
+    }
+    // Conditional (no timer): true exactly while you're standing in it.
+    if (this.currentEnvMoveMult < 1) {
+      out.push({
+        id: "slow",
+        name: "Slowed",
+        icon: "icon_status_slow",
+        detail: `Movement ${Math.round((1 - this.currentEnvMoveMult) * 100)}% slower here`,
+        color: 0xc9a24a,
+      });
+    }
+    // Only shown when regen is blocked by something OTHER than poison — poison's
+    // own tooltip already says it stops healing, so pairing the two icons every
+    // time would be pure noise.
+    if (this.currentEnvBlockRegen && !this.poison.isPoisoned()) {
+      out.push({
+        id: "noregen",
+        name: "No Regen",
+        icon: "icon_status_noregen",
+        detail: "Healing is suppressed here",
+        color: 0x9a3a46,
+      });
+    }
+    return out;
+  }
+
   private createBuffBar(): void {
     const gap = 8;
     const barH = 20;
@@ -9820,7 +10000,13 @@ export class MainScene extends Phaser.Scene {
     const healthBarY = staminaBarY - gap - barH;
     this.buffBarUI = new BuffBarUI(this);
     this.buffBarUI.layout(this.scale.width / 2, healthBarY - 6);
+    // Debuffs sit in their own band directly ABOVE the buff row, at a FIXED
+    // offset rather than stacked on the live buff count — otherwise the debuff
+    // icons would jump every time a food buff started or expired.
+    this.statusBarUI = new StatusBarUI(this);
+    this.statusBarUI.layout(this.scale.width / 2, healthBarY - 6 - 34);
     this.buffBarUI.sync(this.buffs.active());
+    this.statusBarUI.sync(this.statusEffects());
   }
 
   // Unified passive/proc HUD (the user: Dota-style icons LEFT of the hotbar) —
