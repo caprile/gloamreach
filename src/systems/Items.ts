@@ -1424,6 +1424,28 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     hotbarable: false,
   },
 
+  // --- bayou surface-POI spoils (Phase 4d). Deliberately vague about what they
+  // are FOR: naming the thing they summon would spoil the discovery, the same
+  // reason the Gremlin Totem's description only points at the altar. ---
+  tyrant_sigil: {
+    key: "tyrant_sigil",
+    name: "Tyrant Sigil",
+    description:
+      "A slab of black shrine-stone, scored with a mark the swamp keeps repeating. It is warm on the side that faces down.",
+    texture: "icon_tyrant_sigil",
+    maxStack: 99,
+    hotbarable: false,
+  },
+  gorge_bone: {
+    key: "gorge_bone",
+    name: "Gorge Bone",
+    description:
+      "A rib the length of an arm, kept wrapped above a chieftain's bed. Whatever shed it is still down there somewhere.",
+    texture: "icon_gorge_bone",
+    maxStack: 99,
+    hotbarable: false,
+  },
+
   // --- bayou elite trophies (Common rarity, Tier 3 — the deepest relic tier) ---
   mirejaw_trophy: {
     key: "mirejaw_trophy",
@@ -1738,6 +1760,8 @@ const BAYOU_ITEM_KEYS = new Set<string>([
   "mirejaw_meat", "blight_gland", "gloam_dust",
   "mirejaw_trophy", "blighttoad_trophy", "mosswretch_trophy",
   "murkling_trophy", "fenlurker_trophy", "corpselight_trophy",
+  // surface-POI spoils (Phase 4d)
+  "tyrant_sigil", "gorge_bone",
 ]);
 
 export function itemBiome(key: string): ItemBiome {
@@ -1753,6 +1777,7 @@ export type ItemCategory = "material" | "gear" | "station" | "food" | "curio";
 const CURIO_ITEM_KEYS = new Set<string>([
   "gloam_shard", "ember_shard", "gremlin_king_fang",
   "warren_fetish", "tyrant_totem", "gremlin_totem",
+  "tyrant_sigil", "gorge_bone",
 ]);
 
 export function itemCategory(key: string): ItemCategory {

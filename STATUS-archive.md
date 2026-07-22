@@ -7246,3 +7246,118 @@ forest — an earlier 65-vs-71 reading was just an unsettled loop, not a regress
 source would be dishonest; it lands with the 4b roster. The bayou is also gated out of the
 enemy-respawn/nightfall top-up (`makeRespawnEnemy` returns null for it) so it doesn't spawn forest
 boars in a swamp before 4b ships. No `RECIPES.md`/dashboard change (no new recipes).
+
+### B3-P4b — Biome-3 Phase 4b: the Duskmire Bayou creature roster (2026-07-22, Opus)
+
+Phase 4b of the biome-3 roadmap (`.claude/plans/biome-3-and-new-systems-roadmap.md`) — the
+**melee-core bayou roster**, six bespoke creatures dropped into the terrain 4a built. Scope locked
+with the user up front via `AskUserQuestion`: **the specced 6** (not a trimmed 4-5, not a 7th
+apex elite); **Mirehide comes from the Mirejaw ONLY** (the signature ambusher — hunting it *is*
+the reforge gate, mirroring Bog Ore as the one surface metal); and **build the homing projectile
+now** rather than shipping the Corpselight with a straight bolt.
+
+**Two shared hooks first, both tiny, both built before the content that needs them:**
+- **`Enemy.pendingPoison`** — the exact contract `pendingBleed` already had (read + cleared by
+  `updateEnemies` on the landing frame, so it rides the same i-frame guard);
+  `applyDamageToPlayer` gained a matching optional `poison` param that routes to
+  `PoisonManager.apply()` — the **discrete, stacking** path, deliberately not the miasma's
+  refresh-only `sustain()`.
+- **`Projectile.homing`** — optional `{turnRateRadPerSec, target}` (a live ref, re-aimed each
+  `preUpdate` by rotating the current velocity toward the target by at most `turnRate·dt`, speed
+  preserved), plus an optional `maxLifetimeMs`. The lifetime is **required** for a homing shot:
+  the default despawn measures straight-line distance *from spawn*, which a curving orb may never
+  exceed — it would orbit forever. Straight shots are untouched and keep the distance rule.
+
+**The six (each a bespoke subclass with its own state machine/constants/loot + elite variant +
+per-species trophy, per the standing "own numbers, don't share one config table" rule):**
+- **Mirejaw** *(130 HP)* — the signature ambusher and sole **Mirehide** source. Lurks half-sunk at
+  **alpha 0.4 — visible**, unlike the Sandmaw's 0.18, so it's spottable — creeps into position,
+  then commits a **locked-line lunge chomp** (85 dmg + bleed 7/s×6s). Unlike the Sandmaw it does
+  NOT re-submerge after one attempt: it **surfaces and hunts** (62 chomp + bleed), re-lunging from
+  mid-range, and only re-buries once it loses you. Also drops **Mirejaw Meat** — the bayou's food
+  source, the Duskrunner-meat precedent. Resists pierce ×0.5 / weak slash ×1.25.
+- **Blighttoad** *(70 HP)* — the **poison** carrier, the creature half of the biome's signature
+  status. Its bite (52) is mostly eaten by bayou-tier plate; the **poison is the payload** —
+  armor-bypassing, **stacking per bite**, and it halves every heal source while it runs, so it
+  also stops you eating your way out. Semi-swarm (`packAggro` 200), clumps of 2-3, burst **hop**
+  locomotion.
+- **Mosswretch** *(190 HP)* — the bruiser. **Slowest common enemy in the game** (36px/s, always
+  outwalkable) with the **longest common wind-up** (780ms) and a 720ms recovery, so every hit it
+  lands is one you chose not to walk out of. **The roster's FIRE lesson:** fire **×1.5**, the
+  biggest weakness multiplier on any common enemy, which finally makes the player's fire sources a
+  deliberate answer to a specific creature. Resists blunt ×0.5.
+- **Murkling** *(22 HP)* — the fast melee swarm and the **AOE-arc payoff enemy**. Dies to one
+  bayou-tier hit; the threat is 4-6 at once, faster than the player's walk, with the shortest
+  telegraph in the game (150ms). Wide `packAggro` (300) on the **base `state` field** (the
+  Duskrunner's zero-override pattern). **Deliberately neutral to every damage type** — it's the
+  baseline you measure a weapon's sweep against.
+- **Fenlurker** *(85 HP)* — the muck-burrowing ambusher. Shipped alongside the Sandmaw on purpose
+  because **the dodge verb is opposite**: the Sandmaw detonates a *ring* (dodge by clearing
+  distance), the Fenlurker rakes a **locked line** out of the mud (dodge by stepping aside), and a
+  dodged maul leaves it planted a full second with no radial safety net. Invisible **and
+  untargetable** while buried (the Sandmaw's locked rule); AoE damage while buried arms a flag that
+  `update()` commits next frame (takeHit has no player coords and this attack has a direction to
+  lock). Resists slash ×0.5 / weak blunt ×1.25 — **the exact inverse of the Mirejaw**, so the two
+  bayou ambushers want different weapons.
+- **Corpselight** *(90 HP)* — the **one** ranged creature, kept genuinely uncommon (22 vs 42-139
+  for the melee species) so the biome still reads melee-core. Fires the **homing gloam orb**: 110
+  px/s, 1.5 rad/s, 4.2s lifetime, `magic` (bypasses flat armor). Neutral to physical on purpose
+  (the Hexling's old flat physical resist read as unkillable). Also the bayou's **local Hex Essence
+  source**, so forging Gloamsteel no longer means walking back to the badlands.
+
+**Spawning + economy.** `spawnBayouEnemies()` places **358 creatures** through `pickBayouPoint`
+(bayou-dominant only, POI exclusions honored), clustered per species rather than evenly spread per
+the organic-density preference — and cluster jitter now **re-checks the biome per member** and
+falls back to the anchor, an improvement on the badlands pack spawner, which can leak members over
+a seam. The bayou's **enemy-respawn top-up is live** (4a had it explicitly gated off), weighted to
+its own counts with a real Mirejaw share so the Mirehide tier stays farmable. 3 new materials
+(Mirejaw Meat / Blight Gland / Gloam Dust) + 6 elite trophies at **Common / Tier 3** — a new power
+tier (×2.25), **roll-only for now**: refining needs a tier-3 shard currency the bayou's own POI /
+dungeon phases will source, exactly as biome-2 trophies were before Phase 5 added Ember Shards.
+Mosswretch reuses existing keys (Swamp Moss + Wood) and Fenlurker drops **Bones**, giving the bayou
+a bone supply that previously only came from forest Boars.
+
+**Verified live** (`javascript_tool`; the backgrounded-preview loop had to be hand-stepped via
+`game.loop.step`): 358 bayou creatures, all inside the 6400-10500 band; every stat/resist/loot/
+trophy/elite-texture pair read off real instances; **Mirejaw's locked lunge dealt 85 + bleed 7/s
+standing still and ZERO damage when sidestepped during the tell**; poison **stacked 6→12→18→24 dps
+across repeated bites while the miasma's sustain path held flat at 3** (the two-mode contract);
+Mosswretch 800ms telegraph→95 dmg, planted at velocity 0; one woken Murkling **cascaded aggro to
+all 5** packmates; Fenlurker buried = untargetable/alpha 0.12/no HP bar, retaliates on AoE damage,
+maul 78 + bleed 5; the homing orb **re-aimed 0°→-55° chasing a moving player at exactly its
+1.5 rad/s cap** and **expired at 4224ms** (the anti-orbit safeguard), and hit for **20 through 42
+flat armor vs 1 for the same shot untyped** — magic bypass + heavy-armor mitigation both correct.
+`tsc` clean, zero console errors, all six render with distinct silhouettes (screenshot).
+Dashboard Enemies tab (the one hand-mirrored source) + `RECIPES.md`'s trophy table updated; no
+recipe changes.
+
+**Same-session tuning pass (the user: orbs "fade away really soon", "remember how powerful the player
+is going to be — think about how fast players will be", "the gators are too small").** All three were
+the same root error: the roster was sized against the **badlands** roster instead of against a
+bayou-ready player. Measured, not guessed — that player **sprints at 166-229 px/s** (Running skill +
+move relics, ~309 on a kill-rush), **dashes at 450**, **blinks 220px**, and hits for **45-70 (130-200
+on crit)**. Against that, the fastest creature in the roster was 104 px/s and the tankiest was 190 HP:
+**the entire biome was outrunnable at a walk and died in two swings.**
+- **Corpselight orb:** 110px/s × 4.2s was a **~460px leash** — it died almost as soon as it was fired.
+  Now 170px/s × 9s ≈ **1500px of pursuit** (verified: 9024ms/1527px when outrun). The fairness bound
+  is unchanged in spirit — 170 is still under a sprint, so running straight escapes outright; verified
+  it *does* catch a player moving at 125px/s. Damage 26→34, cast cooldown 2400→1900ms.
+- **Speeds** (peak pursuit, measured live): Murkling 104→**172** (the only creature that can hang with
+  a sprint — that IS the swarm's identity: you kill it, sweep it, or blink, you don't walk away),
+  Mirejaw chase 66→**138** / lunge 400→**560** over 340px, Blighttoad hop burst 150→**300** (~145 avg),
+  Fenlurker burrow-stalk 40→**130**, Corpselight drift 40→**85**, Mosswretch 36→**74** (still the
+  slowest by design — it's the bruiser, it's *meant* to be escapable).
+- **HP** ~2.5-3× (Murkling 22→40, Blighttoad 70→150, Fenlurker 85→220, Corpselight 90→190, Mirejaw
+  130→**320**, Mosswretch 190→**420**), and **damage** raised to matter through bayou plate. Measured
+  net through a **full Gloamsteel set**: Mosswretch smash **63**, Mirejaw lunge **52**, Fenlurker maul
+  **44** — ~4 hits to kill a 220 HP player, all three heavily telegraphed.
+- **Mirejaw "stalk patience" (a real bug the tuning exposed):** its stalk is deliberately slow, so a
+  player who simply kept walking could never be ambushed — it fell **537px behind and never engaged**.
+  After 2.4s of fruitless stalking it now **abandons stealth and hunts**. Verified: walking away → it
+  escalates and closes; sprinting away → clean escape (1500px gap). That's the intended contract.
+- **Gator size:** sprite redrawn 34×22 → **48×22** and scaled 1.55 (elite 2.0) = **74×34 on screen**,
+  the largest common creature in the game, with a `barScale` bump so its HP bar stays readable.
+
+**Next: 4c — dungeons** (where the ability gems + Moonsilver actually live, ordered
+after the roster because a dungeon needs creatures), then 4d (surface POIs + the Miretyrant boss +
+the win-con swap).

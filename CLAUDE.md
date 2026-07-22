@@ -1621,9 +1621,29 @@ below.**
      CLIPPED to floor rather than banned** (`clipBlinkToFloor` marches the blink line and lands on
      the last valid point — testing only the endpoint would let it jump through a wall). See
      `STATUS.md`.
-   - Still to come: **4d = surface POIs + the Miretyrant boss**, which **becomes the new win-con**,
-     demoting the Duneshaper to a mid-boss and finally making its Heart obtainable. **Then Phase 5**
-     (post-big-boss RNG reward choice). See [[survivor-rpg-biome-3-roadmap]].
+   - **Phase 4d (B3-P4d) — surface POIs + the Miretyrant, itself split across two sessions**
+     (plan: `.claude/plans/biome-3-phase-4d-pois.md`). **Session 1 is DONE:** the bayou's two
+     surface POIs, built on **deliberately different verbs** because every prior POI (shack,
+     warren, forge, vein, crypt) resolves as "kill the guards, take the loot". The **Sunken
+     Shrine** is a rite the PLAYER starts — spend an offering (3 Blight Gland + 2 Gloam Dust,
+     finally giving the 4b trash-mob drops an economy) to kindle three escalating waves fought on
+     the spot; leaving a 420px radius for 5s lapses it and destroys what it summoned; surviving
+     opens a bowl with a guaranteed **Tyrant Sigil**, and emptying the bowl re-arms it, so it is
+     **renewable with no respawn timer**. The **Drowned Lodge** is a place whose danger is its
+     geography — a stilt village where the boardwalk is the only safe footing (Corpselights above,
+     Mirejaws in the 0.5×-slow water below), payoff spread across per-hut caches, with a
+     chieftain's hut planked shut (no prompt at all, the shielded-node treatment) until every
+     haunt is dead, holding a guaranteed **Gorge Bone**. Both key materials ship **inert** — no
+     recipe until the descent exists, so nothing dead-ends in the crafting menu. Also extracted
+     **`MainScene.insidePoiClearing(x,y)`**: the POI-exclusion list had been duplicated in three
+     samplers (only one knew about the new POIs) and `scatterInZone` had no check at all, which
+     put stray trees inside a Lodge — **any future POI now only needs adding in one place.**
+     **Session 2 (NEXT) = the Miretyrant**, which per a locked amendment from the user lives in
+     its **own boss-level DUNGEON, not on the surface** (a bespoke arena reusing 4c's
+     `CryptLayout`/`CRYPT_REALM` machinery behind a sealed descent, unlocked by an effigy crafted
+     from the Sigil + Bone). It **becomes the new win-con**, demoting the Duneshaper to a mid-boss
+     and finally making its Heart obtainable. **Then Phase 5** (post-big-boss RNG reward choice).
+     See [[survivor-rpg-biome-3-roadmap]].
 
 **Not yet built — next up in rough order:**
 6. **World & discovery** — much bigger generated world, biomes, map, a single giant

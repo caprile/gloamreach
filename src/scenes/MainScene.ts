@@ -44,6 +44,8 @@ import {
   CRYPT_CELL,
   type CryptLayout,
 } from "../systems/CryptLayout";
+import { SunkenShrine, SHRINE_OFFERING } from "../entities/SunkenShrine";
+import { DrownedLodge } from "../entities/DrownedLodge";
 import type { LootContainer, LootRollEntry } from "../systems/LootContainer";
 import type { ResourceType } from "../systems/Inventory";
 import {
@@ -637,6 +639,76 @@ const CRYPT_LOOT_TABLE: LootRollEntry[] = [
   { key: "refined_trophy_uncommon", min: 1, max: 1, chance: 0.25 },
 ];
 
+// ===== Bayou surface POIs (biome 3 Phase 4d) =====
+//
+// The crypts gave the bayou a way DOWN; these give it places to go on the
+// surface. Deliberately built on two different verbs so they aren't each
+// other's reskin (and aren't a fourth copy of "kill the guards, take the loot"):
+// the Shrine is a rite the PLAYER starts and has to survive on the spot, and
+// the Lodge is a place whose danger is its geography.
+
+// Sunken Shrines. A rite site is a destination, so they sit deep (POI_DEEP_R_MIN)
+// and well apart; SHRINE_CLEAR_RADIUS is generous because the rite spawns waves
+// in a ring around it and wild scatter inside that ring reads as noise.
+const SHRINE_COUNT = 4;
+const SHRINE_MIN_SPACING = 1800;
+const SHRINE_CLEAR_RADIUS = 260;
+const SHRINE_RING_PROPS = 7; // decorative offering basins circling the shrine
+// The rite. Three waves, each given time to be fought before the next lands —
+// a wave that arrives on top of the last one is a pile-up, not an escalation.
+const SHRINE_WAVE_COUNT = 3;
+const SHRINE_FIRST_WAVE_DELAY_MS = 1400; // beat between kindling and wave 1
+const SHRINE_WAVE_INTERVAL_MS = 22000; // cadence if the player hasn't cleared yet
+const SHRINE_SPAWN_RADIUS = 190; // where a wave surfaces, in a ring around the shrine
+// Leash: the rite is a stand-and-hold, so walking away lapses it. Not instant —
+// a fighting retreat across the clearing is legitimate, abandoning it isn't.
+const SHRINE_RITE_RADIUS = 420;
+const SHRINE_LEASH_GRACE_MS = 5000;
+
+// Sunken Shrine bowl (Phase 4d). Guaranteed Tyrant Sigil — a survived rite is a
+// real fight, and the sigils are half of what the deep mire will ask for.
+const SUNKEN_SHRINE_LOOT_TABLE: LootRollEntry[] = [
+  { key: "tyrant_sigil", min: 1, max: 1, chance: 1.0 },
+  { key: "gloam_shard", min: 2, max: 4, chance: 0.85 },
+  { key: "moonsilver", min: 1, max: 1, chance: 0.35 },
+  { key: "blight_gland", min: 2, max: 4, chance: 0.6 },
+  { key: "gloam_dust", min: 2, max: 4, chance: 0.6 },
+  { key: "hex_essence", min: 1, max: 2, chance: 0.4 },
+];
+
+// Drowned Lodges. Fewer and further apart than crypt doorways — a village is a
+// landmark. The clear radius covers the whole boardwalk footprint.
+const LODGE_COUNT = 4;
+const LODGE_MIN_SPACING = 1800;
+const LODGE_CLEAR_RADIUS = 280;
+const LODGE_HUT_MIN = 4;
+const LODGE_HUT_MAX = 6;
+const LODGE_WALK_HALF_W = 16; // half-width of the boardwalk planking
+const LODGE_SPAN = 210; // how far the boardwalk runs either side of center
+const LODGE_HUT_OFFSET = 66; // how far off the walkway a hut platform sits
+const LODGE_LURKER_COUNT = 3; // Mirejaws in the water under the planks
+
+// An ordinary hut's cache — steady bayou supply, no key material.
+const LODGE_HUT_LOOT_TABLE: LootRollEntry[] = [
+  { key: "mirehide", min: 1, max: 2, chance: 0.6 },
+  { key: "mirejaw_meat", min: 1, max: 3, chance: 0.7 },
+  { key: "bog_ore", min: 2, max: 4, chance: 0.55 },
+  { key: "swamp_moss", min: 2, max: 4, chance: 0.5 },
+  { key: "bones", min: 2, max: 4, chance: 0.5 },
+  { key: "twine", min: 1, max: 3, chance: 0.4 },
+];
+
+// The chieftain's hut — barred until the site's haunts are dead, so it's allowed
+// to be the richest thing on the boardwalk. Guaranteed Gorge Bone.
+const LODGE_CHIEF_LOOT_TABLE: LootRollEntry[] = [
+  { key: "gorge_bone", min: 1, max: 1, chance: 1.0 },
+  { key: "moonsilver", min: 1, max: 2, chance: 0.6 },
+  { key: "mirehide", min: 2, max: 3, chance: 0.8 },
+  { key: "gloam_shard", min: 1, max: 3, chance: 0.5 },
+  { key: "corpselight_trophy", min: 1, max: 1, chance: 0.4 },
+  { key: "refined_trophy_uncommon", min: 1, max: 1, chance: 0.2 },
+];
+
 // The main gameplay scene: build the world, spawn the player and resources,
 // follow the camera, and run the mouse-driven interaction + HUD.
 export class MainScene extends Phaser.Scene {
@@ -858,6 +930,20 @@ export class MainScene extends Phaser.Scene {
   private hoveredCrypt: SunkenCrypt | null = null;
   private hoveredCryptExit: SunkenCrypt | null = null;
   private hoveredCryptChest: SunkenCrypt | null = null;
+
+  // Bayou surface POIs (biome 3 Phase 4d). Positions are picked in create()
+  // before any spawning so their clear radii can keep wild content out of each
+  // site (the standing "POI busy = missing exclusion zone" rule). All reset per
+  // run in create() (scene.restart field-init gotcha).
+  private shrinePositions: { x: number; y: number }[] = [];
+  private shrines: SunkenShrine[] = [];
+  private shrineLightPoints: { x: number; y: number }[] = [];
+  private hoveredShrine: SunkenShrine | null = null;
+  private lodgePositions: { x: number; y: number }[] = [];
+  private lodges: DrownedLodge[] = [];
+  private lodgeLightPoints: { x: number; y: number }[] = [];
+  // A lodge hover resolves to ONE hut, not the site — each hut is its own cache.
+  private hoveredLodgeHut: { lodge: DrownedLodge; hut: DrownedLodge["huts"][number] } | null = null;
   // Right-click "Upgrade / Destroy" popup for any placed object (Workbench,
   // Campfire, Drying Rack, ...) — a single generic system, not per-type.
   private contextMenu!: ContextMenu;
@@ -1193,6 +1279,14 @@ export class MainScene extends Phaser.Scene {
     this.hoveredCrypt = null;
     this.hoveredCryptExit = null;
     this.hoveredCryptChest = null;
+    this.shrinePositions = [];
+    this.shrines = [];
+    this.shrineLightPoints = [];
+    this.hoveredShrine = null;
+    this.lodgePositions = [];
+    this.lodges = [];
+    this.lodgeLightPoints = [];
+    this.hoveredLodgeHut = null;
     this.upgradeTarget = null;
     this.placedLabels = new Map();
     this.placedUpgradeGlyphs = new Map();
@@ -1291,6 +1385,23 @@ export class MainScene extends Phaser.Scene {
     // spawning, so CRYPT_CLEAR_RADIUS keeps ordinary bayou content out of each
     // doorway's clearing (same reason every POI above picks its spot up front).
     this.cryptPositions = this.pickCryptPositions(this.sessionRng());
+    // Bayou surface POIs (Phase 4d) — same rule again: chosen up front so their
+    // clear radii are in force for every spawn pass below. After the crypts, so
+    // a shrine/lodge can't land on a doorway.
+    this.shrinePositions = this.pickBayouPoiPositions(
+      this.sessionRng(),
+      SHRINE_COUNT,
+      SHRINE_MIN_SPACING,
+      { avoidDeepWater: true },
+    );
+    // Lodges deliberately do NOT avoid deep water — a stilt village belongs over
+    // a channel. That IS the POI: the boardwalk is the only safe footing.
+    this.lodgePositions = this.pickBayouPoiPositions(
+      this.sessionRng(),
+      LODGE_COUNT,
+      LODGE_MIN_SPACING,
+      { avoidDeepWater: false, avoid: this.shrinePositions, avoidRadius: POI_MIN_SEPARATION },
+    );
 
     // Ground: a repeating grass texture only over the FOREST REGION (biome 1),
     // where it shows through the translucent forest bake. A world-sized tilesprite
@@ -1397,6 +1508,8 @@ export class MainScene extends Phaser.Scene {
     this.spawnBayouFlora();
     this.spawnBayouEnemies(); // Phase 4b — the melee-core roster (after the nodes, same as the badlands order)
     this.spawnSunkenCrypts(solids); // Phase 4c — surface doorways + their prebuilt interiors
+    this.spawnSunkenShrines(); // Phase 4d — the rite POI
+    this.spawnDrownedLodges(); // Phase 4d — the stilt-village POI
     // PB1 Session 3 — populate the forest patchwork blobs beyond BIOME_RADIUS and
     // extend the badlands band beyond BADLANDS_R_MAX_INNER. Called last of the
     // content passes (every POI position is set by now) so their exclusion checks
@@ -1903,6 +2016,7 @@ export class MainScene extends Phaser.Scene {
     this.updateEnemies(delta);
     this.updateRespawns(delta);
     this.updatePoiRespawns(this.time.now);
+    this.updateShrines(this.time.now, delta); // Phase 4d — rite waves + the leash
     this.updateTreeOcclusion(delta);
     this.updateMapReveal();
     this.updateShackGlows();
@@ -1997,6 +2111,18 @@ export class MainScene extends Phaser.Scene {
       if (!onScreen(shack.x, shack.y)) continue;
       const s = toScreen(shack.x, shack.y);
       lights.push({ x: s.x, y: s.y, radius: POI_LIGHT_RADIUS * z });
+    }
+    // Bayou surface POIs (Phase 4d) — a shrine's bowl-fire and a lodge's lamps
+    // are how both read as inhabited places across a dark swamp.
+    for (const p of this.shrineLightPoints) {
+      if (!onScreen(p.x, p.y)) continue;
+      const s = toScreen(p.x, p.y);
+      lights.push({ x: s.x, y: s.y, radius: POI_LIGHT_RADIUS * z });
+    }
+    for (const p of this.lodgeLightPoints) {
+      if (!onScreen(p.x, p.y)) continue;
+      const s = toScreen(p.x, p.y);
+      lights.push({ x: s.x, y: s.y, radius: POI_LIGHT_RADIUS * 1.3 * z });
     }
     // Sunken Crypts — surface doorways glow with their gem's color at night.
     for (const p of this.cryptLightPoints) {
@@ -3475,6 +3601,10 @@ export class MainScene extends Phaser.Scene {
     for (const shack of this.gremlinShacks) shack.syncGlow();
     for (const den of this.badlandsDens) den.syncGlow();
     for (const crypt of this.crypts) crypt.syncGlow();
+    // Also unbars a lodge's chieftain hut the moment its last haunt dies (the
+    // texture swap lives in syncGlow so a haunt killed by a DoT tick or a stray
+    // AOE can't miss it — no kill-path hook needed).
+    for (const lodge of this.lodges) lodge.syncGlow();
   }
 
   // POI respawn (S4, locked decision 4): every badlands mini-boss POI re-arms
@@ -3522,6 +3652,25 @@ export class MainScene extends Phaser.Scene {
         den.reset(); // clears respawnAt, resets to wave1, re-arms loot
         this.spawnDenWave(den, false); // fresh wave 1 of 3 normal Duskrunners
         this.notifyPoiRespawn(den.x, den.y, "A Warren has been reclaimed — Duskrunners burrow in anew.");
+      }
+    }
+    // Drowned Lodges (Phase 4d): every cache emptied AND the chieftain's hut
+    // opened. Sunken Shrines are deliberately absent — they re-arm the instant
+    // their bowl is emptied (they're a rite, not a container), so a timer would
+    // only get in the way. See updateShrines.
+    for (const lodge of this.lodges) {
+      if (!lodge.fullyLooted) {
+        lodge.respawnAt = null;
+        continue;
+      }
+      if (lodge.respawnAt === null) lodge.respawnAt = now + POI_RESPAWN_MS;
+      else if (now >= lodge.respawnAt) {
+        lodge.reset(); // clears respawnAt, re-bars the chief hut, re-arms caches
+        this.spawnLodgeResidents(lodge);
+        for (const hut of lodge.huts) {
+          hut.loot.rollIfEmpty(hut.chief ? LODGE_CHIEF_LOOT_TABLE : LODGE_HUT_LOOT_TABLE);
+        }
+        this.notifyPoiRespawn(lodge.x, lodge.y, "The lodge is occupied again — lights move on the water.");
       }
     }
   }
@@ -3783,6 +3932,27 @@ export class MainScene extends Phaser.Scene {
     return last;
   }
 
+  // Is (x, y) inside ANY POI's own clearing? The standing rule is that a POI
+  // clearing stays free of wild scatter, or the landmark reads as visual noise
+  // instead of a place ("POI busy = missing exclusion zone"). Every sampler used
+  // to carry its own copy of this list, which is exactly how the Phase-4d POIs
+  // ended up with stray trees in them: pickBayouPoint learned about them and the
+  // badlands/outer-forest samplers didn't, and bayou blobs neighbour badlands
+  // ones. One list, consulted by everything that places world content.
+  private insidePoiClearing(x: number, y: number): boolean {
+    const near = (c: { x: number; y: number } | null | undefined, r: number) =>
+      !!c && Phaser.Math.Distance.Between(x, y, c.x, c.y) < r;
+    if (near(this.altarPosition, WAR_CAMP_CLEAR_RADIUS)) return true;
+    if (near(this.veinPosition, VEIN_CLEAR_RADIUS)) return true;
+    if (this.badlandsDens.some((d) => near(d, DEN_CLEAR_RADIUS))) return true;
+    if (this.forgePositions.some((f) => near(f, FORGE_CLEAR_RADIUS))) return true;
+    if (this.tyrantAltarPositions.some((a) => near(a, TYRANT_ALTAR_CLEAR_RADIUS))) return true;
+    if (this.cryptPositions.some((c) => near(c, CRYPT_CLEAR_RADIUS))) return true;
+    if (this.shrinePositions.some((s) => near(s, SHRINE_CLEAR_RADIUS))) return true;
+    if (this.lodgePositions.some((l) => near(l, LODGE_CLEAR_RADIUS))) return true;
+    return false;
+  }
+
   // Sample a point out in the badlands patchwork (biome 2 Phase 2). Unlike the
   // forest samplers (which sample the central BIOME region), this sweeps a polar
   // annulus in the badlands radius band and requires real badlands blob coverage
@@ -3814,44 +3984,7 @@ export class MainScene extends Phaser.Scene {
       const r = R_MIN + Math.pow(rng.frac(), 1.7) * (R_MAX - R_MIN); // inner-weighted
       const x = WORLD_CX + Math.cos(ang) * r;
       const y = WORLD_CY + Math.sin(ang) * r;
-      if (
-        this.altarPosition &&
-        Phaser.Math.Distance.Between(x, y, this.altarPosition.x, this.altarPosition.y) < WAR_CAMP_CLEAR_RADIUS
-      )
-        continue;
-      if (
-        this.veinPosition &&
-        Phaser.Math.Distance.Between(x, y, this.veinPosition.x, this.veinPosition.y) < VEIN_CLEAR_RADIUS
-      )
-        continue;
-      // Duskrunner Warrens (Phase 3): keep wild badlands packs out of a den's
-      // own clearing (it has its own two-wave guard fight).
-      if (
-        this.badlandsDens.some(
-          (d) => Phaser.Math.Distance.Between(x, y, d.x, d.y) < DEN_CLEAR_RADIUS,
-        )
-      )
-        continue;
-      // Sunken Forges (Phase 3 POI 2): keep ordinary badlands content out of each
-      // forge clearing (each has its own Cinderwrought mini-boss + dressing).
-      if (
-        this.forgePositions.some(
-          (f) => Phaser.Math.Distance.Between(x, y, f.x, f.y) < FORGE_CLEAR_RADIUS,
-        )
-      )
-        continue;
-      // Duneshaper altars (Phase 3): keep wild badlands content off each altar's
-      // own clearing so the summon landmark reads clean.
-      if (
-        this.tyrantAltarPositions.some(
-          (a) => Phaser.Math.Distance.Between(x, y, a.x, a.y) < TYRANT_ALTAR_CLEAR_RADIUS,
-        )
-      )
-        continue;
-      // Sunken Crypt doorways (Phase 4c): same standing rule — a POI clearing
-      // stays clear, or it reads as visual noise rather than a place.
-      if (this.cryptPositions.some((c) => Phaser.Math.Distance.Between(x, y, c.x, c.y) < CRYPT_CLEAR_RADIUS))
-        continue;
+      if (this.insidePoiClearing(x, y)) continue;
       // Phase 1 macro-zones: keep WILD scatter off a solid rock footprint AND out
       // of a themed sub-zone's core (both empty until zones are placed, so the
       // earlier flora/mineral passes that run before placeBadlandsZones are
@@ -3894,29 +4027,7 @@ export class MainScene extends Phaser.Scene {
       const r = rMin + rng.frac() * (rMax - rMin); // uniform — blobs are patchy either way
       const x = WORLD_CX + Math.cos(ang) * r;
       const y = WORLD_CY + Math.sin(ang) * r;
-      if (
-        this.altarPosition &&
-        Phaser.Math.Distance.Between(x, y, this.altarPosition.x, this.altarPosition.y) < WAR_CAMP_CLEAR_RADIUS
-      )
-        continue;
-      if (
-        this.veinPosition &&
-        Phaser.Math.Distance.Between(x, y, this.veinPosition.x, this.veinPosition.y) < VEIN_CLEAR_RADIUS
-      )
-        continue;
-      if (this.badlandsDens.some((d) => Phaser.Math.Distance.Between(x, y, d.x, d.y) < DEN_CLEAR_RADIUS)) continue;
-      if (this.forgePositions.some((f) => Phaser.Math.Distance.Between(x, y, f.x, f.y) < FORGE_CLEAR_RADIUS))
-        continue;
-      if (
-        this.tyrantAltarPositions.some(
-          (a) => Phaser.Math.Distance.Between(x, y, a.x, a.y) < TYRANT_ALTAR_CLEAR_RADIUS,
-        )
-      )
-        continue;
-      // Sunken Crypt doorways (Phase 4c): same standing rule — a POI clearing
-      // stays clear, or it reads as visual noise rather than a place.
-      if (this.cryptPositions.some((c) => Phaser.Math.Distance.Between(x, y, c.x, c.y) < CRYPT_CLEAR_RADIUS))
-        continue;
+      if (this.insidePoiClearing(x, y)) continue;
       if (this.obstaclePositions.some((o) => Phaser.Math.Distance.Between(x, y, o.x, o.y) < o.r + 34)) continue;
       if (this.worldBiomes.dominantBiomeAt(x, y) !== "bayou") continue;
       if (this.worldBiomes.coverageAt(x, y, "bayou") < minCoverage) continue;
@@ -3952,29 +4063,7 @@ export class MainScene extends Phaser.Scene {
       const r = rMin + rng.frac() * (rMax - rMin); // uniform — blobs are patchy either way
       const x = WORLD_CX + Math.cos(ang) * r;
       const y = WORLD_CY + Math.sin(ang) * r;
-      if (
-        this.altarPosition &&
-        Phaser.Math.Distance.Between(x, y, this.altarPosition.x, this.altarPosition.y) < WAR_CAMP_CLEAR_RADIUS
-      )
-        continue;
-      if (
-        this.veinPosition &&
-        Phaser.Math.Distance.Between(x, y, this.veinPosition.x, this.veinPosition.y) < VEIN_CLEAR_RADIUS
-      )
-        continue;
-      if (this.badlandsDens.some((d) => Phaser.Math.Distance.Between(x, y, d.x, d.y) < DEN_CLEAR_RADIUS)) continue;
-      if (this.forgePositions.some((f) => Phaser.Math.Distance.Between(x, y, f.x, f.y) < FORGE_CLEAR_RADIUS))
-        continue;
-      if (
-        this.tyrantAltarPositions.some(
-          (a) => Phaser.Math.Distance.Between(x, y, a.x, a.y) < TYRANT_ALTAR_CLEAR_RADIUS,
-        )
-      )
-        continue;
-      // Sunken Crypt doorways (Phase 4c): same standing rule — a POI clearing
-      // stays clear, or it reads as visual noise rather than a place.
-      if (this.cryptPositions.some((c) => Phaser.Math.Distance.Between(x, y, c.x, c.y) < CRYPT_CLEAR_RADIUS))
-        continue;
+      if (this.insidePoiClearing(x, y)) continue;
       if (this.worldBiomes.dominantBiomeAt(x, y) !== "forest") continue;
       if (this.worldBiomes.coverageAt(x, y, "forest") < minCoverage) continue;
       return { x, y };
@@ -5349,7 +5438,14 @@ export class MainScene extends Phaser.Scene {
     for (let i = 0; i < count; i++) {
       const a = rng.frac() * Math.PI * 2;
       const d = Math.sqrt(rng.frac()) * this.zoneEdge(z, a) * 0.94;
-      place(z.x + Math.cos(a) * d, z.y + Math.sin(a) * d);
+      const x = z.x + Math.cos(a) * d;
+      const y = z.y + Math.sin(a) * d;
+      // A zone is placed clear of POIs, but a big one's EDGE can still reach into
+      // a nearby POI clearing — this is the path that put cypresses inside a
+      // Drowned Lodge. Skip rather than retry: a zone that overlaps a POI should
+      // just be a little thinner where they meet.
+      if (this.insidePoiClearing(x, y)) continue;
+      place(x, y);
     }
   }
 
@@ -6737,6 +6833,336 @@ export class MainScene extends Phaser.Scene {
     }
   }
 
+  // ===== Bayou surface POIs (biome 3 Phase 4d) =====
+
+  // Shared placement for both Phase-4d POIs: sample the bayou until we have
+  // `count` points that are far enough from each other (and from any extra
+  // positions the caller passes). Same "keep the best fallback" contract every
+  // other POI picker uses — a spacing rule should thin a crowded map, not
+  // silently drop half the POIs when the band is tight.
+  private pickBayouPoiPositions(
+    rng: Phaser.Math.RandomDataGenerator,
+    count: number,
+    minSpacing: number,
+    opts: { avoidDeepWater?: boolean; avoid?: { x: number; y: number }[]; avoidRadius?: number } = {},
+  ): { x: number; y: number }[] {
+    const picked: { x: number; y: number }[] = [];
+    const avoid = opts.avoid ?? [];
+    const avoidRadius = opts.avoidRadius ?? 0;
+    for (let i = 0; i < count; i++) {
+      let pt: { x: number; y: number } | null = null;
+      let fallback: { x: number; y: number } | null = null;
+      for (let a = 0; a < 90; a++) {
+        const cand = this.pickBayouPoint(rng, 0.45, BAYOU_R_MIN, BAYOU_R_MAX, {
+          avoidDeepWater: opts.avoidDeepWater,
+        });
+        if (!cand) break;
+        fallback = cand;
+        const spacedOk = picked.every(
+          (p) => Phaser.Math.Distance.Between(p.x, p.y, cand.x, cand.y) >= minSpacing,
+        );
+        const avoidOk = avoid.every(
+          (p) => Phaser.Math.Distance.Between(p.x, p.y, cand.x, cand.y) >= avoidRadius,
+        );
+        if (spacedOk && avoidOk) {
+          pt = cand;
+          break;
+        }
+      }
+      pt = pt ?? fallback;
+      if (!pt) break;
+      picked.push(pt);
+    }
+    return picked;
+  }
+
+  // --- Sunken Shrine (the rite POI) ---
+
+  private spawnSunkenShrines(): void {
+    const rng = this.sessionRng();
+    for (const pos of this.shrinePositions) {
+      this.decoratePoi(rng, pos.x, pos.y, {
+        floorTexture: "poi_floor_shrine",
+        floorRadius: 190,
+        ringTexture: "poi_ring_shrine",
+        ringCount: 12,
+        ringRadius: 176,
+      });
+      const shrine = new SunkenShrine(this, { x: pos.x, y: pos.y });
+      this.shrines.push(shrine);
+      this.shrineLightPoints.push({ x: pos.x, y: pos.y });
+      // A close ring of offering basins — what makes it read as a rite site
+      // rather than one standing stone in the muck.
+      for (let i = 0; i < SHRINE_RING_PROPS; i++) {
+        const a = (i / SHRINE_RING_PROPS) * Math.PI * 2 + rng.frac() * 0.4;
+        const r = 72 + rng.between(-10, 10);
+        const bx = pos.x + Math.cos(a) * r;
+        const by = pos.y + Math.sin(a) * r;
+        this.add.image(bx, by, "shrine_basin").setDepth(ysortDepth(by));
+      }
+    }
+  }
+
+  // Spend the offering and start the rite. The shrine is deliberately always
+  // prompt-able while dormant (the Boss Altar precedent) so it reads as a real
+  // interactable before the player knows what it wants — clicking without the
+  // offering just says so.
+  private kindleShrine(shrine: SunkenShrine): void {
+    if (shrine.phase !== "dormant") return;
+    const held = (key: string) => this.backpack.count(key) + this.hotbar.container.count(key);
+    const missing = SHRINE_OFFERING.find((o) => held(o.key) < o.count);
+    if (missing && !this.devNoBuildCost) {
+      const def = itemDef(missing.key);
+      this.eventLog.add("info", `The bowl stays cold. It wants ${missing.count}x ${def?.name ?? missing.key}.`);
+      return;
+    }
+    if (!this.devNoBuildCost) {
+      // Backpack first, then the hotbar for whatever's left — the offering is a
+      // material, so unlike a totem the player isn't necessarily holding it.
+      for (const o of SHRINE_OFFERING) {
+        const fromPack = Math.min(o.count, this.backpack.count(o.key));
+        if (fromPack > 0) this.backpack.removeCount(o.key, fromPack);
+        if (fromPack < o.count) this.hotbar.container.removeCount(o.key, o.count - fromPack);
+      }
+      this.afterItemMove();
+    }
+    shrine.clearRite();
+    shrine.setPhase("rite");
+    shrine.nextWaveAt = this.time.now + SHRINE_FIRST_WAVE_DELAY_MS;
+    this.eventLog.add("combat", "The bowl takes the offering — the water starts to move.");
+  }
+
+  // One wave of the rite. Each is a different shape rather than more of the
+  // same: a swarm to be swept, then a poison line that punishes standing still,
+  // then a bruiser with an elite escort. All three are the bayou's own roster,
+  // which is the point — the rite is what makes those creatures the content.
+  private spawnShrineWave(shrine: SunkenShrine, wave: number): void {
+    const rng = this.sessionRng();
+    const spawnAt = (i: number, total: number) => {
+      const a = (i / total) * Math.PI * 2 + rng.frac() * 0.5;
+      const r = SHRINE_SPAWN_RADIUS + rng.between(-24, 24);
+      return { x: shrine.x + Math.cos(a) * r, y: shrine.y + Math.sin(a) * r };
+    };
+    const summoned: Enemy[] = [];
+    const add = (e: Enemy) => {
+      summoned.push(e);
+      this.enemies.push(e);
+      this.enemyGroup.add(e);
+      // The rite CALLED them — they don't wander in and notice you later.
+      e.forceAggro(this.time.now);
+    };
+    if (wave === 1) {
+      for (let i = 0; i < 5; i++) {
+        const p = spawnAt(i, 5);
+        add(new Murkling(this, { x: p.x, y: p.y }));
+      }
+    } else if (wave === 2) {
+      for (let i = 0; i < 3; i++) {
+        const p = spawnAt(i, 6);
+        add(new Blighttoad(this, { x: p.x, y: p.y }));
+      }
+      for (let i = 3; i < 7; i++) {
+        const p = spawnAt(i, 7);
+        add(new Murkling(this, { x: p.x, y: p.y }));
+      }
+    } else {
+      for (let i = 0; i < 2; i++) {
+        const p = spawnAt(i, 4);
+        add(new Mosswretch(this, { x: p.x, y: p.y, elite: i === 0 }));
+      }
+      for (let i = 2; i < 5; i++) {
+        const p = spawnAt(i, 5);
+        add(new Blighttoad(this, { x: p.x, y: p.y }));
+      }
+    }
+    shrine.wave = wave;
+    shrine.riteEnemies = summoned;
+    shrine.nextWaveAt = this.time.now + SHRINE_WAVE_INTERVAL_MS;
+    shrine.stokeForWave(wave);
+    this.sfx.nightfall();
+    this.eventLog.add("combat", `The shrine burns brighter — wave ${wave} of ${SHRINE_WAVE_COUNT}!`);
+  }
+
+  // Ticked every frame from update(). Owns wave cadence, the leash, and both
+  // exits from the rite. Polled rather than hooked into the kill path because
+  // every condition here (a wave cleared, the player wandering off, the bowl
+  // being emptied) is already a polled state elsewhere.
+  private updateShrines(now: number, delta: number): void {
+    for (const shrine of this.shrines) {
+      if (shrine.phase === "open") {
+        // Emptied — the shrine goes cold and can be kindled again. This is what
+        // makes it a renewable source rather than a one-shot clear.
+        if (shrine.loot.isEmpty()) {
+          shrine.loot.rearmIfEmpty();
+          shrine.setPhase("dormant");
+        }
+        continue;
+      }
+      if (shrine.phase !== "rite") continue;
+
+      const dist = Phaser.Math.Distance.Between(this.player.x, this.player.y, shrine.x, shrine.y);
+      // Being underground counts as gone: activeCrypt puts the player in the
+      // CRYPT_REALM pocket, which is nowhere near the shrine anyway, but say it
+      // explicitly rather than relying on that distance being large.
+      if (dist > SHRINE_RITE_RADIUS || this.activeCrypt) shrine.awayMs += delta;
+      else shrine.awayMs = 0;
+      if (shrine.awayMs >= SHRINE_LEASH_GRACE_MS) {
+        this.failShrineRite(shrine);
+        continue;
+      }
+
+      shrine.riteEnemies = shrine.riteEnemies.filter((e) => !e.depleted);
+      if (shrine.wave < SHRINE_WAVE_COUNT) {
+        // Next wave lands when this one is cleared, or when the interval runs
+        // out — so a fast player is rewarded with pace instead of waiting.
+        const cleared = shrine.wave > 0 && shrine.riteEnemies.length === 0;
+        if (cleared || now >= shrine.nextWaveAt) this.spawnShrineWave(shrine, shrine.wave + 1);
+      } else if (shrine.riteEnemies.length === 0) {
+        this.completeShrineRite(shrine);
+      }
+    }
+  }
+
+  // The rite lapses. The offering is gone, the site is not — everything it
+  // called sinks back into the water, so a lapsed rite doesn't leave a pack
+  // roaming the swamp that the player never chose to fight.
+  private failShrineRite(shrine: SunkenShrine): void {
+    for (const e of shrine.riteEnemies) {
+      if (e.depleted) continue;
+      const idx = this.enemies.indexOf(e);
+      if (idx >= 0) this.enemies.splice(idx, 1);
+      this.enemyGroup.remove(e);
+      e.destroy();
+    }
+    shrine.clearRite();
+    shrine.setPhase("dormant");
+    if (Phaser.Math.Distance.Between(this.player.x, this.player.y, shrine.x, shrine.y) <= POI_RESPAWN_NOTIFY_RADIUS) {
+      this.eventLog.add("info", "The rite lapses — the shrine goes cold.");
+    }
+  }
+
+  private completeShrineRite(shrine: SunkenShrine): void {
+    shrine.clearRite();
+    shrine.setPhase("open");
+    shrine.loot.rollIfEmpty(SUNKEN_SHRINE_LOOT_TABLE);
+    this.eventLog.add("info", "The rite holds — the bowl spills what it was keeping.");
+  }
+
+  // Dormant: always prompt-able in reach (the Boss Altar precedent — the site
+  // should read as interactable before you know what it wants). Mid-rite: no
+  // prompt, there is nothing to click. Open: the bowl is a container.
+  private promptForShrine(shrine: SunkenShrine): string | null {
+    const inReach = Phaser.Math.Distance.Between(this.player.x, this.player.y, shrine.x, shrine.y) <= REACH;
+    if (!inReach) return null;
+    if (shrine.phase === "dormant") return "[LMB] Make an offering";
+    if (shrine.phase === "open") return "[LMB] Search the offering bowl";
+    return null;
+  }
+
+  // --- Drowned Lodge (the stilt-village POI) ---
+
+  private spawnDrownedLodges(): void {
+    const rng = this.sessionRng();
+    for (const pos of this.lodgePositions) {
+      this.decoratePoi(rng, pos.x, pos.y, {
+        floorTexture: "poi_floor_lodge",
+        floorRadius: 220,
+        ringTexture: "poi_ring_lodge",
+        ringCount: 13,
+        ringRadius: 205,
+      });
+      const lodge = new DrownedLodge(this, { x: pos.x, y: pos.y });
+      this.lodges.push(lodge);
+      this.lodgeLightPoints.push({ x: pos.x, y: pos.y });
+
+      // The boardwalk: one plank run through the site. It is NOT solid — the
+      // player can step off any time, which is exactly the trap. It just sits
+      // above the water visually, and the deep-water slow does the rest.
+      this.add
+        .tileSprite(
+          pos.x - LODGE_SPAN,
+          pos.y - LODGE_WALK_HALF_W,
+          LODGE_SPAN * 2,
+          LODGE_WALK_HALF_W * 2,
+          "lodge_plank",
+        )
+        .setOrigin(0, 0)
+        .setDepth(-6);
+      for (let px = -LODGE_SPAN + 24; px < LODGE_SPAN; px += 62) {
+        const y = pos.y + LODGE_WALK_HALF_W + 6;
+        this.add.image(pos.x + px, y, "lodge_piling").setDepth(ysortDepth(y) - 0.1);
+      }
+
+      // Huts alternate above and below the walk, strung along it. The LAST one
+      // is the chieftain's, so the richest cache is always the far end of the
+      // boardwalk — the deepest point of the site, not the doorstep.
+      const hutCount = rng.between(LODGE_HUT_MIN, LODGE_HUT_MAX);
+      for (let i = 0; i < hutCount; i++) {
+        const t = hutCount === 1 ? 0.5 : i / (hutCount - 1);
+        const hx = pos.x - LODGE_SPAN + 40 + t * (LODGE_SPAN * 2 - 80);
+        const hy = pos.y + (i % 2 === 0 ? -LODGE_HUT_OFFSET : LODGE_HUT_OFFSET);
+        const chief = i === hutCount - 1;
+        const hut = lodge.addHut(hx, hy, chief);
+        hut.loot.rollIfEmpty(chief ? LODGE_CHIEF_LOOT_TABLE : LODGE_HUT_LOOT_TABLE);
+        // A short spur of planking connecting the hut to the walk.
+        this.add
+          .tileSprite(hx - 10, Math.min(hy, pos.y), 20, Math.abs(hy - pos.y), "lodge_plank")
+          .setOrigin(0, 0)
+          .setDepth(-6.1);
+        this.add.image(hx, hy + 22, "lodge_piling").setDepth(ysortDepth(hy) - 0.1);
+      }
+
+      this.spawnLodgeResidents(lodge);
+    }
+  }
+
+  // The site's population, shared by the initial spawn and the respawn. Haunts
+  // gate the chieftain's hut; lurkers gate nothing — they're the reason
+  // stepping off the planks is a mistake.
+  private spawnLodgeResidents(lodge: DrownedLodge): void {
+    const rng = this.sessionRng();
+    const haunts: Enemy[] = [];
+    // One Corpselight per two huts, minimum two — the ranged haunt is uncommon
+    // by design (Phase 4b), so a lodge is one of the few places to meet several.
+    const hauntCount = Math.max(2, Math.round(lodge.huts.length / 2));
+    for (let i = 0; i < hauntCount; i++) {
+      const hut = lodge.huts[i % lodge.huts.length];
+      const c = new Corpselight(this, {
+        x: hut.image.x + rng.between(-30, 30),
+        y: hut.image.y - 34 + rng.between(-14, 14),
+      });
+      haunts.push(c);
+      this.enemies.push(c);
+      this.enemyGroup.add(c);
+    }
+    lodge.haunts = haunts;
+
+    const lurkers: Enemy[] = [];
+    for (let i = 0; i < LODGE_LURKER_COUNT; i++) {
+      // Under the boardwalk, off to the side — in the water the player is
+      // tempted to shortcut through.
+      const m = new Mirejaw(this, {
+        x: lodge.x + rng.between(-LODGE_SPAN, LODGE_SPAN),
+        y: lodge.y + (i % 2 === 0 ? 1 : -1) * rng.between(46, 120),
+      });
+      lurkers.push(m);
+      this.enemies.push(m);
+      this.enemyGroup.add(m);
+    }
+    lodge.lurkers = lurkers;
+  }
+
+  // A hut's cache. The chieftain's hut returns NOTHING while barred — no
+  // prompt, no highlight — the same reveal-nothing treatment a shielded node
+  // gets, so the planked-over door is the only tell that it's there at all.
+  private promptForLodgeHut(hut: DrownedLodge["huts"][number], lodge: DrownedLodge): string | null {
+    if (hut.chief && !lodge.chiefUnbarred) return null;
+    const inReach =
+      Phaser.Math.Distance.Between(this.player.x, this.player.y, hut.image.x, hut.image.y) <= REACH;
+    if (!inReach) return null;
+    return hut.chief ? "[LMB] Search the chieftain's hut" : "[LMB] Search the hut";
+  }
+
   // A discovered (not summoned) Boss Altar gets a one-time landmark marker on
   // the minimap once the player has actually explored close enough to reveal
   // its fog cell — reuses fog's own REVEAL_RADIUS so "discovered" means the
@@ -6862,6 +7288,35 @@ export class MainScene extends Phaser.Scene {
         tint: 0xd6481a,
       });
       this.eventLog.add("poi", "Discovered: The Sunken Forge");
+    }
+    // Bayou surface POIs (Phase 4d) — discovered fixed structures, same one-shot
+    // treatment. Distinct colors from the crypt trio's violets so the map reads
+    // "a place" vs "a way down" at a glance.
+    for (const shrine of this.shrines) {
+      if (shrine.discoveredOnMap) continue;
+      if (!inPoiReveal(shrine.x, shrine.y)) continue;
+      shrine.discoveredOnMap = true;
+      this.exploredMap.addLandmark({
+        worldX: shrine.x,
+        worldY: shrine.y,
+        iconKey: "map_shrine",
+        label: "Sunken Shrine",
+        tint: 0x2a7a6a,
+      });
+      this.eventLog.add("poi", "Discovered: Sunken Shrine");
+    }
+    for (const lodge of this.lodges) {
+      if (lodge.discoveredOnMap) continue;
+      if (!inPoiReveal(lodge.x, lodge.y)) continue;
+      lodge.discoveredOnMap = true;
+      this.exploredMap.addLandmark({
+        worldX: lodge.x,
+        worldY: lodge.y,
+        iconKey: "map_lodge",
+        label: "Drowned Lodge",
+        tint: 0x6a4a2a,
+      });
+      this.eventLog.add("poi", "Discovered: Drowned Lodge");
     }
     // Once the player is actually holding a Totem, spell out what to do with it
     // (trigger is once-per-run idempotent, so a per-frame poll here is fine).
@@ -7212,6 +7667,42 @@ export class MainScene extends Phaser.Scene {
     this.hoveredCryptExit = hoveredCryptExit;
     this.hoveredCryptChest = hoveredCryptChest;
 
+    // Bayou surface POIs (Phase 4d). Same last-runner treatment: they respect
+    // `best` and win by nulling the others. Never reachable from inside a crypt.
+    let hoveredShrine: SunkenShrine | null = null;
+    let hoveredLodgeHut: { lodge: DrownedLodge; hut: DrownedLodge["huts"][number] } | null = null;
+    if (!this.activeCrypt) {
+      for (const shrine of this.shrines) {
+        const d = hits(shrine.image);
+        if (d !== null) {
+          hoveredShrine = shrine;
+          hoveredLodgeHut = null;
+          hoveredCrypt = null;
+          takeCryptHover(d);
+        }
+      }
+      for (const lodge of this.lodges) {
+        for (const hut of lodge.huts) {
+          // A barred chieftain's hut isn't a target at all (see promptForLodgeHut).
+          if (hut.chief && !lodge.chiefUnbarred) continue;
+          const d = hits(hut.image);
+          if (d !== null) {
+            hoveredLodgeHut = { lodge, hut };
+            hoveredShrine = null;
+            hoveredCrypt = null;
+            takeCryptHover(d);
+          }
+        }
+      }
+    }
+    if (hoveredShrine || hoveredLodgeHut) {
+      this.hoveredCrypt = null;
+      this.hoveredCryptExit = null;
+      this.hoveredCryptChest = null;
+    }
+    this.hoveredShrine = hoveredShrine;
+    this.hoveredLodgeHut = hoveredLodgeHut;
+
     this.hoveredNode = hoveredNode;
     this.hoveredEnemy = hoveredEnemy;
     this.hoveredRack = hoveredRack;
@@ -7261,7 +7752,11 @@ export class MainScene extends Phaser.Scene {
                               ? this.promptForCryptExit(hoveredCryptExit)
                               : hoveredCryptChest
                                 ? this.promptForCryptChest(hoveredCryptChest)
-                                : null;
+                                : hoveredShrine
+                                  ? this.promptForShrine(hoveredShrine)
+                                  : hoveredLodgeHut
+                                    ? this.promptForLodgeHut(hoveredLodgeHut.hut, hoveredLodgeHut.lodge)
+                                    : null;
     if (prompt) {
       this.promptText.setText(prompt).setColor(this.promptColorFor()).setVisible(true);
       this.input.setDefaultCursor("pointer");
@@ -7287,6 +7782,8 @@ export class MainScene extends Phaser.Scene {
       this.hoveredCrypt?.image ??
       this.hoveredCryptExit?.exitStairs ??
       this.hoveredCryptChest?.chestImage ??
+      this.hoveredShrine?.image ??
+      this.hoveredLodgeHut?.hut.image ??
       this.hoveredAltar?.image ??
       this.hoveredWorkbench ??
       this.hoveredCampfire ??
@@ -7541,6 +8038,20 @@ export class MainScene extends Phaser.Scene {
     if (this.hoveredCryptChest) {
       const crypt = this.hoveredCryptChest;
       if (this.promptForCryptChest(crypt)) this.openChestMenu(crypt.loot, CRYPT_LOOT_TABLE);
+      return;
+    }
+    if (this.hoveredShrine) {
+      const shrine = this.hoveredShrine;
+      if (!this.promptForShrine(shrine)) return;
+      if (shrine.phase === "dormant") this.kindleShrine(shrine);
+      else this.openChestMenu(shrine.loot, SUNKEN_SHRINE_LOOT_TABLE);
+      return;
+    }
+    if (this.hoveredLodgeHut) {
+      const { lodge, hut } = this.hoveredLodgeHut;
+      if (this.promptForLodgeHut(hut, lodge)) {
+        this.openChestMenu(hut.loot, hut.chief ? LODGE_CHIEF_LOOT_TABLE : LODGE_HUT_LOOT_TABLE);
+      }
       return;
     }
     if (this.hoveredAltar) {

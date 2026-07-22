@@ -1891,6 +1891,10 @@ export class BootScene extends Phaser.Scene {
     mapMarker("map_crypt_gloam", 0xd8c0ff, 0x6a3ec8);
     mapMarker("map_crypt_ember", 0xffc890, 0xd6601a);
     mapMarker("map_crypt_blood", 0xff9aa8, 0xa8203a);
+    // Bayou surface POIs (Phase 4d) — kept clearly apart from the crypt trio's
+    // violets so a glance at the map distinguishes "a way down" from "a place".
+    mapMarker("map_shrine", 0x9ce0d0, 0x2a7a6a); // Sunken Shrine — drowned verdigris
+    mapMarker("map_lodge", 0xd8b48a, 0x6a4a2a); // Drowned Lodge — waterlogged timber
 
     // ===== Badlands (biome 2 Phase 2) content =====
 
@@ -2873,6 +2877,35 @@ export class BootScene extends Phaser.Scene {
     g.fillCircle(14, 8, 1);
     g.fillCircle(8, 11, 0.8);
     g.generateTexture("icon_gloam_dust", ICON, ICON);
+
+    // --- bayou surface-POI spoils (Phase 4d) ---
+
+    g.clear(); // Tyrant Sigil — a black shrine-stone slab cut with a verdigris mark
+    g.fillStyle(0x14181a, 1);
+    g.fillRect(5, 3, 14, 18);
+    g.fillStyle(0x232a2c, 1);
+    g.fillRect(6, 4, 12, 16); // polished face
+    g.fillStyle(0x2a7a6a, 1); // the mark the swamp keeps repeating
+    g.fillRect(9, 7, 6, 2);
+    g.fillRect(11, 7, 2, 9);
+    g.fillRect(8, 14, 8, 2);
+    g.fillStyle(0x9ce0d0, 0.85);
+    g.fillRect(11, 9, 2, 3); // it glows where it was warm
+    g.generateTexture("icon_tyrant_sigil", ICON, ICON);
+
+    g.clear(); // Gorge Bone — a long rib still bound in its keeping-wrap
+    g.fillStyle(0xe4dcc0, 1);
+    g.fillRect(6, 10, 14, 4); // shaft
+    g.fillCircle(6, 10, 3.5); // knuckled ends
+    g.fillCircle(6, 15, 3);
+    g.fillCircle(20, 11, 3);
+    g.fillStyle(0xb8ad8e, 1);
+    g.fillRect(6, 13, 14, 1.5); // shadow along the underside
+    g.fillStyle(0x6a4a2a, 1); // the cloth wrap
+    g.fillRect(11, 7, 3, 10);
+    g.fillStyle(0x8a6a42, 1);
+    g.fillRect(11, 9, 3, 2);
+    g.generateTexture("icon_gorge_bone", ICON, ICON);
 
     // --- bayou elite trophies (all on the shared crimson-shard + gold-cord
     // template, so a trophy is instantly recognizable as one) ---
@@ -3867,6 +3900,156 @@ export class BootScene extends Phaser.Scene {
     g.fillStyle(0x141a12, 1);
     g.fillRect(2, 20, 10, 3);
     g.generateTexture("poi_ring_crypt", 14, 24);
+
+    // ===== Bayou surface POIs (biome 3 Phase 4d) =====
+
+    // Sunken Shrine (44x50) — a drowned gloam altar-stone standing in the muck,
+    // its offering bowl on top. Three states, because the shrine's phase IS the
+    // instruction: dormant (cold, algae-choked), lit (the rite is running and
+    // every wave stokes it), open (the bowl has spilled its spoils).
+    const drawShrine = (key: string, fire: number, fireAlpha: number, bowl: number) => {
+      g.clear();
+      g.fillStyle(0x1c241f, 1); // muck the base is sunk into
+      g.fillEllipse(22, 46, 40, 9);
+      g.fillStyle(0x2f3a36, 1);
+      g.fillRect(9, 18, 26, 28); // the stele
+      g.fillStyle(0x3d4a45, 1);
+      g.fillRect(11, 20, 10, 24); // lit face
+      g.fillStyle(0x2a7a6a, 0.7); // verdigris runes down the stone
+      g.fillRect(24, 24, 3, 3);
+      g.fillRect(24, 30, 3, 3);
+      g.fillRect(24, 36, 3, 3);
+      g.fillStyle(0x1c2622, 1); // algae skirt at the waterline
+      g.fillRect(9, 40, 26, 4);
+      g.fillStyle(bowl, 1);
+      g.fillEllipse(22, 16, 30, 11); // the offering bowl
+      g.fillStyle(0x141a18, 1);
+      g.fillEllipse(22, 15, 22, 7); // its hollow
+      if (fireAlpha > 0) {
+        g.fillStyle(fire, fireAlpha);
+        g.fillTriangle(14, 15, 30, 15, 22, 0);
+        g.fillStyle(0xe8fff4, fireAlpha * 0.8);
+        g.fillTriangle(18, 15, 26, 15, 22, 6);
+      }
+      g.generateTexture(key, 44, 50);
+    };
+    drawShrine("sunken_shrine", 0, 0, 0x35423d); // dormant — no flame at all
+    drawShrine("sunken_shrine_lit", 0x3ce0b8, 0.95, 0x46564f); // mid-rite
+    drawShrine("sunken_shrine_open", 0x9ce0d0, 0.45, 0x56685f); // rite survived, bowl spilling
+
+    // Shrine ring basin (16x14) — the small standing offering bowls that circle
+    // the shrine; purely decorative, but they're what makes it read as a rite
+    // site rather than a lone rock.
+    g.clear();
+    g.fillStyle(0x2f3a36, 1);
+    g.fillRect(5, 6, 6, 8);
+    g.fillStyle(0x3d4a45, 1);
+    g.fillEllipse(8, 5, 15, 7);
+    g.fillStyle(0x141a18, 1);
+    g.fillEllipse(8, 5, 10, 4);
+    g.generateTexture("shrine_basin", 16, 14);
+
+    g.clear(); // shrine clearing floor — pale drowned stone bleeding into muck
+    {
+      const S = 180;
+      const c = S / 2;
+      for (let i = 12; i >= 1; i--) {
+        g.fillStyle(0x24322c, 0.05);
+        g.fillCircle(c, c, c * (i / 12));
+      }
+      for (let i = 5; i >= 1; i--) {
+        g.fillStyle(0x2a7a6a, 0.035);
+        g.fillCircle(c, c, c * 0.4 * (i / 5));
+      }
+      g.generateTexture("poi_floor_shrine", S, S);
+    }
+    g.clear(); // shrine ring prop — a leaning verdigris marker stake
+    g.fillStyle(0x2f3a36, 1);
+    g.fillRect(4, 4, 5, 18);
+    g.fillStyle(0x2a7a6a, 0.8);
+    g.fillRect(4, 8, 5, 3);
+    g.fillStyle(0x1c2622, 1);
+    g.fillRect(2, 20, 9, 3);
+    g.generateTexture("poi_ring_shrine", 13, 24);
+
+    // Drowned Lodge hut (40x38) — a stilt shack with a sagging thatch roof. The
+    // barred variant is the chieftain's: planked shut until the site's haunts
+    // are dead, so the bar itself is the "not yet" tell (no prompt is shown
+    // either, per the standing reveal-nothing rule).
+    const drawLodgeHut = (key: string, barred: boolean) => {
+      g.clear();
+      g.fillStyle(0x3a2c1e, 1);
+      g.fillRect(6, 16, 28, 20); // wall
+      g.fillStyle(0x4a3826, 1);
+      g.fillRect(8, 18, 11, 16); // lit boards
+      g.fillStyle(0x241a12, 1); // board seams
+      g.fillRect(14, 16, 1.5, 20);
+      g.fillRect(23, 16, 1.5, 20);
+      g.fillStyle(0x5a4a2e, 1);
+      g.fillTriangle(2, 18, 38, 18, 20, 2); // thatch roof
+      g.fillStyle(0x6a5a38, 1);
+      g.fillTriangle(6, 17, 20, 17, 20, 5);
+      g.fillStyle(0x0c0f0c, 1);
+      g.fillRect(16, 24, 9, 12); // doorway
+      if (barred) {
+        g.fillStyle(0x6a4a2a, 1); // planked shut, crosswise
+        g.fillRect(13, 26, 15, 3);
+        g.fillRect(13, 32, 15, 3);
+        g.fillStyle(0x8a6a42, 1);
+        g.fillRect(19, 22, 3, 16);
+      }
+      g.fillStyle(0x241a12, 1); // stilts down into the water
+      g.fillRect(8, 34, 3, 4);
+      g.fillRect(29, 34, 3, 4);
+      g.generateTexture(key, 40, 38);
+    };
+    drawLodgeHut("lodge_hut", false);
+    drawLodgeHut("lodge_hut_barred", true);
+
+    // Lodge walkway plank (32x32, tiled) — the narrow boardwalk between huts.
+    // Stepping off it is the whole POI's danger, so it's drawn bright against
+    // the dark channel water.
+    g.clear();
+    g.fillStyle(0x4a3826, 1);
+    g.fillRect(0, 0, 32, 32);
+    g.fillStyle(0x5a4630, 1);
+    g.fillRect(0, 2, 32, 12);
+    g.fillStyle(0x2e2216, 1);
+    g.fillRect(0, 14, 32, 2); // the gap between boards
+    g.fillRect(0, 30, 32, 2);
+    g.fillStyle(0x3a2c1e, 1);
+    g.fillRect(7, 0, 1.5, 32); // nail lines
+    g.fillRect(24, 0, 1.5, 32);
+    g.generateTexture("lodge_plank", 32, 32);
+
+    // Lodge piling (12x26) — the posts the boardwalk stands on.
+    g.clear();
+    g.fillStyle(0x2e2216, 1);
+    g.fillRect(2, 0, 8, 26);
+    g.fillStyle(0x4a3826, 1);
+    g.fillRect(3, 0, 3, 26);
+    g.fillStyle(0x1c2622, 1); // waterline slime
+    g.fillRect(1, 18, 10, 5);
+    g.generateTexture("lodge_piling", 12, 26);
+
+    g.clear(); // lodge clearing floor — dark standing water under the village
+    {
+      const S = 200;
+      const c = S / 2;
+      for (let i = 12; i >= 1; i--) {
+        g.fillStyle(0x101a1c, 0.055);
+        g.fillCircle(c, c, c * (i / 12));
+      }
+      g.generateTexture("poi_floor_lodge", S, S);
+    }
+    g.clear(); // lodge ring prop — a broken piling jutting out of the water
+    g.fillStyle(0x2e2216, 1);
+    g.fillRect(3, 3, 7, 17);
+    g.fillStyle(0x4a3826, 1);
+    g.fillRect(4, 3, 3, 17);
+    g.fillStyle(0x1c2622, 1);
+    g.fillRect(1, 16, 11, 6);
+    g.generateTexture("poi_ring_lodge", 13, 22);
 
     // --- The three crypt wardens ---
     // One per gem, each with its own state machine (see the entity files). All
