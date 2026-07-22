@@ -1604,7 +1604,23 @@ below.**
      **heat meter that rises as it acts**, igniting its own vault floor; the backdraft sweeps the
      burning ground, so the dodge is **cold tiles**, and the punish window comes on the boss's
      clock), **Sanguinarch** (**the player sets its phase** — its feed only lands while you're
-     bleeding, trading it a heal for your `engorged` punish window). See `STATUS.md`.
+     bleeding, trading it a heal for your `engorged` punish window).
+     **Two same-session playtest passes locked the rest of the dungeon's rules:**
+     (1) **Crypt dwellers collide with walls** — the one place the engine-wide
+     `Enemy.collidesWithTerrain = false` default is wrong (out in the world, solid things are
+     boulders = cover; a dungeon wall is structure). That immediately reproduced the wedging the
+     default protects against, so `CryptLayout` gained a small **nav graph over its own rooms and
+     corridors** and `MainScene.steerCryptEnemy` **re-aims the velocity the AI already chose** toward
+     the next doorway — steering, never target substitution (a fake nearby target makes anything with
+     reach plant and swing at air), waypoints kept inside the rect overlap (convex ⇒ the straight
+     line never crosses rock), and one committed waypoint per enemy (re-planning each frame
+     oscillates at junctions). **Any future enemy placed in a crypt gets this for free; anything that
+     moves by teleport does not.** (2) **A crypt is lit by DISCOVERY, not equipment** — stepping into
+     a room lights that whole space permanently (fog-of-war), the player carries an ambient light
+     underground so **a torch is a bonus, never the price of seeing**, and **Gloamstep Blink is
+     CLIPPED to floor rather than banned** (`clipBlinkToFloor` marches the blink line and lands on
+     the last valid point — testing only the endpoint would let it jump through a wall). See
+     `STATUS.md`.
    - Still to come: **4d = surface POIs + the Miretyrant boss**, which **becomes the new win-con**,
      demoting the Duneshaper to a mid-boss and finally making its Heart obtainable. **Then Phase 5**
      (post-big-boss RNG reward choice). See [[survivor-rpg-biome-3-roadmap]].

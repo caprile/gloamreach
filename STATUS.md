@@ -31,91 +31,18 @@ you a fat `engorged` punish window; stay clean and it never opens up). Verified 
 bleeding-vs-clean feeds, zero spawns inside a crypt, containment); `tsc` clean, zero console errors.
 **Next: 4d — surface POIs + the Miretyrant boss (the new win-con).** See B3-P4c below +
 [[survivor-rpg-biome-3-roadmap]].
-Prior: **B3-P4b — Biome-3 Phase 4b: the
-Duskmire Bayou creature roster** (2026-07-22, Opus). Six bespoke melee-core creatures + one
-deliberately uncommon ranged haunt, dropped into 4a's terrain. Locked with the user up front: the
-**specced 6**, **Mirehide from the Mirejaw ONLY** (hunting the gator IS the reforge gate), and
-**build the homing projectile now**. Two shared hooks first: **`Enemy.pendingPoison`** (the
-`pendingBleed` contract exactly, routed to `PoisonManager.apply()` — the discrete **stacking**
-path, not the miasma's refresh-only `sustain()`) and **`Projectile.homing`** (re-aim velocity by
-at most `turnRate·dt` each `preUpdate`, plus a **required** `maxLifetimeMs` — the default
-despawn measures distance *from spawn*, which a curving orb never trips, so it would orbit
-forever). The six: **Mirejaw** (130 HP, sole Mirehide + the bayou's meat; lurks VISIBLE at alpha
-0.4, locked-line lunge chomp 85+bleed, then **surfaces and hunts** rather than re-burying);
-**Blighttoad** (poison carrier — the bite is eaten by plate, the **stacking armor-bypassing
-poison** is the payload, and it halves healing so you can't eat your way out); **Mosswretch**
-(190 HP bruiser, slowest enemy in the game + the longest wind-up — and **the roster's FIRE
-lesson at ×1.5**, the biggest weakness on any common enemy); **Murkling** (22 HP swarm, the
-**AOE-arc payoff**, wide pack-aggro on the base-state pattern, deliberately neutral to every
-damage type); **Fenlurker** (burrowing ambusher shipped alongside the Sandmaw because **the dodge
-verb is opposite** — ring vs **locked line** — and its resists are the **exact inverse of the
-Mirejaw**, so the two bayou ambushers want different weapons); **Corpselight** (the ONE ranged
-creature, the game's first **homing** projectile — 110px/s, 1.5 rad/s, 4.2s lifetime, magic —
-plus the bayou's **local Hex Essence** source, so Gloamsteel no longer means walking back to the
-badlands). **358 creatures** spawn clustered-per-species via `pickBayouPoint`, with cluster jitter
-now **re-checking biome per member** (an improvement on the badlands spawner, which can leak over
-a seam); the bayou **respawn top-up is live** (4a had it gated off), Mirejaw-weighted so the
-Mirehide tier stays farmable. 3 new materials + 6 elite trophies at **Common / Tier 3** (×2.25) —
-**roll-only** until a tier-3 shard currency exists (4c/4d), exactly as biome-2 was pre-Ember.
-Verified live: locked lunge dealt 85 standing still and **0 when sidestepped**; poison **stacked
-6→12→18→24 while the miasma held flat at 3**; one woken Murkling **cascaded to all 5**; the orb
-re-aimed at exactly its turn cap and **expired at 4224ms**, hitting for **20 through 42 armor vs 1
-untyped**. `tsc` clean, zero console errors. Dashboard Enemies tab + `RECIPES.md` trophy table
-updated; no recipe changes. **SAME-SESSION TUNING PASS (the user):** the roster was sized against the
-badlands roster, not a bayou-ready player — who **sprints 166-229px/s, dashes 450, blinks 220px and
-hits for 45-70 (130-200 crit)**, against a roster whose fastest was 104px/s and tankiest 190 HP, i.e.
-**outrunnable at a walk and dead in two swings**. Speeds ~1.7-3×, HP ~2.5-3×, damage up to matter
-through bayou plate (measured net through a full Gloamsteel set: Mosswretch smash 63 / Mirejaw lunge
-52 / Fenlurker maul 44 ≈ 4 hits on a 220 HP player, all telegraphed); the **Corpselight orb went from
-a ~460px leash to ~1500px** (170px/s × 9s — still under a sprint, so running straight still escapes);
-the **Mirejaw gained "stalk patience"** (a real bug: its slow stalk meant a merely-walking player could
-never be ambushed — it fell 537px behind and never engaged; after 2.4s it now abandons stealth and
-hunts); and the **gator sprite is now the biggest common creature** (74×34 on screen).
-Prior: **B3-P4a — Biome-3 Phase 4a:
-Duskmire Bayou terrain, environment & material sources** (2026-07-22, Opus, roadmap
-`.claude/plans/biome-3-and-new-systems-roadmap.md`). Phase 4 was **sliced into three sessions** by
-the user: **4a = terrain + environment + sources (this)**, **4b = the melee enemy roster**, **4c =
-POIs + the Miretyrant boss + the win-con swap**. The bayou is now a real walkable, harvestable third
-biome, and every material that shipped **dormant** in Phases 2b/3 finally has a world source.
-Locked this session: water **slows by depth, never blocks**; the bayou boss **will** become the new
-win-con (4c); and **`poison` is a SUBTYPE OF MAGIC** — a new `IncomingDamageType` that bypasses flat
-armor and takes the *same* heavy-armor magic mitigation (new `Weapons.isMagicFamily()`), while adding
-its own identity: it ticks over time and **suppresses HP regen**. New `src/systems/Poison.ts`
-**composes** `BleedManager` and exposes two modes — `apply()` (discrete stacking dose, for 4b's
-creatures) and `sustain()` (continuous environmental source, refresh-don't-stack). New
-`src/systems/Bayou.ts` palette + `bayouWaterAt()`; `WorldBiomes` gained **bayou at tier 3** (unlock
-6500) and **demoted the content-less Dunes placeholder to tier 4** (10500, deep frontier);
-`pickBayouPoint` mirrors `pickBadlandsPoint` with an `avoidDeepWater` option; `BadlandsZone` was split
-into a shared **`ZoneShape`** so 14 new **miasma zones** (regen-suppressing + 3 dps poison — the
-Phase-1 env hook's real payoff) reuse `zoneEdge`/`drawZoneFloor` verbatim. **443 nodes:** cypress/
-mirestone/driftwood/shellrock (universal wood/stone), **Bog Ore** 46, **Moonsilver** 22, and **three
-separate geodes** (9 each) that each drop one specific ability gem — one node per gem, honoring
-Phase 2b's "gem source dictates build". New Swamp Moss + Water Lily flora (persistent, no recipes
-yet). **Two real bugs caught in verification:** the water slow used a raw coverage cutoff instead of
-*dominance* (edge water didn't slow; the badlands DRY RAVINE did), and the miasma stacked to the cap
-(3 dps became 15 and killed an idle test player) — both fixed and re-verified. Palette also gained a
-uniform **gloam wash** after it composited olive and read as "more green biome": now forest `#3f6a36`
-/ badlands `#755f39` / bayou `#44454b` / dunes `#cab47e`. Verified live; `tsc` clean, zero console
-errors. **SAME-SESSION REDIRECT (the user):** the **most precious materials moved off the
-surface** — the 3 ability geodes + Moonsilver are now **dungeon-only loot** (a Valheim
-burial-chamber/sunken-crypt mechanic, added to the arc as its own phase); **Bog Ore stays
-surface-mineable** so the reforge tier is still reachable by exploring. Their textures/node shapes
-are KEPT for the dungeon phase to re-site; the gems + moonsilver are dormant again meanwhile. To
-keep the surface characterful, `BayouZone` widened to **three themed macro-zones** (6 each):
-**miasma** (poison + halved regen), **bonemire** (bleached dead-tree boneyard, 0.62 slow), **hammock**
-(raised cypress island, no penalty + the densest foraging). Per the user the **miasma is very common
-and large** — 46 zones at avg r 652 (vs 8 each of the others), placed first and allowed to merge into
-big fog banks, covering **34.8% of the bayou** with 62.4% left clear; measured, not guessed, and at
-no FPS cost. Also new: **`src/ui/StatusBarUI.ts`**, a
-**generic debuff strip** above the buff bar (poison/bleed/slow/no-regen — bleed had NO HUD tell since
-the badlands), timed effects get a meter + countdown, conditional ones just show; No Regen is
-suppressed while poisoned as redundant. **Poison's regen penalty is 50%, not a block** (the user):
-`blockRegen` became a `regenMult` multiplier end-to-end (`BuffManager.tick` included), the miasma
-zone moved to the same 50% (a full block would have made the rule unobservable, since miasma is the
-only poison source), sources take the MIN not the product, and Comfort's double-penalty bug was
-caught + fixed. Verified: +19.4 HP over 9.69s in a miasma under a food buff vs +19.4 expected. **Deliberately left out:** **Mirehide** (a *creature* hide —
-lands with 4b's roster, not a node), and the bayou is gated out of the enemy-respawn/nightfall top-up
-until 4b ships. No `RECIPES.md`/dashboard change. See B3-P4a below + [[survivor-rpg-biome-3-roadmap]].
+Prior: **B3-P4b — the Duskmire Bayou creature roster** (2026-07-22, Opus). Six bespoke melee-core
+creatures (Mirejaw / Blighttoad / Mosswretch / Murkling / Fenlurker) + the one uncommon ranged
+Corpselight, which introduced the game's first HOMING projectile. Added `Enemy.pendingPoison`, 3
+materials and 6 elite trophies at Common/Tier 3. A same-session tuning pass rescaled the whole
+roster — **size new enemies against the PLAYER's measured envelope, never the previous biome's
+roster** (see [[feedback_size_enemies_against_player]]). Full entry below.
+Prior: **B3-P4a — Duskmire Bayou terrain, environment & material sources** (2026-07-22, Opus). The
+bayou as a walkable, harvestable third biome: water slows by depth (never blocks); **`poison` is a
+SUBTYPE OF MAGIC** (bypasses flat armor, takes heavy-armor magic mitigation, ticks over time and
+halves regen) via a new `Poison.ts` that composes `BleedManager` with stacking `apply()` vs
+refresh-only `sustain()` modes; three themed macro-zones (miasma/bonemire/hammock) and 443 nodes;
+plus `StatusBarUI`, a generic debuff strip. Full entry in STATUS-archive.md.
 Prior: **B3-P3 — Biome-3 Phase 3: Bayou gear progression (reforge tier + gem augments)**
 (2026-07-21, Opus) — gem augments (mix-and-match, consumed, max 2/instance) reusing the existing
 per-instance `upgrades` field + `UpgradeMenu`, plus the Gloamsteel/Mirehide reforge tier, Workbench
@@ -135,16 +62,16 @@ current arc is the **biome-3 (haunted bayou, working name "Duskmire Bayou") + ne
 (terrain-that-matters + badlands macro-zones), **Phase 2a** (the activated-ability framework + Dota
 QER HUD), **Phase 2b** (the jewelry-effect pipeline + the Gemwright's Table), **Phase 3** (the bayou
 gear progression — gem augments + the Gloamsteel/Mirehide reforge tier), **Phase 4a** (the
-bayou's terrain, environment and material sources), and now **Phase 4b** (the creature roster —
-above). **Phase 4 is sliced into FOUR sessions**
+bayou's terrain, environment and material sources), **Phase 4b** (the creature roster), and now
+**Phase 4c** (the Sunken Crypts dungeon mechanic — above). **Phase 4 is sliced into FOUR sessions**
 (the Dungeon mechanic was added mid-4a): **4a terrain/env/surface-sources — DONE**; **4b — the
 melee-core roster** (Mirejaw / Blighttoad / Mosswretch / Murkling / Fenlurker + the one ranged
 Corpselight haunt) — **DONE**, which sourced **Mirehide** and re-enabled the bayou's respawn top-up;
-**4c — DUNGEONS (NEXT)** (Valheim burial-chamber/sunken-crypt interiors; where the ability gems + Moonsilver
-actually live — ordered after the roster because a dungeon needs creatures to populate it); **4d —
-surface POIs + the **Miretyrant** melee boss-with-adds**, which **becomes the new win-con** (locked),
-demoting the Duneshaper to a mid-boss and finally making its **Heart** obtainable, unlocking the
-Gemwright's ability recipes. **Then Phase 5** (post-big-boss RNG reward choice).
+**4c — DUNGEONS — DONE** (6 themed Sunken Crypts; the 3 ability gems + Moonsilver finally have a
+source, hard-gated behind a bespoke warden per gem); **4d — surface POIs + the **Miretyrant** melee
+boss-with-adds (NEXT)**, which **becomes the new win-con** (locked), demoting the Duneshaper to a
+mid-boss and finally making its **Heart** obtainable, unlocking the Gemwright's ability recipes.
+**Then Phase 5** (post-big-boss RNG reward choice).
 Ability/jewelry numbers and everything biome-3 are first-pass/tunable. The master-plan tail
 **M-TE** (trophy-gated gear) is folded into the shipped biome-2 work; real pixel art/animations stay
 deliberately deferred until content/balance settle (roadmap item 8).
