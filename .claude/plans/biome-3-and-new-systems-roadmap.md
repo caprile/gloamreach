@@ -314,14 +314,18 @@ generalize to an N-option card picker. Weighted RNG via `TROPHY_OUTCOME_ODDS`/`r
 (`Relics.ts:122-156`). Hook into the kill tail `resolveKill` (`MainScene.ts:6141`), gated on
 big-boss-and-not-run-ending.
 
-**Later (deferred sub-phases of Pillar E, plan when reached):**
-- **Start-of-run base character** — greenfield; seeds `PlayerProgression` starting stats/gear/an innate
-  ability + a run-defining modifier; RNG-per-run options; choice screen at run start (reuse
-  `WelcomeUI`/`RunEndUI` modal patterns).
-- **RNG dungeons + build-defining miniboss drops** — extend the Sunken-Forge POI template with an
-  `sessionRng()`-driven miniboss table (all Enemy subclasses share the
-  `update`/`checkPlayerHit`/`rollLoot` contract) and per-miniboss guaranteed gem/material drops, so
-  *which dungeon you clear* determines *which build gems you get*. Reuse `decoratePoi` + `CLEAR_RADIUS`.
+**Later (deferred sub-phases of Pillar E) — BOTH NOW DONE. Do not re-plan these as new work.**
+- ~~**Start-of-run base character**~~ — **SHIPPED as B4-P1** (2026-07-22, plan
+  `.claude/plans/b4-p1-start-of-run-character.md`). Landed as a FIXED five-survivor roster rather
+  than the RNG-per-run options sketched here (the user's call — the pick should be a playstyle
+  decision, not a dealt hand), and the "innate ability" is a real pre-equipped special ITEM, which
+  meant zero new ability plumbing. Modifiers are double-edged with NO score effect.
+- ~~**RNG dungeons + build-defining miniboss drops**~~ — **already SHIPPED as B3-P4c (the Sunken
+  Crypts)**; this entry was mistakenly still listed as open until 2026-07-22. 4c satisfies it in
+  full, RNG included: `MainScene.pickCryptPositions()` shuffles both the six crypt positions and
+  their theme assignment off `sessionRng()` each run, each of the three themes is gated by its own
+  bespoke warden (Palewake / Kilnborn / Sanguinarch), and the ability gems + Moonsilver spawn
+  `shielded` behind that kill — so *which crypt you clear* determines *which build gems you get*.
 
 ---
 

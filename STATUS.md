@@ -128,12 +128,19 @@ is obtainable, unlocking the Gemwright's ability recipes). **Phase 5 — DONE**:
 reward choice, delivered as a **boss-trophy 3-Mythic pick inside the Relic Forge** rather than the
 umbrella's kill-time modal (the user's redirect — see B3-P5). **THE BIOME-3 + NEW-SYSTEMS UMBRELLA
 IS COMPLETE (all 5 phases).** The first post-umbrella milestone, **B4-P1 (start-of-run base
-character)**, has now shipped — the first of the roadmap's two deferred sub-phases. **Still
-open and unplanned:** the second one, **RNG dungeons with build-defining miniboss drops**
-(sketched in `.claude/plans/biome-3-and-new-systems-roadmap.md` under Phase 5's "Later"), plus
-a biome-3 playtest/balance pass (the bayou arc has never been played end-to-end) and save/load.
-The five characters' stats/kits/modifiers are all first-pass and expected to need tuning once
-they're actually played.
+character)**, has now shipped. **Both of the roadmap's deferred "Later" sub-phases are now
+done** — B4-P1 was one; the other, **RNG dungeons with build-defining miniboss drops**, was
+already delivered by **B3-P4c (the Sunken Crypts)** and should not be re-planned as new work
+(the user flagged this 2026-07-22 — it had been mistakenly listed as open). 4c satisfies it in
+full, RNG included: `pickCryptPositions()` shuffles both the six crypt POSITIONS and their
+THEME assignment off `sessionRng()` every run, each of the three themes is gated by its own
+bespoke warden (Palewake / Kilnborn / Sanguinarch), and the ability gems + Moonsilver are hard-
+gated `shielded` behind that kill — so *which crypt you clear decides which build you get*,
+and which crypt is near you varies per run. **Genuinely open and unplanned:** a **biome-3
+playtest/balance pass** (the bayou arc has never been played end-to-end — crypts, POIs, the
+Miretyrant, the Mythic pick), **save/load** (roadmap item 8), and real pixel art/animation
+(deliberately last). The five characters' stats/kits/modifiers are all first-pass and expected
+to need tuning once they're actually played.
 Ability/jewelry numbers and everything biome-3 are first-pass/tunable. The master-plan tail
 **M-TE** (trophy-gated gear) is folded into the shipped biome-2 work; real pixel art/animations stay
 deliberately deferred until content/balance settle (roadmap item 8).
