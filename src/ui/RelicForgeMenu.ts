@@ -54,6 +54,11 @@ export interface RelicForgeMenuDeps {
   // once the player picks Keep New / Keep Old. Returns the refund info so the
   // menu can update its result line, or null if there's nothing pending.
   resolveFamilyChoice: (keepNew: boolean) => ChoiceResolution | null;
+  // Phase 5 (biome 3): commit one of a boss trophy's candidate relics. The scene
+  // writes it into the loadout + announces/logs it (a boss roll's announce is
+  // deferred to the pick, since there's no relic to name until then). Returns
+  // the completed result so the menu can show the usual result line.
+  commitCandidate: (id: string) => RollResult | null;
   // Whether a material key has been discovered. Used to gate a refine recipe
   // whose shard currency (e.g. Ember Shard) the player hasn't seen yet — so the
   // Refine tab never asks for a currency that doesn't exist to the player.
@@ -89,6 +94,11 @@ const BTN_COLS = 2;
 
 // Refine tab timing — a quick commit-at-end bar, same feel as craft/process/cook.
 const REFINE_BAR_MS = 650;
+
+// Boss-trophy candidate cards (Phase 5) — full panel width, stacked, so each
+// has room for its effect line + what it would displace.
+const CARD_H = 54;
+const CARD_GAP = 6;
 
 // The Relic Forge station menu (M-RL, reworked in Phase 5): a probabilistic
 // roll — 1 trophy per attempt, success chance by rarity, failure consumes the
@@ -169,7 +179,11 @@ export class RelicForgeMenu {
     // already spent) — default to declining the new roll, same as if the
     // player had clicked "Keep Old", so the spent trophy always yields
     // something.
-    if (this.choicePending()) this.deps.resolveFamilyChoice(false);
+    // A boss trophy's pick is resolved by auto-taking the FIRST candidate. The
+    // trophy is already spent and the roll is a guaranteed Mythic — declining it
+    // the way an ambiguous family conflict declines would silently burn it.
+    if (this.candidatesPending()) this.deps.commitCandidate(this.lastResult!.candidates![0]);
+    else if (this.choicePending()) this.deps.resolveFamilyChoice(false);
     this.open = false;
     this.lastResult = null;
     this.busy = false;
@@ -188,10 +202,17 @@ export class RelicForgeMenu {
     this.hideTooltip();
   }
 
-  // A successful roll landed on a family already owned, but neither instance
-  // strictly dominates the other — the player must pick Keep New / Keep Old.
+  // Something is waiting on the player before another roll can start: either a
+  // boss trophy's 3-relic pick (Phase 5), or a family conflict where neither
+  // instance dominates (Keep New / Keep Old). Both block rolling + tab-switching.
   private choicePending(): boolean {
-    return this.lastResult?.familyConflict?.verdict === "choice";
+    return this.candidatesPending() || this.lastResult?.familyConflict?.verdict === "choice";
+  }
+
+  // A boss-trophy roll landed and is waiting on the player to pick one of its
+  // candidate relics. Nothing has been written to the loadout yet.
+  private candidatesPending(): boolean {
+    return !!this.lastResult?.candidates?.length && !this.lastResult.id;
   }
 
   isOpen(): boolean {
@@ -371,9 +392,15 @@ export class RelicForgeMenu {
     //   • plain success / fail    — one 13px line.
     //   • auto-resolved conflict  — that line + a second (refund) line.
     //   • unresolved "choice"     — the Keep New / Keep Old button block.
+    //   • boss-trophy pick        — a header line + one card per candidate.
     const conflict = this.lastResult?.familyConflict;
     let resultBlockH: number;
     if (!this.lastResult) resultBlockH = 24;
+    else if (this.candidatesPending())
+      // 22px "Choose your relic" header + the card stack (the trailing CARD_GAP
+      // is slack), then 30 so the grid's own header (drawn at gridTop-22) clears
+      // the last card instead of sitting on top of it.
+      resultBlockH = 22 + this.lastResult!.candidates!.length * (CARD_H + CARD_GAP) + 30;
     else if (conflict?.verdict === "choice") resultBlockH = 134;
     else if (conflict) resultBlockH = 64;
     else resultBlockH = 46;
@@ -659,6 +686,10 @@ export class RelicForgeMenu {
   private renderResultLine(y: number): void {
     const x = this.panelX + 16;
     if (!this.lastResult) return;
+    if (this.candidatesPending()) {
+      this.renderCandidateCards(x, y);
+      return;
+    }
     if (!this.lastResult.success || !this.lastResult.id) {
       this.addText(x, y, `The trophy crumbled to dust — no relic this time.`, 13, "#c8a05a");
       return;
@@ -679,6 +710,50 @@ export class RelicForgeMenu {
     } else {
       this.renderFamilyChoice(x, y + 20, def, oldDef, this.lastResult.id, this.lastResult.powerTier!, conflict.oldId, conflict.oldPowerTier);
     }
+  }
+
+  // Phase 5 (biome 3): a boss trophy rolled a guaranteed Mythic and offers
+  // several candidates — the player picks which one to keep. There's exactly one
+  // Mythic per family, so this reads as "which family gets it?": each card names
+  // the family and whether it fills an empty slot or displaces what's there.
+  // Commit only — no skip (locked), and no reroll.
+  private renderCandidateCards(x: number, y: number): void {
+    const tier = this.lastResult!.powerTier ?? 1;
+    this.addText(x, y, "Choose your relic — one only.", 13, "#e6b8f0");
+
+    const cardW = this.panelW - 32;
+    this.lastResult!.candidates!.forEach((id, i) => {
+      const def = RELIC_DEFS[id];
+      const cardY = y + 22 + i * (CARD_H + CARD_GAP);
+      const box = this.scene.add
+        .rectangle(x, cardY, cardW, CARD_H, 0x14181f, 0.95)
+        .setOrigin(0, 0)
+        .setStrokeStyle(1, RARITY_COLOR[def.rarity])
+        .setScrollFactor(0)
+        .setDepth(DEPTH_ITEM)
+        .setInteractive({ useHandCursor: true })
+        .on("pointerover", () => box.setFillStyle(0x1e2530, 0.95))
+        .on("pointerout", () => box.setFillStyle(0x14181f, 0.95))
+        .on("pointerdown", () => this.pickCandidate(id));
+      this.rows.push(box);
+
+      this.addText(x + 10, cardY + 6, def.name, 13, rarityHex(def.rarity));
+      this.addText(x + cardW - 10, cardY + 7, relicFamilyName(def.family), 10, "#8a93a3", 1);
+      this.addText(x + 10, cardY + 24, relicEffectText(def, tier), 10, "#c9d1d9");
+      // What taking it would cost: the family slot is exclusive, so name the
+      // relic it displaces rather than letting the player find out after.
+      const owned = this.deps.relics.groupedForDisplay().find((g) => g.family === def.family);
+      const line = owned ? `Replaces ${RELIC_DEFS[owned.id].name}` : `Fills your empty ${relicFamilyName(def.family)} slot`;
+      this.addText(x + 10, cardY + 39, line, 9, owned ? "#c8a05a" : "#6a7280");
+    });
+  }
+
+  private pickCandidate(id: string): void {
+    if (!this.candidatesPending()) return;
+    const result = this.deps.commitCandidate(id);
+    if (!result) return;
+    this.lastResult = result;
+    this.render();
   }
 
   // " — +N Shard" suffix, or "" when the refund is zero (the default now that

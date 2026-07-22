@@ -306,6 +306,12 @@ export interface TrophyRoll {
   // Mythic" profile (which the shared Rare table can't express). Bands walk
   // highest-rarity-first, same as the shared table.
   outcomeOdds?: { rarity: RelicRarity; chance: number }[];
+  // How many candidate relics a SUCCESSFUL roll offers the player to pick from
+  // (biome-3 Phase 5). Absent or 1 = the original behaviour (one relic, granted
+  // outright). Boss trophies set 3: they already guarantee a Mythic, and there's
+  // exactly one Mythic per family, so the pick reads as "which family gets it?".
+  // Data, not an isBossTrophy branch — any future trophy opts in by setting it.
+  choiceCount?: number;
 }
 export const TROPHY_ROLL: Record<string, TrophyRoll> = {
   // Biome-1 elite trophies: Common / Tier 1 — they share the Common outcome
@@ -342,15 +348,20 @@ export const TROPHY_ROLL: Record<string, TrophyRoll> = {
   // keep playing past, so its trophy (Tier 1) is spendable; the Duneshaper ends
   // the run, so its Tier-2 trophy is kept for correctness / a future continue
   // mode. Two keys so the tiers differ (T2 relics hit ×1.5).
+  // Phase 5 (biome 3): both boss trophies now offer a CHOICE of 3 Mythics rather
+  // than granting one at random — the payoff for a big-boss kill is picking which
+  // family your guaranteed Mythic lands in.
   boss_refined_trophy: {
     rarity: "mythic",
     powerTier: 1,
     outcomeOdds: [{ rarity: "mythic", chance: 1.0 }],
+    choiceCount: 3,
   },
   boss_refined_trophy_t2: {
     rarity: "mythic",
     powerTier: 2,
     outcomeOdds: [{ rarity: "mythic", chance: 1.0 }],
+    choiceCount: 3,
   },
   // Refined trophies (Gloaming Vein loop, biome 1). Roll-only keys (produced
   // ONLY by refinement) so they climb trophies one rarity up into a
@@ -456,6 +467,11 @@ export interface RollResult {
   id?: string; // set on success
   powerTier?: number; // set on success
   pity?: boolean; // success was forced by the pity counter
+  // Biome-3 Phase 5: a trophy with choiceCount > 1 (boss trophies) offers SEVERAL
+  // candidate relics and lets the player pick one. While a pick is pending, `id`
+  // is unset and NOTHING has been written to the loadout yet — the caller must
+  // follow up with commitCandidate(), which fills in `id` + any familyConflict.
+  candidates?: string[];
   // Set when a successful roll contested a family slot already owned. See
   // RelicManager doc comment above for the three verdicts.
   familyConflict?: {
@@ -659,6 +675,15 @@ export class RelicManager {
   // The contested OLD relic, so a Keep-New (replace) refund can be previewed.
   private pendingChoiceOldId: string | null = null;
   private pendingChoiceOldTier = 1;
+  // Phase 5 (biome 3): an unresolved boss-trophy pick. The rarity + candidate set
+  // are already decided; the loadout stays untouched until commitCandidate().
+  private pendingCandidates: {
+    ids: string[];
+    powerTier: number;
+    rarity: RelicRarity;
+    trophyKey: string;
+    pity: boolean;
+  } | null = null;
 
   count(): number {
     return Object.keys(this.instances).length;
@@ -722,20 +747,40 @@ export class RelicManager {
       const fresh = pool.filter((id) => !owned.has(id));
       if (fresh.length) pool = fresh;
     }
-    const id = pool[Math.floor(rng() * pool.length)];
-    const family = RELIC_DEFS[id].family;
-    const base: RollResult = { success: true, rarity: resultRarity, id, powerTier: t.powerTier, pity: pityHit };
+    // Phase 5: a trophy that offers a CHOICE draws several distinct candidates
+    // and writes NOTHING yet — the loadout is only touched once the player picks
+    // (commitCandidate). The rarity/candidate set is fixed here, at click, so an
+    // interrupted spin still can't change the outcome.
+    const choiceCount = Math.min(t.choiceCount ?? 1, pool.length);
+    if (choiceCount > 1) {
+      const candidates: string[] = [];
+      const remaining = [...pool];
+      for (let i = 0; i < choiceCount; i++) {
+        candidates.push(remaining.splice(Math.floor(rng() * remaining.length), 1)[0]);
+      }
+      this.pendingCandidates = { ids: candidates, powerTier: t.powerTier, rarity: resultRarity, trophyKey, pity: pityHit };
+      return { success: true, rarity: resultRarity, powerTier: t.powerTier, pity: pityHit, candidates };
+    }
 
+    const id = pool[Math.floor(rng() * pool.length)];
+    return this.place(id, t.powerTier, trophyKey, { success: true, rarity: resultRarity, id, powerTier: t.powerTier, pity: pityHit });
+  }
+
+  // Write a resolved relic into its family slot, resolving any contest with the
+  // relic already there. Shared by the single-relic roll path and Phase 5's
+  // commitCandidate() so the two can't drift on the dominance rules.
+  private place(id: string, powerTier: number, trophyKey: string, base: RollResult): RollResult {
+    const family = RELIC_DEFS[id].family;
     const existing = this.instances[family];
     if (!existing) {
-      this.instances[family] = { id, powerTier: t.powerTier };
+      this.instances[family] = { id, powerTier };
       return base;
     }
 
-    const verdict = compareInstances(id, t.powerTier, existing.id, existing.powerTier);
+    const verdict = compareInstances(id, powerTier, existing.id, existing.powerTier);
     if (verdict === "better") {
       // New relic wins the slot — the OLD one is displaced with a small refund.
-      this.instances[family] = { id, powerTier: t.powerTier };
+      this.instances[family] = { id, powerTier };
       return { ...base, familyConflict: { family, oldId: existing.id, oldPowerTier: existing.powerTier, verdict: "replaced", ...replaceRefund(existing.id, existing.powerTier) } };
     }
     if (verdict === "worse_or_equal") {
@@ -750,6 +795,37 @@ export class RelicManager {
     this.pendingChoiceOldId = existing.id;
     this.pendingChoiceOldTier = existing.powerTier;
     return { ...base, familyConflict: { family, oldId: existing.id, oldPowerTier: existing.powerTier, verdict: "choice" } };
+  }
+
+  // --- Phase 5: boss-trophy relic pick ---
+
+  // Whether a boss-trophy roll is waiting on the player to pick a candidate.
+  // The forge blocks further rolls + tab switches while this is true.
+  hasPendingCandidates(): boolean {
+    return this.pendingCandidates !== null;
+  }
+
+  // The candidate ids awaiting a pick (empty when none is pending).
+  pendingCandidateIds(): string[] {
+    return this.pendingCandidates ? [...this.pendingCandidates.ids] : [];
+  }
+
+  // Commit one of the pending candidates into the loadout. `id` must be one of
+  // the offered candidates — anything else is rejected, so a stale/forged click
+  // can't grant an arbitrary relic. Returns the completed RollResult (with `id`
+  // filled in and any family conflict resolved exactly as a normal roll would),
+  // or null if nothing is pending.
+  commitCandidate(id: string): RollResult | null {
+    const pending = this.pendingCandidates;
+    if (!pending || !pending.ids.includes(id)) return null;
+    this.pendingCandidates = null;
+    return this.place(id, pending.powerTier, pending.trophyKey, {
+      success: true,
+      rarity: pending.rarity,
+      id,
+      powerTier: pending.powerTier,
+      pity: pending.pity,
+    });
   }
 
   // Finalize an "ambiguous" family conflict once the player picks. `newId`/

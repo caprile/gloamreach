@@ -494,6 +494,11 @@ dungeon phases will source.
   `outcomeOdds` = 100% Mythic). The **Boss Trophy** (Gremlin King) → Mythic
   Tier 1; the **Tyrant Trophy** (Duneshaper) → Mythic Tier 2 (×1.5). Mini-bosses
   keep their refined-trophy drops.
+- **B3-P5 — a boss trophy offers a CHOICE of 3 Mythics** (`TrophyRoll.choiceCount`)
+  instead of granting one at random. There is exactly one Mythic per family, so
+  the pick is "which family gets it?". Commit only — no skip, no reroll; closing
+  the forge mid-pick auto-takes the first card so a spent trophy is never lost.
+  Every other trophy is unaffected (`choiceCount` absent = one relic, as before).
 - A **Rare/Mythic roll never repeats an id you already own** (the pool pick
   filters owned ids for those rarities), so lucky high rolls are always fresh.
 - **Common crumble softened** (own-rarity band 10%→20%, success 13.5%→23.5%,
@@ -530,8 +535,8 @@ source, so ember sites supply the tier-2 refine currency without hauling Gloam
 from the forest (both drop shards for supply; only one drops the trophy so a
 two-guard site doesn't flood refined trophies). **Gremlin King** → Gremlin King's Heart + 1
 **Boss Trophy** (guaranteed Mythic, Tier 1). **Duneshaper** → 5–8 Ember Shard + 1
-**Tyrant Trophy** (guaranteed Mythic, Tier 2 — its kill wins the run, so the trophy
-is unreachable in practice; kept for consistency).
+**Tyrant Trophy** (guaranteed Mythic, Tier 2 — spendable since B3-P4d(2) made the
+**Miretyrant** the win-con and demoted the Duneshaper to a mid-boss).
 
 **Replaced-relic refund** (Phase-5 family loadout): rolling a strictly-better
 relic that displaces an owned one now refunds a **small** shard amount for the old

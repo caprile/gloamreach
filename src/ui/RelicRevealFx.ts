@@ -164,7 +164,10 @@ export class RelicRevealFx {
     result: RollResult | null,
     onComplete: () => void,
   ): void {
-    const success = !!result?.success && !!result.id;
+    // Phase 5: a boss-trophy roll lands with CANDIDATES instead of a single id
+    // (the player picks after the spin) — that is still a win, so it must play
+    // the rarity fanfare rather than the crumble fizzle.
+    const success = !!result?.success && (!!result.id || !!result.candidates?.length);
 
     if (!success) {
       // Fizzle — grey crumble, subdued. The contrast makes wins feel better.
@@ -187,7 +190,7 @@ export class RelicRevealFx {
     }
 
     const rarity = result!.rarity;
-    const def = RELIC_DEFS[result!.id!];
+    const def = result!.id ? RELIC_DEFS[result!.id] : null;
     const cfg = REVEAL_CFG[rarity];
     const color = RARITY_COLOR[rarity];
 
@@ -288,7 +291,10 @@ export class RelicRevealFx {
     }
 
     // Result name under the gem.
-    this.addText(cx, gemY + 74, `${def.name} [${rarityName(rarity)}]`, 15, rarityHex(rarity), D_BANNER, 0.5);
+    // Without a committed id yet (a pending pick), name the rarity only — the
+    // three candidate cards below the spin do the naming.
+    const bannerLabel = def ? `${def.name} [${rarityName(rarity)}]` : `${rarityName(rarity)} — choose your relic`;
+    this.addText(cx, gemY + 74, bannerLabel, 15, rarityHex(rarity), D_BANNER, 0.5);
 
     if (cfg.shakeIntensity > 0) this.scene.cameras.main.shake(160, cfg.shakeIntensity);
 

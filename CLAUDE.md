@@ -1658,8 +1658,17 @@ below.**
      **no branching** (`activeCrypt` → `activeDungeon`). **The win-con is now the Miretyrant**,
      demoting the Duneshaper to a mid-boss and finally making its **Heart** obtainable (it gates the
      Gemwright's ability-jewelry tier and had been unreachable since B3-P2b because that kill ended
-     the run). **NEXT: Phase 5** (post-big-boss RNG reward choice) — the last phase of this arc, and
-     its trigger (a big-boss kill that does NOT end the run) now exists.
+     the run). **Phase 5 (B3-P5) — DONE, completing the arc:** the post-big-boss reward choice, which
+     the user **redirected out of the umbrella's kill-time modal and into the Relic Forge** —
+     rolling a **boss trophy** now offers **3 candidate Mythics to pick from** instead of granting
+     one at random. Since there's exactly one Mythic per family, the pick reads as "which family
+     gets your Mythic?". Boss-trophy-only but expressed as **data** (`TrophyRoll.choiceCount`), so
+     every other trophy is unchanged; **ownership isn't written until the pick** (the roll fixes
+     rarity + candidates at click, preserving the "theatre over a known result" invariant), and
+     picking then runs the **normal family-dominance path** rather than force-equipping.
+     Commit-only (no skip, no reroll); closing the forge mid-pick auto-takes the first card, since
+     a spent boss trophy must never yield nothing. **The whole biome-3 + new-systems umbrella is
+     now COMPLETE (all 5 phases); no next arc is planned.**
      See [[survivor-rpg-biome-3-roadmap]].
 
 **Not yet built — next up in rough order:**

@@ -3307,6 +3307,7 @@ export class MainScene extends Phaser.Scene {
       forgeTier: () => (this.openForge?.getData("tier") as number | undefined) ?? 0,
       convert: () => this.convertGloamToEmber(),
       resolveFamilyChoice: (keepNew) => this.resolveRelicFamilyChoice(keepNew),
+      commitCandidate: (id) => this.commitRelicCandidate(id),
       hasDiscovered: (key) => this.discovered.has(key),
       noBuildCost: () => this.devNoBuildCost,
     });
@@ -3355,6 +3356,14 @@ export class MainScene extends Phaser.Scene {
   // forge menu's deferred announceRoll, or inline for any non-menu roll path.
   private announceRelicResult(result: RollResult | null): void {
     const tex = this.lastRollTrophyKey ? itemDef(this.lastRollTrophyKey)?.texture : undefined;
+    // Phase 5 (biome 3): a boss trophy landed on a CHOICE of candidates — there's
+    // no relic to name or grant yet, so the real announce is deferred to the pick
+    // (commitRelicCandidate). Only the HUD/menu refresh runs now.
+    if (result?.success && result.candidates?.length && !result.id) {
+      this.eventLog.add("recipe", `The forge offers ${result.candidates.length} relics — choose one`, tex);
+      this.afterRelicChange();
+      return;
+    }
     if (result?.success && result.id) {
       const def = RELIC_DEFS[result.id];
       this.eventLog.add("recipe", `Relic forged: ${def.name} (${rarityName(def.rarity)})`, tex);
@@ -3396,6 +3405,18 @@ export class MainScene extends Phaser.Scene {
     }
     const shardDef = itemDef(shardKey);
     this.eventLog.add("info", `${discardedName} discarded — +${amount} ${shardDef?.name ?? shardKey}`, shardDef?.texture);
+  }
+
+  // Commit one of a boss trophy's candidate relics (biome-3 Phase 5) once the
+  // player picks in the forge menu. RelicManager validates that `id` was
+  // actually offered, then resolves it through the SAME family-dominance path a
+  // normal roll uses — so announceRelicResult can handle the completed result
+  // (log + any refund + HUD sync) with no special-casing.
+  private commitRelicCandidate(id: string): RollResult | null {
+    const result = this.relics.commitCandidate(id);
+    if (!result) return null;
+    this.announceRelicResult(result);
+    return result;
   }
 
   // Finalize a pending "ambiguous" family-conflict choice (Phase 5) once the

@@ -2,7 +2,20 @@
 
 ## Current State
 
-_Living snapshot — edit in place, never append. Last shipped: **B3-P4d(2) — Biome-3 Phase 4d,
+_Living snapshot — edit in place, never append. Last shipped: **B3-P5 — Biome-3 Phase 5: the
+post-boss reward choice** (2026-07-22, Opus, plan
+`.claude/plans/biome-3-phase-5-boss-relic-choice.md`). **This completes the entire biome-3 +
+new-systems arc (all 5 phases).** the user redirected the umbrella's kill-time modal into the
+**Relic Forge**: rolling a **boss trophy** now offers **3 candidate Mythics to pick from** instead
+of granting one at random. Because there's exactly one Mythic per family, the pick reads as
+"which family gets your Mythic?". Boss-trophy-only but expressed as data
+(`TrophyRoll.choiceCount`), so every other trophy is byte-for-byte unchanged; ownership isn't
+written until the pick; picking runs the normal family-dominance path; commit-only (no skip/
+reroll), and closing the forge mid-pick auto-takes the first card so a spent trophy is never lost.
+Verified live end-to-end; `tsc` clean, zero console errors. Verification caught a 6px layout
+overlap between the card stack and the relic grid's header (now a re-asserted 14px gap).
+**Next: no phase is queued** — the arc is done. See B3-P5 below + [[survivor-rpg-biome-3-roadmap]].
+Prior: **B3-P4d(2) — Biome-3 Phase 4d,
 session 2: the Miretyrant, its lair, and the win-con swap** (2026-07-22, Opus, plan
 `.claude/plans/biome-3-phase-4d-miretyrant.md`). **This completes Phase 4d and moves the game's
 win-condition to the bayou**, demoting the Duneshaper to a mid-boss exactly as biome 2 demoted the
@@ -93,9 +106,13 @@ have a source, hard-gated behind a bespoke warden per gem); **4d — surface POI
 itself split in two, **both DONE**: session 1 (the Sunken Shrine + Drowned Lodge + the Tyrant Sigil /
 Gorge Bone key materials) and session 2 (the **Miretyrant**, its own boss-level dungeon behind the
 sealed Sunken Gorge, and the **win-con swap** — the Duneshaper is now a mid-boss and its **Heart**
-is obtainable, unlocking the Gemwright's ability recipes). **NEXT: Phase 5** — the post-big-boss RNG
-reward choice, the last phase of this arc; its trigger (a big-boss kill that does NOT end the run)
-now exists for both the Gremlin King and the Duneshaper.
+is obtainable, unlocking the Gemwright's ability recipes). **Phase 5 — DONE**: the post-big-boss
+reward choice, delivered as a **boss-trophy 3-Mythic pick inside the Relic Forge** rather than the
+umbrella's kill-time modal (the user's redirect — see B3-P5). **THE BIOME-3 + NEW-SYSTEMS UMBRELLA
+IS COMPLETE (all 5 phases).** Nothing is queued behind it — the next arc is unplanned. Standing
+candidates from the roadmap's deferred sub-phases: a **start-of-run base character** (RNG run-
+defining modifiers at run start) and **RNG dungeons with build-defining miniboss drops**, both
+sketched in `.claude/plans/biome-3-and-new-systems-roadmap.md` under Phase 5's "Later" section.
 Ability/jewelry numbers and everything biome-3 are first-pass/tunable. The master-plan tail
 **M-TE** (trophy-gated gear) is folded into the shipped biome-2 work; real pixel art/animations stay
 deliberately deferred until content/balance settle (roadmap item 8).
@@ -146,6 +163,72 @@ below + [[survivor-rpg-dev-console]].
 ## Recent Entries
 
 > Older entries in STATUS-archive.md.
+
+### B3-P5 — Biome-3 Phase 5: the post-boss reward choice (boss-trophy relic pick) (2026-07-22, Opus)
+
+Plan: `.claude/plans/biome-3-phase-5-boss-relic-choice.md`. **The last phase of the biome-3 +
+new-systems arc — the umbrella is now COMPLETE.**
+
+**The umbrella's spec changed during the locking pass.** It called for a kill-time modal (a
+full-screen 3-card picker of relic / ability / stat boon / gem / special item). the user
+redirected: *"it can be a relic but now im thinking when you roll the boss trophy, instead of it
+outright giving you a single random relic, you get 3 random relics to pick from of the pool —
+within the relic forge menu."* So the choice moved **out of a kill-time modal and into the Relic
+Forge**, riding the boss trophy a big-boss kill already drops. That's strictly better here: the
+reward is still gated on a big-boss kill (`boss_refined_trophy` / `boss_refined_trophy_t2` drop
+from the Gremlin King / Duneshaper and nothing else), it reuses the forge's slot-machine reveal as
+the drum-roll instead of building a second modal that would compete with it, and it needs no new
+pause/freeze surface. It's also a **better decision than the original**: boss trophies already
+guarantee a Mythic and there is exactly **one Mythic per family** (8 total), so "pick 1 of 3" reads
+as **"which family gets your Mythic?"**.
+
+**Locked:** boss trophies only, but as **data** (`TrophyRoll.choiceCount`) rather than an
+`isBossTrophy` branch — any future trophy opts in, and an absent field means the original
+one-relic behaviour, so every existing trophy is untouched. **Commit — pick one, no skip, no
+reroll** (locked via `AskUserQuestion`). Candidates are **distinct ids**, reusing S4's existing
+rule that never re-offers an owned Rare/Mythic. **Ownership is not written until the pick**: the
+roll fixes the rarity + candidate set at click (so an interrupted spin still can't change the
+outcome — the existing "theatre over a known result" invariant), and the family slot is only
+written by `commitCandidate()`. Picking then runs the **normal family-dominance path**
+(replace/decline/ambiguous) rather than force-equipping, so a hand-written pool that broke the
+one-Mythic-per-family assumption still can't corrupt the loadout model.
+
+**Implementation.** `Relics.ts`: `TrophyRoll.choiceCount` (3 on both boss trophies),
+`RollResult.candidates`, the family-conflict tail of `roll()` extracted into a private
+`place(id, powerTier, trophyKey, base)` shared by both paths, plus `pendingCandidates` state +
+`hasPendingCandidates()` / `pendingCandidateIds()` / `commitCandidate(id)` (which **validates that
+`id` was actually offered**, so a stale or forged click can't grant an arbitrary relic).
+`RelicForgeMenu.ts`: a 3-row card picker in the result region — name, family, tier-scaled effect
+text, and **what it would displace** (`Replaces Titan Totem` vs `Fills your empty Stamina slot`),
+folded into `choicePending()` so it blocks further rolls + tab switches. `RelicRevealFx.ts`: its
+`success` test required `result.id`, which a pending pick doesn't have — widened, else a
+guaranteed Mythic played the **crumble fizzle**; the banner names the rarity only
+("Mythic — choose your relic") since the cards do the naming. `MainScene.ts`: a `commitCandidate`
+dep + `commitRelicCandidate()`, and `announceRelicResult` defers the "Relic forged" log to the
+pick (there's no relic to name until then).
+
+**Closing the forge mid-pick auto-takes the first card.** The trophy is already spent and the roll
+is a guaranteed Mythic — declining it the way an ambiguous family conflict declines would silently
+burn it. (The standing rule is "a spent trophy always yields something.")
+
+**Verification** (live, `preview_eval`; `tsc` clean, zero console errors). A boss roll yields 3
+distinct Mythics with **no** ownership change and `hasPendingCandidates()` true; committing grants
+**exactly** the picked id; a foreign id and a double-commit both return null without touching the
+loadout; 12 Common rolls never offer candidates and always carry an id on success (the normal path
+is unchanged); committing a candidate that contests an owned family cleanly **replaced** a Common
+Bloodroot Charm with the T2 Mythic Bloodlord's Mantle; the real card click commits the clicked card
+(not the first); a second roll while a pick is pending is refused with **no** trophy consumed; and
+closing mid-pick auto-commits candidate 0 and unblocks rolling. Trophy consumption is exactly 1.
+The reveal was confirmed to play `★ MYTHIC! ★` rather than "Crumbled to dust…".
+
+**One real bug caught in verification** — the same layout class that bit the Phase-5 relic rework:
+the result region's reserved height was 6px short, so the relic grid's own "Your Relics" header
+**overlapped the last card**. Re-measured (22px picker header + the card stack + 30 for the grid
+header) and re-asserted with exact pixel gaps: now a 14px gap, panel still fully on-screen.
+
+`RECIPES.md` + the dashboard's trophy-source notes updated (and a **stale RECIPES line** fixed
+along the way: the Tyrant Trophy was still documented as "unreachable in practice", which
+B3-P4d(2)'s win-con swap had already made false).
 
 ### B3-P4d(2) — Biome-3 Phase 4d, session 2: the Miretyrant, its lair, and the win-con swap (2026-07-22, Opus)
 
