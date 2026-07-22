@@ -39,6 +39,13 @@ export interface ProjectileConfig {
   maxLifetimeMs?: number;
 }
 
+// Miss rule for homing projectiles (see preUpdate). "Came close" is generous
+// enough that a dodge at any reasonable range counts, and the fizzle is short
+// enough that a dodged orb is gone before it becomes a second threat.
+const MISS_NEAR_PX = 150; // how close it must have gotten for a miss to count
+const MISS_MARGIN_PX = 20; // how far back past that it must drift to be "missed"
+const MISS_FIZZLE_MS = 300; // straight-line grace after giving up
+
 // Whatever spawns projectiles (currently just MainScene) implements this —
 // lets Enemy subclasses call scene.spawnProjectile(...) without importing
 // MainScene directly (would be a circular import: MainScene already imports
@@ -58,10 +65,14 @@ export class Projectile extends Phaser.Physics.Arcade.Sprite {
   private readonly velX: number;
   private readonly velY: number;
   private readonly speed: number;
-  private readonly homing?: { turnRateRadPerSec: number; target: { x: number; y: number } };
+  private homing?: { turnRateRadPerSec: number; target: { x: number; y: number } };
   private readonly maxLifetimeMs?: number;
   private readonly artAngleOffset: number;
   private spawnedAt = -1;
+  // Closest the orb has ever come to its target, and when it gave up. See the
+  // miss rule in preUpdate.
+  private closestDist = Number.POSITIVE_INFINITY;
+  private missExpireAt = -1;
 
   constructor(scene: Phaser.Scene, cfg: ProjectileConfig) {
     super(scene, cfg.x, cfg.y, cfg.texture);
@@ -98,10 +109,28 @@ export class Projectile extends Phaser.Physics.Arcade.Sprite {
     super.preUpdate(time, delta);
     if (this.spawnedAt < 0) this.spawnedAt = time;
     if (this.homing) {
-      this.steerToward(delta);
-      // A homing orb despawns on its lifetime, not on distance-from-spawn (see
-      // maxLifetimeMs) — the curve means it can circle inside maxRangePx forever.
-      if (this.maxLifetimeMs !== undefined && time - this.spawnedAt >= this.maxLifetimeMs) this.destroy();
+      // MISS RULE (the user playtest: "if they miss you, it should just
+      // disappear"). A bounded-turn orb that overshoots would otherwise loop
+      // back and chase for its whole lifetime, which reads as unfair rather
+      // than dodgeable. Once it has actually come close and is now moving away
+      // again, the dodge SUCCEEDED: it stops tracking and fizzles shortly after.
+      const dist = Phaser.Math.Distance.Between(this.x, this.y, this.homing.target.x, this.homing.target.y);
+      this.closestDist = Math.min(this.closestDist, dist);
+      if (this.closestDist <= MISS_NEAR_PX && dist > this.closestDist + MISS_MARGIN_PX) {
+        this.homing = undefined;
+        this.missExpireAt = time + MISS_FIZZLE_MS;
+      } else {
+        this.steerToward(delta);
+        // A homing orb despawns on its lifetime, not on distance-from-spawn (see
+        // maxLifetimeMs) — the curve means it can circle inside maxRangePx forever.
+        if (this.maxLifetimeMs !== undefined && time - this.spawnedAt >= this.maxLifetimeMs) this.destroy();
+        return;
+      }
+    }
+    // A missed orb flies straight for a beat, then fizzles — it can still clip
+    // someone who walks into it, it just stops hunting.
+    if (this.missExpireAt >= 0 && time >= this.missExpireAt) {
+      this.destroy();
       return;
     }
     const traveled = Phaser.Math.Distance.Between(this.spawnX, this.spawnY, this.x, this.y);

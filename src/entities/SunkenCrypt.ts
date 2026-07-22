@@ -80,6 +80,7 @@ export class SunkenCrypt {
   // next dungeon's braziers glowing across the void while you stand in this one.
   // collectLights() only reads these for the crypt you're actually inside.
   braziers: { x: number; y: number }[] = [];
+  objects: Phaser.GameObjects.GameObject[] = [];
   // Rooms/corridors the player has set foot in. Discovering a space lights the
   // WHOLE space permanently (the user) — a fog-of-war reveal rather than a torch
   // radius, so exploring a crypt leaves a map of lit rooms behind you and the

@@ -41,7 +41,11 @@ const ORB_DAMAGE = 34; // magic — bypasses armor entirely, so this IS very clo
 // the turn rate only punishes standing still or turning into it.
 const ORB_SPEED = 170;
 const ORB_TURN_RATE = 1.9; // rad/s — a wider arc than before, still out-turnable at speed
-const ORB_LIFETIME_MS = 9000; // hard expiry (a curving orb never trips distance-despawn)
+// Hard expiry (a curving orb never trips distance-despawn). 9000 at 170px/s was
+// ~1.5km of chase — the orb outlived the whole engagement. The Projectile miss
+// rule ends most orbs well before this; this is just the backstop for one that
+// never gets near enough to count as dodged.
+const ORB_LIFETIME_MS = 4200;
 const ORB_MAX_RANGE = 2200; // unused by the homing path, kept honest for the despawn contract
 const CAST_COOLDOWN_MS = 1900;
 

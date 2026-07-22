@@ -104,6 +104,35 @@ export const COOK_RECIPES: CookRecipe[] = [
     inputs: { shishkabob: 1, duskrunner_meat: 1, emberbloom: 1, boar_meat: 1 }, // mixed — leftover boar_meat
     requiredCampfireTier: 3,
   },
+
+  // --- Bayou dishes (biome 3). The bayou shipped its food SOURCE in Phase 4b
+  // (mirejaw_meat, "cooking recipes land later") and its harvestables in 4a,
+  // but never the recipes — so the deepest biome had no food at all and every
+  // player arrived there living off badlands leftovers (the user playtest: "is
+  // there any food in bayou?"). These sit at the existing top campfire tier
+  // rather than adding a Lvl 5: by the bayou you have a Lvl 4 fire, and the
+  // gate that matters is having bayou INGREDIENTS. ---
+  {
+    id: "seared_mirejaw_tail",
+    name: "Seared Mirejaw Tail",
+    output: "seared_mirejaw_tail",
+    inputs: { shishkabob: 1, mirejaw_meat: 1 }, // the simple one — meat on a stick, like the Duskrunner Skewer
+    requiredCampfireTier: 2,
+  },
+  {
+    id: "mossbound_mirejaw",
+    name: "Mossbound Mirejaw",
+    output: "mossbound_mirejaw",
+    inputs: { shishkabob: 1, mirejaw_meat: 1, swamp_moss: 2 }, // bayou-native, finally uses swamp moss
+    requiredCampfireTier: 3,
+  },
+  {
+    id: "lilygilded_feast",
+    name: "Lily-Gilded Feast",
+    output: "lilygilded_feast",
+    inputs: { shishkabob: 1, mirejaw_meat: 2, water_lily: 2, swamp_moss: 1 }, // the bayou's best
+    requiredCampfireTier: 3,
+  },
 ];
 
 export function canAffordCook(recipe: CookRecipe, backpack: ItemContainer): boolean {

@@ -24,7 +24,6 @@ export class MiretyrantLair implements DungeonInterior {
   readonly x: number; // surface maw
   readonly y: number;
   readonly image: Phaser.GameObjects.Image;
-  private readonly glow: Phaser.GameObjects.Image;
 
   unsealed = false;
   discoveredOnMap = false;
@@ -33,6 +32,7 @@ export class MiretyrantLair implements DungeonInterior {
   layout!: CryptLayout;
   entryPoint = { x: 0, y: 0 };
   braziers: { x: number; y: number }[] = [];
+  objects: Phaser.GameObjects.GameObject[] = [];
   discovered = new Set<CryptRect>();
   exitStairs: Phaser.GameObjects.Image | null = null;
   enemies: Enemy[] = [];
@@ -41,19 +41,35 @@ export class MiretyrantLair implements DungeonInterior {
   // means something (see Miretyrant.MIRETYRANT_MAX_ADDS).
   adds: Enemy[] = [];
 
+  // Every maw that leads down here. ONE interior, several doors (the user
+  // playtest: "there should be 2 boss locations"). Separate lairs would mean
+  // two bosses and two win conditions in a one-life run; separate doors just
+  // means you don't have to cross a 28000px world to reach the finale. The
+  // player always returns to the door they came in by, since the exit restores
+  // their pre-descent position rather than the lair's own.
+  readonly maws: { x: number; y: number; image: Phaser.GameObjects.Image }[] = [];
+
   constructor(scene: Phaser.Scene, cfg: { x: number; y: number }) {
     this.x = cfg.x;
     this.y = cfg.y;
-    this.image = scene.add.image(cfg.x, cfg.y, "gorge_maw_sealed").setDepth(ysortDepth(cfg.y));
-    this.glow = scene.add
-      .image(cfg.x, cfg.y + 10, "light_soft")
+    this.image = this.addMaw(scene, cfg.x, cfg.y);
+  }
+
+  private readonly glows: Phaser.GameObjects.Image[] = [];
+
+  // Build one surface maw (image + pulsing glow). The first is the canonical
+  // `image`/`x`/`y`; the rest are additional doors.
+  addMaw(scene: Phaser.Scene, x: number, y: number): Phaser.GameObjects.Image {
+    const img = scene.add.image(x, y, this.unsealed ? "gorge_maw_open" : "gorge_maw_sealed").setDepth(ysortDepth(y));
+    const glow = scene.add
+      .image(x, y + 10, "light_soft")
       .setTint(0x4fbf86)
       .setBlendMode(Phaser.BlendModes.ADD)
       .setScale(0.22)
       .setAlpha(0.28)
-      .setDepth(this.image.depth - 1);
+      .setDepth(img.depth - 1);
     scene.tweens.add({
-      targets: this.glow,
+      targets: glow,
       alpha: 0.52,
       scale: 0.3,
       duration: 1800,
@@ -61,13 +77,16 @@ export class MiretyrantLair implements DungeonInterior {
       repeat: -1,
       ease: "Sine.easeInOut",
     });
+    this.glows.push(glow);
+    this.maws.push({ x, y, image: img });
+    return img;
   }
 
-  // Break the seal: the maw opens and stays open for the run.
+  // Break the seal: EVERY maw opens and stays open for the run.
   unseal(): void {
     if (this.unsealed) return;
     this.unsealed = true;
-    this.image.setTexture("gorge_maw_open");
-    this.glow.setAlpha(0.55).setScale(0.34);
+    for (const m of this.maws) m.image.setTexture("gorge_maw_open");
+    for (const g of this.glows) g.setAlpha(0.55).setScale(0.34);
   }
 }

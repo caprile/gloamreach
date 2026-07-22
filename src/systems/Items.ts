@@ -737,6 +737,37 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     edible: { hpPerSec: 3.5, durationMs: 28000 },
   },
 
+  // --- Bayou dishes (biome 3). The best food in the game, but only by a
+  // measured step over the badlands' Lvl 4 platters — the same "deeper is
+  // better, not a different league" pacing every earlier tier used. ---
+  seared_mirejaw_tail: {
+    key: "seared_mirejaw_tail",
+    name: "Seared Mirejaw Tail",
+    description: "Thick gator tail, seared black on the outside. Right-click to eat.",
+    texture: "icon_seared_mirejaw_tail",
+    maxStack: 99,
+    hotbarable: true,
+    edible: { hpPerSec: 3, durationMs: 26000 },
+  },
+  mossbound_mirejaw: {
+    key: "mossbound_mirejaw",
+    name: "Mossbound Mirejaw",
+    description: "Mirejaw wrapped in swamp moss and steamed in its own juices. Right-click to eat.",
+    texture: "icon_mossbound_mirejaw",
+    maxStack: 99,
+    hotbarable: true,
+    edible: { hpPerSec: 3.5, durationMs: 34000 },
+  },
+  lilygilded_feast: {
+    key: "lilygilded_feast",
+    name: "Lily-Gilded Feast",
+    description: "A whole spread of mire game dressed with lilies. Right-click to eat.",
+    texture: "icon_lilygilded_feast",
+    maxStack: 99,
+    hotbarable: true,
+    edible: { hpPerSec: 4, durationMs: 36000 },
+  },
+
   // --- processed goods (Drying Rack outputs) ---
   twine: {
     key: "twine",
@@ -1206,6 +1237,24 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     name: "Ember Shard",
     description: "A gloam shard rendered down over kiln-heat until it burns amber instead of violet. Used at the Relic Forge.",
     texture: "icon_ember_shard",
+    maxStack: 99,
+    hotbarable: false,
+  },
+  // --- biome 3: Mire Crucible (Ember -> Mire conversion) + tier-3 refinement.
+  // The bayou's trophies are Tier 3 and had no refine path at all until this. ---
+  mire_shard: {
+    key: "mire_shard",
+    name: "Mire Shard",
+    description: "An ember shard steeped in black bog-water until it drinks the light. Used at the Relic Forge.",
+    texture: "icon_mire_shard",
+    maxStack: 99,
+    hotbarable: false,
+  },
+  refined_trophy_uncommon_t3: {
+    key: "refined_trophy_uncommon_t3",
+    name: "Mire-Refined Trophy",
+    description: "A bayou trophy steeped in mire until it holds its shape. Never crumbles at the Relic Forge.",
+    texture: "icon_refined_trophy_uncommon_t3",
     maxStack: 99,
     hotbarable: false,
   },
@@ -1957,7 +2006,7 @@ export function itemBiome(key: string): ItemBiome {
 export type ItemCategory = "material" | "gear" | "station" | "food" | "curio";
 
 const CURIO_ITEM_KEYS = new Set<string>([
-  "gloam_shard", "ember_shard", "gremlin_king_fang",
+  "gloam_shard", "ember_shard", "mire_shard", "gremlin_king_fang",
   "warren_fetish", "tyrant_totem", "gremlin_totem",
   "tyrant_sigil", "gorge_bone", "miretyrant_effigy",
 ]);

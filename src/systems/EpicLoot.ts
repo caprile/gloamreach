@@ -29,9 +29,35 @@ const T3_KEYS = [
   "back_drowned_king_shroud",
 ];
 
-export const EPIC_POOL_T1: EpicPool = { chance: 0.04, keys: T1_KEYS };
-export const EPIC_POOL_T2: EpicPool = { chance: 0.06, keys: T2_KEYS };
-export const EPIC_POOL_T3: EpicPool = { chance: 0.08, keys: T3_KEYS };
+// Rates raised hard after the user's 95-minute run produced ZERO epics. At the
+// old 4/6/8% a full playthrough's realistic container count made "never saw
+// one" the LIKELY outcome, which makes an entire system invisible. Paired with
+// the pity counter below, which is the actual guarantee — the percentages set
+// the pace, the pity sets the floor.
+export const EPIC_POOL_T1: EpicPool = { chance: 0.1, keys: T1_KEYS };
+export const EPIC_POOL_T2: EpicPool = { chance: 0.16, keys: T2_KEYS };
+export const EPIC_POOL_T3: EpicPool = { chance: 0.22, keys: T3_KEYS };
+
+// Containers opened with no epic before one is GUARANTEED. Run-scoped and
+// shared across tiers (a run's containers are one stream from the player's
+// point of view), so a deep-diving run and a wide-roaming one both get there.
+// Same reasoning as the relic roll's per-rarity pity: a low-probability reward
+// needs a floor, or its worst case is "the system doesn't exist".
+export const EPIC_PITY_THRESHOLD = 8;
+
+// Run-scoped miss counter. MainScene owns one and resets it in create() per the
+// scene.restart() field-initializer rule.
+export class EpicPity {
+  private misses = 0;
+
+  get due(): boolean {
+    return this.misses >= EPIC_PITY_THRESHOLD;
+  }
+
+  record(gotEpic: boolean): void {
+    this.misses = gotEpic ? 0 : this.misses + 1;
+  }
+}
 
 // Every epic key, for the pickup toast + the container glow. T3 is the superset.
 export const EPIC_ITEM_KEYS: ReadonlySet<string> = new Set(T3_KEYS);

@@ -427,6 +427,23 @@ export class BootScene extends Phaser.Scene {
     g.fillRect(1, 9, 14, 2); // band
     g.generateTexture("gremlin_shack_chest", 16, 14);
 
+    // Crypt side-room chest — a heavier, iron-bound stone coffer, 18x15. Its own
+    // texture rather than reusing the shack barrel: this is the deepest content
+    // in the game and should not look like a biome-1 pickup. (It was previously
+    // pointed at a texture key that didn't exist at all, so it drew as Phaser's
+    // missing-texture placeholder.)
+    g.clear();
+    g.fillStyle(0x3b3a44, 1);
+    g.fillRect(1, 3, 16, 11); // stone body
+    g.fillStyle(0x2a2932, 1);
+    g.fillRect(1, 3, 16, 3); // shadowed lid
+    g.fillStyle(0x8a7a4a, 1);
+    g.fillRect(3, 3, 2, 11); // iron bands
+    g.fillRect(13, 3, 2, 11);
+    g.fillStyle(0xd8c98a, 1);
+    g.fillRect(8, 7, 2, 3); // clasp
+    g.generateTexture("crypt_chest", 18, 15);
+
     // Boss Altar — a stone ring with a central fire-pit brazier, 64x56. Not
     // player-placeable; world-gen-placed like the shack. Visually distinct
     // from every other structure so it reads as a landmark from a distance.
@@ -1512,6 +1529,45 @@ export class BootScene extends Phaser.Scene {
     g.fillRect(14, 10, 2, 2);
     g.generateTexture("icon_emberglazed_skewer", ICON, ICON);
 
+    // --- Bayou dishes. Shared read: pale gator meat + bog greens, so the whole
+    // set is instantly "swamp food" next to the badlands' warm reds. ---
+
+    // Seared Mirejaw Tail: one thick charred cut on a skewer.
+    g.clear();
+    g.fillStyle(0xc0a060, 1);
+    g.fillRect(3, 11, 18, 2); // skewer
+    g.fillStyle(0x9a8a6a, 1); // pale gator meat
+    g.fillRect(7, 6, 10, 8);
+    g.fillStyle(0x3b3228, 1); // seared crust
+    g.fillRect(7, 6, 10, 2);
+    g.fillRect(7, 12, 10, 2);
+    g.generateTexture("icon_seared_mirejaw_tail", ICON, ICON);
+
+    // Mossbound Mirejaw: the same cut bound in green moss.
+    g.clear();
+    g.fillStyle(0x9a8a6a, 1);
+    g.fillRect(6, 6, 12, 10);
+    g.fillStyle(0x4a6b32, 1); // moss wrap
+    g.fillRect(6, 8, 12, 2);
+    g.fillRect(6, 12, 12, 2);
+    g.fillStyle(0x6f9147, 1);
+    g.fillRect(9, 5, 3, 2);
+    g.generateTexture("icon_mossbound_mirejaw", ICON, ICON);
+
+    // Lily-Gilded Feast: a platter with a pale lily bloom on top.
+    g.clear();
+    g.fillStyle(0x5c5140, 1);
+    g.fillRect(3, 13, 18, 4); // platter
+    g.fillStyle(0x9a8a6a, 1);
+    g.fillRect(6, 8, 12, 6); // heaped meat
+    g.fillStyle(0x4a6b32, 1);
+    g.fillRect(5, 11, 3, 3); // greens
+    g.fillStyle(0xe8e0f0, 1); // lily
+    g.fillRect(14, 5, 4, 4);
+    g.fillStyle(0xd8c98a, 1);
+    g.fillRect(15, 6, 2, 2);
+    g.generateTexture("icon_lilygilded_feast", ICON, ICON);
+
     // Campfire: stacked logs + flame.
     g.clear();
     g.fillStyle(0x7a4a22, 1);
@@ -1816,6 +1872,19 @@ export class BootScene extends Phaser.Scene {
     g.fillStyle(0xffce8a, 1);
     g.fillRect(11, 8, 2, 8); // bright vein
     g.generateTexture("icon_ember_shard", ICON, ICON);
+
+    // Mire Shard (biome 3): the same shard silhouette a third time, bog-dark
+    // with a sickly green vein — kin to Gloam and Ember, unmistakably deeper.
+    g.clear();
+    g.fillStyle(0x24301f, 1);
+    g.fillTriangle(12, 2, 5, 20, 19, 20);
+    g.fillStyle(0x3f5c30, 1);
+    g.fillTriangle(12, 6, 8, 18, 12, 18);
+    g.fillStyle(0x8fd06a, 1);
+    g.fillRect(11, 8, 2, 8);
+    g.generateTexture("icon_mire_shard", ICON, ICON);
+
+    refinedTrophy("icon_refined_trophy_uncommon_t3", 0x6fbf4a);
 
     // Ember-Refined Trophy (Phase 5): same refinedTrophy silhouette, socketed
     // in ember instead of gloam (amber core vs violet).
@@ -2539,6 +2608,23 @@ export class BootScene extends Phaser.Scene {
       g.fillRect(16, 14, 1, 3);
       g.generateTexture(name, 26, 30);
     };
+    // The SEALED husk every vault node wears until its warden dies. Deliberately
+    // colourless — dull stone with a hairline seam and no crystal showing — so a
+    // sealed node reads as "something is locked in there", never as the purple
+    // gloam ore it used to borrow its texture from. Same 28x30 footprint as the
+    // vein nodes so the crack() swap doesn't jump.
+    g.clear();
+    g.fillStyle(0x2f2c33, 1);
+    g.fillRect(4, 8, 20, 20);
+    g.fillStyle(0x3c3941, 1);
+    g.fillRect(6, 6, 16, 10);
+    g.fillStyle(0x211f26, 1);
+    g.fillRect(13, 9, 2, 17); // hairline seam
+    g.fillStyle(0x565161, 1);
+    g.fillRect(8, 24, 4, 2); // chipped highlights
+    g.fillRect(17, 12, 3, 2);
+    g.generateTexture("crypt_node_sealed", 28, 30);
+
     geode("geode_gloam", 0x3b3348, 0x8a5ce0, 0xd0b6ff);
     geode("geode_ember", 0x453026, 0xe0722a, 0xffc070);
     geode("geode_blood", 0x3d2228, 0xc02a44, 0xff8a9a);

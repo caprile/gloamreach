@@ -7790,3 +7790,146 @@ header) and re-asserted with exact pixel gaps: now a 14px gap, panel still fully
 along the way: the Tyrant Trophy was still documented as "unreachable in practice", which
 B3-P4d(2)'s win-con swap had already made false).
 
+### B4-P1 — Start-of-run base character (2026-07-22, Opus)
+
+Plan: `.claude/plans/b4-p1-start-of-run-character.md`. **The first milestone after the
+biome-3 umbrella closed**, and the roadmap's own top deferred candidate
+(`biome-3-and-new-systems-roadmap.md`, Phase 5 "Later"). Every run used to start identically —
+a level-1 `PlayerProgression` with 0 stats, an empty backpack/`Equipment`, an empty Q/E/R bar —
+so the roguelike loop varied how a run *went* but never how it *began*. Now a **run-start
+class picker** offers a fixed roster of five survivors, each bundling stats, a kit, a granted
+ability, and a lasting double-edged trade-off. It also closes a real dead end: the B3-P2a
+ability framework was only reachable via the Sunken Crypt wardens or `__dev.give`, so most runs
+never touched it.
+
+**Locked with the user (`AskUserQuestion`):**
+1. **Fixed roster, always all available** — not an RNG 3-card draw. The pick is a playstyle
+   decision, not a dealt hand.
+2. **One card bundles all four axes** — identity + starting stats + kit + ability + modifier.
+3. **Modifiers are double-edged with NO score effect.** `Run.score()` stays kills +
+   speed-scaled completion bonus, so a harder card can never become a leaderboard lever
+   (verified: score is byte-identical across characters for identical run inputs).
+4. **The "innate" ability is a real ability-granting SPECIAL ITEM pre-equipped in its slot**,
+   not a separate innate channel — it fills exactly the same mechanical role as any other
+   equipment. This meant **zero new ability plumbing**: `recomputeAbilities()` already derives
+   Q/E/R from `ItemDef.grantsAbility`, so unequipping the special darkens the key (verified).
+
+**`src/systems/Characters.ts`** (new, framework-free like `Run`/`Buffs`/`Relics`) is pure data
+plus a `RunCharacter` accessor **whose getter shape mirrors `RelicManager`'s**, so every hook
+site reads a character exactly the way it already reads relics. A null character returns
+neutral values throughout, so the game stays playable if the picker is ever bypassed. The
+roster: **Vagabond** (Blink; +10% move / −10% stamina), **Reaver** (Bloodpact; +25% damage
+dealt / +25% taken), **Ashcaller** (Nova; +30% XP / −15% HP), **Warden** (Blink; +20% HP /
++20% attack stamina), **Ascetic** (Nova; −20% damage taken / elites twice as common, and no
+starting kit at all).
+
+**`src/ui/CharacterSelectUI.ts`** (new) is a five-card modal in the `WelcomeUI` style — flat
+`scrollFactor(0)` objects (never a Container, per the standing input-hit-testing bug), depth
+band 3620+. **Select-then-confirm**, because a mis-click would silently decide a whole hardcore
+run; committing is final, and there is deliberately **no cancel path** (Esc is guarded — a run
+must have a character).
+
+**MainScene:** the picker **chains off the welcome overlay** rather than stacking on it, and —
+unlike the welcome — shows on **every** run including New Run. It reuses the welcome/pause
+freeze verbatim, so **deciding your build never burns speedrun time** (verified: `run.elapsedMs`
+holds at 0 across stepped frames while it's open). Each **modifier adds exactly one term at an
+existing choke point** — `damageBonusMult`, `applyDamageToPlayer`, the `moveMult` sum,
+`awardSkillXp`, `effectiveStaminaCostMult`, `rollElite`, `syncStatBonuses` — never new math. Two
+deliberate placements: the character's damage-taken scales `amount` **before** the reduction
+bucket (it's a property of the run, not another stackable resistance, so a +25% card can't be
+erased by the 75% reduction cap), and its HP/stamina % is a **third independent linear add** off
+the 100 base, matching the 2026-07-15 additive rule so it can't compound with relic %. The run
+HUD and run-end screen both name the survivor.
+
+**Verified live** via `preview_eval` (the backgrounded-tab render loop needed the `loop.step`
+trick): the welcome→picker chain and its freeze; the full grant for multiple cards (stats,
+pre-equipped special, tools onto the hotbar, empty-kit case); Q/E/R lighting up **through the
+item** and going dark on unequip; a granted ability actually casting; every modifier hook
+measured against a neutral baseline (damage dealt 1→1.25, taken 20→25 and 20→16 **including the
+magic/armor-bypass branch**, XP 10→13, stamina 1→1.2, elites 1663→3223 per 20k seeded rolls,
+pools 112→97 HP and 106→96 stamina); score isolation; and `scene.restart()` leaving **zero**
+carryover. Card geometry was measured rather than eyeballed — the first pass left ~150px of dead
+space per card, so `CARD_H` was cut 512→400 against the real content bottom. `tsc` clean, zero
+console errors. Dashboard gained a **Characters** tab importing `Characters.ts` live (drift-free);
+no `RECIPES.md` change (no recipes touched).
+
+### B4-P2 — Epic loot pool + starter-ability nerf (2026-07-22, Opus)
+
+Plan: `.claude/plans/b4-p2-epic-loot-and-starter-abilities.md`. Two problems that
+turned out to be one problem.
+
+**The bug in the design B4-P1 shipped:** all five characters were pre-equipped with
+`special_gloamstep_band` / `special_gloam_focus` / `back_bloodpact_shroud` — which are
+**byte-identical to the terminal outputs of the Gemwright jewelry chain**
+(`Jewelry.ts`). Earning one legitimately costs Duneshaper → Duneshaper's Heart →
+Gemwright tier-1 upgrade → find a crypt → beat a bespoke warden → crack the vault geode
+→ moonsilver + gem. The whole crypt→gem→jewelry progression had **no reward left at the
+end of it**. **The system that was specced and never built:** the biome-3 roadmap's Phase
+2b called for a shared low-chance special-item pool on every chest table; 2b shipped only
+the jewelry half, and there was no `EPIC_LOOT` anywhere in `src/`.
+
+**Locked with the user (`AskUserQuestion`, all as recommended):** lesser variants of the
+same three abilities (not new starter abilities, not stripping them); the epic pool holds
+new found-only abilities *and* passive uniques; the pool is **tiered by POI depth**; a
+rare drop gets a distinct toast plus a container glow.
+
+- **`AbilityDef` gained `family` + `power`** (`Abilities.ts`). The id names an
+  item-granted active, the **family** names the effect `castAbility()` runs, and `power`
+  scales every magnitude it reads (reach, damage, i-frames, active window) — cooldown
+  stays per-def, so a weaker variant can also be a slower one. That's what lets two grades
+  of one effect coexist **as pure data** with no duplicated dispatcher branch. `power`
+  multiplies *alongside* (not instead of) the jewelry `abilityPowerMult()` hook.
+- **Three lesser variants**, granted by all five characters (`Characters.ts` startingEquip
+  swapped; `recomputeAbilities()` needed **zero** changes since it derives Q/E/R purely
+  from `ItemDef.grantsAbility` — the same reason B4-P1 needed no ability plumbing):
+  Lesser Gloamstep (0.60 power / 9s), Lesser Gloamburst (0.55 / 14s), Lesser Bloodpact
+  (0.50 / 30s). **Start-only** — no recipe, no loot entry.
+- **Bug fixed while in there:** `abilityEntries()` hardcoded `key === "r"` for the active
+  glow, i.e. it assumed R == Bloodpact. Generalized to `activeUntilFor(def.family)`.
+  Verified it matters: with Aegis on R the old check read `bloodpactUntil` (0) and would
+  have reported the slot inactive mid-window.
+- **Three found-only actives**, each reusing a proven primitive rather than inventing a
+  system: **Gravebind** (castNova's loop with the shove inverted — yank to a hold ring +
+  slow, no damage), **Spirit Lance** (a 420px line through the shared
+  `dealAbilityDamage(…, "magic")` helper, so resists and the damage-number tint come free;
+  only new geometry is a point-to-segment distance), **Drowned Aegis** (a timed window
+  added into the **existing additive reduction bucket**, so it lands under the shared 0.75
+  cap and can never be stacked into immunity).
+- **Six passive uniques** + a genuinely new `statusResistPct` channel on `EquipPassive`
+  (bleed/poison dose mitigation — nothing owned status resistance before, so it collides
+  with neither the relic combat-stat layer nor heavy armor's magic/fire mitigation).
+- **`src/systems/EpicLoot.ts`** (new, framework-free) owns the three tiered pools; the
+  roll lives **inside `LootContainer.rollIfEmpty`** because that method's `rolled` flag is
+  the real gate — whichever of the seven call sites fires first wins, so putting the roll
+  beside it would have been a coin-flip. A `rollContainerLoot()` helper + `epicPoolFor()`
+  keyed off the **loot table's identity** (the table *is* the POI's identity) means no
+  call site carries a tier argument that can drift, and a future POI gets it by
+  construction. New `"epic"` `LogKind` routes to the prominent gold center toast with no
+  UI code (it just isn't `"recipe"`/`"material"` in `onNewEntry`), fired from
+  `discoverMaterial()` — already the choke point every container move reconciles through.
+  The container glow is a **tint swap on the glow each POI already has** (taking the
+  container's own base tint as a param so existing per-POI colours are preserved), NOT a
+  second glow object — so there's no extra infinite tween to leak.
+
+**Verified live** (`preview_eval`, all measured not eyeballed): blink **132px lesser vs
+220 full**, nova **17 dmg/82px vs 30 dmg/150px**, bloodpact **3.0s/17.5% vs 6.0s/35%**,
+every cooldown exact (9/6/14/10/30/24/14/12/26s), Ring of Quickening still multiplies
+(×0.85 → 6000→5100ms); gravebind pulls at 100/250px and not 400px with the slow applied
+only to those pulled; lance hits on-axis, misses 60px off-axis and past 420px, and scales
+by the target's magic multiplier (a Hexling is **weak** ×1.25 → 55→69, so the resist layer
+routes correctly); Aegis 100→40 dmg and **clamps at 25 when stacked with a −50% relic**
+(the cap holds); Mireborn Cloak −30% on both bleed and poison DPS. **Epic rolls: 20k per
+tier → 4.04% / 6.00% / 8.13% vs spec 4/6/8%, zero double-epics, every pool key reachable,
+actives T3-exclusive, re-roll idempotent** — plus **4000 rolls through the REAL in-game
+shack path** (`respawnShackGuards` → `rollContainerLoot`) at 3.9%, only T1 keys, never an
+active. Toast fires as kind `"epic"` while plain materials keep the quiet blue path; glow
+tint swaps `#ffd873`→`#fff6d0` and hides when emptied. `tsc` clean; zero console errors;
+dashboard gained a live **Epic Loot** tab (3 pools + all 9 abilities); `RECIPES.md`
+updated. **Screenshots were not possible this session** — the Browser pane isn't displayed
+in this environment, so the ability bar was verified by asserting its render data
+(names/textures/cooldowns/active flags) rather than visually.
+
+**Not done / next:** the epic drop has no bespoke reveal FX (the toast + glow are the
+whole tell — `RelicRevealFx` is built around a roll, not a pickup); all numbers are
+first-pass and want a playtest; the toast dedupes on `discovered`, so a *second* copy of
+the same epic won't re-toast (accepted — they're `maxStack: 1` uniques).

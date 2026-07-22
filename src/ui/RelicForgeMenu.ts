@@ -17,7 +17,8 @@ import {
   REFINE_RECIPES,
   ownedRefineInput,
   canAffordRefine,
-  GLOAM_TO_EMBER_RATIO,
+  SHARD_CONVERSIONS,
+  type ShardConversion,
   type RefineRecipe,
   type RollResult,
   type RelicGroup,
@@ -49,7 +50,7 @@ export interface RelicForgeMenuDeps {
   forgeTier: () => number;
   // Convert GLOAM_TO_EMBER_RATIO Gloam Shards -> 1 Ember Shard. Called at the
   // ProgressBar's completion (commit-at-end), like refine.
-  convert: () => void;
+  convert: (conversionId: string) => void;
   // Resolve a pending "ambiguous" family conflict (see Relics.ts doc comment)
   // once the player picks Keep New / Keep Old. Returns the refund info so the
   // menu can update its result line, or null if there's nothing pending.
@@ -139,6 +140,8 @@ export class RelicForgeMenu {
   // click (the player just clicks again for more).
   private convertBar: ProgressBar;
   private convertBusy = false;
+  // Which SHARD_CONVERSIONS row is mid-bar, so only that row shows the bar.
+  private convertingId: string | null = null;
 
   private tipBg?: Phaser.GameObjects.Rectangle;
   private tipText?: Phaser.GameObjects.Text;
@@ -440,72 +443,92 @@ export class RelicForgeMenu {
     return h;
   }
 
-  // The Convert tab (Phase 5, Ember Kiln): render GLOAM_TO_EMBER_RATIO Gloam
-  // Shards down into 1 Ember Shard, one click per conversion.
+  // The Convert tab: shard conversions, one box per unlocked step. Data-driven
+  // over SHARD_CONVERSIONS rather than a hardcoded Gloam->Ember block, so the
+  // bayou's Ember->Mire step needed no new UI (and neither will biome 4's).
+  private availableConversions(): ShardConversion[] {
+    const tier = this.deps.forgeTier();
+    return SHARD_CONVERSIONS.filter((c) => this.deps.noBuildCost() || tier >= c.minStationTier);
+  }
+
   private renderConvert(): void {
     if (!this.convertUnlocked()) {
       this.renderRoll();
       return;
     }
     const listTop = 96;
-    this.panelH = listTop + 100;
+    const rowH = 72;
+    const gap = 10;
+    const list = this.availableConversions();
+    this.panelH = listTop + list.length * (rowH + gap) + 28;
     this.layoutPanel();
-    this.renderHeader("Render Gloam Shards down into Ember — the tier-2 refinement currency.");
+    this.renderHeader("Render shards down into the deeper refinement currencies.");
 
-    const gloam = this.deps.backpack.count("gloam_shard");
-    const ember = this.deps.backpack.count("ember_shard");
     const x = this.panelX + 16;
-    const y = this.panelY + listTop;
     const w = this.panelW - 32;
-    const h = 72;
+    let y = this.panelY + listTop;
 
-    const box = this.scene.add
-      .rectangle(x, y, w, h, 0x14181f, 0.95)
-      .setOrigin(0, 0)
-      .setStrokeStyle(1, 0xc8641e)
-      .setScrollFactor(0)
-      .setDepth(DEPTH_ITEM);
-    this.rows.push(box);
+    for (const conv of list) {
+      const have = this.deps.backpack.count(conv.fromKey);
+      const owned = this.deps.backpack.count(conv.toKey);
+      const fromName = itemDef(conv.fromKey)?.name ?? conv.fromKey;
+      const toName = itemDef(conv.toKey)?.name ?? conv.toKey;
 
-    const emberDef = itemDef("ember_shard");
-    if (emberDef) {
-      const img = this.scene.add.image(x + 22, y + h / 2, emberDef.texture).setScrollFactor(0).setDepth(DEPTH_ITEM + 1);
-      this.rows.push(img);
+      const box = this.scene.add
+        .rectangle(x, y, w, rowH, 0x14181f, 0.95)
+        .setOrigin(0, 0)
+        .setStrokeStyle(1, 0xc8641e)
+        .setScrollFactor(0)
+        .setDepth(DEPTH_ITEM);
+      this.rows.push(box);
+
+      const toDef = itemDef(conv.toKey);
+      if (toDef) {
+        const img = this.scene.add
+          .image(x + 22, y + rowH / 2, toDef.texture)
+          .setScrollFactor(0)
+          .setDepth(DEPTH_ITEM + 1);
+        this.rows.push(img);
+      }
+      const enough = have >= conv.ratio;
+      const can = (this.deps.noBuildCost() || enough) && !this.convertBusy;
+      this.addText(x + 44, y + 8, `${conv.ratio} ${fromName} -> 1 ${toName}`, 13, "#e8923c");
+      this.addText(x + 44, y + 28, `${fromName}s  ${have}/${conv.ratio}`, 11, enough ? "#c8d0da" : "#e08a8a");
+      this.addText(x + 44, y + 44, `${toName}s owned: ${owned}`, 11, "#8a93a3");
+
+      const btnW = 110;
+      const btnH = 30;
+      const bx = x + w - btnW - 10;
+      const by = y + rowH / 2 - btnH / 2;
+      const btn = this.scene.add
+        .rectangle(bx, by, btnW, btnH, can ? 0x2a2333 : 0x14181f, 0.95)
+        .setOrigin(0, 0)
+        .setStrokeStyle(1, can ? 0xe8923c : 0x3a4250)
+        .setScrollFactor(0)
+        .setDepth(DEPTH_ITEM)
+        .setInteractive({ useHandCursor: can })
+        .on("pointerdown", () => {
+          if (can) this.beginConvert(conv.id, bx, by, btnW, btnH);
+        });
+      this.rows.push(btn);
+      const busyThis = this.convertBusy && this.convertingId === conv.id;
+      this.addText(bx + btnW / 2, by + btnH / 2, busyThis ? "Rendering…" : "Convert", 12, can ? "#f0c090" : "#6a7280", 0.5, 0.5);
+      if (busyThis) this.convertBar.setPosition(bx, by).setSize(btnW, btnH);
+      y += rowH + gap;
     }
-    const can = (this.deps.noBuildCost() || gloam >= GLOAM_TO_EMBER_RATIO) && !this.convertBusy;
-    this.addText(x + 44, y + 8, `${GLOAM_TO_EMBER_RATIO} Gloam Shard -> 1 Ember Shard`, 13, "#e8923c");
-    this.addText(x + 44, y + 28, `Gloam Shards  ${gloam}/${GLOAM_TO_EMBER_RATIO}`, 11, gloam >= GLOAM_TO_EMBER_RATIO ? "#c8d0da" : "#e08a8a");
-    this.addText(x + 44, y + 44, `Ember Shards owned: ${ember}`, 11, "#8a93a3");
-
-    const btnW = 110;
-    const btnH = 30;
-    const bx = x + w - btnW - 10;
-    const by = y + h / 2 - btnH / 2;
-    const btn = this.scene.add
-      .rectangle(bx, by, btnW, btnH, can ? 0x2a2333 : 0x14181f, 0.95)
-      .setOrigin(0, 0)
-      .setStrokeStyle(1, can ? 0xe8923c : 0x3a4250)
-      .setScrollFactor(0)
-      .setDepth(DEPTH_ITEM)
-      .setInteractive({ useHandCursor: can })
-      .on("pointerdown", () => {
-        if (can) this.beginConvert(bx, by, btnW, btnH);
-      });
-    this.rows.push(btn);
-    this.addText(bx + btnW / 2, by + btnH / 2, this.convertBusy ? "Rendering…" : "Convert", 12, can ? "#f0c090" : "#6a7280", 0.5, 0.5);
-    if (this.convertBusy) this.convertBar.setPosition(bx, by).setSize(btnW, btnH);
   }
 
   // Commit-at-end, same pattern as beginRefine.
-  private beginConvert(bx: number, by: number, bw: number, bh: number): void {
+  private beginConvert(id: string, bx: number, by: number, bw: number, bh: number): void {
     if (this.convertBusy || this.busy || this.refineBusy) return;
     this.convertBusy = true;
+    this.convertingId = id;
     this.render();
     this.convertBar.setPosition(bx, by).setSize(bw, bh);
     this.convertBar.start(REFINE_BAR_MS, {
       onComplete: () => {
         this.convertBusy = false;
-        this.deps.convert();
+        this.deps.convert(id);
         if (this.open) this.render();
       },
     });

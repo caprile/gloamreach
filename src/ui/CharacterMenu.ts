@@ -19,7 +19,7 @@ import {
   type PlayerProgression,
   type StatType,
 } from "../systems/Progression";
-import type { RunCharacter } from "../systems/Characters";
+import { affinityLines, type RunCharacter } from "../systems/Characters";
 
 export interface CharacterMenuDeps {
   skills: Skills;
@@ -52,7 +52,7 @@ export class CharacterMenu {
   private deps: CharacterMenuDeps;
   private bg: Phaser.GameObjects.Rectangle;
   private open = false;
-  private tab: "skills" | "stats" = "skills";
+  private tab: "class" | "skills" | "stats" = "skills";
   private rows: Phaser.GameObjects.GameObject[] = [];
 
   private panelX: number;
@@ -146,9 +146,9 @@ export class CharacterMenu {
 
     // Tabs
     let tx = x0;
-    for (const t of ["skills", "stats"] as const) {
+    for (const t of ["class", "skills", "stats"] as const) {
       const active = this.tab === t;
-      const label = t === "skills" ? "Skills" : "Stats";
+      const label = t === "class" ? "Class" : t === "skills" ? "Skills" : "Stats";
       const tab = this.scene.add
         .text(tx, y, label, {
           fontFamily: "monospace",
@@ -169,8 +169,46 @@ export class CharacterMenu {
     }
     y += 34;
 
-    if (this.tab === "skills") this.renderSkillsTab(x0, y);
+    if (this.tab === "class") this.renderClassTab(x0, y);
+    else if (this.tab === "skills") this.renderSkillsTab(x0, y);
     else this.renderStatsTab(x0, y);
+  }
+
+  // Everything the run-start picker told you, still readable after you picked.
+  // The card is gone the moment the run begins, so a player 90 minutes in had
+  // no way back to their own class's rules (the user playtest: "I picked a
+  // starting class but I can't find the info on my class after I pick it").
+  // Text is DERIVED (affinityLines) for the same reason the picker card derives
+  // it — two hand-written copies of the same numbers drift.
+  private renderClassTab(x0: number, startY: number): void {
+    let y = startY;
+    const def = this.deps.character().def;
+    if (!def) {
+      this.text(x0, y, "No class selected for this run.", 12, "#8a93a3");
+      return;
+    }
+
+    this.text(x0, y, def.name, 15, "#ffffff");
+    y += 22;
+    this.text(x0, y, def.blurb, 11, "#8a93a3");
+    y += 26;
+
+    this.text(x0, y, `Trait — ${def.modifier.name}`, 12, "#e3b25a");
+    y += 20;
+    this.text(x0 + 8, y, def.modifier.boon, 12, "#c8d0dc");
+    y += 18;
+    this.text(x0 + 8, y, def.modifier.bane, 12, "#c8d0dc");
+    y += 28;
+
+    const { boons, banes } = affinityLines(def);
+    if (boons.length > 0 || banes.length > 0) {
+      this.text(x0, y, "Affinities", 12, "#e3b25a");
+      y += 20;
+      for (const line of [...boons, ...banes]) {
+        this.text(x0 + 8, y, line, 12, "#c8d0dc");
+        y += 18;
+      }
+    }
   }
 
   private renderSkillsTab(x0: number, startY: number): void {

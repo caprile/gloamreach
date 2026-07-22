@@ -374,6 +374,7 @@ export const TROPHY_ROLL: Record<string, TrophyRoll> = {
   // Tier-2 refined trophy (Phase 5) — badlands raw Common (Tier 2) trophies
   // refined via Ember Shards. Cap also lifted (S4), at Tier 2 magnitude.
   refined_trophy_uncommon_t2: { rarity: "uncommon", powerTier: 2 },
+  refined_trophy_uncommon_t3: { rarity: "uncommon", powerTier: 3 },
 };
 
 // --- Trophy refinement (Gloaming Vein / Ember Kiln) ---
@@ -410,6 +411,12 @@ export const REFINE_RECIPES: RefineRecipe[] = [
   // PHASE 5: badlands Common trophies are Tier 2 now, so they need their own
   // tier-2 row, gated behind Ember Shards (the tier-2 refinement currency).
   { id: "refine_common_t2", inputRarity: "common", inputCount: 3, shardKey: "ember_shard", shardCount: 2, tier: 2, output: "refined_trophy_uncommon_t2" },
+  // BIOME 3: the bayou's six species all drop Common/Tier-3 trophies, and until
+  // now there was no tier-3 row and no tier-3 currency — so the deepest trophies
+  // in the game could only ever be gambled raw, never refined (the user playtest:
+  // "badlands relic refining? new shards?"). Mire Shards close that, exactly the
+  // way Ember Shards closed the tier-2 gap in Phase 5.
+  { id: "refine_common_t3", inputRarity: "common", inputCount: 3, shardKey: "mire_shard", shardCount: 2, tier: 3, output: "refined_trophy_uncommon_t3" },
 ];
 
 // Raw (non-refined) trophy keys of a given rarity + tier — the eligible inputs
@@ -436,6 +443,26 @@ export function canAffordRefine(recipe: RefineRecipe, count: (key: string) => nu
 // one action (mirrors a single craft/process click); the forge menu's Convert
 // tab calls it repeatedly for a batch.
 export const GLOAM_TO_EMBER_RATIO = 3; // 3 Gloam Shards -> 1 Ember Shard
+
+// Every shard conversion, as data. Was a single hardcoded Gloam->Ember path in
+// the Convert tab; the bayou needed a second one, and a second hardcoded block
+// is how the first drift starts. A deeper biome is now a row here plus its
+// station-upgrade row — nothing in the menu changes.
+export interface ShardConversion {
+  id: string;
+  fromKey: string;
+  toKey: string;
+  ratio: number;
+  minStationTier: number; // Relic Forge tier that unlocks it
+}
+
+export const SHARD_CONVERSIONS: ShardConversion[] = [
+  { id: "gloam_to_ember", fromKey: "gloam_shard", toKey: "ember_shard", ratio: GLOAM_TO_EMBER_RATIO, minStationTier: 2 },
+  // Biome 3: the tier-3 currency. Same ratio and same shape — depth costs more
+  // because the input is itself a converted currency, not because the rate got
+  // worse.
+  { id: "ember_to_mire", fromKey: "ember_shard", toKey: "mire_shard", ratio: 3, minStationTier: 3 },
+];
 
 // A single owned relic instance — an id at a specific power tier.
 export interface RelicInstance {
@@ -512,6 +539,7 @@ export interface ChoiceResolution {
 // Together this keeps rerolling from ever netting shards while still returning
 // value on a costly refined-trophy roll that didn't make the loadout.
 function shardKeyForTier(tier: number): string {
+  if (tier >= 3) return "mire_shard";
   return tier >= 2 ? "ember_shard" : "gloam_shard";
 }
 // Refund for discarding the just-rolled relic — 50% (floored) of the trophy's

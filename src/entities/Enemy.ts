@@ -23,6 +23,19 @@ export interface SwingConfig {
   recoverMs: number; // planted/vulnerable punish window after the strike
   cooldownMs: number; // gap after recovery before another swing can start
   knockback?: number; // optional px/s shove applied to the player on connect
+  // Optional per-enemy telegraph styling. The default tell (a 1.18x scale punch
+  // in amber) is deliberately subtle — right for ordinary trash, but it reads
+  // the same on a chip-damage nip as on a heavy that will take a third of your
+  // health, and it says nothing about REACH. A heavy attacker should look heavy.
+  tell?: {
+    punchScale?: number; // scale multiplier at full wind-up (default 1.18)
+    color?: number; // wind-up tint (default amber)
+    // px/s the enemy drifts AWAY from the player while winding up. A visible
+    // rear-back both reads as "something big is coming" and previews the lunge,
+    // which is how the player learns the reach without a world-space arc (the
+    // standing "tells are motion + tint, never red arcs" lock).
+    rearBackSpeed?: number;
+  };
 }
 
 // Base "default melee enemy" swing timings — used by Enemy.update() (the
@@ -613,10 +626,10 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   // the locked direction: players learn hitboxes from the animation, not an
   // explicit danger zone). Finite tween (no repeat:-1 leak), snapped back to
   // baseScale by endWindupTell at the strike.
-  protected playWindupTell(windupMs: number, color = 0xffd24a): void {
+  protected playWindupTell(windupMs: number, color = 0xffd24a, punchScale = 1.18): void {
     this.windupTween?.stop();
     this.setScale(this.baseScale);
-    const punch = this.baseScale * 1.18;
+    const punch = this.baseScale * punchScale;
     this.windupTween = this.scene.tweens.add({
       targets: this,
       scaleX: punch,
@@ -673,6 +686,11 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
 
     switch (this.attackPhase) {
       case "windup":
+        // A heavy attacker rears back as it loads the swing (see SwingConfig.tell).
+        if (cfg.tell?.rearBackSpeed && dist > 1) {
+          const ang = Phaser.Math.Angle.Between(playerX, playerY, this.x, this.y);
+          body.setVelocity(Math.cos(ang) * cfg.tell.rearBackSpeed, Math.sin(ang) * cfg.tell.rearBackSpeed);
+        }
         if (this.attackElapsed(now) >= cfg.windupMs) {
           this.attackPhase = "strike";
           this.attackStartedAt = now;
@@ -702,10 +720,27 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
           this.attackPhase = "windup";
           this.attackStartedAt = now;
           this.applyFacing(playerX - this.x, playerY - this.y);
-          this.playWindupTell(cfg.windupMs);
+          this.playWindupTell(cfg.windupMs, cfg.tell?.color, cfg.tell?.punchScale);
         }
         return false;
     }
+  }
+
+  // Abandon any in-flight swing and restart the attack cooldown from `now`.
+  //
+  // Used when the player ARRIVES somewhere already occupied — descending into a
+  // dungeon puts them a few pixels from dwellers that may have been left
+  // mid-wind-up (or long off cooldown) from a previous visit, so the first
+  // thing that happens is an unavoidable hit with no tell (the user playtest:
+  // "enemies insta attacking me when I enter dungeon"). Resetting the phase
+  // guarantees the next attack starts from the top, telegraph and all — which
+  // is the whole contract the souls-like combat pass is built on.
+  resetAttackState(now: number): void {
+    this.attackPhase = "none";
+    this.attackStartedAt = now;
+    this.lastAttackEndAt = now;
+    this.pendingAttackKnockback = 0;
+    this.endWindupTell();
   }
 
   // Death feedback (fade), then the caller destroys/removes from tracking

@@ -3,7 +3,6 @@ import { Biome } from "./Biome";
 import { blendColors, mottleColor } from "./colorUtil";
 import { forestTerrainColorAt } from "./ExploredMap";
 import { badlandsGroundColorAt } from "./Badlands";
-import { dunesGroundColorAt } from "./Dunes";
 import { bayouGroundColorAt } from "./Bayou";
 
 // The patchwork world map (biome-2 Phase 0). Decides WHICH biome type covers each
@@ -24,6 +23,10 @@ import { bayouGroundColorAt } from "./Bayou";
 // generator for its internal look. worldBiomeColorAt composites base + all biomes and
 // is the single source of truth for both the terrain bake and the map.
 
+// "dunes" stays in the union with no seeds ever assigned to it: several call
+// sites still branch on it (e.g. the respawn roster's "no roster yet" guard),
+// and keeping the member means the next biome can reclaim tier 4 without
+// touching every switch. It simply never covers any ground now.
 export type BiomeId = "forest" | "badlands" | "bayou" | "dunes";
 
 // Every blob biome + the danger tier it sits at. Forest (tier 1) IS in the pool now
@@ -33,7 +36,13 @@ const BIOMES: { id: BiomeId; tier: number }[] = [
   { id: "forest", tier: 1 },
   { id: "badlands", tier: 2 },
   { id: "bayou", tier: 3 },
-  { id: "dunes", tier: 4 },
+  // NOTE: the Windswept Dunes were removed here (the user playtest: "windswept
+  // dunes need to go away — the map should be majority bayou past the
+  // badlands"). They were always a content-LESS placeholder that existed only
+  // to make the patchwork read as varied, and by biome 3 they were just a dead
+  // band of the frontier with nothing in it. Dunes.ts is deliberately KEPT on
+  // disk, unreferenced: tier 4 is where the next real biome slots in, and its
+  // terrain generator is a working starting point when that happens.
 ];
 
 const FOREST_CORE = 2000; // forest chunk is solid (coverage 1) within this radius
@@ -42,20 +51,22 @@ const FOREST_EDGE = 2300; // guaranteed forest chunk fully gone by here
 // Ceiling curve (piecewise-linear control points: [radius, maxTier]). A biome of
 // tier T only becomes eligible once ceiling(r) >= T, giving each biome a hard
 // "unlock radius" (the ordering guarantee) while lower biomes stay eligible outward.
-// Tuned so: forest-only inside ~2400, badlands from ~2400, dunes from ~6500.
-// Biome 3 (bayou) TOOK tier 3 and its 6500 unlock radius; the content-less Dunes
-// placeholder was demoted to tier 4 / the deep frontier, which is where it always
-// belonged (it exists only to make the patchwork visibly varied, and everything
-// past ~10500 is deliberately reserved for a future biome).
+// Tuned so: forest-only inside ~2400, badlands from ~2400, bayou from ~4200.
+// The bayou's unlock came IN from 6500 so that the band past the badlands is
+// actually bayou rather than a long stretch of mixed lower biomes, and the
+// ceiling now holds at 3 all the way out — with the Dunes gone, tier 3 is the
+// top of the world. A future biome 4 raises this tail back up.
 const CEILING_POINTS: [number, number][] = [
   [FOREST_EDGE, 1],
   [2400, 2], // badlands unlocks
-  [6500, 3], // bayou unlocks
-  [10500, 4], // dunes unlocks (deep frontier)
-  [14000, 5], // headroom (dunes stays top biome until biome 5 exists)
+  [4200, 3], // bayou unlocks
+  [14000, 3], // bayou stays the deepest biome out to the rim
 ];
 // How fast a below-ceiling biome's weight falls off (bigger = lower biomes rarer).
-const LOWER_FALLOFF = 0.9;
+// Raised 0.9 -> 1.2 alongside the Dunes removal: at ceiling 3 this makes a blob
+// ~72% bayou / 22% badlands / 6% forest, so "past the badlands" reads decisively
+// as bayou while still leaving the occasional lower-biome pocket for variety.
+const LOWER_FALLOFF = 1.2;
 
 // Jittered-grid seed scatter: one blob seed per grid cell (deterministic), which
 // also doubles as the spatial bucket for cheap coverage lookups (only the 3x3
@@ -256,8 +267,6 @@ export class WorldBiomes {
     if (bC > 0.01) color = blendColors(color, badlandsGroundColorAt(x, y, this.outerFeature), bC);
     const yC = this.coverageAt(x, y, "bayou");
     if (yC > 0.01) color = blendColors(color, bayouGroundColorAt(x, y, this.outerFeature), yC);
-    const dC = this.coverageAt(x, y, "dunes");
-    if (dC > 0.01) color = blendColors(color, dunesGroundColorAt(x, y, this.outerFeature), dC);
     // Forest: the guaranteed center chunk (real crisp features) OR an outer blob.
     const discC = this.forestCoverage(r);
     const blobC = this.coverageAt(x, y, "forest");

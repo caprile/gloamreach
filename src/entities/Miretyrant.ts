@@ -27,7 +27,12 @@ import { Enemy } from "./Enemy";
 export type MiretyrantState = "idle" | "telegraphing" | "executing" | "recovering" | "staggered";
 export type MiretyrantAttack = "chomp" | "sweep" | "slam" | "roll";
 
-const MAX_HEALTH = 3200; // above the Duneshaper's 2500 — it's fought with biome-3 gear + abilities
+// 3200 -> 4600. the user cleared the whole bayou and killed this in EMBERSTEEL
+// gear — a full tier below the bayou set it is meant to gate — and called the
+// fight "too easy and boring". The boring half is answered by the phase-3 mire
+// pools below (an arena that closes in, rather than a longer bar); this is the
+// half that just needed to be bigger.
+const MAX_HEALTH = 4600;
 export const MIRETYRANT_SCALE = 2.6;
 const AGGRO_RADIUS = 330;
 const LEASH_RADIUS = 620; // retreat past this and it resets (there is no arena seal — locked)
@@ -152,6 +157,7 @@ export class Miretyrant extends Enemy {
   private nextBellowAt = 0;
   private bellowingUntil = 0;
   private pendingAdds = 0;
+  private pendingPools: { x: number; y: number }[] = [];
 
   private poiseBarBg: Phaser.GameObjects.Rectangle;
   private poiseBarFill: Phaser.GameObjects.Rectangle;
@@ -220,6 +226,20 @@ export class Miretyrant extends Enemy {
     const n = this.pendingAdds;
     this.pendingAdds = 0;
     return n;
+  }
+
+  // Mire pools left by phase-3 impacts, drained by MainScene the same way (the
+  // boss ASKS, the scene resolves — the standing contract, which is what gets
+  // the pools their rendering and their poison for free).
+  //
+  // This is the fight's answer to "boring": from phase 3 the arena itself starts
+  // closing in, so the punish windows you were farming get progressively more
+  // expensive to stand in. It costs the boss no new attack — the pools fall out
+  // of the slams and rolls it was already throwing.
+  consumeMirePools(): { x: number; y: number }[] {
+    const p = this.pendingPools;
+    this.pendingPools = [];
+    return p;
   }
 
   update(delta: number, playerX: number, playerY: number, now: number): boolean {
@@ -449,6 +469,12 @@ export class Miretyrant extends Enemy {
   }
 
   private beginRecover(now: number): void {
+    // Phase 3 only: a heavy impact churns the floor into a mire pool where it
+    // landed. Chomp/sweep are excluded — a pool under every attack would carpet
+    // the arena in seconds and remove the movement game rather than tighten it.
+    if (this.enraged && (this.currentAttack === "slam" || this.currentAttack === "roll")) {
+      this.pendingPools.push({ x: this.x, y: this.y });
+    }
     this.tyrantState = "recovering";
     this.stateEnteredAt = now;
     this.currentStateDurationMs =

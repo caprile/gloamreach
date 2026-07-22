@@ -54,7 +54,7 @@ import {
 import type { DungeonInterior } from "../systems/Dungeon";
 import { DrownedLodge } from "../entities/DrownedLodge";
 import type { EpicPool, LootContainer, LootRollEntry } from "../systems/LootContainer";
-import { EPIC_ITEM_KEYS, EPIC_POOL_T1, EPIC_POOL_T2, EPIC_POOL_T3 } from "../systems/EpicLoot";
+import { EPIC_ITEM_KEYS, EPIC_POOL_T1, EPIC_POOL_T2, EPIC_POOL_T3, EpicPity } from "../systems/EpicLoot";
 import type { ResourceType } from "../systems/Inventory";
 import {
   Skills,
@@ -95,6 +95,7 @@ import {
   bypassesArmor,
   BLUNT_SLOW_FACTOR,
   weaponLifelinkPct,
+  weaponOnHitBurst,
   BLUNT_SLOW_MS,
   type WeaponType,
   type DamageType,
@@ -112,11 +113,13 @@ import {
 import {
   armorUpgradesForItem,
   totalPlayerDefense,
+  ARMOR_UPGRADES,
   type ArmorUpgradeDef,
 } from "../systems/ArmorUpgrades";
 import {
   weaponUpgradesForItem,
   weaponTierDamageBonus,
+  WEAPON_UPGRADES,
   type WeaponUpgradeDef,
 } from "../systems/WeaponUpgrades";
 import { toolUpgradesForItem, TOOL_UPGRADES } from "../systems/ToolUpgrades";
@@ -212,7 +215,7 @@ import {
   refinableTrophyKeys,
   canAffordRefine,
   powerTierMult,
-  GLOAM_TO_EMBER_RATIO,
+  SHARD_CONVERSIONS,
   type RollResult,
   type ChoiceResolution,
   type RelicGroup,
@@ -398,6 +401,38 @@ const BLACKBERRY_REGROW_MS = 3 * 60 * 1000; // a picked bush regrows berries aft
 // nearby doesn't block resting).
 const COMFORT_RANGE = 80; // px, player <-> Bedroll
 const COMFORT_CAMPFIRE_RANGE = 120; // px, Bedroll <-> Campfire
+// How close a HUNTING enemy must be to count as "you are not safe to rest".
+// Comfortably past a screen's width, so nothing off-camera blocks resting but
+// anything actually bearing down on you does. See isAnyEnemyAggro.
+const COMFORT_THREAT_RADIUS = 900;
+// Miretyrant phase-3 arena hazard. Deliberately survivable to cross — the pools
+// are meant to take the arena away a piece at a time, not to be instant death
+// that turns the fight into a tile puzzle.
+const MIRE_POOL_RADIUS = 90;
+const MIRE_POOL_SLOW_MULT = 0.55;
+const MIRE_POOL_POISON_DPS = 7;
+// Every named fight, keyed by displayName, with the one-line read that tells the
+// player what KIND of fight they just walked into. Presence in this table is
+// what makes an enemy announce itself (see announceBossEncounter) — a future
+// boss is one row, and an ordinary enemy is simply absent.
+const BOSS_SUBTITLES: Record<string, string> = {
+  // Mini-bosses — each hints at its own bespoke opening, since every one of
+  // these is solved differently.
+  Gloamwarden: "Guardian of the Vein",
+  Cinderwrought: "Keeper of the Sunken Forge",
+  "The Palewake": "It feeds on the tether — break line of sight",
+  "The Kilnborn": "It burns the ground it stands on",
+  "The Sanguinarch": "It grows strong on your blood",
+  // Big bosses.
+  "Gremlin King": "Warlord of the Forest",
+  "The Duneshaper": "Sorcerer of the Sunscorch",
+  "The Miretyrant": "Sovereign of the Drowned Deep",
+};
+// How far from the player an enemy still runs its AI. Comfortably past both the
+// camera's ~1536px view and the longest leash on the roster (the Duskrunner's
+// 620), so the cull is never observable. See the note in updateEnemies.
+const ENEMY_ACTIVE_RADIUS = 2000;
+const ENEMY_ACTIVE_RADIUS_SQ = ENEMY_ACTIVE_RADIUS * ENEMY_ACTIVE_RADIUS;
 // Phase 1 (terrain-that-matters): walk-speed multiplier while standing in a
 // bramble patch — noticeable but not punishing, the gentle intro to terrain
 // affecting movement. Dashing ignores it (Player.update's dash burst is separate).
@@ -518,7 +553,7 @@ const DUSKRUNNER_WARREN_LOOT_TABLE: LootRollEntry[] = [
 // keeps ordinary wild badlands packs out of a den's own clearing (the "POI busy
 // = missing exclusion zone" lesson); DEN_MIN_SPACING spreads them so they land
 // in different chunks rather than clustering.
-const DEN_COUNT = 16; // bumped 10→16 (the user: "need more burrows")
+const DEN_COUNT = 30; // 10 -> 16 -> 30 (the user: "need more burrows", then "WAAYAYYY more")
 const DEN_MIN_SPACING = 900; // spread across chunks, but common enough that most areas have one
 const DEN_CLEAR_RADIUS = 200;
 const DEN_WAVE2_DELAY_MS = 1600; // beat between wave-1 clear and the elite wave-2 emerging (S4)
@@ -549,8 +584,13 @@ const OUTER_FOREST_R_MAX = 6000;
 // Bayou band (biome 3). Starts at its WorldBiomes unlock radius (6500) and runs
 // out to the deep frontier where the Dunes placeholder takes over — so a player
 // pushing past the badlands finds it, and it never laps the forest disc.
-const BAYOU_R_MIN = 6400;
-const BAYOU_R_MAX = 10500;
+// Pulled IN from 6400 to follow the bayou's new 4200 unlock radius, and the
+// outer edge in from 10500 now that the Dunes no longer own the frontier.
+// Together with the POI density bump this is what makes a QUADRANT hold a full
+// material set (the user: "a shitload of mats in just 1/4th of the map"), instead
+// of the bayou's content being smeared across a 4000px-deep ring.
+const BAYOU_R_MIN = 4400;
+const BAYOU_R_MAX = 9000;
 // Water movement penalties (locked: slow BY DEPTH, never blocks — the swamp stays
 // fully traversable). Shallow muck is a nuisance; a deep gloam channel is a real
 // commitment you can be caught in.
@@ -574,7 +614,7 @@ const BLEED_METER_FULL_MS = 4000;
 const POI_DEEP_R_MIN = 3600;
 // Keep distinct POI types from crowding each other (S4). Enforced in the pickers
 // against every already-placed POI center, on top of each POI's own clear radius.
-const POI_MIN_SEPARATION = 1000;
+const POI_MIN_SEPARATION = 800; // eased alongside the density bump — more POIs need more room to fit
 
 // Sunken Forge POIs (biome 2 Phase 3 POI 2) — SEVERAL themed landmarks out in the
 // badlands, each guarded by a Cinderwrought mini-boss (the user: "way more of the
@@ -582,7 +622,7 @@ const POI_MIN_SEPARATION = 1000;
 // the war camp and Gloaming Vein so each reads as its own destination;
 // FORGE_CLEAR_RADIUS keeps ordinary badlands spawns out of a forge clearing (the
 // "POI busy = missing exclusion zone" lesson).
-const FORGE_COUNT = 5;
+const FORGE_COUNT = 9;
 const FORGE_MIN_SPACING = 1600; // spread the forges across the badlands
 const FORGE_MIN_DIST_FROM_CAMP = 1000;
 const FORGE_MIN_DIST_FROM_VEIN = 700;
@@ -619,16 +659,23 @@ const TYRANT_ALTAR_GUARD_COUNT = 4; // elite Hexlings guarding each altar
 // nearest world center is (3600, 2600), which is hypot(10400, 11400) ≈ 15432 px
 // from (WORLD_CX, WORLD_CY) — comfortably outside WORLD_RADIUS (14000). Every
 // other point of the rect is further out still.
-const CRYPT_REALM = { x: 200, y: 200, w: 3400, h: 2400 };
-const CRYPT_GRID_COLS = 3;
-const CRYPT_GRID_ROWS = 2;
-const CRYPT_COUNT = CRYPT_GRID_COLS * CRYPT_GRID_ROWS; // 6 — two per gem theme
+// The underground pocket, in the dead corner of the world SQUARE that falls
+// outside the world CIRCLE. Grown 3400x2400 -> 3700x3700 (the largest square
+// that still clears WORLD_RADIUS at its inner corner: hypot(10100,10100) =
+// 14283 > 14000) and packed 4x3 instead of 3x2, DOUBLING the dungeon count.
+// Packing this tightly is only safe because an interior is now hidden unless
+// you're inside it (see setDungeonVisible) — cells still never overlap, so no
+// interior's wall bodies reach into another's floor.
+const CRYPT_REALM = { x: 200, y: 200, w: 3700, h: 3700 };
+const CRYPT_GRID_COLS = 4;
+const CRYPT_GRID_ROWS = 3;
+const CRYPT_COUNT = CRYPT_GRID_COLS * CRYPT_GRID_ROWS; // 12 — four per gem theme
 const CRYPT_CELL_PAD = 40; // gap between adjacent interiors inside the realm
 const CRYPT_ROOMS_MIN = 5;
 const CRYPT_ROOMS_MAX = 7;
 // Surface entrances: spread across the bayou, with the standing POI exclusion so
 // ordinary swamp content never scatters into a crypt's clearing.
-const CRYPT_MIN_SPACING = 1400;
+const CRYPT_MIN_SPACING = 1100; // eased with the count doubled, so 12 doorways still spread
 const CRYPT_CLEAR_RADIUS = 200;
 const CRYPT_LIGHT_RADIUS = 130; // entrance/brazier night-glow holes
 // A crypt is lit by DISCOVERY, not by equipment (the user: not a fan of "you must
@@ -671,7 +718,7 @@ const CRYPT_LOOT_TABLE: LootRollEntry[] = [
 // Sunken Shrines. A rite site is a destination, so they sit deep (POI_DEEP_R_MIN)
 // and well apart; SHRINE_CLEAR_RADIUS is generous because the rite spawns waves
 // in a ring around it and wild scatter inside that ring reads as noise.
-const SHRINE_COUNT = 4;
+const SHRINE_COUNT = 9;
 const SHRINE_MIN_SPACING = 1800;
 const SHRINE_CLEAR_RADIUS = 260;
 const SHRINE_RING_PROPS = 7; // decorative offering basins circling the shrine
@@ -699,7 +746,7 @@ const SUNKEN_SHRINE_LOOT_TABLE: LootRollEntry[] = [
 
 // Drowned Lodges. Fewer and further apart than crypt doorways — a village is a
 // landmark. The clear radius covers the whole boardwalk footprint.
-const LODGE_COUNT = 4;
+const LODGE_COUNT = 9;
 const LODGE_MIN_SPACING = 1800;
 const LODGE_CLEAR_RADIUS = 280;
 const LODGE_HUT_MIN = 4;
@@ -739,11 +786,6 @@ function epicPoolFor(table: LootRollEntry[]): EpicPool {
   return EPIC_POOL_T2; // warren / shrine bowl / ordinary lodge hut
 }
 
-// Every roll of a world container goes through here so the epic pool can never
-// be forgotten at a call site (and so a future POI gets it by construction).
-function rollContainerLoot(loot: LootContainer, table: LootRollEntry[]): void {
-  loot.rollIfEmpty(table, { epics: epicPoolFor(table) });
-}
 
 // ===== The Sunken Gorge — the Miretyrant's lair (biome 3 Phase 4d session 2) =====
 //
@@ -759,7 +801,13 @@ const GORGE_LIGHT_RADIUS = 150;
 // world center is (2800, 4400), hypot(11200, 9600) ~= 14750 px from
 // (WORLD_CX, WORLD_CY) — outside WORLD_RADIUS (14000), so no sampler can reach
 // it and drawWorldBoundary already paints it near-black.
-const LAIR_REALM = { x: 200, y: 2700, w: 2600, h: 1700 };
+// Moved to the TOP-RIGHT dead corner now that the crypts fill the top-left one.
+// Same geometry check: its inner corner (24100, 3800) is hypot(10100, 10200) =
+// 14355 from world center, outside WORLD_RADIUS.
+const LAIR_REALM = { x: 24100, y: 200, w: 2600, h: 1700 };
+// Surface doors into that one interior (see MiretyrantLair.maws).
+const GORGE_MAW_COUNT = 2;
+const GORGE_MAW_MIN_SPACING = 3000;
 // Approach + arena (locked): a short descent, then one big room. The arena is
 // FORCED to this cell size rather than rolled — a 2.6x boss, its adds and the
 // room to dodge in do not fit in a random 8-12 cell room.
@@ -804,6 +852,20 @@ export class MainScene extends Phaser.Scene {
   // so they need the same one-shot discovery tracking as discoveredUpgradeIds —
   // a separate set only because they use a different data table (mirrors it).
   private discoveredToolUpgradeIds = new Set<string>();
+  // Weapon + armor upgrades (WeaponUpgrades.ts / ArmorUpgrades.ts). These were
+  // the ONLY upgrade tables with no discovery announcement at all — a whole
+  // progression axis the player could finish a run without ever learning about
+  // (the user playtest: "I never got any weapon upgrade unlocks"). Same one-shot
+  // pattern; one set for both since ids are unique across the two tables.
+  private discoveredGearUpgradeIds = new Set<string>();
+  // Run-scoped epic-loot pity. A scene field rather than module state so
+  // scene.restart() can't carry a half-full counter into the next run.
+  private epicPity = new EpicPity();
+  // Bosses that have already played their intro card this run.
+  private announcedBosses = new Set<Enemy>();
+  // Phase-3 Miretyrant arena hazard (see updateMiretyrantBellow). Permanent for
+  // the fight — the arena closing in IS the phase.
+  private mirePools: { x: number; y: number; image: Phaser.GameObjects.Image }[] = [];
   // Cook recipes (Cooking.ts) discovered so far — one-shot "New Recipe
   // Unlocked!" toast tracking, same as discoveredUpgradeIds but for the cook
   // table. Tier-0 dishes unlock on first campfire placement; tier-1 on upgrade.
@@ -1001,6 +1063,8 @@ export class MainScene extends Phaser.Scene {
   // world; its position is picked in create() before spawning like every other
   // POI, and its interior is prebuilt in LAIR_REALM alongside the crypts.
   private gorgePosition: { x: number; y: number } | null = null;
+  // Every surface maw leading to the single lair interior.
+  private gorgePositions: { x: number; y: number }[] = [];
   private lair: MiretyrantLair | null = null;
   private gorgeLightPoints: { x: number; y: number }[] = [];
   private hoveredGorge: MiretyrantLair | null = null;
@@ -1286,6 +1350,10 @@ export class MainScene extends Phaser.Scene {
     this.discovered = new Set<string>();
     this.discoveredUpgradeIds = new Set<string>();
     this.discoveredToolUpgradeIds = new Set<string>();
+    this.discoveredGearUpgradeIds = new Set<string>();
+    this.epicPity = new EpicPity();
+    this.announcedBosses = new Set();
+    this.mirePools = [];
     this.discoveredCookRecipeIds = new Set<string>();
     this.campfireMaxTierSeen = -1;
     this.equippedTool = null;
@@ -1365,6 +1433,7 @@ export class MainScene extends Phaser.Scene {
     this.shrineLightPoints = [];
     this.hoveredShrine = null;
     this.gorgePosition = null;
+    this.gorgePositions = [];
     this.lair = null;
     this.gorgeLightPoints = [];
     this.hoveredGorge = null;
@@ -1495,12 +1564,14 @@ export class MainScene extends Phaser.Scene {
     // The Sunken Gorge (Phase 4d session 2) — last of the bayou POIs to be
     // placed, so it keeps clear of every other one; deep water avoided because
     // the maw is a hole in the ground, not a pool.
-    this.gorgePosition =
-      this.pickBayouPoiPositions(this.sessionRng(), 1, 0, {
-        avoidDeepWater: true,
-        avoid: [...this.shrinePositions, ...this.lodgePositions, ...this.cryptPositions],
-        avoidRadius: POI_MIN_SEPARATION,
-      })[0] ?? null;
+    // TWO maws into the one lair (see MiretyrantLair.maws) so the finale is
+    // never a cross-map trek. Spaced like any other pair of POIs.
+    this.gorgePositions = this.pickBayouPoiPositions(this.sessionRng(), GORGE_MAW_COUNT, GORGE_MAW_MIN_SPACING, {
+      avoidDeepWater: true,
+      avoid: [...this.shrinePositions, ...this.lodgePositions, ...this.cryptPositions],
+      avoidRadius: POI_MIN_SEPARATION,
+    });
+    this.gorgePosition = this.gorgePositions[0] ?? null;
 
     // Ground: a repeating grass texture only over the FOREST REGION (biome 1),
     // where it shows through the translucent forest bake. A world-sized tilesprite
@@ -1672,7 +1743,7 @@ export class MainScene extends Phaser.Scene {
     this.physics.add.overlap(this.playerProjectiles, this.enemyGroup, (a, b) => {
       const projectile = (a instanceof Projectile ? a : b) as Projectile;
       const enemy = (a instanceof Enemy ? a : b) as Enemy;
-      if (!enemy.depleted) this.resolveWeaponHit(enemy, projectile.damage, "ranged", projectile.isCrit);
+      if (!enemy.depleted) this.resolveWeaponHit(enemy, projectile.damage, "ranged", projectile.isCrit, true);
       projectile.destroy();
     });
 
@@ -2442,6 +2513,14 @@ export class MainScene extends Phaser.Scene {
   ): Enemy | null {
     const elite = this.rollElite(rng, eliteMult);
     const biome = this.worldBiomes.dominantBiomeAt(x, y);
+    // Respawns are drawn from a RING around the player, so near a seam the ring
+    // reaches into the neighbouring biome and tops it up with that biome's
+    // roster — which the player then meets on this side of the border, since a
+    // hunter happily chases across it (the user playtest: "murklings in the
+    // badlands"). Every initial spawner is already strict about this; the ring
+    // was the one path that wasn't. Skipping the mismatch is right rather than
+    // remapping the species: the ring has plenty of other candidate points.
+    if (biome !== this.worldBiomes.dominantBiomeAt(this.player.x, this.player.y)) return null;
     if (biome === "badlands") {
       // Weighted ~ spawnBadlandsEnemies() counts (Duskrunner ~84 / Cragscale 46 /
       // Hexling 44 / Sandmaw 46 = 220). Duskrunners respawn as LONE runners (no
@@ -3360,7 +3439,7 @@ export class MainScene extends Phaser.Scene {
       announceRoll: (result) => this.announceRelicResult(result),
       refine: (recipeId) => this.refineTrophies(recipeId),
       forgeTier: () => (this.openForge?.getData("tier") as number | undefined) ?? 0,
-      convert: () => this.convertGloamToEmber(),
+      convert: (id) => this.convertShards(id),
       resolveFamilyChoice: (keepNew) => this.resolveRelicFamilyChoice(keepNew),
       commitCandidate: (id) => this.commitRelicCandidate(id),
       hasDiscovered: (key) => this.discovered.has(key),
@@ -3490,23 +3569,29 @@ export class MainScene extends Phaser.Scene {
     return resolution;
   }
 
-  // Render GLOAM_TO_EMBER_RATIO Gloam Shards down into 1 Ember Shard (Relic
-  // Forge Lvl 3, the Ember Kiln upgrade — Phase 5's tier-2 refinement
-  // currency). One conversion per call; the menu's Convert tab calls this
-  // repeatedly for a batch. Re-guards tier + affordability defensively (the
-  // menu already gates its button).
-  private convertGloamToEmber(): void {
+  // One conversion per call; the menu's Convert tab calls this repeatedly for a
+  // batch. Re-guards station tier + affordability defensively (the menu already
+  // gates its button).
+  //
+  // One shard conversion, identified by its SHARD_CONVERSIONS row. Was
+  // Gloam->Ember specifically; the bayou added Ember->Mire, and a second
+  // near-identical method is how the tier gate and the ratio drift apart.
+  private convertShards(conversionId: string): void {
+    const conv = SHARD_CONVERSIONS.find((c) => c.id === conversionId);
+    if (!conv) return;
     if (!this.devNoBuildCost) {
-      if (((this.openForge?.getData("tier") as number | undefined) ?? 0) < 2) return;
-      if (this.backpack.count("gloam_shard") < GLOAM_TO_EMBER_RATIO) return;
-      this.backpack.removeCount("gloam_shard", GLOAM_TO_EMBER_RATIO);
+      if (((this.openForge?.getData("tier") as number | undefined) ?? 0) < conv.minStationTier) return;
+      if (this.backpack.count(conv.fromKey) < conv.ratio) return;
+      this.backpack.removeCount(conv.fromKey, conv.ratio);
     }
-    const leftover = this.addToBackpack("ember_shard", 1);
+    const toName = itemDef(conv.toKey)?.name ?? conv.toKey;
+    const leftover = this.addToBackpack(conv.toKey, 1);
     if (leftover > 0) {
-      this.spawnLooseDrop("ember_shard", leftover, this.player.x, this.player.y, DROPPED_ITEM_MAGNET_COOLDOWN_MS);
-      this.eventLog.add("info", "Backpack full — the ember shard landed on the floor");
+      this.spawnLooseDrop(conv.toKey, leftover, this.player.x, this.player.y, DROPPED_ITEM_MAGNET_COOLDOWN_MS);
+      this.eventLog.add("info", `Backpack full — the ${toName.toLowerCase()} landed on the floor`);
     }
-    this.eventLog.add("recipe", "Rendered Gloam into Ember", itemDef("ember_shard")?.texture);
+    this.discoverMaterial(conv.toKey);
+    this.eventLog.add("recipe", `Rendered ${itemDef(conv.fromKey)?.name ?? conv.fromKey} into ${toName}`, itemDef(conv.toKey)?.texture);
     this.sfx.craft();
     this.afterRelicChange();
   }
@@ -3669,7 +3754,7 @@ export class MainScene extends Phaser.Scene {
     this.inventoryMenu.close();
     this.closeUpgradeMenu();
     this.closeRelicForgeMenu();
-    rollContainerLoot(loot, table);
+    this.rollContainerLoot(loot, table);
     this.openChest = loot.items;
     this.chestMenu.openMenu();
   }
@@ -3720,7 +3805,7 @@ export class MainScene extends Phaser.Scene {
     // it exists, without requiring the player to open it first to find out.
     // rollIfEmpty is idempotent — a no-op here if it's already rolled and
     // still holds unclaimed loot.
-    rollContainerLoot(shack.loot, GREMLIN_SHACK_LOOT_TABLE);
+    this.rollContainerLoot(shack.loot, GREMLIN_SHACK_LOOT_TABLE);
     shack.syncGlow();
     const ranged = new RangedGremlin(this, {
       x: shack.x + Phaser.Math.Between(-40, 40),
@@ -3815,7 +3900,7 @@ export class MainScene extends Phaser.Scene {
         lodge.reset(); // clears respawnAt, re-bars the chief hut, re-arms caches
         this.spawnLodgeResidents(lodge);
         for (const hut of lodge.huts) {
-          rollContainerLoot(hut.loot, hut.chief ? LODGE_CHIEF_LOOT_TABLE : LODGE_HUT_LOOT_TABLE);
+          this.rollContainerLoot(hut.loot, hut.chief ? LODGE_CHIEF_LOOT_TABLE : LODGE_HUT_LOOT_TABLE);
         }
         this.notifyPoiRespawn(lodge.x, lodge.y, "The lodge is occupied again — lights move on the water.");
       }
@@ -4099,7 +4184,7 @@ export class MainScene extends Phaser.Scene {
     if (this.cryptPositions.some((c) => near(c, CRYPT_CLEAR_RADIUS))) return true;
     if (this.shrinePositions.some((s) => near(s, SHRINE_CLEAR_RADIUS))) return true;
     if (this.lodgePositions.some((l) => near(l, LODGE_CLEAR_RADIUS))) return true;
-    if (near(this.gorgePosition, GORGE_CLEAR_RADIUS)) return true;
+    if (this.gorgePositions.some((p) => near(p, GORGE_CLEAR_RADIUS))) return true;
     return false;
   }
 
@@ -5094,7 +5179,7 @@ export class MainScene extends Phaser.Scene {
     this.sfx.hit();
     this.spawnDamageNumber(den.x, den.y, Math.round(dmg), false, "normal");
     if (den.takeHit(dmg)) {
-      rollContainerLoot(den.loot, DUSKRUNNER_WARREN_LOOT_TABLE);
+      this.rollContainerLoot(den.loot, DUSKRUNNER_WARREN_LOOT_TABLE);
       den.syncGlow();
       this.eventLog.add("info", "The warren collapses — search the remains");
     }
@@ -5772,7 +5857,15 @@ export class MainScene extends Phaser.Scene {
     // Crypt interiors sit outside every biome blob, so the samplers below would
     // return neutral anyway — but say it explicitly: dungeon floors are plain
     // stone, never swamp water or a miasma.
-    if (this.activeDungeon) return { moveMult: 1, regenMult: 1 };
+    if (this.activeDungeon) {
+      // The only underground environment: the Miretyrant's mire pools.
+      for (const pool of this.mirePools) {
+        if (Phaser.Math.Distance.Between(x, y, pool.x, pool.y) <= MIRE_POOL_RADIUS) {
+          return { moveMult: MIRE_POOL_SLOW_MULT, regenMult: POISON_REGEN_MULT, poisonDps: MIRE_POOL_POISON_DPS };
+        }
+      }
+      return { moveMult: 1, regenMult: 1 };
+    }
     const z = this.subZoneAt(x, y);
     if (z && z.type === "thornfield") return { moveMult: BRAMBLE_SLOW_MULT, regenMult: 1 };
     // Biome 3 zones are resolved BEFORE the early return so a zone sitting over a
@@ -6078,7 +6171,7 @@ export class MainScene extends Phaser.Scene {
     // Bumped 5 -> 8 (playtest: too sparse) — the extra 3 land in the wild
     // standalone pool below, not the war-camp cluster, which keeps
     // SHACK_NEAR_ALTAR_COUNT's carefully-spaced hut fan untouched.
-    const SHACK_COUNT = 8;
+    const SHACK_COUNT = 14;
     const SHACK_NEAR_ALTAR_COUNT = 3;
     const SHACK_CLEAR_RADIUS = 260;
     const SHACK_MIN_SPACING = 500;
@@ -6557,6 +6650,8 @@ export class MainScene extends Phaser.Scene {
         ringRadius: 128,
       });
       this.buildCryptInterior(crypt, i, rng, solids);
+      // Prebuilt but not drawn — an interior only becomes visible when entered.
+      this.setDungeonVisible(crypt, false);
     });
   }
 
@@ -6575,17 +6670,23 @@ export class MainScene extends Phaser.Scene {
     vaultPillars: number,
   ): { x: number; y: number; w: number; h: number }[] {
     const layout = dungeon.layout;
+    // Everything built here is registered on the interior so it can be hidden
+    // while you're not inside it (see DungeonInterior.objects).
+    const reg = <T extends Phaser.GameObjects.GameObject>(o: T): T => {
+      dungeon.objects.push(o);
+      return o;
+    };
     // Floors: one TileSprite per room/corridor rect. Tiled (not a stretched
     // image) so the flagstones keep their grain at room scale.
     for (const r of [...layout.rooms, ...layout.corridors]) {
-      this.add.tileSprite(r.x, r.y, r.w, r.h, "crypt_floor").setOrigin(0, 0).setDepth(-7);
+      reg(this.add.tileSprite(r.x, r.y, r.w, r.h, "crypt_floor").setOrigin(0, 0).setDepth(-7));
     }
 
     // Walls: merged runs from the layout, each one solid. The player collides
     // via the existing player↔solids collider; enemies only if they opt in
     // (collidesWithTerrain), exactly like boulderfield rock.
     for (const w of layout.walls) {
-      const ts = this.add.tileSprite(w.x, w.y, w.w, w.h, "crypt_wall").setOrigin(0, 0);
+      const ts = reg(this.add.tileSprite(w.x, w.y, w.w, w.h, "crypt_wall").setOrigin(0, 0));
       ts.setDepth(ysortDepth(w.y + w.h));
       solids.add(ts);
     }
@@ -6596,26 +6697,26 @@ export class MainScene extends Phaser.Scene {
       for (let i = 0; i < pillars; i++) {
         const px = room.x + rng.between(40, Math.max(41, room.w - 40));
         const py = room.y + rng.between(40, Math.max(41, room.h - 40));
-        const img = this.add.image(px, py, "crypt_pillar").setDepth(ysortDepth(py));
+        const img = reg(this.add.image(px, py, "crypt_pillar").setDepth(ysortDepth(py)));
         solids.add(img);
         occluders.push({ x: px - 10, y: py - 10, w: 20, h: 20 });
       }
       for (let i = 0; i < rng.between(1, 3); i++) {
         const px = room.x + rng.between(20, Math.max(21, room.w - 20));
         const py = room.y + rng.between(20, Math.max(21, room.h - 20));
-        this.add.image(px, py, "crypt_rubble").setDepth(ysortDepth(py));
+        reg(this.add.image(px, py, "crypt_rubble").setDepth(ysortDepth(py)));
       }
       // One brazier per room: the only ambient light down here besides a torch.
       const bx = room.cx + rng.between(-30, 30);
       const by = room.y + 26;
-      this.add.image(bx, by, "crypt_brazier").setDepth(ysortDepth(by));
+      reg(this.add.image(bx, by, "crypt_brazier").setDepth(ysortDepth(by)));
       dungeon.braziers.push({ x: bx, y: by }); // per-interior, see SunkenCrypt.braziers
     }
 
     // Exit stairs in the entry room, and the arrival point right beside them.
     const stairsX = layout.entry.cx;
     const stairsY = layout.entry.y + 34;
-    dungeon.exitStairs = this.add.image(stairsX, stairsY, "crypt_stairs").setDepth(ysortDepth(stairsY));
+    dungeon.exitStairs = reg(this.add.image(stairsX, stairsY, "crypt_stairs").setDepth(ysortDepth(stairsY)));
     dungeon.entryPoint = { x: stairsX, y: stairsY + 46 };
     return occluders;
   }
@@ -6642,11 +6743,15 @@ export class MainScene extends Phaser.Scene {
     // a few extra — a fight with nothing to hide behind isn't a fight.
     const occluders = this.renderDungeonShell(crypt, rng, solids, crypt.theme === "gloam" ? 4 : 0);
 
-    // Side-room chest (reuses LootContainer + ChestMenu verbatim).
+    // Side-room chest (reuses LootContainer + ChestMenu verbatim). The texture
+    // key was "shack_chest", which BootScene never generates — the chest was
+    // rendering as Phaser's missing-texture placeholder (the user playtest:
+    // "chest looks like black box with green outline").
     const chest = this.add
-      .image(layout.side.cx, layout.side.cy, "shack_chest")
+      .image(layout.side.cx, layout.side.cy, "crypt_chest")
       .setDepth(ysortDepth(layout.side.cy));
     crypt.setChest(chest);
+    crypt.objects.push(chest);
 
     this.populateCrypt(crypt, rng, occluders);
   }
@@ -6745,13 +6850,19 @@ export class MainScene extends Phaser.Scene {
         this.nodes.push(node);
         this.obstacleNodes.push(node);
         crypt.vaultNodes.push(node);
+        crypt.objects.push(node);
       }
     };
     ring(CRYPT_VAULT_GEODE_COUNT, 0.62, 0.4, (x, y) =>
       new ResourceNode(this, {
         x,
         y,
-        texture: "gloaming_vein_shielded",
+        // A neutral SEALED husk, not the surface gloam vein's texture. Sharing
+        // "gloaming_vein_shielded" made a crypt's gem geode read as an ordinary
+        // Gloam Shard node (the user playtest) — which also hid the fact that
+        // these are the game's only ability-gem source. It cracks open into
+        // def.geodeTexture below, which is where the colour belongs.
+        texture: "crypt_node_sealed",
         resource: crypt.def.gem as ResourceType,
         amount: 1,
         action: "mine",
@@ -6765,7 +6876,7 @@ export class MainScene extends Phaser.Scene {
       new ResourceNode(this, {
         x,
         y,
-        texture: "gloaming_vein_shielded",
+        texture: "crypt_node_sealed",
         resource: "moonsilver",
         amount: rng.between(2, 3),
         action: "mine",
@@ -6810,7 +6921,21 @@ export class MainScene extends Phaser.Scene {
     const lair = new MiretyrantLair(this, { x: pos.x, y: pos.y });
     this.lair = lair;
     this.gorgeLightPoints.push({ x: pos.x, y: pos.y });
+    // Additional maws into the SAME interior — each gets the full POI dressing
+    // and night glow, so neither reads as the "lesser" door.
+    for (const extra of this.gorgePositions.slice(1)) {
+      this.decoratePoi(rng, extra.x, extra.y, {
+        floorTexture: "poi_floor_gorge",
+        floorRadius: 175,
+        ringTexture: "poi_ring_gorge",
+        ringCount: 11,
+        ringRadius: 156,
+      });
+      lair.addMaw(this, extra.x, extra.y);
+      this.gorgeLightPoints.push({ x: extra.x, y: extra.y });
+    }
     this.buildLairInterior(lair, rng, solids);
+    this.setDungeonVisible(lair, false);
   }
 
   private buildLairInterior(
@@ -6879,6 +7004,19 @@ export class MainScene extends Phaser.Scene {
     const lair = this.lair;
     const boss = this.miretyrant;
     if (!lair || !boss || boss.depleted) return;
+    // Phase-3 mire pools: churned floor that poisons and drags. Rendered here
+    // (the boss owns no world objects beyond itself) and applied through the
+    // SAME environmentEffectAt path the bayou's miasma zones use, so a pool
+    // needs no bespoke damage code and inherits the status-resist layer.
+    for (const p of boss.consumeMirePools()) {
+      const img = this.add
+        .image(p.x, p.y, "poi_floor_gorge")
+        .setScale(MIRE_POOL_RADIUS / 90)
+        .setAlpha(0.72)
+        .setTint(0x2c4a2a)
+        .setDepth(-6);
+      this.mirePools.push({ x: p.x, y: p.y, image: img });
+    }
     const wanted = boss.consumeBellow();
     if (wanted <= 0) return;
     lair.adds = lair.adds.filter((a) => !a.depleted);
@@ -6943,33 +7081,68 @@ export class MainScene extends Phaser.Scene {
     this.sfx.levelUp();
   }
 
-  // Crafting the effigy puts the one lair on the map, wherever it is. A single
-  // door in a 28000px world is not findable by exploration, so this mirrors the
-  // Duneshaper altars' clue system rather than hoping the player wanders past.
+  // Crafting the effigy puts EVERY maw on the map. A door in a 28000px world is
+  // not findable by exploration, so this mirrors the Duneshaper altars' clue
+  // system rather than hoping the player wanders past — and with several doors
+  // into one lair, the compass points at the NEAREST one, which is the entire
+  // reason there is more than one.
   private onMiretyrantEffigyCrafted(): void {
     const lair = this.lair;
     if (!lair || this.lairRevealed) return;
     this.lairRevealed = true;
     if (!lair.discoveredOnMap) {
       lair.discoveredOnMap = true;
-      this.exploredMap.addLandmark({
-        worldX: lair.x,
-        worldY: lair.y,
-        iconKey: "map_gorge",
-        label: "The Sunken Gorge",
-        tint: 0x4fbf86,
-      });
+      for (const maw of lair.maws) {
+        this.exploredMap.addLandmark({
+          worldX: maw.x,
+          worldY: maw.y,
+          iconKey: "map_gorge",
+          label: "The Sunken Gorge",
+          tint: 0x4fbf86,
+        });
+      }
     }
-    const dir = this.compassDir(this.player.x, this.player.y, lair.x, lair.y);
+    const nearest = lair.maws.reduce((best, m) =>
+      Phaser.Math.Distance.Between(this.player.x, this.player.y, m.x, m.y) <
+      Phaser.Math.Distance.Between(this.player.x, this.player.y, best.x, best.y)
+        ? m
+        : best,
+    );
+    const dir = this.compassDir(this.player.x, this.player.y, nearest.x, nearest.y);
     this.eventLog.add("poi", `The effigy pulls ${dir} — the Sunken Gorge is marked on your map.`);
   }
 
   // Enter a crypt: remember where we came in, then teleport into its entry room.
+  // Show/hide a whole interior — its shell, its props and its inhabitants.
+  // Interiors are prebuilt at create() and packed into the dead corners outside
+  // the world circle, so a neighbour is easily within the ~1536px the camera
+  // sees. Hiding all but the active one is what makes that packing safe (and
+  // lets the corners hold far more dungeons than separation ever could).
+  //
+  // Enemies are hidden too, but NOT disabled — their AI is already skipped by
+  // the distance cull in updateEnemies, and their bodies must stay live so a
+  // dungeon the player re-enters is exactly as they left it.
+  private setDungeonVisible(dungeon: DungeonInterior, visible: boolean): void {
+    for (const o of dungeon.objects) {
+      (o as unknown as { setVisible?: (v: boolean) => void }).setVisible?.(visible);
+    }
+    for (const e of dungeon.enemies) {
+      if (!e.depleted) e.setVisible(visible);
+    }
+  }
+
   // A short camera fade sells the transition (and hides the one-frame jump).
   private enterCrypt(crypt: DungeonInterior): void {
     if (this.activeDungeon) return;
     this.cryptReturn = { x: this.player.x, y: this.player.y };
     this.activeDungeon = crypt;
+    this.setDungeonVisible(crypt, true);
+    // Nobody gets a free hit on arrival: every dweller starts its attack clock
+    // over, so the first swing you see down here plays its full telegraph.
+    const now = this.time.now;
+    for (const e of crypt.enemies) {
+      if (!e.depleted) e.resetAttackState(now);
+    }
     this.player.setPosition(crypt.entryPoint.x, crypt.entryPoint.y);
     (this.player.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0);
     this.cameras.main.flash(260, 0, 0, 0);
@@ -6984,6 +7157,7 @@ export class MainScene extends Phaser.Scene {
     const crypt = this.activeDungeon;
     if (!crypt) return;
     const back = this.cryptReturn ?? { x: crypt.x, y: crypt.y + 40 };
+    this.setDungeonVisible(crypt, false);
     this.activeDungeon = null;
     this.cryptReturn = null;
     this.player.setPosition(back.x, back.y + 30);
@@ -7390,7 +7564,7 @@ export class MainScene extends Phaser.Scene {
   private completeShrineRite(shrine: SunkenShrine): void {
     shrine.clearRite();
     shrine.setPhase("open");
-    rollContainerLoot(shrine.loot, SUNKEN_SHRINE_LOOT_TABLE);
+    this.rollContainerLoot(shrine.loot, SUNKEN_SHRINE_LOOT_TABLE);
     this.eventLog.add("info", "The rite holds — the bowl spills what it was keeping.");
   }
 
@@ -7449,7 +7623,7 @@ export class MainScene extends Phaser.Scene {
         const hy = pos.y + (i % 2 === 0 ? -LODGE_HUT_OFFSET : LODGE_HUT_OFFSET);
         const chief = i === hutCount - 1;
         const hut = lodge.addHut(hx, hy, chief);
-        rollContainerLoot(hut.loot, chief ? LODGE_CHIEF_LOOT_TABLE : LODGE_HUT_LOOT_TABLE);
+        this.rollContainerLoot(hut.loot, chief ? LODGE_CHIEF_LOOT_TABLE : LODGE_HUT_LOOT_TABLE);
         // A short spur of planking connecting the hut to the walk.
         this.add
           .tileSprite(hx - 10, Math.min(hy, pos.y), 20, Math.abs(hy - pos.y), "lodge_plank")
@@ -8035,11 +8209,13 @@ export class MainScene extends Phaser.Scene {
     let hoveredGorge: MiretyrantLair | null = null;
     if (!this.activeDungeon) {
       if (this.lair) {
-        const d = hits(this.lair.image);
-        if (d !== null) {
-          hoveredGorge = this.lair;
-          hoveredCrypt = null;
-          takeCryptHover(d);
+        for (const maw of this.lair.maws) {
+          const d = hits(maw.image);
+          if (d !== null) {
+            hoveredGorge = this.lair;
+            hoveredCrypt = null;
+            takeCryptHover(d);
+          }
         }
       }
       for (const shrine of this.shrines) {
@@ -8633,7 +8809,7 @@ export class MainScene extends Phaser.Scene {
     const critP = this.rollCrit(this.equippedWeapon);
     const primaryDmg =
       normalHit * (1 + onsBonus + (critP ? this.critBonus(this.equippedWeapon) : 0)) * this.staggerMultiplierFor(enemy);
-    this.resolveWeaponHit(enemy, primaryDmg, dmgType, critP);
+    this.resolveWeaponHit(enemy, primaryDmg, dmgType, critP, true);
 
     // AOE arc sweep (Biome 2 Phase 1, locked decision 6): wide weapons also hit
     // other live enemies within `range` and within ±halfAngle of the swing
@@ -8680,6 +8856,71 @@ export class MainScene extends Phaser.Scene {
       if (b && !b.depleted && b.isEngaged()) return b;
     }
     return null;
+  }
+
+  // A boss/mini-boss the player has just engaged announces itself, once per
+  // encounter: a name card, a camera kick and a sting.
+  //
+  // the user playtest: "minibosses need more character and should be more epic in
+  // those fights." Each of the five already HAS a bespoke state machine — the
+  // Palewake's tether, the Kilnborn's heat, the Sanguinarch's phase-follows-your-
+  // bleed — but nothing announced that you'd walked into a named fight rather
+  // than a big trash mob, so the mechanics never got read as special. This is
+  // the cheapest thing that makes all of them land, and it applies to every
+  // future boss for free.
+  private announceBossEncounter(enemy: Enemy, subtitle: string): void {
+    if (this.announcedBosses.has(enemy)) return;
+    this.announcedBosses.add(enemy);
+
+    const cam = this.cameras.main;
+    const cx = this.scale.width / 2;
+    const title = this.add
+      .text(cx, this.scale.height * 0.34, enemy.displayName.toUpperCase(), {
+        fontFamily: "monospace",
+        fontSize: "40px",
+        color: "#f0e0c0",
+        stroke: "#000000",
+        strokeThickness: 5,
+      })
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(2890)
+      .setAlpha(0);
+    const sub = this.add
+      .text(cx, this.scale.height * 0.34 + 34, subtitle, {
+        fontFamily: "monospace",
+        fontSize: "15px",
+        color: "#b8a888",
+        stroke: "#000000",
+        strokeThickness: 3,
+      })
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(2890)
+      .setAlpha(0);
+
+    for (const t of [title, sub]) {
+      this.tweens.add({
+        targets: t,
+        alpha: 1,
+        duration: 320,
+        ease: "Quad.easeOut",
+        onComplete: () => {
+          this.tweens.add({
+            targets: t,
+            alpha: 0,
+            delay: 1500,
+            duration: 700,
+            onComplete: () => t.destroy(),
+          });
+        },
+      });
+    }
+    title.setScale(1.18);
+    this.tweens.add({ targets: title, scale: 1, duration: 420, ease: "Back.easeOut" });
+    cam.shake(320, 0.004);
+    this.sfx.nightfall();
+    this.eventLog.add("combat", `${enemy.displayName} stirs.`);
   }
 
   private staggerMultiplierFor(enemy: Enemy): number {
@@ -8801,7 +9042,15 @@ export class MainScene extends Phaser.Scene {
   // (skill XP, floating damage number, kill loot/armor-XP/run-scoring) —
   // shared by melee (applied instantly) and ranged (applied on projectile
   // impact), so the two firing paths can't drift out of sync on kill logic.
-  private resolveWeaponHit(enemy: Enemy, dmg: number, dmgType: DamageType, isCrit = false): void {
+  private resolveWeaponHit(
+    enemy: Enemy,
+    dmg: number,
+    dmgType: DamageType,
+    isCrit = false,
+    // True only for the swing's PRIMARY target / a projectile's impact — the
+    // one hit allowed to trigger the weapon's on-hit burst.
+    isBurstSource = false,
+  ): void {
     // Waking on hit is handled by takeHit() itself — the base Enemy.takeHit()
     // flips idle->chasing for state-field enemies, and Boar/Snake/RangedGremlin/
     // MeleeGremling/Hexling each mirror that in their own takeHit() override
@@ -8850,8 +9099,49 @@ export class MainScene extends Phaser.Scene {
       this.refreshHealthBar();
     }
     if (isCrit) this.applyCritSplash(enemy, finalDmg, dmgType);
+    // Magic's crowd answer (see WEAPON_ON_HIT_BURST). Fires from the PRIMARY hit
+    // only — `isBurstSource` is false for the arc sweep, the burst's own victims
+    // and the crit splash, so a detonation can never chain into another one.
+    if (isBurstSource) this.applyWeaponBurst(enemy, finalDmg, dmgType);
     if (!depleted) return;
     this.resolveKill(enemy);
+  }
+
+  // Detonate the equipped weapon's on-hit burst around the struck enemy. Models
+  // applyCritSplash exactly (same targetable/edge/resist/kill-tail handling) —
+  // the only difference is what triggers it.
+  private applyWeaponBurst(source: Enemy, primaryDmg: number, dmgType: DamageType): void {
+    const burst = this.equippedWeapon ? weaponOnHitBurst(this.equippedWeapon) : undefined;
+    if (!burst) return;
+    const splash = primaryDmg * burst.damageFrac;
+    for (const other of [...this.enemies]) {
+      if (other === source || !other.active || other.depleted || !other.isTargetable()) continue;
+      const edge = Math.max(other.displayWidth, other.displayHeight) / 2;
+      if (Phaser.Math.Distance.Between(source.x, source.y, other.x, other.y) > burst.radius + edge) continue;
+      const resistMult = other.resistMultiplier(dmgType);
+      const dealt = splash * resistMult;
+      const eff: DamageEffectiveness = resistMult > 1.001 ? "weak" : resistMult < 0.999 ? "resist" : "normal";
+      const depleted = other.takeHit(dealt);
+      this.spawnDamageNumber(other.x, other.y, Math.round(dealt), false, eff);
+      if (depleted) this.resolveKill(other);
+    }
+    // The detonation itself — the same expanding additive flash the Emberblink
+    // nova uses, tinted per weapon.
+    const fx = this.add
+      .image(source.x, source.y, "light_soft")
+      .setTint(burst.tint)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setDepth(ysortDepth(source.y) + 1)
+      .setScale(((burst.radius * 2) / 256) * 0.35)
+      .setAlpha(0.85);
+    this.tweens.add({
+      targets: fx,
+      scale: (burst.radius * 2) / 256,
+      alpha: 0,
+      duration: 240,
+      ease: "Cubic.easeOut",
+      onComplete: () => fx.destroy(),
+    });
   }
 
   // A brief icy-blue puff at a blunt-slowed enemy — the subtle "cripple landed"
@@ -8906,7 +9196,10 @@ export class MainScene extends Phaser.Scene {
     const r = mire ? SET_MIREBLINK_BURST_RADIUS : SET_EMBERBLINK_BURST_RADIUS;
     const burstDamage = mire ? SET_MIREBLINK_BURST_DAMAGE : SET_EMBERBLINK_BURST_DAMAGE;
     for (const enemy of [...this.enemies]) {
-      if (!enemy.active) continue;
+      // isTargetable gates the burrowed/stalking states (Sandmaw, Fenlurker,
+      // Palewake). Every other damage sweep already honors it; this one didn't,
+      // so the nova was hitting things that are underground (the user playtest).
+      if (!enemy.active || enemy.depleted || !enemy.isTargetable()) continue;
       // Catch a big elite at its edge, not just its center (mirrors enemyReach's
       // sprite-radius term).
       const edge = Math.max(enemy.displayWidth, enemy.displayHeight) / 2;
@@ -9095,7 +9388,9 @@ export class MainScene extends Phaser.Scene {
     // `power` also carries the lesser variant's smaller, weaker pop.
     const r = ABILITY_NOVA_RADIUS * power;
     for (const enemy of [...this.enemies]) {
-      if (!enemy.active) continue;
+      // Untargetable = burrowed/stalking (Sandmaw, Fenlurker, Palewake). An AoE
+      // must respect that for the same reason a click does: it isn't there yet.
+      if (!enemy.active || enemy.depleted || !enemy.isTargetable()) continue;
       const edge = Math.max(enemy.displayWidth, enemy.displayHeight) / 2;
       if (Phaser.Math.Distance.Between(cx, cy, enemy.x, enemy.y) > r + edge) continue;
       this.dealAbilityDamage(enemy, ABILITY_NOVA_DAMAGE * power, "magic");
@@ -9627,7 +9922,25 @@ export class MainScene extends Phaser.Scene {
     // night-spawned enemies pick it up too. The GremlinKing's overridden
     // update() ignores envSpeedMult, so the boss is exempt with no branch here.
     const envSpeedMult = this.dayNight.enemySpeedMultiplier();
+    const px = this.player.x;
+    const py = this.player.y;
     for (const enemy of this.enemies) {
+      // ACTIVITY CULL. Every enemy in the world used to run its full AI every
+      // frame — the forest, badlands and bayou rosters, every POI guard, and
+      // every dweller in every prebuilt dungeon interior, well over a thousand
+      // of them, most of them tens of thousands of pixels away and idle. That
+      // is the frame-rate regression (the user: "overall performance feels
+      // worse"), and it gets worse with every POI added.
+      //
+      // Safe because nothing an enemy does at this distance is observable: it
+      // can't see the player (the largest leash on the roster is far inside
+      // this radius), can't be seen (~1536px of camera), and can't be hit. All
+      // give-up/attack timers are absolute (`now`-based), not accumulators, so
+      // nothing drifts while an enemy sits out frames. A culled enemy simply
+      // resumes when the player comes back into range.
+      const dx = enemy.x - px;
+      const dy = enemy.y - py;
+      if (dx * dx + dy * dy > ENEMY_ACTIVE_RADIUS_SQ) continue;
       // Fold any temporary slow (Executioner crit relic) into the same envSpeedMult
       // path every aggressive-movement velocity already reads — no per-subclass wiring.
       enemy.envSpeedMult = envSpeedMult * enemy.slowMult(now);
@@ -9635,6 +9948,11 @@ export class MainScene extends Phaser.Scene {
       // bleeding, which update()'s (delta, x, y, now) signature can't express —
       // so the scene pushes it, the same way envSpeedMult is pushed above.
       if (enemy instanceof Sanguinarch) enemy.playerBleeding = this.bleed.isBleeding();
+      // Name card the first time any named fight actually starts. Driven off the
+      // same isAggro() every enemy already reports, so a new boss needs only a
+      // row in BOSS_SUBTITLES.
+      const subtitle = BOSS_SUBTITLES[enemy.displayName];
+      if (subtitle !== undefined && enemy.isAggro()) this.announceBossEncounter(enemy, subtitle);
       const bit = enemy.update(delta, this.player.x, this.player.y, now);
       // Dungeon navigation (Phase 4c): re-aim whatever movement the AI just
       // decided on down the corridor toward the player, so the whole roster
@@ -10399,6 +10717,23 @@ export class MainScene extends Phaser.Scene {
       const icon = itemDef(upg.appliesToItemKey)?.texture;
       this.eventLog.add("recipe", `New Upgrade Unlocked! ${upg.name}`, icon);
     }
+    // Weapon + armor upgrades. Unlike stations/tools these are LADDERS (Lvl 2
+    // then Lvl 3), so a tier is only announced once the tier below it already
+    // has been — otherwise a player who just learned the base weapon gets both
+    // steps at once, which reads as noise and spoils the ladder's shape.
+    for (const upg of [...WEAPON_UPGRADES, ...ARMOR_UPGRADES]) {
+      if (this.discoveredGearUpgradeIds.has(upg.id)) continue;
+      if (!this.upgradeIngredientsKnown(upg)) continue;
+      if (upg.resultTier > 1) {
+        const prev = [...WEAPON_UPGRADES, ...ARMOR_UPGRADES].find(
+          (u) => u.appliesToItemKey === upg.appliesToItemKey && u.resultTier === upg.resultTier - 1,
+        );
+        if (prev && !this.discoveredGearUpgradeIds.has(prev.id)) continue;
+      }
+      this.discoveredGearUpgradeIds.add(upg.id);
+      const icon = itemDef(upg.appliesToItemKey)?.texture;
+      this.eventLog.add("recipe", `New Upgrade Unlocked! ${upg.name}`, icon);
+    }
     this.announceCookRecipes();
     this.craftingMenu?.refresh();
     this.inventoryMenu?.refresh();
@@ -10949,15 +11284,31 @@ export class MainScene extends Phaser.Scene {
     );
   }
 
-  // Is any live (non-depleted) enemy currently AGGRO'd on the player. Used by
-  // Comfort's "safe to rest" check — per playtest feedback, a flat proximity
-  // radius (COMFORT_SAFE_RADIUS) was too easily tripped by enemies that
-  // weren't even a threat (asleep/wandering nearby); "safe" now means
-  // literally nobody is hunting you, regardless of how close they idle.
+  // Every roll of a world container goes through here so the epic pool can never
+  // be forgotten at a call site (and so a future POI gets it by construction).
+  // A scene method rather than a free function only so it can reach the
+  // run-scoped pity counter, which has to be shared across every container.
+  private rollContainerLoot(loot: LootContainer, table: LootRollEntry[]): void {
+    loot.rollIfEmpty(table, { epics: epicPoolFor(table), pity: this.epicPity });
+  }
+
+  // Is any live enemy currently HUNTING the player from close enough to matter.
+  // Used by Comfort's "safe to rest" check. Two revisions deep now:
+  //   1. Originally a flat proximity radius — tripped by harmless enemies just
+  //      idling nearby, so it became aggro-only.
+  //   2. Aggro-only, world-wide, then broke completely in the badlands (the user
+  //      playtest): a Duskrunner leashes for 620px and barely ever deaggros, so
+  //      somewhere on a 28000px map SOMETHING is always hunting you and Comfort
+  //      simply never fired again.
+  // So: aggro AND within a generous radius. Both conditions carry their own
+  // lesson — an idler nearby doesn't block resting, and a hunter on the far
+  // side of the world isn't your problem.
   private isAnyEnemyAggro(): boolean {
     for (const enemy of this.enemies) {
-      if (enemy.depleted) continue;
-      if (enemy.isAggro()) return true;
+      if (enemy.depleted || !enemy.isAggro()) continue;
+      if (Phaser.Math.Distance.Between(this.player.x, this.player.y, enemy.x, enemy.y) <= COMFORT_THREAT_RADIUS) {
+        return true;
+      }
     }
     return false;
   }

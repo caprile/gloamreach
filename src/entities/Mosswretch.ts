@@ -38,6 +38,13 @@ const SMASH_SWING: SwingConfig = {
   strikeMs: 110,
   recoverMs: 720, // the punish window; a whole weapon combo fits in it
   cooldownMs: 620,
+  // the user playtest: "mosswretch attack is hard to predict". The swing was
+  // always dodgeable — the hit is re-checked against your CURRENT position at
+  // the strike frame — but nothing about the default tell said how FAR to go,
+  // and reach 88 is far enough that stepping back half a pace fails. It now
+  // rears visibly back and swells much larger in a sickly green: the rear-back
+  // is the read, and its size is the reach.
+  tell: { punchScale: 1.4, color: 0x8fd06a, rearBackSpeed: 46 },
   knockback: 300,
 };
 

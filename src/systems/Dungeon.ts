@@ -26,4 +26,13 @@ export interface DungeonInterior {
   discovered: Set<CryptRect>;
   exitStairs: Phaser.GameObjects.Image | null;
   enemies: Enemy[];
+  // Every GameObject that makes up this interior — floors, walls, props,
+  // stairs, the chest, vault nodes. Interiors are prebuilt at create() and
+  // packed close together in the dead corners outside the world circle, so
+  // without an explicit visibility toggle the NEXT dungeon along renders in
+  // plain sight beside the one you're standing in (the user playtest: "I can
+  // see crypts next to the one I am in"). Separation alone can't fix that
+  // affordably — the camera sees ~1536px and the corners are finite — so an
+  // interior simply isn't drawn unless it's the one you're in.
+  objects: Phaser.GameObjects.GameObject[];
 }

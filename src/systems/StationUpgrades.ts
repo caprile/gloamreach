@@ -86,6 +86,18 @@ export const STATION_UPGRADES: StationUpgradeDef[] = [
     deltaLabel: "Unlocks Gloam -> Ember conversion",
   },
   {
+    // Relic Forge Lvl 4 (biome 3). Gated on Gloamsteel the same way the Ember
+    // Kiln was gated on Embersteel — you must have smelted the bayou's own
+    // metal before the bayou's own currency exists.
+    id: "mire_crucible",
+    name: "Mire Crucible",
+    description: "A black-glass crucible that steeps ember in bog-water. Renders Ember Shards down into Mire.",
+    appliesToItemKey: "relic_forge",
+    resultTier: 3,
+    costs: { gloamsteel_ingot: 3, stone: 16 },
+    deltaLabel: "Unlocks Ember -> Mire conversion",
+  },
+  {
     id: "forge_anvil",
     name: "Forge Anvil",
     description: "A proper forge and anvil bolted to an ironbark frame. Lets you work metal ingots into gear.",

@@ -373,6 +373,42 @@ export function weaponArc(weapon: WeaponType): WeaponArc {
   return WEAPON_ARC[weapon];
 }
 
+// ON-HIT BURST: a detonation centred on the target, dealing a fraction of the
+// hit's damage to everything else nearby.
+//
+// This is what a MAGIC weapon is for. Magic's only stated upside was that it
+// "bypasses flat armor" — but that is a rule about damage taken by the PLAYER;
+// enemies have no armor stat at all, so against them the bypass did precisely
+// nothing. What was left was strictly worse than the alternatives: the Gloam
+// Brand deals 44 DPS to the Gloamsteel Pike's 52 and Sword's 53, AND is shrugged
+// off (x0.4-0.5) by the gloam-casters. the user, correctly: "the magic weapons
+// feel like trash idk maybe we need to buff them or give them gnarly AOE."
+//
+// So: a magic weapon trades single-target DPS for a real crowd answer, which is
+// a trade a player can actually read and choose. Data-driven rather than keyed
+// off damageType === "magic", so a future non-magic weapon can carry a burst
+// (and a future magic weapon can decline one) without touching MainScene.
+export interface WeaponBurst {
+  radius: number;
+  damageFrac: number; // fraction of the hit's final damage dealt to others
+  tint: number; // detonation colour
+}
+
+const WEAPON_ON_HIT_BURST: Partial<Record<WeaponType, WeaponBurst>> = {
+  // The fire brand: a wide, showy wash of flame. Its 45-degree arc already
+  // sweeps, so the burst is what makes it hit things the arc missed.
+  ember_brand: { radius: 88, damageFrac: 0.55, tint: 0xff7a1e },
+  // The bayou brand: bigger and harder, matching its tier.
+  gloam_brand: { radius: 104, damageFrac: 0.6, tint: 0x9a5ce0 },
+  // The drinker keeps the tightest burst — every swept target already lifelinks,
+  // so a wide detonation would make it the sustain AND the crowd answer.
+  gloamdrinker: { radius: 72, damageFrac: 0.4, tint: 0x6fbf4a },
+};
+
+export function weaponOnHitBurst(weapon: WeaponType): WeaponBurst | undefined {
+  return WEAPON_ON_HIT_BURST[weapon];
+}
+
 // Per-hit LIFELINK: the fraction of damage dealt healed back to the player,
 // applied at the single melee/ranged hit choke point (MainScene.resolveWeaponHit).
 // Data-driven rather than hardcoded to one key so a future drain weapon is a

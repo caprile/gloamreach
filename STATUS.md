@@ -2,7 +2,32 @@
 
 ## Current State
 
-_Living snapshot — edit in place, never append. Last shipped: **B4-P3 — Class identity:
+_Living snapshot — edit in place, never append. Last shipped: **B4-P4 — 25-item playtest
+omnibus** (2026-07-22, Opus, plan `.claude/plans/b4-p4-playtest-omnibus.md`). Off the user's
+95-minute Ascetic run, which cleared the whole bayou and killed the final boss in
+**Embersteel** gear — a tier below the set that content gates. All four buckets in one
+session (explicit override of one-milestone-per-chat). **Bugs:** three "broken texture /
+missing feature" reports were all references to something never built (crypt chest pointed
+at a nonexistent texture key; crypt gem geodes wore the literal surface gloam-ore texture;
+`refreshDiscovery` had no loop for weapon/armor upgrades at all). The perf regression was
+structural — every one of **1142** enemies ran full AI each frame, now **115** via a
+distance cull. Neighbouring crypts were visible because interiors always rendered; they're
+now hidden unless occupied, which removed the spacing constraint and let crypts go **6 →
+12**. Plus: AoE no longer hits submerged enemies, Comfort no longer blocked by a hunter
+anywhere on a 28000px map, no free hit on dungeon entry, epic loot 4/6/8% → 10/16/22% with
+a pity floor, homing orbs get a real miss rule, and a **Class tab** in the Character menu.
+**Gaps:** the bayou had no food and no refine path — three dishes + **Mire Shard** /
+**Mire Crucible** (Relic Forge Lvl 4) close both. **World:** the content-less **Dunes are
+gone** (kept on disk for a future biome 4), the frontier past the badlands is now **63%
+bayou**, POI counts are up across the board, and the Sunken Gorge has **two maws into one
+interior**. **Combat:** magic weapons got a real identity (an on-hit detonation — their
+armor-bypass did literally nothing vs enemies, which have no armor stat), set bonuses now
+span tiers at the weakest worn piece, poison capped 5 → 3 stacks, the Mosswretch rears
+back, every named fight gets a name card, and the Miretyrant is 4600 HP with a phase-3
+arena that closes in. Verified live throughout; `tsc` + `npm run build` clean, zero console
+errors. **Next: a playtest — every number is first-pass, and the density/biome-mix changes
+especially want real play.** See B4-P4 below.
+Prior: **B4-P3 — Class identity:
 skill affinities + stat potency** (2026-07-22, Opus, plan
 `.claude/plans/b4-p3-class-identity.md`). B4-P1's five survivors all differentiated on the
 **same shape** — eight global scalar `RunModifier` fields — so nothing about a character
@@ -240,6 +265,104 @@ below + [[survivor-rpg-dev-console]].
 
 > Older entries in STATUS-archive.md.
 
+### B4-P4 — 25-item playtest omnibus: bugs, bayou gaps, world density, combat feel (2026-07-22, Opus)
+
+Plan: `.claude/plans/b4-p4-playtest-omnibus.md`. the user's 95-minute Ascetic run (lvl 18, ~60 in
+three stats) cleared the **whole bayou and killed the final boss in EMBERSTEEL gear** — a full tier
+below the set that content gates. That, not any single bug, is the thesis: the endgame tier was
+never necessary and the map was too big for the materials in it. 25 items, all four buckets in one
+session (an explicit override of the one-milestone-per-chat convention). Four design calls locked
+via `AskUserQuestion`, all as recommended: magic = **on-hit AOE**, set bonuses **span tiers**,
+bosses get **new mechanics + presentation**, and **densify hard while keeping `WORLD_RADIUS`**.
+
+**Three reported bugs turned out to be the same class of defect — a reference to something that
+was never built:** the crypt chest pointed at texture `shack_chest` (BootScene only makes
+`gremlin_shack_chest`), so it drew as Phaser's missing-texture placeholder — exactly the "black box
+with green outline"; the crypt gem geodes wore `gloaming_vein_shielded`, *literally the surface
+gloam-ore texture*, which is why a gem node read as a Gloam Shard node while the purpose-built
+`geode_gloam/ember/blood` textures went unused; and `refreshDiscovery()` announced station and tool
+upgrades but simply **had no loop for `WEAPON_UPGRADES` or `ARMOR_UPGRADES`**, so an entire
+progression axis could never be discovered ("I never got any weapon upgrade unlocks").
+
+**Perf ("overall performance feels worse") was structural, not incremental.** `updateEnemies` ran
+full AI for *every* enemy in the world each frame — measured live at **1142**, including every
+dweller in every prebuilt dungeon interior tens of thousands of pixels away. A distance cull
+(`ENEMY_ACTIVE_RADIUS` 2000, comfortably past both the ~1536px camera and the roster's longest
+620px leash) drops that to **115 per frame**. Safe because every give-up/attack timer is absolute
+rather than an accumulator, so nothing drifts while an enemy sits out frames.
+
+**"I can see crypts next to the one I am in"** was fixed by making interiors *not render* unless
+occupied (`setDungeonVisible`) rather than by separating them — separation can't win, since the
+camera sees ~1536px and the dead corners are finite. That inverted the constraint on dungeon
+density: cells only need to not overlap, so `CRYPT_REALM` grew to the largest square that still
+clears `WORLD_RADIUS` (3700 square, inner corner 14283 > 14000) and packs **4x3 = 12 crypts, up
+from 6**.
+
+**Other fixes:** the Emberblink nova and Gloam Nova both damaged submerged/stalking enemies (they
+skipped the `isTargetable()` guard every other damage sweep honors); Comfort's rest check was
+aggro-only **world-wide**, so on a 28000px map with a 620px-leash Duskrunner *something* was always
+hunting you and resting silently never fired again in the badlands (now scoped to 900px); dungeon
+dwellers got a free hit on arrival (descending now calls a new `Enemy.resetAttackState`, so the
+first swing you see underground plays its full telegraph); epic loot at 4/6/8% made "never saw one"
+the *likely* outcome for a run, so rates went to 10/16/22% **plus a pity counter** (guaranteed after
+8 dud containers — verified forcing at exactly 8); the Corpselight orb's 9000ms lifetime at 170px/s
+was ~1.5km of chase, now 4200ms **plus a real miss rule** in `Projectile` (once it has come close
+and is drifting away again, the dodge *succeeded* — it stops tracking and fizzles); and a Class tab
+was added to the Character menu, deriving its text from `affinityLines` so it can't drift from the
+picker card.
+
+**Content gaps closed:** the bayou had **no food at all** — `mirejaw_meat` shipped in Phase 4b
+marked "cooking recipes land later" and that never happened — so three dishes now land, also giving
+`swamp_moss`/`water_lily` their first use. And all six bayou trophies are Common/**Tier 3** with
+`REFINE_RECIPES` stopping at tier 2, so the deepest trophies could only ever be gambled raw: added
+**Mire Shard**, a tier-3 refine row, and a **Mire Crucible** (Relic Forge Lvl 4). The Convert tab
+was generalized over a new `SHARD_CONVERSIONS` table rather than gaining a second hardcoded block.
+Note `tsc` *passed* on the half-done version of this — TypeScript's arity rule let the old
+zero-arg `convertGloamToEmber` satisfy the new `convert(id)` signature while silently ignoring the
+id; caught by reading, not by the compiler.
+
+**World:** the content-less **Windswept Dunes are gone** from the biome pool (`Dunes.ts` kept on
+disk unreferenced — tier 4 is where the next real biome slots in, per the user: "1 but there will
+eventually be another biome"). Bayou's unlock radius came in 6500 to 4200, `LOWER_FALLOFF` 0.9 to
+1.2, and the bayou content band tightened to r 4400-9000. Measured live: **0 dunes coverage**, and
+beyond the badlands the mix is **63% bayou / 24% badlands / 8% forest**. POI counts up across the
+board (dens 16 to 30, forges/shrines/lodges 4-5 to 9, shacks 8 to 14), and the Sunken Gorge now has
+**two maws into one interior** — separate lairs would mean two bosses and two win conditions in a
+one-life run, whereas separate doors just mean the finale isn't a cross-map trek.
+
+**Combat feel:** magic weapons' whole selling point was bypassing flat armor — but **enemies have
+no armor stat**, so against them the bypass did *nothing*, leaving the Gloam Brand at 44 DPS vs the
+Pike's 52 and Sword's 53 *and* resisted by the gloam-casters. They now carry a data-driven on-hit
+detonation (`WEAPON_ON_HIT_BURST`), fired only from the primary hit so it can never chain. Set
+bonuses now match on **lineage + rank**, granting the bonus of the **weakest piece worn**, so
+crafting one next-tier piece no longer deletes it (verified: 1 and 2 Mirehide pieces both keep
+Emberblink; the full set upgrades to Mireblink). Poison capped **5 to 3 stacks** with the dose cut
+9 to 6 dps (45 dps that bypassed armor *and* halved healing was a delete button; measured 18 now).
+The Mosswretch now **rears back** and swells 1.4x in green via a new optional `SwingConfig.tell`,
+so its reach is readable without violating the "no world-space red arcs" lock. Every named fight
+now announces itself with a **name card, camera kick and sting** (`BOSS_SUBTITLES` — a future boss
+is one row), and the Miretyrant went 3200 to 4600 HP and gained a phase-3 hazard: its slams and
+rolls leave **permanent mire pools** that slow and poison, so the arena closes in rather than the
+bar just getting longer.
+
+**Verified live throughout** (`preview_eval`): 12 crypts all hidden and outside the world circle
+with zero overlaps, 2 maws, biome mix, the 1142 to 115 cull, the set-bonus matrix across both
+lineages, magic burst hitting a 40px neighbour for 60 while a 400px one is untouched and the source
+is never double-hit, poison capping at 18 dps, epic pity firing at container 8, upgrade-ladder
+discovery holding lvl3 back until lvl2, attack reset on descend, Comfort ignoring a 5000px hunter
+but not a 100px one, and the boss card being idempotent. `tsc` + `npm run build` clean, zero
+console errors. **One caveat worth a playtest:** a dodged homing orb still trails for ~2.4s when the
+player is only just outpacing it (170px/s orb vs sprint) — much better than the old 9s, not instant.
+
+**Two verification traps worth remembering.** The preview tab throttles when backgrounded (frame
+73 to 75 across a whole call), which made a projectile look immortal; and a fresh reload sits behind
+the character picker, which uses the **pause freeze** — so physics never steps and *nothing moves*,
+which reads exactly like a broken projectile. Both were mine, not the game's. Drive the loop with
+`game.loop.step()` and check `isPaused`/`physics.world.running` before trusting any motion test.
+
+**Next: a playtest.** Every number here is first-pass, and the density/biome-mix changes especially
+want real play rather than sampling.
+
 ### B4-P3 — Class identity: skill affinities + stat potency (2026-07-22, Opus)
 
 Plan: `.claude/plans/b4-p3-class-identity.md`. B4-P1 shipped the run-start picker, but all
@@ -332,148 +455,3 @@ the real dev server.
 **No screenshots** — the Browser pane isn't displayed in this environment, so the page never
 composites frames; everything above was measured from live render data instead. All numbers
 are first-pass and want a playtest.
-
-### B4-P2 — Epic loot pool + starter-ability nerf (2026-07-22, Opus)
-
-Plan: `.claude/plans/b4-p2-epic-loot-and-starter-abilities.md`. Two problems that
-turned out to be one problem.
-
-**The bug in the design B4-P1 shipped:** all five characters were pre-equipped with
-`special_gloamstep_band` / `special_gloam_focus` / `back_bloodpact_shroud` — which are
-**byte-identical to the terminal outputs of the Gemwright jewelry chain**
-(`Jewelry.ts`). Earning one legitimately costs Duneshaper → Duneshaper's Heart →
-Gemwright tier-1 upgrade → find a crypt → beat a bespoke warden → crack the vault geode
-→ moonsilver + gem. The whole crypt→gem→jewelry progression had **no reward left at the
-end of it**. **The system that was specced and never built:** the biome-3 roadmap's Phase
-2b called for a shared low-chance special-item pool on every chest table; 2b shipped only
-the jewelry half, and there was no `EPIC_LOOT` anywhere in `src/`.
-
-**Locked with the user (`AskUserQuestion`, all as recommended):** lesser variants of the
-same three abilities (not new starter abilities, not stripping them); the epic pool holds
-new found-only abilities *and* passive uniques; the pool is **tiered by POI depth**; a
-rare drop gets a distinct toast plus a container glow.
-
-- **`AbilityDef` gained `family` + `power`** (`Abilities.ts`). The id names an
-  item-granted active, the **family** names the effect `castAbility()` runs, and `power`
-  scales every magnitude it reads (reach, damage, i-frames, active window) — cooldown
-  stays per-def, so a weaker variant can also be a slower one. That's what lets two grades
-  of one effect coexist **as pure data** with no duplicated dispatcher branch. `power`
-  multiplies *alongside* (not instead of) the jewelry `abilityPowerMult()` hook.
-- **Three lesser variants**, granted by all five characters (`Characters.ts` startingEquip
-  swapped; `recomputeAbilities()` needed **zero** changes since it derives Q/E/R purely
-  from `ItemDef.grantsAbility` — the same reason B4-P1 needed no ability plumbing):
-  Lesser Gloamstep (0.60 power / 9s), Lesser Gloamburst (0.55 / 14s), Lesser Bloodpact
-  (0.50 / 30s). **Start-only** — no recipe, no loot entry.
-- **Bug fixed while in there:** `abilityEntries()` hardcoded `key === "r"` for the active
-  glow, i.e. it assumed R == Bloodpact. Generalized to `activeUntilFor(def.family)`.
-  Verified it matters: with Aegis on R the old check read `bloodpactUntil` (0) and would
-  have reported the slot inactive mid-window.
-- **Three found-only actives**, each reusing a proven primitive rather than inventing a
-  system: **Gravebind** (castNova's loop with the shove inverted — yank to a hold ring +
-  slow, no damage), **Spirit Lance** (a 420px line through the shared
-  `dealAbilityDamage(…, "magic")` helper, so resists and the damage-number tint come free;
-  only new geometry is a point-to-segment distance), **Drowned Aegis** (a timed window
-  added into the **existing additive reduction bucket**, so it lands under the shared 0.75
-  cap and can never be stacked into immunity).
-- **Six passive uniques** + a genuinely new `statusResistPct` channel on `EquipPassive`
-  (bleed/poison dose mitigation — nothing owned status resistance before, so it collides
-  with neither the relic combat-stat layer nor heavy armor's magic/fire mitigation).
-- **`src/systems/EpicLoot.ts`** (new, framework-free) owns the three tiered pools; the
-  roll lives **inside `LootContainer.rollIfEmpty`** because that method's `rolled` flag is
-  the real gate — whichever of the seven call sites fires first wins, so putting the roll
-  beside it would have been a coin-flip. A `rollContainerLoot()` helper + `epicPoolFor()`
-  keyed off the **loot table's identity** (the table *is* the POI's identity) means no
-  call site carries a tier argument that can drift, and a future POI gets it by
-  construction. New `"epic"` `LogKind` routes to the prominent gold center toast with no
-  UI code (it just isn't `"recipe"`/`"material"` in `onNewEntry`), fired from
-  `discoverMaterial()` — already the choke point every container move reconciles through.
-  The container glow is a **tint swap on the glow each POI already has** (taking the
-  container's own base tint as a param so existing per-POI colours are preserved), NOT a
-  second glow object — so there's no extra infinite tween to leak.
-
-**Verified live** (`preview_eval`, all measured not eyeballed): blink **132px lesser vs
-220 full**, nova **17 dmg/82px vs 30 dmg/150px**, bloodpact **3.0s/17.5% vs 6.0s/35%**,
-every cooldown exact (9/6/14/10/30/24/14/12/26s), Ring of Quickening still multiplies
-(×0.85 → 6000→5100ms); gravebind pulls at 100/250px and not 400px with the slow applied
-only to those pulled; lance hits on-axis, misses 60px off-axis and past 420px, and scales
-by the target's magic multiplier (a Hexling is **weak** ×1.25 → 55→69, so the resist layer
-routes correctly); Aegis 100→40 dmg and **clamps at 25 when stacked with a −50% relic**
-(the cap holds); Mireborn Cloak −30% on both bleed and poison DPS. **Epic rolls: 20k per
-tier → 4.04% / 6.00% / 8.13% vs spec 4/6/8%, zero double-epics, every pool key reachable,
-actives T3-exclusive, re-roll idempotent** — plus **4000 rolls through the REAL in-game
-shack path** (`respawnShackGuards` → `rollContainerLoot`) at 3.9%, only T1 keys, never an
-active. Toast fires as kind `"epic"` while plain materials keep the quiet blue path; glow
-tint swaps `#ffd873`→`#fff6d0` and hides when emptied. `tsc` clean; zero console errors;
-dashboard gained a live **Epic Loot** tab (3 pools + all 9 abilities); `RECIPES.md`
-updated. **Screenshots were not possible this session** — the Browser pane isn't displayed
-in this environment, so the ability bar was verified by asserting its render data
-(names/textures/cooldowns/active flags) rather than visually.
-
-**Not done / next:** the epic drop has no bespoke reveal FX (the toast + glow are the
-whole tell — `RelicRevealFx` is built around a roll, not a pickup); all numbers are
-first-pass and want a playtest; the toast dedupes on `discovered`, so a *second* copy of
-the same epic won't re-toast (accepted — they're `maxStack: 1` uniques).
-
-### B4-P1 — Start-of-run base character (2026-07-22, Opus)
-
-Plan: `.claude/plans/b4-p1-start-of-run-character.md`. **The first milestone after the
-biome-3 umbrella closed**, and the roadmap's own top deferred candidate
-(`biome-3-and-new-systems-roadmap.md`, Phase 5 "Later"). Every run used to start identically —
-a level-1 `PlayerProgression` with 0 stats, an empty backpack/`Equipment`, an empty Q/E/R bar —
-so the roguelike loop varied how a run *went* but never how it *began*. Now a **run-start
-class picker** offers a fixed roster of five survivors, each bundling stats, a kit, a granted
-ability, and a lasting double-edged trade-off. It also closes a real dead end: the B3-P2a
-ability framework was only reachable via the Sunken Crypt wardens or `__dev.give`, so most runs
-never touched it.
-
-**Locked with the user (`AskUserQuestion`):**
-1. **Fixed roster, always all available** — not an RNG 3-card draw. The pick is a playstyle
-   decision, not a dealt hand.
-2. **One card bundles all four axes** — identity + starting stats + kit + ability + modifier.
-3. **Modifiers are double-edged with NO score effect.** `Run.score()` stays kills +
-   speed-scaled completion bonus, so a harder card can never become a leaderboard lever
-   (verified: score is byte-identical across characters for identical run inputs).
-4. **The "innate" ability is a real ability-granting SPECIAL ITEM pre-equipped in its slot**,
-   not a separate innate channel — it fills exactly the same mechanical role as any other
-   equipment. This meant **zero new ability plumbing**: `recomputeAbilities()` already derives
-   Q/E/R from `ItemDef.grantsAbility`, so unequipping the special darkens the key (verified).
-
-**`src/systems/Characters.ts`** (new, framework-free like `Run`/`Buffs`/`Relics`) is pure data
-plus a `RunCharacter` accessor **whose getter shape mirrors `RelicManager`'s**, so every hook
-site reads a character exactly the way it already reads relics. A null character returns
-neutral values throughout, so the game stays playable if the picker is ever bypassed. The
-roster: **Vagabond** (Blink; +10% move / −10% stamina), **Reaver** (Bloodpact; +25% damage
-dealt / +25% taken), **Ashcaller** (Nova; +30% XP / −15% HP), **Warden** (Blink; +20% HP /
-+20% attack stamina), **Ascetic** (Nova; −20% damage taken / elites twice as common, and no
-starting kit at all).
-
-**`src/ui/CharacterSelectUI.ts`** (new) is a five-card modal in the `WelcomeUI` style — flat
-`scrollFactor(0)` objects (never a Container, per the standing input-hit-testing bug), depth
-band 3620+. **Select-then-confirm**, because a mis-click would silently decide a whole hardcore
-run; committing is final, and there is deliberately **no cancel path** (Esc is guarded — a run
-must have a character).
-
-**MainScene:** the picker **chains off the welcome overlay** rather than stacking on it, and —
-unlike the welcome — shows on **every** run including New Run. It reuses the welcome/pause
-freeze verbatim, so **deciding your build never burns speedrun time** (verified: `run.elapsedMs`
-holds at 0 across stepped frames while it's open). Each **modifier adds exactly one term at an
-existing choke point** — `damageBonusMult`, `applyDamageToPlayer`, the `moveMult` sum,
-`awardSkillXp`, `effectiveStaminaCostMult`, `rollElite`, `syncStatBonuses` — never new math. Two
-deliberate placements: the character's damage-taken scales `amount` **before** the reduction
-bucket (it's a property of the run, not another stackable resistance, so a +25% card can't be
-erased by the 75% reduction cap), and its HP/stamina % is a **third independent linear add** off
-the 100 base, matching the 2026-07-15 additive rule so it can't compound with relic %. The run
-HUD and run-end screen both name the survivor.
-
-**Verified live** via `preview_eval` (the backgrounded-tab render loop needed the `loop.step`
-trick): the welcome→picker chain and its freeze; the full grant for multiple cards (stats,
-pre-equipped special, tools onto the hotbar, empty-kit case); Q/E/R lighting up **through the
-item** and going dark on unequip; a granted ability actually casting; every modifier hook
-measured against a neutral baseline (damage dealt 1→1.25, taken 20→25 and 20→16 **including the
-magic/armor-bypass branch**, XP 10→13, stamina 1→1.2, elites 1663→3223 per 20k seeded rolls,
-pools 112→97 HP and 106→96 stamina); score isolation; and `scene.restart()` leaving **zero**
-carryover. Card geometry was measured rather than eyeballed — the first pass left ~150px of dead
-space per card, so `CARD_H` was cut 512→400 against the real content bottom. `tsc` clean, zero
-console errors. Dashboard gained a **Characters** tab importing `Characters.ts` live (drift-free);
-no `RECIPES.md` change (no recipes touched).
-

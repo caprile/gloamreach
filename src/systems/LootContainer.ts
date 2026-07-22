@@ -40,7 +40,10 @@ export class LootContainer {
 
   // No-op on repeat calls so re-opening an already-looted (but not yet
   // guard-respawned) chest doesn't top it back up.
-  rollIfEmpty(table: LootRollEntry[], opts: { epics?: EpicPool; rng?: () => number } = {}): void {
+  rollIfEmpty(
+    table: LootRollEntry[],
+    opts: { epics?: EpicPool; rng?: () => number; pity?: { due: boolean; record(got: boolean): void } } = {},
+  ): void {
     if (this.rolled) return;
     this.rolled = true;
     const rng = opts.rng ?? Math.random;
@@ -51,11 +54,18 @@ export class LootContainer {
     }
     // The epic rides the same one-shot gate as the table itself.
     const epics = opts.epics;
-    if (epics && epics.keys.length > 0 && rng() < epics.chance) {
-      const key = epics.keys[Math.floor(rng() * epics.keys.length)];
-      // addStack, not add: epics are maxStack-1 uniques, and add()'s by-key
-      // merge would be the wrong primitive if one ever gained a tier.
-      this.items.addStack({ key, count: 1 });
+    if (epics && epics.keys.length > 0) {
+      // Pity forces a hit once enough containers have come up empty, so a run
+      // can't miss the system entirely on bad luck. The roll is still made
+      // first, so a lucky hit resets the counter the same as a forced one.
+      const got = rng() < epics.chance || (opts.pity?.due ?? false);
+      if (got) {
+        const key = epics.keys[Math.floor(rng() * epics.keys.length)];
+        // addStack, not add: epics are maxStack-1 uniques, and add()'s by-key
+        // merge would be the wrong primitive if one ever gained a tier.
+        this.items.addStack({ key, count: 1 });
+      }
+      opts.pity?.record(got);
     }
   }
 

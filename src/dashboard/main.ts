@@ -386,7 +386,7 @@ const ENEMIES: EnemyStat[] = [
   },
   {
     name: "The Miretyrant (FINAL BOSS)",
-    hp: 3200,
+    hp: 4600,
     speed: 66,
     aggro: 330,
     attacks: [
@@ -395,6 +395,7 @@ const ENEMIES: EnemyStat[] = [
       { label: "Muck Slam (radial AoE under itself, 150px, growing telegraph)", damage: 58, telegraphMs: 820 },
       { label: "Death Roll @65% HP (travelling multi-hit spin along a locked line, 300px/s for 900ms, can re-hit every 420ms — outrun it ACROSS, never along)", damage: 40, telegraphMs: 780 },
       { label: "Bellow (own 15s timer, 8.5s enraged — surfaces 3 adds, 5 enraged; max 8 concurrent). Not damage: the adds are the attack.", damage: 0, telegraphMs: 700 },
+      { label: "Mire Pools @35% HP (phase 3) — every Muck Slam and Death Roll leaves a permanent 90px pool that slows to 0.55x and poisons 7/s. Not an attack it aims: the ARENA closes in.", damage: 0, telegraphMs: 0 },
     ],
     loot: "8-12 Gloam Shard + 1 Tier-2 Boss Trophy (unreachable in practice — this kill wins the run)",
     notes:

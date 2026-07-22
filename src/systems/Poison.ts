@@ -31,7 +31,14 @@ import { BleedManager } from "./Bleed";
 //               applied buff id. Letting the caller re-arm every frame is what
 //               makes leaving the zone self-cleaning: the slot simply lapses.
 export class PoisonManager {
-  private doses = new BleedManager();
+  // THREE stacks, not bleed's five. At five, a clump of Blighttoads (they spawn
+  // in 2-3s and swarm) stacked to 45 dps that bypassed flat armor AND halved
+  // every heal — enough to delete a full-HP player in a few seconds with no
+  // counterplay but running (the user playtest: "poison stacking is wild
+  // damage"). Three keeps the ramp — being bitten repeatedly still escalates —
+  // without the tail where a bad five seconds is simply lethal.
+  private doses = new BleedManager(PoisonManager.MAX_DOSE_STACKS);
+  static readonly MAX_DOSE_STACKS = 3;
   private env: { dmgPerSec: number; remainingMs: number } | null = null;
   private envAccum = 0; // fractional environmental damage carried across frames
 

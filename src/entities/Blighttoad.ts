@@ -35,7 +35,7 @@ const BITE_DAMAGE = 66; // physical, mostly eaten by bayou-tier armor — the po
 // heal source while it runs (Poison.ts) — so it also blocks you from eating your
 // way out of a fight. Stacks per bite (to 4×), which is the real pressure: a
 // clump of toads you don't break off from ramps to 36 armor-ignoring dps.
-const BITE_POISON_DPS = 9;
+const BITE_POISON_DPS = 6; // 9 -> 6 alongside the 3-stack poison cap (was 45 dps at full stacks)
 const BITE_POISON_MS = 6000;
 
 const BITE_SWING: SwingConfig = {

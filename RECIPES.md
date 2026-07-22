@@ -140,6 +140,7 @@ fixed destination level.
 | Campfire | Lvl 4 | Emberforge Hearth | 3 Embersteel Ingot, 13 Stone | Best campfire dishes |
 | Relic Forge | Lvl 2 | Gloam Conduit | 10 Stone, 1 Gloam Shard | Unlocks the Refine tab |
 | Relic Forge | Lvl 3 | Ember Kiln | 3 Embersteel Ingot, 13 Stone | Unlocks Gloam → Ember conversion (Convert tab) |
+| Relic Forge | Lvl 4 | Mire Crucible | 3 Gloamsteel Ingot, 16 Stone | Unlocks Ember → Mire conversion + tier-3 refining |
 | Smelter | Lvl 2 | Ember Crucible | 1 Gremlin King's Heart, 7 Stone | Smelt rare Cinderforged Ore → Embersteel Ingot |
 | Gemwright's Table | Lvl 2 | Gloamheart Setting | 1 Duneshaper's Heart, 3 Moonsilver | Unlocks ability-jewelry (Q/E/R specials) — **biome-3 dormant** (the Duneshaper's Heart is only reachable once biome 3 demotes the Duneshaper from win-boss) |
 
@@ -344,6 +345,14 @@ that spend a plentiful earlier-biome leftover (boar_meat).
 | Emberbloom Broth | Lvl 3 | 2 Emberbloom, 1 Sunfruit, 1 Gloamcap | Emberbloom Broth | +2.5 HP/s for 34s |
 | Sunscorch Feast | Lvl 4 | 1 Shishkabob, 2 Duskrunner Meat, 1 Gloamcap, 1 Sunfruit | Sunscorch Feast | +3.5 HP/s for 30s |
 | Ember-Glazed Skewer | Lvl 4 | 1 Shishkabob, 1 Duskrunner Meat, 1 Emberbloom, 1 Boar Meat | Ember-Glazed Skewer | +3.5 HP/s for 28s |
+| Seared Mirejaw Tail | Lvl 3 | 1 Shishkabob, 1 Mirejaw Meat | Seared Mirejaw Tail | +3 HP/s for 26s |
+| Mossbound Mirejaw | Lvl 4 | 1 Shishkabob, 1 Mirejaw Meat, 2 Swamp Moss | Mossbound Mirejaw | +3.5 HP/s for 34s |
+| Lily-Gilded Feast | Lvl 4 | 1 Shishkabob, 2 Mirejaw Meat, 2 Water Lily, 1 Swamp Moss | Lily-Gilded Feast | +4 HP/s for 36s |
+
+The three bayou dishes close a real gap: `mirejaw_meat` shipped in Phase 4b marked
+"cooking recipes land later" and that never happened, so the deepest biome had no
+food at all (playtest: "is there any food in bayou?"). They also give `swamp_moss`
+and `water_lily` — harvestables that had existed with no recipe — their first use.
 
 ## Jewelry — Gemwright's Table (`src/systems/Jewelry.ts`) — B3-P2b
 
@@ -564,9 +573,15 @@ a real payoff.
 | Common → Refined | 3 Common Tier-1 (any species) | 2 Gloam Shard | 1 Refined Trophy (rolls Uncommon) | biome 1 |
 | Uncommon → Radiant | 3 Uncommon Tier-1 (any species) | 3 Gloam Shard | 1 Radiant Trophy (rolls Rare) | scaffold — no raw Uncommon source in biome 1 |
 | Common (T2) → Ember-Refined | 3 Common Tier-2 badlands (any species) | 2 Ember Shard | 1 Ember-Refined Trophy (rolls Uncommon) | badlands, Phase 5 |
+| Common (T3) → Mire-Refined | 3 Common Tier-3 bayou (any species) | 2 **Mire Shard** | 1 Mire-Refined Trophy (rolls Uncommon) | bayou — the tier-3 row the bayou shipped without |
 
-**Gloam → Ember conversion:** 3 Gloam Shards → 1 Ember Shard, at the Relic
-Forge's Convert tab.
+**Shard conversion** (Relic Forge Convert tab, one row per unlocked step —
+`SHARD_CONVERSIONS`):
+
+| Conversion | Ratio | Unlocked by |
+|---|---|---|
+| Gloam → Ember | 3 Gloam Shard → 1 Ember Shard | Relic Forge Lvl 3 (Ember Kiln) |
+| Ember → Mire | 3 Ember Shard → 1 Mire Shard | Relic Forge Lvl 4 (**Mire Crucible**) |
 
 **Gloaming Vein POI:** ~5 shielded ore nodes (Stone-Pickaxe-gated, non-respawning,
 1–2 Gloam Shard each) ringed around the **Gloamwarden** guardian; the nodes stay

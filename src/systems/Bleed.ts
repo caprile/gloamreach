@@ -15,12 +15,19 @@ interface BleedStack {
 export class BleedManager {
   private stacks: BleedStack[] = [];
   private accum = 0; // fractional damage carried across frames
-  private static readonly MAX_STACKS = 5;
+  // Bleed's own default. Poison composes this class with a LOWER cap — see
+  // PoisonManager — because poison also cripples regen and bypasses flat armor,
+  // so the same stack count is far more punishing coming from poison.
+  private readonly maxStacks: number;
+
+  constructor(maxStacks = 5) {
+    this.maxStacks = maxStacks;
+  }
 
   // Add a bleed stack. At the cap, refresh the shortest-lived stack rather than
   // growing unbounded — repeated rolls keep bleed dangerous without runaway DPS.
   apply(dmgPerSec: number, durationMs: number): void {
-    if (this.stacks.length >= BleedManager.MAX_STACKS) {
+    if (this.stacks.length >= this.maxStacks) {
       let shortest = 0;
       for (let i = 1; i < this.stacks.length; i++) {
         if (this.stacks[i].remainingMs < this.stacks[shortest].remainingMs) shortest = i;
