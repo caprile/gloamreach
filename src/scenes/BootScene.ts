@@ -2600,9 +2600,11 @@ export class BootScene extends Phaser.Scene {
     // convention) and every elite is the same silhouette in crimson/gold, so
     // "elite" reads identically across all three biomes.
 
-    // Mirejaw (34x16) — a long, low gloam-gator: heavy tail at the left, ridged
+    // Mirejaw (48x22) — a long, low gloam-gator: heavy tail at the left, ridged
     // scutes down the back, and a long toothed snout at the right. The bayou's
     // apex regular, and the silhouette that should read as "get out of the water."
+    // Drawn BIG (2026-07-22, the user: "the gators are too small") — it's also
+    // scaled 1.55x in-world, so it towers over the rest of the roster.
     const drawMirejaw = (
       key: string,
       hide: number,
@@ -2612,37 +2614,45 @@ export class BootScene extends Phaser.Scene {
       eye: number,
     ) => {
       g.clear();
-      // squat legs
+      // squat splayed legs
       g.fillStyle(0x2a3328, 1);
-      g.fillRect(8, 12, 3, 4);
-      g.fillRect(14, 13, 3, 3);
-      g.fillRect(20, 12, 3, 4);
-      // tail (left) + body
+      g.fillRect(11, 17, 4, 5);
+      g.fillRect(19, 18, 4, 4);
+      g.fillRect(28, 18, 4, 4);
+      g.fillRect(35, 17, 4, 5);
+      // heavy tapering tail (left) + barrel body
       g.fillStyle(hide, 1);
-      g.fillTriangle(0, 8, 7, 5, 7, 12);
-      g.fillRect(6, 5, 18, 8);
+      g.fillTriangle(0, 11, 10, 6, 10, 17);
+      g.fillRect(9, 6, 26, 12);
       // belly
       g.fillStyle(belly, 1);
-      g.fillRect(6, 11, 18, 2);
-      // long snout (right), slightly tapered
-      g.fillStyle(hide, 1);
-      g.fillRect(23, 6, 9, 5);
-      g.fillRect(29, 7, 4, 3);
-      // teeth along the jaw line
-      g.fillStyle(teeth, 1);
-      for (let i = 0; i < 5; i++) g.fillTriangle(24 + i * 2, 11, 26 + i * 2, 11, 25 + i * 2, 13);
-      // dorsal scutes
+      g.fillRect(9, 15, 26, 3);
+      // tail banding
       g.fillStyle(scute, 1);
-      g.fillTriangle(8, 5, 11, 5, 9, 1);
-      g.fillTriangle(13, 5, 16, 5, 14, 0);
-      g.fillTriangle(18, 5, 21, 5, 19, 1);
-      g.fillRect(6, 4, 18, 1);
+      g.fillRect(3, 10, 1, 4);
+      g.fillRect(6, 9, 1, 6);
+      // long heavy snout (right), tapering to the nose
+      g.fillStyle(hide, 1);
+      g.fillRect(34, 8, 11, 8);
+      g.fillRect(42, 9, 6, 5);
+      // jaw line + teeth
+      g.fillStyle(0x140f10, 1);
+      g.fillRect(35, 13, 13, 1);
+      g.fillStyle(teeth, 1);
+      for (let i = 0; i < 7; i++) g.fillTriangle(35 + i * 2, 13, 37 + i * 2, 13, 36 + i * 2, 16);
+      // dorsal scute ridges — two staggered rows down the back
+      g.fillStyle(scute, 1);
+      g.fillTriangle(12, 6, 16, 6, 14, 1);
+      g.fillTriangle(19, 6, 23, 6, 21, 0);
+      g.fillTriangle(26, 6, 30, 6, 28, 1);
+      g.fillTriangle(32, 6, 35, 6, 33, 2);
+      g.fillRect(9, 5, 26, 2);
       // raised eye ridge — the part that stays above the waterline
       g.fillStyle(eye, 1);
-      g.fillRect(24, 5, 2, 2);
+      g.fillRect(35, 7, 3, 3);
       g.fillStyle(0x140f10, 1);
-      g.fillRect(25, 5, 1, 1);
-      g.generateTexture(key, 34, 16);
+      g.fillRect(36, 8, 2, 1);
+      g.generateTexture(key, 48, 22);
     };
     drawMirejaw("mirejaw", 0x4a5a44, 0x6a7358, 0x33402f, 0xe8e4c8, 0xc9d94a);
     drawMirejaw("mirejaw_elite", 0x6a1f2a, 0x3f1020, 0xf0c040, 0xffe8a0, 0xf0c040);

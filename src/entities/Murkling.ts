@@ -14,19 +14,24 @@ import type { SwingConfig } from "./Enemy";
 // it just SWARMS, closing in a loose weave so a pack doesn't stack into one
 // pixel, and it keeps the shortest telegraph in the game (a flicker, not a tell).
 
-const AGGRO_RADIUS = 190;
-const DEAGGRO_RADIUS = 430;
-const CHASE_SPEED = 104; // faster than the player's walk — you cannot simply stroll away
-const WANDER_SPEED = 26;
+const AGGRO_RADIUS = 300;
+const DEAGGRO_RADIUS = 640;
+// 172px/s — the FASTEST thing in the bayou and the only creature that can hang
+// with a sprinting player (166-229 depending on Running/relics). That IS the
+// swarm's identity: you cannot outrun a Murkling nest, you kill it, sweep it
+// with an AOE arc, or blink out. Every other bayou creature is escapable on
+// foot; this one makes you spend something.
+const CHASE_SPEED = 172;
+const WANDER_SPEED = 30;
 const MELEE_RANGE = 26;
-const PACK_AGGRO_RADIUS = 300; // wide: one Murkling waking means the whole reed-bed wakes
+const PACK_AGGRO_RADIUS = 340; // wide: one Murkling waking means the whole reed-bed wakes
 
-const MAX_HEALTH = 22; // dies to a single bayou-tier weapon hit — by design
-// 50 raw. Bayou armor is thick (Gloamsteel full set = 42 flat), so a swarm unit
-// needs a real number to land more than the floor-of-1 chip; at 50 it nets ~8
-// through full plate and ~20 through Mirehide light, which with 4-6 of them
-// swinging is genuine pressure without being a one-sided execution.
-const CLAW_DAMAGE = 50;
+const MAX_HEALTH = 40; // still ~one bayou-tier hit for a strong weapon — by design
+// 62 raw. Bayou armor is thick (Gloamsteel full set = 42 flat), so a swarm unit
+// needs a real number to land more than the floor-of-1 chip; at 62 it nets ~20
+// through full plate and ~32 through Mirehide light — with 4-6 of them swinging
+// on a 130ms cooldown, a nest you ignore genuinely kills you.
+const CLAW_DAMAGE = 62;
 
 // The shortest swing in the roster — a skitter-and-slash, not a telegraphed
 // commitment. You don't dodge an individual Murkling claw; you kill the pack or

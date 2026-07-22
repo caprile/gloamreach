@@ -22,42 +22,59 @@ import type { SwingConfig } from "./Enemy";
 
 type MirejawMode = "lurk" | "lunging" | "hunting";
 
-const AMBUSH_RADIUS = 150; // lurking, player this close → commit the lunge
-const STALK_RADIUS = 300; // lurking, drifts toward a player inside this to line one up
-const LURK_DRIFT = 26; // px/s — a submerged gator repositioning, deliberately slow
+// Tuning pass (2026-07-22, the user): the first numbers were sized against the
+// BADLANDS roster, not against what a bayou-ready player actually is — sprinting
+// at 166-229px/s (Running skill + move relics, up to ~309 on a kill-rush),
+// dashing at 450, and blinking 220px on a 6s cooldown, while hitting for ~45-70
+// (130-200 on a crit). A 66px/s chaser with 130 HP was outrun at a WALK and died
+// in two swings. Everything below is scaled to that reality: this is the bayou's
+// apex regular and it has to be able to genuinely run you down.
+const AMBUSH_RADIUS = 240; // lurking, player this close → commit the lunge
+const STALK_RADIUS = 460; // lurking, drifts toward a player inside this to line one up
+const LURK_DRIFT = 44; // px/s — a submerged gator repositioning, still slow enough to spot
 const LURK_ALPHA = 0.4; // half-sunk, not invisible (cf. Sandmaw's 0.18)
+// Stalking is SLOW (that's what makes a lurking gator readable), which means a
+// player who simply keeps walking can never be ambushed — the stalk can't close
+// on 95px/s, so the creature would politely watch you leave forever (caught in
+// testing: it fell 537px behind a walking player and never engaged). After this
+// long stalking without getting an ambush, it abandons stealth and HUNTS. That's
+// the escalation an apex predator should have, and it's what stops the bayou's
+// signature creature from being trivially ignorable.
+const STALK_PATIENCE_MS = 2400;
 
-const CHASE_SPEED = 66; // surfaced hunt — slower than the player, so it's escapable on foot
-const DEAGGRO_RADIUS = 460;
+// Faster than a player's WALK (95) and most of a sprint, so escaping on foot
+// means actually committing to a sprint/dash instead of strolling off.
+const CHASE_SPEED = 138;
+const DEAGGRO_RADIUS = 720; // sticky (the Duskrunner's 620 precedent) — an apex predator commits
 
-const MAX_HEALTH = 130; // the bayou's tanky regular (badlands topped out at Hexling 95)
+const MAX_HEALTH = 320; // ~5-6 bayou-tier hits; the badlands' 95-HP Hexling was two
 
-// The ambush: a long telegraph, then a fast locked-line lunge. Big enough to
-// take a third of a bayou-geared player's HP through Gloamsteel plate, which is
-// the point — being caught flat-footed at the water's edge should hurt.
+// The ambush: a long telegraph, then a fast locked-line lunge. It has to cover
+// enough ground to catch a sprinting player, so the lunge outruns a sprint while
+// it lasts — the counterplay is the 430ms tell + the locked direction, not speed.
 const LUNGE_WINDUP_MS = 430; // jaw-open/coil tell — the sidestep window
-const LUNGE_SPEED = 400;
-const LUNGE_MAX_DIST = 215;
-const LUNGE_HIT_RADIUS = 38;
-const LUNGE_DAMAGE = 85;
-const LUNGE_KNOCKBACK = 150;
+const LUNGE_SPEED = 560;
+const LUNGE_MAX_DIST = 340;
+const LUNGE_HIT_RADIUS = 44;
+const LUNGE_DAMAGE = 120; // ~78 net through a full Gloamsteel set — being caught really hurts
+const LUNGE_KNOCKBACK = 190;
 const LUNGE_RECOVER_MS = 720; // beached/planted after the snap — the punish window
-const LUNGE_COOLDOWN_MS = 3200;
+const LUNGE_COOLDOWN_MS = 2600;
 // Signature death-roll bleed: the chomp doesn't just hit, it tears.
-const LUNGE_BLEED_DPS = 7;
+const LUNGE_BLEED_DPS = 9;
 const LUNGE_BLEED_MS = 6000;
 
 // The surfaced melee chomp — its bread-and-butter once hunting.
-const CHOMP_DAMAGE = 62;
-const CHOMP_BLEED_DPS = 5;
+const CHOMP_DAMAGE = 85;
+const CHOMP_BLEED_DPS = 6;
 const CHOMP_BLEED_MS = 4000;
 const CHOMP_SWING: SwingConfig = {
-  reach: 40, // a big head on a big body
-  windupMs: 460,
+  reach: 56, // a huge head on a huge body (the sprite is 1.55x now)
+  windupMs: 440,
   strikeMs: 90,
-  recoverMs: 520,
-  cooldownMs: 500,
-  knockback: 80,
+  recoverMs: 500,
+  cooldownMs: 430,
+  knockback: 110,
 };
 
 export class Mirejaw extends Enemy {
@@ -72,6 +89,9 @@ export class Mirejaw extends Enemy {
   private overrideBite: number | null = null;
   private wanderTgt: { x: number; y: number } | null = null;
   private nextRoamAt = 0;
+  // When the current uninterrupted stalk began (-1 = not stalking). Drives the
+  // give-up-on-stealth escalation above.
+  private stalkingSince = -1;
 
   constructor(scene: Phaser.Scene, cfg: { x: number; y: number; elite?: boolean }) {
     const elite = cfg.elite ?? false;
@@ -95,6 +115,7 @@ export class Mirejaw extends Enemy {
       biteDamage: elite ? Math.round(CHOMP_DAMAGE * 1.5) : CHOMP_DAMAGE,
       elite,
       eliteTrophy: "mirejaw_trophy",
+      barScale: 1.5, // big sprite, readable overhead bar
       // Overlapping bony scutes turn a thrust; the belly under them doesn't like
       // an edge. Deliberately the INVERSE of the Fenlurker (resist slash / weak
       // blunt) and distinct from the Mosswretch (resist blunt / weak fire), so
@@ -104,11 +125,12 @@ export class Mirejaw extends Enemy {
     });
     this.lungeDamage = elite ? Math.round(LUNGE_DAMAGE * 1.5) : LUNGE_DAMAGE;
     this.setAlpha(LURK_ALPHA);
-    if (elite) {
-      this.speedMult = 1.1;
-      this.setScale(1.3);
-      this.baseScale = 1.3;
-    }
+    // A gloam-gorged alligator should read as the biggest thing in the swamp
+    // (the user: "the gators are too small"). The texture itself also grew to
+    // 48x22; this scales it past every other common creature.
+    this.setScale(elite ? 2.0 : 1.55);
+    this.baseScale = elite ? 2.0 : 1.55;
+    if (elite) this.speedMult = 1.1;
   }
 
   update(delta: number, playerX: number, playerY: number, now: number): boolean {
@@ -128,6 +150,12 @@ export class Mirejaw extends Enemy {
       // range; otherwise hold still and wait (a lurking gator that patrols
       // reads wrong, and a slow invisible shove feels bad).
       if (dist <= STALK_RADIUS) {
+        // Stalking a target it can't catch → drop the ambush and just hunt.
+        if (this.stalkingSince < 0) this.stalkingSince = now;
+        else if (now - this.stalkingSince >= STALK_PATIENCE_MS) {
+          this.surface();
+          return false;
+        }
         const ang = Phaser.Math.Angle.Between(this.x, this.y, playerX, playerY);
         const spd = LURK_DRIFT * this.speedMult * this.envSpeedMult;
         const vx = Math.cos(ang) * spd;
@@ -135,6 +163,7 @@ export class Mirejaw extends Enemy {
         body.setVelocity(vx, vy);
         this.applyFacing(vx, vy);
       } else {
+        this.stalkingSince = -1; // player left stalk range — patience resets
         this.updateWander(body, now);
       }
       return false;
@@ -206,6 +235,7 @@ export class Mirejaw extends Enemy {
   private submerge(): void {
     this.mode = "lurk";
     this.attackPhase = "none";
+    this.stalkingSince = -1;
     this.setAlpha(LURK_ALPHA);
     (this.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0);
     this.lungeCooldownUntil = this.scene.time.now + LUNGE_COOLDOWN_MS;

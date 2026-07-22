@@ -18,20 +18,24 @@ import type { SwingConfig } from "./Enemy";
 // (the Duskrunner's zero-override pattern), with a smaller radius than a true
 // canid pack — toads rouse the neighbors, they don't hunt as a unit.
 
-const AGGRO_RADIUS = 175;
-const DEAGGRO_RADIUS = 380;
-const HOP_SPEED = 150; // px/s during a hop — it lurches forward in bursts, not a steady walk
-const HOP_DIST = 74; // how far one hop carries
-const HOP_GAP_MS = 620; // planted beat between hops (the burst-move rhythm)
-const WANDER_SPEED = 18;
-const PACK_AGGRO_RADIUS = 200;
+const AGGRO_RADIUS = 270;
+const DEAGGRO_RADIUS = 600;
+// Big committed leaps: 300px/s while airborne, ~150px per hop, with a shorter
+// planted beat — averaging ~145px/s, which keeps pace with a walking player and
+// most of a sprint. The first pass averaged 66px/s and was outwalked trivially.
+const HOP_SPEED = 300; // px/s during a hop — it lurches forward in bursts, not a steady walk
+const HOP_DIST = 150; // how far one hop carries
+const HOP_GAP_MS = 330; // planted beat between hops (the burst-move rhythm)
+const WANDER_SPEED = 20;
+const PACK_AGGRO_RADIUS = 240;
 
-const MAX_HEALTH = 70; // squishier than the Mirejaw/Mosswretch — it trades HP for the DoT
-const BITE_DAMAGE = 52; // physical, mostly eaten by bayou-tier armor — the poison is the payload
-// The dose. 6/s over 6s = 36 damage that armor CANNOT stop, and it halves every
+const MAX_HEALTH = 150; // squishier than the Mirejaw/Mosswretch — it trades HP for the DoT
+const BITE_DAMAGE = 66; // physical, mostly eaten by bayou-tier armor — the poison is the payload
+// The dose. 9/s over 6s = 54 damage that armor CANNOT stop, and it halves every
 // heal source while it runs (Poison.ts) — so it also blocks you from eating your
-// way out of a fight. Stacks per bite, which is the pressure.
-const BITE_POISON_DPS = 6;
+// way out of a fight. Stacks per bite (to 4×), which is the real pressure: a
+// clump of toads you don't break off from ramps to 36 armor-ignoring dps.
+const BITE_POISON_DPS = 9;
 const BITE_POISON_MS = 6000;
 
 const BITE_SWING: SwingConfig = {

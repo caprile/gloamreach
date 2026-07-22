@@ -19,23 +19,26 @@ import type { SwingConfig } from "./Enemy";
 // straight-line chaser is exactly what the base machine models, so unlike the
 // ambushers there's no reason for a bespoke mode field here.
 
-const AGGRO_RADIUS = 165;
-const DEAGGRO_RADIUS = 400;
-const CHASE_SPEED = 36; // the slowest common enemy in the game — always outwalkable
-const WANDER_SPEED = 12;
+const AGGRO_RADIUS = 250;
+const DEAGGRO_RADIUS = 560;
+// Still the SLOWEST common enemy and still outwalkable — that's the bruiser's
+// deal. 36 was comically slow though (a player could circle it at a stroll);
+// 74 means disengaging is a decision, not an afterthought.
+const CHASE_SPEED = 74;
+const WANDER_SPEED = 16;
 
-const MAX_HEALTH = 190; // the wall: ~7 hits with a Gloamsteel weapon, far more without
+const MAX_HEALTH = 420; // the wall: ~7-8 bayou-tier hits, and it does not flinch
 
 // The smash. Huge reach, huge damage, huge tell — and a long recovery, so
 // baiting it out is the intended way to fight one.
-const SMASH_DAMAGE = 95; // nets ~53 through a full Gloamsteel set: a third of a healthy bar
+const SMASH_DAMAGE = 135; // nets ~93 through a full Gloamsteel set — a "that nearly killed me"
 const SMASH_SWING: SwingConfig = {
-  reach: 62, // long arms + a wide sweep — backing off half a step is NOT enough
+  reach: 88, // long arms + a wide sweep — backing off half a step is NOT enough
   windupMs: 780,
   strikeMs: 110,
   recoverMs: 720, // the punish window; a whole weapon combo fits in it
   cooldownMs: 620,
-  knockback: 240,
+  knockback: 300,
 };
 
 export class Mosswretch extends Enemy {

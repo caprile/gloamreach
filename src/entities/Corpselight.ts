@@ -23,20 +23,27 @@ import type { ProjectileConfig, ProjectileHost } from "./Projectile";
 
 type HauntMode = "idle" | "engaged";
 
-const AGGRO_RADIUS = 260;
-const DEAGGRO_RADIUS = 520;
-const PREFERRED_RANGE = 210; // hovers around this — drifts out if crowded, in if too far
-const DRIFT_SPEED = 40; // a slow, weightless float; it never sprints anywhere
-const WANDER_SPEED = 14;
+const AGGRO_RADIUS = 340;
+const DEAGGRO_RADIUS = 700;
+const PREFERRED_RANGE = 240; // hovers around this — drifts out if crowded, in if too far
+const DRIFT_SPEED = 85; // a weightless float — still far under a sprint, it never runs you down
+const WANDER_SPEED = 18;
 const WANDER_RADIUS = 90;
 
-const MAX_HEALTH = 90;
-const ORB_DAMAGE = 26; // magic — bypasses armor entirely, so this IS the net number
-const ORB_SPEED = 110; // deliberately slow enough to walk away from
-const ORB_TURN_RATE = 1.5; // rad/s — a wide, out-turnable arc
-const ORB_LIFETIME_MS = 4200; // hard expiry (a curving orb never trips distance-despawn)
-const ORB_MAX_RANGE = 900; // unused by the homing path, kept honest for the despawn contract
-const CAST_COOLDOWN_MS = 2400;
+const MAX_HEALTH = 190;
+const ORB_DAMAGE = 34; // magic — bypasses armor entirely, so this IS very close to the net number
+// Orb tuning (2026-07-22, the user: "the projectiles fade away really soon"). The
+// first pass paired 110px/s with a 4.2s lifetime = a ~460px leash, so an orb
+// died almost as soon as it was fired and the Corpselight read as harmless. Now
+// 170px/s × 9s ≈ 1500px of pursuit — it genuinely chases you across a fight.
+// The bound that keeps it FAIR is unchanged in spirit: 170 is still well under a
+// bayou-tier sprint (166-229), so running in a straight line outruns it outright;
+// the turn rate only punishes standing still or turning into it.
+const ORB_SPEED = 170;
+const ORB_TURN_RATE = 1.9; // rad/s — a wider arc than before, still out-turnable at speed
+const ORB_LIFETIME_MS = 9000; // hard expiry (a curving orb never trips distance-despawn)
+const ORB_MAX_RANGE = 2200; // unused by the homing path, kept honest for the despawn contract
+const CAST_COOLDOWN_MS = 1900;
 
 export class Corpselight extends Enemy {
   private mode: HauntMode = "idle";

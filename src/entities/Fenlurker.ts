@@ -17,28 +17,31 @@ import { Enemy } from "./Enemy";
 
 type FenMode = "buried" | "surfacing" | "mauling" | "exposed" | "digging";
 
-const AMBUSH_RADIUS = 78; // player this close (+ off cooldown) → burst out
-const STALK_RADIUS = 300; // buried, tunnels toward a player inside this to line up an ambush
-const BURROW_DRIFT = 40; // px/s under the silt — faster than a Sandmaw's crawl (this one hunts)
+const AMBUSH_RADIUS = 120; // player this close (+ off cooldown) → burst out
+const STALK_RADIUS = 480; // buried, tunnels toward a player inside this to line up an ambush
+// 130px/s under the silt — genuinely hunting, and it's UNSEEN while doing it, so
+// speed here reads as dread rather than unfairness (you can still sprint away;
+// you just can't stroll). The first pass crawled at 40 and never caught anyone.
+const BURROW_DRIFT = 130;
 const BURIED_ALPHA = 0.12; // a barely-there ripple in the muck
 
-const MAX_HEALTH = 85;
+const MAX_HEALTH = 220;
 
 // The maul: a short, fast, LOCKED-direction rake forward. Shorter than a
 // Mirejaw's lunge (it comes up right under you, it doesn't need to travel), but
 // it strikes on contact anywhere along the rake.
 const SURFACE_WINDUP_MS = 500; // silt-bulge tell — the sidestep window
-const MAUL_SPEED = 300;
-const MAUL_MAX_DIST = 96;
-const MAUL_HIT_RADIUS = 40;
-const MAUL_DAMAGE = 78;
-const MAUL_KNOCKBACK = 190;
-const MAUL_BLEED_DPS = 5;
+const MAUL_SPEED = 420;
+const MAUL_MAX_DIST = 150;
+const MAUL_HIT_RADIUS = 46;
+const MAUL_DAMAGE = 110;
+const MAUL_KNOCKBACK = 240;
+const MAUL_BLEED_DPS = 7;
 const MAUL_BLEED_MS = 5000;
 
 const EXPOSED_MS = 1000; // planted, fully surfaced — the reward for stepping aside
 const DIG_MS = 380;
-const REBURY_COOLDOWN_MS = 2200;
+const REBURY_COOLDOWN_MS = 1900;
 
 export class Fenlurker extends Enemy {
   private mode: FenMode = "buried";

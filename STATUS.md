@@ -32,7 +32,17 @@ Verified live: locked lunge dealt 85 standing still and **0 when sidestepped**; 
 6→12→18→24 while the miasma held flat at 3**; one woken Murkling **cascaded to all 5**; the orb
 re-aimed at exactly its turn cap and **expired at 4224ms**, hitting for **20 through 42 armor vs 1
 untyped**. `tsc` clean, zero console errors. Dashboard Enemies tab + `RECIPES.md` trophy table
-updated; no recipe changes. **Next: 4c — DUNGEONS.** See B3-P4b below +
+updated; no recipe changes. **SAME-SESSION TUNING PASS (the user):** the roster was sized against the
+badlands roster, not a bayou-ready player — who **sprints 166-229px/s, dashes 450, blinks 220px and
+hits for 45-70 (130-200 crit)**, against a roster whose fastest was 104px/s and tankiest 190 HP, i.e.
+**outrunnable at a walk and dead in two swings**. Speeds ~1.7-3×, HP ~2.5-3×, damage up to matter
+through bayou plate (measured net through a full Gloamsteel set: Mosswretch smash 63 / Mirejaw lunge
+52 / Fenlurker maul 44 ≈ 4 hits on a 220 HP player, all telegraphed); the **Corpselight orb went from
+a ~460px leash to ~1500px** (170px/s × 9s — still under a sprint, so running straight still escapes);
+the **Mirejaw gained "stalk patience"** (a real bug: its slow stalk meant a merely-walking player could
+never be ambushed — it fell 537px behind and never engaged; after 2.4s it now abandons stealth and
+hunts); and the **gator sprite is now the biggest common creature** (74×34 on screen).
+**Next: 4c — DUNGEONS.** See B3-P4b below +
 [[survivor-rpg-biome-3-roadmap]].
 Prior: **B3-P4a — Biome-3 Phase 4a:
 Duskmire Bayou terrain, environment & material sources** (2026-07-22, Opus, roadmap
@@ -305,7 +315,36 @@ maul 78 + bleed 5; the homing orb **re-aimed 0°→-55° chasing a moving player
 flat armor vs 1 for the same shot untyped** — magic bypass + heavy-armor mitigation both correct.
 `tsc` clean, zero console errors, all six render with distinct silhouettes (screenshot).
 Dashboard Enemies tab (the one hand-mirrored source) + `RECIPES.md`'s trophy table updated; no
-recipe changes. **Next: 4c — dungeons** (where the ability gems + Moonsilver actually live, ordered
+recipe changes.
+
+**Same-session tuning pass (the user: orbs "fade away really soon", "remember how powerful the player
+is going to be — think about how fast players will be", "the gators are too small").** All three were
+the same root error: the roster was sized against the **badlands** roster instead of against a
+bayou-ready player. Measured, not guessed — that player **sprints at 166-229 px/s** (Running skill +
+move relics, ~309 on a kill-rush), **dashes at 450**, **blinks 220px**, and hits for **45-70 (130-200
+on crit)**. Against that, the fastest creature in the roster was 104 px/s and the tankiest was 190 HP:
+**the entire biome was outrunnable at a walk and died in two swings.**
+- **Corpselight orb:** 110px/s × 4.2s was a **~460px leash** — it died almost as soon as it was fired.
+  Now 170px/s × 9s ≈ **1500px of pursuit** (verified: 9024ms/1527px when outrun). The fairness bound
+  is unchanged in spirit — 170 is still under a sprint, so running straight escapes outright; verified
+  it *does* catch a player moving at 125px/s. Damage 26→34, cast cooldown 2400→1900ms.
+- **Speeds** (peak pursuit, measured live): Murkling 104→**172** (the only creature that can hang with
+  a sprint — that IS the swarm's identity: you kill it, sweep it, or blink, you don't walk away),
+  Mirejaw chase 66→**138** / lunge 400→**560** over 340px, Blighttoad hop burst 150→**300** (~145 avg),
+  Fenlurker burrow-stalk 40→**130**, Corpselight drift 40→**85**, Mosswretch 36→**74** (still the
+  slowest by design — it's the bruiser, it's *meant* to be escapable).
+- **HP** ~2.5-3× (Murkling 22→40, Blighttoad 70→150, Fenlurker 85→220, Corpselight 90→190, Mirejaw
+  130→**320**, Mosswretch 190→**420**), and **damage** raised to matter through bayou plate. Measured
+  net through a **full Gloamsteel set**: Mosswretch smash **63**, Mirejaw lunge **52**, Fenlurker maul
+  **44** — ~4 hits to kill a 220 HP player, all three heavily telegraphed.
+- **Mirejaw "stalk patience" (a real bug the tuning exposed):** its stalk is deliberately slow, so a
+  player who simply kept walking could never be ambushed — it fell **537px behind and never engaged**.
+  After 2.4s of fruitless stalking it now **abandons stealth and hunts**. Verified: walking away → it
+  escalates and closes; sprinting away → clean escape (1500px gap). That's the intended contract.
+- **Gator size:** sprite redrawn 34×22 → **48×22** and scaled 1.55 (elite 2.0) = **74×34 on screen**,
+  the largest common creature in the game, with a `barScale` bump so its HP bar stays readable.
+
+**Next: 4c — dungeons** (where the ability gems + Moonsilver actually live, ordered
 after the roster because a dungeon needs creatures), then 4d (surface POIs + the Miretyrant boss +
 the win-con swap).
 
