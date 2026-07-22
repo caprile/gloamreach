@@ -1581,7 +1581,8 @@ below.**
      easy — see [[feedback_size_enemies_against_player]]: size new enemies against the **player's
      measured envelope** (sprint 166-229px/s, dash 450, 220px blink, 45-70 per hit), never against
      the previous biome's roster.
-   - **Phase 4 is sliced into four sessions:** 4a, 4b and **4c are done**.
+   - **Phase 4 is sliced into four sessions — 4a, 4b, 4c and 4d are ALL done, so Phase 4 is
+     complete.** Only **Phase 5** (post-big-boss RNG reward choice) remains in this arc.
    - **Phase 4c (B3-P4c) — Sunken Crypts, the DUNGEON mechanic** (plan:
      `.claude/plans/biome-3-phase-4c-crypts.md`): where the 3 ability gems + Moonsilver actually
      live, now that they've been pulled OFF the surface (locked surface/dungeon split — surface =
@@ -1638,11 +1639,27 @@ below.**
      **`MainScene.insidePoiClearing(x,y)`**: the POI-exclusion list had been duplicated in three
      samplers (only one knew about the new POIs) and `scatterInZone` had no check at all, which
      put stray trees inside a Lodge — **any future POI now only needs adding in one place.**
-     **Session 2 (NEXT) = the Miretyrant**, which per a locked amendment from the user lives in
-     its **own boss-level DUNGEON, not on the surface** (a bespoke arena reusing 4c's
-     `CryptLayout`/`CRYPT_REALM` machinery behind a sealed descent, unlocked by an effigy crafted
-     from the Sigil + Bone). It **becomes the new win-con**, demoting the Duneshaper to a mid-boss
-     and finally making its Heart obtainable. **Then Phase 5** (post-big-boss RNG reward choice).
+     **Session 2 (B3-P4d(2)) — DONE, and it completes Phase 4:** the **Miretyrant**, which per a
+     locked amendment lives in its **own boss-level DUNGEON, not on the surface**. Locked via
+     `AskUserQuestion`: adds = **bellow waves** on their own clock (the boss only ASKS via
+     `consumeBellow()` and MainScene resolves the spawn — the same contract `checkPlayerHit()`
+     uses, so adds inherit terrain collision / crypt nav / containment for free); interior =
+     **approach + arena**; **no arena seal** (4c's lock — hardcore + no escape = no counterplay);
+     **one fixed lair**, map-revealed the moment the **Effigy of the Miretyrant** (2 Tyrant Sigil +
+     1 Gorge Bone + 4 Mirehide) is crafted, which also unseals its maw. The boss is the deliberate
+     counterweight to the caster Duneshaper — a **bruiser** that closes and stays close, so every
+     dodge is a spacing dodge (locked-heading chomp, ±120° tail sweep escaped by DISTANCE, radial
+     slam, phase-2 death roll you outrun across) — and it resists slash/poison but folds to
+     **blunt**, so the two finales reward different loadouts. The dungeon layer was **generalized,
+     not copied**: `generateCrypt` gained an optional forced **arena room** (a boss arena can't be a
+     random 8-12 cell room), and a new `DungeonInterior` interface (`src/systems/Dungeon.ts`) plus
+     an extracted `renderDungeonShell()` let the player clamp, room-discovery lighting, brazier
+     lights, crypt-nav steering, containment and every underground gate serve both interiors with
+     **no branching** (`activeCrypt` → `activeDungeon`). **The win-con is now the Miretyrant**,
+     demoting the Duneshaper to a mid-boss and finally making its **Heart** obtainable (it gates the
+     Gemwright's ability-jewelry tier and had been unreachable since B3-P2b because that kill ended
+     the run). **NEXT: Phase 5** (post-big-boss RNG reward choice) — the last phase of this arc, and
+     its trigger (a big-boss kill that does NOT end the run) now exists.
      See [[survivor-rpg-biome-3-roadmap]].
 
 **Not yet built — next up in rough order:**

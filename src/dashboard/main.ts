@@ -365,7 +365,7 @@ const ENEMIES: EnemyStat[] = [
       "Sunken Forge guardian (badlands Phase 3 POI 2). 5 forges × 1 Cinderwrought each = 5. PB17 REWORK (the user: the old 2v1 of stationary fire-swingers felt awkward/incohesive vs the solo Gloamwarden): now ONE solo boss, HP 260→650, and CANNOT be staggered (poise mechanic removed entirely — a pure survive-and-DPS wall). Both attacks now RE-AIM at the player at execute (lock at execute, track through the wind-up) with wide/long hitboxes, so a slow-walking player (95px/s) can't sidestep or back-pedal out — the only reliable dodge is a dash's i-frames. Attack cooldown 850ms (was 1050 for the 2v1). Cinder Cone deals FIRE (bypasses flat armor); Forge Hammer is PHYSICAL (armor applies) — one fire + one physical attack. Scale 1.8, scored as an elite kill. Regens 12 HP/s while deaggro'd. On death, its shielded Ember Deposits crack open into mineable Cinderforged Ore.",
   },
   {
-    name: "The Duneshaper (FINAL BOSS)",
+    name: "The Duneshaper (BADLANDS BOSS)",
     hp: 2500,
     speed: 48,
     aggro: 300,
@@ -376,9 +376,25 @@ const ENEMIES: EnemyStat[] = [
       { label: "Gloamfire Lance @70% HP (tracking-then-committed SWEEPING magic beam, 360px / ±11°, sweeps ±20° on strike)", damage: 54, telegraphMs: 640 },
       { label: "Sunscorch Barrage @50% HP (7-circle magic carpet)", damage: 34, telegraphMs: 1100 },
     ],
-    loot: "5-8 Ember Shard + 1 Tyrant Trophy (S4: guaranteed Mythic, Tier 2 — unreachable, kill wins the run)",
+    loot: "5-8 Ember Shard + 1 Tyrant Trophy (guaranteed Mythic, Tier 2) + 1 Duneshaper's Heart (gates the Gemwright's ability-jewelry tier) — all reachable since B3-P4d moved the win-con to the Miretyrant",
     notes:
-      "SUNSCORCH BADLANDS FINAL BOSS + WIN-CONDITION (demotes the Gremlin King to a mid-boss). PB17 (the user): HP 1250→2500 (≥2× tankier — a real endurance fight) and poise 170→400 (scaled MORE than the HP bump so it staggers genuinely less often, not just over a longer fight). Poise 400 (stagger → 1.35× dmg for 2.2s). Scale 2.3. 2026-07-15: physical weakness REMOVED and the magic resist DROPPED (the user: fire is a magic subtype + the Ember Brand deals fire — resisting magic while fire-weak was contradictory). Its ONLY resistance line now is FIRE ×1.25 (weak); everything else neutral — burning it down (Ember Brand / Emberblink / Molten set-bonus fire) is the intended counter. Phase-gated ESCALATION: 3 attacks at full HP, +Gloamfire Lance at 70% HP, +Sunscorch Barrage AND enrage timing at 50% HP. A caster — holds ~220px and casts, magic attacks bypass flat armor, only Sand Spikes is physical. Summoned by offering an Effigy of the Duneshaper at any of the 3 badlands Tyrant Altars (crafting the effigy reveals them all on the map). Regens 14 HP/s while deaggro'd. S3 (the user: felt easier than the mid-boss): HP 1050→1250; ATTACK_COOLDOWN 900→700ms; the LANCE now tracks the player through 60% of the wind-up then commits + SWEEPS ±20° on the strike (was locked at telegraph start — trivially sidesteppable); Sand Spikes reworked from 3 spaced circles to a tracked 5-circle CROSS (distinct from the Hexling, only a diagonal run/dash clears it).",
+      "SUNSCORCH BADLANDS FINAL BOSS. NO LONGER THE WIN-CONDITION as of B3-P4d — the bayou's Miretyrant took that role and demoted this to a mid-progression big boss, exactly as biome 2 demoted the Gremlin King; killing it no longer ends the run, which is what finally makes its Heart obtainable. PB17 (the user): HP 1250→2500 (≥2× tankier — a real endurance fight) and poise 170→400 (scaled MORE than the HP bump so it staggers genuinely less often, not just over a longer fight). Poise 400 (stagger → 1.35× dmg for 2.2s). Scale 2.3. 2026-07-15: physical weakness REMOVED and the magic resist DROPPED (the user: fire is a magic subtype + the Ember Brand deals fire — resisting magic while fire-weak was contradictory). Its ONLY resistance line now is FIRE ×1.25 (weak); everything else neutral — burning it down (Ember Brand / Emberblink / Molten set-bonus fire) is the intended counter. Phase-gated ESCALATION: 3 attacks at full HP, +Gloamfire Lance at 70% HP, +Sunscorch Barrage AND enrage timing at 50% HP. A caster — holds ~220px and casts, magic attacks bypass flat armor, only Sand Spikes is physical. Summoned by offering an Effigy of the Duneshaper at any of the 3 badlands Tyrant Altars (crafting the effigy reveals them all on the map). Regens 14 HP/s while deaggro'd. S3 (the user: felt easier than the mid-boss): HP 1050→1250; ATTACK_COOLDOWN 900→700ms; the LANCE now tracks the player through 60% of the wind-up then commits + SWEEPS ±20° on the strike (was locked at telegraph start — trivially sidesteppable); Sand Spikes reworked from 3 spaced circles to a tracked 5-circle CROSS (distinct from the Hexling, only a diagonal run/dash clears it).",
+  },
+  {
+    name: "The Miretyrant (FINAL BOSS)",
+    hp: 3200,
+    speed: 66,
+    aggro: 330,
+    attacks: [
+      { label: "Lunging Chomp (locked-heading gap-closer + jaw snap, 300px lunge / 74px snap — step off the LINE)", damage: 52, telegraphMs: 600 },
+      { label: "Tail Sweep (rear-to-front arc, 165px / ±120° — dodge by DISTANCE or dash through, a sidestep won't clear it)", damage: 46, telegraphMs: 700 },
+      { label: "Muck Slam (radial AoE under itself, 150px, growing telegraph)", damage: 58, telegraphMs: 820 },
+      { label: "Death Roll @65% HP (travelling multi-hit spin along a locked line, 300px/s for 900ms, can re-hit every 420ms — outrun it ACROSS, never along)", damage: 40, telegraphMs: 780 },
+      { label: "Bellow (own 15s timer, 8.5s enraged — surfaces 3 adds, 5 enraged; max 8 concurrent). Not damage: the adds are the attack.", damage: 0, telegraphMs: 700 },
+    ],
+    loot: "8-12 Gloam Shard + 1 Tier-2 Boss Trophy (unreachable in practice — this kill wins the run)",
+    notes:
+      "DUSKMIRE BAYOU FINAL BOSS + WIN-CONDITION (B3-P4d), demoting the Duneshaper to a mid-boss. Fought at the bottom of the Sunken Gorge — its own boss dungeon (approach rooms + one 832×576 arena), unsealed by offering an Effigy of the Miretyrant at the maw. A BRUISER, deliberately the opposite of the caster Duneshaper: it closes to ~96px and stays there, and every dodge is a spacing dodge. Poise 450 (stagger → 1.35× for 2.2s), scale 2.6, regens 16 HP/s deaggro'd, leash 620 (no arena seal — you can always retreat, and it resets). Resistances: slash ×0.8, blunt ×1.2, poison ×0.25 — a thick swamp hide that folds to a warhammer, deliberately NOT the Duneshaper's fire-weakness so the two finales reward different loadouts. Phases: +Death Roll at 65% HP, enrage timing (0.75× telegraph/recovery, 1.25× move) + halved bellow interval at 35%.",
   },
 ];
 

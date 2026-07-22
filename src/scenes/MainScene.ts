@@ -45,6 +45,13 @@ import {
   type CryptLayout,
 } from "../systems/CryptLayout";
 import { SunkenShrine, SHRINE_OFFERING } from "../entities/SunkenShrine";
+import { MiretyrantLair } from "../entities/MiretyrantLair";
+import {
+  Miretyrant,
+  MIRETYRANT_STAGGER_DAMAGE_MULTIPLIER,
+  MIRETYRANT_MAX_ADDS,
+} from "../entities/Miretyrant";
+import type { DungeonInterior } from "../systems/Dungeon";
 import { DrownedLodge } from "../entities/DrownedLodge";
 import type { LootContainer, LootRollEntry } from "../systems/LootContainer";
 import type { ResourceType } from "../systems/Inventory";
@@ -709,6 +716,28 @@ const LODGE_CHIEF_LOOT_TABLE: LootRollEntry[] = [
   { key: "refined_trophy_uncommon", min: 1, max: 1, chance: 0.2 },
 ];
 
+// ===== The Sunken Gorge — the Miretyrant's lair (biome 3 Phase 4d session 2) =====
+//
+// ONE lair per world (locked with the user), sealed until an Effigy of the
+// Miretyrant is offered at its maw, and revealed on the map the moment that
+// effigy is crafted — a 28000px world is far too big to hunt a single door in
+// (the Duneshaper altars' clue system, same reasoning).
+const GORGE_CLEAR_RADIUS = 300; // the standing POI exclusion — nothing wild scatters into the clearing
+const GORGE_LIGHT_RADIUS = 150;
+// Its interior lives in the same dead corner outside the world circle as the
+// crypts, in its own rect BELOW CRYPT_REALM (which ends at y 2600) so the two
+// can never touch. Geometry check, same as CRYPT_REALM's: the corner nearest
+// world center is (2800, 4400), hypot(11200, 9600) ~= 14750 px from
+// (WORLD_CX, WORLD_CY) — outside WORLD_RADIUS (14000), so no sampler can reach
+// it and drawWorldBoundary already paints it near-black.
+const LAIR_REALM = { x: 200, y: 2700, w: 2600, h: 1700 };
+// Approach + arena (locked): a short descent, then one big room. The arena is
+// FORCED to this cell size rather than rolled — a 2.6x boss, its adds and the
+// room to dodge in do not fit in a random 8-12 cell room.
+const LAIR_ROOMS = 4; // the arena + 3 approach rooms
+const LAIR_ARENA_CELLS = { cw: 26, ch: 18 }; // 832 x 576 px
+const LAIR_ADD_SPAWN_INSET = 60; // adds surface this far inside the arena walls
+
 // The main gameplay scene: build the world, spawn the player and resources,
 // follow the camera, and run the mouse-driven interaction + HUD.
 export class MainScene extends Phaser.Scene {
@@ -919,7 +948,7 @@ export class MainScene extends Phaser.Scene {
   // per run in create() (scene.restart field-init gotcha).
   private cryptPositions: { x: number; y: number; theme: CryptTheme }[] = [];
   private crypts: SunkenCrypt[] = [];
-  private activeCrypt: SunkenCrypt | null = null;
+  private activeDungeon: DungeonInterior | null = null;
   private cryptReturn: { x: number; y: number } | null = null;
   // Enemies living inside crypts, excluded from the surface respawn budget so
   // ~60 dungeon dwellers can't eat RESPAWN_MAX_LIVE and starve the overworld.
@@ -928,7 +957,7 @@ export class MainScene extends Phaser.Scene {
   // Committed nav waypoint per chasing crypt dweller (see steerCryptEnemy).
   private cryptNav = new Map<Enemy, { x: number; y: number; at: number }>();
   private hoveredCrypt: SunkenCrypt | null = null;
-  private hoveredCryptExit: SunkenCrypt | null = null;
+  private hoveredCryptExit: DungeonInterior | null = null;
   private hoveredCryptChest: SunkenCrypt | null = null;
 
   // Bayou surface POIs (biome 3 Phase 4d). Positions are picked in create()
@@ -939,6 +968,15 @@ export class MainScene extends Phaser.Scene {
   private shrines: SunkenShrine[] = [];
   private shrineLightPoints: { x: number; y: number }[] = [];
   private hoveredShrine: SunkenShrine | null = null;
+  // The Sunken Gorge (Phase 4d session 2) — the Miretyrant's lair. One per
+  // world; its position is picked in create() before spawning like every other
+  // POI, and its interior is prebuilt in LAIR_REALM alongside the crypts.
+  private gorgePosition: { x: number; y: number } | null = null;
+  private lair: MiretyrantLair | null = null;
+  private gorgeLightPoints: { x: number; y: number }[] = [];
+  private hoveredGorge: MiretyrantLair | null = null;
+  private lairRevealed = false; // crafting the effigy puts the maw on the map, once
+  private miretyrant: Miretyrant | null = null;
   private lodgePositions: { x: number; y: number }[] = [];
   private lodges: DrownedLodge[] = [];
   private lodgeLightPoints: { x: number; y: number }[] = [];
@@ -1271,7 +1309,7 @@ export class MainScene extends Phaser.Scene {
     this.forgeLightPoints = [];
     this.cryptPositions = [];
     this.crypts = [];
-    this.activeCrypt = null;
+    this.activeDungeon = null;
     this.cryptReturn = null;
     this.cryptEnemies = new Set();
     this.cryptLightPoints = [];
@@ -1283,6 +1321,12 @@ export class MainScene extends Phaser.Scene {
     this.shrines = [];
     this.shrineLightPoints = [];
     this.hoveredShrine = null;
+    this.gorgePosition = null;
+    this.lair = null;
+    this.gorgeLightPoints = [];
+    this.hoveredGorge = null;
+    this.lairRevealed = false;
+    this.miretyrant = null;
     this.lodgePositions = [];
     this.lodges = [];
     this.lodgeLightPoints = [];
@@ -1402,6 +1446,15 @@ export class MainScene extends Phaser.Scene {
       LODGE_MIN_SPACING,
       { avoidDeepWater: false, avoid: this.shrinePositions, avoidRadius: POI_MIN_SEPARATION },
     );
+    // The Sunken Gorge (Phase 4d session 2) — last of the bayou POIs to be
+    // placed, so it keeps clear of every other one; deep water avoided because
+    // the maw is a hole in the ground, not a pool.
+    this.gorgePosition =
+      this.pickBayouPoiPositions(this.sessionRng(), 1, 0, {
+        avoidDeepWater: true,
+        avoid: [...this.shrinePositions, ...this.lodgePositions, ...this.cryptPositions],
+        avoidRadius: POI_MIN_SEPARATION,
+      })[0] ?? null;
 
     // Ground: a repeating grass texture only over the FOREST REGION (biome 1),
     // where it shows through the translucent forest bake. A world-sized tilesprite
@@ -1510,6 +1563,7 @@ export class MainScene extends Phaser.Scene {
     this.spawnSunkenCrypts(solids); // Phase 4c — surface doorways + their prebuilt interiors
     this.spawnSunkenShrines(); // Phase 4d — the rite POI
     this.spawnDrownedLodges(); // Phase 4d — the stilt-village POI
+    this.spawnSunkenGorge(solids); // Phase 4d s2 — the sealed maw + the Miretyrant's lair
     // PB1 Session 3 — populate the forest patchwork blobs beyond BIOME_RADIUS and
     // extend the badlands band beyond BADLANDS_R_MAX_INNER. Called last of the
     // content passes (every POI position is set by now) so their exclusion checks
@@ -2033,11 +2087,11 @@ export class MainScene extends Phaser.Scene {
     // Underground: no fog reveal, no map. Painting the CRYPT_REALM pocket into
     // the explored-world cache would smear a dungeon across the far corner of
     // the world map, and a crypt is meant to be navigated by torchlight anyway.
-    if (this.activeCrypt) {
+    if (this.activeDungeon) {
       this.minimapUI.setHidden(true);
-      this.biomeLabel?.setText(this.activeCrypt.def.name);
+      this.biomeLabel?.setText(this.activeDungeon.name);
       this.currentBiome = "base"; // force a re-label on the way back out
-      this.updateCryptDiscovery(this.activeCrypt);
+      this.updateCryptDiscovery(this.activeDungeon);
       return;
     }
     this.minimapUI.setHidden(false);
@@ -2060,8 +2114,8 @@ export class MainScene extends Phaser.Scene {
     // A crypt is always pitch dark regardless of the sky (biome 3 Phase 4c) —
     // which is what finally makes the torch/light system load-bearing rather
     // than a night-time convenience. The clock keeps running underneath.
-    const darkness = this.activeCrypt ? 1 : this.dayNight.nightIntensity01();
-    this.nightOverlay.render(darkness, this.collectLights(), !!this.activeCrypt);
+    const darkness = this.activeDungeon ? 1 : this.dayNight.nightIntensity01();
+    this.nightOverlay.render(darkness, this.collectLights(), !!this.activeDungeon);
     this.minimapUI.setNightIntensity(this.dayNight.nightIntensity01());
 
     const isNight = this.dayNight.isNight();
@@ -2093,7 +2147,7 @@ export class MainScene extends Phaser.Scene {
     // The player's own light. Underground there's always SOME (see
     // CRYPT_AMBIENT_LIGHT) — a torch widens it rather than being required.
     const carried = this.equippedLightRadius * this.equipEffects.lightRadiusMult();
-    const ownLight = this.activeCrypt ? Math.max(CRYPT_AMBIENT_LIGHT, carried) : carried;
+    const ownLight = this.activeDungeon ? Math.max(CRYPT_AMBIENT_LIGHT, carried) : carried;
     if (ownLight > 0) {
       const p = toScreen(this.player.x, this.player.y);
       lights.push({ x: p.x, y: p.y, radius: ownLight * z });
@@ -2130,13 +2184,19 @@ export class MainScene extends Phaser.Scene {
       const s = toScreen(p.x, p.y);
       lights.push({ x: s.x, y: s.y, radius: CRYPT_LIGHT_RADIUS * z });
     }
+    // The Sunken Gorge's maw — a bile-green hole breathing light at night.
+    for (const p of this.gorgeLightPoints) {
+      if (!onScreen(p.x, p.y)) continue;
+      const s = toScreen(p.x, p.y);
+      lights.push({ x: s.x, y: s.y, radius: GORGE_LIGHT_RADIUS * z });
+    }
     // Interior braziers, but ONLY for the crypt you're standing in. The six
     // interiors share one grid in CRYPT_REALM and a neighbour is within camera
     // range, so lighting them all would hang the next dungeon's braziers in the
     // void beside you — the one place the "it's pitch dark down here" illusion
     // can actually break.
-    if (this.activeCrypt) {
-      for (const p of this.activeCrypt.braziers) {
+    if (this.activeDungeon) {
+      for (const p of this.activeDungeon.braziers) {
         if (!onScreen(p.x, p.y)) continue;
         const s = toScreen(p.x, p.y);
         lights.push({ x: s.x, y: s.y, radius: CRYPT_LIGHT_RADIUS * z });
@@ -2147,7 +2207,7 @@ export class MainScene extends Phaser.Scene {
       // pass at the room's own size. The halo alone left room edges ~40% dark
       // (the brush is a radial gradient), which read as murky rather than lit —
       // and "lit" is the whole point of discovering a room.
-      for (const r of this.activeCrypt.discovered) {
+      for (const r of this.activeDungeon.discovered) {
         const cx = r.x + r.w / 2;
         const cy = r.y + r.h / 2;
         if (!onScreen(cx, cy)) continue;
@@ -2207,7 +2267,7 @@ export class MainScene extends Phaser.Scene {
     // Underground there is no nightfall to surge into — and the surge ring is
     // measured around the PLAYER, so it would drop swamp creatures inside a
     // sealed crypt.
-    if (this.activeCrypt) return;
+    if (this.activeDungeon) return;
     const rng = this.sessionRng();
     // Biome-aware surge (S4): pick each spawn point, then draw its species from
     // THAT point's biome roster via makeRespawnEnemy — so a nightfall out in the
@@ -2237,7 +2297,7 @@ export class MainScene extends Phaser.Scene {
     // Dawn can't reach a crypt: culling here would judge "off-screen" against a
     // camera parked underground and quietly delete surface night-spawns the
     // player never saw resolve. They're culled on the next dawn instead.
-    if (this.activeCrypt) return;
+    if (this.activeDungeon) return;
     const cam = this.cameras.main;
     const margin = 80;
     const onScreen = (e: Enemy) =>
@@ -2267,7 +2327,7 @@ export class MainScene extends Phaser.Scene {
   // MAX_LIVE, so a very long roaming run can eventually park at the cap — the cap
   // is generous enough that this stays a non-issue in practice.
   private updateRespawns(delta: number): void {
-    if (this.activeCrypt) return; // no surface top-ups into a dungeon
+    if (this.activeDungeon) return; // no surface top-ups into a dungeon
     this.respawnAccumMs += delta;
     if (this.respawnAccumMs < RESPAWN_TICK_MS) return;
     this.respawnAccumMs = 0;
@@ -2279,7 +2339,8 @@ export class MainScene extends Phaser.Scene {
       e instanceof Duneshaper ||
       e instanceof Palewake ||
       e instanceof Kilnborn ||
-      e instanceof Sanguinarch;
+      e instanceof Sanguinarch ||
+      e instanceof Miretyrant;
     // Crypt dwellers are excluded from the surface budget: six prebuilt
     // interiors hold ~60 enemies that would otherwise permanently consume a
     // third of RESPAWN_MAX_LIVE and starve the overworld's top-up.
@@ -3960,6 +4021,7 @@ export class MainScene extends Phaser.Scene {
     if (this.cryptPositions.some((c) => near(c, CRYPT_CLEAR_RADIUS))) return true;
     if (this.shrinePositions.some((s) => near(s, SHRINE_CLEAR_RADIUS))) return true;
     if (this.lodgePositions.some((l) => near(l, LODGE_CLEAR_RADIUS))) return true;
+    if (near(this.gorgePosition, GORGE_CLEAR_RADIUS)) return true;
     return false;
   }
 
@@ -4338,8 +4400,8 @@ export class MainScene extends Phaser.Scene {
     // Inside a Sunken Crypt the player is out in the CRYPT_REALM pocket, well
     // outside the world circle — clamp to the interior's own footprint instead,
     // or this would yank them back to the swamp every frame.
-    if (this.activeCrypt) {
-      this.clampPlayerToCrypt(this.activeCrypt);
+    if (this.activeDungeon) {
+      this.clampPlayerToCrypt(this.activeDungeon);
       return;
     }
     const dx = this.player.x - WORLD_CX;
@@ -5632,7 +5694,7 @@ export class MainScene extends Phaser.Scene {
     // Crypt interiors sit outside every biome blob, so the samplers below would
     // return neutral anyway — but say it explicitly: dungeon floors are plain
     // stone, never swamp water or a miasma.
-    if (this.activeCrypt) return { moveMult: 1, regenMult: 1 };
+    if (this.activeDungeon) return { moveMult: 1, regenMult: 1 };
     const z = this.subZoneAt(x, y);
     if (z && z.type === "thornfield") return { moveMult: BRAMBLE_SLOW_MULT, regenMult: 1 };
     // Biome 3 zones are resolved BEFORE the early return so a zone sitting over a
@@ -6422,6 +6484,64 @@ export class MainScene extends Phaser.Scene {
 
   // The interior itself. CryptLayout carves the floor plan; everything below is
   // just turning its rects into floors, solid walls, props and content.
+  // Turn a layout into an actual place: floors, solid walls, dressing, the exit
+  // stairs and the arrival point. Extracted in Phase 4d session 2, when the
+  // Miretyrant's lair became a second interior — everything here is about being
+  // a dungeon, not about being a crypt, so both build from this one path.
+  // Returns the occluder rects (walls + pillars) a warden's line-of-sight logic
+  // needs. `vaultPillars` forces extra cover in the boss room.
+  private renderDungeonShell(
+    dungeon: DungeonInterior,
+    rng: Phaser.Math.RandomDataGenerator,
+    solids: Phaser.Physics.Arcade.StaticGroup,
+    vaultPillars: number,
+  ): { x: number; y: number; w: number; h: number }[] {
+    const layout = dungeon.layout;
+    // Floors: one TileSprite per room/corridor rect. Tiled (not a stretched
+    // image) so the flagstones keep their grain at room scale.
+    for (const r of [...layout.rooms, ...layout.corridors]) {
+      this.add.tileSprite(r.x, r.y, r.w, r.h, "crypt_floor").setOrigin(0, 0).setDepth(-7);
+    }
+
+    // Walls: merged runs from the layout, each one solid. The player collides
+    // via the existing player↔solids collider; enemies only if they opt in
+    // (collidesWithTerrain), exactly like boulderfield rock.
+    for (const w of layout.walls) {
+      const ts = this.add.tileSprite(w.x, w.y, w.w, w.h, "crypt_wall").setOrigin(0, 0);
+      ts.setDepth(ysortDepth(w.y + w.h));
+      solids.add(ts);
+    }
+
+    const occluders: { x: number; y: number; w: number; h: number }[] = layout.walls.map((w) => ({ ...w }));
+    for (const room of layout.rooms) {
+      const pillars = room === layout.vault && vaultPillars > 0 ? vaultPillars : rng.between(0, 2);
+      for (let i = 0; i < pillars; i++) {
+        const px = room.x + rng.between(40, Math.max(41, room.w - 40));
+        const py = room.y + rng.between(40, Math.max(41, room.h - 40));
+        const img = this.add.image(px, py, "crypt_pillar").setDepth(ysortDepth(py));
+        solids.add(img);
+        occluders.push({ x: px - 10, y: py - 10, w: 20, h: 20 });
+      }
+      for (let i = 0; i < rng.between(1, 3); i++) {
+        const px = room.x + rng.between(20, Math.max(21, room.w - 20));
+        const py = room.y + rng.between(20, Math.max(21, room.h - 20));
+        this.add.image(px, py, "crypt_rubble").setDepth(ysortDepth(py));
+      }
+      // One brazier per room: the only ambient light down here besides a torch.
+      const bx = room.cx + rng.between(-30, 30);
+      const by = room.y + 26;
+      this.add.image(bx, by, "crypt_brazier").setDepth(ysortDepth(by));
+      dungeon.braziers.push({ x: bx, y: by }); // per-interior, see SunkenCrypt.braziers
+    }
+
+    // Exit stairs in the entry room, and the arrival point right beside them.
+    const stairsX = layout.entry.cx;
+    const stairsY = layout.entry.y + 34;
+    dungeon.exitStairs = this.add.image(stairsX, stairsY, "crypt_stairs").setDepth(ysortDepth(stairsY));
+    dungeon.entryPoint = { x: stairsX, y: stairsY + 46 };
+    return occluders;
+  }
+
   private buildCryptInterior(
     crypt: SunkenCrypt,
     index: number,
@@ -6440,52 +6560,9 @@ export class MainScene extends Phaser.Scene {
     };
     const layout = generateCrypt(rng, rect, rng.between(CRYPT_ROOMS_MIN, CRYPT_ROOMS_MAX));
     crypt.layout = layout;
-
-    // Floors: one TileSprite per room/corridor rect. Tiled (not a stretched
-    // image) so the flagstones keep their grain at room scale.
-    for (const r of [...layout.rooms, ...layout.corridors]) {
-      this.add.tileSprite(r.x, r.y, r.w, r.h, "crypt_floor").setOrigin(0, 0).setDepth(-7);
-    }
-
-    // Walls: merged runs from the layout, each one solid. The player collides
-    // via the existing player↔solids collider; enemies only if they opt in
-    // (collidesWithTerrain), exactly like boulderfield rock.
-    for (const w of layout.walls) {
-      const ts = this.add.tileSprite(w.x, w.y, w.w, w.h, "crypt_wall").setOrigin(0, 0);
-      ts.setDepth(ysortDepth(w.y + w.h));
-      solids.add(ts);
-    }
-
-    // Dressing. Pillars double as the Palewake's tether-breakers, so the gloam
-    // vault gets a few extra — a fight with nothing to hide behind isn't a fight.
-    const occluders: { x: number; y: number; w: number; h: number }[] = layout.walls.map((w) => ({ ...w }));
-    for (const room of layout.rooms) {
-      const isVault = room === layout.vault;
-      const pillars = isVault && crypt.theme === "gloam" ? 4 : rng.between(0, 2);
-      for (let i = 0; i < pillars; i++) {
-        const px = room.x + rng.between(40, Math.max(41, room.w - 40));
-        const py = room.y + rng.between(40, Math.max(41, room.h - 40));
-        const img = this.add.image(px, py, "crypt_pillar").setDepth(ysortDepth(py));
-        solids.add(img);
-        occluders.push({ x: px - 10, y: py - 10, w: 20, h: 20 });
-      }
-      for (let i = 0; i < rng.between(1, 3); i++) {
-        const px = room.x + rng.between(20, Math.max(21, room.w - 20));
-        const py = room.y + rng.between(20, Math.max(21, room.h - 20));
-        this.add.image(px, py, "crypt_rubble").setDepth(ysortDepth(py));
-      }
-      // One brazier per room: the only ambient light down here besides a torch.
-      const bx = room.cx + rng.between(-30, 30);
-      const by = room.y + 26;
-      this.add.image(bx, by, "crypt_brazier").setDepth(ysortDepth(by));
-      crypt.braziers.push({ x: bx, y: by }); // per-crypt, see SunkenCrypt.braziers
-    }
-
-    // Exit stairs in the entry room, and the arrival point right beside them.
-    const stairsX = layout.entry.cx;
-    const stairsY = layout.entry.y + 34;
-    crypt.exitStairs = this.add.image(stairsX, stairsY, "crypt_stairs").setDepth(ysortDepth(stairsY));
-    crypt.entryPoint = { x: stairsX, y: stairsY + 46 };
+    // Pillars double as the Palewake's tether-breakers, so the gloam vault gets
+    // a few extra — a fight with nothing to hide behind isn't a fight.
+    const occluders = this.renderDungeonShell(crypt, rng, solids, crypt.theme === "gloam" ? 4 : 0);
 
     // Side-room chest (reuses LootContainer + ChestMenu verbatim).
     const chest = this.add
@@ -6636,27 +6713,200 @@ export class MainScene extends Phaser.Scene {
     this.sfx.levelUp();
   }
 
+  // ===== The Sunken Gorge — the Miretyrant's lair (Phase 4d session 2) =====
+
+  // The surface maw + its prebuilt interior. Same two-part shape as a crypt: the
+  // doorway is a POI out in the swamp, the interior lives in the dead-corner
+  // pocket and is built once, at create() time.
+  private spawnSunkenGorge(solids: Phaser.Physics.Arcade.StaticGroup): void {
+    const pos = this.gorgePosition;
+    if (!pos) return;
+    const rng = this.sessionRng();
+    this.decoratePoi(rng, pos.x, pos.y, {
+      floorTexture: "poi_floor_gorge",
+      floorRadius: 175,
+      ringTexture: "poi_ring_gorge",
+      ringCount: 11,
+      ringRadius: 156,
+    });
+    const lair = new MiretyrantLair(this, { x: pos.x, y: pos.y });
+    this.lair = lair;
+    this.gorgeLightPoints.push({ x: pos.x, y: pos.y });
+    this.buildLairInterior(lair, rng, solids);
+  }
+
+  private buildLairInterior(
+    lair: MiretyrantLair,
+    rng: Phaser.Math.RandomDataGenerator,
+    solids: Phaser.Physics.Arcade.StaticGroup,
+  ): void {
+    // Approach + arena (locked): the forced arena room becomes the layout's
+    // vault, and generateCrypt puts the entrance in the room furthest from it,
+    // so the descent always ENDS at the arena instead of opening onto it.
+    lair.layout = generateCrypt(rng, LAIR_REALM, LAIR_ROOMS, LAIR_ARENA_CELLS);
+    this.renderDungeonShell(lair, rng, solids, 3); // a few pillars: cover to break the death roll's line
+    this.populateLair(lair, rng);
+  }
+
+  // The approach holds bayou dwellers; the arena holds nothing but the boss.
+  // No chest and no vault nodes down here — killing what waits in the arena ends
+  // the run, so there is nothing to bank.
+  private populateLair(lair: MiretyrantLair, rng: Phaser.Math.RandomDataGenerator): void {
+    const layout = lair.layout;
+    for (const room of layout.rooms) {
+      if (room === layout.entry || room === layout.vault) continue; // arrival stays safe; the arena is the boss's
+      const spot = () => ({
+        x: room.x + rng.between(24, Math.max(25, room.w - 24)),
+        y: room.y + rng.between(24, Math.max(25, room.h - 24)),
+      });
+      const roll = rng.between(1, 10);
+      if (roll <= 5) {
+        for (let i = 0; i < rng.between(3, 5); i++) {
+          const p = spot();
+          this.addDungeonEnemy(lair, new Murkling(this, { x: p.x, y: p.y, elite: this.rollElite(rng) }));
+        }
+      } else if (roll <= 8) {
+        const p = spot();
+        this.addDungeonEnemy(lair, new Mosswretch(this, { x: p.x, y: p.y, elite: this.rollElite(rng, 2) }));
+      } else {
+        const p = spot();
+        this.addDungeonEnemy(lair, new Fenlurker(this, { x: p.x, y: p.y, elite: this.rollElite(rng) }));
+      }
+    }
+
+    const arena = layout.vault;
+    const boss = new Miretyrant(this, { x: arena.cx, y: arena.cy });
+    this.miretyrant = boss;
+    lair.boss = boss;
+    this.addDungeonEnemy(lair, boss);
+  }
+
+  // Register an enemy as living inside an interior. Dungeon dwellers DO collide
+  // with solid terrain (the one place the engine-wide default is wrong — see
+  // populateCrypt), and being in cryptEnemies keeps them out of the surface
+  // respawn budget.
+  private addDungeonEnemy(dungeon: DungeonInterior, e: Enemy): void {
+    e.collidesWithTerrain = true;
+    this.enemies.push(e);
+    this.enemyGroup.add(e);
+    this.cryptEnemies.add(e);
+    dungeon.enemies.push(e);
+  }
+
+  // The Miretyrant's bellow, resolved. The boss only ASKS (consumeBellow) —
+  // spawning is the scene's job, which is what gets the adds terrain collision,
+  // crypt navigation and containment for free. Called each frame from
+  // updateEnemies while the player is in the lair.
+  private updateMiretyrantBellow(): void {
+    const lair = this.lair;
+    const boss = this.miretyrant;
+    if (!lair || !boss || boss.depleted) return;
+    const wanted = boss.consumeBellow();
+    if (wanted <= 0) return;
+    lair.adds = lair.adds.filter((a) => !a.depleted);
+    const room = lair.layout.vault;
+    const rng = this.sessionRng();
+    let spawned = 0;
+    for (let i = 0; i < wanted && lair.adds.length < MIRETYRANT_MAX_ADDS; i++) {
+      // Surface them around the arena's edge rather than on the player — a wave
+      // that materializes on top of you isn't a wave, it's a mugging.
+      const a = rng.frac() * Math.PI * 2;
+      const x = Phaser.Math.Clamp(
+        room.cx + Math.cos(a) * (room.w / 2 - LAIR_ADD_SPAWN_INSET),
+        room.x + LAIR_ADD_SPAWN_INSET,
+        room.x + room.w - LAIR_ADD_SPAWN_INSET,
+      );
+      const y = Phaser.Math.Clamp(
+        room.cy + Math.sin(a) * (room.h / 2 - LAIR_ADD_SPAWN_INSET),
+        room.y + LAIR_ADD_SPAWN_INSET,
+        room.y + room.h - LAIR_ADD_SPAWN_INSET,
+      );
+      const add =
+        rng.frac() < 0.7
+          ? new Murkling(this, { x, y })
+          : new Blighttoad(this, { x, y });
+      this.addDungeonEnemy(lair, add);
+      lair.adds.push(add);
+      spawned++;
+    }
+    if (spawned > 0) {
+      this.eventLog.add("combat", "The Miretyrant bellows — the mire answers.");
+      this.sfx.nightfall();
+    }
+  }
+
+  // The maw. Sealed it takes the effigy; open it's a doorway like any other.
+  // Prompted even while sealed (the tyrant-altar precedent) so the site reads as
+  // real content before you can use it — clicking without the effigy just needs
+  // to say why nothing happened.
+  private promptForGorge(lair: MiretyrantLair): string | null {
+    const inReach = Phaser.Math.Distance.Between(this.player.x, this.player.y, lair.x, lair.y) <= REACH;
+    if (!inReach) return null;
+    return lair.unsealed ? "[LMB] Descend into the Sunken Gorge" : "[LMB] Break the seal";
+  }
+
+  private tryOpenGorge(lair: MiretyrantLair): void {
+    if (lair.unsealed) {
+      this.enterCrypt(lair);
+      return;
+    }
+    if (this.hotbar.container.count("miretyrant_effigy") >= 1) {
+      this.hotbar.container.removeCount("miretyrant_effigy", 1);
+    } else if (this.backpack.count("miretyrant_effigy") >= 1) {
+      this.backpack.removeCount("miretyrant_effigy", 1);
+    } else {
+      this.eventLog.add("info", "The seal holds. Something must be offered here.");
+      return;
+    }
+    this.afterItemMove();
+    lair.unseal();
+    this.cameras.main.shake(400, 0.006);
+    this.eventLog.add("poi", "The seal splits — the mire drains into the dark.");
+    this.sfx.levelUp();
+  }
+
+  // Crafting the effigy puts the one lair on the map, wherever it is. A single
+  // door in a 28000px world is not findable by exploration, so this mirrors the
+  // Duneshaper altars' clue system rather than hoping the player wanders past.
+  private onMiretyrantEffigyCrafted(): void {
+    const lair = this.lair;
+    if (!lair || this.lairRevealed) return;
+    this.lairRevealed = true;
+    if (!lair.discoveredOnMap) {
+      lair.discoveredOnMap = true;
+      this.exploredMap.addLandmark({
+        worldX: lair.x,
+        worldY: lair.y,
+        iconKey: "map_gorge",
+        label: "The Sunken Gorge",
+        tint: 0x4fbf86,
+      });
+    }
+    const dir = this.compassDir(this.player.x, this.player.y, lair.x, lair.y);
+    this.eventLog.add("poi", `The effigy pulls ${dir} — the Sunken Gorge is marked on your map.`);
+  }
+
   // Enter a crypt: remember where we came in, then teleport into its entry room.
   // A short camera fade sells the transition (and hides the one-frame jump).
-  private enterCrypt(crypt: SunkenCrypt): void {
-    if (this.activeCrypt) return;
+  private enterCrypt(crypt: DungeonInterior): void {
+    if (this.activeDungeon) return;
     this.cryptReturn = { x: this.player.x, y: this.player.y };
-    this.activeCrypt = crypt;
+    this.activeDungeon = crypt;
     this.player.setPosition(crypt.entryPoint.x, crypt.entryPoint.y);
     (this.player.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0);
     this.cameras.main.flash(260, 0, 0, 0);
     this.clearHoverState();
-    this.eventLog.add("poi", `Entered the ${crypt.def.name}`);
+    this.eventLog.add("poi", `Entered the ${crypt.name}`);
     this.hints.trigger("crypt_dark");
   }
 
   // Leave a crypt: back to the surface doorway we came in by. Anything killed or
   // mined inside stays that way — the interior is prebuilt, never regenerated.
   private exitCrypt(): void {
-    const crypt = this.activeCrypt;
+    const crypt = this.activeDungeon;
     if (!crypt) return;
     const back = this.cryptReturn ?? { x: crypt.x, y: crypt.y + 40 };
-    this.activeCrypt = null;
+    this.activeDungeon = null;
     this.cryptReturn = null;
     this.player.setPosition(back.x, back.y + 30);
     (this.player.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0);
@@ -6675,7 +6925,7 @@ export class MainScene extends Phaser.Scene {
     angle: number,
     dist: number,
   ): { x: number; y: number } {
-    const crypt = this.activeCrypt;
+    const crypt = this.activeDungeon;
     const full = { x: fromX + Math.cos(angle) * dist, y: fromY + Math.sin(angle) * dist };
     if (!crypt?.layout) return full;
     const step = 10;
@@ -6695,7 +6945,7 @@ export class MainScene extends Phaser.Scene {
   // included), so a crypt you've walked reads as a lit floor plan and the parts
   // you haven't stay black. A small margin means stepping just inside a doorway
   // counts — nobody should have to walk to a room's center to light it.
-  private updateCryptDiscovery(crypt: SunkenCrypt): void {
+  private updateCryptDiscovery(crypt: DungeonInterior): void {
     const layout = crypt.layout;
     if (!layout) return;
     const px = this.player.x;
@@ -6718,9 +6968,14 @@ export class MainScene extends Phaser.Scene {
   private static readonly CRYPT_NAV_REACHED = 34; // px — close enough, pick the next one
   private static readonly CRYPT_NAV_REFRESH_MS = 1200; // re-plan even if not reached (the player moves)
   private steerCryptEnemy(enemy: Enemy): void {
-    const crypt = this.activeCrypt;
+    const crypt = this.activeDungeon;
     if (!crypt?.layout || !this.cryptEnemies.has(enemy)) return;
     if (!crypt.enemies.includes(enemy) || !enemy.isAggro() || enemy.isAttacking()) return;
+    // Bosses run their own committed lines (a locked lunge, a death roll) and
+    // never leave their arena, so steering them toward a doorway could only bend
+    // an attack the player has already read. isAttacking() doesn't cover it —
+    // the bespoke bosses drive their own state machines, not the base one.
+    if (enemy instanceof Miretyrant) return;
     const body = enemy.body as Phaser.Physics.Arcade.Body | undefined;
     if (!body) return;
     const speed = Math.hypot(body.velocity.x, body.velocity.y);
@@ -6756,7 +7011,7 @@ export class MainScene extends Phaser.Scene {
   // plan is nudged to the NEAREST floor point (the smallest correction that
   // works) rather than teleported to a room center. Cheap: 6 crypts × ~10.
   private containCryptEnemies(): void {
-    for (const crypt of this.crypts) {
+    for (const crypt of [...this.crypts, ...(this.lair ? [this.lair as DungeonInterior] : [])]) {
       const layout = crypt.layout;
       if (!layout) continue;
       for (const e of crypt.enemies) {
@@ -6788,6 +7043,9 @@ export class MainScene extends Phaser.Scene {
     this.hoveredCrypt = null;
     this.hoveredCryptExit = null;
     this.hoveredCryptChest = null;
+    this.hoveredShrine = null;
+    this.hoveredLodgeHut = null;
+    this.hoveredGorge = null;
     this.promptText.setVisible(false);
     this.hoverHighlight.clear();
   }
@@ -6795,7 +7053,7 @@ export class MainScene extends Phaser.Scene {
   // Clamp the player to the interior's own footprint while inside (the world
   // circle clamp is meaningless out in the realm pocket). Walls already stop
   // ordinary movement; this catches a dash/blink through a corner.
-  private clampPlayerToCrypt(crypt: SunkenCrypt): void {
+  private clampPlayerToCrypt(crypt: DungeonInterior): void {
     const b = crypt.layout.bounds;
     const m = 16;
     this.player.setPosition(
@@ -7014,7 +7272,7 @@ export class MainScene extends Phaser.Scene {
       // Being underground counts as gone: activeCrypt puts the player in the
       // CRYPT_REALM pocket, which is nowhere near the shrine anyway, but say it
       // explicitly rather than relying on that distance being large.
-      if (dist > SHRINE_RITE_RADIUS || this.activeCrypt) shrine.awayMs += delta;
+      if (dist > SHRINE_RITE_RADIUS || this.activeDungeon) shrine.awayMs += delta;
       else shrine.awayMs = 0;
       if (shrine.awayMs >= SHRINE_LEASH_GRACE_MS) {
         this.failShrineRite(shrine);
@@ -7283,6 +7541,20 @@ export class MainScene extends Phaser.Scene {
       });
       this.eventLog.add("poi", `Discovered: ${crypt.def.name}`);
       this.hints.trigger("crypt_found");
+    }
+    // The Sunken Gorge (Phase 4d s2) — the bayou finale. Crafting the effigy
+    // reveals it outright (onMiretyrantEffigyCrafted); this covers walking into
+    // it first, which is the better story when it happens.
+    if (this.lair && !this.lair.discoveredOnMap && inPoiReveal(this.lair.x, this.lair.y)) {
+      this.lair.discoveredOnMap = true;
+      this.exploredMap.addLandmark({
+        worldX: this.lair.x,
+        worldY: this.lair.y,
+        iconKey: "map_gorge",
+        label: "The Sunken Gorge",
+        tint: 0x4fbf86,
+      });
+      this.eventLog.add("poi", "Discovered: The Sunken Gorge");
     }
     // Sunken Forges (Phase 3 POI 2) — discovered fixed landmarks, fiery
     // orange-red markers, same one-shot treatment as the other POIs.
@@ -7621,7 +7893,7 @@ export class MainScene extends Phaser.Scene {
     // doorway, and (while inside) the exit stairs + the crypt's chest. Runs last
     // like the Warren so it respects `best` and wins by nulling the others.
     let hoveredCrypt: SunkenCrypt | null = null;
-    let hoveredCryptExit: SunkenCrypt | null = null;
+    let hoveredCryptExit: DungeonInterior | null = null;
     let hoveredCryptChest: SunkenCrypt | null = null;
     const takeCryptHover = (d: number) => {
       hoveredNode = null;
@@ -7642,18 +7914,19 @@ export class MainScene extends Phaser.Scene {
       const d = Phaser.Math.Distance.Between(world.x, world.y, img.x, img.y);
       return d <= radius && d < best ? d : null;
     };
-    if (this.activeCrypt) {
-      const crypt = this.activeCrypt;
-      if (crypt.exitStairs) {
-        const d = hits(crypt.exitStairs);
+    if (this.activeDungeon) {
+      const dungeon = this.activeDungeon;
+      const crypt = dungeon instanceof SunkenCrypt ? dungeon : null;
+      if (dungeon.exitStairs) {
+        const d = hits(dungeon.exitStairs);
         if (d !== null) {
-          hoveredCryptExit = crypt;
+          hoveredCryptExit = dungeon;
           hoveredCrypt = null;
           hoveredCryptChest = null;
           takeCryptHover(d);
         }
       }
-      if (crypt.chestImage) {
+      if (crypt?.chestImage) {
         const d = hits(crypt.chestImage);
         if (d !== null) {
           hoveredCryptChest = crypt;
@@ -7681,7 +7954,16 @@ export class MainScene extends Phaser.Scene {
     // `best` and win by nulling the others. Never reachable from inside a crypt.
     let hoveredShrine: SunkenShrine | null = null;
     let hoveredLodgeHut: { lodge: DrownedLodge; hut: DrownedLodge["huts"][number] } | null = null;
-    if (!this.activeCrypt) {
+    let hoveredGorge: MiretyrantLair | null = null;
+    if (!this.activeDungeon) {
+      if (this.lair) {
+        const d = hits(this.lair.image);
+        if (d !== null) {
+          hoveredGorge = this.lair;
+          hoveredCrypt = null;
+          takeCryptHover(d);
+        }
+      }
       for (const shrine of this.shrines) {
         const d = hits(shrine.image);
         if (d !== null) {
@@ -7705,13 +7987,15 @@ export class MainScene extends Phaser.Scene {
         }
       }
     }
-    if (hoveredShrine || hoveredLodgeHut) {
+    if (hoveredShrine || hoveredLodgeHut) hoveredGorge = null;
+    if (hoveredShrine || hoveredLodgeHut || hoveredGorge) {
       this.hoveredCrypt = null;
       this.hoveredCryptExit = null;
       this.hoveredCryptChest = null;
     }
     this.hoveredShrine = hoveredShrine;
     this.hoveredLodgeHut = hoveredLodgeHut;
+    this.hoveredGorge = hoveredGorge;
 
     this.hoveredNode = hoveredNode;
     this.hoveredEnemy = hoveredEnemy;
@@ -7766,7 +8050,9 @@ export class MainScene extends Phaser.Scene {
                                   ? this.promptForShrine(hoveredShrine)
                                   : hoveredLodgeHut
                                     ? this.promptForLodgeHut(hoveredLodgeHut.hut, hoveredLodgeHut.lodge)
-                                    : null;
+                                    : hoveredGorge
+                                      ? this.promptForGorge(hoveredGorge)
+                                      : null;
     if (prompt) {
       this.promptText.setText(prompt).setColor(this.promptColorFor()).setVisible(true);
       this.input.setDefaultCursor("pointer");
@@ -7794,6 +8080,7 @@ export class MainScene extends Phaser.Scene {
       this.hoveredCryptChest?.chestImage ??
       this.hoveredShrine?.image ??
       this.hoveredLodgeHut?.hut.image ??
+      this.hoveredGorge?.image ??
       this.hoveredAltar?.image ??
       this.hoveredWorkbench ??
       this.hoveredCampfire ??
@@ -7884,7 +8171,8 @@ export class MainScene extends Phaser.Scene {
       e instanceof Duneshaper ||
       e instanceof Palewake ||
       e instanceof Kilnborn ||
-      e instanceof Sanguinarch
+      e instanceof Sanguinarch ||
+      e instanceof Miretyrant
     )
       return "#ff5a5a";
     if (e.elite) return "#ff9d5c";
@@ -7933,7 +8221,7 @@ export class MainScene extends Phaser.Scene {
 
   // The exit stairs inside a crypt. Deliberately a generous reach — nobody
   // should have to fight the camera to leave a dungeon.
-  private promptForCryptExit(crypt: SunkenCrypt): string | null {
+  private promptForCryptExit(crypt: DungeonInterior): string | null {
     const stairs = crypt.exitStairs;
     if (!stairs) return null;
     const inReach =
@@ -8062,6 +8350,10 @@ export class MainScene extends Phaser.Scene {
       if (this.promptForLodgeHut(hut, lodge)) {
         this.openChestMenu(hut.loot, hut.chief ? LODGE_CHIEF_LOOT_TABLE : LODGE_HUT_LOOT_TABLE);
       }
+      return;
+    }
+    if (this.hoveredGorge) {
+      if (this.promptForGorge(this.hoveredGorge)) this.tryOpenGorge(this.hoveredGorge);
       return;
     }
     if (this.hoveredAltar) {
@@ -8302,11 +8594,11 @@ export class MainScene extends Phaser.Scene {
   // Poise-break punish multiplier for a staggerable boss/mini-boss, else 1.
   // Shared by the primary melee hit, arc secondaries, and ranged so the three
   // can't drift.
-  // Whichever "big" boss (Gremlin King / Duneshaper) is currently engaged, for
+  // Whichever "big" boss (Gremlin King / Duneshaper / Miretyrant) is engaged, for
   // the fixed top-of-screen BossHealthUI. Mini-bosses (Gloamwarden/Cinderwrought)
   // stay off the big bar — they keep only their floating world-space bars.
   private engagedBigBoss(): BossBarTarget | null {
-    for (const b of [this.gremlinKing, this.duneshaper]) {
+    for (const b of [this.gremlinKing, this.duneshaper, this.miretyrant]) {
       if (b && !b.depleted && b.isEngaged()) return b;
     }
     return null;
@@ -8324,6 +8616,7 @@ export class MainScene extends Phaser.Scene {
     if (enemy instanceof Kilnborn && enemy.isStaggered()) return KILNBORN_VENT_DAMAGE_MULTIPLIER;
     if (enemy instanceof Sanguinarch && enemy.isStaggered()) return SANGUINARCH_ENGORGED_DAMAGE_MULTIPLIER;
     if (enemy instanceof Duneshaper && enemy.isStaggered()) return DUNESHAPER_STAGGER_DAMAGE_MULTIPLIER;
+    if (enemy instanceof Miretyrant && enemy.isStaggered()) return MIRETYRANT_STAGGER_DAMAGE_MULTIPLIER;
     return 1;
   }
 
@@ -8782,12 +9075,14 @@ export class MainScene extends Phaser.Scene {
     this.hoveredEnemy = null;
     this.promptText.setVisible(false);
 
-    // Run/score tracking. Killing the FINAL boss (the Duneshaper) wins the run —
-    // end it after a short beat so the death feedback plays first. The Gremlin
-    // King is now a mid-boss (biome 2 demoted it): still a "boss" score, but no
-    // longer the win-condition.
+    // Run/score tracking. Killing the FINAL boss (the Miretyrant, at the bottom
+    // of the Sunken Gorge) wins the run — end it after a short beat so the death
+    // feedback plays first. Biome 3 demoted the Duneshaper the same way biome 2
+    // demoted the Gremlin King: both are still "boss" scores, and the
+    // Duneshaper's Heart is finally obtainable now that killing it doesn't end
+    // the run (it gates the Gemwright's Table's ability-jewelry tier).
     this.run.recordKill(this.classifyKill(enemy));
-    if (enemy instanceof Duneshaper) {
+    if (enemy instanceof Miretyrant) {
       this.time.delayedCall(1200, () => this.endRun("won"));
     }
   }
@@ -8990,7 +9285,7 @@ export class MainScene extends Phaser.Scene {
   // Kill category for run scoring: the final boss, an elite variant, or a plain
   // enemy. Kept here (not on Enemy) since it's a scoring concern, not behavior.
   private classifyKill(enemy: Enemy): KillCategory {
-    if (enemy instanceof GremlinKing || enemy instanceof Duneshaper) return "boss";
+    if (enemy instanceof GremlinKing || enemy instanceof Duneshaper || enemy instanceof Miretyrant) return "boss";
     // The Gloamwarden/Cinderwrought are mini-bosses — no dedicated score band
     // exists, so they're scored at the elite tier (per the plan's "simplest"
     // open sub-decision).
@@ -9170,6 +9465,7 @@ export class MainScene extends Phaser.Scene {
         enemy instanceof Duneshaper ||
         enemy instanceof Hexling ||
         enemy instanceof Sandmaw ||
+        enemy instanceof Miretyrant ||
         enemy instanceof Palewake ||
         enemy instanceof Kilnborn ||
         enemy instanceof Sanguinarch
@@ -9195,6 +9491,7 @@ export class MainScene extends Phaser.Scene {
     this.updatePackAggro(now);
     this.updateDuskrunnerPacks(now);
     this.containCryptEnemies();
+    this.updateMiretyrantBellow();
   }
 
   // Duskrunner pack-attack sync (the user: "attack as a pack"). When one dog is
@@ -9952,6 +10249,7 @@ export class MainScene extends Phaser.Scene {
     // by crafting the effigy, reveal ALL badlands altars on the map so a distant
     // one is never a dead end (the world is huge).
     if (key === "tyrant_totem") this.onTyrantTotemCrafted();
+    if (key === "miretyrant_effigy") this.onMiretyrantEffigyCrafted();
   }
 
   // Where a reforge's output should land so it returns to where the consumed
@@ -11651,7 +11949,7 @@ export class MainScene extends Phaser.Scene {
     if (this.runOver || this.isPaused) return;
     // No surface map underground — it would center on the CRYPT_REALM pocket,
     // i.e. a black corner nowhere near the swamp you actually came from.
-    if (this.activeCrypt && !this.worldMapUI.isOpen()) {
+    if (this.activeDungeon && !this.worldMapUI.isOpen()) {
       this.eventLog.add("info", "No use for a map down here.");
       return;
     }
@@ -11827,7 +12125,8 @@ export class MainScene extends Phaser.Scene {
           e instanceof Duneshaper ||
           e instanceof Palewake ||
           e instanceof Kilnborn ||
-          e instanceof Sanguinarch;
+          e instanceof Sanguinarch ||
+          e instanceof Miretyrant;
         const targets = this.enemies.filter(
           (e) => !isBossEnemy(e) && Phaser.Math.Distance.Between(this.player.x, this.player.y, e.x, e.y) <= radius,
         );

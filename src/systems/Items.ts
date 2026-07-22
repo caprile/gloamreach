@@ -1445,6 +1445,16 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     maxStack: 99,
     hotbarable: false,
   },
+  miretyrant_effigy: {
+    key: "miretyrant_effigy",
+    name: "Effigy of the Miretyrant",
+    description:
+      "Sigil-stone and gorge-bone bound in gator hide. The swamp goes quiet when you hold it. Offer it at the sealed maw deep in the mire.",
+    texture: "icon_miretyrant_effigy",
+    maxStack: 99,
+    hotbarable: true,
+    stats: [{ label: "Type", value: "Ritual Item" }],
+  },
 
   // --- bayou elite trophies (Common rarity, Tier 3 — the deepest relic tier) ---
   mirejaw_trophy: {
@@ -1760,8 +1770,8 @@ const BAYOU_ITEM_KEYS = new Set<string>([
   "mirejaw_meat", "blight_gland", "gloam_dust",
   "mirejaw_trophy", "blighttoad_trophy", "mosswretch_trophy",
   "murkling_trophy", "fenlurker_trophy", "corpselight_trophy",
-  // surface-POI spoils (Phase 4d)
-  "tyrant_sigil", "gorge_bone",
+  // surface-POI spoils + the boss key (Phase 4d)
+  "tyrant_sigil", "gorge_bone", "miretyrant_effigy",
 ]);
 
 export function itemBiome(key: string): ItemBiome {
@@ -1777,7 +1787,7 @@ export type ItemCategory = "material" | "gear" | "station" | "food" | "curio";
 const CURIO_ITEM_KEYS = new Set<string>([
   "gloam_shard", "ember_shard", "gremlin_king_fang",
   "warren_fetish", "tyrant_totem", "gremlin_totem",
-  "tyrant_sigil", "gorge_bone",
+  "tyrant_sigil", "gorge_bone", "miretyrant_effigy",
 ]);
 
 export function itemCategory(key: string): ItemCategory {

@@ -44,6 +44,7 @@ requires standing near a placed Workbench (`MainScene.isNearWorkbench`).
 | Gremlin Pants | Armor | 1 | Yes | 2 Gremlin Leather, 2 Leather Scraps, 1 Blackberry | Light Armor 0 | Item (armor, legs) |
 | Gremlin Totem | Misc | 1 | Yes | 3 Gremlin Trophy, 1 Wood, 1 Gremlin Guck | — | Item (ritual — summons the Gremlin King at the Boss Altar) |
 | Effigy of the Duneshaper | Misc | 1 | Yes | 3 Gloam-Bone Totem, 2 Gloam Shard, 8 Bones | — | Item (ritual — summons the Duneshaper at a badlands altar; crafting it reveals the altars on the map) |
+| Effigy of the Miretyrant | Misc | 1 | Yes | 2 Tyrant Sigil, 1 Gorge Bone, 4 Mirehide | — | Item (ritual — unseals the Sunken Gorge, the bayou final boss's lair; crafting it reveals the Gorge on the map) |
 | Smelter | Crafting | 1 | Yes | 10 Clay, 10 Stone | — | Item (placeable, station — smelts ore into ingots) |
 | Gemwright's Table | Crafting | 1 | Yes | 4 Moonsilver, 10 Stone | — | Item (placeable, station — crafts jewelry; **biome-3 dormant**, needs Moonsilver) |
 | Sunsteel Helm | Armor | 1 | Yes (Lvl 3) | 2 Sunsteel Ingot, 2 Cragscale Plate | Heavy Armor 0 | Item (armor, helmet, **heavy**) |

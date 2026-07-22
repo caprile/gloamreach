@@ -17,6 +17,7 @@ import { GremlinKing } from "../entities/GremlinKing";
 import { Gloamwarden } from "../entities/Gloamwarden";
 import { Cinderwrought } from "../entities/Cinderwrought";
 import { Duneshaper } from "../entities/Duneshaper";
+import { Miretyrant } from "../entities/Miretyrant";
 
 // DEV-only spawn table for the `spawn <name>` console command. Kept in its
 // own file (rather than inline in MainScene) so the name list is easy to
@@ -46,4 +47,5 @@ export const DEV_ENEMY_SPAWN_TABLE: Record<string, SpawnFactory> = {
   gloamwarden: (scene, x, y) => new Gloamwarden(scene, { x, y }),
   cinderwrought: (scene, x, y) => new Cinderwrought(scene, { x, y }),
   duneshaper: (scene, x, y) => new Duneshaper(scene, { x, y }),
+  miretyrant: (scene, x, y) => new Miretyrant(scene, { x, y }),
 };

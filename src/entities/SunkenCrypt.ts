@@ -130,6 +130,12 @@ export class SunkenCrypt {
     return CRYPT_THEMES[this.theme];
   }
 
+  // Satisfies DungeonInterior (B3-P4d) — the underground paths are shared with
+  // the Miretyrant's lair now, and they only ever wanted a display name.
+  get name(): string {
+    return this.def.name;
+  }
+
   // Attach the crypt's loot chest (built with the interior) so its glow can be
   // gated on actually holding something, like the shack/warren caches.
   setChest(image: Phaser.GameObjects.Image): void {

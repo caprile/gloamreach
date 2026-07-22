@@ -285,6 +285,21 @@ export const RECIPES: Recipe[] = [
     output: { kind: "item", itemId: "tyrant_totem", itemName: "Effigy of the Duneshaper" },
   },
 
+  // The bayou boss key (biome 3 Phase 4d). Its gate is the two POI materials —
+  // two survived shrine rites and a cleared Drowned Lodge — not a workbench
+  // tier, so it stays tier 1 like the effigy it succeeds.
+  {
+    id: "miretyrant_effigy",
+    name: "Effigy of the Miretyrant",
+    description:
+      "Sigil-stone and gorge-bone lashed together in gator hide. Something in the deep mire will answer it.",
+    category: "misc",
+    tier: 1,
+    costs: { tyrant_sigil: 2, gorge_bone: 1, mirehide: 4 },
+    requiredSkills: [],
+    output: { kind: "item", itemId: "miretyrant_effigy", itemName: "Effigy of the Miretyrant" },
+  },
+
   // --- forged HEAVY armor: Sunsteel set (biome 2 Phase 4, Workbench Lvl 3) ---
   {
     id: "sunsteel_helm",

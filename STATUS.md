@@ -2,14 +2,33 @@
 
 ## Current State
 
-_Living snapshot — edit in place, never append. Last shipped: **B3-P4d(1) — Biome-3 Phase 4d,
-session 1: the bayou's two surface POIs** (2026-07-22, Opus, plan
-`.claude/plans/biome-3-phase-4d-pois.md`). Phase 4d is sliced in two: **this session = the POIs +
-the boss-key economy; next session = the Miretyrant + the win-con swap.** Locked amendment
-(the user): **the Miretyrant lives in its own boss-level DUNGEON, not on the surface**, so next
-session reuses 4c's `CryptLayout`/`CRYPT_REALM` machinery for a bespoke arena and the altar/totem
-summon becomes "unseal the descent." The two POIs run on **deliberately different verbs**, because
-every prior POI resolves as "kill the guards, take the loot": the **Sunken Shrine** is a rite the
+_Living snapshot — edit in place, never append. Last shipped: **B3-P4d(2) — Biome-3 Phase 4d,
+session 2: the Miretyrant, its lair, and the win-con swap** (2026-07-22, Opus, plan
+`.claude/plans/biome-3-phase-4d-miretyrant.md`). **This completes Phase 4d and moves the game's
+win-condition to the bayou**, demoting the Duneshaper to a mid-boss exactly as biome 2 demoted the
+Gremlin King — which finally makes the **Duneshaper's Heart** obtainable (it gates the Gemwright's
+ability-jewelry tier and had been unreachable since B3-P2b, because killing it ended the run).
+Session 1's inert `tyrant_sigil`/`gorge_bone` now craft the **Effigy of the Miretyrant** (2/1/4
+with Mirehide, tier 1), which reveals the **Sunken Gorge** on the map and unseals its maw. Locked
+via `AskUserQuestion` (all as recommended): adds = **bellow waves** on their own clock (3 per
+bellow, 5 enraged, capped at 8 — punctuation, not crowd-control busywork); interior = **approach +
+arena**; **no arena seal** (4c's lock — hardcore + no escape = no counterplay); **one fixed lair**.
+The boss is a deliberate counterweight to the caster Duneshaper: a **bruiser** that closes to ~96px,
+whose dodges are all spacing dodges (locked-heading chomp, ±120° tail sweep you escape by distance,
+radial slam, and a phase-2 death roll you outrun across), resisting slash and poison but folding to
+**blunt** so the two finales reward different loadouts. The dungeon layer was **generalized, not
+copied**: `generateCrypt` gained an optional forced arena room, a new `DungeonInterior` interface
+(`src/systems/Dungeon.ts`) lets the player clamp, room lighting, nav steering, containment and every
+underground gate serve both interiors with no branching, and the shell builder was extracted into
+`renderDungeonShell()`. Verified live end-to-end (placement, key loop, descent, every attack's hit
+geometry, phase gates, bellow cap, both win/no-win kills); `tsc` clean, zero console errors.
+**Next: Phase 5 — the post-big-boss RNG reward choice**, whose trigger (a big-boss kill that does
+NOT end the run) now exists for both the Gremlin King and the Duneshaper. See B3-P4d(2) below +
+[[survivor-rpg-biome-3-roadmap]].
+Prior: **B3-P4d(1) — Biome-3 Phase 4d, session 1: the bayou's two surface POIs** (2026-07-22, Opus,
+plan `.claude/plans/biome-3-phase-4d-pois.md`). The two POIs run on **deliberately different
+verbs**, because every prior POI resolves as "kill the guards, take the loot": the **Sunken Shrine**
+is a rite the
 PLAYER starts (spend 3 Blight Gland + 2 Gloam Dust → three escalating waves fought on the spot →
 guaranteed **Tyrant Sigil**; walking out of a 420px radius for 5s lapses it, destroying what it
 summoned; emptying the bowl re-arms it, so it's renewable with **no** respawn timer), and the
@@ -21,35 +40,17 @@ so nothing dead-ends in the crafting menu until the descent exists). Verificatio
 bug: the POI-clearing exclusion list was duplicated across three samplers so only `pickBayouPoint`
 knew about the new POIs, and `scatterInZone` had no check at all — now **one
 `insidePoiClearing(x,y)`** consulted by all four paths (0 violations across 2162 nodes / 1043
-enemies). Verified live end-to-end; `tsc` clean, zero console errors. **Next: 4d session 2 — the
-Miretyrant boss dungeon + the win-con swap.** See B3-P4d(1) below + [[survivor-rpg-biome-3-roadmap]].
+enemies). Verified live end-to-end; `tsc` clean, zero console errors. See B3-P4d(1) below +
+[[survivor-rpg-biome-3-roadmap]].
 Prior: **B3-P4c — Biome-3 Phase 4c: Sunken Crypts, the DUNGEON mechanic** (2026-07-22, Opus, plan
-`.claude/plans/biome-3-phase-4c-crypts.md`). The payoff for 4a's locked surface/dungeon split:
-`moonsilver` + the 3 ability geodes had been pulled off the surface and had **no source at all**
-until now — so every jewelry recipe and all three Q/E/R abilities were unreachable. **6 crypts, two
-per gem theme, 5-7 rooms each.** Interiors are a **pocket of the same world**, not a second Scene:
-prebuilt at `create()` in `CRYPT_REALM`, the dead corner of the world SQUARE that lies outside the
-world CIRCLE (measured 15488px from center vs `WORLD_RADIUS` 14000). New framework-free
-`src/systems/CryptLayout.ts` carves rooms + L-corridors on a 32px grid and returns **merged
-horizontal wall runs** (601 static bodies across six dungeons instead of ~1800). `activeCrypt` gates
-everything that must not run underground — player clamp, map reveal + minimap, surface respawns,
-nightfall surge, dawn cull — and `NightOverlayUI` gained an **underground mode at 0.94 alpha** so a
-crypt is pitch black past your torch (at night's 0.42 you could see the next crypt's floor across
-the void); interior braziers are per-crypt so a neighbour's 7 in-range lights don't hang glowing
-beside you. **The materials are hard-gated on the encounter**: vault geodes + moonsilver seams spawn
-`shielded` (the Gloaming Vein mechanic) — no prompt, un-mineable — and crack open only when that
-crypt's warden dies. **Three bespoke wardens with three genuinely different state machines** (locked
-by the user: not one skeleton with new numbers, and different from every previous mini-boss, none of
-which reuse the shared poise-bar punish): **Palewake** (gloam — a stalker that's untargetable while
-stalking; its ONLY opening is **breaking its drain-tether with a wall or pillar**, a dodge verb that
-exists only because we now have interiors), **Kilnborn** (ember — a **heat meter that rises as it
-acts**, setting its own vault floor alight; the backdraft sweeps the burning ground so the dodge is
-**standing on cold tiles**, and the punish window arrives on the boss's clock), and **Sanguinarch**
-(blood — **the player sets its phase**: its feed only lands if you're bleeding, buying it a heal and
-you a fat `engorged` punish window; stay clean and it never opens up). Verified live end-to-end
-(walls hold, sealed→cracked→mined, all three warden loops incl. cold-vs-burning ground and
-bleeding-vs-clean feeds, zero spawns inside a crypt, containment); `tsc` clean, zero console errors.
-See B3-P4c below + [[survivor-rpg-biome-3-roadmap]].
+`.claude/plans/biome-3-phase-4c-crypts.md`). 6 crypts (two per gem theme) whose interiors are a
+**pocket of the same world**, not a second Scene — prebuilt in `CRYPT_REALM`, the dead corner of the
+world SQUARE outside the world CIRCLE, laid out by the framework-free `src/systems/CryptLayout.ts`
+(merged wall runs, room-discovery lighting, crypt nav for dwellers that now collide with walls).
+The 3 ability gems + Moonsilver live here, hard-gated `shielded` behind **three bespoke wardens with
+three genuinely different state machines** (Palewake's breakable drain-tether / Kilnborn's rising
+heat meter and cold-tile dodge / Sanguinarch's player-driven phase). Full entry in
+STATUS-archive.md; see [[survivor-rpg-biome-3-roadmap]].
 Prior: **B3-P4b — the Duskmire Bayou creature roster** (2026-07-22, Opus). Six bespoke melee-core
 creatures (Mirejaw / Blighttoad / Mosswretch / Murkling / Fenlurker) + the one uncommon ranged
 Corpselight, which introduced the game's first HOMING projectile. Added `Enemy.pendingPoison`, 3
@@ -75,26 +76,26 @@ env hook; **PB18** backpack armor-upgrade fix + reforge-returns-to-slot.
 
 **In progress / next.** The **biome-2 (Sunscorch Badlands) umbrella is COMPLETE** (all 6 phases 0–5 —
 patchwork worldgen through the relic rework; the badlands is a fully populated second biome with a
-4-enemy roster, POIs, the Duneshaper win-boss, and the smelting/forging gear + tier-2 relic tiers). The
+4-enemy roster, POIs, the Duneshaper — now a MID-boss, see below — and the smelting/forging gear +
+tier-2 relic tiers). The
 current arc is the **biome-3 (haunted bayou, working name "Duskmire Bayou") + new-systems roadmap**
 (`.claude/plans/biome-3-and-new-systems-roadmap.md`, 5 phases). **Shipped so far:** **Phase 1**
 (terrain-that-matters + badlands macro-zones), **Phase 2a** (the activated-ability framework + Dota
 QER HUD), **Phase 2b** (the jewelry-effect pipeline + the Gemwright's Table), **Phase 3** (the bayou
 gear progression — gem augments + the Gloamsteel/Mirehide reforge tier), **Phase 4a** (the
-bayou's terrain, environment and material sources), **Phase 4b** (the creature roster), and now
-**Phase 4c** (the Sunken Crypts dungeon mechanic) and **Phase 4d session 1** (the two surface POIs —
-above). **Phase 4 is sliced into FOUR sessions** (the Dungeon mechanic was added mid-4a): **4a
-terrain/env/surface-sources — DONE**; **4b — the melee-core roster** (Mirejaw / Blighttoad /
-Mosswretch / Murkling / Fenlurker + the one ranged Corpselight haunt) — **DONE**, which sourced
-**Mirehide** and re-enabled the bayou's respawn top-up; **4c — DUNGEONS — DONE** (6 themed Sunken
-Crypts; the 3 ability gems + Moonsilver finally have a source, hard-gated behind a bespoke warden
-per gem); **4d — surface POIs + the Miretyrant**, itself split in two: **session 1 (the Sunken
-Shrine + Drowned Lodge + the Tyrant Sigil / Gorge Bone key materials) — DONE**; **session 2 —
-the Miretyrant melee boss-with-adds (NEXT)**, which per the locked amendment lives in its **own
-boss-level dungeon** (a bespoke arena on 4c's `CryptLayout`/`CRYPT_REALM` machinery) behind a sealed
-descent unlocked by an effigy crafted from those two materials. It **becomes the new win-con**
-(locked), demoting the Duneshaper to a mid-boss and finally making its **Heart** obtainable,
-unlocking the Gemwright's ability recipes. **Then Phase 5** (post-big-boss RNG reward choice).
+bayou's terrain, environment and material sources), **Phase 4b** (the creature roster), **Phase 4c**
+(the Sunken Crypts dungeon mechanic), and now **all of Phase 4d** — **PHASE 4 IS COMPLETE**. It ran
+to four sessions (the Dungeon mechanic was added mid-4a): **4a terrain/env/surface-sources — DONE**;
+**4b — the melee-core roster** (Mirejaw / Blighttoad / Mosswretch / Murkling / Fenlurker + the one
+ranged Corpselight haunt) — **DONE**, which sourced **Mirehide** and re-enabled the bayou's respawn
+top-up; **4c — DUNGEONS — DONE** (6 themed Sunken Crypts; the 3 ability gems + Moonsilver finally
+have a source, hard-gated behind a bespoke warden per gem); **4d — surface POIs + the Miretyrant**,
+itself split in two, **both DONE**: session 1 (the Sunken Shrine + Drowned Lodge + the Tyrant Sigil /
+Gorge Bone key materials) and session 2 (the **Miretyrant**, its own boss-level dungeon behind the
+sealed Sunken Gorge, and the **win-con swap** — the Duneshaper is now a mid-boss and its **Heart**
+is obtainable, unlocking the Gemwright's ability recipes). **NEXT: Phase 5** — the post-big-boss RNG
+reward choice, the last phase of this arc; its trigger (a big-boss kill that does NOT end the run)
+now exists for both the Gremlin King and the Duneshaper.
 Ability/jewelry numbers and everything biome-3 are first-pass/tunable. The master-plan tail
 **M-TE** (trophy-gated gear) is folded into the shipped biome-2 work; real pixel art/animations stay
 deliberately deferred until content/balance settle (roadmap item 8).
@@ -145,6 +146,108 @@ below + [[survivor-rpg-dev-console]].
 ## Recent Entries
 
 > Older entries in STATUS-archive.md.
+
+### B3-P4d(2) — Biome-3 Phase 4d, session 2: the Miretyrant, its lair, and the win-con swap (2026-07-22, Opus)
+
+Plan: `.claude/plans/biome-3-phase-4d-miretyrant.md`. The second half of Phase 4d, and the payoff
+for session 1: `tyrant_sigil` and `gorge_bone` shipped inert, and this is what consumes them.
+**The bayou boss is now the game's win-condition**, demoting the Duneshaper to a mid-boss exactly
+as biome 2 demoted the Gremlin King.
+
+**Locked this session (`AskUserQuestion`, all four as recommended):** adds = **bellow waves**
+(periodic clearable batches — punctuation, not a crowd-control job; rejected a continuous Broodmaw
+trickle and mandatory phase-locked packs); interior = **approach + arena** (rejected a bare single
+chamber, which makes the descent a loading screen, and a full 5-7 room crypt, which would read as a
+7th crypt); **no arena seal** (4c's lock — hardcore + no escape = no counterplay; retreat resets it);
+**one fixed lair**, revealed on the map when the effigy is crafted.
+
+**The key.** New `miretyrant_effigy` recipe (misc, tier 1 — Workbench proximity, deliberately **no**
+workbench-TIER gate, since its real gate is the POI materials): `2 Tyrant Sigil + 1 Gorge Bone +
+4 Mirehide` = two survived shrine rites, one cleared Drowned Lodge, and gator hide to bind it.
+Crafting it fires `onMiretyrantEffigyCrafted()` — a direct mirror of `onTyrantTotemCrafted()` —
+which drops the `map_gorge` landmark and a directional nudge, because a single door in a 28000px
+world is not findable by exploration.
+
+**The descent.** One **Sunken Gorge**, position picked in `create()` before any spawning with its
+own `GORGE_CLEAR_RADIUS` (300) added to the single `insidePoiClearing()` session 1 consolidated —
+so the new POI needed adding in exactly one place, which is what that extraction was for. Sealed it
+prompts `[LMB] Break the seal` (prompted even while sealed, the tyrant-altar precedent, so the site
+reads as real content before you can use it); clicking without the effigy logs why nothing happened.
+Offering it swaps the maw texture, shakes the camera, and the site becomes a crypt doorway.
+
+**Generalizing the dungeon, not copying it.** Two small changes rather than a parallel system:
+`CryptLayout.generateCrypt` gained an optional **arena cell size** — that room is placed first,
+becomes the layout's `vault`, and `entry` becomes the room furthest from it (rooms reordered so
+index 0 is still the entry), because a 2.6x boss plus adds plus dodging room does not fit in a
+random 8-12 cell room. And a new `src/systems/Dungeon.ts` **`DungeonInterior`** interface captures
+exactly what MainScene's underground paths already wanted (name / x / y / layout / entryPoint /
+braziers / discovered / exitStairs / enemies): `activeCrypt` became `activeDungeon: DungeonInterior`,
+`SunkenCrypt` gained a `name` getter, and the player clamp, room-discovery lighting, brazier lights,
+crypt-nav steering, containment net, exit-stairs hover and every "don't run surface systems down
+here" gate now serve both with **no branching**. The floor/wall/prop/stairs builder was likewise
+**extracted, not duplicated**, into `renderDungeonShell()` — all of it was about being underground,
+none of it about being a crypt. The lair's interior lives in a new `LAIR_REALM` rect in the same
+dead corner outside the world circle, below `CRYPT_REALM` and non-overlapping (measured: nearest
+corner 14751px from world center vs `WORLD_RADIUS` 14000).
+
+**The Miretyrant** (`src/entities/Miretyrant.ts`) — bespoke telegraph/poise AI on the GremlinKing /
+Gloamwarden / Duneshaper lineage, a trimmed sibling and **not** a shared framework (the standing boss
+lock). HP 3200, poise 450 (stagger x1.35 / 2.2s), scale 2.6, regen 16 HP/s deaggro'd, leash 620.
+Where the Duneshaper is a caster that holds 220px and throws magic, this is a **bruiser** that closes
+to ~96px and stays there, so every dodge is a spacing dodge: **Lunging Chomp** (locked heading, step
+off the line), **Tail Sweep** (165px / ±120° — dodge by distance or dash, a sidestep never clears
+it), **Muck Slam** (radial, growing telegraph), and a phase-2 **Death Roll** (a travelling multi-hit
+spin you outrun across, never along — the only attack that can hit you twice). Resistances
+`{ slash: 0.8, blunt: 1.2, poison: 0.25 }`: a thick swamp hide that folds to a warhammer, deliberately
+**not** the Duneshaper's fire-weakness so the two finales reward different loadouts. Phases: Death
+Roll at 65% HP, enrage timing + halved bellow interval at 35%, multipliers captured at state entry.
+**The bellow runs on its own clock**, not in the attack pool, so it lands as punctuation between
+attacks; the boss only ASKS (`consumeBellow()`) and MainScene resolves the spawn — the same contract
+`checkPlayerHit()` uses, which is what gets the adds terrain collision, crypt navigation and
+containment for free. Adds surface at the arena's edge (never on the player), 3 per bellow / 5 enraged,
+hard-capped at 8 concurrent.
+
+**Win-con swap.** A `Miretyrant` kill fires `endRun("won")`; the `Duneshaper` branch is gone. It
+joins `classifyKill` as `"boss"`, `engagedBigBoss()` (the top-of-screen bar), `staggerMultiplierFor`,
+the `checkPlayerHit` boss union, the boss prompt color, and both `isBoss` exclusions (respawn +
+`__dev.killall`). The Duneshaper's **Heart** — which gates the Gemwright's Table's ability-jewelry
+tier and had been unreachable since B3-P2b because killing it ended the run — is finally obtainable,
+along with its Tier-2 boss trophy. `__dev.spawn("miretyrant")` added.
+
+**Verified live** (`preview_eval`; the Browser pane is hidden in this session so the render loop was
+driven with `game.loop.step` and **screenshots were not possible** — everything below is state
+assertion, not a visual check):
+- **Placement:** gorge at r=8241 (bayou band 6400-10500), ≥1215px from every other POI type, **0**
+  wild nodes and **0** wild enemies inside its 300px clearing.
+- **Interior:** 4 rooms / 6 corridors / 133 merged wall runs; arena 832×576 and the largest room;
+  entry is `rooms[0]`, is not the arena, and sits 1298px from it; every room inside `LAIR_REALM`;
+  8 inhabitants, and the **only** thing in the arena is the boss.
+- **Key loop:** recipe discovered once the materials are known + a bench exists; crafting consumed
+  exactly 2/1/4 and produced 1 effigy, set `lairRevealed`, added the `map_gorge` landmark and logged
+  the directional nudge. Clicking the sealed maw with no effigy: no state change, logged "The seal
+  holds." Offering it: texture → `gorge_maw_open`, prompt → "Descend into the Sunken Gorge".
+  Descend put the player exactly on `entryPoint` with the label reading "The Sunken Gorge"; the exit
+  stairs prompted and returned them 60px from the maw.
+- **Boss:** aggro'd at range, registered on the big boss bar, cycled
+  idle → telegraph → execute → recover through all three base attacks. `checkPlayerHit` geometry
+  asserted case by case: chomp 60px hit / 90px miss; sweep front hit, **behind and 200px both miss**;
+  slam 140px hit / 170px miss and **once per attack**; roll hits, is blocked for its 420ms interval,
+  then hits again, and misses at 120px; nothing at all outside `executing`.
+- **Phases:** at full HP the pool never offered the roll; at 60% it did. At 30% the boss was enraged
+  and the bellow added 5 at once, stopping exactly at the cap of 8. Every add was terrain-colliding
+  and in `cryptEnemies`, all 12 live lair enemies were on floor, and nothing else was in the realm.
+- **Win-con:** a Duneshaper kill scored as a boss, left `runOver` false, and yielded its Heart; a
+  Miretyrant kill classified `"boss"` and ended the run with outcome `"won"` and the victory screen.
+- `tsc --noEmit` clean; **zero console errors**.
+
+**A verification gotcha worth recording** (it cost a bad reading, and the session-1 addendum warned
+about the same class of thing): `__dev.god()` is a **toggle**. Calling it twice re-armed death, the
+planted test player died, and hardcore's `runOver` guard silently froze `update()` — so a boss that
+was cycling fine read as "stuck in telegraph for 53 seconds". Any "nothing is happening" result
+underground should be checked against `isDead`/`runOver` before it is believed.
+
+**Next: Phase 5** — the post-big-boss RNG reward choice. With the win-con moved, the Gremlin King and
+the Duneshaper are both non-run-ending big-boss kills, which is exactly the trigger Phase 5 wants.
 
 ### B3-P4d(1) — Biome-3 Phase 4d, session 1: the bayou's surface POIs (2026-07-22, Opus)
 
@@ -221,188 +324,4 @@ the player had *died* in an earlier probe — hardcore's `runOver` guard early-r
 every polled system (including the rite) freezes while the scene still looks alive. Check
 `isDead`/`runOver` before trusting a "nothing happened" reading, and keep timed sequences inside a
 single eval.
-
-### B3-P4c — Biome-3 Phase 4c: Sunken Crypts (the dungeon mechanic) (2026-07-22, Opus)
-
-Plan: `.claude/plans/biome-3-phase-4c-crypts.md`. Phase 4c of the biome-3 roadmap — the **dungeon
-mechanic**, and the payoff for 4a's locked surface/dungeon split. In 4a the **most precious
-materials were pulled OFF the surface**: `moonsilver` + the three ability geodes
-(`gem_gloam`/`gem_ember`/`gem_blood`) were removed from the bayou scatter and their node textures
-kept in-repo specifically so this phase could re-site them. Until now those four materials — and
-therefore every jewelry recipe and all three Q/E/R abilities from 2a/2b — had **no in-game source
-at all** (`__dev.give` only). They do now.
-
-**Locked with the user via `AskUserQuestion` (+ two follow-up corrections):** materials come out as
-**mineable nodes deep inside** (re-site the kept geode/seam nodes, not a chest hand-out); **one gem
-per crypt, themed**, so *which crypt you clear decides which ability you unlock*; **6 crypts, ~5-7
-rooms each** (two per theme); **a unique bespoke mini-boss per gem type** — and, on his correction,
-**the materials are hard-gated on beating that encounter** and each warden must feel different
-**from each other AND from every previous mini-boss**, i.e. three genuinely different state machines,
-not one skeleton with new numbers.
-
-**Interiors are a pocket of the same world, not a second Scene.** Every system the player carries
-(run state, HUD, inventory, physics groups, day/night, relics) lives on `MainScene`; a second scene
-would duplicate or re-parent all of it. Instead interiors are prebuilt at `create()` in
-`CRYPT_REALM` — the dead corner of the world SQUARE that falls outside the world CIRCLE. Physics and
-camera bounds already cover it, `drawWorldBoundary()` already paints it near-black, and every spawn
-sampler already rejects it. Geometry is measured, not assumed: the rect's nearest corner is **15488
-px** from world center vs `WORLD_RADIUS` 14000 (verified live across reseeds). Six interiors sit on
-a 3×2 grid inside it, so no two can overlap. Prebuilt (not instanced on demand) means **a
-partially-cleared crypt stays cleared for the run**, matching how all world-gen already works.
-
-**New: `src/systems/CryptLayout.ts`** (framework-free, no Phaser) — carves rooms + L-bend corridors
-on a 32px cell grid, marks the floor, then turns every non-floor cell touching floor into wall.
-Walls come back as **merged horizontal runs**, which is the difference between ~1800 static bodies
-across six dungeons and the **601** actually created (measured live). Also picks `entry` (arrival +
-exit stairs), `vault` (furthest from entry — the payoff is always a real delve) and `side` (furthest
-from both — the loot detour is a detour).
-
-**New: `src/entities/SunkenCrypt.ts`** — the surface doorway + per-crypt state, `BadlandsDen`'s
-plain-data-class split (MainScene owns generation/population). `CRYPT_THEMES` is the single source
-for a theme's entrance art, map marker, geode texture, gem key, warden name and glow color, so one
-decision drives four consistent tells.
-
-**The gate.** Vault geodes + moonsilver seams spawn `shielded: true` — the exact Gloaming Vein
-mechanic (`ResourceNode.shielded` + `crack()`), which is why that mechanic exists. Shielded nodes
-are skipped by hover/prompt/interact entirely, so there is no walking past the fight to the loot;
-the warden's kill handler cracks them into their real textures. **Deliberately NOT done:** sealing
-the vault door behind the player. In a hardcore one-life run an arena lock turns "I misjudged this"
-into "the run is over with no counterplay" — shielding the reward gates the loot without removing
-retreat.
-
-**Three wardens, three different machines** (`src/entities/Palewake.ts` / `Kilnborn.ts` /
-`Sanguinarch.ts`). All extend `Enemy`, fully override `update()`, and route area damage through
-`checkPlayerHit()` → `applyDamageToPlayer` so dash i-frames and armor just work. That is where the
-similarity stops — `Gloamwarden` and `Cinderwrought` both run
-`idle → telegraphing → executing → recovering (+poise → staggered)` where **the punish window is
-always "chip the poise bar"**, and none of these three do that:
-- **Palewake** (gloam → Blink) — *a stalker you cannot always hit.* `stalking` (near-invisible AND
-  **untargetable**, the Sandmaw's rule) → `manifest` → `tether` (channels a draining beam that will
-  not stop on its own) → `unravel` → `vanish`. **No poise bar.** The only opening is **breaking the
-  tether by putting a wall or pillar between you** — a segment-vs-rect test against the crypt's own
-  wall list, i.e. a dodge verb that only exists because this phase introduced interiors. Riding the
-  channel to its natural end gives you nothing. Its vault seeds extra pillars, and it picks flanks
-  with **clear** line-of-sight (a fix caught in verification: without it, it could resolve behind a
-  pillar and hand out a free unravel).
-- **Kilnborn** (ember → Nova) — *the room is the boss.* Driven by a **heat meter that rises as it
-  acts**. Rising heat sets the vault floor alight tile by tile (32px grid, up to 62% of the room —
-  the tile size was cut from 48 after a live check showed a vault holding only 12 tiles, making
-  "cold ground" five chunky squares); at full heat the **backdraft sweeps exactly the burning
-  floor**, so the dodge is not a direction, it's standing on cold ground. The punish window is
-  `venting`, and it arrives on the **boss's** clock — you survive to it, you can't force it.
-- **Sanguinarch** (blood → Bloodpact) — *you set its phase.* Its flurry stacks bleed (existing
-  `pendingBleed`); every ~5s it channels a **feed that resolves against your state at the end** —
-  bleeding when it lands and it drinks (heals 45) and swells into `engorged`: slow, huge slams, and
-  1.7× incoming damage. Deny it and it just stays a fast, frantic, never-vulnerable frenzy. Bleeding
-  is the only way to buy an opening, and it costs you. (`MainScene` pushes `playerBleeding` each
-  frame, the same way `envSpeedMult` is pushed — `update()`'s signature can't express player state.)
-
-**Scene wiring.** `activeCrypt` gates the world systems that must not run underground: the player
-clamp (crypt footprint instead of the world circle), map reveal (no fog painting of the pocket;
-minimap hidden via a new `MinimapUI.setHidden`, biome label shows the crypt's name, world map
-refuses to open), the surface respawn tick, the nightfall surge, and the dawn cull. `NightOverlayUI`
-gained an `underground` mode — **0.94 alpha of near-black vs night's 0.42** — because at night's
-value you could still make out the neighbouring crypt's floor across the void. Interior braziers are
-kept **per crypt** (`SunkenCrypt.braziers`) and only lit for the crypt you're in: verification found
-**7 neighbouring braziers inside camera range** that would otherwise have hung glowing in the dark
-beside you. Crypt dwellers are tracked in a `cryptEnemies` set and **excluded from the surface
-respawn budget** (57 of them would have permanently eaten a third of `RESPAWN_MAX_LIVE`), and pinned
-to their own crypt each frame (`containCryptEnemies`) — enemies keep the standing
-"not blocked by terrain" rule, so doorways aren't a free escape, but a wanderer can never leak into
-the void. Entrance positions are picked before any spawning with a `CRYPT_CLEAR_RADIUS` exclusion in
-all three samplers (the standing "POI busy = missing exclusion zone" rule). Discovery reuses the POI
-quartet with a **per-theme map marker**, so the map itself tells you which ability is buried where.
-
-**Verified live** (`javascript_tool`, each test self-contained): 6 crypts, two per theme, 5-7 rooms,
-601 wall bodies of which **zero** overlap a room center; every interior **15488+ px** from world
-center (outside the 14000 radius); all 6 doorways in real bayou, min spacing 1745, **0 surface nodes
-inside the exclusion** (closest 204px) and 1 cluster-jittered Mosswretch at 190px (the bayou
-spawner jitters members after the exclusion check — noted, harmless, arguably a guard); enter →
-lands in the entry room, exit → back at the doorway; **shoving into a wall at 400px/s moved 10px,
-the same shove in open floor moved 166px**; darkness forced to 1 in-crypt while the sky read 0;
-sealed geodes gave **no prompt and could not be mined**, then cracked to the **correct themed gem**
-(gloam→`geode_gloam`, ember→`geode_ember`, blood→`geode_blood`) + moonsilver seams, and a cracked
-geode mined out in 3 hits to a real drop; chests rolled varied loot; Palewake ticked **10 magic**
-with clear LOS and **unravelled 400ms after a wall was interposed** (`isStaggered` 1.6×); Kilnborn
-lit 31/50 tiles at full heat and dealt **58 fire + 260 knockback on burning ground vs nothing on
-cold ground**, `venting` 1.7×; Sanguinarch **never engorged across 400 ticks while the player wasn't
-bleeding** (health flat) but healed 200→280 and engorged (scale 1.85, slam 50 + 220) when they were;
-all three classify as `elite` kills; a forced respawn tick + nightfall batch inside a crypt spawned
-**0**; a dweller shoved 900px outside its bounds was pinned back inside. `tsc` clean, **zero console
-errors**, screenshot captured of a torchlit interior.
-
-Also fixed in passing: `promptFor()` now refuses `shielded`/`harvested` nodes directly. `updateHover`
-already filtered them, but the crypt vault's entire material gate rests on that rule, so it's stated
-at the prompt layer too rather than living in one loop's filter.
-
-**SAME-SESSION FIX — dungeon collision + pathing (the user: "enemies aren't respecting collision and
-aren't pathing through the hallways/rooms... spawning/moving outside of the walls").** Two real bugs
-plus the design consequence of fixing the first:
-1. **Dwellers walked through walls.** `Enemy.collidesWithTerrain` defaults to FALSE — the standing
-   rule, because out in the world solid things are boulders (cover, not structure) and a straight-line
-   chaser wedges on them. In a dungeon the wall IS the structure, so crypt dwellers now set the flag,
-   which the existing collider's process callback already gates on (no new wiring).
-2. **Vault nodes could sit inside the walls.** The geode/seam rings used fixed 96/132px radii, but a
-   vault could be 192×160, so the outer ring landed in rock. Radii are now a fraction of the room's
-   tightest half-span (plus a clamp), and `CryptLayout` picks the vault from the FAR HALF of rooms by
-   **largest area** rather than distance alone (distance alone once handed the boss fight a cupboard).
-   Room minimums went 6×5 → 8×7. Measured after: **0 of 36 vault nodes and 0 of 43 live dwellers off
-   the floor plan.**
-3. **Turning collision on immediately reproduced exactly what the default protects against**: a
-   Murkling closed 545px → 276px and then pressed into a wall for 35 straight intervals. Rather than
-   revive the per-frame obstacle-avoidance heuristic this codebase deleted once already, crypt
-   dwellers now **navigate the structure that already exists** — `CryptLayout` gained a tiny nav
-   graph (rooms + corridors as nodes, adjacency = a ≥24px overlap, BFS memoized per layout) and
-   `MainScene.steerCryptEnemy` **re-aims the velocity the AI already chose** toward the next doorway.
-   Three iterations were needed and each failure is worth recording:
-   - **Substituting a fake doorway TARGET doesn't work.** Every enemy with reach thinks it has
-     arrived and plants, swinging at air (a Mosswretch's ~100px reach froze it 710px away). Steering
-     velocity after `update()` keeps the AI seeing the real player for every range/attack/give-up
-     decision.
-   - **Pushing the waypoint past the doorway breaks the safety property.** The overlap region is a
-     rectangle inside both rects, and rectangles are convex, so a straight line to it never leaves
-     the floor; a point 70px beyond it does, and enemies drove into a wall forever.
-   - **Re-planning every frame oscillates.** Rooms and corridors overlap, so at a junction an enemy
-     is inside three rects at once and "which rect am I in" flips frame to frame (velocity seen
-     alternating ±25 while the position held still). Fixed with `rectIndexAt` picking the DEEPEST
-     containing rect, a committed per-enemy waypoint (re-planned on arrival or after 1.2s), and a
-     look-ahead for the degenerate case where the first seam is the spot you're already standing on.
-   Verified: a Murkling pathed **503 → 424 → 325 → 264 → 157 → 20px** through two doorways onto the
-   player, and left running, **every** dweller in a crypt (7 Murklings + a Fenlurker) crossed the
-   dungeon and ended up within 9–36px of the player while the leashed Kilnborn stayed in its vault at
-   501px. Containment now snaps anything off the floor plan to the **nearest** floor point (a net for
-   burrows/leaps/knockback, not the thing keeping them in). The Palewake gained an `arena` so its
-   flanks are clamped to its vault (20/20 picks on floor) — with collision on, a flank in the rock
-   would leave it tethering with no line of sight, handing out a free unravel every cycle.
-   **Test-harness note:** the 30s `CHASE_GIVEUP_MS` deaggro silently confounds a long pumped chase
-   test — re-arm `forceAggro` each interval or you'll read "stuck" where the enemy simply gave up.
-
-**SAME-SESSION — room-discovery lighting, blink clipping, and dropping the torch tax (the user:
-"discovering a room should light up the whole room, sort of like a fog of war"; "how will the
-teleport work in here — should we just not allow it?"; "not a big fan of the requires-torch
-mechanic").** All three are the same decision from different angles, so they landed together:
-- **A crypt is lit by DISCOVERY, not by equipment.** Setting foot in a room or corridor lights that
-  whole space permanently (`SunkenCrypt.discovered`, a per-run set of layout rects), so an explored
-  crypt reads as a lit floor plan with the unexplored parts still black — fog of war, not a torch
-  radius. `ScreenLight` gained optional `width`/`height` so the existing soft brush can be stretched
-  to a room's footprint; each discovered space erases **twice** (a wide halo that softens onto the
-  walls, then a core pass at the room's own size), because the halo alone left room edges ~40% dark
-  and a "lit" room that reads murky defeats the point.
-- **The torch is now a bonus, not a toll.** The player carries `CRYPT_AMBIENT_LIGHT` (120px)
-  underground regardless of what's equipped; a torch/lantern widens that pool (180px+) instead of
-  being the price of seeing anything. The `crypt_dark` hint was reworded to teach the discovery rule
-  rather than sell torches.
-- **Gloamstep Blink is CLIPPED, not banned.** Forbidding it was the other option the user raised, but
-  the gem that grants it is crypt loot, so a dungeon is the last place it should stop working.
-  `clipBlinkToFloor` marches the blink line in 10px steps and lands on the furthest point still on
-  floor — stepping rather than testing the endpoint is the whole trick, since a destination can be
-  perfectly valid floor on the *far side* of a wall. Verified: all 8 directions from a room center
-  land on floor, clipped to 110–160px by the room's own walls, while a surface blink still travels
-  its full 220px. `clampPlayerToCrypt` also now snaps the player out of rock as a last resort, for
-  any future movement that doesn't ask permission.
-
-**Not done / next:** **4d — surface POIs + the Miretyrant boss**, which becomes the new win-con
-(demoting the Duneshaper to a mid-boss and finally making its Heart, and therefore the ability
-jewelry, obtainable). Crypts do not respawn once cleared, and there is no crypt-specific minimap —
-both deliberate.
 

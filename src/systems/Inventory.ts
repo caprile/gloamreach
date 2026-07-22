@@ -88,4 +88,5 @@ export type ResourceType =
   | "corpselight_trophy"
   // --- biome-3 (Phase 4d) surface-POI spoils — the two halves of the deep-mire summon ---
   | "tyrant_sigil" // pulled from a Sunken Shrine's bowl once its rite is survived
-  | "gorge_bone"; // taken from a Drowned Lodge's chieftain hut once its haunts are put down
+  | "gorge_bone" // taken from a Drowned Lodge's chieftain hut once its haunts are put down
+  | "miretyrant_effigy"; // bound from both POI spoils — unseals the Sunken Gorge

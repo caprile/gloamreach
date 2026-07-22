@@ -1895,6 +1895,7 @@ export class BootScene extends Phaser.Scene {
     // violets so a glance at the map distinguishes "a way down" from "a place".
     mapMarker("map_shrine", 0x9ce0d0, 0x2a7a6a); // Sunken Shrine — drowned verdigris
     mapMarker("map_lodge", 0xd8b48a, 0x6a4a2a); // Drowned Lodge — waterlogged timber
+    mapMarker("map_gorge", 0x8fe0b0, 0x1f5a3a); // The Sunken Gorge — the bayou finale, bright bile-green
 
     // ===== Badlands (biome 2 Phase 2) content =====
 
@@ -2907,6 +2908,25 @@ export class BootScene extends Phaser.Scene {
     g.fillRect(11, 9, 3, 2);
     g.generateTexture("icon_gorge_bone", ICON, ICON);
 
+    g.clear(); // Effigy of the Miretyrant — a hide-bound gator skull on a stake
+    g.fillStyle(0x5a4a30, 1);
+    g.fillRect(11, 12, 3, 10); // the stake
+    g.fillStyle(0xd8cfae, 1);
+    g.fillRect(5, 4, 15, 8); // long flat skull
+    g.fillTriangle(20, 4, 20, 12, 24, 9); // snout
+    g.fillStyle(0x14181a, 1);
+    g.fillRect(8, 6, 3, 3); // socket
+    g.fillStyle(0x2a7a6a, 1); // sigil-green witchlight in the socket
+    g.fillRect(9, 7, 1.5, 1.5);
+    g.fillStyle(0x6a4a2a, 1); // hide binding
+    g.fillRect(5, 10, 15, 2);
+    g.fillRect(13, 4, 2, 8);
+    g.fillStyle(0xd8cfae, 1); // teeth
+    g.fillRect(6, 12, 1.5, 2);
+    g.fillRect(10, 12, 1.5, 2);
+    g.fillRect(16, 12, 1.5, 2);
+    g.generateTexture("icon_miretyrant_effigy", ICON, ICON);
+
     // --- bayou elite trophies (all on the shared crimson-shard + gold-cord
     // template, so a trophy is instantly recognizable as one) ---
 
@@ -3900,6 +3920,113 @@ export class BootScene extends Phaser.Scene {
     g.fillStyle(0x141a12, 1);
     g.fillRect(2, 20, 10, 3);
     g.generateTexture("poi_ring_crypt", 14, 24);
+
+    // ===== The Sunken Gorge — the Miretyrant's lair (Phase 4d session 2) =====
+
+    // The maw (54x46): a jagged sinkhole ringed with jawbone-like stones. Two
+    // states, because the seal IS the gate — sealed reads as solid stone
+    // knitted shut, open reads as a black throat you can walk into.
+    const drawGorgeMaw = (key: string, open: boolean) => {
+      g.clear();
+      g.fillStyle(0x1b2a20, 1); // sunken rim of wet stone
+      g.fillEllipse(27, 26, 52, 34);
+      g.fillStyle(0x0f1a14, 1);
+      g.fillEllipse(27, 27, 42, 26);
+      if (open) {
+        g.fillStyle(0x040705, 1); // the throat
+        g.fillEllipse(27, 28, 32, 19);
+        g.fillStyle(0x2a7a5a, 0.4); // bile-green light breathing out of it
+        g.fillEllipse(27, 30, 22, 12);
+      } else {
+        g.fillStyle(0x243a2c, 1); // knitted-shut slab
+        g.fillEllipse(27, 27, 32, 19);
+        g.fillStyle(0x1a2a20, 1);
+        g.fillRect(11, 25, 32, 3); // the seam
+        g.fillStyle(0x4fbf86, 0.55); // sigil-green ward light along the seam
+        g.fillRect(13, 26, 28, 1);
+        g.fillCircle(27, 26.5, 3);
+      }
+      // jawbone stones around the rim — the tell that this is a mouth
+      g.fillStyle(0xd8cfae, 1);
+      const teeth: [number, number][] = [
+        [8, 16], [17, 9], [27, 6], [37, 9], [46, 16], [46, 34], [37, 41], [27, 44], [17, 41], [8, 34],
+      ];
+      for (const [tx, ty] of teeth) {
+        g.fillTriangle(tx - 3, ty + 4, tx + 3, ty + 4, tx, ty - 4);
+      }
+      g.fillStyle(0x141a12, 1); // muck creeping in at the base
+      g.fillRect(0, 42, 54, 4);
+      g.generateTexture(key, 54, 46);
+    };
+    drawGorgeMaw("gorge_maw_sealed", false);
+    drawGorgeMaw("gorge_maw_open", true);
+
+    // Gorge clearing dressing: a dark bile-tinted decal + half-sunk ribs.
+    g.clear();
+    {
+      const S = 180;
+      const c = S / 2;
+      for (let i = 12; i >= 1; i--) {
+        g.fillStyle(0x14231a, 0.055);
+        g.fillCircle(c, c, c * (i / 12));
+      }
+      for (let i = 5; i >= 1; i--) {
+        g.fillStyle(0x1f4a34, 0.05);
+        g.fillCircle(c, c, c * 0.4 * (i / 5));
+      }
+      g.generateTexture("poi_floor_gorge", S, S);
+    }
+    g.clear(); // a rib arching out of the muck
+    g.fillStyle(0xcfc6a6, 1);
+    g.fillRect(4, 4, 3, 18);
+    g.fillRect(4, 4, 9, 3);
+    g.fillStyle(0xa89e80, 1);
+    g.fillRect(4, 20, 3, 3);
+    g.fillStyle(0x141a12, 1);
+    g.fillRect(1, 21, 12, 3);
+    g.generateTexture("poi_ring_gorge", 14, 24);
+
+    // The Miretyrant (60x38) — the bayou FINAL BOSS: a colossal gloam-gorged
+    // alligator-behemoth. Long and low (it fills a room sideways, unlike the
+    // tall Duneshaper), drawn facing RIGHT per the roster art convention, with a
+    // ridged back, a slab of a jaw, and gloam-green witchlight in the eye and
+    // between the scutes — the swamp's own light, so it reads as the thing every
+    // bayou creature is a smaller copy of.
+    g.clear();
+    // tail (tapering back to -x) + body slab
+    g.fillStyle(0x2c4433, 1);
+    g.fillTriangle(0, 22, 16, 15, 16, 27);
+    g.fillEllipse(30, 21, 44, 20);
+    // darker underside
+    g.fillStyle(0x1e3325, 1);
+    g.fillEllipse(30, 26, 42, 10);
+    // head: a long flat jaw pushed forward (+x)
+    g.fillStyle(0x33503b, 1);
+    g.fillRect(44, 13, 16, 12);
+    g.fillTriangle(60, 13, 60, 25, 66, 20);
+    // jaw line + teeth
+    g.fillStyle(0x101a13, 1);
+    g.fillRect(44, 20, 18, 1.5);
+    g.fillStyle(0xe4dcc0, 1);
+    for (let i = 0; i < 5; i++) g.fillTriangle(46 + i * 3.4, 20, 48 + i * 3.4, 20, 47 + i * 3.4, 24);
+    // eye — gloam-green, the only bright thing on it
+    g.fillStyle(0x8fe0b0, 1);
+    g.fillRect(48, 14, 4, 3);
+    g.fillStyle(0x0a1410, 1);
+    g.fillRect(49.5, 14.5, 1.5, 2);
+    // back scutes with witchlight between them
+    g.fillStyle(0x1f3527, 1);
+    for (let i = 0; i < 7; i++) g.fillTriangle(10 + i * 6, 12, 16 + i * 6, 12, 13 + i * 6, 4);
+    g.fillStyle(0x4fbf86, 0.75);
+    for (let i = 0; i < 6; i++) g.fillRect(15 + i * 6, 10, 2, 2);
+    // legs
+    g.fillStyle(0x243a2b, 1);
+    g.fillRect(20, 28, 7, 8);
+    g.fillRect(40, 28, 7, 8);
+    g.fillStyle(0x101a13, 1);
+    g.fillRect(20, 34, 7, 2);
+    g.fillRect(40, 34, 7, 2);
+    g.generateTexture("miretyrant", 68, 38);
 
     // ===== Bayou surface POIs (biome 3 Phase 4d) =====
 

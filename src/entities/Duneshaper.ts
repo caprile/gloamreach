@@ -4,7 +4,10 @@ import type { DamageType } from "../systems/Weapons";
 import type { ProjectileConfig, ProjectileHost } from "./Projectile";
 
 // The Duneshaper (a.k.a. the Gloam Tyrant) — the SUNSCORCH BADLANDS FINAL BOSS
-// and the game's new win-condition (biome 2 Phase 3). A gloam-warped apex
+// (biome 2 Phase 3). It WAS the game's win-condition until biome 3's Miretyrant
+// took that role (B3-P4d), exactly as biome 2 demoted the Gremlin King before
+// it; it is now a mid-progression big boss whose kill is scored as a boss and
+// whose drops are finally reachable. A gloam-warped apex
 // sorcerer commanding sand + gloamfire. Bespoke AI following the GremlinKing/
 // Gloamwarden/Cinderwrought telegraph/poise pattern — NOT a shared framework
 // (the standing "own condition/numbers, don't generalize" boss lock). Extends
@@ -177,12 +180,10 @@ export class Duneshaper extends Enemy {
       y: cfg.y,
       texture: "duneshaper",
       displayName: "The Duneshaper",
-      // The final boss drops a Tier-2 Boss Trophy (guaranteed Mythic, ×1.5
-      // magnitude — S4) — though killing the Duneshaper ENDS the run, so this
-      // drop is unreachable in practice (kept for correctness / a future
-      // continue-mode). Plus ember shards. The Duneshaper's Heart (B3-P2b) gates
-      // the Gemwright's Table's ability-jewelry tier — likewise only reachable
-      // once biome 3 demotes the Duneshaper from the win-boss (dormant for now).
+      // A Tier-2 Boss Trophy (guaranteed Mythic, ×1.5 magnitude — S4) plus ember
+      // shards, and the Duneshaper's Heart, which gates the Gemwright's Table's
+      // ability-jewelry tier (B3-P2b). All three were unreachable while this
+      // kill ended the run; B3-P4d's win-con swap is what turns them on.
       loot: [
         { resource: "ember_shard", min: 5, max: 8 },
         { resource: "boss_refined_trophy_t2", min: 1, max: 1 },

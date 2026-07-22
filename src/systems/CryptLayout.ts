@@ -256,10 +256,25 @@ function centerOf(r: CellRoom): { x: number; y: number } {
   return { x: r.cx0 + Math.floor(r.cw / 2), y: r.cy0 + Math.floor(r.ch / 2) };
 }
 
+// An oversized room the caller REQUIRES, in cells. The Miretyrant's lair is an
+// approach plus one arena, and a boss arena can't be a random 8-12 cell room —
+// a 2.6× boss, its adds and the space to dodge in all have to fit. When given,
+// that room is placed first and becomes the layout's `vault`, and `entry`
+// becomes the room furthest from it (so the delve still ends at the arena).
+export interface CryptArenaSpec {
+  cw: number;
+  ch: number;
+}
+
 // Carve a crypt into `rect` (world px). roomCount is a target — if the rect
 // can't fit that many with the spacing rule, it returns as many as it placed
 // (never fewer than 2, so entry/vault always differ).
-export function generateCrypt(rng: CryptRng, rect: CryptRect, roomCount: number): CryptLayout {
+export function generateCrypt(
+  rng: CryptRng,
+  rect: CryptRect,
+  roomCount: number,
+  arena?: CryptArenaSpec,
+): CryptLayout {
   const cols = Math.floor(rect.w / CRYPT_CELL);
   const rows = Math.floor(rect.h / CRYPT_CELL);
   // 1-cell margin so the outer wall ring always has room to exist inside the rect.
@@ -267,6 +282,18 @@ export function generateCrypt(rng: CryptRng, rect: CryptRect, roomCount: number)
   const minR = 1;
 
   const cellRooms: CellRoom[] = [];
+  // The required arena first, so the rest of the rooms have to work around it
+  // rather than the other way round (a big room placed last rarely fits).
+  if (arena) {
+    const cw = Math.min(arena.cw, cols - minC * 2);
+    const ch = Math.min(arena.ch, rows - minR * 2);
+    cellRooms.push({
+      cx0: rng.between(minC, Math.max(minC, cols - cw - minC)),
+      cy0: rng.between(minR, Math.max(minR, rows - ch - minR)),
+      cw,
+      ch,
+    });
+  }
   for (let attempt = 0; attempt < 400 && cellRooms.length < roomCount; attempt++) {
     const cw = rng.between(ROOM_MIN_W, ROOM_MAX_W);
     const ch = rng.between(ROOM_MIN_H, ROOM_MAX_H);
@@ -370,6 +397,35 @@ export function generateCrypt(rng: CryptRng, rect: CryptRect, roomCount: number)
     const h = cr.ch * CRYPT_CELL;
     return { x, y, w, h, cx: x + w / 2, cy: y + h / 2 };
   });
+
+  // Arena mode: the required room IS the vault, and the entrance is whichever
+  // room sits furthest from it — the descent should end at the arena, not open
+  // onto it. rooms[] is reordered so index 0 is still the entry, since the rest
+  // of the codebase relies on that.
+  if (arena && rooms.length >= 2) {
+    const vaultRoom = rooms[0];
+    let entryRoom = rooms[1];
+    for (const room of rooms.slice(1)) {
+      if (
+        Math.hypot(room.cx - vaultRoom.cx, room.cy - vaultRoom.cy) >
+        Math.hypot(entryRoom.cx - vaultRoom.cx, entryRoom.cy - vaultRoom.cy)
+      ) {
+        entryRoom = room;
+      }
+    }
+    const rest = rooms.filter((r) => r !== entryRoom);
+    const ordered = [entryRoom, ...rest];
+    const sideRoom = ordered.find((r) => r !== entryRoom && r !== vaultRoom) ?? vaultRoom;
+    return {
+      bounds: rect,
+      rooms: ordered,
+      corridors,
+      walls,
+      entry: entryRoom,
+      vault: vaultRoom,
+      side: sideRoom,
+    };
+  }
 
   const entry = rooms[0];
   // Vault = a room that is both FAR from the entrance (the payoff is a real
