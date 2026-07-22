@@ -6960,3 +6960,61 @@ thing).
   empty-slot cast is a safe no-op; run-over/menu guards block casting; the bar renders (Q "6"s cooldown
   overlay, R active-glow) with icons visible and **no console errors**; `tsc --noEmit` clean. No
   `RECIPES.md`/dashboard change (dev-only items, no recipes).
+
+### B3-P2b — Biome-3 Phase 2b: Jewelry-effect pipeline + Gemwright's Table (2026-07-21, Opus)
+
+Makes 2a's abilities obtainable and lays the jewelry/gems economy. Plan:
+`.claude/plans/biome-3-phase-2b-jewelry-station.md`. the user's scope corrections mid-planning: gems +
+jewelry crafting are **biome-3+ content** (gems not findable before biome 3; no badlands node); the
+station is a **dedicated new station with a Duneshaper-boss-drop-gated upgrade** (the Gremlin King's
+Heart → Smelter pattern); and passive jewelry must feel **distinct from relics** (which own raw-% combat
+stats) — so it's the **ability-augment + utility/explorer** layer. Since biome 3 has no world content
+yet, this session built the biome-agnostic systems **live** and authored the materials/recipes/heart as
+**dormant** biome-3 data (test via `__dev.give`).
+
+**Built live (biome-agnostic):**
+- **`src/systems/EquipmentEffects.ts` (new)** — the first mechanical effect path for equipped non-armor
+  items (`ItemDef.stats` was display-only). `ItemDef.passive?: EquipPassive` holds the data; the class
+  sums equipped pieces (recomputed in `afterItemMove`, reset in `create`) and exposes getters modeled on
+  the relic summer. **Distinct channels (never relic-overlapping):** `abilityCooldownPct` (clamped ≥0.4),
+  `abilityPowerPct`, `magnetRadiusPct`, `gatherBonusPct`, `lightRadiusPct`. `describePassive()` feeds
+  the Tooltip, the JewelryMenu row, AND the HUD passive strip so display can't drift. Equipped jewelry
+  shows on the shared **`PassiveBarUI`** (left of the hotbar, alongside relic passives + armor
+  set-bonuses) — one always-on icon per equipped ring/amulet, gloam-violet border + hover tooltip.
+- **Hook sites (bespoke, one edit each):** cooldown → `tryCastAbility` + `abilityEntries` (HUD sweep
+  matches); power → `castBlink` distance + `castNova` dmg/radius; magnet → `MAGNET_RADIUS` gate; gather →
+  the depleted-node bonus-drop roll (alongside the M-SS chopping/mining chance); light → the player term
+  in `collectLights`. No `syncStatBonuses`/damage/crit change — that stays relics' turf.
+- **Ring-slot resolution** in `equipArmorFromContainer`: a ring (`armorSlot:"ring1"`) fills the first
+  empty of ring1/ring2, so two rings can be worn.
+- **4 passive pieces:** Ring of Quickening (−15% ability CD), Amulet of Channeling (+20% ability power),
+  Ring of the Forager (+15% gather, +30% magnet), Amulet of Farsight (+40% light, +20% magnet).
+
+**New dedicated jewelry station (built now, dormant recipes):**
+- **Gemwright's Table** — a placeable station (`Items.ts` def + `Recipes.ts` craft recipe, tier-1 /
+  Workbench-gated, costs Moonsilver) with its own recipe-list menu **`src/ui/JewelryMenu.ts` (new)** +
+  table **`src/systems/Jewelry.ts` (new)**, a near-clone of the Campfire+Cooking pattern (`craftAtJewelry`
+  / `maxJewelryBatches` / open/close mirror the campfire methods; hover/prompt/interact added to the
+  shared placed-station loop). Tier gates the recipes: **tier 0 = the 4 passives; tier 1 = the 3 ability
+  specials** (the existing 2a `special_*`/`back_*` items — 2b only adds their recipes).
+- **`Gloamheart Setting`** station upgrade (`StationUpgrades.ts`, resultTier 1) unlocks the tier-1
+  recipes, gated on a NEW **`duneshaper_heart`** guaranteed drop (`Duneshaper.ts` loot + `Items.ts` def +
+  BootScene icon) — mirroring `gremlin_king_heart` → Ember Crucible. Reuses the generic right-click
+  Upgrade/Pick-up ContextMenu + `applyStationUpgrade` verbatim (no new upgrade wiring).
+
+**Dormant / biome-3 (no in-game source this session):** 4 new materials (`moonsilver` +
+`gem_gloam`/`gem_ember`/`gem_blood`, `ResourceType` + `Items.ts` + BootScene icons via the `relicGem`
+helper), all jewelry recipes, and the heart. **Deferred to Phases 3/4:** Moonsilver mining, gem drops
+from bayou enemies/bosses, the epic-loot chest pool, and wiring the Duneshaper kill to continue-the-run
+(its demotion) so the heart is legitimately obtainable.
+
+**Verified live** (`javascript_tool` against `MainScene`; loop hand-stepped to boot the backgrounded
+preview): baseline effects neutral → equip 2 rings + amulet → **two-ring resolution** (ring1+ring2) and
+all 5 channels exact (0.85 CD / 1.2 power / 1.3 magnet / 0.15 gather / 1.4 light); equip a Q special +
+Ring of Quickening → real cast sets a **5100ms** cooldown (vs 6000 unringed) and the HUD `cooldownMs`
+reads 5100; station **tier 0** shows only the 4 passives, **tier 1** adds the 3 abilities, a tier-1
+craft at tier 0 is a **no-op**, a tier-0 passive craft lands in the bag; the **Gloamheart Setting
+upgrade** (with a Workbench nearby per the standing tier-≥1 rule) bumps the placed table 0→1, consumes
+the Duneshaper's Heart, and unlocks the ability recipes; the menu opens/renders/closes cleanly. `tsc`
+clean; **zero console errors**. `RECIPES.md` updated (station recipe + upgrade + a new Jewelry section);
+dashboard reads recipes live.

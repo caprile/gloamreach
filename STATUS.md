@@ -33,8 +33,11 @@ burial-chamber/sunken-crypt mechanic, added to the arc as its own phase); **Bog 
 surface-mineable** so the reforge tier is still reachable by exploring. Their textures/node shapes
 are KEPT for the dungeon phase to re-site; the gems + moonsilver are dormant again meanwhile. To
 keep the surface characterful, `BayouZone` widened to **three themed macro-zones** (6 each):
-**miasma** (no-regen + poison), **bonemire** (bleached dead-tree boneyard, 0.62 slow), **hammock**
-(raised cypress island, no penalty + the densest foraging). Also new: **`src/ui/StatusBarUI.ts`**, a
+**miasma** (poison + halved regen), **bonemire** (bleached dead-tree boneyard, 0.62 slow), **hammock**
+(raised cypress island, no penalty + the densest foraging). Per the user the **miasma is very common
+and large** — 46 zones at avg r 652 (vs 8 each of the others), placed first and allowed to merge into
+big fog banks, covering **34.8% of the bayou** with 62.4% left clear; measured, not guessed, and at
+no FPS cost. Also new: **`src/ui/StatusBarUI.ts`**, a
 **generic debuff strip** above the buff bar (poison/bleed/slow/no-regen — bleed had NO HUD tell since
 the badlands), timed effects get a meter + countdown, conditional ones just show; No Regen is
 suppressed while poisoned as redundant. **Poison's regen penalty is 50%, not a block** (the user):
@@ -324,6 +327,23 @@ still tick DOWN at full rate regardless, so a debuff can't be waited out under a
   miasma with a food buff, **+19.4 HP over 9.69s against +19.4 expected** (+5/s healing −3/s poison).
   Poison is now real pressure you can out-heal with good food rather than a hard shutoff.
 
+**Miasma made very common + large (the user).** Zone placement moved from an even 6/6/6 split to
+**per-type targets** (`PLAN` in `placeBayouZones`): **46 miasmas at r 520-780** (avg 652, up from 6 at
+avg 235) vs 8 bonemires + 8 hammocks. Miasma is placed **first** so it claims ground freely, and it's
+the only type allowed near its own kind (`selfSep` 520 vs 700) so neighbouring fog **merges into big
+irregular banks** rather than staying tidy separate discs. A separate, much larger `CROSS_SEP` (1250)
+keeps other types clear — it has to exceed the largest miasma radius plus the other zone's own radius,
+or a fog bank simply swallows the hammock it was meant to spare (and since miasma is placed first,
+`bayouZoneAt` would resolve that overlap in its favour). Fume density now scales with area under a
+cap of 120 — holding the old small-zone density across r-780 blobs would have put thousands of extra
+sprites in the world, and the ground decal already fills the whole organic outline, so fumes read as
+an accent on it rather than as the fog itself.
+**Tuned against measurement, not guesswork:** a first pass at 30 zones/avg r 459 covered only **13.1%**
+of the bayou — common, but not *very* common. At 46/avg 652 it's **34.8% miasma, 62.4% clear ground**,
+so the swamp reads as choked with gloam fog while staying navigable. All 8 hammocks verified intact
+(none swallowed). **No perf cost:** 60 fps standing inside the largest bank (r 777) vs 58 in the
+forest — an earlier 65-vs-71 reading was just an unsettled loop, not a regression.
+
 **Left out of 4a, deliberately:** **Mirehide** has no source yet — it's a *creature* hide, so a node
 source would be dishonest; it lands with the 4b roster. The bayou is also gated out of the
 enemy-respawn/nightfall top-up (`makeRespawnEnemy` returns null for it) so it doesn't spawn forest
@@ -397,61 +417,3 @@ fires + decrements 10→9 with Gloamsteel Arrows. Zero console errors.
 
 **Not built (deliberate):** no world source for Bog Ore/Mirehide/gems — that lands in Phase 4 with the
 bayou itself (same authored-dormant pattern as 2b; test via `__dev.give`).
-
-### B3-P2b — Biome-3 Phase 2b: Jewelry-effect pipeline + Gemwright's Table (2026-07-21, Opus)
-
-Makes 2a's abilities obtainable and lays the jewelry/gems economy. Plan:
-`.claude/plans/biome-3-phase-2b-jewelry-station.md`. the user's scope corrections mid-planning: gems +
-jewelry crafting are **biome-3+ content** (gems not findable before biome 3; no badlands node); the
-station is a **dedicated new station with a Duneshaper-boss-drop-gated upgrade** (the Gremlin King's
-Heart → Smelter pattern); and passive jewelry must feel **distinct from relics** (which own raw-% combat
-stats) — so it's the **ability-augment + utility/explorer** layer. Since biome 3 has no world content
-yet, this session built the biome-agnostic systems **live** and authored the materials/recipes/heart as
-**dormant** biome-3 data (test via `__dev.give`).
-
-**Built live (biome-agnostic):**
-- **`src/systems/EquipmentEffects.ts` (new)** — the first mechanical effect path for equipped non-armor
-  items (`ItemDef.stats` was display-only). `ItemDef.passive?: EquipPassive` holds the data; the class
-  sums equipped pieces (recomputed in `afterItemMove`, reset in `create`) and exposes getters modeled on
-  the relic summer. **Distinct channels (never relic-overlapping):** `abilityCooldownPct` (clamped ≥0.4),
-  `abilityPowerPct`, `magnetRadiusPct`, `gatherBonusPct`, `lightRadiusPct`. `describePassive()` feeds
-  the Tooltip, the JewelryMenu row, AND the HUD passive strip so display can't drift. Equipped jewelry
-  shows on the shared **`PassiveBarUI`** (left of the hotbar, alongside relic passives + armor
-  set-bonuses) — one always-on icon per equipped ring/amulet, gloam-violet border + hover tooltip.
-- **Hook sites (bespoke, one edit each):** cooldown → `tryCastAbility` + `abilityEntries` (HUD sweep
-  matches); power → `castBlink` distance + `castNova` dmg/radius; magnet → `MAGNET_RADIUS` gate; gather →
-  the depleted-node bonus-drop roll (alongside the M-SS chopping/mining chance); light → the player term
-  in `collectLights`. No `syncStatBonuses`/damage/crit change — that stays relics' turf.
-- **Ring-slot resolution** in `equipArmorFromContainer`: a ring (`armorSlot:"ring1"`) fills the first
-  empty of ring1/ring2, so two rings can be worn.
-- **4 passive pieces:** Ring of Quickening (−15% ability CD), Amulet of Channeling (+20% ability power),
-  Ring of the Forager (+15% gather, +30% magnet), Amulet of Farsight (+40% light, +20% magnet).
-
-**New dedicated jewelry station (built now, dormant recipes):**
-- **Gemwright's Table** — a placeable station (`Items.ts` def + `Recipes.ts` craft recipe, tier-1 /
-  Workbench-gated, costs Moonsilver) with its own recipe-list menu **`src/ui/JewelryMenu.ts` (new)** +
-  table **`src/systems/Jewelry.ts` (new)**, a near-clone of the Campfire+Cooking pattern (`craftAtJewelry`
-  / `maxJewelryBatches` / open/close mirror the campfire methods; hover/prompt/interact added to the
-  shared placed-station loop). Tier gates the recipes: **tier 0 = the 4 passives; tier 1 = the 3 ability
-  specials** (the existing 2a `special_*`/`back_*` items — 2b only adds their recipes).
-- **`Gloamheart Setting`** station upgrade (`StationUpgrades.ts`, resultTier 1) unlocks the tier-1
-  recipes, gated on a NEW **`duneshaper_heart`** guaranteed drop (`Duneshaper.ts` loot + `Items.ts` def +
-  BootScene icon) — mirroring `gremlin_king_heart` → Ember Crucible. Reuses the generic right-click
-  Upgrade/Pick-up ContextMenu + `applyStationUpgrade` verbatim (no new upgrade wiring).
-
-**Dormant / biome-3 (no in-game source this session):** 4 new materials (`moonsilver` +
-`gem_gloam`/`gem_ember`/`gem_blood`, `ResourceType` + `Items.ts` + BootScene icons via the `relicGem`
-helper), all jewelry recipes, and the heart. **Deferred to Phases 3/4:** Moonsilver mining, gem drops
-from bayou enemies/bosses, the epic-loot chest pool, and wiring the Duneshaper kill to continue-the-run
-(its demotion) so the heart is legitimately obtainable.
-
-**Verified live** (`javascript_tool` against `MainScene`; loop hand-stepped to boot the backgrounded
-preview): baseline effects neutral → equip 2 rings + amulet → **two-ring resolution** (ring1+ring2) and
-all 5 channels exact (0.85 CD / 1.2 power / 1.3 magnet / 0.15 gather / 1.4 light); equip a Q special +
-Ring of Quickening → real cast sets a **5100ms** cooldown (vs 6000 unringed) and the HUD `cooldownMs`
-reads 5100; station **tier 0** shows only the 4 passives, **tier 1** adds the 3 abilities, a tier-1
-craft at tier 0 is a **no-op**, a tier-0 passive craft lands in the bag; the **Gloamheart Setting
-upgrade** (with a Workbench nearby per the standing tier-≥1 rule) bumps the placed table 0→1, consumes
-the Duneshaper's Heart, and unlocks the ability recipes; the menu opens/renders/closes cleanly. `tsc`
-clean; **zero console errors**. `RECIPES.md` updated (station recipe + upgrade + a new Jewelry section);
-dashboard reads recipes live.

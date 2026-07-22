@@ -4905,28 +4905,46 @@ export class MainScene extends Phaser.Scene {
   // pickBayouPoint's exclusions apply.
   private placeBayouZones(): void {
     const rng = this.sessionRng();
-    const TYPES = ["miasma", "bonemire", "hammock"] as const;
-    const TARGET = 18; // ~6 of each — enough that crossing the bayou hits several
-    const MIN_SEP = 620;
-    let guard = 0;
-    while (this.bayouZones.length < TARGET && guard++ < 1800) {
-      const p = this.pickBayouPoint(rng);
-      if (!p) break;
-      if (this.bayouZones.some((z) => Phaser.Math.Distance.Between(p.x, p.y, z.x, z.y) < MIN_SEP)) continue;
-      const type = TYPES[this.bayouZones.length % TYPES.length];
-      // Miasmas stay the smallest — a pocket of bad air you route around or push
-      // through, not a region you live in.
-      const r =
-        type === "miasma" ? rng.between(190, 280) : type === "bonemire" ? rng.between(240, 330) : rng.between(250, 350);
-      this.bayouZones.push({
-        type,
-        x: p.x,
-        y: p.y,
-        r,
-        wK: rng.between(2, 4),
-        wPhase: rng.frac() * Math.PI * 2,
-        wAmp: rng.realInRange(0.16, 0.24),
-      });
+    // Per-type targets rather than an even split: the miasma is the bayou's
+    // SIGNATURE, and the user wants it **very common and large** — the swamp
+    // should read as choked with gloam fog, with the other zones as punctuation.
+    // It's placed first so it claims ground freely, and it's the only type
+    // allowed to sit close to its own kind (selfSep), so neighbouring miasmas
+    // MERGE into big irregular fog banks instead of staying tidy separate discs.
+    const PLAN = [
+      { type: "miasma" as const, count: 46, rMin: 520, rMax: 780, selfSep: 520 },
+      { type: "bonemire" as const, count: 8, rMin: 260, rMax: 360, selfSep: 700 },
+      { type: "hammock" as const, count: 8, rMin: 260, rMax: 360, selfSep: 700 },
+    ];
+    // Distance a zone must keep from a zone of a DIFFERENT type. Larger than any
+    // self-separation so a hammock stays a genuine respite — a big miasma lapping
+    // over the one safe island would quietly delete the thing that makes it one.
+    // Must exceed the largest miasma radius plus the other zone's own radius, or
+    // a fog bank simply swallows the island it was supposed to spare — and since
+    // miasma is placed FIRST, bayouZoneAt would resolve the overlap in its favour.
+    const CROSS_SEP = 1250;
+    for (const plan of PLAN) {
+      let placed = 0;
+      let guard = 0;
+      while (placed < plan.count && guard++ < 1400) {
+        const p = this.pickBayouPoint(rng);
+        if (!p) break;
+        const tooClose = this.bayouZones.some((z) => {
+          const sep = z.type === plan.type ? plan.selfSep : CROSS_SEP;
+          return Phaser.Math.Distance.Between(p.x, p.y, z.x, z.y) < sep;
+        });
+        if (tooClose) continue;
+        this.bayouZones.push({
+          type: plan.type,
+          x: p.x,
+          y: p.y,
+          r: rng.between(plan.rMin, plan.rMax),
+          wK: rng.between(2, 4),
+          wPhase: rng.frac() * Math.PI * 2,
+          wAmp: rng.realInRange(0.16, 0.24),
+        });
+        placed++;
+      }
     }
   }
 
@@ -4942,7 +4960,11 @@ export class MainScene extends Phaser.Scene {
         // legible from OUTSIDE it — the player should never walk into one blind
         // (the same "obvious from a distance" rule the badlands zones follow).
         this.drawZoneFloor(z, 0x2c3a24, 0x4d6b2e);
-        this.scatterInZone(z, rng, Math.min(70, Math.round((Math.PI * z.r * z.r) / 2600)), (x, y) => {
+        // Fume count scales with AREA but is capped — miasmas are large now, and
+        // holding the old small-zone density would put thousands of sprites in
+        // the world. The ground decal already fills the whole organic blob, so
+        // the fumes are an accent on top of it rather than the fog itself.
+        this.scatterInZone(z, rng, Math.min(120, Math.round((Math.PI * z.r * z.r) / 6500)), (x, y) => {
           this.add
             .image(x, y, "miasma_fume")
             .setDepth(ysortDepth(y))
