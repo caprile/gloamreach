@@ -3,6 +3,7 @@ import type { StationUpgradeDef } from "../systems/StationUpgrades";
 import type { ArmorUpgradeDef } from "../systems/ArmorUpgrades";
 import type { WeaponUpgradeDef } from "../systems/WeaponUpgrades";
 import type { ToolUpgradeDef } from "../systems/ToolUpgrades";
+import { isGearAugment, MAX_AUGMENTS_PER_ITEM, type GearAugmentDef } from "../systems/GearAugments";
 import { ProgressBar } from "./ProgressBar";
 
 // A short "upgrading…" bar plays over the clicked row before the tier lands —
@@ -13,7 +14,12 @@ const UPGRADE_BAR_MS = 500;
 // weapon's upgrade — all three share the same shape the UI actually reads
 // (name/description/resultTier/costs), so one panel serves all of them
 // without a generic type parameter.
-export type UpgradeDef = StationUpgradeDef | ArmorUpgradeDef | WeaponUpgradeDef | ToolUpgradeDef;
+export type UpgradeDef =
+  | StationUpgradeDef
+  | ArmorUpgradeDef
+  | WeaponUpgradeDef
+  | ToolUpgradeDef
+  | GearAugmentDef;
 
 export interface UpgradeTarget {
   itemKey: string;
@@ -34,6 +40,12 @@ export interface UpgradeMenuDeps {
   // (no "requires previous tier"), and applying any one is +1 level. Null (or
   // absent) for worn weapon/armor, which keep the resultTier ladder.
   appliedUpgradeIds?: () => Set<string> | null;
+  // Non-null when the target is an augmentable gear INSTANCE (Biome-3 Phase 3):
+  // the gem-augment ids already applied to it. Augment rows always run the
+  // no-ladder model regardless of whether the target is also on a tier ladder —
+  // a piece can hold both (Lvl 2/3 tiers AND up to MAX_AUGMENTS_PER_ITEM gems),
+  // which is why this is a separate dep rather than reusing appliedUpgradeIds.
+  appliedAugmentIds?: () => Set<string> | null;
   // Extra non-material gate beyond canAfford (e.g. armor upgrades that also
   // require a nearby Workbench at a given tier) — returns a short blocking
   // reason to display, or null when unblocked. Optional: station upgrades
@@ -169,12 +181,19 @@ export class UpgradeMenu {
     // worn weapon/armor keep the resultTier ladder. A non-null applied set is
     // the discriminator.
     const applied = this.deps.appliedUpgradeIds?.() ?? null;
+    // Non-null only for an augmentable gear instance; augment rows always run
+    // the no-ladder model, independently of the tier ladder above them.
+    const augApplied = this.deps.appliedAugmentIds?.() ?? null;
+    const augFull = augApplied !== null && augApplied.size >= MAX_AUGMENTS_PER_ITEM;
     const all = this.deps.upgradesFor(target.itemKey);
-    // Station: every discovered, not-yet-applied upgrade is offerable (no order
-    // gate). Weapon/armor: only tiers above the current one, discovered.
-    const upgrades = applied
-      ? all.filter((u) => !applied.has(u.id) && this.deps.isDiscovered(u))
-      : all.filter((u) => u.resultTier > target.tier && this.deps.isDiscovered(u));
+    // Station + augment rows: every discovered, not-yet-applied one is offerable
+    // (no order gate). Weapon/armor tiers: only tiers above the current one.
+    const upgrades = all.filter((u) => {
+      if (!this.deps.isDiscovered(u)) return false;
+      if (isGearAugment(u)) return augApplied !== null && !augApplied.has(u.id);
+      if (applied) return !applied.has(u.id);
+      return u.resultTier > target.tier;
+    });
 
     let cursor = 0;
     this.addText(this.panelX + 16, cursor + 14, this.deps.displayName(target.itemKey, target.tier), 16, "#ffffff");
@@ -182,17 +201,32 @@ export class UpgradeMenu {
     closeText.setInteractive({ useHandCursor: true }).on("pointerdown", () => this.close());
     cursor += HEADER_H;
 
+    // Gem-slot readout for augmentable gear, so the 2-per-item cap is visible
+    // before a player finds every row greyed out.
+    if (augApplied !== null) {
+      this.addText(
+        this.panelX + 16,
+        cursor - 12,
+        `Gem augments: ${augApplied.size}/${MAX_AUGMENTS_PER_ITEM}`,
+        11,
+        augFull ? "#8a93a3" : "#8fe38f",
+      );
+      cursor += 10;
+    }
+
     if (upgrades.length === 0) {
       // Distinguish "everything is already applied" from "higher tiers exist
       // but aren't discovered yet" — the former should read as maxed, not empty.
       const higherExists = applied
         ? all.some((u) => !applied.has(u.id))
-        : all.some((u) => u.resultTier > target.tier);
+        : all.some((u) => !isGearAugment(u) && u.resultTier > target.tier);
       const msg = higherExists ? "No upgrades discovered yet." : "Fully upgraded.";
       this.addText(this.panelX + 16, cursor + 6, msg, 12, "#8a93a3");
       cursor += 36;
     } else {
-      for (const upg of upgrades) cursor += this.renderUpgradeRow(upg, target, applied !== null, cursor);
+      for (const upg of upgrades) {
+        cursor += this.renderUpgradeRow(upg, target, applied !== null, augFull, cursor);
+      }
     }
     cursor += 12;
 
@@ -216,13 +250,24 @@ export class UpgradeMenu {
 
   // Returns this row's total height so the caller can advance its cursor.
   // Only not-yet-applied tiers reach here (render() filters applied ones out).
-  private renderUpgradeRow(upg: UpgradeDef, target: UpgradeTarget, stationMode: boolean, rowY: number): number {
+  private renderUpgradeRow(
+    upg: UpgradeDef,
+    target: UpgradeTarget,
+    stationMode: boolean,
+    augFull: boolean,
+    rowY: number,
+  ): number {
     const filling = this.busyUpgradeId === upg.id;
-    // No ladder for stations/processors — any offered upgrade is applyable.
-    // Worn weapon/armor still require the previous tier first.
-    const locked = !stationMode && upg.resultTier > target.tier + 1;
+    const isAug = isGearAugment(upg);
+    // No ladder for stations/processors or gem augments — any offered one is
+    // applyable. Worn weapon/armor TIERS still require the previous tier first.
+    const locked = !isAug && !stationMode && upg.resultTier > target.tier + 1;
     const affordable = this.deps.canAfford(upg);
-    const blockReason = !locked ? (this.deps.extraBlockReason?.(upg) ?? null) : null;
+    const blockReason = locked
+      ? null
+      : isAug && augFull
+        ? "Gem slots full"
+        : (this.deps.extraBlockReason?.(upg) ?? null);
     // While any row's bar is filling, every row is inert (the bar covers the
     // filling one; the rest grey out until it lands).
     const clickable = !this.busy && !locked && affordable && !blockReason;

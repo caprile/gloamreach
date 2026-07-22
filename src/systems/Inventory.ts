@@ -67,4 +67,8 @@ export type ResourceType =
   | "gem_gloam" // ability gem → Gloamstep Band (Q); "gem source dictates build"
   | "gem_ember" // ability gem → Gloam Focus (E)
   | "gem_blood" // ability gem → Bloodpact Shroud (R)
+  // --- biome-3 (Phase 3) bayou gear economy — DORMANT: authored now, real sources land in biome 3 ---
+  | "bog_ore" // gloam-soaked bayou ore — smelts into Gloamsteel (no node yet)
+  | "gloamsteel_ingot" // the bayou forged ingot: Bog Ore + Hex Essence at a Lvl 2 Smelter
+  | "mirehide" // bayou creature hide — the light-armor half of the bayou reforge
   | "duneshaper_heart"; // the Duneshaper's guaranteed drop — upgrades the Gemwright's Table to craft ability jewelry (biome-3 gate)

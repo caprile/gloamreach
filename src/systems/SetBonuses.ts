@@ -9,7 +9,7 @@
 // same as relic magnitudes vs. relic membership.
 import { EquippedItem } from "./Equipment";
 
-export type SetId = "embersteel" | "emberhide";
+export type SetId = "embersteel" | "emberhide" | "gloamsteel" | "mirehide";
 
 export interface ArmorSet {
   id: SetId;
@@ -33,6 +33,24 @@ export const ARMOR_SETS: ArmorSet[] = [
     pieces: ["emberhide_hood", "emberhide_vest", "emberhide_leggings"],
     bonusName: "Emberblink",
     bonusDesc: "Your dash travels farther and erupts in fire where you land.",
+  },
+  // Biome-3 Phase 3: the bayou reforge of each Ember set. Deliberately the SAME
+  // two mechanics, turned up — a reforged set is the same identity worn better,
+  // not a third thing to learn. MainScene picks the stronger constant when the
+  // bayou set is worn (see moltenDamageReduction/emberblinkDash*).
+  {
+    id: "gloamsteel",
+    name: "Gloamsteel",
+    pieces: ["gloamsteel_helm", "gloamsteel_cuirass", "gloamsteel_greaves"],
+    bonusName: "Gloam Bulwark",
+    bonusDesc: "Greatly reduces all incoming damage. Melee attackers are seared badly.",
+  },
+  {
+    id: "mirehide",
+    name: "Mirehide",
+    pieces: ["mirehide_hood", "mirehide_vest", "mirehide_leggings"],
+    bonusName: "Mireblink",
+    bonusDesc: "Your dash travels much farther and erupts violently where you land.",
   },
 ];
 

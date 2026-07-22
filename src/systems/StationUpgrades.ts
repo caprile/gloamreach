@@ -128,6 +128,18 @@ export const STATION_UPGRADES: StationUpgradeDef[] = [
     costs: { embersteel_ingot: 5, ironbark: 8, stone: 10 },
     deltaLabel: "Unlocks enhanced gear",
   },
+  {
+    // Workbench Lvl 5 (biome 3 Phase 3). Gated the same way every forging tier
+    // has been: the Gloamsteel Ingot in its costs means the upgrade stays
+    // undiscovered until bayou ore has actually been smelted.
+    id: "gloamforge_anvil",
+    name: "Gloamforge Anvil",
+    description: "A gloam-fed anvil sunk on a mirehide-wrapped stand. Cold to the touch, and it reforges ember gear into something worse-tempered.",
+    appliesToItemKey: "workbench",
+    resultTier: 4,
+    costs: { gloamsteel_ingot: 5, mirehide: 6, moonsilver: 3 },
+    deltaLabel: "Unlocks the bayou reforge tier",
+  },
 ];
 
 // The upgrades that could apply to a given placed object, ordered by the tier

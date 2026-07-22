@@ -4,7 +4,7 @@ import { itemDef, itemBiome, itemCategory, type ItemCategory } from "./Items";
 // physically clusters the way the tabbed inventory view groups it (forest
 // first, then badlands; within a biome, materials -> gear -> stations -> food
 // -> curios). Kept here (not in the UI) so a plain sort matches the view.
-const BIOME_ORDER: Record<string, number> = { forest: 0, badlands: 1 };
+const BIOME_ORDER: Record<string, number> = { forest: 0, badlands: 1, bayou: 2 };
 const CATEGORY_ORDER: Record<ItemCategory, number> = {
   material: 0,
   gear: 1,

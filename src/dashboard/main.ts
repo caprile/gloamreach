@@ -30,6 +30,7 @@ import { WEAPON_UPGRADES, weaponTierDamageBonus } from "../systems/WeaponUpgrade
 import { TOOL_UPGRADES } from "../systems/ToolUpgrades";
 import { ARMOR_UPGRADES, armorDefenseForTier } from "../systems/ArmorUpgrades";
 import { STATION_UPGRADES } from "../systems/StationUpgrades";
+import { GEAR_AUGMENTS, MAX_AUGMENTS_PER_ITEM } from "../systems/GearAugments";
 import { PROCESS_RECIPES } from "../systems/Processing";
 import { COOK_RECIPES } from "../systems/Cooking";
 import {
@@ -299,6 +300,26 @@ function renderRecipes(): string {
     for (const r of rows) html += recipeRow(r);
     html += `</tbody></table>`;
   }
+
+  html += `<h3>Gem augments (per gear instance)</h3>
+    <p class="note">Biome-3 Phase 3 (<code>src/systems/GearAugments.ts</code>). Applied via a
+    gear item's right-click Upgrade panel, <b>no ladder</b> (any order) and <b>consumed</b> —
+    max <b>${MAX_AUGMENTS_PER_ITEM}</b> per instance. Independent of the item's Lvl 2/3 tier
+    upgrades, so a piece can carry both.</p>
+    <table><thead><tr>
+    <th>Augment</th><th>Fits</th><th>Effect</th><th>Cost</th><th>Description</th>
+    </tr></thead><tbody>`;
+  for (const a of GEAR_AUGMENTS) {
+    const fits = a.appliesToItemKeys.some((k) => itemDef(k)?.weapon) ? "Weapons" : "Armor";
+    html += `<tr>
+      <td><b>${esc(a.name)}</b></td>
+      <td><span class="tag">${fits}</span></td>
+      <td class="pos">${esc(a.deltaLabel)}</td>
+      <td class="cost">${esc(costsText(a.costs))}</td>
+      <td class="muted">${esc(a.description)}</td>
+    </tr>`;
+  }
+  html += `</tbody></table>`;
   return html;
 }
 

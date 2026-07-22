@@ -18,7 +18,14 @@ export type WeaponType =
   // enhanced/T2 RANGED (S8) — the Sunsteel Warbow reforged with ember-steel
   | "embersteel_warbow"
   // the first MAGIC weapon — a rare-ore-exclusive melee fire brand
-  | "ember_brand";
+  | "ember_brand"
+  // bayou tier (biome 3 Phase 3) — the Ember tier reforged with Gloamsteel.
+  // No new base weapons: each of these consumes its Ember counterpart.
+  | "gloamsteel_warhammer"
+  | "gloamsteel_sword"
+  | "gloamsteel_pike"
+  | "gloamsteel_warbow"
+  | "gloam_brand";
 
 // Damage types double as the 5 weapon Skill types (Skills.ts) — a weapon's
 // primary (first) type routes its on-hit skill XP. Multiple types are
@@ -54,6 +61,11 @@ const WEAPON_DAMAGE_TYPES: Record<WeaponType, DamageType[]> = {
   embersteel_pike: ["pierce"],
   embersteel_warbow: ["ranged"],
   ember_brand: ["magic"],
+  gloamsteel_warhammer: ["blunt"],
+  gloamsteel_sword: ["slash"],
+  gloamsteel_pike: ["pierce"],
+  gloamsteel_warbow: ["ranged"],
+  gloam_brand: ["magic"],
 };
 export function weaponDamageTypes(weapon: WeaponType): DamageType[] {
   return WEAPON_DAMAGE_TYPES[weapon];
@@ -99,6 +111,14 @@ const WEAPON_DAMAGE: Record<WeaponType, number> = {
   // (~x0.4-0.5) by the gloam-casters (Hexlings, the Duneshaper). It's the only
   // `magic` weapon-skill source — a sidegrade with an upside, not flatly best.
   ember_brand: 17,
+  // Bayou tier — another ~+30% over the Ember numbers, holding every S7
+  // identity invariant (pierce stays the single-target leader, slash the
+  // sweeper, blunt the cripple, the brand a resisted-but-armor-ignoring sidegrade).
+  gloamsteel_warhammer: 30,
+  gloamsteel_sword: 25,
+  gloamsteel_pike: 32,
+  gloamsteel_warbow: 20,
+  gloam_brand: 23,
 };
 export function weaponDamage(weapon: WeaponType): number {
   return WEAPON_DAMAGE[weapon];
@@ -120,6 +140,11 @@ const WEAPON_COOLDOWN_MS: Record<WeaponType, number> = {
   embersteel_pike: 610,
   embersteel_warbow: 730,
   ember_brand: 520,
+  gloamsteel_warhammer: 800,
+  gloamsteel_sword: 470,
+  gloamsteel_pike: 610,
+  gloamsteel_warbow: 720,
+  gloam_brand: 520,
 };
 export function weaponCooldownMs(weapon: WeaponType): number {
   return WEAPON_COOLDOWN_MS[weapon];
@@ -144,6 +169,12 @@ const WEAPON_STAMINA_COST: Record<WeaponType, number> = {
   embersteel_pike: 22,
   embersteel_warbow: 15,
   ember_brand: 19,
+  // Each tier is a real commitment, not a free upgrade: Sunsteel < Ember < Gloam.
+  gloamsteel_warhammer: 31,
+  gloamsteel_sword: 21,
+  gloamsteel_pike: 25,
+  gloamsteel_warbow: 17,
+  gloam_brand: 22,
 };
 export function weaponStaminaCost(weapon: WeaponType): number {
   return WEAPON_STAMINA_COST[weapon];
@@ -188,6 +219,12 @@ const WEAPON_BASE_CRIT_CHANCE: Record<WeaponType, number> = {
   embersteel_pike: 0.11,
   // Magic — mid.
   ember_brand: 0.07,
+  // Bayou tier — a hair above its Ember counterpart, identities unchanged.
+  gloamsteel_sword: 0.07,
+  gloamsteel_warhammer: 0.06,
+  gloamsteel_warbow: 0.09,
+  gloamsteel_pike: 0.12,
+  gloam_brand: 0.08,
 };
 const WEAPON_BASE_CRIT_MULT: Record<WeaponType, number> = {
   bone_knife: 1.5,
@@ -206,6 +243,11 @@ const WEAPON_BASE_CRIT_MULT: Record<WeaponType, number> = {
   sunsteel_pike: 1.7,
   embersteel_pike: 1.75,
   ember_brand: 1.6,
+  gloamsteel_sword: 1.6,
+  gloamsteel_warhammer: 1.62,
+  gloamsteel_warbow: 1.62,
+  gloamsteel_pike: 1.8,
+  gloam_brand: 1.62,
 };
 export function weaponBaseCritChance(weapon: WeaponType): number {
   return WEAPON_BASE_CRIT_CHANCE[weapon];
@@ -238,6 +280,7 @@ const RANGED_WEAPONS: Partial<Record<WeaponType, RangedWeaponConfig>> = {
   // than the slingshot: the bow is the badlands ranged upgrade.
   sunsteel_warbow: { projectileSpeed: 600, maxRangePx: 380, ammoItemKey: "arrows", projectileTexture: "arrow_projectile" },
   embersteel_warbow: { projectileSpeed: 640, maxRangePx: 400, ammoItemKey: "arrows", projectileTexture: "arrow_projectile" },
+  gloamsteel_warbow: { projectileSpeed: 680, maxRangePx: 420, ammoItemKey: "arrows", projectileTexture: "arrow_projectile" },
 };
 
 export function rangedWeaponConfig(weapon: WeaponType): RangedWeaponConfig | undefined {
@@ -290,6 +333,12 @@ const WEAPON_ARC: Record<WeaponType, WeaponArc> = {
   embersteel_warbow: { halfAngleDeg: 0, range: 0, falloff: 0 },
   // Fire washes over nearby foes — a medium sweep despite its melee reach.
   ember_brand: { halfAngleDeg: 45, range: 52, falloff: 0.6 },
+  // Bayou tier — same identity spread, one notch wider/harder-hitting each.
+  gloamsteel_sword: { halfAngleDeg: 64, range: 74, falloff: 0.8 },
+  gloamsteel_warhammer: { halfAngleDeg: 44, range: 54, falloff: 0.58 },
+  gloamsteel_pike: { halfAngleDeg: 24, range: 38, falloff: 0.44 },
+  gloamsteel_warbow: { halfAngleDeg: 0, range: 0, falloff: 0 },
+  gloam_brand: { halfAngleDeg: 46, range: 54, falloff: 0.62 },
 };
 export function weaponArc(weapon: WeaponType): WeaponArc {
   return WEAPON_ARC[weapon];

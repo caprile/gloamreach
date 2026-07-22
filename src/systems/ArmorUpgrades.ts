@@ -2,6 +2,7 @@ import type { ResourceType } from "./Inventory";
 import { itemDef } from "./Items";
 import type { Equipment } from "./Equipment";
 import { EQUIP_SLOTS } from "./Equipment";
+import { augmentEffect } from "./GearAugments";
 
 // A named upgrade for a worn armor piece — mirrors StationUpgradeDef
 // (StationUpgrades.ts) but targets an *equipped* item rather than a placed
@@ -152,6 +153,16 @@ ARMOR_UPGRADES.push(
   ...forgedArmorUpgrades("emberhide_hood", "Emberhide Hood", "embersteel_ingot", 3),
   ...forgedArmorUpgrades("emberhide_vest", "Emberhide Vest", "embersteel_ingot", 3),
   ...forgedArmorUpgrades("emberhide_leggings", "Emberhide Leggings", "embersteel_ingot", 3),
+  // Bayou tier (biome 3 Phase 3) — same two right-click levels, sunk in
+  // Gloamsteel and gated on the Gloamforge-Anvil bench (tier 4) the pieces are
+  // reforged at. These stack WITH gem augments (GearAugments.ts): tiers live on
+  // the instance's `tier`, augments on its `upgrades` set.
+  ...forgedArmorUpgrades("gloamsteel_helm", "Gloamsteel Helm", "gloamsteel_ingot", 4),
+  ...forgedArmorUpgrades("gloamsteel_cuirass", "Gloamsteel Cuirass", "gloamsteel_ingot", 4),
+  ...forgedArmorUpgrades("gloamsteel_greaves", "Gloamsteel Greaves", "gloamsteel_ingot", 4),
+  ...forgedArmorUpgrades("mirehide_hood", "Mirehide Hood", "gloamsteel_ingot", 4),
+  ...forgedArmorUpgrades("mirehide_vest", "Mirehide Vest", "gloamsteel_ingot", 4),
+  ...forgedArmorUpgrades("mirehide_leggings", "Mirehide Leggings", "gloamsteel_ingot", 4),
 );
 
 // The upgrades that could apply to a given equipped armor item, ordered by
@@ -173,12 +184,14 @@ export function armorDefenseForTier(itemKey: string, tier: number): number {
 }
 
 // Sum of armorDefenseForTier across every worn slot — the flat damage
-// reduction applied to all incoming (physical) player damage.
+// reduction applied to all incoming (physical) player damage. Each piece's
+// applied gem augments (biome 3 Phase 3) add their flat defense here too, so
+// every existing caller picks them up with no extra hook.
 export function totalPlayerDefense(equipment: Equipment): number {
   let total = 0;
   for (const { id } of EQUIP_SLOTS) {
     const eq = equipment.get(id);
-    if (eq) total += armorDefenseForTier(eq.key, eq.tier);
+    if (eq) total += armorDefenseForTier(eq.key, eq.tier) + (augmentEffect(eq).defenseBonus ?? 0);
   }
   return total;
 }

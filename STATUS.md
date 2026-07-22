@@ -2,7 +2,22 @@
 
 ## Current State
 
-_Living snapshot — edit in place, never append. Last shipped: **B3-P2b — Biome-3 Phase 2b:
+_Living snapshot — edit in place, never append. Last shipped: **B3-P3 — Biome-3 Phase 3:
+Bayou gear progression (reforge tier + gem augments)** (2026-07-21, Opus, plan
+`.claude/plans/biome-3-phase-3-bayou-gear.md`). Two locked calls from the user: gem augments are
+**mix-and-match + CONSUMED** (no removable sockets, no ladder, **max 2 per gear instance**), and biome 3
+**does** add one reforge tier. New **`src/systems/GearAugments.ts`** reuses the existing per-instance
+`upgrades` field (`ItemStack` + a new `EquippedItem.upgrades`) and the existing `UpgradeMenu` — so tiers
+(Lvl 2/3) and gems compose on the same piece with **no new data model**. 9 gear-flavored augments
+(flat dmg / crit chance / crit dmg / arc reach / stamina; flat armor ×2 / magic-fire mitigation / move
+speed), each wired at the single existing chokepoint. Plus the **bayou reforge tier**: Bog Ore →
+**Gloamsteel Ingot** (Smelter), **Mirehide**, a Workbench **Lvl 5** (Gloamforge Anvil), and 11 recipes
+that each **consume their Ember counterpart** — Gloamsteel heavy (42 armor) / Mirehide light (30) sets
+with **Gloam Bulwark**/**Mireblink** set bonuses (the Ember mechanics turned up, superseding rather than
+stacking), and 5 bayou weapons. **DORMANT** like 2b: Bog Ore/Mirehide/gems get world sources in Phase 4
+(`__dev.give` to test). New **Bayou** inventory tab. Verified live; `tsc` clean, zero console errors.
+`RECIPES.md` + dashboard updated. See B3-P3 below + [[survivor-rpg-biome-3-roadmap]].
+Prior: **B3-P2b — Biome-3 Phase 2b:
 Jewelry-effect pipeline + Gemwright's Table (jewelry station)** (2026-07-21, Opus, plan
 `.claude/plans/biome-3-phase-2b-jewelry-station.md`). Makes 2a's abilities obtainable + lays the jewelry
 economy. **Built live (biome-agnostic):** `src/systems/EquipmentEffects.ts` — the first mechanical
@@ -80,11 +95,13 @@ current arc is the **biome-3 (haunted bayou, working name "Duskmire Bayou") + ne
 (terrain-that-matters + badlands macro-zones), **Phase 2a** (the activated-ability framework + Dota
 QER HUD), and **Phase 2b** (the jewelry-effect pipeline + the Gemwright's Table jewelry station, above —
 which built the equipment stat-aggregation path + the jewelry/gems material class as data, and the
-station+Duneshaper-Heart gate that will source the abilities in biome 3). **the user scoped gems +
+station+Duneshaper-Heart gate that will source the abilities in biome 3), and **Phase 3** (the bayou gear
+progression above — gem augments + the Gloamsteel/Mirehide reforge tier, also authored dormant).
+**the user scoped gems +
 jewelry crafting as biome-3+ content**, so 2b's materials/recipes/heart are authored **dormant** (test
 via `__dev.give`); their real sources — Moonsilver mining, gem drops, a game-wide epic-loot pool, and the
-Duneshaper demotion — move into the biome-3 content phases (3/4). **Next:** **Phase 3** (bayou gear
-reforge), **Phase 4** (the bayou content drop — a melee-core roster + a melee boss-with-adds, where the
+Duneshaper demotion — move into the biome-3 content phase (4); Phase 3's Bog Ore / Mirehide / gem sources
+land there too. **Next:** **Phase 4** (the bayou content drop — a melee-core roster + a melee boss-with-adds, where the
 gem/metal/heart sources land), and **Phase 5** (post-**big-boss** RNG reward choice — a natural home for
 ability sourcing too). Ability/jewelry numbers and everything biome-3 are first-pass/tunable. The master-plan tail
 **M-TE** (trophy-gated gear) is folded into the shipped biome-2 work; real pixel art/animations stay
@@ -136,6 +153,55 @@ below + [[survivor-rpg-dev-console]].
 ## Recent Entries
 
 > Older entries in STATUS-archive.md.
+
+### B3-P3 — Biome-3 Phase 3: Bayou gear progression (reforge tier + gem augments) (2026-07-21, Opus)
+
+Plan: `.claude/plans/biome-3-phase-3-bayou-gear.md`. Two locked calls from the user (`AskUserQuestion`):
+gem augments are **mix-and-match and CONSUMED** (not removable sockets, not a linear ladder), and biome 3
+**does** add one reforge tier on top of them.
+
+**A. Gem augments — `src/systems/GearAugments.ts` (new).** `GearAugmentDef` mirrors `StationUpgradeDef`'s
+shape (so the existing `UpgradeMenu` serves it unchanged) plus an `augment: true` discriminator and an
+`AugmentEffect` payload. **No new per-instance data model:** applied ids reuse `ItemStack.upgrades` for
+gear in a container and a new `EquippedItem.upgrades` for a worn piece — and an augment never touches the
+item's `tier`, so the Lvl 2/3 right-click ladder and up to **2 augments** compose on the same piece.
+Deliberately its own effect layer (relics = raw-% combat stats, jewelry = ability/explorer utility), so
+augments stay gear-flavored: **Gloam Edge** +3 dmg, **Serrated Fang** +6% crit chance, **Cruel Weight**
++0.30x crit dmg, **Widened Sweep** +30% arc reach, **Swift Grip** −12% stamina (weapons); **Warded
+Plating** +2 armor, **Stoneheart Core** +3 armor, **Gloamweave Lining** −10% magic/fire, **Fleetfoot
+Stitching** +4% move (armor). Fit the **Ember + new Gloam tiers only** (gems are a late-game sink, not a
+way to keep a Wood Club alive) and gate on a **Workbench Lvl 4**. Every effect hooks the single existing
+chokepoint — a new `equippedWeaponBaseDamage()` (which also collapsed three copies of the
+`weaponDamage + weaponTierDamageBonus` expression), `critChanceTotal`/`critMultTotal`, the melee arc's
+range, `effectiveStaminaCostMult`, `ArmorUpgrades.totalPlayerDefense`, `applyDamageToPlayer`'s
+armor-bypass branch (summed with heavy-armor skill mitigation, capped 75%), and the `moveMult` bucket.
+`UpgradeMenu` gained an `appliedAugmentIds` dep: augment rows run the no-ladder model even while a tier
+ladder is listed above them, with a `Gem augments: N/2` header and a "Gem slots full" block at the cap.
+The item Tooltip lists a specific instance's gems.
+
+**B. The bayou reforge tier (dormant — sourced in Phase 4).** New materials **Bog Ore** → **Gloamsteel
+Ingot** (Smelter + Hex Essence, needs the tier-1 Ember Crucible) and **Mirehide**; new Workbench **Lvl 5**
+upgrade **Gloamforge Anvil**. 11 recipes at `requiresWorkbenchTier: 4`, each **consuming its Ember
+counterpart** (roadmap locked decision 6 — no fresh base sets): **Gloamsteel** heavy set (13/16/13 = 42)
++ **Mirehide** light set (9/12/9 = 30) + Gloamsteel Warhammer/Longsword/Pike/Warbow and the **Gloam
+Brand** (30/25/32/20/23), all holding the S7 identity invariants. Both sets get the existing two
+right-click levels (sunk in Gloamsteel) and their own set bonuses — **Gloam Bulwark** / **Mireblink**,
+deliberately the *same two mechanics* as the Ember sets turned up (22% DR + 15 thorns; 1.9x dash +
+120px/26 dmg nova); MainScene picks the stronger rather than stacking. New **Bayou** inventory tab
+(`ItemBiome`) covering this tier and 2b's jewelry economy.
+
+**Verified live** (`javascript_tool`): all 15 new textures generate; augment apply **blocked** without a
+Lvl-5 bench ("Requires nearby Workbench Lvl 4") and applies with one, exact costs deducted, a **third
+augment refused at the cap**; equipped weapon 30→33 dmg and crit 6%→12%; Swift Grip stamina mult 0.88;
+**Widened Sweep proven functionally** (a secondary enemy at 62px is OUT of the warhammer's 54px sweep and
+IN at +30%); armor 42→47 with two augments; a magic hit 60→48 with two Linings while physical stays
+60−30 armor = 30; `moveMult` 1→1.08 arriving at `Player.update` with dash 1.9 from the Mirehide set; all
+11 recipes gate at bench tier 4 (craft refused without, succeeds with, base piece consumed); Bog Ore
+smelts only at Smelter tier 1; equip→unequip round-trips both `tier` and `upgrades`. `tsc` clean, zero
+console errors. `RECIPES.md` + the dashboard (new Gem-augments table) updated.
+
+**Not built (deliberate):** no world source for Bog Ore/Mirehide/gems — that lands in Phase 4 with the
+bayou itself (same authored-dormant pattern as 2b; test via `__dev.give`).
 
 ### B3-P2b — Biome-3 Phase 2b: Jewelry-effect pipeline + Gemwright's Table (2026-07-21, Opus)
 
@@ -344,40 +410,3 @@ unchanged. Equip case also recomputes cached set bonuses. Verified live (`javasc
 backpack armor right-click opens the menu bound to the piece + applies (tier 0→1); reforge with
 base equipped → embersteel equipped, hotbar → same hotbar slot, backpack → stays backpack, hotbar
 untouched. `tsc` clean, no console errors.
-
-### PB17 — Boss tuning + Cinderwrought solo rework + silent placement (2026-07-16, Opus)
-A small playtest batch off the user's badlands run ("felt really good" overall). Three items:
-1. **Silent bench placement** — removed the `sfx.craft()` cue that fired on every object
-   placement (`MainScene.attemptPlaceObject`, the user: "placing benches down doesn't need to make
-   a noise"). Actual crafting of non-placeables still plays the craft cue; only placement is now
-   silent.
-2. **Duneshaper (the "2nd boss") tankier + staggers less** — HP **1250→2500** (≥2× — a real
-   endurance fight) and poise **170→400** (scaled MORE than the HP bump so it staggers genuinely
-   less often, not just over a longer fight — the user: "shouldn't stagger so fast").
-3. **Cinderwrought rework — solo, tanky, unstaggerable, must-dash attacks** (the user: "emberwrought
-   fight still feels awkward… the Gloom guy is a much more cohesive mini boss"). **Diagnosis:** the
-   Sunken Forge spawned **two** Cinderwroughts (2v1) vs the Gloamwarden's clean solo fight, and both
-   its attacks were stationary front-swings that could be walked out of. **Fix (locked with the user):**
-   - **One** Cinderwrought per forge now (`armForge` spawns 1, was `[-70,70].forEach`). The 5 forges =
-     5 mini-bosses (was 10).
-   - **Way tankier:** HP **260→650**.
-   - **Can't be staggered:** the entire poise/stagger machinery was removed from `Cinderwrought.ts`
-     (poise field, poise bar, `updatePoiseRegen`, `enterStaggered`, the `staggered` state). It's a pure
-     survive-and-DPS wall now. `isStaggered()` kept (always `false`) for MainScene's shared
-     `staggerMultiplierFor` switch; `CINDERWROUGHT_STAGGER_DAMAGE_MULTIPLIER` kept exported (inert = 1).
-   - **Attacks force i-frames:** both the **Cinder Cone** (300px / ±44° fire, bypasses armor, 32→**44**)
-     and the **Forge Hammer** (235px / ±70° physical, 40→**52**) now **re-aim at the player at execute**
-     (lock at execute, track through the wind-up) with wide/long hitboxes — a slow-walking player (95px/s)
-     can't sidestep or back-pedal out, so the only reliable dodge is a dash's i-frames (`applyDamageToPlayer`
-     skips damage during `invulnerableUntil`, while `checkPlayerHit` still consumes the swing via
-     `hasHitThisAttack`). Attack cooldown 1050→**850ms** (solo cadence, matches the Gloamwarden).
-   - **Ember shards stay high** (the user: "gotta be worth it"): the single boss drops **5-8 Ember Shard +
-     1 Refined Trophy (Uncommon T2)** (was 2-4 across two guards). `onCinderwroughtKilled` already works with
-     a one-element `bosses` array (cracks the ore once the sole guard dies).
-
-   `tsc` clean; verified live via `javascript_tool`: 5 forges × 1 boss, Cinderwrought HP 650 / no poise bar /
-   `isStaggered()` false / loot 5-8 shards + trophy; Duneshaper HP 2500 / poiseMax 400; the Cinder Cone
-   re-aims (telegraph started with the player to the RIGHT, player moved DOWN mid-wind-up → attack locked to
-   90° and hit at the new position); Forge Hammer hits in-range/center (52 dmg) and correctly misses beyond
-   range and behind the boss; no console errors. Dashboard Enemies tab updated (both bosses). No `RECIPES.md`
-   change (enemy loot isn't tracked there). See [[survivor-rpg-biome-2-plan]].

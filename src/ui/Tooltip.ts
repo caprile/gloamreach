@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import { itemDef, type ItemDef, type ItemStat } from "../systems/Items";
 import { stationDisplayName } from "../systems/StationUpgrades";
+import { augmentDef } from "../systems/GearAugments";
 import {
   weaponAttacksPerSecond,
   weaponBaseCritChance,
@@ -55,7 +56,13 @@ export class Tooltip {
   // `tier` is only meaningful for stations with a defined upgrade path
   // (StationUpgrades.ts) — passing it for any other item is harmless, since
   // stationDisplayName falls back to the plain item name.
-  show(key: string, anchor: Anchor, placement: TooltipPlacement, tier?: number): void {
+  show(
+    key: string,
+    anchor: Anchor,
+    placement: TooltipPlacement,
+    tier?: number,
+    augments?: string[],
+  ): void {
     this.hide();
     const def = itemDef(key);
     if (!def) return;
@@ -90,6 +97,15 @@ export class Tooltip {
     if (def.edible) {
       lines.push("");
       lines.push(`Effect: +${def.edible.hpPerSec} HP/s for ${Math.round(def.edible.durationMs / 1000)}s`);
+    }
+    // Applied gem augments on THIS instance (biome 3 Phase 3) — per-instance, so
+    // they come from the hovered stack rather than the shared ItemDef.
+    if (augments?.length) {
+      lines.push("");
+      for (const id of augments) {
+        const a = augmentDef(id);
+        if (a) lines.push(`Gem: ${a.name} (${a.deltaLabel})`);
+      }
     }
     // Jewelry (B3-P2b): its ability-augment / utility passives, derived from the
     // `passive` record so the numbers live only in Items.ts.

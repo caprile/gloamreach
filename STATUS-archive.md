@@ -6773,3 +6773,40 @@ power tier. Fix locked with the user.
   Positioned off `hotbarUI.left`/`.bottom`, growing left + wrapping up. The timed food-buff bar
   (`BuffBarUI`, above HP) stays separate. Verified live: 5-icon strip (4 relics + Embersteel set),
   Onslaught count "3"+glow, Guardian 27px cooldown overlay, hover tooltips, no console errors.
+
+### PB17 — Boss tuning + Cinderwrought solo rework + silent placement (2026-07-16, Opus)
+A small playtest batch off the user's badlands run ("felt really good" overall). Three items:
+1. **Silent bench placement** — removed the `sfx.craft()` cue that fired on every object
+   placement (`MainScene.attemptPlaceObject`, the user: "placing benches down doesn't need to make
+   a noise"). Actual crafting of non-placeables still plays the craft cue; only placement is now
+   silent.
+2. **Duneshaper (the "2nd boss") tankier + staggers less** — HP **1250→2500** (≥2× — a real
+   endurance fight) and poise **170→400** (scaled MORE than the HP bump so it staggers genuinely
+   less often, not just over a longer fight — the user: "shouldn't stagger so fast").
+3. **Cinderwrought rework — solo, tanky, unstaggerable, must-dash attacks** (the user: "emberwrought
+   fight still feels awkward… the Gloom guy is a much more cohesive mini boss"). **Diagnosis:** the
+   Sunken Forge spawned **two** Cinderwroughts (2v1) vs the Gloamwarden's clean solo fight, and both
+   its attacks were stationary front-swings that could be walked out of. **Fix (locked with the user):**
+   - **One** Cinderwrought per forge now (`armForge` spawns 1, was `[-70,70].forEach`). The 5 forges =
+     5 mini-bosses (was 10).
+   - **Way tankier:** HP **260→650**.
+   - **Can't be staggered:** the entire poise/stagger machinery was removed from `Cinderwrought.ts`
+     (poise field, poise bar, `updatePoiseRegen`, `enterStaggered`, the `staggered` state). It's a pure
+     survive-and-DPS wall now. `isStaggered()` kept (always `false`) for MainScene's shared
+     `staggerMultiplierFor` switch; `CINDERWROUGHT_STAGGER_DAMAGE_MULTIPLIER` kept exported (inert = 1).
+   - **Attacks force i-frames:** both the **Cinder Cone** (300px / ±44° fire, bypasses armor, 32→**44**)
+     and the **Forge Hammer** (235px / ±70° physical, 40→**52**) now **re-aim at the player at execute**
+     (lock at execute, track through the wind-up) with wide/long hitboxes — a slow-walking player (95px/s)
+     can't sidestep or back-pedal out, so the only reliable dodge is a dash's i-frames (`applyDamageToPlayer`
+     skips damage during `invulnerableUntil`, while `checkPlayerHit` still consumes the swing via
+     `hasHitThisAttack`). Attack cooldown 1050→**850ms** (solo cadence, matches the Gloamwarden).
+   - **Ember shards stay high** (the user: "gotta be worth it"): the single boss drops **5-8 Ember Shard +
+     1 Refined Trophy (Uncommon T2)** (was 2-4 across two guards). `onCinderwroughtKilled` already works with
+     a one-element `bosses` array (cracks the ore once the sole guard dies).
+
+   `tsc` clean; verified live via `javascript_tool`: 5 forges × 1 boss, Cinderwrought HP 650 / no poise bar /
+   `isStaggered()` false / loot 5-8 shards + trophy; Duneshaper HP 2500 / poiseMax 400; the Cinder Cone
+   re-aims (telegraph started with the player to the RIGHT, player moved DOWN mid-wind-up → attack locked to
+   90° and hit at the new position); Forge Hammer hits in-range/center (52 dmg) and correctly misses beyond
+   range and behind the boss; no console errors. Dashboard Enemies tab updated (both bosses). No `RECIPES.md`
+   change (enemy loot isn't tracked there). See [[survivor-rpg-biome-2-plan]].

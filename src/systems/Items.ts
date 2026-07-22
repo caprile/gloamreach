@@ -1336,6 +1336,225 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     passive: { lightRadiusPct: 40, magnetRadiusPct: 20 },
     stats: [{ label: "Type", value: "Amulet" }],
   },
+
+  // === Biome-3 Phase 3: the bayou gear tier (DORMANT materials — sourced in biome 3) ===
+  // Locked decision 6: biome 3 authors NO fresh base sets. Every piece below is
+  // a REFORGE of its Ember-tier counterpart (the base piece is consumed as an
+  // ingredient — see Recipes.ts), gated behind a Gloamforge-Anvil Workbench.
+
+  // --- materials ---
+  bog_ore: {
+    key: "bog_ore",
+    name: "Bog Ore",
+    description: "Heavy, gloam-soaked ore dredged out of the mire. It sweats violet when it's worked.",
+    texture: "icon_bog_ore",
+    maxStack: 99,
+    hotbarable: false,
+  },
+  gloamsteel_ingot: {
+    key: "gloamsteel_ingot",
+    name: "Gloamsteel Ingot",
+    description: "Bog ore rendered down and bound with hex essence. The gloam never quite leaves the metal.",
+    texture: "icon_gloamsteel_ingot",
+    maxStack: 99,
+    hotbarable: false,
+  },
+  mirehide: {
+    key: "mirehide",
+    name: "Mirehide",
+    description: "Thick, water-shedding hide off something that lives under the bayou. Supple, and stubbornly tough.",
+    texture: "icon_mirehide",
+    maxStack: 99,
+    hotbarable: false,
+  },
+
+  // --- bayou HEAVY armor: Gloamsteel set (reforged from Embersteel) ---
+  gloamsteel_helm: {
+    key: "gloamsteel_helm",
+    name: "Gloamsteel Helm",
+    description: "An Embersteel helm drowned in gloam and beaten out again. It hums faintly against the skull.",
+    texture: "icon_gloamsteel_helm",
+    maxStack: 1,
+    hotbarable: false,
+    armorSlot: "helmet",
+    armorType: "heavy_armor",
+    armorDefense: 13,
+    stats: [
+      { label: "Type", value: "Armor (Head)" },
+      { label: "Armor Type", value: "Heavy" },
+      { label: "Armor", value: "13" },
+      { label: "Set (3)", value: "Gloam Bulwark" },
+    ],
+  },
+  gloamsteel_cuirass: {
+    key: "gloamsteel_cuirass",
+    name: "Gloamsteel Cuirass",
+    description: "A gloam-quenched breastplate. Blows land on it like they landed on the swamp floor.",
+    texture: "icon_gloamsteel_cuirass",
+    maxStack: 1,
+    hotbarable: false,
+    armorSlot: "chest",
+    armorType: "heavy_armor",
+    armorDefense: 16,
+    stats: [
+      { label: "Type", value: "Armor (Chest)" },
+      { label: "Armor Type", value: "Heavy" },
+      { label: "Armor", value: "16" },
+      { label: "Set (3)", value: "Gloam Bulwark" },
+    ],
+  },
+  gloamsteel_greaves: {
+    key: "gloamsteel_greaves",
+    name: "Gloamsteel Greaves",
+    description: "Gloam-veined leg plates over a mirehide lining — heavy, and utterly unbothered by the muck.",
+    texture: "icon_gloamsteel_greaves",
+    maxStack: 1,
+    hotbarable: false,
+    armorSlot: "legs",
+    armorType: "heavy_armor",
+    armorDefense: 13,
+    stats: [
+      { label: "Type", value: "Armor (Legs)" },
+      { label: "Armor Type", value: "Heavy" },
+      { label: "Armor", value: "13" },
+      { label: "Set (3)", value: "Gloam Bulwark" },
+    ],
+  },
+
+  // --- bayou LIGHT armor: Mirehide set (reforged from Emberhide) ---
+  mirehide_hood: {
+    key: "mirehide_hood",
+    name: "Mirehide Hood",
+    description: "An Emberhide hood relined with mirehide. Sheds water, sound, and most of a claw.",
+    texture: "icon_mirehide_hood",
+    maxStack: 1,
+    hotbarable: false,
+    armorSlot: "helmet",
+    armorType: "light_armor",
+    armorDefense: 9,
+    stats: [
+      { label: "Type", value: "Armor (Head)" },
+      { label: "Armor Type", value: "Light" },
+      { label: "Armor", value: "9" },
+      { label: "Set (3)", value: "Mireblink" },
+    ],
+  },
+  mirehide_vest: {
+    key: "mirehide_vest",
+    name: "Mirehide Vest",
+    description: "Layered mirehide over ember-steel seams. Silent, quick, and far harder to open than it looks.",
+    texture: "icon_mirehide_vest",
+    maxStack: 1,
+    hotbarable: false,
+    armorSlot: "chest",
+    armorType: "light_armor",
+    armorDefense: 12,
+    stats: [
+      { label: "Type", value: "Armor (Chest)" },
+      { label: "Armor Type", value: "Light" },
+      { label: "Armor", value: "12" },
+      { label: "Set (3)", value: "Mireblink" },
+    ],
+  },
+  mirehide_leggings: {
+    key: "mirehide_leggings",
+    name: "Mirehide Leggings",
+    description: "Mirehide leggings cut for wading. You move through the bayou the way its own things do.",
+    texture: "icon_mirehide_leggings",
+    maxStack: 1,
+    hotbarable: false,
+    armorSlot: "legs",
+    armorType: "light_armor",
+    armorDefense: 9,
+    stats: [
+      { label: "Type", value: "Armor (Legs)" },
+      { label: "Armor Type", value: "Light" },
+      { label: "Armor", value: "9" },
+      { label: "Set (3)", value: "Mireblink" },
+    ],
+  },
+
+  // --- bayou weapons (reforged from the Embersteel tier) ---
+  gloamsteel_warhammer: {
+    key: "gloamsteel_warhammer",
+    name: "Gloamsteel Warhammer",
+    description: "A maul reforged in gloamsteel. What it hits stops being shaped like itself.",
+    texture: "icon_gloamsteel_warhammer",
+    maxStack: 1,
+    hotbarable: true,
+    weapon: "gloamsteel_warhammer",
+    stats: [
+      { label: "Type", value: "Weapon" },
+      { label: "Damage", value: "30" },
+      { label: "Damage Type", value: "Blunt" },
+      { label: "Stamina", value: "31" },
+      { label: "Attack Speed", value: "1.3/s" },
+    ],
+  },
+  gloamsteel_sword: {
+    key: "gloamsteel_sword",
+    name: "Gloamsteel Longsword",
+    description: "A longsword quenched in bog water. The edge cuts a hand's width wider than the steel.",
+    texture: "icon_gloamsteel_sword",
+    maxStack: 1,
+    hotbarable: true,
+    weapon: "gloamsteel_sword",
+    stats: [
+      { label: "Type", value: "Weapon" },
+      { label: "Damage", value: "25" },
+      { label: "Damage Type", value: "Slash" },
+      { label: "Stamina", value: "21" },
+      { label: "Attack Speed", value: "2.1/s" },
+    ],
+  },
+  gloamsteel_pike: {
+    key: "gloamsteel_pike",
+    name: "Gloamsteel Pike",
+    description: "A pike with a gloam-fed head. It finds the one seam in anything and opens it.",
+    texture: "icon_gloamsteel_pike",
+    maxStack: 1,
+    hotbarable: true,
+    weapon: "gloamsteel_pike",
+    stats: [
+      { label: "Type", value: "Weapon" },
+      { label: "Damage", value: "32" },
+      { label: "Damage Type", value: "Pierce" },
+      { label: "Stamina", value: "25" },
+      { label: "Attack Speed", value: "1.6/s" },
+    ],
+  },
+  gloamsteel_warbow: {
+    key: "gloamsteel_warbow",
+    name: "Gloamsteel Warbow",
+    description: "A warbow restrung with gloam-soaked sinew. It throws an arrow further than it has any right to.",
+    texture: "icon_gloamsteel_warbow",
+    maxStack: 1,
+    hotbarable: true,
+    weapon: "gloamsteel_warbow",
+    stats: [
+      { label: "Type", value: "Weapon" },
+      { label: "Damage", value: "20" },
+      { label: "Damage Type", value: "Ranged" },
+      { label: "Stamina", value: "17" },
+      { label: "Attack Speed", value: "1.4/s" },
+    ],
+  },
+  gloam_brand: {
+    key: "gloam_brand",
+    name: "Gloam Brand",
+    description: "The Ember Brand drowned and rekindled — it burns violet now, and armor means nothing to it.",
+    texture: "icon_gloam_brand",
+    maxStack: 1,
+    hotbarable: true,
+    weapon: "gloam_brand",
+    stats: [
+      { label: "Type", value: "Weapon" },
+      { label: "Damage", value: "23" },
+      { label: "Damage Type", value: "Magic" },
+      { label: "Stamina", value: "22" },
+      { label: "Attack Speed", value: "1.9/s" },
+    ],
+  },
 };
 
 export function itemDef(key: string): ItemDef | undefined {
@@ -1349,7 +1568,7 @@ export function itemDef(key: string): ItemDef | undefined {
 // Gremlin King's heart/fang, Gloaming-Vein shards + their forest-POI refined
 // trophies all first show up in the forest, so they stay forest even though
 // they feed badlands-tier crafting.
-export type ItemBiome = "forest" | "badlands";
+export type ItemBiome = "forest" | "badlands" | "bayou";
 
 const BADLANDS_ITEM_KEYS = new Set<string>([
   // raw materials + arid flora
@@ -1376,7 +1595,26 @@ const BADLANDS_ITEM_KEYS = new Set<string>([
   "ember_shard", "refined_trophy_uncommon_t2", "warren_fetish", "tyrant_totem",
 ]);
 
+// Biome-3 keys: the Phase-2b jewelry economy + the Phase-3 bayou gear tier.
+// Both are authored dormant (no in-game source until the biome-3 content
+// phases), but they still belong under their own inventory tab the moment a
+// dev/test grant puts one in the backpack.
+const BAYOU_ITEM_KEYS = new Set<string>([
+  // jewelry economy (Phase 2b)
+  "moonsilver", "gem_gloam", "gem_ember", "gem_blood", "duneshaper_heart",
+  "jewelry_station", "ring_quickening", "amulet_channeling", "ring_forager",
+  "amulet_farsight", "special_gloamstep_band", "special_gloam_focus",
+  "back_bloodpact_shroud",
+  // bayou gear tier (Phase 3)
+  "bog_ore", "gloamsteel_ingot", "mirehide",
+  "gloamsteel_helm", "gloamsteel_cuirass", "gloamsteel_greaves",
+  "mirehide_hood", "mirehide_vest", "mirehide_leggings",
+  "gloamsteel_warhammer", "gloamsteel_sword", "gloamsteel_pike",
+  "gloamsteel_warbow", "gloam_brand",
+]);
+
 export function itemBiome(key: string): ItemBiome {
+  if (BAYOU_ITEM_KEYS.has(key)) return "bayou";
   return BADLANDS_ITEM_KEYS.has(key) ? "badlands" : "forest";
 }
 

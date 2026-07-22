@@ -14,6 +14,8 @@ export interface ArmorSlotView {
   label: string;
   itemKey: string | null;
   tier?: number;
+  // Applied gem-augment ids on the worn instance (biome 3 Phase 3).
+  upgrades?: string[];
   // Set only for the "ammo" slot — every other slot holds a single item.
   count?: number;
 }
@@ -722,7 +724,7 @@ export class InventoryMenu {
         .setInteractive({ useHandCursor: !!slot.itemKey })
         .on("pointerover", () => {
           if (slot.itemKey && !this.deps.isDragging())
-            this.tooltipUI.show(slot.itemKey, { x, y, width: SLOT, height: SLOT }, "right", slot.tier);
+            this.tooltipUI.show(slot.itemKey, { x, y, width: SLOT, height: SLOT }, "right", slot.tier, slot.upgrades);
         })
         .on("pointerout", () => this.hideTooltip())
         .on("pointerdown", (pointer: Phaser.Input.Pointer) => {
@@ -796,13 +798,19 @@ export class InventoryMenu {
     const out: ItemBiome[] = [];
     if (set.has("forest")) out.push("forest");
     if (set.has("badlands")) out.push("badlands");
+    if (set.has("bayou")) out.push("bayou");
     return out;
   }
 
   private renderTabs(): void {
     const tabs: (ItemBiome | "all")[] = ["all", ...this.presentBiomes()];
     if (!tabs.includes(this.activeTab)) this.activeTab = "all";
-    const labels: Record<ItemBiome | "all", string> = { all: "All", forest: "Forest", badlands: "Badlands" };
+    const labels: Record<ItemBiome | "all", string> = {
+      all: "All",
+      forest: "Forest",
+      badlands: "Badlands",
+      bayou: "Bayou",
+    };
     let x = BACKPACK_X;
     for (const tab of tabs) {
       const active = tab === this.activeTab;
@@ -982,7 +990,7 @@ export class InventoryMenu {
       .setInteractive({ useHandCursor: true })
       .on("pointerover", () => {
         if (!this.deps.isDragging())
-          this.tooltipUI.show(stack.key, { x, y, width: SLOT, height: SLOT }, "right", stack.tier);
+          this.tooltipUI.show(stack.key, { x, y, width: SLOT, height: SLOT }, "right", stack.tier, stack.upgrades);
       })
       .on("pointerout", () => this.hideTooltip())
       .on("pointerdown", (pointer: Phaser.Input.Pointer) => {

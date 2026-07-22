@@ -566,6 +566,142 @@ export const RECIPES: Recipe[] = [
     requiredSkills: [{ skill: "magic", level: 0 }],
     output: { kind: "item", itemId: "ember_brand", itemName: "Ember Brand" },
   },
+
+  // === Biome-3 Phase 3: the bayou reforge tier ===
+  // Locked decision 6 — no fresh base sets in biome 3. Every recipe here
+  // CONSUMES its Ember-tier counterpart (the same reforge-forward pattern the
+  // Embersteel/Emberhide tier used on Sunsteel/Duskhide), so the ladder is
+  // Sunsteel -> Embersteel -> Gloamsteel rather than three parallel sets.
+  // All gate on requiresWorkbenchTier: 4 (a Gloamforge-Anvil Workbench, Lvl 5)
+  // and are only DISCOVERED once both the base piece and a Gloamsteel Ingot
+  // have been made. DORMANT until biome 3 sources Bog Ore / Mirehide.
+
+  // --- bayou HEAVY armor: Gloamsteel set ---
+  {
+    id: "gloamsteel_helm",
+    name: "Gloamsteel Helm",
+    description: "Drown an Embersteel Helm in gloam and beat it out again.",
+    category: "armor",
+    tier: 1,
+    requiresWorkbenchTier: 4,
+    costs: { embersteel_helm: 1, gloamsteel_ingot: 2, mirehide: 2, gem_gloam: 1 },
+    requiredSkills: [{ skill: "heavy_armor", level: 0 }],
+    output: { kind: "item", itemId: "gloamsteel_helm", itemName: "Gloamsteel Helm" },
+  },
+  {
+    id: "gloamsteel_cuirass",
+    name: "Gloamsteel Cuirass",
+    description: "Reforge an Embersteel Cuirass in gloamsteel — the heaviest plate yet worn.",
+    category: "armor",
+    tier: 1,
+    requiresWorkbenchTier: 4,
+    costs: { embersteel_cuirass: 1, gloamsteel_ingot: 4, mirehide: 3, cragscale_plate: 3, gem_gloam: 1 },
+    requiredSkills: [{ skill: "heavy_armor", level: 0 }],
+    output: { kind: "item", itemId: "gloamsteel_cuirass", itemName: "Gloamsteel Cuirass" },
+  },
+  {
+    id: "gloamsteel_greaves",
+    name: "Gloamsteel Greaves",
+    description: "Reforge Embersteel Greaves in gloamsteel over a mirehide lining.",
+    category: "armor",
+    tier: 1,
+    requiresWorkbenchTier: 4,
+    costs: { embersteel_greaves: 1, gloamsteel_ingot: 2, mirehide: 3, gem_gloam: 1 },
+    requiredSkills: [{ skill: "heavy_armor", level: 0 }],
+    output: { kind: "item", itemId: "gloamsteel_greaves", itemName: "Gloamsteel Greaves" },
+  },
+
+  // --- bayou LIGHT armor: Mirehide set ---
+  {
+    id: "mirehide_hood",
+    name: "Mirehide Hood",
+    description: "Reline an Emberhide Hood with mirehide — quieter, and far harder to open.",
+    category: "armor",
+    tier: 1,
+    requiresWorkbenchTier: 4,
+    costs: { emberhide_hood: 1, mirehide: 3, gloamsteel_ingot: 1, gem_blood: 1 },
+    requiredSkills: [{ skill: "light_armor", level: 0 }],
+    output: { kind: "item", itemId: "mirehide_hood", itemName: "Mirehide Hood" },
+  },
+  {
+    id: "mirehide_vest",
+    name: "Mirehide Vest",
+    description: "Layer mirehide over an Emberhide Vest's ember-steel seams.",
+    category: "armor",
+    tier: 1,
+    requiresWorkbenchTier: 4,
+    costs: { emberhide_vest: 1, mirehide: 5, gloamsteel_ingot: 2, duskrunner_pelt: 3, gem_blood: 1 },
+    requiredSkills: [{ skill: "light_armor", level: 0 }],
+    output: { kind: "item", itemId: "mirehide_vest", itemName: "Mirehide Vest" },
+  },
+  {
+    id: "mirehide_leggings",
+    name: "Mirehide Leggings",
+    description: "Recut Emberhide Leggings in mirehide, for wading rather than marching.",
+    category: "armor",
+    tier: 1,
+    requiresWorkbenchTier: 4,
+    costs: { emberhide_leggings: 1, mirehide: 3, gloamsteel_ingot: 1, gem_blood: 1 },
+    requiredSkills: [{ skill: "light_armor", level: 0 }],
+    output: { kind: "item", itemId: "mirehide_leggings", itemName: "Mirehide Leggings" },
+  },
+
+  // --- bayou weapons ---
+  {
+    id: "gloamsteel_warhammer",
+    name: "Gloamsteel Warhammer",
+    description: "Reforge an Embersteel Warhammer in gloamsteel — a heavier head on a heavier haft.",
+    category: "weapons",
+    tier: 1,
+    requiresWorkbenchTier: 4,
+    costs: { embersteel_warhammer: 1, gloamsteel_ingot: 3, ironbark: 4, gem_ember: 1 },
+    requiredSkills: [{ skill: "blunt", level: 0 }],
+    output: { kind: "item", itemId: "gloamsteel_warhammer", itemName: "Gloamsteel Warhammer" },
+  },
+  {
+    id: "gloamsteel_sword",
+    name: "Gloamsteel Longsword",
+    description: "Quench an Embersteel Longsword in bog water — the edge cuts wider than the steel.",
+    category: "weapons",
+    tier: 1,
+    requiresWorkbenchTier: 4,
+    costs: { embersteel_sword: 1, gloamsteel_ingot: 2, mirehide: 2, gem_ember: 1 },
+    requiredSkills: [{ skill: "slash", level: 0 }],
+    output: { kind: "item", itemId: "gloamsteel_sword", itemName: "Gloamsteel Longsword" },
+  },
+  {
+    id: "gloamsteel_pike",
+    name: "Gloamsteel Pike",
+    description: "Refit an Embersteel Pike with a gloam-fed head that finds every seam.",
+    category: "weapons",
+    tier: 1,
+    requiresWorkbenchTier: 4,
+    costs: { embersteel_pike: 1, gloamsteel_ingot: 2, ironbark: 3, gem_ember: 1 },
+    requiredSkills: [{ skill: "pierce", level: 0 }],
+    output: { kind: "item", itemId: "gloamsteel_pike", itemName: "Gloamsteel Pike" },
+  },
+  {
+    id: "gloamsteel_warbow",
+    name: "Gloamsteel Warbow",
+    description: "Restring an Embersteel Warbow with gloam-soaked sinew for a longer, meaner draw.",
+    category: "weapons",
+    tier: 1,
+    requiresWorkbenchTier: 4,
+    costs: { embersteel_warbow: 1, gloamsteel_ingot: 3, mirehide: 3, gem_ember: 1 },
+    requiredSkills: [{ skill: "ranged", level: 0 }],
+    output: { kind: "item", itemId: "gloamsteel_warbow", itemName: "Gloamsteel Warbow" },
+  },
+  {
+    id: "gloam_brand",
+    name: "Gloam Brand",
+    description: "Drown the Ember Brand and rekindle it violet. Armor stops meaning very much.",
+    category: "weapons",
+    tier: 1,
+    requiresWorkbenchTier: 4,
+    costs: { ember_brand: 1, gloamsteel_ingot: 3, hex_essence: 4, gem_gloam: 2 },
+    requiredSkills: [{ skill: "magic", level: 0 }],
+    output: { kind: "item", itemId: "gloam_brand", itemName: "Gloam Brand" },
+  },
 ];
 
 export function itemNameFor(itemId: string): string | undefined {

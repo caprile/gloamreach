@@ -66,6 +66,22 @@ requires standing near a placed Workbench (`MainScene.isNearWorkbench`).
 | Embersteel Pike | Weapons | 1 | Yes (Lvl 4) | 1 Sunsteel Pike, 2 Embersteel Ingot, 3 Ironbark, 2 Cragscale Plate, 2 Hex Essence | Pierce 3 | Item (weapon, pierce — reforge) |
 | Embersteel Warbow | Weapons | 1 | Yes (Lvl 4) | 1 Sunsteel Warbow, 3 Embersteel Ingot, 3 Ironbark, 2 Duskrunner Pelt, 2 Hex Essence | Ranged 0 | Item (weapon, ranged — reforge) |
 | Ember Brand | Weapons | 1 | Yes (Lvl 4) | 3 Embersteel Ingot, 4 Hex Essence, 2 Ironbark | Magic 0 | Item (weapon, **magic** — first magic weapon) |
+| Gloamsteel Helm | Armor | 1 | Yes (Lvl 5) | 1 Embersteel Helm, 2 Gloamsteel Ingot, 2 Mirehide, 1 Gloam Gem | Heavy Armor 0 | Item (armor, helmet, **heavy** — reforge) |
+| Gloamsteel Cuirass | Armor | 1 | Yes (Lvl 5) | 1 Embersteel Cuirass, 4 Gloamsteel Ingot, 3 Mirehide, 3 Cragscale Plate, 1 Gloam Gem | Heavy Armor 0 | Item (armor, chest, **heavy** — reforge) |
+| Gloamsteel Greaves | Armor | 1 | Yes (Lvl 5) | 1 Embersteel Greaves, 2 Gloamsteel Ingot, 3 Mirehide, 1 Gloam Gem | Heavy Armor 0 | Item (armor, legs, **heavy** — reforge) |
+| Mirehide Hood | Armor | 1 | Yes (Lvl 5) | 1 Emberhide Hood, 3 Mirehide, 1 Gloamsteel Ingot, 1 Blood Gem | Light Armor 0 | Item (armor, helmet, light — reforge) |
+| Mirehide Vest | Armor | 1 | Yes (Lvl 5) | 1 Emberhide Vest, 5 Mirehide, 2 Gloamsteel Ingot, 3 Duskrunner Pelt, 1 Blood Gem | Light Armor 0 | Item (armor, chest, light — reforge) |
+| Mirehide Leggings | Armor | 1 | Yes (Lvl 5) | 1 Emberhide Leggings, 3 Mirehide, 1 Gloamsteel Ingot, 1 Blood Gem | Light Armor 0 | Item (armor, legs, light — reforge) |
+| Gloamsteel Warhammer | Weapons | 1 | Yes (Lvl 5) | 1 Embersteel Warhammer, 3 Gloamsteel Ingot, 4 Ironbark, 1 Ember Gem | Blunt 0 | Item (weapon, blunt — reforge) |
+| Gloamsteel Longsword | Weapons | 1 | Yes (Lvl 5) | 1 Embersteel Longsword, 2 Gloamsteel Ingot, 2 Mirehide, 1 Ember Gem | Slash 0 | Item (weapon, slash — reforge) |
+| Gloamsteel Pike | Weapons | 1 | Yes (Lvl 5) | 1 Embersteel Pike, 2 Gloamsteel Ingot, 3 Ironbark, 1 Ember Gem | Pierce 0 | Item (weapon, pierce — reforge) |
+| Gloamsteel Warbow | Weapons | 1 | Yes (Lvl 5) | 1 Embersteel Warbow, 3 Gloamsteel Ingot, 3 Mirehide, 1 Ember Gem | Ranged 0 | Item (weapon, ranged — reforge) |
+| Gloam Brand | Weapons | 1 | Yes (Lvl 5) | 1 Ember Brand, 3 Gloamsteel Ingot, 4 Hex Essence, 2 Gloam Gem | Magic 0 | Item (weapon, **magic** — reforge) |
+
+The **bayou (Gloamsteel/Mirehide) tier is biome-3 DORMANT** — Bog Ore, Mirehide and
+the gems have no in-game source until the biome-3 content phases (test via
+`__dev.give`). Every one of the 11 reforges consumes its Ember-tier counterpart
+(roadmap locked decision 6: no fresh base sets in biome 3).
 
 The base forged gear (Sunsteel/Duskhide) is **"Yes (Lvl 3)"** — tier 1 (any
 Workbench) **plus** `requiresWorkbenchTier: 2` (a Forge-Anvil-upgraded **Workbench
@@ -107,6 +123,7 @@ fixed destination level.
 | Workbench | Lvl 2 | Tool Sharpener | 3 Twine, 5 Wood, 2 Stone | — (unlocks gates only) |
 | Workbench | Lvl 3 | Forge Anvil | 5 Sunsteel Ingot, 5 Ironbark, 7 Stone | Unlocks base forged gear (`requiresWorkbenchTier: 2`) |
 | Workbench | Lvl 4 | Emberforge Anvil | 5 Embersteel Ingot, 8 Ironbark, 10 Stone | Unlocks enhanced/T2 gear (`requiresWorkbenchTier: 3`) |
+| Workbench | Lvl 5 | Gloamforge Anvil | 5 Gloamsteel Ingot, 6 Mirehide, 3 Moonsilver | Unlocks the bayou reforge tier (`requiresWorkbenchTier: 4`) — **biome-3 dormant** |
 | Campfire | Lvl 2 | Stone Hearth | 4 Twine, 13 Stone | Better campfire dishes |
 | Campfire | Lvl 3 | Sunsteel Grill | 3 Sunsteel Ingot, 8 Clay, 7 Stone | Better campfire dishes |
 | Campfire | Lvl 4 | Emberforge Hearth | 3 Embersteel Ingot, 13 Stone | Best campfire dishes |
@@ -160,6 +177,8 @@ i-frames. `heavy_armor` XP accrues per worn piece on a kill.
 | Embersteel (T2) | Heavy | 10 | 12 | 10 | 32 → 38 |
 | Duskhide (base) | Light | 4 | 6 | 5 | 15 → 21 |
 | Emberhide (T2) | Light | 7 | 9 | 8 | 24 → 30 |
+| Gloamsteel (bayou) | Heavy | 13 | 16 | 13 | 42 → 48 |
+| Mirehide (bayou) | Light | 9 | 12 | 9 | 30 → 36 |
 
 Forged-piece upgrade costs: base (Sunsteel/Duskhide) Lvl 2 = **2 Sunsteel Ingot**,
 Lvl 3 = **3 Sunsteel Ingot** (needs Workbench Lvl 3). T2 (Embersteel/Emberhide)
@@ -204,6 +223,10 @@ starter < Sunsteel < Ember. AOE arc widths in `Weapons.ts` `WEAPON_ARC`.
 | Embersteel Longsword | 19 / 470ms / 18 | Slash | 32° / 42 / 0.58 |
 | Embersteel Pike | 20 / 610ms / 22 | Pierce | 42° / 58 / 0.68 |
 | Ember Brand | 17 / 520ms / 19 | **Magic** | 45° / 52 / 0.6 (fire washes over foes) |
+| Gloamsteel Warhammer | 30 / 800ms / 31 | Blunt | 44° / 54 / 0.58 |
+| Gloamsteel Longsword | 25 / 470ms / 21 | Slash | 64° / 74 / 0.8 |
+| Gloamsteel Pike | 32 / 610ms / 25 | Pierce | 24° / 38 / 0.44 |
+| Gloam Brand | 23 / 520ms / 22 | **Magic** | 46° / 54 / 0.62 |
 
 The **Ember Brand** is the first magic weapon (rare-ore-exclusive). Its raw 17 is
 mid-pack (DPS ≈ the Embersteel Pike on a neutral target), but `magic` type routes
@@ -277,6 +300,7 @@ Upgrades).
 |---|---|---|---|---|
 | Sunscorch Ore (common, scattered badlands) | 1 Hex Essence | Sunsteel Ingot | 1 : 1 | Any (Lvl 1) |
 | Cinderforged Ore (rare veins + Sunken Forge POI) | 1 Hex Essence | Embersteel Ingot | 1 : 1 | Lvl 2 (Ember Crucible) |
+| Bog Ore (bayou — **no source yet**, biome-3 dormant) | 1 Hex Essence | Gloamsteel Ingot | 1 : 1 | Lvl 2 (Ember Crucible) |
 
 Ratio is **1 ore + 1 hex → 1 ingot** (S1 rebalance — the old 2:1 made forging
 grindy). Clay (Smelter build material), Sunscorch Ore, and rare Cinderforged
@@ -332,6 +356,31 @@ combat stats (that's relics' layer). Rings fill either ring slot (wear two).
 | Gloamstep Band | Lvl 2 | 2 Moonsilver, 1 Gloam Gem | Spec1 (Q) | Grants Gloamstep Blink |
 | Gloam Focus | Lvl 2 | 2 Moonsilver, 1 Ember Gem | Spec2 (E) | Grants Gloam Nova |
 | Bloodpact Shroud | Lvl 2 | 3 Moonsilver, 1 Blood Gem | Back (R) | Grants Bloodpact |
+
+## Gem Augments (`src/systems/GearAugments.ts`) — B3-P3
+
+Per-**instance** gem augments applied through a gear item's right-click Upgrade
+panel. **No ladder** (any order), **consumed** one-shot, **max 2 per item**, and
+independent of that item's Lvl 2/3 tier upgrades — a piece can carry both.
+Applied ids live on the same per-instance field a placed station's upgrades use
+(`ItemStack.upgrades` / `EquippedItem.upgrades`), so they survive equip →
+backpack → equip. Fit the **Ember and Gloamsteel/Mirehide tiers only**, and all
+require a nearby **Workbench Lvl 4** (Emberforge Anvil).
+
+| Augment | Fits | Effect | Costs |
+|---|---|---|---|
+| Gloam Edge | Weapons | +3 Damage | 1 Gloam Gem, 1 Gloamsteel Ingot |
+| Serrated Fang | Weapons | +6% Crit Chance | 1 Blood Gem, 2 Sandmaw Chitin |
+| Cruel Weight | Weapons | +0.30x Crit Damage | 1 Ember Gem, 2 Cragscale Plate |
+| Widened Sweep | Weapons | +30% Arc Reach | 2 Moonsilver, 1 Gloam Gem |
+| Swift Grip | Weapons | -12% Stamina Cost | 2 Moonsilver, 4 Twine |
+| Warded Plating | Armor | +2 Armor | 2 Gloamsteel Ingot |
+| Stoneheart Core | Armor | +3 Armor | 3 Gloamsteel Ingot, 3 Cragscale Plate |
+| Gloamweave Lining | Armor | -10% Magic/Fire Damage | 1 Gloam Gem, 1 Moonsilver |
+| Fleetfoot Stitching | Armor | +4% Move Speed | 2 Mirehide, 1 Blood Gem |
+
+Armor-augment magic/fire mitigation sums with the `heavy_armor` skill's own
+mitigation and is capped at 75% total.
 
 ## Relics (`src/systems/Relics.ts`) — M-RL, reworked in Phase 5
 

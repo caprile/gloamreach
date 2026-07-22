@@ -121,6 +121,14 @@ WEAPON_UPGRADES.push(
   ...forgedWeaponUpgrades("embersteel_sword", "Embersteel Longsword", "embersteel_ingot"),
   ...forgedWeaponUpgrades("embersteel_pike", "Embersteel Pike", "embersteel_ingot"),
   ...forgedWeaponUpgrades("ember_brand", "Ember Brand", "embersteel_ingot"),
+  // Bayou tier (biome 3 Phase 3) — sunk in Gloamsteel. Stacks with gem
+  // augments (GearAugments.ts), which live on the instance's `upgrades` set
+  // rather than its `tier`.
+  ...forgedWeaponUpgrades("gloamsteel_warhammer", "Gloamsteel Warhammer", "gloamsteel_ingot"),
+  ...forgedWeaponUpgrades("gloamsteel_sword", "Gloamsteel Longsword", "gloamsteel_ingot"),
+  ...forgedWeaponUpgrades("gloamsteel_pike", "Gloamsteel Pike", "gloamsteel_ingot"),
+  ...forgedWeaponUpgrades("gloamsteel_warbow", "Gloamsteel Warbow", "gloamsteel_ingot"),
+  ...forgedWeaponUpgrades("gloam_brand", "Gloam Brand", "gloamsteel_ingot"),
 );
 
 // The upgrades that could apply to a given weapon item, ordered by the tier

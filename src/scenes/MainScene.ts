@@ -95,6 +95,17 @@ import { EventLog } from "../systems/EventLog";
 import { Biome, type ZoneType } from "../systems/Biome";
 import { Equipment, EQUIP_SLOTS, type EquipSlot, type EquippedItem } from "../systems/Equipment";
 import { activeSets, setById, type SetId } from "../systems/SetBonuses";
+import {
+  augmentEffect,
+  augmentsForItem,
+  appliedAugmentIds,
+  equippedAugmentEffect,
+  isGearAugment,
+  isAugmentableItem,
+  MAX_AUGMENTS_PER_ITEM,
+  type AugmentEffect,
+  type GearAugmentDef,
+} from "../systems/GearAugments";
 import { Hotbar, ROW1_COUNT } from "../systems/Hotbar";
 import { ProcessingStation, PROCESS_RECIPES, SMELT_RECIPES } from "../systems/Processing";
 import { BuffManager } from "../systems/Buffs";
@@ -306,6 +317,14 @@ const SET_MOLTEN_DAMAGE_REDUCTION = 0.15; // 15% off every hit (physical/magic/f
 const SET_EMBERBLINK_DASH_MULT = 1.6;
 const SET_EMBERBLINK_BURST_RADIUS = 95;
 const SET_EMBERBLINK_BURST_DAMAGE = 16;
+// Bayou reforges of both sets (biome 3 Phase 3) - same two mechanics, turned up.
+// Read through moltenDamageReduction()/emberblinkDashMult() so the Ember and
+// Gloam tiers can never both apply (the stronger one wins).
+const SET_GLOAM_BULWARK_DAMAGE_REDUCTION = 0.22;
+const SET_GLOAM_THORNS_FIRE_DAMAGE = 15;
+const SET_MIREBLINK_DASH_MULT = 1.9;
+const SET_MIREBLINK_BURST_RADIUS = 120;
+const SET_MIREBLINK_BURST_DAMAGE = 26;
 // --- Activated-ability tuning (B3-P2a). First-pass/tunable. ---
 const ABILITY_BLINK_DISTANCE = 220; // px teleported toward aim
 const ABILITY_BLINK_IFRAME_MS = 250; // untouchable window on blink (> the 150ms dash)
@@ -550,6 +569,10 @@ export class MainScene extends Phaser.Scene {
   private equippedWeapon: WeaponType | null = null;
   private equippedWeaponName: string | null = null;
   private equippedWeaponTier = 0;
+  // Summed gem-augment effect of the currently-equipped weapon instance (biome 3
+  // Phase 3). Cached at the same chokepoint equippedWeaponTier is (recomputeEquipped)
+  // so the per-swing hooks never re-walk the stack.
+  private equippedWeaponAugment: AugmentEffect = {};
   private attackRangeRing!: Phaser.GameObjects.Graphics;
   // Outline drawn around whatever's hovered, redrawn each frame in
   // updateHover() — gated on the SAME prompt string the bottom-right text
@@ -951,6 +974,7 @@ export class MainScene extends Phaser.Scene {
     this.equippedWeapon = null;
     this.equippedWeaponName = null;
     this.equippedWeaponTier = 0;
+    this.equippedWeaponAugment = {};
     this.hotbar = new Hotbar();
     this.equipment = new Equipment();
     // Let crafting count/consume EQUIPPED pieces toward recipe ingredients
@@ -1588,11 +1612,14 @@ export class MainScene extends Phaser.Scene {
     // Relic move-speed bonus (M-RL) + Fleetfoot on-kill burst ADD into the move
     // bucket (2026-07-15), applied to walk & sprint alike in Player.update.
     // Emberblink set bonus (Emberhide light set) lengthens the dash burst only.
-    const dashDistMult = this.hasSet("emberhide") ? SET_EMBERBLINK_DASH_MULT : 1;
+    const dashDistMult = this.emberblinkDashMult();
     // Movement locks while the inventory search box is focused, so WASD routes
     // to the text field instead of walking the player.
     const inputEnabled = !this.inventoryMenu.isSearchFocused();
-    const moveMult = this.relics.moveSpeedMult() + this.killMoveBurstBonus();
+    const moveMult =
+      this.relics.moveSpeedMult() +
+      this.killMoveBurstBonus() +
+      (equippedAugmentEffect(this.equipment).moveSpeedPct ?? 0) / 100;
     // Phase 1: terrain under the player this frame — the bramble slow feeds
     // Player.update's env multiplier; blockRegen is cached for the regen gates
     // later this frame (dormant in biome 2, live for biome-3 miasma).
@@ -2076,6 +2103,7 @@ export class MainScene extends Phaser.Scene {
     this.equippedWeapon = def?.weapon ?? null;
     this.equippedWeaponName = def?.weapon ? def.name : null;
     this.equippedWeaponTier = def?.weapon ? stack?.tier ?? 0 : 0;
+    this.equippedWeaponAugment = def?.weapon ? augmentEffect(stack) : {};
     // Use the tiered texture so an upgraded tool/weapon (e.g. the Ironshod
     // stone_axe) shows its upgraded art on the player, not the base icon.
     const iconTexture =
@@ -4451,7 +4479,7 @@ export class MainScene extends Phaser.Scene {
 
     const dmgType = weaponPrimaryDamageType(this.equippedWeapon);
     const dmg =
-      (weaponDamage(this.equippedWeapon) + weaponTierDamageBonus(this.equippedWeapon, this.equippedWeaponTier)) *
+      (this.equippedWeaponBaseDamage()) *
       this.damageBonusMult(dmgType);
     this.sfx.hit();
     this.spawnDamageNumber(den.x, den.y, Math.round(dmg), false, "normal");
@@ -6326,7 +6354,7 @@ export class MainScene extends Phaser.Scene {
     this.player.playSwing();
     this.player.playEquippedSwing();
 
-    const baseDmg = weaponDamage(this.equippedWeapon) + weaponTierDamageBonus(this.equippedWeapon, this.equippedWeaponTier);
+    const baseDmg = this.equippedWeaponBaseDamage();
     // Kept fractional all the way to takeHit — a skill's +0.5%/level bonus
     // used to get thrown away by an early Math.round (e.g. Blunt 10 on a
     // base-5 weapon rounds right back to 5, so the bonus was invisible AND
@@ -6356,7 +6384,13 @@ export class MainScene extends Phaser.Scene {
     // resolveWeaponHit (own resist, kill/loot/XP). enemy may already be dead
     // here (a lethal primary), but the arc is keyed off the swing direction, not
     // the primary's live position.
-    const arc = weaponArc(this.equippedWeapon);
+    // A Widened Sweep augment stretches the arc's reach (not its angle - the
+    // swing still only covers what is in front of you).
+    const baseArc = weaponArc(this.equippedWeapon);
+    const arc = {
+      ...baseArc,
+      range: baseArc.range * (1 + (this.equippedWeaponAugment.arcRangePct ?? 0) / 100),
+    };
     if (arc.range > 0) {
       const swingAngle = Phaser.Math.Angle.Between(this.player.x, this.player.y, enemy.x, enemy.y);
       const halfAngle = Phaser.Math.DegToRad(arc.halfAngleDeg);
@@ -6463,7 +6497,7 @@ export class MainScene extends Phaser.Scene {
     this.player.playSwing();
     this.player.playEquippedSwing();
 
-    const baseDmg = weaponDamage(this.equippedWeapon) + weaponTierDamageBonus(this.equippedWeapon, this.equippedWeaponTier);
+    const baseDmg = this.equippedWeaponBaseDamage();
     // Same additive model as melee: normal hit × (1 + Onslaught + crit), then
     // the target-side stagger multiplier. Crit is rolled at fire time (the
     // "captured at commit time" precedent) and carried by the projectile so the
@@ -6593,14 +6627,16 @@ export class MainScene extends Phaser.Scene {
     if (this.isDead || this.isPaused || this.runOver) return;
     const cx = this.player.x;
     const cy = this.player.y;
-    const r = SET_EMBERBLINK_BURST_RADIUS;
+    const mire = this.hasSet("mirehide");
+    const r = mire ? SET_MIREBLINK_BURST_RADIUS : SET_EMBERBLINK_BURST_RADIUS;
+    const burstDamage = mire ? SET_MIREBLINK_BURST_DAMAGE : SET_EMBERBLINK_BURST_DAMAGE;
     for (const enemy of [...this.enemies]) {
       if (!enemy.active) continue;
       // Catch a big elite at its edge, not just its center (mirrors enemyReach's
       // sprite-radius term).
       const edge = Math.max(enemy.displayWidth, enemy.displayHeight) / 2;
       if (Phaser.Math.Distance.Between(cx, cy, enemy.x, enemy.y) <= r + edge) {
-        this.dealSetBonusDamage(enemy, SET_EMBERBLINK_BURST_DAMAGE);
+        this.dealSetBonusDamage(enemy, burstDamage);
       }
     }
     // Expanding fire flash. light_soft is a soft radial gradient (~256px) — scale
@@ -6860,14 +6896,20 @@ export class MainScene extends Phaser.Scene {
   private critChanceTotal(weapon: WeaponType): number {
     return Math.min(
       CRIT_CHANCE_CAP,
-      weaponBaseCritChance(weapon) + this.progression.critChanceBonus() + this.relics.critChanceBonus(),
+      weaponBaseCritChance(weapon) +
+        this.progression.critChanceBonus() +
+        this.relics.critChanceBonus() +
+        (this.equippedWeaponAugment.critChancePct ?? 0) / 100,
     );
   }
   // Total crit MULTIPLIER for `weapon` (capped) — weapon base + Strength + relics.
   private critMultTotal(weapon: WeaponType): number {
     return Math.min(
       CRIT_MULT_CAP,
-      weaponBaseCritMult(weapon) + this.progression.critMultBonus() + this.relics.critDamageBonus(),
+      weaponBaseCritMult(weapon) +
+        this.progression.critMultBonus() +
+        this.relics.critDamageBonus() +
+        (this.equippedWeaponAugment.critMultBonus ?? 0),
     );
   }
   // Roll whether one hit of `weapon` crits (M-SS). Uses Math.random — combat crit
@@ -6910,7 +6952,23 @@ export class MainScene extends Phaser.Scene {
   // Second Wind (stamina Mythic) free-attack window folds into the weapon/tool
   // stamina-cost multiplier as a 0. Every weapon/tool cost site reads this.
   private effectiveStaminaCostMult(): number {
-    return this.time.now < this.freeAttackUntil ? 0 : this.relics.staminaCostMult();
+    if (this.time.now < this.freeAttackUntil) return 0;
+    // A Swift Grip augment on the equipped weapon discounts its own swings (and
+    // a tool swing harmlessly - a tool cannot carry augments, so its factor is 1).
+    const aug = 1 - (this.equippedWeaponAugment.staminaCostPct ?? 0) / 100;
+    return this.relics.staminaCostMult() * Math.max(0, aug);
+  }
+
+  // The equipped weapon's flat damage before any multiplier: base + right-click
+  // tier bonus + a Gloam Edge augment. One helper so the melee, ranged, and
+  // inventory Combat-column readouts cannot drift.
+  private equippedWeaponBaseDamage(): number {
+    if (!this.equippedWeapon) return 0;
+    return (
+      weaponDamage(this.equippedWeapon) +
+      weaponTierDamageBonus(this.equippedWeapon, this.equippedWeaponTier) +
+      (this.equippedWeaponAugment.damageBonus ?? 0)
+    );
   }
 
   // Fleetfoot (move relic) on-kill move-speed burst, as a fraction added into the
@@ -7150,9 +7208,12 @@ export class MainScene extends Phaser.Scene {
         // ranged projectiles never touch the plate. Note dealSetBonusDamage may
         // remove this enemy from this.enemies on a kill; for...of holds the old
         // array reference (filter returns a new one), so the loop stays safe.
-        if (this.hasSet("embersteel")) {
-          this.dealSetBonusDamage(enemy, SET_THORNS_FIRE_DAMAGE);
-        }
+        const thorns = this.hasSet("gloamsteel")
+          ? SET_GLOAM_THORNS_FIRE_DAMAGE
+          : this.hasSet("embersteel")
+            ? SET_THORNS_FIRE_DAMAGE
+            : 0;
+        if (thorns > 0) this.dealSetBonusDamage(enemy, thorns);
       }
       // Area-damage attacks (boss slams, the Hexling's flame strike) deal AoE,
       // not a single-point bite — queried separately since they need richer info
@@ -7280,6 +7341,19 @@ export class MainScene extends Phaser.Scene {
     return this.activeSetIds.has(id);
   }
 
+  // Heavy-set flat damage reduction - the bayou (Gloamsteel) reforge supersedes
+  // the Ember one rather than stacking (you can only wear one full set anyway).
+  private moltenDamageReduction(): number {
+    if (this.hasSet("gloamsteel")) return SET_GLOAM_BULWARK_DAMAGE_REDUCTION;
+    return this.hasSet("embersteel") ? SET_MOLTEN_DAMAGE_REDUCTION : 0;
+  }
+
+  // Light-set dash-distance multiplier, same supersede rule.
+  private emberblinkDashMult(): number {
+    if (this.hasSet("mirehide")) return SET_MIREBLINK_DASH_MULT;
+    return this.hasSet("emberhide") ? SET_EMBERBLINK_DASH_MULT : 1;
+  }
+
   // `knockback` is optional so every existing call site (Boar bite, Snake
   // bite, Gremlin claw/projectile) is untouched — only the Gremlin King's
   // slam attack passes one.
@@ -7317,7 +7391,7 @@ export class MainScene extends Phaser.Scene {
     // flat armor. Magic AND fire (Biome 2) BYPASS the flat-armor term (badlands
     // casters/forge-boss teeth); the %-reduction still applies. Floored at 1.
     const relicRed = 1 - this.relics.damageTakenMult();
-    const moltenDr = this.hasSet("embersteel") ? SET_MOLTEN_DAMAGE_REDUCTION : 0;
+    const moltenDr = this.moltenDamageReduction();
     const reductionPct = Math.min(0.75, Math.max(0, relicRed + moltenDr));
     let relicAdjusted = amount * (1 - reductionPct);
     // Guardian Mythic: cap any single hit at capPct% of max HP (post-%, pre-armor).
@@ -7333,7 +7407,11 @@ export class MainScene extends Phaser.Scene {
       // elemental mitigation instead (its identity vs light's dodge i-frames) —
       // a % reduction, only while wearing at least one heavy piece (biome 2
       // Phase 4). Light-armor players take the hit undiminished, as before.
-      const mit = this.wearsHeavyArmor() ? heavyArmorMagicMitigation(this.skills) : 0;
+      // Heavy-armor skill mitigation + any Gloamweave Lining augments, capped so
+      // a full set of linings can never zero out elemental damage.
+      const skillMit = this.wearsHeavyArmor() ? heavyArmorMagicMitigation(this.skills) : 0;
+      const augMit = (equippedAugmentEffect(this.equipment).elementalMitigationPct ?? 0) / 100;
+      const mit = Math.min(0.75, skillMit + augMit);
       reduced = Math.max(1, Math.round(relicAdjusted * (1 - mit)));
       this.hints.trigger("magic_damage");
     } else {
@@ -8432,6 +8510,10 @@ export class MainScene extends Phaser.Scene {
         ...armorUpgradesForItem(itemKey),
         ...weaponUpgradesForItem(itemKey),
         ...toolUpgradesForItem(itemKey),
+        // Gem augments (biome 3 Phase 3) sit alongside the tier ladder in the
+        // same panel — they're keyed by the same itemKey but run the no-ladder
+        // model (see UpgradeMenu's appliedAugmentIds branch).
+        ...augmentsForItem(itemKey),
       ],
       isDiscovered: (upg) => this.upgradeIngredientsKnown(upg),
       canAfford: (upg) => this.canAffordUpgrade(upg),
@@ -8444,13 +8526,22 @@ export class MainScene extends Phaser.Scene {
         if (!t || this.isArmorUpgradeTarget(t) || this.isGearUpgradeTarget(t)) return null;
         return new Set((t.getData("upgrades") as string[] | undefined) ?? []);
       },
+      // Non-null only when the target is an augmentable gear INSTANCE — a worn
+      // paper-doll piece or a weapon/armor stack in a container. Reads the same
+      // `upgrades` field a placed station's applied set lives on.
+      appliedAugmentIds: () => {
+        const inst = this.upgradeTargetInstance();
+        if (!inst || !isAugmentableItem(inst.key)) return null;
+        return new Set(appliedAugmentIds(inst));
+      },
       extraBlockReason: (upg) => this.upgradeBlockReason(upg),
       formatCost: (upg) => this.formatUpgradeCost(upg),
       displayName: (itemKey, tier) => stationDisplayName(itemKey, tier),
       apply: (upg) => {
         const t = this.upgradeTarget;
         if (!t) return;
-        if (this.isArmorUpgradeTarget(t)) this.applyArmorUpgrade(t.armorSlot, upg as ArmorUpgradeDef);
+        if (isGearAugment(upg)) this.applyGearAugment(upg);
+        else if (this.isArmorUpgradeTarget(t)) this.applyArmorUpgrade(t.armorSlot, upg as ArmorUpgradeDef);
         else if (this.isGearUpgradeTarget(t)) {
           this.applyGearUpgrade(t.gearSlot.container, t.gearSlot.index, upg as WeaponUpgradeDef | ArmorUpgradeDef);
         } else this.applyStationUpgrade(t, upg as StationUpgradeDef);
@@ -8592,7 +8683,11 @@ export class MainScene extends Phaser.Scene {
   //    not just any workbench) — checked second so a player with no nearby
   //    workbench at all sees the more helpful generic message first.
   private upgradeBlockReason(upg: UpgradeDef): string | null {
-    const recipe = RECIPES.find((r) => outputKey(r) === upg.appliesToItemKey);
+    // A gem augment has no single appliesToItemKey (it fits a family of pieces),
+    // so the generic "needs the bench you crafted it at" rule is skipped for it -
+    // its own requiresWorkbenchTier below is the gate.
+    const targetKey = "appliesToItemKey" in upg ? upg.appliesToItemKey : undefined;
+    const recipe = targetKey ? RECIPES.find((r) => outputKey(r) === targetKey) : undefined;
     if (recipe && recipe.tier > 0 && !this.isNearWorkbench(this.player.x, this.player.y)) {
       return "Requires a nearby Workbench";
     }
@@ -8645,6 +8740,50 @@ export class MainScene extends Phaser.Scene {
     this.afterItemMove();
   }
 
+  // The gear INSTANCE the Upgrade panel is currently bound to — a worn
+  // paper-doll piece or a stack in a container — or null for a placed station.
+  // Both instance shapes carry `key` + the optional `upgrades` augment set, which
+  // is all the augment path needs to read.
+  private upgradeTargetInstance(): { key: string; upgrades?: string[] } | null {
+    const t = this.upgradeTarget;
+    if (!t) return null;
+    if (this.isArmorUpgradeTarget(t)) return this.equipment.get(t.armorSlot);
+    if (this.isGearUpgradeTarget(t)) return t.gearSlot.container.slot(t.gearSlot.index);
+    return null;
+  }
+
+  // Apply a gem augment to whichever gear instance the panel is bound to
+  // (worn or held). Deducts the cost and appends the augment id to that
+  // instance's `upgrades` set — the item's own `tier` is untouched, so tiers and
+  // augments compose. Capped at MAX_AUGMENTS_PER_ITEM; the menu greys the rows
+  // at the cap, this is the belt-and-braces guard.
+  private applyGearAugment(aug: GearAugmentDef): void {
+    const t = this.upgradeTarget;
+    const inst = this.upgradeTargetInstance();
+    if (!t || !inst) return;
+    if (!this.canAffordUpgrade(aug) || this.upgradeBlockReason(aug)) return;
+    const applied = appliedAugmentIds(inst);
+    if (applied.includes(aug.id) || applied.length >= MAX_AUGMENTS_PER_ITEM) return;
+    if (!this.devNoBuildCost) for (const [r, n] of Object.entries(aug.costs)) this.backpack.removeCount(r, n ?? 0);
+    // Keep any non-augment ids already on the field (a station's applied set can
+    // never land on gear, but the merge keeps the field's contract honest).
+    const next = [...(inst.upgrades ?? []), aug.id];
+    if (this.isArmorUpgradeTarget(t)) {
+      const eq = this.equipment.get(t.armorSlot);
+      if (eq) this.equipment.set(t.armorSlot, { ...eq, upgrades: next });
+    } else if (this.isGearUpgradeTarget(t)) {
+      const stack = t.gearSlot.container.slot(t.gearSlot.index);
+      if (stack) t.gearSlot.container.set(t.gearSlot.index, { ...stack, upgrades: next });
+    }
+    this.sfx.upgrade();
+    this.eventLog.add("recipe", `${itemDef(inst.key)?.name ?? inst.key} augmented: ${aug.name}`, itemDef(inst.key)?.texture);
+    // An augmented weapon may be the currently-equipped hotbar item — refresh
+    // the cached augment effect so its damage/crit/arc bonus applies at once.
+    this.recomputeEquipped();
+    this.upgradeMenu.refresh();
+    this.afterItemMove();
+  }
+
   // Armor's equivalent of applyStationUpgrade — deducts cost and bumps the
   // EquippedItem's tier in place.
   private applyArmorUpgrade(slot: EquipSlot, upg: ArmorUpgradeDef): void {
@@ -8652,7 +8791,7 @@ export class MainScene extends Phaser.Scene {
     if (!eq || !this.canAffordUpgrade(upg) || this.upgradeBlockReason(upg)) return;
     if (!this.devNoBuildCost) for (const [r, n] of Object.entries(upg.costs)) this.backpack.removeCount(r, n ?? 0);
     this.sfx.upgrade();
-    this.equipment.set(slot, { key: eq.key, tier: upg.resultTier });
+    this.equipment.set(slot, { key: eq.key, tier: upg.resultTier, upgrades: eq.upgrades });
     // Left-anchored "recipe" toast, not the top-center "info" one — the
     // Upgrade panel for a paper-doll slot opens right beside/over where the
     // center toast used to land (see applyStationUpgrade's note).
@@ -8903,7 +9042,7 @@ export class MainScene extends Phaser.Scene {
   private armorSlots(): ArmorSlotView[] {
     return EQUIP_SLOTS.map((s) => {
       const eq = this.equipment.get(s.id);
-      return { id: s.id, label: s.label, itemKey: eq?.key ?? null, tier: eq?.tier, count: eq?.count };
+      return { id: s.id, label: s.label, itemKey: eq?.key ?? null, tier: eq?.tier, count: eq?.count, upgrades: eq?.upgrades };
     });
   }
 
@@ -8943,7 +9082,7 @@ export class MainScene extends Phaser.Scene {
         setBonuses,
       };
     const dmgType = weaponPrimaryDamageType(this.equippedWeapon);
-    const baseDmg = weaponDamage(this.equippedWeapon) + weaponTierDamageBonus(this.equippedWeapon, this.equippedWeaponTier);
+    const baseDmg = this.equippedWeaponBaseDamage();
     // Include relic bonuses (M-RL) so the panel matches the real math — the
     // additive skill+relic damage bucket (2026-07-15), same as damageBonusMult().
     const damage = Math.round(baseDmg * this.damageBonusMult(dmgType));
@@ -9038,7 +9177,7 @@ export class MainScene extends Phaser.Scene {
             : "ring1"
         : slot;
     const previous = this.equipment.get(targetSlot);
-    this.equipment.set(targetSlot, { key: stack.key, tier: stack.tier ?? 0 });
+    this.equipment.set(targetSlot, { key: stack.key, tier: stack.tier ?? 0, upgrades: stack.upgrades });
     container.set(index, null);
     if (previous) this.returnArmorToBackpack(previous);
     this.eventLog.add("info", `Equipped ${def.name}`);
@@ -9049,7 +9188,7 @@ export class MainScene extends Phaser.Scene {
   }
 
   private returnArmorToBackpack(item: EquippedItem): void {
-    const stack: ItemStack = { key: item.key, count: item.count ?? 1, tier: item.tier || undefined };
+    const stack: ItemStack = { key: item.key, count: item.count ?? 1, tier: item.tier || undefined, upgrades: item.upgrades };
     if (!this.backpack.addStack(stack)) {
       this.spawnLooseDrop(item.key, stack.count, this.player.x, this.player.y, DROPPED_ITEM_MAGNET_COOLDOWN_MS, item.tier || undefined);
     }
@@ -9070,7 +9209,7 @@ export class MainScene extends Phaser.Scene {
     if (t && "armorSlot" in t && t.armorSlot === slot) this.closeUpgradeMenu();
     this.equipment.set(slot, null);
     if (toIndex !== undefined && this.backpack.slot(toIndex) === null) {
-      this.backpack.set(toIndex, { key: eq.key, count: eq.count ?? 1, tier: eq.tier || undefined });
+      this.backpack.set(toIndex, { key: eq.key, count: eq.count ?? 1, tier: eq.tier || undefined, upgrades: eq.upgrades });
     } else {
       this.returnArmorToBackpack(eq);
     }

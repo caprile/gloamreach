@@ -23,6 +23,10 @@ export interface EquippedItem {
   // undefined. Armor-equip logic swaps whole items; ammo-equip logic merges
   // counts of the same key instead (see MainScene.equipArmorFromContainer).
   count?: number;
+  // Applied gem-augment ids (Biome-3 Phase 3, GearAugments.ts) — the same
+  // per-instance field name ItemStack.upgrades uses, so a piece keeps its
+  // augments across equip -> backpack -> equip with no translation step.
+  upgrades?: string[];
 }
 
 export const EQUIP_SLOTS: { id: EquipSlot; label: string }[] = [

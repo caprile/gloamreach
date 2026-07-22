@@ -39,6 +39,10 @@ export const PROCESS_RECIPES: ProcessRecipe[] = [
 export const SMELT_RECIPES: ProcessRecipe[] = [
   { input: "sunscorch_ore", output: "sunsteel_ingot", inputPerOutput: 1, fuel: { key: "hex_essence", per: 1 } },
   { input: "ember_ore", output: "embersteel_ingot", inputPerOutput: 1, fuel: { key: "hex_essence", per: 1 }, minStationTier: 1 },
+  // Biome 3 Phase 3: bayou ore. Same tier-1 Smelter as rare badlands ore (the
+  // Ember Crucible is the "can melt the hard stuff" gate; the bayou doesn't
+  // need a second one) — the real gate is finding Bog Ore at all.
+  { input: "bog_ore", output: "gloamsteel_ingot", inputPerOutput: 1, fuel: { key: "hex_essence", per: 1 }, minStationTier: 1 },
 ];
 
 export function processRecipeFor(inputKey: string): ProcessRecipe | undefined {

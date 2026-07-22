@@ -2612,6 +2612,22 @@ export class BootScene extends Phaser.Scene {
     g.fillRect(10, 4, 2, 1);
     g.generateTexture("icon_workbench_t3", ICON, ICON);
 
+    g.clear(); // Workbench Lvl 5 — the Gloamforge Anvil (cold violet forge)
+    g.fillStyle(0x6a5a44, 1);
+    g.fillRect(2, 8, 20, 4);
+    g.fillStyle(0x453a2c, 1);
+    g.fillRect(3, 12, 3, 8);
+    g.fillRect(18, 12, 3, 8);
+    g.fillStyle(0x39323f, 1); // gloamsteel anvil
+    g.fillRect(7, 3, 10, 3);
+    g.fillRect(10, 6, 4, 2);
+    g.fillRect(8, 6, 8, 1);
+    g.fillStyle(0x9a5cff, 1); // gloam glow under the anvil
+    g.fillRect(8, 12, 8, 1);
+    g.fillStyle(0xc9a8ff, 1);
+    g.fillRect(10, 4, 2, 1);
+    g.generateTexture("icon_workbench_t4", ICON, ICON);
+
     // --- enhanced weapons ---
     g.clear(); // Embersteel Warhammer — dark head with ember cracks
     g.fillStyle(0x6b4a26, 1);
@@ -2738,6 +2754,165 @@ export class BootScene extends Phaser.Scene {
     g.fillRect(6, 12, 5, 1); // ember plate band
     g.fillRect(13, 12, 5, 1);
     g.generateTexture("icon_emberhide_leggings", ICON, ICON);
+
+    // --- Biome-3 Phase 3: the bayou reforge tier (dormant materials/gear) ---
+    // Palette rule: Gloamsteel keeps the Ember tier's dark steel but swaps every
+    // ember-orange highlight for gloam violet; Mirehide is swamp green-brown
+    // hide with the same violet accents, so a bayou piece reads at a glance.
+    g.clear(); // Bog Ore — a wet, gloam-soaked lump
+    g.fillStyle(0x3c4438, 1);
+    g.fillCircle(10, 13, 6);
+    g.fillCircle(16, 11, 4);
+    g.fillStyle(0x9a5cff, 0.85);
+    g.fillCircle(9, 12, 2); // gloam seep
+    g.fillCircle(17, 10, 1);
+    g.fillStyle(0x6b7a5c, 1);
+    g.fillRect(6, 18, 12, 2); // mud
+    g.generateTexture("icon_bog_ore", ICON, ICON);
+
+    g.clear(); // Gloamsteel Ingot — dark bar with a violet vein
+    g.fillStyle(0x39323f, 1);
+    g.fillRect(4, 10, 16, 7);
+    g.fillStyle(0x574d5f, 1);
+    g.fillRect(5, 10, 14, 2); // top highlight
+    g.fillStyle(0x9a5cff, 1);
+    g.fillRect(7, 14, 10, 1); // gloam vein
+    g.generateTexture("icon_gloamsteel_ingot", ICON, ICON);
+
+    g.clear(); // Mirehide — a folded swamp-green hide
+    g.fillStyle(0x3f4a34, 1);
+    g.fillRect(4, 7, 16, 11);
+    g.fillStyle(0x5b6b46, 1);
+    g.fillRect(4, 7, 16, 3);
+    g.fillStyle(0x2c331f, 1);
+    g.fillRect(8, 12, 8, 1); // fold
+    g.fillStyle(0x9a5cff, 0.7);
+    g.fillRect(15, 15, 3, 1); // gloam stain
+    g.generateTexture("icon_mirehide", ICON, ICON);
+
+    // --- bayou weapons ---
+    g.clear(); // Gloamsteel Warhammer
+    g.fillStyle(0x4a4030, 1);
+    g.fillRect(11, 4, 2, 18); // haft
+    g.fillStyle(0x39323f, 1);
+    g.fillRect(5, 4, 14, 6); // head
+    g.fillStyle(0x9a5cff, 1);
+    g.fillRect(6, 6, 4, 1); // gloam crack
+    g.fillRect(14, 5, 4, 1);
+    g.fillStyle(0xc9a8ff, 1);
+    g.fillRect(7, 6, 1, 1);
+    g.generateTexture("icon_gloamsteel_warhammer", ICON, ICON);
+
+    g.clear(); // Gloamsteel Longsword
+    g.fillStyle(0x39323f, 1);
+    g.fillRect(11, 3, 3, 14);
+    g.fillStyle(0x9a5cff, 1);
+    g.fillRect(13, 4, 1, 12); // gloam edge
+    g.fillStyle(0x4a4030, 1);
+    g.fillRect(8, 17, 9, 2); // guard
+    g.fillStyle(0x2f2a22, 1);
+    g.fillRect(11, 19, 3, 4); // grip
+    g.generateTexture("icon_gloamsteel_sword", ICON, ICON);
+
+    g.clear(); // Gloamsteel Pike
+    g.fillStyle(0x4a4030, 1);
+    g.fillRect(11, 8, 2, 15);
+    g.fillStyle(0x39323f, 1);
+    g.fillTriangle(12, 2, 8, 10, 16, 10);
+    g.fillStyle(0x9a5cff, 1);
+    g.fillTriangle(12, 4, 10, 9, 14, 9); // gloam core
+    g.generateTexture("icon_gloamsteel_pike", ICON, ICON);
+
+    g.clear(); // Gloamsteel Warbow
+    g.lineStyle(2, 0x39323f, 1);
+    g.beginPath();
+    g.arc(3, 12, 10, -Math.PI / 3, Math.PI / 3, false);
+    g.strokePath();
+    g.lineStyle(1, 0x9a5cff, 1);
+    g.beginPath();
+    g.moveTo(8, 3);
+    g.lineTo(8, 21); // gloam-lit string
+    g.strokePath();
+    g.fillStyle(0x4a4030, 1);
+    g.fillRect(8, 11, 12, 2);
+    g.fillStyle(0x9a5cff, 1);
+    g.fillTriangle(20, 9, 20, 15, 23, 12);
+    g.generateTexture("icon_gloamsteel_warbow", ICON, ICON);
+
+    g.clear(); // Gloam Brand — the Ember Brand's flame burning violet
+    g.fillStyle(0x2f2a22, 1);
+    g.fillRect(11, 12, 2, 11); // handle
+    g.fillStyle(0x39323f, 1);
+    g.fillRect(9, 9, 6, 4); // head
+    g.fillStyle(0x6a2fd0, 1); // gloamfire
+    g.fillTriangle(12, 1, 8, 9, 16, 9);
+    g.fillStyle(0xc9a8ff, 1);
+    g.fillTriangle(12, 4, 10, 9, 14, 9);
+    g.generateTexture("icon_gloam_brand", ICON, ICON);
+
+    // --- bayou HEAVY armor: Gloamsteel set ---
+    g.clear(); // Gloamsteel Helm
+    g.fillStyle(0x39323f, 1);
+    g.fillRect(5, 8, 14, 10);
+    g.fillCircle(12, 8, 7);
+    g.fillStyle(0x9a5cff, 1);
+    g.fillRect(7, 11, 10, 3); // gloam visor slit
+    g.fillStyle(0x574d5f, 1);
+    g.fillRect(4, 15, 16, 3);
+    g.generateTexture("icon_gloamsteel_helm", ICON, ICON);
+
+    g.clear(); // Gloamsteel Cuirass
+    g.fillStyle(0x39323f, 1);
+    g.fillRect(5, 5, 14, 15);
+    g.fillStyle(0x574d5f, 1);
+    g.fillRect(2, 5, 4, 7);
+    g.fillRect(18, 5, 4, 7);
+    g.fillStyle(0x9a5cff, 1);
+    g.fillRect(11, 6, 2, 12); // gloam sternum ridge
+    g.generateTexture("icon_gloamsteel_cuirass", ICON, ICON);
+
+    g.clear(); // Gloamsteel Greaves
+    g.fillStyle(0x39323f, 1);
+    g.fillRect(6, 4, 5, 16);
+    g.fillRect(13, 4, 5, 16);
+    g.fillStyle(0x9a5cff, 1);
+    g.fillRect(7, 5, 2, 12);
+    g.fillRect(14, 5, 2, 12);
+    g.generateTexture("icon_gloamsteel_greaves", ICON, ICON);
+
+    // --- bayou LIGHT armor: Mirehide set ---
+    g.clear(); // Mirehide Hood
+    g.fillStyle(0x3f4a34, 1);
+    g.fillRect(5, 8, 14, 10);
+    g.fillCircle(12, 8, 7);
+    g.fillStyle(0x2c331f, 1);
+    g.fillRect(4, 15, 16, 3);
+    g.fillStyle(0x9a5cff, 1);
+    g.fillRect(6, 10, 12, 1); // gloamsteel band
+    g.generateTexture("icon_mirehide_hood", ICON, ICON);
+
+    g.clear(); // Mirehide Vest
+    g.fillStyle(0x3f4a34, 1);
+    g.fillRect(5, 5, 14, 15);
+    g.fillStyle(0x2c331f, 1);
+    g.fillRect(2, 5, 4, 7);
+    g.fillRect(18, 5, 4, 7);
+    g.fillStyle(0x9a5cff, 1);
+    g.fillRect(6, 9, 12, 1); // gloam straps
+    g.fillRect(6, 14, 12, 1);
+    g.generateTexture("icon_mirehide_vest", ICON, ICON);
+
+    g.clear(); // Mirehide Leggings
+    g.fillStyle(0x3f4a34, 1);
+    g.fillRect(6, 4, 5, 16);
+    g.fillRect(13, 4, 5, 16);
+    g.fillStyle(0x5b6b46, 1);
+    g.fillRect(7, 5, 3, 3);
+    g.fillRect(14, 5, 3, 3);
+    g.fillStyle(0x9a5cff, 1);
+    g.fillRect(6, 12, 5, 1);
+    g.fillRect(13, 12, 5, 1);
+    g.generateTexture("icon_mirehide_leggings", ICON, ICON);
 
     // --- ability icons (B3-P2a) — gloam-violet glyphs; each doubles as the
     // granting "special" item's icon AND the Q/E/R ability-bar icon. ---
