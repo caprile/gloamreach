@@ -27,7 +27,9 @@ export class RunHudUI {
       .setDepth(DEPTH);
   }
 
-  update(run: Run, dayNight?: DayNight): void {
+  // `characterName` (B4-P1) is appended to the expanded readout so a run is
+  // always attributable to the survivor that started it.
+  update(run: Run, dayNight?: DayNight, characterName?: string): void {
     const clock = formatDuration(run.elapsedMs);
     // Day/night phase prefix (M-DN) — "Day N" / "Night N" (the night shares the
     // number of the day it follows). Minimized view keeps just the phase tag + clock.
@@ -37,8 +39,9 @@ export class RunHudUI {
         : `Day ${dayNight.dayNumber()}`
       : "";
     const tag = phase ? `[${phase}] ` : "";
+    const who = characterName ? `    ${characterName}` : "";
     this.text.setText(
-      this.minimized ? `${tag}T ${clock}` : `${tag}T ${clock}    Score ${run.score()}`,
+      this.minimized ? `${tag}T ${clock}` : `${tag}T ${clock}    Score ${run.score()}${who}`,
     );
   }
 

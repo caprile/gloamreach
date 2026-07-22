@@ -1671,6 +1671,34 @@ below.**
      now COMPLETE (all 5 phases); no next arc is planned.**
      See [[survivor-rpg-biome-3-roadmap]].
 
+5ao. **B4-P1 — Start-of-run base character** (plan:
+   `.claude/plans/b4-p1-start-of-run-character.md`, built on Opus). The first milestone after
+   the biome-3 umbrella closed, and the roadmap's own top deferred candidate. A **run-start
+   class picker** (`src/ui/CharacterSelectUI.ts`) offers a **fixed roster of five survivors**
+   — Vagabond / Reaver / Ashcaller / Warden / Ascetic — each bundling starting stats, a kit, a
+   granted Q/E/R ability, and a **double-edged run modifier** live for the whole run. Locked
+   with the user: fixed roster (not an RNG 3-card draw); one card bundles all four axes;
+   modifiers are double-edged with **NO score effect** (`Run.score()` stays kills +
+   speed-scaled completion bonus, so a harder card can't become a leaderboard lever); and the
+   "innate" ability is a **real ability-granting SPECIAL ITEM pre-equipped in its slot**, so it
+   fills the same mechanical role as any other equipment — which meant **zero new ability
+   plumbing** (`recomputeAbilities()` already derives Q/E/R from `ItemDef.grantsAbility`) and
+   also makes B3-P2a's ability framework reachable from turn one instead of only via crypt
+   gems. `src/systems/Characters.ts` is framework-free pure data plus a `RunCharacter` accessor
+   **deliberately shaped like `RelicManager`'s getters**, so each modifier **adds exactly one
+   term at an existing choke point** (`damageBonusMult` / `applyDamageToPlayer` / the `moveMult`
+   sum / `awardSkillXp` / `effectiveStaminaCostMult` / `rollElite` / `syncStatBonuses`) and
+   never introduces new math — a new modifier field means a new hook, which is a deliberate
+   decision rather than a freebie. Two placements to preserve: the damage-taken modifier scales
+   `amount` **before** the reduction bucket (a property of the run, not another stackable
+   resistance, so it can't be erased by the 75% cap), and its HP/stamina % is an **independent
+   linear add** off the 100 base per the additive rule, never compounded with relic %. The
+   picker **chains off the welcome overlay** (never stacks on it), shows on **every** run
+   including New Run, has **no cancel path** (a run must have a character), and reuses the pause
+   freeze so **deciding your build never burns speedrun time**. The dashboard gained a live
+   **Characters** tab. All five characters' numbers are first-pass — expect tuning once played.
+   See `STATUS.md` + [[survivor-rpg-start-of-run-character]].
+
 **Not yet built — next up in rough order:**
 6. **World & discovery** — much bigger generated world, biomes, map, a single giant
    circular Valheim-style map (spawn at center, danger increases outward). **The circular

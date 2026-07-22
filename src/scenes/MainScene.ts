@@ -194,6 +194,8 @@ import { SfxPlayer } from "../systems/Sfx";
 import { HintUI } from "../ui/HintUI";
 import { PauseMenuUI } from "../ui/PauseMenuUI";
 import { WelcomeUI, hasSeenWelcome } from "../ui/WelcomeUI";
+import { CharacterSelectUI } from "../ui/CharacterSelectUI";
+import { RunCharacter, type CharacterDef } from "../systems/Characters";
 import { TipsUI } from "../ui/TipsUI";
 import { DayNight } from "../systems/DayNight";
 import { NightOverlayUI, type ScreenLight } from "../ui/NightOverlayUI";
@@ -1135,6 +1137,12 @@ export class MainScene extends Phaser.Scene {
   // pause menu no longer has its own "How to Play" re-entry point — the
   // Tips panel below is the re-readable reference instead.
   private welcomeUI!: WelcomeUI;
+  // Run-start character picker (B4-P1) + the chosen character. `character` is a
+  // neutral RunCharacter(null) until a card is confirmed, so every modifier hook
+  // reads a harmless 1x if the picker is ever bypassed. Reset per run in
+  // create() (scene.restart field-init gotcha).
+  private characterSelectUI!: CharacterSelectUI;
+  private character = new RunCharacter();
   // Pause menu's "Tips" panel — re-readable list of hints discovered this run.
   private tipsUI!: TipsUI;
   // Procedural SFX layer — deliberately NOT re-created in create() (unlike
@@ -1225,6 +1233,8 @@ export class MainScene extends Phaser.Scene {
     this.physics.world.resume();
     this.time.paused = false;
     this.run = new Run();
+    // No character until this run's picker is confirmed — neutral modifiers.
+    this.character = new RunCharacter();
     // Day/night resets to dawn each run (M-DN). NightOverlayUI is a GameObject,
     // rebuilt in createHud() on every create(), so only the plain-object clock
     // + edge tracker + surge list need resetting here (scene.restart() gotcha).
@@ -1739,13 +1749,17 @@ export class MainScene extends Phaser.Scene {
     this.hints.onShow((text, _id, kind) => this.hintUI.show(text, kind));
     this.pauseMenu = new PauseMenuUI(this);
     this.welcomeUI = new WelcomeUI(this);
+    this.characterSelectUI = new CharacterSelectUI(this);
     this.tipsUI = new TipsUI(this);
     // Opening nudge: movement + goal, a beat after the world loads.
     this.time.delayedCall(1500, () => this.hints.trigger("awaken"));
     // Show the welcome/how-to-play overlay before the player can act. During
     // early access it surfaces once per page load (see WelcomeUI's
     // ALWAYS_SHOW_EACH_LOAD) — not re-shown on an in-session New Run restart.
+    // The character picker follows it (chained, so the two queue rather than
+    // stack) and — unlike the welcome — shows on EVERY run, including New Run.
     if (!hasSeenWelcome()) this.openWelcome();
+    else this.openCharacterSelect();
 
     // Classify every object built above onto the world/ui camera before the
     // first render (update() also does this each frame for later-created ones).
@@ -1811,6 +1825,8 @@ export class MainScene extends Phaser.Scene {
       // Esc while typing in the inventory search just unfocuses the box (so it
       // doesn't also close the whole menu on the same press).
       if (this.inventoryMenu.isSearchFocused()) return this.inventoryMenu.unfocusSearch();
+      // The character picker has no cancel path — a run must have a character.
+      if (this.characterSelectUI.isOpen()) return;
       if (this.welcomeUI.isOpen()) return this.closeWelcome();
       if (this.tipsUI.isOpen()) return this.closeTips();
       if (this.pauseMenu.isOpen()) return this.resumeGame();
@@ -1928,7 +1944,7 @@ export class MainScene extends Phaser.Scene {
       // keep running so the world doesn't visually freeze too.
       this.run.tick(delta);
       this.updateDayNight(delta);
-      this.runHudUI.update(this.run, this.dayNight);
+      this.runHudUI.update(this.run, this.dayNight, this.character.def ? this.character.name() : undefined);
       this.stamina.tick(delta);
       this.refreshStaminaBar();
       this.player.syncEquippedIconPosition();
@@ -1962,7 +1978,8 @@ export class MainScene extends Phaser.Scene {
     const moveMult =
       this.relics.moveSpeedMult() +
       this.killMoveBurstBonus() +
-      (equippedAugmentEffect(this.equipment).moveSpeedPct ?? 0) / 100;
+      (equippedAugmentEffect(this.equipment).moveSpeedPct ?? 0) / 100 +
+      (this.character.moveSpeedMult() - 1);
     // Phase 1: terrain under the player this frame — the bramble slow feeds
     // Player.update's env multiplier; regenMult is cached for the regen gates
     // later this frame (dormant in biome 2, live for biome-3 miasma).
@@ -2008,7 +2025,7 @@ export class MainScene extends Phaser.Scene {
     }
     this.run.tick(delta);
     this.updateDayNight(delta);
-    this.runHudUI.update(this.run, this.dayNight);
+    this.runHudUI.update(this.run, this.dayNight, this.character.def ? this.character.name() : undefined);
     this.stamina.tick(delta);
     this.refreshStaminaBar();
     // Contextual hint: nearly-empty stamina. (First-damage-taken hint fires
@@ -3951,7 +3968,9 @@ export class MainScene extends Phaser.Scene {
   // lets the nightfall surge roll at a higher rate than daytime scatter
   // without duplicating the base percentage in two places.
   private rollElite(rng: Phaser.Math.RandomDataGenerator, chanceMult = 1): boolean {
-    return rng.frac() < Math.min(1, ELITE_SPAWN_CHANCE * chanceMult);
+    // The run character's elite-chance modifier multiplies on top of the
+    // caller's own multiplier (e.g. M-DN's 3x nightfall surge).
+    return rng.frac() < Math.min(1, ELITE_SPAWN_CHANCE * chanceMult * this.character.eliteChanceMult());
   }
 
   // Draw x/y within world margins, biased to a preferred zone via rejection
@@ -9117,7 +9136,11 @@ export class MainScene extends Phaser.Scene {
     // Additive XP bucket (2026-07-15): relic +%, Intelligence +%, and the Prodigy
     // kill-streak +% ADD instead of compounding.
     const bonus =
-      this.relics.xpMult() - 1 + (this.progression.xpMult() - 1) + (this.xpStreakMult() - 1);
+      this.relics.xpMult() -
+      1 +
+      (this.progression.xpMult() - 1) +
+      (this.xpStreakMult() - 1) +
+      (this.character.xpMult() - 1);
     this.skills.addXp(skill, base * (1 + bonus));
   }
 
@@ -9162,7 +9185,12 @@ export class MainScene extends Phaser.Scene {
   // + resist stay their own target-side multipliers. Future always-on % sources
   // add here.
   private damageBonusMult(dmgType: DamageType): number {
-    return 1 + (weaponSkillDamageMultiplier(dmgType, this.skills) - 1) + (this.relics.damageMult() - 1);
+    return (
+      1 +
+      (weaponSkillDamageMultiplier(dmgType, this.skills) - 1) +
+      (this.relics.damageMult() - 1) +
+      (this.character.damageDealtMult() - 1)
+    );
   }
 
   // Onslaught (damage relic): count each attack; every Nth adds a FLAT bonus to
@@ -9185,7 +9213,7 @@ export class MainScene extends Phaser.Scene {
     // A Swift Grip augment on the equipped weapon discounts its own swings (and
     // a tool swing harmlessly - a tool cannot carry augments, so its factor is 1).
     const aug = 1 - (this.equippedWeaponAugment.staminaCostPct ?? 0) / 100;
-    return this.relics.staminaCostMult() * Math.max(0, aug);
+    return this.relics.staminaCostMult() * this.character.staminaCostMult() * Math.max(0, aug);
   }
 
   // The equipped weapon's flat damage before any multiplier: base + right-click
@@ -9666,7 +9694,10 @@ export class MainScene extends Phaser.Scene {
     const relicRed = 1 - this.relics.damageTakenMult();
     const moltenDr = this.moltenDamageReduction();
     const reductionPct = Math.min(0.75, Math.max(0, relicRed + moltenDr));
-    let relicAdjusted = amount * (1 - reductionPct);
+    // The run character's modifier scales incoming damage BEFORE the reduction
+    // bucket — it's a property of the run, not another stackable resistance, so
+    // a +25%-damage-taken card can't be cancelled out by the 75% reduction cap.
+    let relicAdjusted = amount * this.character.damageTakenMult() * (1 - reductionPct);
     // Guardian Mythic: cap any single hit at capPct% of max HP (post-%, pre-armor).
     if (guardian && guardian.params.capPct) {
       relicAdjusted = Math.min(
@@ -9813,6 +9844,62 @@ export class MainScene extends Phaser.Scene {
     this.time.paused = false;
     this.physics.world.resume();
     this.isPaused = false;
+    // The picker follows the welcome rather than stacking on top of it.
+    this.openCharacterSelect();
+  }
+
+  // === B4-P1: run-start character picker ===
+
+  // Shares the welcome/pause freeze (isPaused + physics + clock) so the run
+  // clock and day/night can't advance while the picker is up — deciding your
+  // build must never burn speedrun time.
+  private openCharacterSelect(): void {
+    if (this.runOver || this.isDead) return;
+    this.isPaused = true;
+    this.player.setVelocity(0, 0);
+    this.physics.world.pause();
+    this.time.paused = true;
+    this.characterSelectUI.show((def) => this.applyCharacter(def));
+  }
+
+  // Commit the chosen card: stats, pre-equipped gear (including the ability
+  // special that lights up Q/E/R through the ordinary equipment path), and the
+  // loose kit — then unfreeze. The run modifier itself is read live at the
+  // existing relic hook points, so nothing is "applied" for it here.
+  private applyCharacter(def: CharacterDef): void {
+    this.character = new RunCharacter(def);
+
+    for (const [stat, n] of Object.entries(def.startingStats)) {
+      this.progression.setStat(stat as StatType, n as number);
+    }
+    for (const eq of def.startingEquip) {
+      this.equipment.set(eq.slot, { key: eq.key, tier: 0 });
+      this.discoverMaterial(eq.key);
+    }
+    for (const it of def.startingItems) {
+      // Tools/weapons go straight to the hotbar so they're usable without
+      // opening the inventory; everything else (and any overflow) lands in the
+      // backpack. Both containers are empty at run start, so addStack's
+      // first-empty-slot placement is the whole story here — no merge path.
+      const stack = { key: it.key, count: it.count };
+      const wantsHotbar = itemDef(it.key)?.hotbarable !== false;
+      if (!wantsHotbar || !this.hotbar.container.addStack(stack)) {
+        this.backpack.addStack(stack);
+      }
+      this.discoverMaterial(it.key);
+    }
+
+    this.afterItemMove();
+    this.syncStatBonuses();
+    this.refreshDiscovery();
+    this.hotbarUI.refresh();
+    this.characterMenu?.refresh();
+    this.refreshStatPointsBadge();
+    this.eventLog.add("info", `${def.name} — ${def.modifier.name}`);
+
+    this.time.paused = false;
+    this.physics.world.resume();
+    this.isPaused = false;
   }
 
   // "Tips" from the pause menu: swap the pause panel for the discovered-tips
@@ -9859,6 +9946,9 @@ export class MainScene extends Phaser.Scene {
       level: this.progression.level,
       entries,
       rank,
+      characterLine: this.character.def
+        ? `Played as ${this.character.name()} — ${this.character.modifierName()}`
+        : undefined,
       onNewRun: () => this.scene.restart(),
       // Only surfaced on a win (RunEndUI hides it on "died"): dismiss the end
       // screen and un-freeze the world so the player can keep exploring.
@@ -10159,17 +10249,21 @@ export class MainScene extends Phaser.Scene {
     // relics.maxHpPctMult() is (1 + sumMaxHpPct/100); (mult - 1) × 100 is the
     // relic's flat HP contribution off the 100 base. Legacy flat maxHp/maxStamina
     // still add directly if a flat relic ever ships.
+    // The run character's % is a third INDEPENDENT linear add off the same 100
+    // base (never multiplied into the relic/stat total), for the same reason.
     const finalMaxHp =
       100 +
       this.progression.vitalityHealthBonus() +
       this.relics.maxHpBonus() +
-      100 * (this.relics.maxHpPctMult() - 1);
+      100 * (this.relics.maxHpPctMult() - 1) +
+      this.character.maxHpBonus();
     this.health.setBonusMax(finalMaxHp - 100);
     const finalMaxStam =
       100 +
       this.progression.enduranceStaminaBonus() +
       this.relics.maxStaminaBonus() +
-      100 * (this.relics.maxStaminaPctMult() - 1);
+      100 * (this.relics.maxStaminaPctMult() - 1) +
+      this.character.maxStaminaBonus();
     this.stamina.setBonusMax(finalMaxStam - 100);
     // Secondary stat axes (M-SS): Vitality healing-received, Endurance stamina
     // regen, Wisdom buff duration — pushed into the pools/managers that own each.

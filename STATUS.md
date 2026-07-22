@@ -2,7 +2,25 @@
 
 ## Current State
 
-_Living snapshot — edit in place, never append. Last shipped: **B3-P5 — Biome-3 Phase 5: the
+_Living snapshot — edit in place, never append. Last shipped: **B4-P1 — Start-of-run base
+character** (2026-07-22, Opus, plan `.claude/plans/b4-p1-start-of-run-character.md`). **The
+first milestone after the biome-3 umbrella closed** — the roadmap's own top deferred candidate.
+A **run-start class picker** now offers a fixed roster of five survivors (Vagabond / Reaver /
+Ashcaller / Warden / Ascetic), each bundling starting stats, a kit, a granted Q/E/R ability, and
+a **double-edged run modifier** that stays live all run. Locked with the user: fixed roster (not
+an RNG draw); one card bundles all four axes; modifiers are double-edged with **no score
+effect** (score stays kills + speed bonus, verified byte-identical across characters); and the
+"innate" ability is a **real special ITEM pre-equipped in its slot**, so it needed zero new
+ability plumbing and unequipping it darkens the key. `src/systems/Characters.ts` is pure data
+plus a `RunCharacter` accessor **shaped like `RelicManager`'s**, so each modifier adds exactly
+one term at an existing choke point (`damageBonusMult` / `applyDamageToPlayer` / `moveMult` /
+`awardSkillXp` / `effectiveStaminaCostMult` / `rollElite` / `syncStatBonuses`) — never new math.
+The picker chains off the welcome overlay, shows on every run including New Run, and reuses the
+pause freeze so **deciding your build never burns speedrun time**. Verified live end-to-end
+(grants, ability-through-item, every hook measured against a neutral baseline, score isolation,
+clean `scene.restart()`); `tsc` clean, zero console errors; dashboard gained a live **Characters**
+tab. **Next: unplanned** — see the candidates below. See B4-P1 below.
+Prior: **B3-P5 — Biome-3 Phase 5: the
 post-boss reward choice** (2026-07-22, Opus, plan
 `.claude/plans/biome-3-phase-5-boss-relic-choice.md`). **This completes the entire biome-3 +
 new-systems arc (all 5 phases).** the user redirected the umbrella's kill-time modal into the
@@ -109,10 +127,13 @@ sealed Sunken Gorge, and the **win-con swap** — the Duneshaper is now a mid-bo
 is obtainable, unlocking the Gemwright's ability recipes). **Phase 5 — DONE**: the post-big-boss
 reward choice, delivered as a **boss-trophy 3-Mythic pick inside the Relic Forge** rather than the
 umbrella's kill-time modal (the user's redirect — see B3-P5). **THE BIOME-3 + NEW-SYSTEMS UMBRELLA
-IS COMPLETE (all 5 phases).** Nothing is queued behind it — the next arc is unplanned. Standing
-candidates from the roadmap's deferred sub-phases: a **start-of-run base character** (RNG run-
-defining modifiers at run start) and **RNG dungeons with build-defining miniboss drops**, both
-sketched in `.claude/plans/biome-3-and-new-systems-roadmap.md` under Phase 5's "Later" section.
+IS COMPLETE (all 5 phases).** The first post-umbrella milestone, **B4-P1 (start-of-run base
+character)**, has now shipped — the first of the roadmap's two deferred sub-phases. **Still
+open and unplanned:** the second one, **RNG dungeons with build-defining miniboss drops**
+(sketched in `.claude/plans/biome-3-and-new-systems-roadmap.md` under Phase 5's "Later"), plus
+a biome-3 playtest/balance pass (the bayou arc has never been played end-to-end) and save/load.
+The five characters' stats/kits/modifiers are all first-pass and expected to need tuning once
+they're actually played.
 Ability/jewelry numbers and everything biome-3 are first-pass/tunable. The master-plan tail
 **M-TE** (trophy-gated gear) is folded into the shipped biome-2 work; real pixel art/animations stay
 deliberately deferred until content/balance settle (roadmap item 8).
@@ -163,6 +184,69 @@ below + [[survivor-rpg-dev-console]].
 ## Recent Entries
 
 > Older entries in STATUS-archive.md.
+
+### B4-P1 — Start-of-run base character (2026-07-22, Opus)
+
+Plan: `.claude/plans/b4-p1-start-of-run-character.md`. **The first milestone after the
+biome-3 umbrella closed**, and the roadmap's own top deferred candidate
+(`biome-3-and-new-systems-roadmap.md`, Phase 5 "Later"). Every run used to start identically —
+a level-1 `PlayerProgression` with 0 stats, an empty backpack/`Equipment`, an empty Q/E/R bar —
+so the roguelike loop varied how a run *went* but never how it *began*. Now a **run-start
+class picker** offers a fixed roster of five survivors, each bundling stats, a kit, a granted
+ability, and a lasting double-edged trade-off. It also closes a real dead end: the B3-P2a
+ability framework was only reachable via the Sunken Crypt wardens or `__dev.give`, so most runs
+never touched it.
+
+**Locked with the user (`AskUserQuestion`):**
+1. **Fixed roster, always all available** — not an RNG 3-card draw. The pick is a playstyle
+   decision, not a dealt hand.
+2. **One card bundles all four axes** — identity + starting stats + kit + ability + modifier.
+3. **Modifiers are double-edged with NO score effect.** `Run.score()` stays kills +
+   speed-scaled completion bonus, so a harder card can never become a leaderboard lever
+   (verified: score is byte-identical across characters for identical run inputs).
+4. **The "innate" ability is a real ability-granting SPECIAL ITEM pre-equipped in its slot**,
+   not a separate innate channel — it fills exactly the same mechanical role as any other
+   equipment. This meant **zero new ability plumbing**: `recomputeAbilities()` already derives
+   Q/E/R from `ItemDef.grantsAbility`, so unequipping the special darkens the key (verified).
+
+**`src/systems/Characters.ts`** (new, framework-free like `Run`/`Buffs`/`Relics`) is pure data
+plus a `RunCharacter` accessor **whose getter shape mirrors `RelicManager`'s**, so every hook
+site reads a character exactly the way it already reads relics. A null character returns
+neutral values throughout, so the game stays playable if the picker is ever bypassed. The
+roster: **Vagabond** (Blink; +10% move / −10% stamina), **Reaver** (Bloodpact; +25% damage
+dealt / +25% taken), **Ashcaller** (Nova; +30% XP / −15% HP), **Warden** (Blink; +20% HP /
++20% attack stamina), **Ascetic** (Nova; −20% damage taken / elites twice as common, and no
+starting kit at all).
+
+**`src/ui/CharacterSelectUI.ts`** (new) is a five-card modal in the `WelcomeUI` style — flat
+`scrollFactor(0)` objects (never a Container, per the standing input-hit-testing bug), depth
+band 3620+. **Select-then-confirm**, because a mis-click would silently decide a whole hardcore
+run; committing is final, and there is deliberately **no cancel path** (Esc is guarded — a run
+must have a character).
+
+**MainScene:** the picker **chains off the welcome overlay** rather than stacking on it, and —
+unlike the welcome — shows on **every** run including New Run. It reuses the welcome/pause
+freeze verbatim, so **deciding your build never burns speedrun time** (verified: `run.elapsedMs`
+holds at 0 across stepped frames while it's open). Each **modifier adds exactly one term at an
+existing choke point** — `damageBonusMult`, `applyDamageToPlayer`, the `moveMult` sum,
+`awardSkillXp`, `effectiveStaminaCostMult`, `rollElite`, `syncStatBonuses` — never new math. Two
+deliberate placements: the character's damage-taken scales `amount` **before** the reduction
+bucket (it's a property of the run, not another stackable resistance, so a +25% card can't be
+erased by the 75% reduction cap), and its HP/stamina % is a **third independent linear add** off
+the 100 base, matching the 2026-07-15 additive rule so it can't compound with relic %. The run
+HUD and run-end screen both name the survivor.
+
+**Verified live** via `preview_eval` (the backgrounded-tab render loop needed the `loop.step`
+trick): the welcome→picker chain and its freeze; the full grant for multiple cards (stats,
+pre-equipped special, tools onto the hotbar, empty-kit case); Q/E/R lighting up **through the
+item** and going dark on unequip; a granted ability actually casting; every modifier hook
+measured against a neutral baseline (damage dealt 1→1.25, taken 20→25 and 20→16 **including the
+magic/armor-bypass branch**, XP 10→13, stamina 1→1.2, elites 1663→3223 per 20k seeded rolls,
+pools 112→97 HP and 106→96 stamina); score isolation; and `scene.restart()` leaving **zero**
+carryover. Card geometry was measured rather than eyeballed — the first pass left ~150px of dead
+space per card, so `CARD_H` was cut 512→400 against the real content bottom. `tsc` clean, zero
+console errors. Dashboard gained a **Characters** tab importing `Characters.ts` live (drift-free);
+no `RECIPES.md` change (no recipes touched).
 
 ### B3-P5 — Biome-3 Phase 5: the post-boss reward choice (boss-trophy relic pick) (2026-07-22, Opus)
 

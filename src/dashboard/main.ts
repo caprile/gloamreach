@@ -31,6 +31,7 @@ import { TOOL_UPGRADES } from "../systems/ToolUpgrades";
 import { ARMOR_UPGRADES, armorDefenseForTier } from "../systems/ArmorUpgrades";
 import { STATION_UPGRADES } from "../systems/StationUpgrades";
 import { GEAR_AUGMENTS, MAX_AUGMENTS_PER_ITEM } from "../systems/GearAugments";
+import { CHARACTER_DEFS } from "../systems/Characters";
 import { PROCESS_RECIPES } from "../systems/Processing";
 import { COOK_RECIPES } from "../systems/Cooking";
 import {
@@ -984,6 +985,39 @@ function renderItems(): string {
   return html;
 }
 
+// Start-of-run characters (B4-P1) — imported live from Characters.ts, so the
+// roster and its trade-offs can never drift from what the picker offers.
+function renderCharacters(): string {
+  let html = `<h2>Start-of-Run Characters</h2>
+    <p class="note">The fixed roster offered at the start of every run
+    (<code>Characters.ts</code>). Each card grants stats, a kit, and one
+    ability-granting special item pre-equipped in its slot. The run modifier is
+    always double-edged and deliberately has <b>no</b> score effect.</p>
+    <div class="searchwrap"><input type="search" data-filter="characters" placeholder="Filter characters…" /></div>
+    <table data-table="characters"><thead><tr>
+      <th>Character</th><th>Ability item</th><th>Stats</th><th>Kit</th>
+      <th>Modifier</th><th>Boon</th><th>Bane</th>
+      </tr></thead><tbody>`;
+  for (const c of CHARACTER_DEFS) {
+    const equip = c.startingEquip.map((e) => `${itemDef(e.key)?.name ?? e.key} (${e.slot})`).join(", ");
+    const stats = Object.entries(c.startingStats)
+      .map(([s, n]) => `+${n} ${s}`)
+      .join(", ");
+    const kit = c.startingItems.map((i) => `${i.count}x ${itemDef(i.key)?.name ?? i.key}`).join(", ");
+    html += `<tr data-search="${esc((c.name + " " + c.id + " " + c.modifier.name).toLowerCase())}">
+      <td><b>${esc(c.name)}</b><div class="muted">${esc(c.blurb)}</div></td>
+      <td>${esc(equip)}</td>
+      <td>${esc(stats || "—")}</td>
+      <td>${esc(kit || "—")}</td>
+      <td><span class="tag">${esc(c.modifier.name)}</span></td>
+      <td>${esc(c.modifier.boon)}</td>
+      <td class="muted">${esc(c.modifier.bane)}</td>
+    </tr>`;
+  }
+  html += `</tbody></table>`;
+  return html;
+}
+
 // ---------------------------------------------------------------------------
 // Shell: tabbed nav + live search filtering
 // ---------------------------------------------------------------------------
@@ -994,6 +1028,7 @@ const TABS: { id: string; label: string; render: () => string }[] = [
   { id: "armor", label: "Armor", render: renderArmor },
   { id: "stations", label: "Stations & Food", render: renderStations },
   { id: "relics", label: "Relics", render: renderRelics },
+  { id: "characters", label: "Characters", render: renderCharacters },
   { id: "enemies", label: "Enemies", render: renderEnemies },
   { id: "balance", label: "Balance Overview", render: renderBalance },
   { id: "items", label: "All Items", render: renderItems },

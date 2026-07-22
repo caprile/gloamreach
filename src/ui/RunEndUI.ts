@@ -7,6 +7,7 @@ export interface RunEndDeps {
   level: number;
   entries: ScoreEntry[];
   rank: number; // 1-based rank of this run in the table (0 if off-table)
+  characterLine?: string; // "Played as X — Modifier" (B4-P1); absent if unpicked
   onNewRun: () => void;
   onContinue: () => void; // only wired to a button on a win (keep exploring)
   onClearScores: () => void;
@@ -75,7 +76,13 @@ export class RunEndUI {
     this.text(cx, y, `Final Score  ${deps.run.score()}`, 20, "#ffffff", 0.5);
     y += 30;
     this.text(cx, y, `Seed ${deps.run.seed}`, 11, "#5b6472", 0.5);
-    y += 30;
+    y += 18;
+    // Which survivor (and which trade-off) this score belongs to — B4-P1.
+    if (deps.characterLine) {
+      this.text(cx, y, deps.characterLine, 12, "#8a93a3", 0.5);
+      y += 20;
+    }
+    y += 12;
 
     // Breakdown block.
     const bx = this.panelX + 28;
