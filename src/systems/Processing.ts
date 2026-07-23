@@ -14,11 +14,24 @@ export interface ProcessRecipe {
   input: ResourceType;
   output: ResourceType;
   inputPerOutput: number; // input units consumed per one output unit produced
-  // Optional secondary consumable ("A + B = output") — the Smelter's fuel. It's
-  // loaded into the station's own dedicated fuel slot (see ProcessingStation.fuel)
-  // and burned by process()/capped by maxPossibleOutput(). Absent for the Drying
-  // Rack's plain single-input recipes.
-  fuel?: { key: ResourceType; per: number }; // `per` = fuel units per output unit
+  // Optional second INGREDIENT — the thing that ends up in the output alongside
+  // the input (Hex Essence infused into Sunsteel, Moonsilver alloyed into
+  // Gloamsteel). Loaded into the station's own reagent slot and consumed by
+  // process()/capped by maxPossibleOutput(). Absent for the Drying Rack's plain
+  // single-input recipes.
+  //
+  // This used to be called `fuel` — it was named for its first case (Hex Essence,
+  // which really was burned for heat), and B4-P5 then reused it for alloy metal,
+  // which is how the menu ended up labelling Moonsilver "Fuel". Ingredient and
+  // heat source are now separate fields.
+  reagent?: { key: ResourceType; per: number }; // `per` = units consumed per output unit
+  // Optional FUEL — what's burned for heat, and is NOT part of the output. Every
+  // Smelter recipe takes one (you can't melt metal with nothing burning); the
+  // Drying Rack takes none.
+  fuel?: { key: ResourceType; per: number };
+  // Per-recipe slot captions. Default "Input"/"Reagent" (the fuel slot is always
+  // just "Fuel").
+  slotLabels?: { input?: string; reagent?: string };
   // Minimum station tier required before this recipe is available (an upgraded
   // Smelter unlocks rare ore). Defaults to 0 = available on a fresh station.
   minStationTier?: number;
@@ -32,24 +45,28 @@ export const PROCESS_RECIPES: ProcessRecipe[] = [
   { input: "gremlin_blood", output: "gremlin_guck", inputPerOutput: 2 },
 ];
 
-// Smelter recipes (biome 2 Phase 4): ore + Hex Essence fuel = ingot. The rare
-// ore needs a tier-1 Smelter (unlocked with the Gremlin King's Heart).
-// Ratio is 1 ore + 1 hex -> 1 ingot (S1 rebalance — the old 2:1 made forging
-// grindy; fuel is deducted from the Smelter's loaded fuel slot, not the backpack).
+// Smelter recipes (biome 2 Phase 4): input + reagent + fuel = ingot. The rare
+// ores need a tier-1 Smelter (unlocked with the Gremlin King's Heart).
+//
+// EVERY smelt burns Wood. Fuel was originally conflated with the reagent (Hex
+// Essence filled both roles), which left the B4-P5 alloy recipes smelting with no
+// heat source at all. Splitting them makes all four recipes the same shape — one
+// input, one reagent, one fuel — so there's no optional slot to special-case, and
+// gives Wood a sink that lasts past the early game.
 export const SMELT_RECIPES: ProcessRecipe[] = [
-  { input: "sunscorch_ore", output: "sunsteel_ingot", inputPerOutput: 1, fuel: { key: "hex_essence", per: 1 } },
-  { input: "ember_ore", output: "embersteel_ingot", inputPerOutput: 1, fuel: { key: "hex_essence", per: 1 }, minStationTier: 1 },
+  { input: "sunscorch_ore", output: "sunsteel_ingot", inputPerOutput: 1, reagent: { key: "hex_essence", per: 1 }, fuel: { key: "wood", per: 2 }, slotLabels: { input: "Ore", reagent: "Reagent" } },
+  { input: "ember_ore", output: "embersteel_ingot", inputPerOutput: 1, reagent: { key: "hex_essence", per: 1 }, fuel: { key: "wood", per: 3 }, slotLabels: { input: "Ore", reagent: "Reagent" }, minStationTier: 1 },
   // Biome 3 Phase 3: bayou ore. Same tier-1 Smelter as rare badlands ore (the
   // Ember Crucible is the "can melt the hard stuff" gate; the bayou doesn't
   // need a second one) — the real gate is finding Bog Ore at all.
-  // B4-P5: Gloamsteel's secondary input is now MOONSILVER, which only comes from
-  // crypt vaults behind a warden. That is what rewards the Embersteel route
-  // (locked decision 3) — the longer road is the one that needs dungeon clears.
-  { input: "bog_ore", output: "gloamsteel_ingot", inputPerOutput: 1, fuel: { key: "moonsilver", per: 1 }, minStationTier: 1 },
+  // B4-P5: Gloamsteel's reagent is MOONSILVER, which only comes from crypt vaults
+  // behind a warden. That is what rewards the Embersteel route (locked decision
+  // 3) — the longer road is the one that needs dungeon clears.
+  { input: "bog_ore", output: "gloamsteel_ingot", inputPerOutput: 1, reagent: { key: "moonsilver", per: 1 }, fuel: { key: "wood", per: 3 }, slotLabels: { input: "Ore", reagent: "Alloy" }, minStationTier: 1 },
   // The SUNSTEEL branch metal. Input is the ingot (not the ore) so its recipe
   // key stays unique — two recipes sharing an input would make processRecipeFor
   // ambiguous — and so it reads literally as "Sunsteel + Bog Ore".
-  { input: "sunsteel_ingot", output: "mirebronze_ingot", inputPerOutput: 1, fuel: { key: "bog_ore", per: 2 }, minStationTier: 1 },
+  { input: "sunsteel_ingot", output: "mirebronze_ingot", inputPerOutput: 1, reagent: { key: "bog_ore", per: 2 }, fuel: { key: "wood", per: 3 }, slotLabels: { input: "Metal", reagent: "Alloy" }, minStationTier: 1 },
 ];
 
 export function processRecipeFor(inputKey: string): ProcessRecipe | undefined {
@@ -72,6 +89,10 @@ export interface ProcessResult {
   count: number;
 }
 
+// Which of a recipe's two secondary ingredients a slot operation refers to.
+export type SecondarySide = "reagent" | "fuel";
+export const SECONDARY_SIDES: SecondarySide[] = ["reagent", "fuel"];
+
 // One placed station's live state: just whatever raw input is currently
 // loaded. Processing itself is instant and stateless (no progress/output slot
 // to track between frames) — the player picks how much of the loaded input to
@@ -79,9 +100,10 @@ export interface ProcessResult {
 // deposit into the backpack (or drop on the floor if it doesn't fit).
 export class ProcessingStation {
   input: ProcSlot | null = null;
-  // Dedicated fuel slot (S1) — the Smelter's Hex Essence is loaded here rather
-  // than pulled silently from the backpack, so an "A + B = output" station reads
-  // as two explicit slots. Null/unused for fuel-less stations (the Drying Rack).
+  // Dedicated secondary slots (S1) — loaded explicitly rather than pulled
+  // silently from the backpack, so an "A + B + fuel" station reads as three
+  // slots. Both null/unused for the Drying Rack's single-input recipes.
+  reagent: ProcSlot | null = null;
   fuel: ProcSlot | null = null;
   // Which recipe table this station runs (Drying Rack = PROCESS_RECIPES, Smelter
   // = SMELT_RECIPES) and its upgrade tier (an upgraded Smelter unlocks rare-ore
@@ -118,38 +140,83 @@ export class ProcessingStation {
     else this.input = { key, count };
   }
 
-  // --- fuel slot (Smelter) ---
+  // --- secondary slots: reagent + fuel (Smelter) ---
+  //
+  // The two behave identically apart from which recipe field they read and which
+  // slot they fill, so everything below routes through one `side` parameter
+  // rather than two near-identical copies that can drift apart.
 
-  // Does this station run any fuelled ("A + B = output") recipe? Drives whether
-  // the menu renders a fuel slot at all — true for the Smelter, false for the
-  // Drying Rack. Independent of what's currently loaded so fuel can be loaded
-  // before ore.
-  usesFuelSlot(): boolean {
-    return this.recipes.some((r) => !!r.fuel);
+  private slotFor(side: SecondarySide): ProcSlot | null {
+    return side === "reagent" ? this.reagent : this.fuel;
   }
 
-  // The fuel item key this station burns (all its fuelled recipes share one —
-  // the Smelter's Hex Essence), for the empty-slot hint. Null if fuel-less.
-  fuelKey(): string | null {
-    return this.recipes.find((r) => r.fuel)?.fuel?.key ?? null;
+  // Does this station run any recipe with this secondary ingredient? Drives
+  // whether the menu renders the slot at all — true for the Smelter, false for
+  // the Drying Rack. Independent of what's currently loaded, so either can be
+  // loaded before the ore.
+  usesSlot(side: SecondarySide): boolean {
+    return this.recipes.some((r) => !!r[side]);
   }
 
-  // Can this station accept `key` as fuel right now? Only its fuel key, and only
-  // while the fuel slot isn't already holding a different item.
-  canAcceptFuel(key: string): boolean {
-    if (this.fuelKey() !== key) return false;
-    return !this.fuel || this.fuel.key === key;
+  // Every key this station accepts in that slot at its current tier. This is
+  // PER-RECIPE (B4-P5 gave Gloamsteel moonsilver and Mirebronze bog ore), so a
+  // station legitimately accepts several — assuming a single shared key silently
+  // made those two recipes unloadable, and therefore impossible to run.
+  slotKeys(side: SecondarySide): string[] {
+    const keys: string[] = [];
+    for (const r of this.recipes) {
+      const ing = r[side];
+      if (!ing) continue;
+      if ((r.minStationTier ?? 0) > this.tier) continue;
+      if (!keys.includes(ing.key)) keys.push(ing.key);
+    }
+    return keys;
   }
 
-  addFuel(key: string, count: number): void {
-    if (this.fuel && this.fuel.key === key) this.fuel.count += count;
+  // What the station wants in that slot right now, for the empty-slot hint: the
+  // loaded input's own requirement when there is one, else the first it accepts.
+  slotKey(side: SecondarySide): string | null {
+    const loaded = this.recipeForLoaded();
+    if (loaded?.[side]) return loaded[side]!.key;
+    return this.slotKeys(side)[0] ?? null;
+  }
+
+  // Captions for the input + reagent slots, from the loaded recipe (so the
+  // Smelter can call Moonsilver an "Alloy" rather than a generic "Reagent").
+  // Falls back to the first available recipe before anything is loaded. The fuel
+  // slot is always just "Fuel" — it's the one ingredient that's never part of
+  // the output, so it never needs renaming per recipe.
+  slotLabels(): { input: string; reagent: string } {
+    const r = this.recipeForLoaded() ?? this.recipes.find((x) => x.reagent && (x.minStationTier ?? 0) <= this.tier);
+    return { input: r?.slotLabels?.input ?? "Input", reagent: r?.slotLabels?.reagent ?? "Reagent" };
+  }
+
+  // Can this station accept `key` in that slot right now? Anything it accepts
+  // there, and only while the slot isn't already holding a different item.
+  canAcceptInto(side: SecondarySide, key: string): boolean {
+    if (!this.slotKeys(side).includes(key)) return false;
+    const slot = this.slotFor(side);
+    return !slot || slot.key === key;
+  }
+
+  addInto(side: SecondarySide, key: string, count: number): void {
+    const slot = this.slotFor(side);
+    if (slot && slot.key === key) slot.count += count;
+    else if (side === "reagent") this.reagent = { key, count };
     else this.fuel = { key, count };
   }
 
-  takeFuel(): ProcSlot | null {
-    const f = this.fuel;
-    this.fuel = null;
-    return f;
+  takeFrom(side: SecondarySide): ProcSlot | null {
+    const slot = this.slotFor(side);
+    if (side === "reagent") this.reagent = null;
+    else this.fuel = null;
+    return slot;
+  }
+
+  // True if `key` goes in EITHER secondary slot — the "compatible materials"
+  // filter doesn't care which.
+  canAcceptSecondary(key: string): boolean {
+    return this.canAcceptInto("reagent", key) || this.canAcceptInto("fuel", key);
   }
 
   // How much raw input is loaded right now — the slider's upper bound.
@@ -166,18 +233,21 @@ export class ProcessingStation {
 
   // How many whole output units the loaded input could ever produce — the
   // slider's upper bound now that it represents desired output, not raw
-  // input units (a partial remainder can't produce a partial output). A fuelled
-  // recipe (Smelter) is additionally capped by the loaded fuel, so the slider
-  // can never ask for more than the fuel slot covers.
+  // input units (a partial remainder can't produce a partial output). A Smelter
+  // recipe is additionally capped by BOTH loaded secondaries, so the slider can
+  // never ask for more than the reagent and fuel between them cover.
   maxPossibleOutput(): number {
     const recipe = this.recipeForLoaded();
     if (!recipe || !this.input) return 0;
     let max = Math.floor(this.input.count / recipe.inputPerOutput);
-    if (recipe.fuel) {
-      const fuelHave = this.fuel && this.fuel.key === recipe.fuel.key ? this.fuel.count : 0;
-      max = Math.min(max, Math.floor(fuelHave / recipe.fuel.per));
+    for (const side of SECONDARY_SIDES) {
+      const need = recipe[side];
+      if (!need) continue;
+      const slot = this.slotFor(side);
+      const have = slot && slot.key === need.key ? slot.count : 0;
+      max = Math.min(max, Math.floor(have / need.per));
     }
-    return max;
+    return Math.max(0, max);
   }
 
   // What running `amount` units of the loaded input through would yield:
@@ -202,13 +272,22 @@ export class ProcessingStation {
     if (!recipe) return null;
     const { consumed, output } = this.previewFor(amount);
     if (output <= 0) return null;
-    // A fuelled recipe burns fuel from the loaded slot (not the backpack).
-    // maxPossibleOutput already caps the slider by fuel, but re-guard here.
-    if (recipe.fuel) {
-      const need = output * recipe.fuel.per;
-      if (!this.fuel || this.fuel.key !== recipe.fuel.key || this.fuel.count < need) return null;
-      this.fuel.count -= need;
-      if (this.fuel.count <= 0) this.fuel = null;
+    // A Smelter recipe draws its reagent and fuel from the loaded slots (not the
+    // backpack). maxPossibleOutput already caps the slider by both, but re-guard
+    // here — and check BOTH before spending EITHER, so a run that can't cover its
+    // fuel doesn't silently eat the reagent on the way to returning null.
+    for (const side of SECONDARY_SIDES) {
+      const need = recipe[side];
+      if (!need) continue;
+      const slot = this.slotFor(side);
+      if (!slot || slot.key !== need.key || slot.count < output * need.per) return null;
+    }
+    for (const side of SECONDARY_SIDES) {
+      const need = recipe[side];
+      if (!need) continue;
+      const slot = this.slotFor(side)!;
+      slot.count -= output * need.per;
+      if (slot.count <= 0) this.takeFrom(side);
     }
     this.input.count -= consumed;
     if (this.input.count <= 0) this.input = null;

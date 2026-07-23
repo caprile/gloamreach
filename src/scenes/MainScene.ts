@@ -140,7 +140,7 @@ import {
   type GearAugmentDef,
 } from "../systems/GearAugments";
 import { Hotbar, ROW1_COUNT } from "../systems/Hotbar";
-import { ProcessingStation, PROCESS_RECIPES, SMELT_RECIPES } from "../systems/Processing";
+import { ProcessingStation, PROCESS_RECIPES, SMELT_RECIPES, SECONDARY_SIDES, type SecondarySide } from "../systems/Processing";
 import { BuffManager } from "../systems/Buffs";
 import { BleedManager } from "../systems/Bleed";
 import { PoisonManager } from "../systems/Poison";
@@ -2984,8 +2984,9 @@ export class MainScene extends Phaser.Scene {
         this.loadRackInput(src.container, src.index);
         return;
       }
-      if (this.dryingRackMenu.isOverFuel(pointer.x, pointer.y)) {
-        this.loadRackFuel(src.container, src.index);
+      const dropSide = this.dryingRackMenu.secondarySideAt(pointer.x, pointer.y);
+      if (dropSide) {
+        this.loadRackSecondary(dropSide, src.container, src.index);
         return;
       }
       const rackBagIndex = this.dryingRackMenu.slotIndexAt(pointer.x, pointer.y);
@@ -3314,9 +3315,9 @@ export class MainScene extends Phaser.Scene {
       quickLoad: (i) => this.quickLoadStation(this.backpack, i),
       isDragging: () => this.dragSource !== null,
       retrieveInput: () => this.retrieveRackInput(),
-      retrieveFuel: () => this.retrieveRackFuel(),
-      // The Smelter's fuel now lives in its own loaded slot, so process is the
-      // same call for both stations — station.process() burns loaded fuel itself.
+      retrieveSecondary: (side) => this.retrieveRackSecondary(side),
+      // The Smelter's reagent/fuel live in their own loaded slots, so process is
+      // the same call for both stations — station.process() spends them itself.
       processAmount: (amount) => this.processRackAmount(amount),
       // The same menu serves the Smelter — switch title/verb by kind.
       title: () => (this.openStationKind === "smelter" ? "Smelter" : "Drying Rack"),
@@ -4054,38 +4055,46 @@ export class MainScene extends Phaser.Scene {
     this.afterItemMove();
   }
 
-  // Load a whole stack into the Smelter's fuel slot (Hex Essence).
-  private loadRackFuel(container: ItemContainer, index: number): void {
+  // Load a whole stack into one of the Smelter's secondary slots (reagent/fuel).
+  private loadRackSecondary(side: SecondarySide, container: ItemContainer, index: number): void {
     const station = this.openRack;
     if (!station) return;
     const stack = container.slot(index);
-    if (!stack || !station.canAcceptFuel(stack.key)) return;
-    station.addFuel(stack.key, stack.count);
+    if (!stack || !station.canAcceptInto(side, stack.key)) return;
+    station.addInto(side, stack.key, stack.count);
     container.set(index, null);
     this.dryingRackMenu.selectFullAmount();
     this.afterItemMove();
   }
 
   // Route a right-click / quick-move on a backpack stack to the right slot —
-  // valid input goes to the input slot, valid fuel to the fuel slot.
+  // valid input to the input slot, otherwise whichever secondary slot takes it.
   private quickLoadStation(container: ItemContainer, index: number): void {
     const station = this.openRack;
     const stack = container.slot(index);
     if (!station || !stack) return;
-    if (station.canAccept(stack.key)) this.loadRackInput(container, index);
-    else if (station.canAcceptFuel(stack.key)) this.loadRackFuel(container, index);
+    if (station.canAccept(stack.key)) {
+      this.loadRackInput(container, index);
+      return;
+    }
+    for (const side of SECONDARY_SIDES) {
+      if (station.canAcceptInto(side, stack.key)) {
+        this.loadRackSecondary(side, container, index);
+        return;
+      }
+    }
   }
 
-  // Pull the loaded (unburned) fuel back out of the Smelter into the backpack.
-  private retrieveRackFuel(): void {
+  // Pull an unconsumed secondary (reagent/fuel) back out of the Smelter.
+  private retrieveRackSecondary(side: SecondarySide): void {
     const station = this.openRack;
-    if (!station?.fuel) return;
-    const f = station.fuel;
-    const leftover = this.addToBackpack(f.key, f.count);
-    station.takeFuel();
+    const slot = side === "reagent" ? station?.reagent : station?.fuel;
+    if (!station || !slot) return;
+    const leftover = this.addToBackpack(slot.key, slot.count);
+    station.takeFrom(side);
     if (leftover > 0) {
-      this.spawnLooseDrop(f.key, leftover, this.player.x, this.player.y, DROPPED_ITEM_MAGNET_COOLDOWN_MS);
-      this.eventLog.add("info", "Backpack full — some fuel landed on the floor");
+      this.spawnLooseDrop(slot.key, leftover, this.player.x, this.player.y, DROPPED_ITEM_MAGNET_COOLDOWN_MS);
+      this.eventLog.add("info", "Backpack full — some of it landed on the floor");
     }
     this.dryingRackMenu.selectFullAmount();
     this.afterItemMove();
@@ -12109,27 +12118,13 @@ export class MainScene extends Phaser.Scene {
       this.dryingRacks.splice(rackIndex, 1);
     }
 
-    // Same refund + cleanup for a placed Smelter's loaded ore AND fuel.
+    // Same refund + cleanup for a placed Smelter's loaded ore, reagent AND fuel.
     const smelterIndex = this.smelters.findIndex((s) => s.image === obj);
     if (smelterIndex !== -1) {
       const station = this.smelters[smelterIndex].station;
-      if (station.input) {
-        this.spawnLooseDrop(
-          station.input.key,
-          station.input.count,
-          obj.x,
-          obj.y,
-          DROPPED_ITEM_MAGNET_COOLDOWN_MS,
-        );
-      }
-      if (station.fuel) {
-        this.spawnLooseDrop(
-          station.fuel.key,
-          station.fuel.count,
-          obj.x,
-          obj.y,
-          DROPPED_ITEM_MAGNET_COOLDOWN_MS,
-        );
+      for (const slot of [station.input, station.reagent, station.fuel]) {
+        if (!slot) continue;
+        this.spawnLooseDrop(slot.key, slot.count, obj.x, obj.y, DROPPED_ITEM_MAGNET_COOLDOWN_MS);
       }
       if (this.openRack === station) this.closeDryingRackMenu();
       this.smelters.splice(smelterIndex, 1);

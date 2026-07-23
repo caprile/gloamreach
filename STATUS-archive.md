@@ -1,5 +1,77 @@
 # STATUS Archive — older milestone entries (grep by id; never Read in full)
 
+### B4-P5 — Gear branching, set bonuses → jewelry, pickaxe gate, Gemwright UI (2026-07-22, Opus)
+
+Plan: `.claude/plans/b4-p5-gear-branch-and-jewelry.md`. Follow-up to B4-P4 from the user's
+weapon/armor/gem callouts. Every decision was locked via `AskUserQuestion` before any code — and
+one of those rounds corrected my own framing, which is the most important thing in this entry.
+
+**The framing correction.** I first proposed the new set as a *badlands* mid-tier sitting between
+Sunsteel and Embersteel. the user pushed back ("why would the new set be anything Badlands
+related?"), and re-reading his original note ("upgraded straight from sunsteel") the real defect
+was obvious: **Sunsteel is a dead end.** Gloamsteel reforges from an *Embersteel* piece, so a
+player who skipped the Embersteel tier had no path into bayou-grade gear at all. The branch
+belongs at the bayou end, built from bayou materials, reforging from a Sunsteel base. Worth
+remembering that the ask was already precise; I'd added a tier where he'd asked for a route.
+
+**The Mirebronze branch** (9 recipes + a new ingot). `Sunsteel → Mirebronze/Bogweave` runs
+parallel to `Sunsteel → Embersteel → Gloamsteel`; both are terminal. Armor is deliberately
+between the two existing tiers — heavy **20 → 32 → 36 → 42**, light **15 → 24 → 26 → 30** — so
+the Sunsteel route is a complete endgame set while the longer Embersteel road stays the stronger
+one (locked decision 4: with set bonuses leaving armor, the reward is simply bigger numbers).
+
+**Ore economy, counted before deciding.** the user asked me to think through supply, so I did:
+Sunscorch 90 nodes / Bog Ore 46 / Ember Ore ~58 / **Moonsilver 36, every one behind a crypt
+warden**. His proposal (new set = Sunsteel + Bog Ore, Gloamsteel = Bog Ore + Moonsilver) works
+precisely *because* Moonsilver is the scarce gated one — it makes the Embersteel route the
+dungeon-clearing route, which is the reward he asked for, with no special-casing. Seams went
+**3 → 4 per vault** to cover the added demand. One implementation note: Mirebronze smelts from
+the **ingot** (fuelled by Bog Ore) rather than from ore, because two smelt recipes sharing an
+input key would make `processRecipeFor` ambiguous.
+
+**Set bonuses moved off armor onto jewelry.** All four (Molten Bulwark / Emberblink / Gloam
+Bulwark / Mireblink) are now single craftable Gemwright pieces; the effects and numbers are
+untouched, only the source moved. `activeSets()` keeps its signature and every MainScene call
+site (`hasSet`, `moltenDamageReduction`, `emberblinkDashMult`, the thorns branch, the burst) is
+unchanged — it just reads jewelry keys now. The rule also **inverted**: because each bonus is a
+self-contained item, "a partial set" no longer exists, so wearing several of a lineage grants the
+**highest** rank rather than B4-P4's weakest-piece rule. This is what frees armor to be pure flat
+armor, which is what makes branching gear balanceable at all.
+
+**Pickaxe gate**, the exact mirror of an existing precedent: `stone_axe_ironshod` (Sunsteel +
+Stone) already gates Ironbark trees via `minToolTier`. Added `stone_pickaxe_ironshod` (2 Sunsteel
+Ingot + 4 Ironbark — badlands-crafted, so it's something you prepare *before* travelling) and put
+`minToolTier: 1` on Bog Ore's 46 surface nodes. Since Bog Ore is the bayou's only surface ore,
+that one flag gates the whole bayou metal economy.
+
+**Gemwright UI.** Ability-granting designs now show a **Q / E / R badge**, derived from the item's
+own `armorSlot` through `SLOT_ABILITY_KEY` rather than written per recipe — the list previously
+said only "Gloamstep Band" with no hint which key it filled. And gem setting moved out of the
+shared right-click Upgrade panel (which was serving station, armor, weapon *and* gem concepts at
+once) into a **Set Gems tab** on the Gemwright: gear on the left, gem on the right, and a footer
+previewing the exact effect and cost before committing. The preview text comes from a new
+`describeAugmentEffect()` derived from the effect object, so it can't disagree with what gets
+applied. Gem rows are gone from `UpgradeMenu`, which now only does upgrade ladders; its slot
+readout stays and points at the Gemwright. A new addressable API (`augmentTargets` /
+`applyAugmentToTarget`) was needed because the old `applyGearAugment` was bound to whatever the
+Upgrade panel happened to be pointing at.
+
+**Two things needed no work, and saying so was the right answer:** heavy-armor magic mitigation
+already covered magic, fire *and* poison (the user asked for poison+fire to be included), and armor
+pieces already carried no resistances or stat bonuses at all — so "raw armor only" was already
+true.
+
+**Verified live + in Node**: all 9 recipes present with correct costs and bench tier; the armor
+ordering invariant measured on both lineages; the four smelt recipes reading
+`bog_ore+moonsilver→gloamsteel` and `sunsteel_ingot+bog_ore→mirebronze`; full Embersteel *armor*
+now granting no bonus while the amulet alone gives 0.15 reduction and the Mireblink ring gives a
+1.9x dash; both rings worn resolving to the higher rank; Bog Ore at 46 nodes with `minToolTier 1`;
+4 seams per vault; all 14 new textures present; and gem setting applying end-to-end with duplicate
+and 2-per-item cap both refused. `tsc` + `npm run build` clean.
+
+**Next: a playtest.** All numbers are first-pass — especially whether Moonsilver at ~120 supply
+comfortably covers Gloamsteel *and* the four new jewelry pieces in one run.
+
 ### B4-P4 — 25-item playtest omnibus: bugs, bayou gaps, world density, combat feel (2026-07-22, Opus)
 
 Plan: `.claude/plans/b4-p4-playtest-omnibus.md`. the user's 95-minute Ascetic run (lvl 18, ~60 in

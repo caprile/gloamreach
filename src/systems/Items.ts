@@ -808,7 +808,7 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
   smelter: {
     key: "smelter",
     name: "Smelter",
-    description: "A clay kiln that melts ore into metal ingots — feed it ore plus a Hexling's hex essence for the heat. Requires a nearby Workbench to build.",
+    description: "A clay kiln that melts ore into metal ingots — load ore, a reagent, and wood to burn. Requires a nearby Workbench to build.",
     texture: "icon_smelter",
     maxStack: 1,
     hotbarable: true,

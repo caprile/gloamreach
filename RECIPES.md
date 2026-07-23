@@ -303,21 +303,27 @@ how much to run via a slider (output-amount based, see `DryingRackMenu.ts`).
 
 ## Smelting — Smelter (`src/systems/Processing.ts` `SMELT_RECIPES`) — biome 2 Phase 4
 
-`A + B = Ingot`: ore (loaded into the Smelter's input slot) **plus Hex Essence
-fuel loaded into its own dedicated fuel slot** (S1 — was pulled silently from the
-backpack). Reuses the Drying Rack's menu (same `ProcessingStation`, tier- and
-fuel-aware). The rare recipe needs an **Ember Crucible**–upgraded **Smelter Lvl
-2** (`minStationTier: 1`, gated on the Gremlin King's Heart — see Station
-Upgrades).
+`Input + Reagent + Fuel = Ingot` — **three slots, all required on every recipe**,
+each loaded explicitly (S1 — they were pulled silently from the backpack before).
+Reuses the Drying Rack's menu (same `ProcessingStation`, tier-aware; the Rack uses
+neither secondary slot). The rare recipes need an **Ember Crucible**–upgraded
+**Smelter Lvl 2** (`minStationTier: 1`, gated on the Gremlin King's Heart — see
+Station Upgrades).
 
-| Ore | Fuel (per ingot) | Output | Ratio | Smelter Tier |
+**Reagent vs. fuel:** the reagent ends up *in* the ingot (Hex Essence infused into
+Sunsteel, Moonsilver alloyed into Gloamsteel) and is per-recipe; **fuel is always
+Wood**, is burned off, and is never part of the output. These used to be one field
+named `fuel`, which is how Moonsilver ended up labelled "Fuel" and how the two
+B4-P5 alloy recipes ended up smelting with no heat source at all.
+
+| Input | Reagent (per ingot) | Fuel (per ingot) | Output | Smelter Tier |
 |---|---|---|---|---|
-| Sunscorch Ore (common, scattered badlands) | 1 Hex Essence | Sunsteel Ingot | 1 : 1 | Any (Lvl 1) |
-| Cinderforged Ore (rare veins + Sunken Forge POI) | 1 Hex Essence | Embersteel Ingot | 1 : 1 | Lvl 2 (Ember Crucible) |
-| Bog Ore (bayou — **surface-mineable since Phase 4a**) | 1 Hex Essence | Gloamsteel Ingot | 1 : 1 | Lvl 2 (Ember Crucible) |
+| Sunscorch Ore (common, scattered badlands) | 1 Hex Essence | 2 Wood | Sunsteel Ingot | Any (Lvl 1) |
+| Cinderforged Ore (rare veins + Sunken Forge POI) | 1 Hex Essence | 3 Wood | Embersteel Ingot | Lvl 2 (Ember Crucible) |
+| Bog Ore (bayou — **surface-mineable since Phase 4a**) | 1 **Moonsilver** (crypt vaults only) | 3 Wood | Gloamsteel Ingot | Lvl 2 (Ember Crucible) |
+| Sunsteel Ingot | 2 **Bog Ore** | 3 Wood | Mirebronze Ingot | Lvl 2 (Ember Crucible) |
 
-Ratio is **1 ore + 1 hex → 1 ingot** (S1 rebalance — the old 2:1 made forging
-grindy). Clay (Smelter build material), Sunscorch Ore, and rare Cinderforged
+Ore ratio is **1 : 1** (S1 rebalance — the old 2:1 made forging grindy). Clay (Smelter build material), Sunscorch Ore, and rare Cinderforged
 veins are mineable `mine` nodes scattered in the badlands (Stone Pickaxe,
 non-respawning). Node yields (S1): Clay 44×2–3, Sunscorch 60×3–5, Cinderforged
 14×2–4 scattered + the Sunken Forge POI deposits at 4–7 each.

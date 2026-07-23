@@ -1,7 +1,7 @@
 import Phaser from "phaser";
 import type { ItemContainer } from "../systems/ItemContainer";
 import { itemDef } from "../systems/Items";
-import type { ProcessingStation } from "../systems/Processing";
+import { SECONDARY_SIDES, type ProcessingStation, type SecondarySide } from "../systems/Processing";
 import type { Skills } from "../systems/Skills";
 import { Tooltip } from "./Tooltip";
 import { ProgressBar } from "./ProgressBar";
@@ -35,9 +35,9 @@ export interface DryingRackMenuDeps {
   descKey?: () => string; // itemDef key for the description line (default "drying_rack")
   actionLabel?: () => string; // process-button verb (default "Process")
   busyLabel?: () => string; // button label while the bar fills (default "Drying…")
-  // Pull the loaded fuel (Smelter's Hex Essence) back out into the backpack.
-  // Only wired for the Smelter (the Drying Rack has no fuel slot).
-  retrieveFuel?: () => void;
+  // Pull a loaded secondary (the Smelter's reagent or fuel) back out into the
+  // backpack. Only wired for the Smelter (the Drying Rack has neither slot).
+  retrieveSecondary?: (side: SecondarySide) => void;
 }
 
 const SLOT = 46;
@@ -47,6 +47,9 @@ const ROWS = 6;
 const BACKPACK_W = COLS * SLOT + (COLS - 1) * GAP; // 306
 const BACKPACK_H = ROWS * SLOT + (ROWS - 1) * GAP; // 306
 const IO_SLOT = 56;
+// Vertical pitch of one slot row: the box, its "Take Out" link underneath, and
+// the next row's caption.
+const SLOT_ROW_H = IO_SLOT + 44;
 const SLIDER_W = 170;
 const SLIDER_H = 10;
 const DEPTH_BG = 3000;
@@ -88,7 +91,10 @@ export class DryingRackMenu {
   private backpackY: number;
   private processX: number;
   private inputBox: { x: number; y: number } = { x: 0, y: 0 };
-  // Fuel drop-target (Smelter only) — sits to the right of the input slot.
+  // Smelter-only drop targets. Row 1 is the two things that end up in the ingot
+  // (input + reagent, side by side); row 2 is the fuel that's merely burned —
+  // the layout says which is which before you read a label.
+  private reagentBox: { x: number; y: number } = { x: 0, y: 0 };
   private fuelBox: { x: number; y: number } = { x: 0, y: 0 };
   private sliderTrack: { x: number; y: number; w: number } = { x: 0, y: 0, w: SLIDER_W };
 
@@ -109,14 +115,17 @@ export class DryingRackMenu {
     this.progressBar = new ProgressBar(scene, { width: 96, height: 26, depth: DEPTH_TEXT + 3 });
 
     this.panelW = 600;
-    this.panelH = 400;
+    // Tall enough for the Smelter's second slot row; the Drying Rack's single
+    // row just leaves more empty space below its button.
+    this.panelH = 448;
     this.panelX = scene.scale.width / 2 - this.panelW / 2;
     this.panelY = scene.scale.height / 2 - this.panelH / 2;
     this.backpackX = this.panelX + 16;
     this.backpackY = this.panelY + 90;
     this.processX = this.backpackX + BACKPACK_W + 30;
     this.inputBox = { x: this.processX + 40, y: this.backpackY };
-    this.fuelBox = { x: this.processX + 40 + IO_SLOT + 14, y: this.backpackY };
+    this.reagentBox = { x: this.processX + 40 + IO_SLOT + 14, y: this.backpackY };
+    this.fuelBox = { x: this.processX + 40, y: this.backpackY + SLOT_ROW_H };
     this.sliderTrack = { x: this.processX, y: this.backpackY + IO_SLOT + 34, w: SLIDER_W };
 
     this.bg = scene.add
@@ -208,16 +217,21 @@ export class DryingRackMenu {
     );
   }
 
-  // True when a screen point is over the fuel slot (Smelter only) — the drop
-  // target that loads dragged fuel. False when the open station has no fuel slot.
-  isOverFuel(screenX: number, screenY: number): boolean {
-    if (!this.open || !this.deps.station()?.usesFuelSlot()) return false;
-    return (
-      screenX >= this.fuelBox.x &&
-      screenX <= this.fuelBox.x + IO_SLOT &&
-      screenY >= this.fuelBox.y &&
-      screenY <= this.fuelBox.y + IO_SLOT
-    );
+  // Which secondary slot (if any) a screen point is over — the drop targets that
+  // load a dragged reagent/fuel. Null when the open station doesn't use them
+  // (the Drying Rack) or the point is elsewhere.
+  secondarySideAt(screenX: number, screenY: number): SecondarySide | null {
+    if (!this.open) return null;
+    const station = this.deps.station();
+    if (!station) return null;
+    for (const side of SECONDARY_SIDES) {
+      if (!station.usesSlot(side)) continue;
+      const box = side === "reagent" ? this.reagentBox : this.fuelBox;
+      if (screenX >= box.x && screenX <= box.x + IO_SLOT && screenY >= box.y && screenY <= box.y + IO_SLOT) {
+        return side;
+      }
+    }
+    return null;
   }
 
   // --- slider drag (driven by MainScene's shared global pointermove/up) ---
@@ -280,7 +294,7 @@ export class DryingRackMenu {
     const compatible: { index: number; stack: { key: string; count: number; tier?: number } }[] = [];
     for (let i = 0; i < backpack.size; i++) {
       const stack = backpack.slot(i);
-      if (stack && (station.canAccept(stack.key) || station.canAcceptFuel(stack.key))) {
+      if (stack && (station.canAccept(stack.key) || station.canAcceptSecondary(stack.key))) {
         compatible.push({ index: i, stack });
       }
     }
@@ -334,13 +348,10 @@ export class DryingRackMenu {
   private renderProcess(station: ProcessingStation, max: number): void {
     const px = this.processX;
     const ib = this.inputBox;
-    const useFuel = station.usesFuelSlot();
+    const useReagent = station.usesSlot("reagent");
+    const useFuel = station.usesSlot("fuel");
 
-    // --- Input slot (+ Fuel slot for the Smelter, side by side) ---
-    this.addText(ib.x, this.backpackY - 18, useFuel ? "Ore" : "Input", 12, "#8a93a3");
-    this.renderSlotBox(ib.x, ib.y, station.input, station.input ? "#8fe38f" : "#3a4250");
-    // Small "Take Out" link under a loaded slot (moved below to make room for
-    // the fuel slot to its right).
+    // Small "Take Out" link under a loaded slot.
     const takeLink = (x: number, y: number, label: string, onClick: () => void) => {
       const t = this.scene.add
         .text(x, y, label, {
@@ -356,24 +367,51 @@ export class DryingRackMenu {
         .on("pointerdown", onClick);
       this.rows.push(t);
     };
-    const underSlotY = ib.y + IO_SLOT + 2;
-    if (station.input) takeLink(ib.x, underSlotY, "Take Out", () => this.deps.retrieveInput());
 
-    if (useFuel) {
-      const fb = this.fuelBox;
-      this.addText(fb.x, this.backpackY - 18, "Fuel", 12, "#8a93a3");
-      this.renderSlotBox(fb.x, fb.y, station.fuel, station.fuel ? "#c9a86a" : "#3a4250");
-      if (station.fuel) {
-        takeLink(fb.x, underSlotY, "Take Out", () => this.deps.retrieveFuel?.());
+    // --- Row 1: the two ingredients that end up in the output ---
+    // The input caption comes from the loaded recipe ("Ore" for raw ore, "Metal"
+    // for the ingot the Mirebronze recipe takes), as does the reagent's ("Alloy"
+    // when it's metal being alloyed in). Fuel below is always just "Fuel".
+    const labels = station.slotLabels();
+    this.addText(ib.x, this.backpackY - 18, useReagent ? labels.input : "Input", 12, "#8a93a3");
+    this.renderSlotBox(ib.x, ib.y, station.input, station.input ? "#8fe38f" : "#3a4250");
+    const underInputY = ib.y + IO_SLOT + 2;
+    if (station.input) takeLink(ib.x, underInputY, "Take Out", () => this.deps.retrieveInput());
+
+    // Draws one secondary slot with its caption, Take Out link, and the hint that
+    // explains an empty or mismatched slot — the two behave identically, so the
+    // reagent and fuel rows are the same code with different geometry.
+    const renderSecondary = (side: SecondarySide, box: { x: number; y: number }, caption: string) => {
+      const slot = side === "reagent" ? station.reagent : station.fuel;
+      const need = station.recipeForLoaded()?.[side] ?? null;
+      const want = need?.key ?? null;
+      this.addText(box.x, box.y - 18, caption, 12, "#8a93a3");
+      this.renderSlotBox(box.x, box.y, slot, slot ? "#c9a86a" : "#3a4250");
+      const underY = box.y + IO_SLOT + 2;
+      if (slot) {
+        takeLink(box.x, underY, "Take Out", () => this.deps.retrieveSecondary?.(side));
+        // Explain a zero slider rather than leaving the player to guess: either
+        // this slot holds something the recipe doesn't take, or not enough of
+        // what it does.
+        if (want && slot.key !== want) {
+          this.addText(box.x, underY + 20, `Needs ${itemDef(want)?.name ?? want}`, 10, "#d8a24a");
+        } else if (need && slot.count < need.per) {
+          this.addText(box.x, underY + 20, `Needs ${need.per} each`, 10, "#d8a24a");
+        }
       } else {
-        // Empty-fuel hint so the player knows the Smelter needs Hex Essence.
-        const fuelName = itemDef(station.fuelKey() ?? "")?.name ?? "fuel";
-        this.addText(fb.x, underSlotY + 1, `Load ${fuelName}`, 10, "#8a7a55");
+        this.addText(box.x, underY + 1, `Load ${itemDef(station.slotKey(side) ?? "")?.name ?? "…"}`, 10, "#8a7a55");
       }
-    }
+    };
+
+    if (useReagent) renderSecondary("reagent", this.reagentBox, labels.reagent);
+    // --- Row 2: fuel, which is burned off and never part of the output ---
+    if (useFuel) renderSecondary("fuel", this.fuelBox, "Fuel");
 
     // --- Amount selector (slider + numeric entry) ---
-    const amountY = ib.y + IO_SLOT + 22;
+    // Sits below the last slot row that actually rendered.
+    // +34 clears the row's "Take Out" link and its mismatch hint underneath.
+    const slotsBottom = useFuel ? this.fuelBox.y + IO_SLOT : ib.y + IO_SLOT;
+    const amountY = slotsBottom + 34;
     const amountLabel = station.input
       ? `Amount: ${this.selectedAmount} / ${max}`
       : "Amount: — (load an input first)";
