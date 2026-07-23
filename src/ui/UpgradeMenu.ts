@@ -190,7 +190,12 @@ export class UpgradeMenu {
     // (no order gate). Weapon/armor tiers: only tiers above the current one.
     const upgrades = all.filter((u) => {
       if (!this.deps.isDiscovered(u)) return false;
-      if (isGearAugment(u)) return augApplied !== null && !augApplied.has(u.id);
+      // B4-P5: gem augments are NOT offered here any more — setting a gem moved
+      // to the Gemwright's Table's own "Set Gems" tab, so this panel is only
+      // about UPGRADE LADDERS (station/armor/weapon/tool). The slot readout
+      // below stays, because knowing how many gems a piece already carries is
+      // still useful while you're looking at it.
+      if (isGearAugment(u)) return false;
       if (applied) return !applied.has(u.id);
       return u.resultTier > target.tier;
     });
@@ -207,7 +212,7 @@ export class UpgradeMenu {
       this.addText(
         this.panelX + 16,
         cursor - 12,
-        `Gem augments: ${augApplied.size}/${MAX_AUGMENTS_PER_ITEM}`,
+        `Gem augments: ${augApplied.size}/${MAX_AUGMENTS_PER_ITEM}  (set gems at the Gemwright's Table)`,
         11,
         augFull ? "#8a93a3" : "#8fe38f",
       );

@@ -141,6 +141,7 @@ fixed destination level.
 | Relic Forge | Lvl 2 | Gloam Conduit | 10 Stone, 1 Gloam Shard | Unlocks the Refine tab |
 | Relic Forge | Lvl 3 | Ember Kiln | 3 Embersteel Ingot, 13 Stone | Unlocks Gloam → Ember conversion (Convert tab) |
 | Relic Forge | Lvl 4 | Mire Crucible | 3 Gloamsteel Ingot, 16 Stone | Unlocks Ember → Mire conversion + tier-3 refining |
+| Stone Pickaxe | Lvl 2 | Ironshod Pickaxe | 2 Sunsteel Ingot, 4 Ironbark | **Mines Bog Ore** (badlands-crafted gate on the bayou's metal economy) |
 | Smelter | Lvl 2 | Ember Crucible | 1 Gremlin King's Heart, 7 Stone | Smelt rare Cinderforged Ore → Embersteel Ingot |
 | Gemwright's Table | Lvl 2 | Gloamheart Setting | 1 Duneshaper's Heart, 3 Moonsilver | Unlocks ability-jewelry (Q/E/R specials) — **biome-3 dormant** (the Duneshaper's Heart is only reachable once biome 3 demotes the Duneshaper from win-boss) |
 
@@ -650,3 +651,65 @@ magnitude (reach, damage, i-frames, active window); cooldown is set per-def.
 | Gloam Nova | 1.00 | 10.0s | 150px radius, 30 dmg | Gemwright (Moonsilver 2 + Ember Gem 1) |
 | Lesser Bloodpact | 0.50 | 30.0s | 3.0s window, 17.5% lifelink | Run-start character |
 | Bloodpact | 1.00 | 24.0s | 6.0s window, 35% lifelink | Gemwright (Moonsilver 3 + Blood Gem 1) |
+
+
+## B4-P5 — the Mirebronze branch, and set bonuses as jewelry
+
+**Gear now branches.** Sunsteel used to be a dead end: Gloamsteel reforges from an *Embersteel*
+piece, so skipping the Embersteel tier stranded you. A second bayou-grade route now reforges
+straight from Sunsteel/Duskhide. Both routes are terminal — neither feeds the other.
+
+```
+Sunsteel ──┬── Embersteel ── Gloamsteel   (needs Moonsilver: crypt-gated, the earned route)
+           └── Mirebronze                 (needs Sunsteel + Bog Ore: the accessible route)
+```
+
+**Armor totals** (raw armor only — no resistances or stat lines on any armor):
+
+| Lineage | Sunsteel/Duskhide | Embersteel/Emberhide | **Mirebronze/Bogweave** | Gloamsteel/Mirehide |
+|---|---|---|---|---|
+| Heavy | 20 | 32 | **36** | 42 |
+| Light | 15 | 24 | **26** | 30 |
+
+Mirebronze sits deliberately *between* Embersteel and Gloamsteel: a complete endgame set, with
+the longer Embersteel road still the stronger one.
+
+| Recipe | Costs (all Workbench Lvl 5) |
+|---|---|
+| Mirebronze Helm | 1 Sunsteel Helm, 2 Mirebronze Ingot, 2 Mirehide |
+| Mirebronze Cuirass | 1 Sunsteel Cuirass, 4 Mirebronze Ingot, 3 Mirehide |
+| Mirebronze Greaves | 1 Sunsteel Greaves, 2 Mirebronze Ingot, 3 Mirehide |
+| Bogweave Hood | 1 Duskhide Hood, 1 Mirebronze Ingot, 3 Swamp Moss |
+| Bogweave Vest | 1 Duskhide Vest, 2 Mirebronze Ingot, 4 Swamp Moss, 2 Mirehide |
+| Bogweave Leggings | 1 Duskhide Leggings, 1 Mirebronze Ingot, 3 Swamp Moss |
+| Mirebronze Warhammer | 1 Sunsteel Warhammer, 3 Mirebronze Ingot, 4 Bog Ore — 26 blunt |
+| Mirebronze Longsword | 1 Sunsteel Longsword, 3 Mirebronze Ingot, 3 Bog Ore — 22 slash |
+| Mirebronze Pike | 1 Sunsteel Pike, 3 Mirebronze Ingot, 3 Bog Ore — 28 pierce |
+
+**Smelting** (Smelter, input + fuel):
+
+| Output | Input | Fuel | Note |
+|---|---|---|---|
+| Sunsteel Ingot | Sunscorch Ore | Hex Essence | |
+| Embersteel Ingot | Cinderforged Ore | Hex Essence | |
+| **Gloamsteel Ingot** | Bog Ore | **Moonsilver** | changed — Moonsilver is crypt-only, which is what rewards the Embersteel route |
+| **Mirebronze Ingot** | Sunsteel Ingot | 2 Bog Ore | new |
+
+**Set bonuses are no longer worn on armor.** All four are now single pieces of jewelry crafted
+at the Gemwright's Table — the effects and their numbers are unchanged, only what grants them
+moved. This is what frees armor to be pure flat armor (and therefore branchable).
+
+| Item | Grants | Station | Costs |
+|---|---|---|---|
+| Amulet of the Molten Bulwark | Molten Bulwark | Lvl 1 | 3 Moonsilver, 2 Embersteel Ingot, 3 Cragscale Plate |
+| Ring of Emberblink | Emberblink | Lvl 1 | 2 Moonsilver, 2 Embersteel Ingot, 2 Cinderforged Ore |
+| Amulet of the Gloam Bulwark | Gloam Bulwark | Lvl 2 | 4 Moonsilver, 3 Gloamsteel Ingot, 3 Mirehide |
+| Ring of Mireblink | Mireblink | Lvl 2 | 3 Moonsilver, 2 Gloamsteel Ingot, 3 Gloam Shard |
+
+Wearing several of a lineage grants the **highest** rank worn (each item is self-contained, so
+"a partial set" no longer exists). Moonsilver seams per crypt vault went **3 → 4** to cover the
+added demand.
+
+**Gem setting moved** out of the shared right-click Upgrade panel into a **Set Gems** tab on the
+Gemwright's Table: pick gear, pick gem, and a footer previews the exact effect and cost before
+you commit. The Upgrade panel is now only about upgrade ladders.

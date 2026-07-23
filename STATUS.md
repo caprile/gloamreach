@@ -2,7 +2,25 @@
 
 ## Current State
 
-_Living snapshot — edit in place, never append. Last shipped: **B4-P4 — 25-item playtest
+_Living snapshot — edit in place, never append. Last shipped: **B4-P5 — Gear branching, set
+bonuses to jewelry, pickaxe gate, Gemwright UI** (2026-07-22, Opus, plan
+`.claude/plans/b4-p5-gear-branch-and-jewelry.md`). **Gear now branches**: Sunsteel was a dead end
+(Gloamsteel reforges from an *Embersteel* piece), so a new bayou-grade **Mirebronze/Bogweave**
+route reforges straight from Sunsteel/Duskhide. Both routes terminal; armor sits deliberately
+between the tiers (heavy 20-32-**36**-42, light 15-24-**26**-30) so the longer Embersteel road
+stays stronger. **Gloamsteel now costs Moonsilver** — crypt-warden-gated, which is what makes the
+Embersteel route the dungeon-clearing one; seams 3 to 4 to cover demand. **All four set bonuses
+moved off armor onto jewelry** (same effects, same numbers), which frees armor to be pure flat
+armor and is what makes branching balanceable; the rule inverted to "highest rank worn" since each
+bonus is now self-contained. New **Ironshod Pickaxe** (Sunsteel + Ironbark, badlands-crafted) gates
+Bog Ore — the bayou's only surface ore, so it gates the whole bayou metal economy. **Gemwright**:
+ability designs show a **Q/E/R badge** (derived from the item's slot), and gem setting moved out of
+the shared Upgrade panel into a **Set Gems tab** with a live effect+cost preview. Two asks needed
+no work and were reported as such: heavy-armor mitigation already covered fire and poison, and
+armor already had no resistances or stat bonuses. Verified live and in Node; `tsc` +
+`npm run build` clean. **Next: a playtest** — especially whether ~120 Moonsilver covers Gloamsteel
+*and* the four new jewelry pieces in one run. See B4-P5 below.
+Prior: **B4-P4 — 25-item playtest
 omnibus** (2026-07-22, Opus, plan `.claude/plans/b4-p4-playtest-omnibus.md`). Off the user's
 95-minute Ascetic run, which cleared the whole bayou and killed the final boss in
 **Embersteel** gear — a tier below the set that content gates. All four buckets in one
@@ -265,6 +283,78 @@ below + [[survivor-rpg-dev-console]].
 
 > Older entries in STATUS-archive.md.
 
+### B4-P5 — Gear branching, set bonuses → jewelry, pickaxe gate, Gemwright UI (2026-07-22, Opus)
+
+Plan: `.claude/plans/b4-p5-gear-branch-and-jewelry.md`. Follow-up to B4-P4 from the user's
+weapon/armor/gem callouts. Every decision was locked via `AskUserQuestion` before any code — and
+one of those rounds corrected my own framing, which is the most important thing in this entry.
+
+**The framing correction.** I first proposed the new set as a *badlands* mid-tier sitting between
+Sunsteel and Embersteel. the user pushed back ("why would the new set be anything Badlands
+related?"), and re-reading his original note ("upgraded straight from sunsteel") the real defect
+was obvious: **Sunsteel is a dead end.** Gloamsteel reforges from an *Embersteel* piece, so a
+player who skipped the Embersteel tier had no path into bayou-grade gear at all. The branch
+belongs at the bayou end, built from bayou materials, reforging from a Sunsteel base. Worth
+remembering that the ask was already precise; I'd added a tier where he'd asked for a route.
+
+**The Mirebronze branch** (9 recipes + a new ingot). `Sunsteel → Mirebronze/Bogweave` runs
+parallel to `Sunsteel → Embersteel → Gloamsteel`; both are terminal. Armor is deliberately
+between the two existing tiers — heavy **20 → 32 → 36 → 42**, light **15 → 24 → 26 → 30** — so
+the Sunsteel route is a complete endgame set while the longer Embersteel road stays the stronger
+one (locked decision 4: with set bonuses leaving armor, the reward is simply bigger numbers).
+
+**Ore economy, counted before deciding.** the user asked me to think through supply, so I did:
+Sunscorch 90 nodes / Bog Ore 46 / Ember Ore ~58 / **Moonsilver 36, every one behind a crypt
+warden**. His proposal (new set = Sunsteel + Bog Ore, Gloamsteel = Bog Ore + Moonsilver) works
+precisely *because* Moonsilver is the scarce gated one — it makes the Embersteel route the
+dungeon-clearing route, which is the reward he asked for, with no special-casing. Seams went
+**3 → 4 per vault** to cover the added demand. One implementation note: Mirebronze smelts from
+the **ingot** (fuelled by Bog Ore) rather than from ore, because two smelt recipes sharing an
+input key would make `processRecipeFor` ambiguous.
+
+**Set bonuses moved off armor onto jewelry.** All four (Molten Bulwark / Emberblink / Gloam
+Bulwark / Mireblink) are now single craftable Gemwright pieces; the effects and numbers are
+untouched, only the source moved. `activeSets()` keeps its signature and every MainScene call
+site (`hasSet`, `moltenDamageReduction`, `emberblinkDashMult`, the thorns branch, the burst) is
+unchanged — it just reads jewelry keys now. The rule also **inverted**: because each bonus is a
+self-contained item, "a partial set" no longer exists, so wearing several of a lineage grants the
+**highest** rank rather than B4-P4's weakest-piece rule. This is what frees armor to be pure flat
+armor, which is what makes branching gear balanceable at all.
+
+**Pickaxe gate**, the exact mirror of an existing precedent: `stone_axe_ironshod` (Sunsteel +
+Stone) already gates Ironbark trees via `minToolTier`. Added `stone_pickaxe_ironshod` (2 Sunsteel
+Ingot + 4 Ironbark — badlands-crafted, so it's something you prepare *before* travelling) and put
+`minToolTier: 1` on Bog Ore's 46 surface nodes. Since Bog Ore is the bayou's only surface ore,
+that one flag gates the whole bayou metal economy.
+
+**Gemwright UI.** Ability-granting designs now show a **Q / E / R badge**, derived from the item's
+own `armorSlot` through `SLOT_ABILITY_KEY` rather than written per recipe — the list previously
+said only "Gloamstep Band" with no hint which key it filled. And gem setting moved out of the
+shared right-click Upgrade panel (which was serving station, armor, weapon *and* gem concepts at
+once) into a **Set Gems tab** on the Gemwright: gear on the left, gem on the right, and a footer
+previewing the exact effect and cost before committing. The preview text comes from a new
+`describeAugmentEffect()` derived from the effect object, so it can't disagree with what gets
+applied. Gem rows are gone from `UpgradeMenu`, which now only does upgrade ladders; its slot
+readout stays and points at the Gemwright. A new addressable API (`augmentTargets` /
+`applyAugmentToTarget`) was needed because the old `applyGearAugment` was bound to whatever the
+Upgrade panel happened to be pointing at.
+
+**Two things needed no work, and saying so was the right answer:** heavy-armor magic mitigation
+already covered magic, fire *and* poison (the user asked for poison+fire to be included), and armor
+pieces already carried no resistances or stat bonuses at all — so "raw armor only" was already
+true.
+
+**Verified live + in Node**: all 9 recipes present with correct costs and bench tier; the armor
+ordering invariant measured on both lineages; the four smelt recipes reading
+`bog_ore+moonsilver→gloamsteel` and `sunsteel_ingot+bog_ore→mirebronze`; full Embersteel *armor*
+now granting no bonus while the amulet alone gives 0.15 reduction and the Mireblink ring gives a
+1.9x dash; both rings worn resolving to the higher rank; Bog Ore at 46 nodes with `minToolTier 1`;
+4 seams per vault; all 14 new textures present; and gem setting applying end-to-end with duplicate
+and 2-per-item cap both refused. `tsc` + `npm run build` clean.
+
+**Next: a playtest.** All numbers are first-pass — especially whether Moonsilver at ~120 supply
+comfortably covers Gloamsteel *and* the four new jewelry pieces in one run.
+
 ### B4-P4 — 25-item playtest omnibus: bugs, bayou gaps, world density, combat feel (2026-07-22, Opus)
 
 Plan: `.claude/plans/b4-p4-playtest-omnibus.md`. the user's 95-minute Ascetic run (lvl 18, ~60 in
@@ -362,96 +452,3 @@ which reads exactly like a broken projectile. Both were mine, not the game's. Dr
 
 **Next: a playtest.** Every number here is first-pass, and the density/biome-mix changes especially
 want real play rather than sampling.
-
-### B4-P3 — Class identity: skill affinities + stat potency (2026-07-22, Opus)
-
-Plan: `.claude/plans/b4-p3-class-identity.md`. B4-P1 shipped the run-start picker, but all
-five survivors differentiated on the **same shape** — a `RunModifier` of eight global scalar
-fields. Nothing about a character shaped **how you grow**, only how big your flat numbers
-were, so the Reaver read as "the +25% damage one" rather than a class. This adds the missing
-axis as a second, separate channel: `ClassAffinity { skillXpMult, statPotency }`.
-
-**Locked with the user:** both channels; double-edged but **mild** (favoured ×1.4–1.6,
-penalised ×0.75–0.85 — nobody is crippled at anything); and **never reduce drops**. That
-last one has a concrete consequence — `chopping`/`mining` levels roll the bonus-drop chance
-(`Skills.choppingBonusChance`/`miningBonusChance`), so a gathering-XP *penalty* is an
-indirect drop nerf. **No character may penalise those two skills**, enforced by a
-module-load guard in `Characters.ts` (a `console.warn`, so a future editor trips it in the
-dev console rather than in a playtest). The Warden is the only card with gathering affinity,
-and per the lock it can only ever be an upside there.
-
-**Two channels, one hook site each** — the point of the design is that neither introduced
-new math:
-- **Skill affinity** → `MainScene.awardSkillXp` (already the single entry point for every XP
-  source). It multiplies **outside** the additive XP bucket on purpose: the bucket is the
-  "global +% XP" category, and folding a class's ×0.75 weakness in as −25 would let a couple
-  of relics erase its defining downside entirely. A per-skill class scalar is its own
-  category, so it composes rather than competes. **Verified**: with Intelligence at 40 the
-  favoured/neutral ratio is still exactly 1.6 and the penalised/neutral still 0.75, while all
-  three absolute values rose.
-- **Stat potency** → lives **inside `PlayerProgression`** (`setStatPotency`/`potency`), not at
-  MainScene read sites. That's the whole trick: all eight per-point getters and every stat
-  readout pick it up from one place, so **zero** MainScene hooks changed. It also let
-  `statTotalEffect()` be refactored to read the getters instead of re-multiplying the raw
-  per-point constants — that removed a standing duplication-drift risk *and* made the Stats
-  tab reflect potency for free.
-
-**Roster** (skill affinity / penalty · stat potency / penalty): **Vagabond** Running 1.6,
-Light Armor 1.4 / Blunt 0.8 · Agility 1.5 / Strength 0.85 — **Reaver** Blunt 1.6, Slash 1.4 /
-Magic 0.75 · Strength 1.5 / Intelligence 0.85 — **Ashcaller** Magic 1.6, Ranged 1.4 / Heavy
-Armor 0.8 · Intelligence 1.5, Wisdom 1.25 / Vitality 0.85 — **Warden** Heavy Armor 1.6,
-Chopping 1.4, Mining 1.4 / Ranged 0.8 · Vitality 1.5 / Agility 0.85 — **Ascetic** Light Armor
-1.6, Pierce 1.4 / Slash 0.8 · Endurance 1.5 / Wisdom 0.85. Because skills gate recipe
-**discovery** (`Recipe.requiredSkills`), an affinity genuinely changes what a run can build.
-
-**Display** (the feature is invisible otherwise): an `affinityLines(def)` helper **derives**
-the card/menu/dashboard text from the maps, so it can never drift from the numbers the way
-the hand-written `boon`/`bane` strings can. The picker card gained an `AFFINITIES` block; the
-Character menu marks potency-affected stat rows (`x1.5 per point`) and appends the class's XP
-affinity to each skill's hover; the dashboard Characters tab gained Affinity/Weakness columns.
-
-**Two things found along the way, both fixed:**
-- **The picker card no longer has a guessed height.** `CARD_H` was a hand-measured constant,
-  which is exactly the kind of thing that breaks when a section is added. `renderCard` now
-  returns its real content bottom and `render()` grows every rect to the tallest card, so the
-  box measures itself and a future section can't clip.
-- **`Skills.ts` was pulling Phaser in** (via `PLAYER_WALK_SPEED` from `entities/Player.ts`),
-  which mattered the moment `Characters.ts` imported `skillDisplayName` — the balancing
-  dashboard imports `Characters.ts` and is supposed to be **Phaser-free**. Extracted the
-  constant to a new Phaser-free `src/systems/movement.ts`, with `Player.ts` re-exporting it so
-  every existing import path still works. Bundling `Characters.ts` standalone went **6.4 MB →
-  7.5 KB**. (Worth noting for accuracy: `vite.config.ts` does *not* list `dashboard.html` as a
-  build input — it's dev-server-only — so this cost the dashboard page's dev load, not the
-  shipped bundle.)
-
-**Verification.** `tsc --noEmit` and `npm run build` clean; zero console errors.
-
-*Pass 1 — Node.* The dev-server slots were initially all held by **five orphaned Vite
-processes from closed chats** (nothing listening; this chat owned none to stop). Since every
-piece of new logic lives in the framework-free modules, they were bundled out of `src/` with
-esbuild and exercised directly — **20/20 assertions**: affinity math (1600/750/1000 off a
-1000 base), composes-not-folds (ratios exactly preserved with Intelligence at 40), potency
-(vitality 40→60 HP, agility crit 5%→4.25%, healing axis scaled, `statTotalEffect` **string**
-reading "+60 max HP, +22.5% healing"), the drop lock (no penalised gathering entry;
-bonus-drop chance identical across all five characters), the neutral no-character baseline
-(all six getters byte-identical), and per-character coverage/bounds. Score isolation holds
-structurally — `Run.ts` contains zero character references, so `score()` cannot see a class.
-
-*Pass 2 — live.* the user authorised killing the orphans, freeing the slots. Measured in the
-running game: the picker renders 5 cards each with an AFFINITIES block and **min slack
-exactly 14px** (= `CARD_PAD_BOTTOM`, i.e. the self-sizing is driven by the tallest card, no
-clipping) — `PANEL_H` was then tightened 800→690 to remove 158px of measured dead space above
-the Begin Run button, leaving a 48px gap. Committing the Warden gave exactly ×1.6 Heavy Armor
-/ ×1.4 Chopping / ×1.4 Mining / ×0.8 Ranged **through the real `awardSkillXp`**, and vitality
-3pts → 18 HP bonus (×1.5, neutral would be 12) → 138 max HP. The Character menu shows markers
-on exactly the 2 Warden stats, sitting **8px clear** of their labels and inside the panel;
-all 11 skill rows hover, with the affinity line on exactly the 4 affinity skills and neutral
-skills unchanged. `scene.restart()` resets to "Nameless"/potency 1/affinity 1/level 0, and
-picking the Reaver afterwards swaps cleanly — blunt 1600, magic 750, and the Warden's
-signature heavy_armor back to neutral 1000. The dashboard's Affinity/Weakness columns render
-for all five, and that page has **`window.Phaser === undefined`**, confirming the leak fix in
-the real dev server.
-
-**No screenshots** — the Browser pane isn't displayed in this environment, so the page never
-composites frames; everything above was measured from live render data instead. All numbers
-are first-pass and want a playtest.

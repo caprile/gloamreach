@@ -28,7 +28,13 @@ export type WeaponType =
   | "gloam_brand"
   // the bayou's bespoke magic weapon (NOT a reforge of anything) - the only
   // weapon that lifelinks on every hit
-  | "gloamdrinker";
+  | "gloamdrinker"
+  // Mirebronze (B4-P5) — the SUNSTEEL branch. Bayou-grade gear reforged straight
+  // from the Sunsteel weapons, so skipping the Embersteel tier is a different
+  // route rather than a dead end.
+  | "mirebronze_warhammer"
+  | "mirebronze_sword"
+  | "mirebronze_pike";
 
 // Damage types double as the 5 weapon Skill types (Skills.ts) — a weapon's
 // primary (first) type routes its on-hit skill XP. Multiple types are
@@ -82,6 +88,11 @@ const WEAPON_DAMAGE_TYPES: Record<WeaponType, DamageType[]> = {
   gloamsteel_warbow: ["ranged"],
   gloam_brand: ["magic"],
   gloamdrinker: ["magic"],
+  // Mirebronze — the Sunsteel branch (B4-P5). Same three identities as every
+  // forged tier: blunt sweeper, slash sweeper, pierce single-target.
+  mirebronze_warhammer: ["blunt"],
+  mirebronze_sword: ["slash"],
+  mirebronze_pike: ["pierce"],
 };
 export function weaponDamageTypes(weapon: WeaponType): DamageType[] {
   return WEAPON_DAMAGE_TYPES[weapon];
@@ -138,6 +149,12 @@ const WEAPON_DAMAGE: Record<WeaponType, number> = {
   // Deliberately BELOW the Gloam Brand: its per-hit lifelink is the payoff,
   // so it trades raw numbers for sustain rather than adding both.
   gloamdrinker: 19,
+  // Sits BETWEEN the Embersteel and Gloamsteel numbers — the Sunsteel route is
+  // real endgame gear, but the Embersteel route stays the better one (locked
+  // decision 4: the reward for the longer road is simply bigger numbers).
+  mirebronze_warhammer: 26,
+  mirebronze_sword: 22,
+  mirebronze_pike: 28,
 };
 export function weaponDamage(weapon: WeaponType): number {
   return WEAPON_DAMAGE[weapon];
@@ -165,6 +182,9 @@ const WEAPON_COOLDOWN_MS: Record<WeaponType, number> = {
   gloamsteel_warbow: 720,
   gloam_brand: 520,
   gloamdrinker: 560,
+  mirebronze_warhammer: 800,
+  mirebronze_sword: 470,
+  mirebronze_pike: 610,
 };
 export function weaponCooldownMs(weapon: WeaponType): number {
   return WEAPON_COOLDOWN_MS[weapon];
@@ -196,6 +216,9 @@ const WEAPON_STAMINA_COST: Record<WeaponType, number> = {
   gloamsteel_warbow: 17,
   gloam_brand: 22,
   gloamdrinker: 20,
+  mirebronze_warhammer: 28,
+  mirebronze_sword: 24,
+  mirebronze_pike: 26,
 };
 export function weaponStaminaCost(weapon: WeaponType): number {
   return WEAPON_STAMINA_COST[weapon];
@@ -247,6 +270,9 @@ const WEAPON_BASE_CRIT_CHANCE: Record<WeaponType, number> = {
   gloamsteel_pike: 0.12,
   gloam_brand: 0.08,
   gloamdrinker: 0.07,
+  mirebronze_warhammer: 0.05,
+  mirebronze_sword: 0.06,
+  mirebronze_pike: 0.08,
 };
 const WEAPON_BASE_CRIT_MULT: Record<WeaponType, number> = {
   bone_knife: 1.5,
@@ -271,6 +297,9 @@ const WEAPON_BASE_CRIT_MULT: Record<WeaponType, number> = {
   gloamsteel_pike: 1.8,
   gloam_brand: 1.62,
   gloamdrinker: 1.6,
+  mirebronze_warhammer: 1.6,
+  mirebronze_sword: 1.55,
+  mirebronze_pike: 1.62,
 };
 export function weaponBaseCritChance(weapon: WeaponType): number {
   return WEAPON_BASE_CRIT_CHANCE[weapon];
@@ -368,6 +397,11 @@ const WEAPON_ARC: Record<WeaponType, WeaponArc> = {
   // Every swept target lifelinks too, so the arc is kept tighter than the
   // Brand's - a wide drain sweep would trivialize crowds.
   gloamdrinker: { halfAngleDeg: 34, range: 46, falloff: 0.5 },
+  // Same identity spread as every other forged tier, sitting a notch under the
+  // Gloamsteel arcs to match its damage placement.
+  mirebronze_warhammer: { halfAngleDeg: 43, range: 52, falloff: 0.57 },
+  mirebronze_sword: { halfAngleDeg: 63, range: 72, falloff: 0.79 },
+  mirebronze_pike: { halfAngleDeg: 23, range: 37, falloff: 0.43 },
 };
 export function weaponArc(weapon: WeaponType): WeaponArc {
   return WEAPON_ARC[weapon];

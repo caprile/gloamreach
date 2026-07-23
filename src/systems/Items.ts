@@ -981,7 +981,6 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
       { label: "Type", value: "Armor (Head)" },
       { label: "Armor Type", value: "Heavy" },
       { label: "Armor", value: "10" },
-      { label: "Set (3)", value: "Molten Bulwark" },
     ],
   },
   embersteel_cuirass: {
@@ -998,7 +997,6 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
       { label: "Type", value: "Armor (Chest)" },
       { label: "Armor Type", value: "Heavy" },
       { label: "Armor", value: "12" },
-      { label: "Set (3)", value: "Molten Bulwark" },
     ],
   },
   embersteel_greaves: {
@@ -1015,7 +1013,6 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
       { label: "Type", value: "Armor (Legs)" },
       { label: "Armor Type", value: "Heavy" },
       { label: "Armor", value: "10" },
-      { label: "Set (3)", value: "Molten Bulwark" },
     ],
   },
 
@@ -1034,7 +1031,6 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
       { label: "Type", value: "Armor (Head)" },
       { label: "Armor Type", value: "Light" },
       { label: "Armor", value: "7" },
-      { label: "Set (3)", value: "Emberblink" },
     ],
   },
   emberhide_vest: {
@@ -1051,7 +1047,6 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
       { label: "Type", value: "Armor (Chest)" },
       { label: "Armor Type", value: "Light" },
       { label: "Armor", value: "9" },
-      { label: "Set (3)", value: "Emberblink" },
     ],
   },
   emberhide_leggings: {
@@ -1068,7 +1063,6 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
       { label: "Type", value: "Armor (Legs)" },
       { label: "Armor Type", value: "Light" },
       { label: "Armor", value: "7" },
-      { label: "Set (3)", value: "Emberblink" },
     ],
   },
 
@@ -1534,6 +1528,62 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
   },
 
   // --- passive jewelry (ability-augment + utility/explorer — NOT relic stats) ---
+  // === B4-P5: the four former ARMOR SET BONUSES, now single pieces of jewelry.
+  // The effects and their numbers are unchanged — only what grants them moved
+  // (see SetBonuses.ts). The tier-1 pair is badlands-grade, the tier-2 pair
+  // bayou-grade, matching the sets they came from. ===
+  amulet_molten_bulwark: {
+    key: "amulet_molten_bulwark",
+    name: "Amulet of the Molten Bulwark",
+    description: "A slag-cored pendant that drinks a blow's heat. Reduces all incoming damage, and sears melee attackers.",
+    texture: "icon_amulet_molten_bulwark",
+    maxStack: 1,
+    hotbarable: false,
+    armorSlot: "necklace",
+    stats: [
+      { label: "Type", value: "Amulet" },
+      { label: "Effect", value: "Molten Bulwark" },
+    ],
+  },
+  ring_emberblink: {
+    key: "ring_emberblink",
+    name: "Ring of Emberblink",
+    description: "Ember caged in moonsilver. Your dash travels farther and erupts in fire where you land.",
+    texture: "icon_ring_emberblink",
+    maxStack: 1,
+    hotbarable: false,
+    armorSlot: "ring1",
+    stats: [
+      { label: "Type", value: "Ring" },
+      { label: "Effect", value: "Emberblink" },
+    ],
+  },
+  amulet_gloam_bulwark: {
+    key: "amulet_gloam_bulwark",
+    name: "Amulet of the Gloam Bulwark",
+    description: "Gloamsteel worked around a slag core. Greatly reduces incoming damage, and sears attackers badly.",
+    texture: "icon_amulet_gloam_bulwark",
+    maxStack: 1,
+    hotbarable: false,
+    armorSlot: "necklace",
+    stats: [
+      { label: "Type", value: "Amulet" },
+      { label: "Effect", value: "Gloam Bulwark" },
+    ],
+  },
+  ring_mireblink: {
+    key: "ring_mireblink",
+    name: "Ring of Mireblink",
+    description: "A gloam-lit band. Your dash travels much farther and erupts violently where you land.",
+    texture: "icon_ring_mireblink",
+    maxStack: 1,
+    hotbarable: false,
+    armorSlot: "ring1",
+    stats: [
+      { label: "Type", value: "Ring" },
+      { label: "Effect", value: "Mireblink" },
+    ],
+  },
   ring_quickening: {
     key: "ring_quickening",
     name: "Ring of Quickening",
@@ -1733,7 +1783,6 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
       { label: "Type", value: "Armor (Head)" },
       { label: "Armor Type", value: "Heavy" },
       { label: "Armor", value: "13" },
-      { label: "Set (3)", value: "Gloam Bulwark" },
     ],
   },
   gloamsteel_cuirass: {
@@ -1750,7 +1799,6 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
       { label: "Type", value: "Armor (Chest)" },
       { label: "Armor Type", value: "Heavy" },
       { label: "Armor", value: "16" },
-      { label: "Set (3)", value: "Gloam Bulwark" },
     ],
   },
   gloamsteel_greaves: {
@@ -1767,7 +1815,6 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
       { label: "Type", value: "Armor (Legs)" },
       { label: "Armor Type", value: "Heavy" },
       { label: "Armor", value: "13" },
-      { label: "Set (3)", value: "Gloam Bulwark" },
     ],
   },
 
@@ -1786,7 +1833,6 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
       { label: "Type", value: "Armor (Head)" },
       { label: "Armor Type", value: "Light" },
       { label: "Armor", value: "9" },
-      { label: "Set (3)", value: "Mireblink" },
     ],
   },
   mirehide_vest: {
@@ -1803,7 +1849,6 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
       { label: "Type", value: "Armor (Chest)" },
       { label: "Armor Type", value: "Light" },
       { label: "Armor", value: "12" },
-      { label: "Set (3)", value: "Mireblink" },
     ],
   },
   mirehide_leggings: {
@@ -1820,11 +1865,169 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
       { label: "Type", value: "Armor (Legs)" },
       { label: "Armor Type", value: "Light" },
       { label: "Armor", value: "9" },
-      { label: "Set (3)", value: "Mireblink" },
     ],
   },
 
   // --- bayou weapons (reforged from the Embersteel tier) ---
+
+  // === B4-P5: the MIREBRONZE branch — bayou-grade gear reforged straight from
+  // Sunsteel/Duskhide, so skipping the Embersteel tier is a different route
+  // rather than a dead end. Armor sits deliberately BETWEEN Embersteel and
+  // Gloamsteel (heavy 36 vs 32/42, light 26 vs 24/30): a complete endgame set,
+  // with the Embersteel road still the stronger one. Raw armor only — no
+  // resistances, no stat lines (locked decision 5). ===
+  mirebronze_ingot: {
+    key: "mirebronze_ingot",
+    name: "Mirebronze Ingot",
+    description: "Sunsteel drowned in bog-ore slag until it takes on a green-black sheen. Crafting material.",
+    texture: "icon_mirebronze_ingot",
+    maxStack: 99,
+    hotbarable: false,
+  },
+  mirebronze_helm: {
+    key: "mirebronze_helm",
+    name: "Mirebronze Helm",
+    description: "A sunsteel helm resunk in mirebronze. Heavier than it looks, and colder.",
+    texture: "icon_mirebronze_helm",
+    maxStack: 1,
+    hotbarable: false,
+    armorSlot: "helmet",
+    armorType: "heavy_armor",
+    armorDefense: 11,
+    stats: [
+      { label: "Type", value: "Armor (Head)" },
+      { label: "Armor Type", value: "Heavy" },
+      { label: "Armor", value: "11" },
+    ],
+  },
+  mirebronze_cuirass: {
+    key: "mirebronze_cuirass",
+    name: "Mirebronze Cuirass",
+    description: "Sunsteel plate reworked in mirebronze — the bayou's answer to a smith with no ember ore.",
+    texture: "icon_mirebronze_cuirass",
+    maxStack: 1,
+    hotbarable: false,
+    armorSlot: "chest",
+    armorType: "heavy_armor",
+    armorDefense: 14,
+    stats: [
+      { label: "Type", value: "Armor (Chest)" },
+      { label: "Armor Type", value: "Heavy" },
+      { label: "Armor", value: "14" },
+    ],
+  },
+  mirebronze_greaves: {
+    key: "mirebronze_greaves",
+    name: "Mirebronze Greaves",
+    description: "Green-black plate from hip to ankle. It does not rust in standing water.",
+    texture: "icon_mirebronze_greaves",
+    maxStack: 1,
+    hotbarable: false,
+    armorSlot: "legs",
+    armorType: "heavy_armor",
+    armorDefense: 11,
+    stats: [
+      { label: "Type", value: "Armor (Legs)" },
+      { label: "Armor Type", value: "Heavy" },
+      { label: "Armor", value: "11" },
+    ],
+  },
+  bogweave_hood: {
+    key: "bogweave_hood",
+    name: "Bogweave Hood",
+    description: "A duskhide hood rewoven with bog fibre and mirebronze rivets.",
+    texture: "icon_bogweave_hood",
+    maxStack: 1,
+    hotbarable: false,
+    armorSlot: "helmet",
+    armorType: "light_armor",
+    armorDefense: 8,
+    stats: [
+      { label: "Type", value: "Armor (Head)" },
+      { label: "Armor Type", value: "Light" },
+      { label: "Armor", value: "8" },
+    ],
+  },
+  bogweave_vest: {
+    key: "bogweave_vest",
+    name: "Bogweave Vest",
+    description: "Duskhide relined with woven bog fibre — light, and it dries fast.",
+    texture: "icon_bogweave_vest",
+    maxStack: 1,
+    hotbarable: false,
+    armorSlot: "chest",
+    armorType: "light_armor",
+    armorDefense: 10,
+    stats: [
+      { label: "Type", value: "Armor (Chest)" },
+      { label: "Armor Type", value: "Light" },
+      { label: "Armor", value: "10" },
+    ],
+  },
+  bogweave_leggings: {
+    key: "bogweave_leggings",
+    name: "Bogweave Leggings",
+    description: "Bog-fibre weave over duskhide. Quiet in reeds, quieter in water.",
+    texture: "icon_bogweave_leggings",
+    maxStack: 1,
+    hotbarable: false,
+    armorSlot: "legs",
+    armorType: "light_armor",
+    armorDefense: 8,
+    stats: [
+      { label: "Type", value: "Armor (Legs)" },
+      { label: "Armor Type", value: "Light" },
+      { label: "Armor", value: "8" },
+    ],
+  },
+  mirebronze_warhammer: {
+    key: "mirebronze_warhammer",
+    name: "Mirebronze Warhammer",
+    description: "A sunsteel maul resunk in mirebronze. It lands like a dropped anchor.",
+    texture: "icon_mirebronze_warhammer",
+    maxStack: 1,
+    hotbarable: true,
+    weapon: "mirebronze_warhammer",
+    stats: [
+      { label: "Type", value: "Weapon" },
+      { label: "Damage", value: "26" },
+      { label: "Damage Type", value: "Blunt" },
+      { label: "Stamina", value: "28" },
+      { label: "Attack Speed", value: "1.3/s" },
+    ],
+  },
+  mirebronze_sword: {
+    key: "mirebronze_sword",
+    name: "Mirebronze Longsword",
+    description: "A sunsteel blade reforged in mirebronze — a wide, patient sweep.",
+    texture: "icon_mirebronze_sword",
+    maxStack: 1,
+    hotbarable: true,
+    weapon: "mirebronze_sword",
+    stats: [
+      { label: "Type", value: "Weapon" },
+      { label: "Damage", value: "22" },
+      { label: "Damage Type", value: "Slash" },
+      { label: "Stamina", value: "24" },
+      { label: "Attack Speed", value: "2.1/s" },
+    ],
+  },
+  mirebronze_pike: {
+    key: "mirebronze_pike",
+    name: "Mirebronze Pike",
+    description: "A sunsteel pike resunk in mirebronze. Reaches, and keeps reaching.",
+    texture: "icon_mirebronze_pike",
+    maxStack: 1,
+    hotbarable: true,
+    weapon: "mirebronze_pike",
+    stats: [
+      { label: "Type", value: "Weapon" },
+      { label: "Damage", value: "28" },
+      { label: "Damage Type", value: "Pierce" },
+      { label: "Stamina", value: "26" },
+      { label: "Attack Speed", value: "1.6/s" },
+    ],
+  },
   gloamsteel_warhammer: {
     key: "gloamsteel_warhammer",
     name: "Gloamsteel Warhammer",

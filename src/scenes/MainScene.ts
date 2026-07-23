@@ -133,6 +133,7 @@ import {
   appliedAugmentIds,
   equippedAugmentEffect,
   isGearAugment,
+  GEAR_AUGMENTS,
   isAugmentableItem,
   MAX_AUGMENTS_PER_ITEM,
   type AugmentEffect,
@@ -691,7 +692,7 @@ const CRYPT_AMBIENT_LIGHT = 120; // player's own light underground, torch or not
 // room (walls included) rather than a blob in the middle of one.
 const CRYPT_ROOM_LIGHT_SCALE = 1.55;
 const CRYPT_VAULT_GEODE_COUNT = 3; // shielded gem geodes per vault
-const CRYPT_VAULT_SEAM_COUNT = 3; // shielded moonsilver seams per vault
+const CRYPT_VAULT_SEAM_COUNT = 4; // 3 -> 4 (B4-P5): Gloamsteel now eats Moonsilver, on top of rising jewelry demand
 const CRYPT_EXIT_REACH = 46; // stairs are a fat target — never fight the exit
 
 // What a crypt's side-room chest can hold. Richer than a Warren cache (this is
@@ -3369,6 +3370,10 @@ export class MainScene extends Phaser.Scene {
       craft: (recipeId, batches) => this.craftAtJewelry(recipeId, batches),
       maxBatches: (recipe) => this.maxJewelryBatches(recipe),
       noBuildCost: () => this.devNoBuildCost,
+      augmentTargets: () => this.augmentTargets(),
+      availableAugments: () => this.availableAugments(),
+      canAffordAugment: (aug) => this.canAffordAugment(aug),
+      applyAugment: (targetId, augId) => this.applyAugmentToTarget(targetId, augId),
     });
   }
 
@@ -5339,6 +5344,7 @@ export class MainScene extends Phaser.Scene {
       amountMax: number;
       health: number;
       count: number;
+      minToolTier?: number;
     }) => {
       for (let i = 0; i < cfg.count; i++) {
         // Solid/mineable things avoid the deep channels (see pickBayouPoint) so
@@ -5355,6 +5361,7 @@ export class MainScene extends Phaser.Scene {
           displayName: cfg.displayName,
           loose: false,
           health: cfg.health,
+          minToolTier: cfg.minToolTier,
         });
         this.nodes.push(node);
         if (cfg.action !== "pickup") this.obstacleNodes.push(node);
@@ -5367,7 +5374,10 @@ export class MainScene extends Phaser.Scene {
     scatter({ texture: "bayou_shellrock", resource: "stone", displayName: "Shellrock", action: "pickup", amountMin: 1, amountMax: 1, health: 1, count: 42 });
     // Bog Ore — the bayou's metal, plentiful like Sunscorch was in the badlands
     // (it feeds a whole reforge tier, so it can't trickle).
-    scatter({ texture: "bog_ore_node", resource: "bog_ore", displayName: "Bog Ore", action: "mine", amountMin: 3, amountMax: 5, health: 3, count: 46 });
+    // minToolTier 1: needs the Ironshod Pickaxe (B4-P5), the mining mirror of
+    // the Ironbark axe gate. Bog Ore is the bayou's only surface ore, so this is
+    // the gate on the whole bayou metal economy.
+    scatter({ texture: "bog_ore_node", resource: "bog_ore", displayName: "Bog Ore", action: "mine", amountMin: 3, amountMax: 5, health: 3, count: 46, minToolTier: 1 });
     // DELIBERATELY ABSENT: Moonsilver seams and the three ability geodes.
     //
     // Locked by the user (2026-07-22): the most precious materials are NOT found on
@@ -11677,6 +11687,84 @@ export class MainScene extends Phaser.Scene {
   // instance's `upgrades` set — the item's own `tier` is untouched, so tiers and
   // augments compose. Capped at MAX_AUGMENTS_PER_ITEM; the menu greys the rows
   // at the cap, this is the belt-and-braces guard.
+
+  // === B4-P5: gem setting, addressable from the Gemwright's Table ===
+  //
+  // applyGearAugment above is bound to `this.upgradeTarget` — whatever the
+  // right-click Upgrade panel happens to be pointed at. The Gemwright needs to
+  // set a gem on an item the player PICKS from a list, so these address an item
+  // directly. Same rules enforced in both places (cost, the 2-per-item cap, no
+  // duplicate augment); only the addressing differs.
+  augmentTargets(): { id: string; label: string; key: string; texture: string; applied: string[] }[] {
+    const out: { id: string; label: string; key: string; texture: string; applied: string[] }[] = [];
+    for (const slot of EQUIP_SLOTS) {
+      const eq = this.equipment.get(slot.id);
+      if (!eq || !isAugmentableItem(eq.key)) continue;
+      out.push({
+        id: `equip:${slot.id}`,
+        label: `${itemDef(eq.key)?.name ?? eq.key} (worn)`,
+        key: eq.key,
+        texture: itemDef(eq.key)?.texture ?? "",
+        applied: appliedAugmentIds(eq),
+      });
+    }
+    const all = this.backpack.all();
+    for (let i = 0; i < all.length; i++) {
+      const st = all[i];
+      if (!st || !isAugmentableItem(st.key)) continue;
+      out.push({
+        id: `bag:${i}`,
+        label: itemDef(st.key)?.name ?? st.key,
+        key: st.key,
+        texture: itemDef(st.key)?.texture ?? "",
+        applied: appliedAugmentIds(st),
+      });
+    }
+    return out;
+  }
+
+  // Apply `augId` to the item addressed by `targetId` (see augmentTargets).
+  // Returns true if it was actually set.
+  applyAugmentToTarget(targetId: string, augId: string): boolean {
+    const aug = GEAR_AUGMENTS.find((a) => a.id === augId);
+    if (!aug) return false;
+    const [kind, ref] = targetId.split(":");
+    const equipped = kind === "equip" ? this.equipment.get(ref as EquipSlot) : null;
+    const stack = kind === "equip" ? null : this.backpack.slot(Number(ref));
+    const inst = equipped ?? stack;
+    if (!inst) return false;
+    if (!aug.appliesToItemKeys.includes(inst.key)) return false;
+    const applied = appliedAugmentIds(inst);
+    if (applied.includes(aug.id) || applied.length >= MAX_AUGMENTS_PER_ITEM) return false;
+    if (!this.devNoBuildCost) {
+      for (const [r, n] of Object.entries(aug.costs)) {
+        if (this.backpack.count(r) < (n ?? 0)) return false;
+      }
+      for (const [r, n] of Object.entries(aug.costs)) this.backpack.removeCount(r, n ?? 0);
+    }
+    const next = [...(inst.upgrades ?? []), aug.id];
+    if (equipped) {
+      this.equipment.set(ref as EquipSlot, { ...equipped, upgrades: next });
+    } else if (stack) {
+      this.backpack.set(Number(ref), { ...stack, upgrades: next });
+    }
+    this.sfx.upgrade();
+    this.eventLog.add("recipe", `${itemDef(inst.key)?.name ?? inst.key} augmented: ${aug.name}`, itemDef(inst.key)?.texture);
+    this.recomputeEquipped();
+    this.afterItemMove();
+    return true;
+  }
+
+  // Gems the player can currently set: discovered, and affordable.
+  availableAugments(): GearAugmentDef[] {
+    return GEAR_AUGMENTS.filter((a) => this.upgradeIngredientsKnown(a));
+  }
+
+  canAffordAugment(aug: GearAugmentDef): boolean {
+    if (this.devNoBuildCost) return true;
+    return Object.entries(aug.costs).every(([r, n]) => this.backpack.count(r) >= (n ?? 0));
+  }
+
   private applyGearAugment(aug: GearAugmentDef): void {
     const t = this.upgradeTarget;
     const inst = this.upgradeTargetInstance();

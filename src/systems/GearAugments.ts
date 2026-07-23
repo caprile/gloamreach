@@ -55,6 +55,22 @@ export interface GearAugmentDef {
 // of them. Two per instance keeps the pick meaningful.
 export const MAX_AUGMENTS_PER_ITEM = 2;
 
+// Human-readable lines for what an augment actually does, DERIVED from the
+// effect object rather than written per augment — so the Gemwright's "what will
+// this do" preview can never disagree with the numbers that get applied.
+export function describeAugmentEffect(e: AugmentEffect): string[] {
+  const out: string[] = [];
+  if (e.damageBonus) out.push(`+${e.damageBonus} Damage`);
+  if (e.critChancePct) out.push(`+${e.critChancePct}% Crit Chance`);
+  if (e.critMultBonus) out.push(`+${e.critMultBonus.toFixed(2)}x Crit Damage`);
+  if (e.arcRangePct) out.push(`+${e.arcRangePct}% Swing Arc`);
+  if (e.staminaCostPct) out.push(`-${e.staminaCostPct}% Stamina Cost`);
+  if (e.defenseBonus) out.push(`+${e.defenseBonus} Armor`);
+  if (e.elementalMitigationPct) out.push(`-${e.elementalMitigationPct}% Magic/Fire Damage`);
+  if (e.moveSpeedPct) out.push(`+${e.moveSpeedPct}% Move Speed`);
+  return out;
+}
+
 // Augmenting is bayou-era work: it needs an Emberforge Anvil (Workbench Lvl 4,
 // tier 3) — the same bench the Ember tier is forged at, so the gear and the
 // gems that augment it arrive in the same era.

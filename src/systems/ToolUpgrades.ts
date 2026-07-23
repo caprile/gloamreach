@@ -30,6 +30,21 @@ export const TOOL_UPGRADES: ToolUpgradeDef[] = [
     costs: { sunsteel_ingot: 2, stone: 6 },
     deltaLabel: "Fells Ironbark trees",
   },
+  {
+    // B4-P5: the mirror of the axe upgrade, on the mining side. Bog Ore — the
+    // bayou's only surface ore — is now gated behind it, so entering the bayou
+    // with badlands-era tools means you can SEE the ore and not touch it, which
+    // is exactly the gate Ironbark already establishes for wood. Deliberately
+    // crafted in the BADLANDS from badlands materials (Sunsteel + Ironbark), so
+    // it's something you prepare before you travel, not something you find after.
+    id: "stone_pickaxe_ironshod",
+    name: "Ironshod Pickaxe",
+    description: "Sunsteel-headed and hafted in ironbark — bites into bog ore, which a stone head only skids across.",
+    appliesToItemKey: "stone_pickaxe",
+    resultTier: 1,
+    costs: { sunsteel_ingot: 2, ironbark: 4 },
+    deltaLabel: "Mines Bog Ore",
+  },
 ];
 
 // The upgrades that could apply to a given tool item, ordered by the tier they

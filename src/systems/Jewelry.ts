@@ -79,6 +79,37 @@ export const JEWELRY_RECIPES: JewelryRecipe[] = [
     inputs: { moonsilver: 3, gem_blood: 1 },
     requiredStationTier: 1,
   },
+  // --- B4-P5: the four former armor set bonuses, now craftable jewelry. The
+  // badlands pair is available at the base station; the bayou pair needs the
+  // upgraded one, matching the tier of the sets they replaced. ---
+  {
+    id: "amulet_molten_bulwark",
+    name: "Amulet of the Molten Bulwark",
+    output: "amulet_molten_bulwark",
+    inputs: { moonsilver: 3, embersteel_ingot: 2, cragscale_plate: 3 },
+    requiredStationTier: 0,
+  },
+  {
+    id: "ring_emberblink",
+    name: "Ring of Emberblink",
+    output: "ring_emberblink",
+    inputs: { moonsilver: 2, embersteel_ingot: 2, ember_ore: 2 },
+    requiredStationTier: 0,
+  },
+  {
+    id: "amulet_gloam_bulwark",
+    name: "Amulet of the Gloam Bulwark",
+    output: "amulet_gloam_bulwark",
+    inputs: { moonsilver: 4, gloamsteel_ingot: 3, mirehide: 3 },
+    requiredStationTier: 1,
+  },
+  {
+    id: "ring_mireblink",
+    name: "Ring of Mireblink",
+    output: "ring_mireblink",
+    inputs: { moonsilver: 3, gloamsteel_ingot: 2, gloam_shard: 3 },
+    requiredStationTier: 1,
+  },
 ];
 
 export function canAffordJewelry(recipe: JewelryRecipe, backpack: ItemContainer): boolean {

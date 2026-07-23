@@ -7933,3 +7933,96 @@ in this environment, so the ability bar was verified by asserting its render dat
 whole tell — `RelicRevealFx` is built around a roll, not a pickup); all numbers are
 first-pass and want a playtest; the toast dedupes on `discovered`, so a *second* copy of
 the same epic won't re-toast (accepted — they're `maxStack: 1` uniques).
+
+### B4-P3 — Class identity: skill affinities + stat potency (2026-07-22, Opus)
+
+Plan: `.claude/plans/b4-p3-class-identity.md`. B4-P1 shipped the run-start picker, but all
+five survivors differentiated on the **same shape** — a `RunModifier` of eight global scalar
+fields. Nothing about a character shaped **how you grow**, only how big your flat numbers
+were, so the Reaver read as "the +25% damage one" rather than a class. This adds the missing
+axis as a second, separate channel: `ClassAffinity { skillXpMult, statPotency }`.
+
+**Locked with the user:** both channels; double-edged but **mild** (favoured ×1.4–1.6,
+penalised ×0.75–0.85 — nobody is crippled at anything); and **never reduce drops**. That
+last one has a concrete consequence — `chopping`/`mining` levels roll the bonus-drop chance
+(`Skills.choppingBonusChance`/`miningBonusChance`), so a gathering-XP *penalty* is an
+indirect drop nerf. **No character may penalise those two skills**, enforced by a
+module-load guard in `Characters.ts` (a `console.warn`, so a future editor trips it in the
+dev console rather than in a playtest). The Warden is the only card with gathering affinity,
+and per the lock it can only ever be an upside there.
+
+**Two channels, one hook site each** — the point of the design is that neither introduced
+new math:
+- **Skill affinity** → `MainScene.awardSkillXp` (already the single entry point for every XP
+  source). It multiplies **outside** the additive XP bucket on purpose: the bucket is the
+  "global +% XP" category, and folding a class's ×0.75 weakness in as −25 would let a couple
+  of relics erase its defining downside entirely. A per-skill class scalar is its own
+  category, so it composes rather than competes. **Verified**: with Intelligence at 40 the
+  favoured/neutral ratio is still exactly 1.6 and the penalised/neutral still 0.75, while all
+  three absolute values rose.
+- **Stat potency** → lives **inside `PlayerProgression`** (`setStatPotency`/`potency`), not at
+  MainScene read sites. That's the whole trick: all eight per-point getters and every stat
+  readout pick it up from one place, so **zero** MainScene hooks changed. It also let
+  `statTotalEffect()` be refactored to read the getters instead of re-multiplying the raw
+  per-point constants — that removed a standing duplication-drift risk *and* made the Stats
+  tab reflect potency for free.
+
+**Roster** (skill affinity / penalty · stat potency / penalty): **Vagabond** Running 1.6,
+Light Armor 1.4 / Blunt 0.8 · Agility 1.5 / Strength 0.85 — **Reaver** Blunt 1.6, Slash 1.4 /
+Magic 0.75 · Strength 1.5 / Intelligence 0.85 — **Ashcaller** Magic 1.6, Ranged 1.4 / Heavy
+Armor 0.8 · Intelligence 1.5, Wisdom 1.25 / Vitality 0.85 — **Warden** Heavy Armor 1.6,
+Chopping 1.4, Mining 1.4 / Ranged 0.8 · Vitality 1.5 / Agility 0.85 — **Ascetic** Light Armor
+1.6, Pierce 1.4 / Slash 0.8 · Endurance 1.5 / Wisdom 0.85. Because skills gate recipe
+**discovery** (`Recipe.requiredSkills`), an affinity genuinely changes what a run can build.
+
+**Display** (the feature is invisible otherwise): an `affinityLines(def)` helper **derives**
+the card/menu/dashboard text from the maps, so it can never drift from the numbers the way
+the hand-written `boon`/`bane` strings can. The picker card gained an `AFFINITIES` block; the
+Character menu marks potency-affected stat rows (`x1.5 per point`) and appends the class's XP
+affinity to each skill's hover; the dashboard Characters tab gained Affinity/Weakness columns.
+
+**Two things found along the way, both fixed:**
+- **The picker card no longer has a guessed height.** `CARD_H` was a hand-measured constant,
+  which is exactly the kind of thing that breaks when a section is added. `renderCard` now
+  returns its real content bottom and `render()` grows every rect to the tallest card, so the
+  box measures itself and a future section can't clip.
+- **`Skills.ts` was pulling Phaser in** (via `PLAYER_WALK_SPEED` from `entities/Player.ts`),
+  which mattered the moment `Characters.ts` imported `skillDisplayName` — the balancing
+  dashboard imports `Characters.ts` and is supposed to be **Phaser-free**. Extracted the
+  constant to a new Phaser-free `src/systems/movement.ts`, with `Player.ts` re-exporting it so
+  every existing import path still works. Bundling `Characters.ts` standalone went **6.4 MB →
+  7.5 KB**. (Worth noting for accuracy: `vite.config.ts` does *not* list `dashboard.html` as a
+  build input — it's dev-server-only — so this cost the dashboard page's dev load, not the
+  shipped bundle.)
+
+**Verification.** `tsc --noEmit` and `npm run build` clean; zero console errors.
+
+*Pass 1 — Node.* The dev-server slots were initially all held by **five orphaned Vite
+processes from closed chats** (nothing listening; this chat owned none to stop). Since every
+piece of new logic lives in the framework-free modules, they were bundled out of `src/` with
+esbuild and exercised directly — **20/20 assertions**: affinity math (1600/750/1000 off a
+1000 base), composes-not-folds (ratios exactly preserved with Intelligence at 40), potency
+(vitality 40→60 HP, agility crit 5%→4.25%, healing axis scaled, `statTotalEffect` **string**
+reading "+60 max HP, +22.5% healing"), the drop lock (no penalised gathering entry;
+bonus-drop chance identical across all five characters), the neutral no-character baseline
+(all six getters byte-identical), and per-character coverage/bounds. Score isolation holds
+structurally — `Run.ts` contains zero character references, so `score()` cannot see a class.
+
+*Pass 2 — live.* the user authorised killing the orphans, freeing the slots. Measured in the
+running game: the picker renders 5 cards each with an AFFINITIES block and **min slack
+exactly 14px** (= `CARD_PAD_BOTTOM`, i.e. the self-sizing is driven by the tallest card, no
+clipping) — `PANEL_H` was then tightened 800→690 to remove 158px of measured dead space above
+the Begin Run button, leaving a 48px gap. Committing the Warden gave exactly ×1.6 Heavy Armor
+/ ×1.4 Chopping / ×1.4 Mining / ×0.8 Ranged **through the real `awardSkillXp`**, and vitality
+3pts → 18 HP bonus (×1.5, neutral would be 12) → 138 max HP. The Character menu shows markers
+on exactly the 2 Warden stats, sitting **8px clear** of their labels and inside the panel;
+all 11 skill rows hover, with the affinity line on exactly the 4 affinity skills and neutral
+skills unchanged. `scene.restart()` resets to "Nameless"/potency 1/affinity 1/level 0, and
+picking the Reaver afterwards swaps cleanly — blunt 1600, magic 750, and the Warden's
+signature heavy_armor back to neutral 1000. The dashboard's Affinity/Weakness columns render
+for all five, and that page has **`window.Phaser === undefined`**, confirming the leak fix in
+the real dev server.
+
+**No screenshots** — the Browser pane isn't displayed in this environment, so the page never
+composites frames; everything above was measured from live render data instead. All numbers
+are first-pass and want a playtest.

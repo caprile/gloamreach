@@ -34,7 +34,7 @@ export const ARMOR_SETS: ArmorSet[] = [
     lineage: "heavy",
     rank: 1,
     name: "Embersteel",
-    pieces: ["embersteel_helm", "embersteel_cuirass", "embersteel_greaves"],
+    pieces: ["amulet_molten_bulwark"],
     bonusName: "Molten Bulwark",
     bonusDesc: "Reduces all incoming damage. Melee attackers are seared for fire damage.",
   },
@@ -43,7 +43,7 @@ export const ARMOR_SETS: ArmorSet[] = [
     lineage: "light",
     rank: 1,
     name: "Emberhide",
-    pieces: ["emberhide_hood", "emberhide_vest", "emberhide_leggings"],
+    pieces: ["ring_emberblink"],
     bonusName: "Emberblink",
     bonusDesc: "Your dash travels farther and erupts in fire where you land.",
   },
@@ -56,7 +56,7 @@ export const ARMOR_SETS: ArmorSet[] = [
     lineage: "heavy",
     rank: 2,
     name: "Gloamsteel",
-    pieces: ["gloamsteel_helm", "gloamsteel_cuirass", "gloamsteel_greaves"],
+    pieces: ["amulet_gloam_bulwark"],
     bonusName: "Gloam Bulwark",
     bonusDesc: "Greatly reduces all incoming damage. Melee attackers are seared badly.",
   },
@@ -65,51 +65,40 @@ export const ARMOR_SETS: ArmorSet[] = [
     lineage: "light",
     rank: 2,
     name: "Mirehide",
-    pieces: ["mirehide_hood", "mirehide_vest", "mirehide_leggings"],
+    pieces: ["ring_mireblink"],
     bonusName: "Mireblink",
     bonusDesc: "Your dash travels much farther and erupts violently where you land.",
   },
 ];
 
-// Which set bonus is currently active, if any.
+// Which bonus is currently active, if any.
 //
-// A lineage is complete when all THREE slot positions are covered by pieces of
-// that lineage — at ANY mix of ranks — and the bonus that activates is the one
-// for the LOWEST rank worn. So an Ember set with a single Gloamsteel piece in it
-// still grants Molten Bulwark, and only becomes Gloam Bulwark once the last
-// Ember piece is replaced.
+// B4-P5: these effects are no longer granted by wearing three matching ARMOR
+// pieces — they're granted by a single piece of JEWELRY (locked with the user:
+// "move the set bonus effects away and put those effects on rings/amulets").
 //
-// This exists because the old rule (exact key match, all three) meant crafting
-// ONE piece of the next tier silently deleted your set bonus, leaving you weaker
-// than before you upgraded and with no way to tell why (the user playtest: "kind
-// of awkward how you lose the ember armor set bonus when you make a single piece
-// of the next tier's stuff"). Progress should never be a downgrade; a partial
-// upgrade now simply doesn't PAY yet.
+// Two reasons that's better. Armor is now purely flat armor, which is what makes
+// branching gear (the Mirebronze route) balanceable at all — otherwise every new
+// set would owe a bespoke bonus. And a bonus tied to three pieces made a partial
+// upgrade feel like a downgrade, which is a problem this file previously had to
+// paper over with the weakest-piece rule.
+//
+// Since each bonus is now ONE self-contained item, "wearing a partial set" no
+// longer exists, and the rule inverts: wearing several of a lineage grants the
+// HIGHEST rank worn, not the lowest. (You normally can't anyway — the amulets
+// share the necklace slot — but the two rings CAN both be worn.)
 export function activeSets(slots: (EquippedItem | null)[]): Set<SetId> {
   const worn = new Set<string>();
   for (const s of slots) if (s) worn.add(s.key);
 
   const active = new Set<SetId>();
   for (const lineage of ["heavy", "light"] as SetLineage[]) {
-    const sets = ARMOR_SETS.filter((s) => s.lineage === lineage).sort((a, b) => a.rank - b.rank);
-    if (sets.length === 0) continue;
-    const positions = sets[0].pieces.length;
-
-    // Lowest rank worn at each position; bail the moment a position is empty.
-    let lowestRank = Infinity;
-    let complete = true;
-    for (let pos = 0; pos < positions; pos++) {
-      const found = sets.filter((s) => worn.has(s.pieces[pos]));
-      if (found.length === 0) {
-        complete = false;
-        break;
-      }
-      lowestRank = Math.min(lowestRank, ...found.map((s) => s.rank));
-    }
-    if (!complete) continue;
-
-    const granted = sets.find((s) => s.rank === lowestRank);
-    if (granted) active.add(granted.id);
+    const wornSets = ARMOR_SETS.filter(
+      (set) => set.lineage === lineage && set.pieces.every((k) => worn.has(k)),
+    );
+    if (wornSets.length === 0) continue;
+    const best = wornSets.reduce((a, b) => (b.rank > a.rank ? b : a));
+    active.add(best.id);
   }
   return active;
 }

@@ -3572,6 +3572,143 @@ export class BootScene extends Phaser.Scene {
     g.fillRect(7, 14, 10, 1); // gloam vein
     g.generateTexture("icon_gloamsteel_ingot", ICON, ICON);
 
+    // === B4-P5 Mirebronze branch. One shared palette (green-black metal + a
+    // pale bog-fibre weave) so the whole route reads as one set at a glance,
+    // the way the Ember and Gloam tiers already do. ===
+    const MB_DARK = 0x2b3a2e;
+    const MB_MID = 0x4c6b4f;
+    const MB_LIT = 0x86a878;
+
+    g.clear(); // Mirebronze Ingot — green-black bar with a pale sheen
+    g.fillStyle(MB_DARK, 1);
+    g.fillRect(4, 10, 16, 7);
+    g.fillStyle(MB_MID, 1);
+    g.fillRect(5, 10, 14, 2);
+    g.fillStyle(MB_LIT, 1);
+    g.fillRect(7, 14, 10, 1);
+    g.generateTexture("icon_mirebronze_ingot", ICON, ICON);
+
+    g.clear(); // Mirebronze Helm
+    g.fillStyle(MB_DARK, 1);
+    g.fillRect(6, 6, 12, 10);
+    g.fillStyle(MB_MID, 1);
+    g.fillRect(6, 6, 12, 3);
+    g.fillStyle(0x11150f, 1);
+    g.fillRect(8, 11, 8, 3); // visor slit
+    g.generateTexture("icon_mirebronze_helm", ICON, ICON);
+
+    g.clear(); // Mirebronze Cuirass
+    g.fillStyle(MB_DARK, 1);
+    g.fillRect(5, 5, 14, 14);
+    g.fillStyle(MB_MID, 1);
+    g.fillRect(5, 5, 14, 3);
+    g.fillStyle(MB_LIT, 1);
+    g.fillRect(11, 9, 2, 8); // centre ridge
+    g.generateTexture("icon_mirebronze_cuirass", ICON, ICON);
+
+    g.clear(); // Mirebronze Greaves
+    g.fillStyle(MB_DARK, 1);
+    g.fillRect(6, 5, 4, 14);
+    g.fillRect(14, 5, 4, 14);
+    g.fillStyle(MB_MID, 1);
+    g.fillRect(6, 5, 4, 3);
+    g.fillRect(14, 5, 4, 3);
+    g.generateTexture("icon_mirebronze_greaves", ICON, ICON);
+
+    const BW_HIDE = 0x5c5a3c;
+    const BW_WEAVE = 0x8f9b6a;
+
+    g.clear(); // Bogweave Hood
+    g.fillStyle(BW_HIDE, 1);
+    g.fillRect(6, 5, 12, 11);
+    g.fillStyle(BW_WEAVE, 1);
+    g.fillRect(6, 5, 12, 2);
+    g.fillRect(6, 10, 12, 1);
+    g.fillStyle(0x14170f, 1);
+    g.fillRect(9, 12, 6, 3); // face shadow
+    g.generateTexture("icon_bogweave_hood", ICON, ICON);
+
+    g.clear(); // Bogweave Vest
+    g.fillStyle(BW_HIDE, 1);
+    g.fillRect(5, 5, 14, 14);
+    g.fillStyle(BW_WEAVE, 1);
+    g.fillRect(5, 8, 14, 1);
+    g.fillRect(5, 13, 14, 1);
+    g.fillStyle(MB_MID, 1);
+    g.fillRect(11, 5, 2, 14); // mirebronze rivets down the front
+    g.generateTexture("icon_bogweave_vest", ICON, ICON);
+
+    g.clear(); // Bogweave Leggings
+    g.fillStyle(BW_HIDE, 1);
+    g.fillRect(6, 5, 4, 14);
+    g.fillRect(14, 5, 4, 14);
+    g.fillStyle(BW_WEAVE, 1);
+    g.fillRect(6, 11, 4, 1);
+    g.fillRect(14, 11, 4, 1);
+    g.generateTexture("icon_bogweave_leggings", ICON, ICON);
+
+    g.clear(); // Mirebronze Warhammer
+    g.fillStyle(0x6b5a3a, 1);
+    g.fillRect(11, 8, 2, 13); // haft
+    g.fillStyle(MB_DARK, 1);
+    g.fillRect(5, 3, 14, 7); // head
+    g.fillStyle(MB_LIT, 1);
+    g.fillRect(5, 3, 14, 2);
+    g.generateTexture("icon_mirebronze_warhammer", ICON, ICON);
+
+    g.clear(); // Mirebronze Longsword
+    g.fillStyle(MB_MID, 1);
+    g.fillRect(11, 2, 3, 14); // blade
+    g.fillStyle(MB_LIT, 1);
+    g.fillRect(12, 3, 1, 12);
+    g.fillStyle(0x6b5a3a, 1);
+    g.fillRect(8, 16, 9, 2); // crossguard
+    g.fillRect(11, 18, 3, 4); // grip
+    g.generateTexture("icon_mirebronze_sword", ICON, ICON);
+
+    g.clear(); // Mirebronze Pike
+    g.fillStyle(0x6b5a3a, 1);
+    g.fillRect(11, 7, 2, 15); // shaft
+    g.fillStyle(MB_MID, 1);
+    g.fillTriangle(12, 1, 8, 9, 16, 9); // head
+    g.fillStyle(MB_LIT, 1);
+    g.fillRect(11, 4, 2, 4);
+    g.generateTexture("icon_mirebronze_pike", ICON, ICON);
+
+    // B4-P5: the four former set bonuses as jewelry. Amulets are a pendant on a
+    // chain, rings a band with a stone — so slot is readable at a glance, and
+    // colour says which lineage (ember orange / gloam violet).
+    const jewel = (key: string, band: number, stone: number, spark: number, amulet: boolean) => {
+      g.clear();
+      g.fillStyle(band, 1);
+      if (amulet) {
+        g.fillRect(6, 4, 12, 2); // chain
+        g.fillRect(10, 6, 4, 3);
+        g.fillStyle(stone, 1);
+        g.fillCircle(12, 14, 6);
+        g.fillStyle(spark, 1);
+        g.fillCircle(12, 13, 2);
+      } else {
+        g.fillCircle(12, 14, 7);
+        g.fillStyle(0x000000, 0);
+        g.fillStyle(band, 1);
+        g.fillCircle(12, 14, 7);
+        g.fillStyle(0x14181f, 1);
+        g.fillCircle(12, 14, 4); // band hole
+        g.fillStyle(stone, 1);
+        g.fillCircle(12, 6, 4);
+        g.fillStyle(spark, 1);
+        g.fillCircle(12, 5, 2);
+      }
+      g.generateTexture(key, ICON, ICON);
+    };
+    jewel("icon_amulet_molten_bulwark", 0x8a7a4a, 0xc8641e, 0xffc070, true);
+    jewel("icon_ring_emberblink", 0xc9c4b0, 0xe0722a, 0xffd8a0, false);
+    jewel("icon_amulet_gloam_bulwark", 0x8a7a4a, 0x6b4a9a, 0xd0b6ff, true);
+    jewel("icon_ring_mireblink", 0xc9c4b0, 0x8a5ce0, 0xe0d0ff, false);
+
+
+
     g.clear(); // Mirehide — a folded swamp-green hide
     g.fillStyle(0x3f4a34, 1);
     g.fillRect(4, 7, 16, 11);

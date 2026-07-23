@@ -42,7 +42,14 @@ export const SMELT_RECIPES: ProcessRecipe[] = [
   // Biome 3 Phase 3: bayou ore. Same tier-1 Smelter as rare badlands ore (the
   // Ember Crucible is the "can melt the hard stuff" gate; the bayou doesn't
   // need a second one) — the real gate is finding Bog Ore at all.
-  { input: "bog_ore", output: "gloamsteel_ingot", inputPerOutput: 1, fuel: { key: "hex_essence", per: 1 }, minStationTier: 1 },
+  // B4-P5: Gloamsteel's secondary input is now MOONSILVER, which only comes from
+  // crypt vaults behind a warden. That is what rewards the Embersteel route
+  // (locked decision 3) — the longer road is the one that needs dungeon clears.
+  { input: "bog_ore", output: "gloamsteel_ingot", inputPerOutput: 1, fuel: { key: "moonsilver", per: 1 }, minStationTier: 1 },
+  // The SUNSTEEL branch metal. Input is the ingot (not the ore) so its recipe
+  // key stays unique — two recipes sharing an input would make processRecipeFor
+  // ambiguous — and so it reads literally as "Sunsteel + Bog Ore".
+  { input: "sunsteel_ingot", output: "mirebronze_ingot", inputPerOutput: 1, fuel: { key: "bog_ore", per: 2 }, minStationTier: 1 },
 ];
 
 export function processRecipeFor(inputKey: string): ProcessRecipe | undefined {

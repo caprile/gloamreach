@@ -4,7 +4,8 @@ import { itemDef } from "../systems/Items";
 import { JEWELRY_RECIPES, canAffordJewelry, type JewelryRecipe } from "../systems/Jewelry";
 import { describePassive } from "../systems/EquipmentEffects";
 import { stationDisplayName } from "../systems/StationUpgrades";
-import { ABILITY_DEFS } from "../systems/Abilities";
+import { ABILITY_DEFS, SLOT_ABILITY_KEY } from "../systems/Abilities";
+import { MAX_AUGMENTS_PER_ITEM, describeAugmentEffect, type GearAugmentDef } from "../systems/GearAugments";
 import type { Skills } from "../systems/Skills";
 import { Tooltip } from "./Tooltip";
 import { ProgressBar } from "./ProgressBar";
@@ -32,6 +33,13 @@ export interface JewelryMenuDeps {
   craft: (recipeId: string, batches: number) => void;
   maxBatches: (recipe: JewelryRecipe) => number;
   noBuildCost: () => boolean;
+  // --- B4-P5: gem setting moved here from the shared Upgrade panel ---
+  // Items that can take a gem (worn + backpack), the gems available, and the
+  // apply call. All addressed by id so the menu never holds a live item ref.
+  augmentTargets: () => { id: string; label: string; key: string; texture: string; applied: string[] }[];
+  availableAugments: () => GearAugmentDef[];
+  canAffordAugment: (aug: GearAugmentDef) => boolean;
+  applyAugment: (targetId: string, augId: string) => boolean;
 }
 
 const DEPTH_BG = 3000;
@@ -70,6 +78,10 @@ export class JewelryMenu {
   private maxScroll = 0;
   private collapsedTiers = new Set<number>();
   private onlyCraftable = false;
+  // B4-P5 gem-setting tab state: the A and B of the pairing.
+  private tab: "craft" | "gems" = "craft";
+  private gemTargetId: string | null = null;
+  private gemAugId: string | null = null;
   private maskShape: Phaser.GameObjects.Graphics;
   private listMask: Phaser.Display.Masks.GeometryMask;
 
@@ -223,6 +235,18 @@ export class JewelryMenu {
 
   // The short effect line under a recipe row: ability specials advertise what
   // they grant; passive jewelry shows its augment/utility bonuses.
+  // Which hotkey an ability-granting design will occupy, derived from the item's
+  // own equip slot rather than written out per recipe (so it can't drift). The
+  // recipe list previously said only "Gloamstep Band" with no hint that it fills
+  // Q, which made the whole Q/E/R layout unreadable at craft time (the user:
+  // "it isn't clear in the gemcrafter bench what item gives you what hotkey slot").
+  private abilityKeyLabel(outputKey: string): string {
+    const def = itemDef(outputKey);
+    if (!def?.grantsAbility || !def.armorSlot) return "";
+    const key = SLOT_ABILITY_KEY[def.armorSlot];
+    return key ? key.toUpperCase() : "";
+  }
+
   private effectLine(outputKey: string): string {
     const def = itemDef(outputKey);
     if (def?.grantsAbility) return `Grants ${ABILITY_DEFS[def.grantsAbility].name}`;
@@ -238,7 +262,12 @@ export class JewelryMenu {
     this.bg.setPosition(this.panelX, this.panelY).setSize(this.panelW, this.panelH);
 
     this.addText(this.panelX + 16, this.panelY + 14, stationDisplayName("jewelry_station", tier), 16, "#ffffff");
-    this.addText(this.panelX + 16, this.panelY + 40, INTRO_BLURB, 11, "#8a93a3", 0, 0, this.panelW - 32);
+    this.renderTabs(this.panelY + 38);
+    if (this.tab === "gems") {
+      this.renderGemsTab(this.panelY + 74);
+      return;
+    }
+    this.addText(this.panelX + 16, this.panelY + 56, INTRO_BLURB, 11, "#8a93a3", 0, 0, this.panelW - 32);
     this.renderFilterCheckbox(this.panelY + this.introH - 24);
 
     const groups = this.groupedVisibleRecipes();
@@ -291,6 +320,166 @@ export class JewelryMenu {
     }
 
     this.renderFooter(this.viewTop + VIEW_H);
+  }
+
+
+  // Craft / Set Gems tabs. Gem setting used to live in the shared right-click
+  // Upgrade panel alongside station, armor and weapon upgrades — four unrelated
+  // concepts in one list (the user: "not a big fan of the gem setting menu living
+  // in the same place as the upgrades, it is confusing"). It belongs at the gem
+  // station, next to the jewelry it's kin to.
+  private renderTabs(y: number): void {
+    let tx = this.panelX + 16;
+    for (const t of ["craft", "gems"] as const) {
+      const active = this.tab === t;
+      const label = t === "craft" ? "Craft" : "Set Gems";
+      const btn = this.scene.add
+        .text(tx, y, label, {
+          fontFamily: "monospace",
+          fontSize: "13px",
+          color: active ? "#ffffff" : "#8a93a3",
+          backgroundColor: active ? "#2a3a55" : undefined,
+          padding: { x: 6, y: 3 },
+        })
+        .setScrollFactor(0)
+        .setDepth(DEPTH_TEXT)
+        .setInteractive({ useHandCursor: true })
+        .on("pointerdown", () => {
+          this.tab = t;
+          this.render();
+        });
+      this.rows.push(btn);
+      tx += btn.width + 8;
+    }
+  }
+
+  // A + B, like the Smelter: pick the GEAR on the left, the GEM on the right,
+  // and the footer previews exactly what setting it will do before you commit.
+  private renderGemsTab(top: number): void {
+    const x = this.panelX + 16;
+    const colW = (this.panelW - 44) / 2;
+    const targets = this.deps.augmentTargets();
+    const gems = this.deps.availableAugments();
+
+    if (this.gemTargetId && !targets.some((t) => t.id === this.gemTargetId)) this.gemTargetId = null;
+    const target = targets.find((t) => t.id === this.gemTargetId) ?? null;
+
+    this.addText(x, top, "Gear", 12, "#e3b25a");
+    this.addText(x + colW + 12, top, "Gem", 12, "#e3b25a");
+
+    if (targets.length === 0) {
+      this.addText(x, top + 22, "No gear that can take a gem.", 11, "#8a93a3", 0, 0, colW);
+    }
+
+    let ty = top + 22;
+    for (const t of targets.slice(0, 8)) {
+      const full = t.applied.length >= MAX_AUGMENTS_PER_ITEM;
+      const sel = this.gemTargetId === t.id;
+      const box = this.scene.add
+        .rectangle(x, ty, colW, 30, sel ? 0x2a3a55 : 0x14181f, 0.95)
+        .setOrigin(0, 0)
+        .setStrokeStyle(1, sel ? 0xe3b25a : 0x3a4250)
+        .setScrollFactor(0)
+        .setDepth(DEPTH_ITEM)
+        .setInteractive({ useHandCursor: true })
+        .on("pointerdown", () => {
+          this.gemTargetId = t.id;
+          this.render();
+        });
+      this.rows.push(box);
+      if (t.texture) {
+        const img = this.scene.add.image(x + 16, ty + 15, t.texture).setScrollFactor(0).setDepth(DEPTH_ITEM + 1);
+        this.rows.push(img);
+      }
+      // The slot readout is what makes the 2-per-item cap visible up front.
+      this.addText(x + 32, ty + 3, t.label, 11, full ? "#8a93a3" : "#e8ecf2");
+      this.addText(x + 32, ty + 17, `Gems ${t.applied.length}/${MAX_AUGMENTS_PER_ITEM}`, 10, full ? "#e08a8a" : "#8a93a3");
+      ty += 34;
+    }
+
+    let gy = top + 22;
+    const gx = x + colW + 12;
+    for (const g of gems.slice(0, 8)) {
+      const already = target ? target.applied.includes(g.id) : false;
+      const fits = target ? g.appliesToItemKeys.includes(target.key) : true;
+      const afford = this.deps.canAffordAugment(g);
+      const usable = !!target && fits && !already && afford && target.applied.length < MAX_AUGMENTS_PER_ITEM;
+      const sel = this.gemAugId === g.id;
+      const box = this.scene.add
+        .rectangle(gx, gy, colW, 30, sel ? 0x2a3a55 : 0x14181f, 0.95)
+        .setOrigin(0, 0)
+        .setStrokeStyle(1, sel ? 0xe3b25a : 0x3a4250)
+        .setScrollFactor(0)
+        .setDepth(DEPTH_ITEM)
+        .setInteractive({ useHandCursor: true })
+        .on("pointerdown", () => {
+          this.gemAugId = g.id;
+          this.render();
+        });
+      this.rows.push(box);
+      this.addText(gx + 8, gy + 3, g.name, 11, usable ? "#e8ecf2" : "#8a93a3");
+      const why = !target ? "" : already ? "already set" : !fits ? "wrong gear type" : !afford ? "missing materials" : g.deltaLabel;
+      this.addText(gx + 8, gy + 17, why, 10, usable ? "#8fe38f" : "#e08a8a");
+      gy += 34;
+    }
+
+    this.renderGemPreview(Math.max(ty, gy) + 10, target, gems.find((g) => g.id === this.gemAugId) ?? null);
+  }
+
+  // The preview the user asked for: what you're about to get, before you spend.
+  private renderGemPreview(
+    y: number,
+    target: { id: string; label: string; key: string; applied: string[] } | null,
+    gem: GearAugmentDef | null,
+  ): void {
+    const x = this.panelX + 16;
+    const w = this.panelW - 32;
+    const box = this.scene.add
+      .rectangle(x, y, w, 84, 0x14181f, 0.95)
+      .setOrigin(0, 0)
+      .setStrokeStyle(1, 0xc9a86a)
+      .setScrollFactor(0)
+      .setDepth(DEPTH_ITEM);
+    this.rows.push(box);
+
+    if (!target || !gem) {
+      this.addText(x + 10, y + 10, "Pick a piece of gear and a gem to see what it will do.", 11, "#8a93a3");
+      return;
+    }
+
+    this.addText(x + 10, y + 8, `${target.label}  +  ${gem.name}`, 12, "#e8ecf2");
+    const effects = describeAugmentEffect(gem.effect).join("   ");
+    this.addText(x + 10, y + 26, effects || gem.deltaLabel, 11, "#8fe38f");
+    const cost = Object.entries(gem.costs)
+      .map(([k, n]) => `${itemDef(k)?.name ?? k} x${n}`)
+      .join(", ");
+    this.addText(x + 10, y + 42, `Cost: ${cost}`, 10, "#8a93a3");
+
+    const fits = gem.appliesToItemKeys.includes(target.key);
+    const already = target.applied.includes(gem.id);
+    const full = target.applied.length >= MAX_AUGMENTS_PER_ITEM;
+    const can = fits && !already && !full && this.deps.canAffordAugment(gem);
+
+    const bw = 110;
+    const bh = 26;
+    const bx = x + w - bw - 10;
+    const by = y + 50;
+    const btn = this.scene.add
+      .rectangle(bx, by, bw, bh, can ? 0x2a2333 : 0x14181f, 0.95)
+      .setOrigin(0, 0)
+      .setStrokeStyle(1, can ? 0xe3b25a : 0x3a4250)
+      .setScrollFactor(0)
+      .setDepth(DEPTH_ITEM)
+      .setInteractive({ useHandCursor: can })
+      .on("pointerdown", () => {
+        if (!can) return;
+        if (this.deps.applyAugment(target.id, gem.id)) {
+          this.gemAugId = null;
+          this.render();
+        }
+      });
+    this.rows.push(btn);
+    this.addText(bx + bw / 2, by + bh / 2, "Set Gem", 12, can ? "#f0c090" : "#6a7280", 0.5, 0.5);
   }
 
   private renderFilterCheckbox(y: number): void {
@@ -386,7 +575,23 @@ export class JewelryMenu {
       this.rows.push(icon);
     }
 
-    this.mask(this.addText(x + 52, y + 10, recipe.name, 14, canCraft ? "#e8ecf2" : "#8a93a3"));
+    const nameText = this.addText(x + 52, y + 10, recipe.name, 14, canCraft ? "#e8ecf2" : "#8a93a3");
+    this.mask(nameText);
+    // Hotkey badge for ability-granting designs — the one thing the list was
+    // missing that made Q/E/R planning possible.
+    const hotkey = this.abilityKeyLabel(recipe.output);
+    if (hotkey) {
+      const bx = x + 52 + nameText.width + 8;
+      const badge = this.scene.add
+        .rectangle(bx, y + 10, 20, 18, 0x2a2333, 0.95)
+        .setOrigin(0, 0)
+        .setStrokeStyle(1, 0xc9a86a)
+        .setScrollFactor(0)
+        .setDepth(DEPTH_ITEM);
+      this.mask(badge);
+      this.rows.push(badge);
+      this.mask(this.addText(bx + 10, y + 12, hotkey, 12, "#e8c98a", 0.5, 0));
+    }
 
     const parts = Object.entries(recipe.inputs).map(([key, need]) => {
       const have = this.deps.backpack.count(key);
