@@ -100,17 +100,24 @@ export class BossHealthUI {
 
   update(boss: BossBarTarget | null): void {
     const visible = !!boss && !boss.depleted && boss.isEngaged();
+    // A poise bar only makes sense for a boss with a poise/stagger meter. Some
+    // mini-bosses (Cinderwrought/Kilnborn/Palewake/Sanguinarch) run a different
+    // second mechanic (heat/tether/blood-phase) or none, and pass poiseMax 0 —
+    // for those, the HP bar shows alone (no empty poise strip).
+    const showPoise = visible && !!boss && boss.poiseMax > 0;
     this.nameText.setVisible(visible);
     this.hpBarBg.setVisible(visible);
     this.hpBarFill.setVisible(visible);
-    this.poiseBarBg.setVisible(visible);
-    this.poiseBarFill.setVisible(visible);
-    this.poiseText.setVisible(visible);
+    this.poiseBarBg.setVisible(showPoise);
+    this.poiseBarFill.setVisible(showPoise);
+    this.poiseText.setVisible(showPoise);
     if (!boss || !visible) return;
 
     this.nameText.setText(boss.displayName);
     this.hpBarFill.setScale(Math.max(0, boss.health / boss.maxHealth), 1);
-    this.poiseBarFill.setScale(Math.max(0, boss.poise / boss.poiseMax), 1);
-    this.poiseText.setText(`${Math.round(boss.poise)}/${boss.poiseMax}`);
+    if (showPoise) {
+      this.poiseBarFill.setScale(Math.max(0, boss.poise / boss.poiseMax), 1);
+      this.poiseText.setText(`${Math.round(boss.poise)}/${boss.poiseMax}`);
+    }
   }
 }

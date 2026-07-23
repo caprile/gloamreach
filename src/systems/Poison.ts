@@ -7,12 +7,15 @@ import { BleedManager } from "./Bleed";
 // Poison is a SUBTYPE OF MAGIC (locked, the user) — see Weapons.isMagicFamily.
 // Its damage routes through the `poison` IncomingDamageType, so it bypasses flat
 // armor and IS reduced by heavy armor's magic mitigation, exactly like a Hexling
-// bolt. What makes it poison rather than just "magic that ticks":
-//   1. it deals its damage over time, and
-//   2. it CRIPPLES HP REGEN while active — isPoisoned() feeds MainScene's
-//      currentRegenMult, halving every heal source (food buffs, Comfort). It is
-//      deliberately NOT a full shutoff (the user): "significantly worse" keeps it
-//      as pressure you can still play against, where 0% would just be a switch.
+// bolt. What makes it poison rather than just "magic that ticks": it deals its
+// damage OVER TIME (a DoT you can outlast by disengaging), unlike a bolt's
+// instant hit.
+//
+// Note: poison used to also HALVE HP regen while active, but that was removed
+// 2026-07-23 (the user: "get rid of the regen reduction in poison — maybe make it
+// an enemy-kit thing"). The miasma/mire ZONES still cut regen (that's a terrain
+// hazard, fed via environmentEffectAt's regenMult), but a creature's poison dose
+// no longer does. isPoisoned() now only drives the DoT ticks + the status icon.
 //
 // TWO APPLICATION MODES, because poison has two very different sources:
 //

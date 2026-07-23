@@ -337,7 +337,10 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     const barY = this.y - this.barOffsetY;
     const aggro = this.isAggro();
     this.healthBarBg.setPosition(barX, barY).setDepth(this.depth + 1).setVisible(aggro);
-    this.healthBarFill.setPosition(barX, barY).setDepth(this.depth + 1).setVisible(aggro);
+    // Fill sits a depth above the bg (not equal) so it always draws OVER the dark
+    // backing — equal depth falls back to display-list order, which B4-P6's
+    // stream-out/re-add can invert, painting the dark bg over the fill ("dark red").
+    this.healthBarFill.setPosition(barX, barY).setDepth(this.depth + 2).setVisible(aggro);
     this.healthBarFill.setScale(Math.max(0, this.health / this.maxHealth), 1);
   }
 

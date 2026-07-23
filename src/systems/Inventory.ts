@@ -61,6 +61,7 @@ export type ResourceType =
   | "ember_shard" // Phase 5: Gloam Shards rendered down at the Relic Forge's Ember Kiln (Lvl 3) — the tier-2 refinement currency
   | "mire_shard" // biome 3: Ember Shards steeped at the Mire Crucible (Lvl 4) — the tier-3 refinement currency
   | "refined_trophy_uncommon_t2" // Phase 5: badlands (Tier 2) Common trophies refined via Ember Shards — rolls Uncommon
+  | "refined_trophy_uncommon_t3" // biome 3 (Tier 3): refined via Mire Shards, AND the guaranteed drop from the bayou crypt wardens (2026-07-23) — rolls Uncommon at power tier 3
   | "boss_refined_trophy" // Gremlin King drop (S4) — guaranteed Mythic (Tier 1) at the Relic Forge
   | "boss_refined_trophy_t2" // Duneshaper drop (S4) — guaranteed Mythic (Tier 2) at the Relic Forge
   // --- biome-3 (Phase 2b) jewelry economy — DORMANT: authored now, real sources land in biome 3 ---

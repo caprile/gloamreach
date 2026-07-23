@@ -1,6 +1,12 @@
 import Phaser from "phaser";
 import { Enemy } from "./Enemy";
 import type { SwingConfig } from "./Enemy";
+import { enemyStat } from "../systems/enemyStats";
+
+// Combat stats from the Phaser-free source of truth (also read by the balancing
+// dashboard — tune there). attacks[0] = smash.
+const S = enemyStat("mosswretch");
+const ELITE = S.elite!;
 
 // Mosswretch — the bayou's BRUISER (biome 3 Phase 4b), the Cragscale analog. A
 // shambling husk of waterlogged deadwood under a shroud of hanging moss: very
@@ -27,11 +33,11 @@ const DEAGGRO_RADIUS = 560;
 const CHASE_SPEED = 74;
 const WANDER_SPEED = 16;
 
-const MAX_HEALTH = 420; // the wall: ~7-8 bayou-tier hits, and it does not flinch
+const MAX_HEALTH = S.hp; // the wall: ~7-8 bayou-tier hits, and it does not flinch
 
 // The smash. Huge reach, huge damage, huge tell — and a long recovery, so
 // baiting it out is the intended way to fight one.
-const SMASH_DAMAGE = 135; // nets ~93 through a full Gloamsteel set — a "that nearly killed me"
+const SMASH_DAMAGE = S.attacks[0].damage; // heavy telegraphed overhead — big but no longer a one-shot
 const SMASH_SWING: SwingConfig = {
   reach: 88, // long arms + a wide sweep — backing off half a step is NOT enough
   windupMs: 780,
@@ -70,8 +76,8 @@ export class Mosswretch extends Enemy {
             { resource: "swamp_moss", min: 2, max: 3 },
             { resource: "wood", min: 1, max: 2 },
           ],
-      maxHealth: elite ? Math.round(MAX_HEALTH * 1.5) : MAX_HEALTH,
-      biteDamage: elite ? Math.round(SMASH_DAMAGE * 1.5) : SMASH_DAMAGE,
+      maxHealth: elite ? Math.round(MAX_HEALTH * ELITE.hp) : MAX_HEALTH,
+      biteDamage: elite ? Math.round(SMASH_DAMAGE * ELITE.damage) : SMASH_DAMAGE,
       elite,
       eliteTrophy: "mosswretch_trophy",
       // Spongy sodden moss eats a concussive blow; an edge parts it; fire is the
@@ -81,9 +87,9 @@ export class Mosswretch extends Enemy {
       upright: true, // a shambling humanoid husk — mirror, never rotate
       barScale: 1.3, // bigger sprite, readable bar
     });
-    this.setScale(elite ? 1.75 : 1.35); // looms over the rest of the roster
-    this.baseScale = elite ? 1.75 : 1.35;
-    if (elite) this.speedMult = 1.1;
+    this.setScale(elite ? ELITE.scale : S.scale); // looms over the rest of the roster
+    this.baseScale = elite ? ELITE.scale : S.scale;
+    if (elite) this.speedMult = ELITE.speed;
   }
 
   update(_delta: number, playerX: number, playerY: number, now: number): boolean {

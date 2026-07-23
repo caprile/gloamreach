@@ -22,7 +22,6 @@ import { Mirejaw } from "../entities/Mirejaw";
 import { Blighttoad } from "../entities/Blighttoad";
 import { Mosswretch } from "../entities/Mosswretch";
 import { Murkling } from "../entities/Murkling";
-import { Fenlurker } from "../entities/Fenlurker";
 import { Corpselight } from "../entities/Corpselight";
 import { Projectile, type ProjectileConfig } from "../entities/Projectile";
 import { GremlinShack, SHACK_GUARD_RESPAWN_MS } from "../entities/GremlinShack";
@@ -421,7 +420,7 @@ const BOSS_SUBTITLES: Record<string, string> = {
   // Mini-bosses — each hints at its own bespoke opening, since every one of
   // these is solved differently.
   Gloamwarden: "Guardian of the Vein",
-  Cinderwrought: "Keeper of the Sunken Forge",
+  Cinderwrought: "Keeper of the Cinder Forge",
   "The Palewake": "It feeds on the tether — break line of sight",
   "The Kilnborn": "It burns the ground it stands on",
   "The Sanguinarch": "It grows strong on your blood",
@@ -522,6 +521,10 @@ const RESPAWN_RING_MAX = 1600;
 // numbers, tune from playtesting.
 const ELITE_SPAWN_CHANCE = 0.08;
 const NIGHT_ELITE_CHANCE_MULT = 3;
+// The bayou (endgame biome) rolls elites ~2x more often — elites are the trophy
+// source that feeds the relic meta-loop, and the user found them "really rare" out
+// there. Applied to the bayou surface spawns (spawnBayouEnemies).
+const BAYOU_ELITE_CHANCE_MULT = 2;
 
 // Gremlin Shack chest loot — re-rolled per "empty cycle" (see
 // LootContainer.rollIfEmpty/rearmIfEmpty), not per guard-respawn. First-pass,
@@ -2095,7 +2098,7 @@ export class MainScene extends Phaser.Scene {
       this.updateMagnet(delta);
       this.updateTreeOcclusion(delta);
       this.updateMapReveal();
-      this.bossHealthUI.update(this.engagedBigBoss());
+      this.bossHealthUI.update(this.engagedBigBoss() ?? this.engagedMiniBoss());
       this.syncSpeckleLayer();
       return;
     }
@@ -2126,14 +2129,11 @@ export class MainScene extends Phaser.Scene {
     // Player.update's env multiplier; regenMult is cached for the regen gates
     // later this frame (dormant in biome 2, live for biome-3 miasma).
     const env = this.environmentEffectAt(this.player.x, this.player.y);
-    // Regen is reduced by the terrain AND by being poisoned (the second half of
-    // poison's identity as a magic subtype — see Poison.ts). Sources take the
-    // MINIMUM rather than multiplying, so standing poisoned inside a miasma is
-    // still 50%, not a compounded 25% the player was never told about.
-    this.currentRegenMult = Math.min(
-      env.regenMult,
-      this.poison.isPoisoned() ? POISON_REGEN_MULT : 1,
-    );
+    // Regen is reduced ONLY by the terrain now (miasma/mire zones). The creature
+    // poison DoT no longer cuts regen (the user 2026-07-23: "get rid of the regen
+    // reduction in poison — maybe make it an enemy-kit thing"). A specific enemy
+    // could still opt into a regen debuff later; base poison is just a DoT.
+    this.currentRegenMult = env.regenMult;
     this.currentEnvMoveMult = env.moveMult;
     // Standing in a miasma keeps re-applying a short poison stack, so leaving the
     // zone lets it lapse on its own rather than needing a separate "exit" event.
@@ -2201,9 +2201,10 @@ export class MainScene extends Phaser.Scene {
           (equippedAugmentEffect(this.equipment).elementalMitigationPct ?? 0) / 100,
       );
       const poisonDmg = Math.max(1, Math.round(poisonRaw * (1 - mit)));
+      const toHp = this.absorbWithShield(poisonDmg); // chip the Leech overshield first
       const applied = this.devGodMode
-        ? Math.min(poisonDmg, Math.max(0, this.health.value() - 1))
-        : poisonDmg;
+        ? Math.min(toHp, Math.max(0, this.health.value() - 1))
+        : toHp;
       const diedOfPoison = this.health.takeDamage(applied);
       this.refreshHealthBar();
       this.spawnPlayerDamageNumber(poisonDmg, "poison");
@@ -2213,9 +2214,10 @@ export class MainScene extends Phaser.Scene {
     if (bleedDmg > 0 && !this.isDead) {
       // DEV god mode: same floor-at-1-HP guard applyDamageToPlayer() uses —
       // bleed was bypassing it entirely and could still kill the player.
+      const bleedToHp = this.absorbWithShield(bleedDmg); // shield absorbs bleed too
       const appliedBleed = this.devGodMode
-        ? Math.min(bleedDmg, Math.max(0, this.health.value() - 1))
-        : bleedDmg;
+        ? Math.min(bleedToHp, Math.max(0, this.health.value() - 1))
+        : bleedToHp;
       const died = this.health.takeDamage(appliedBleed);
       this.refreshHealthBar();
       this.spawnDamageNumber(this.player.x, this.player.y, bleedDmg, false, "weak");
@@ -2235,7 +2237,7 @@ export class MainScene extends Phaser.Scene {
     this.updateTreeOcclusion(delta);
     this.updateMapReveal();
     this.updateShackGlows();
-    this.bossHealthUI.update(this.engagedBigBoss());
+    this.bossHealthUI.update(this.engagedBigBoss() ?? this.engagedMiniBoss());
     this.updateCraftingMenuWorkbenchProximity();
     this.syncSpeckleLayer();
   }
@@ -2575,18 +2577,17 @@ export class MainScene extends Phaser.Scene {
     if (biome === "dunes") return null; // placeholder biome, no roster yet
     // Bayou (biome 3): the roster shipped in Phase 4b, so the top-up is live —
     // weighted ~ spawnBayouEnemies()'s own counts (Murkling ~130 / Blighttoad ~65
-    // / Mirejaw 44 / Mosswretch ~45 / Fenlurker 42 / Corpselight 22 = 348).
-    // Murklings respawn as LONE stragglers, not a fresh nest, and the Mirejaw
-    // (the sole Mirehide source) keeps a real share so the reforge tier stays
-    // farmable — the same "the material source must replenish" reasoning that
-    // made Duskrunners dominate the badlands top-up.
+    // / Mirejaw 44 / Mosswretch ~45 / Corpselight 22 = 306). The Fenlurker (a
+    // burrower) was CUT 2026-07-23 (the user: "boring to fight"), so its share is
+    // simply gone from the total. Murklings respawn as LONE stragglers, not a
+    // fresh nest, and the Mirejaw (the sole Mirehide source) keeps a real share so
+    // the reforge tier stays farmable.
     if (biome === "bayou") {
-      const roll = rng.between(1, 348);
+      const roll = rng.between(1, 306);
       if (roll <= 130) return new Murkling(this, { x, y, elite });
       if (roll <= 195) return new Blighttoad(this, { x, y, elite });
       if (roll <= 239) return new Mirejaw(this, { x, y, elite });
       if (roll <= 284) return new Mosswretch(this, { x, y, elite });
-      if (roll <= 326) return new Fenlurker(this, { x, y, elite });
       return new Corpselight(this, { x, y, elite });
     }
     // forest + base (the universal between-blobs layer) → the forest roster.
@@ -3359,9 +3360,30 @@ export class MainScene extends Phaser.Scene {
   }
 
   private closeDryingRackMenu(): void {
+    // Closing the menu returns anything still loaded in the station's slots to
+    // the backpack (floor fallback if full) — processing is instant, so nothing
+    // should sit stranded in a Smelter/Drying Rack after you walk away.
+    if (this.openRack) this.refundStationSlots(this.openRack);
     this.dryingRackMenu.close();
     this.openRack = null;
     this.openStationKind = "rack";
+  }
+
+  // Drain a station's loaded slots back into the backpack; overflow drops as a
+  // loose pickup at the station's position. Used by closeDryingRackMenu (menu
+  // close) — destroy uses drainAll directly to drop everything loose instead.
+  private refundStationSlots(station: ProcessingStation): void {
+    const drained = station.drainAll();
+    if (drained.length === 0) return;
+    const img =
+      this.dryingRacks.find((r) => r.station === station)?.image ??
+      this.smelters.find((s) => s.station === station)?.image;
+    const x = img?.x ?? this.player.x;
+    const y = img?.y ?? this.player.y;
+    for (const slot of drained) {
+      const remaining = this.backpack.add(slot.key, slot.count); // merges + returns overflow
+      if (remaining > 0) this.spawnLooseDrop(slot.key, remaining, x, y, DROPPED_ITEM_MAGNET_COOLDOWN_MS);
+    }
   }
 
   // --- Campfire cooking + food buffs ---
@@ -3915,7 +3937,7 @@ export class MainScene extends Phaser.Scene {
       else if (now >= forge.respawnAt) {
         forge.respawnAt = null;
         this.armForge(this.sessionRng(), forge, false);
-        this.notifyPoiRespawn(forge.x, forge.y, "Embers rekindle at a Sunken Forge — its guardian returns.");
+        this.notifyPoiRespawn(forge.x, forge.y, "Embers rekindle at a Cinder Forge — its guardian returns.");
       }
     }
     // Warren dens: destroyed (looted) AND the cache fully emptied by the player.
@@ -4242,6 +4264,30 @@ export class MainScene extends Phaser.Scene {
     return false;
   }
 
+  // Is (x, y) within `minSep` of ANY already-placed POI CENTER? Distinct from
+  // insidePoiClearing (which uses each POI's small ordinary-content clear radius):
+  // this enforces POI-to-POI SPACING, so two landmarks' decorations never overlap
+  // (the "Cinder Forge and Warren spawned on top of each other" / "Duneshaper
+  // altar right next to the Sunken Gorge" reports). Every POI picker consults it
+  // against POI_MIN_SEPARATION so each new POI keeps clear of every earlier one —
+  // the badlands pickers used to enforce only their own clear radii (~200-360),
+  // smaller than a POI's actual footprint, and the bayou pickers avoided only a
+  // hand-picked subset (never the badlands POIs across a blob border).
+  private tooCloseToAnyPoi(x: number, y: number, minSep: number): boolean {
+    const near = (c: { x: number; y: number } | null | undefined) =>
+      !!c && Phaser.Math.Distance.Between(x, y, c.x, c.y) < minSep;
+    if (near(this.altarPosition)) return true;
+    if (near(this.veinPosition)) return true;
+    if (this.badlandsDens.some((d) => near(d))) return true;
+    if (this.forgePositions.some((f) => near(f))) return true;
+    if (this.tyrantAltarPositions.some((a) => near(a))) return true;
+    if (this.cryptPositions.some((c) => near(c))) return true;
+    if (this.shrinePositions.some((s) => near(s))) return true;
+    if (this.lodgePositions.some((l) => near(l))) return true;
+    if (this.gorgePositions.some((p) => near(p))) return true;
+    return false;
+  }
+
   // Sample a point out in the badlands patchwork (biome 2 Phase 2). Unlike the
   // forest samplers (which sample the central BIOME region), this sweeps a polar
   // annulus in the badlands radius band and requires real badlands blob coverage
@@ -4309,7 +4355,7 @@ export class MainScene extends Phaser.Scene {
     minCoverage = 0.4,
     rMin = BAYOU_R_MIN,
     rMax = BAYOU_R_MAX,
-    opts: { avoidDeepWater?: boolean } = {},
+    opts: { avoidDeepWater?: boolean; preferWater?: boolean; preferZone?: "miasma" | "bonemire" | "hammock" } = {},
   ): { x: number; y: number } | null {
     for (let attempt = 0; attempt < 400; attempt++) {
       const ang = rng.frac() * Math.PI * 2;
@@ -4324,6 +4370,14 @@ export class MainScene extends Phaser.Scene {
       // gloam channel where reaching them means eating the heavy slow. Flora and
       // water lilies opt out of this so the water still has its own content.
       if (opts.avoidDeepWater && bayouWaterAt(x, y, this.outerFeatureBiome) === "deep") continue;
+      // SOFT themed-spawn preference (the user: "make bayou spawns a bit more
+      // themed — frogs in the lilypad water, ranged at the haunted boneyard").
+      // Enforced only for the first ~3/4 of attempts, then relaxed so the spawn
+      // never fails outright if a matching cell is scarce this seed.
+      if (attempt < 300) {
+        if (opts.preferWater && bayouWaterAt(x, y, this.outerFeatureBiome) === null) continue;
+        if (opts.preferZone && this.bayouZoneAt(x, y)?.type !== opts.preferZone) continue;
+      }
       return { x, y };
     }
     return null;
@@ -4364,19 +4418,6 @@ export class MainScene extends Phaser.Scene {
   // the requested kinds (S4 — keep distinct POI types from crowding each other, on
   // top of each POI's own smaller clear radius). Only checks POIs already chosen at
   // call time, so the caller order (altar → vein → forge → altars → dens) matters.
-  private clearsOtherPois(
-    p: { x: number; y: number },
-    kinds: ("altar" | "vein" | "forge" | "den")[],
-  ): boolean {
-    const far = (c: { x: number; y: number } | null | undefined) =>
-      !c || Phaser.Math.Distance.Between(p.x, p.y, c.x, c.y) >= POI_MIN_SEPARATION;
-    if (kinds.includes("altar") && !far(this.altarPosition)) return false;
-    if (kinds.includes("vein") && !far(this.veinPosition)) return false;
-    if (kinds.includes("forge") && !this.forgePositions.every(far)) return false;
-    if (kinds.includes("den") && !this.badlandsDens.every(far)) return false;
-    return true;
-  }
-
   // One-time background bake: a single RenderTexture over the whole world,
   // depth just above the grass and below every entity. Forest gets a darker-
   // green overlay, grassy is left showing the base grass, and creek draws a
@@ -5210,9 +5251,16 @@ export class MainScene extends Phaser.Scene {
     for (let i = 0; i < DEN_COUNT; i++) {
       let pt: { x: number; y: number } | null = null;
       let fallback: { x: number; y: number } | null = null;
-      for (let a = 0; a < 80; a++) {
+      // 160 tries (was 80): the POI-separation constraint made a spot harder to
+      // find, and dens are meant to be plentiful (the user), so give them room.
+      for (let a = 0; a < 160; a++) {
         const cand = this.pickBadlandsPoint(rng);
         if (!cand) break;
+        // Keep clear of every OTHER POI so a den never lands on a Cinder Forge /
+        // vein / war camp / tyrant altar (the user: "Cinderwrought and Warren
+        // overlap"). den↔den is handled by DEN_MIN_SPACING (900 > POI_MIN_SEPARATION),
+        // so this only constrains den-vs-other-POI. fallback stays POI-safe too.
+        if (this.tooCloseToAnyPoi(cand.x, cand.y, POI_MIN_SEPARATION)) continue;
         fallback = cand;
         if (
           this.badlandsDens.every(
@@ -5224,7 +5272,10 @@ export class MainScene extends Phaser.Scene {
         }
       }
       pt = pt ?? fallback;
-      if (!pt) break;
+      // Skip just THIS den if no POI-safe spot turned up (continue, not break, so
+      // one crowded den doesn't cut the whole batch short — recovers the count the
+      // POI-separation constraint would otherwise cost).
+      if (!pt) continue;
       // POI dressing — a sandy dirt floor + a ring of bone-cairn stakes so the
       // warren reads as a den from a distance (the user).
       this.decoratePoi(rng, pt.x, pt.y, {
@@ -5595,8 +5646,13 @@ export class MainScene extends Phaser.Scene {
     // Scatter a clustered group around one bayou anchor point — the shared shape
     // for every packed species below (jitter is per-species, since a Murkling
     // swarm boils out of one reed-bed while toads are just loosely neighborly).
-    const cluster = (count: number, jitter: number, make: (x: number, y: number) => Enemy) => {
-      const center = this.pickBayouPoint(rng, 0.4, BAYOU_R_MIN, BAYOU_R_MAX, { avoidDeepWater: true });
+    const cluster = (
+      count: number,
+      jitter: number,
+      make: (x: number, y: number) => Enemy,
+      themed: { preferWater?: boolean; preferZone?: "miasma" | "bonemire" | "hammock" } = {},
+    ) => {
+      const center = this.pickBayouPoint(rng, 0.4, BAYOU_R_MIN, BAYOU_R_MAX, { avoidDeepWater: true, ...themed });
       if (!center) return false;
       for (let i = 0; i < count; i++) {
         let x = Phaser.Math.Clamp(center.x + rng.between(-jitter, jitter), 60, WORLD_W - 60);
@@ -5617,15 +5673,19 @@ export class MainScene extends Phaser.Scene {
 
     // Murkling swarms — the pack-aggro payoff. 4-6 per reed-bed, tightly
     // clustered so updatePackAggro visibly cascades the whole nest awake.
+    // Murkling swarms — themed to the HAMMOCK (raised reed-beds), where a nest
+    // boiling out of the reeds reads right (the user: more themed bayou spawns).
     const MURKLING_NESTS = 26;
     for (let n = 0; n < MURKLING_NESTS; n++) {
-      if (!cluster(rng.between(4, 6), 60, (x, y) => new Murkling(this, { x, y, elite: this.rollElite(rng) }))) break;
+      if (!cluster(rng.between(4, 6), 60, (x, y) => new Murkling(this, { x, y, elite: this.rollElite(rng, BAYOU_ELITE_CHANCE_MULT) }), { preferZone: "hammock" })) break;
     }
 
-    // Blighttoads — loose semi-swarm clumps of 2-3 around still water.
+    // Blighttoads — loose semi-swarm clumps of 2-3. Themed to the MIASMA (the
+    // poison-fog swamp — where poison frogs belong, and abundant enough for the
+    // theming to read; the creek "lilypad" water is too sparse to congregate on).
     const TOAD_CLUMPS = 26;
     for (let c = 0; c < TOAD_CLUMPS; c++) {
-      if (!cluster(rng.between(2, 3), 110, (x, y) => new Blighttoad(this, { x, y, elite: this.rollElite(rng) }))) break;
+      if (!cluster(rng.between(2, 3), 110, (x, y) => new Blighttoad(this, { x, y, elite: this.rollElite(rng, BAYOU_ELITE_CHANCE_MULT) }), { preferZone: "miasma" })) break;
     }
 
     // Mirejaws — LONE ambushers (a gator doesn't share a stretch of water), and
@@ -5633,34 +5693,34 @@ export class MainScene extends Phaser.Scene {
     // for hide is a hunt rather than a scavenger sweep of the whole band.
     const MIREJAW_COUNT = 44;
     for (let i = 0; i < MIREJAW_COUNT; i++) {
-      const pt = this.pickBayouPoint(rng, 0.4, BAYOU_R_MIN, BAYOU_R_MAX);
+      // Gators lurk in the water (themed spawn) — deep channels included, so no avoidDeepWater.
+      const pt = this.pickBayouPoint(rng, 0.4, BAYOU_R_MIN, BAYOU_R_MAX, { preferWater: true });
       if (!pt) break;
-      add(new Mirejaw(this, { x: pt.x, y: pt.y, elite: this.rollElite(rng) }));
+      add(new Mirejaw(this, { x: pt.x, y: pt.y, elite: this.rollElite(rng, BAYOU_ELITE_CHANCE_MULT) }));
     }
 
     // Mosswretches — mostly solitary, occasionally a pair of husks together.
+    // Themed to the bonemire (the drowned boneyard of dead trees these husks are
+    // made of), which also makes it the "haunted" zone alongside the Corpselights.
     const MOSSWRETCH_GROUPS = 30;
     for (let g = 0; g < MOSSWRETCH_GROUPS; g++) {
-      if (!cluster(rng.between(1, 2), 90, (x, y) => new Mosswretch(this, { x, y, elite: this.rollElite(rng) }))) break;
+      if (!cluster(rng.between(1, 2), 90, (x, y) => new Mosswretch(this, { x, y, elite: this.rollElite(rng, BAYOU_ELITE_CHANCE_MULT) }), { preferZone: "bonemire" })) break;
     }
 
-    // Fenlurkers — LONE buried ambushers (a lurker is a solo trap, same as the
-    // Sandmaw), spread so crossing open muck regularly trips one.
-    const FENLURKER_COUNT = 42;
-    for (let i = 0; i < FENLURKER_COUNT; i++) {
-      const pt = this.pickBayouPoint(rng, 0.4, BAYOU_R_MIN, BAYOU_R_MAX);
-      if (!pt) break;
-      add(new Fenlurker(this, { x: pt.x, y: pt.y, elite: this.rollElite(rng) }));
-    }
+    // Fenlurker (burrowing ambusher) CUT 2026-07-23 (the user: "a really boring
+    // enemy to fight — I'd just remove it entirely"). The Sandmaw already covers
+    // the badlands burrow-ambush niche; the bayou didn't need a second one.
 
     // Corpselights — the ONE ranged creature, kept genuinely uncommon (about a
     // third of any melee species) so the biome still reads melee-core and a
     // homing orb stays an event rather than ambient chip damage.
     const CORPSELIGHT_COUNT = 22;
     for (let i = 0; i < CORPSELIGHT_COUNT; i++) {
-      const pt = this.pickBayouPoint(rng, 0.4, BAYOU_R_MIN, BAYOU_R_MAX);
+      // Haunts drift over the drowned boneyard (themed — the "haunted" zone,
+      // alongside the Drowned Lodge POI which already anchors ranged content).
+      const pt = this.pickBayouPoint(rng, 0.4, BAYOU_R_MIN, BAYOU_R_MAX, { preferZone: "bonemire" });
       if (!pt) break;
-      add(new Corpselight(this, { x: pt.x, y: pt.y, elite: this.rollElite(rng) }));
+      add(new Corpselight(this, { x: pt.x, y: pt.y, elite: this.rollElite(rng, BAYOU_ELITE_CHANCE_MULT) }));
     }
   }
 
@@ -6425,9 +6485,11 @@ export class MainScene extends Phaser.Scene {
         if (Math.sign(p.x - WORLD_CX) !== sx || Math.sign(p.y - WORLD_CY) !== sy) continue;
         fallback = p;
         if (picks.some((q) => Phaser.Math.Distance.Between(p.x, p.y, q.x, q.y) < TYRANT_ALTAR_MIN_SPACING)) continue;
-        // Don't crowd another POI type (S4): keep clear of the war camp, the
-        // Gloaming Vein, and every Sunken Forge by POI_MIN_SEPARATION.
-        if (!this.clearsOtherPois(p, ["altar", "vein", "forge"])) continue;
+        // Don't crowd ANY other POI (keep clear of the war camp, vein, forges,
+        // and each other by POI_MIN_SEPARATION). tyrant↔tyrant is the
+        // TYRANT_ALTAR_MIN_SPACING check above (tyrantAltarPositions isn't
+        // assigned until this returns, so tooCloseToAnyPoi only sees earlier POIs).
+        if (this.tooCloseToAnyPoi(p.x, p.y, POI_MIN_SEPARATION)) continue;
         placed = p;
         break;
       }
@@ -6796,6 +6858,11 @@ export class MainScene extends Phaser.Scene {
         ringRadius: 128,
       });
       this.buildCryptInterior(crypt, i, rng, solids);
+      // Pre-roll the loot chest now (like shacks/dens/lodges do) so its glow
+      // reflects its contents from the start. Rolling only on open — as it did
+      // before — left crypt.loot empty until then, so the chest never glowed.
+      // rollIfEmpty is idempotent, so the open-time roll stays a safe no-op.
+      this.rollContainerLoot(crypt.loot, CRYPT_LOOT_TABLE);
       // Prebuilt but not drawn — an interior only becomes visible when entered.
       this.setDungeonVisible(crypt, false);
     });
@@ -6947,12 +7014,11 @@ export class MainScene extends Phaser.Scene {
           const p = spot();
           addEnemy(new Blighttoad(this, { x: p.x, y: p.y, elite: this.rollElite(rng) }));
         }
-      } else if (roll <= 9) {
+      } else {
+        // roll 8-10: a bruiser room. (Fenlurker cut 2026-07-23 — its share folded
+        // into the Mosswretch, keeping the crypt's "one big thing" rooms.)
         const p = spot();
         addEnemy(new Mosswretch(this, { x: p.x, y: p.y, elite: this.rollElite(rng, 2) }));
-      } else {
-        const p = spot();
-        addEnemy(new Fenlurker(this, { x: p.x, y: p.y, elite: this.rollElite(rng) }));
       }
     }
 
@@ -7114,12 +7180,10 @@ export class MainScene extends Phaser.Scene {
           const p = spot();
           this.addDungeonEnemy(lair, new Murkling(this, { x: p.x, y: p.y, elite: this.rollElite(rng) }));
         }
-      } else if (roll <= 8) {
+      } else {
+        // roll 6-10: a bruiser. (Fenlurker cut 2026-07-23 — folded into Mosswretch.)
         const p = spot();
         this.addDungeonEnemy(lair, new Mosswretch(this, { x: p.x, y: p.y, elite: this.rollElite(rng, 2) }));
-      } else {
-        const p = spot();
-        this.addDungeonEnemy(lair, new Fenlurker(this, { x: p.x, y: p.y, elite: this.rollElite(rng) }));
       }
     }
 
@@ -7566,6 +7630,11 @@ export class MainScene extends Phaser.Scene {
           avoidDeepWater: opts.avoidDeepWater,
         });
         if (!cand) break;
+        // Keep clear of EVERY other POI, including the badlands ones a bayou blob
+        // can border (the user: "Duneshaper altar right next to the Sunken Gorge").
+        // Same-type spacing (minSpacing) + the explicit `avoid` list handle
+        // bayou-vs-bayou; this adds the cross-biome / other-type separation.
+        if (this.tooCloseToAnyPoi(cand.x, cand.y, POI_MIN_SEPARATION)) continue;
         fallback = cand;
         const spacedOk = picked.every(
           (p) => Phaser.Math.Distance.Between(p.x, p.y, cand.x, cand.y) >= minSpacing,
@@ -8007,10 +8076,10 @@ export class MainScene extends Phaser.Scene {
         worldX: forge.x,
         worldY: forge.y,
         iconKey: "map_forge",
-        label: "The Sunken Forge",
+        label: "The Cinder Forge",
         tint: 0xd6481a,
       });
-      this.eventLog.add("poi", "Discovered: The Sunken Forge");
+      this.eventLog.add("poi", "Discovered: The Cinder Forge");
     }
     // Bayou surface POIs (Phase 4d) — discovered fixed structures, same one-shot
     // treatment. Distinct colors from the crypt trio's violets so the map reads
@@ -9038,11 +9107,48 @@ export class MainScene extends Phaser.Scene {
   // Shared by the primary melee hit, arc secondaries, and ranged so the three
   // can't drift.
   // Whichever "big" boss (Gremlin King / Duneshaper / Miretyrant) is engaged, for
-  // the fixed top-of-screen BossHealthUI. Mini-bosses (Gloamwarden/Cinderwrought)
-  // stay off the big bar — they keep only their floating world-space bars.
+  // the fixed top-of-screen BossHealthUI. Takes priority over an engaged mini-boss
+  // (see engagedMiniBoss, which now also feeds the big bar as of 2026-07-23).
   private engagedBigBoss(): BossBarTarget | null {
     for (const b of [this.gremlinKing, this.duneshaper, this.miretyrant]) {
       if (b && !b.depleted && b.isEngaged()) return b;
+    }
+    return null;
+  }
+
+  // Mini-bosses (Gloamwarden / Cinderwrought / the three crypt wardens) now ALSO
+  // get the big top-of-screen HP bar while engaged (the user: "fire guy's health
+  // bar is missing" — the floating world-space bar was too easy to lose). Adapted
+  // to BossBarTarget in the scene (rather than editing five entity files): HP +
+  // name come off base Enemy, `isEngaged` maps to isAggro(), and the poise strip
+  // only shows for one that actually exposes a poise meter (Gloamwarden); the
+  // others pass poiseMax 0 and render HP alone (BossHealthUI hides the empty
+  // strip). Their bespoke second mechanic (heat/tether/blood-phase) still reads
+  // from its own in-world tell.
+  private engagedMiniBoss(): BossBarTarget | null {
+    for (const e of this.enemies) {
+      if (e.depleted || !e.isAggro()) continue;
+      if (
+        !(
+          e instanceof Gloamwarden ||
+          e instanceof Cinderwrought ||
+          e instanceof Palewake ||
+          e instanceof Kilnborn ||
+          e instanceof Sanguinarch
+        )
+      )
+        continue;
+      const anyE = e as unknown as { poise?: number; poiseMax?: number };
+      const hasPoise = typeof anyE.poise === "number" && typeof anyE.poiseMax === "number";
+      return {
+        displayName: e.displayName,
+        health: e.health,
+        maxHealth: e.maxHealth,
+        poise: hasPoise ? anyE.poise! : 0,
+        poiseMax: hasPoise ? anyE.poiseMax! : 0,
+        depleted: e.depleted,
+        isEngaged: () => e.isAggro(),
+      };
     }
     return null;
   }
@@ -10157,7 +10263,15 @@ export class MainScene extends Phaser.Scene {
       }
       // Fold any temporary slow (Executioner crit relic) into the same envSpeedMult
       // path every aggressive-movement velocity already reads — no per-subclass wiring.
-      enemy.envSpeedMult = envSpeedMult * enemy.slowMult(now);
+      // ALSO fold in the terrain move-mult (bayou water, thornfield bramble): the
+      // PLAYER wades at 50% in deep water but enemies used to ignore it entirely, so
+      // in the swamp you literally could not out-walk anything (the #1 "can't run
+      // away in the bayou" complaint). Applying the same slow restores relative
+      // speed — and the player's dash is terrain-exempt, so a dash still escapes.
+      // Only runs for already-active (near-player) enemies, so the per-enemy
+      // environment lookup cost is bounded. GremlinKing/bosses that override
+      // update() and ignore envSpeedMult stay exempt with no branch here.
+      enemy.envSpeedMult = envSpeedMult * enemy.slowMult(now) * this.environmentEffectAt(enemy.x, enemy.y).moveMult;
       // The Sanguinarch's whole phase machine runs on whether the PLAYER is
       // bleeding, which update()'s (delta, x, y, now) signature can't express —
       // so the scene pushes it, the same way envSpeedMult is pushed above.
@@ -10437,12 +10551,7 @@ export class MainScene extends Phaser.Scene {
     // god mode, so damage numbers stay testable.
     this.spawnPlayerDamageNumber(reduced, dmgType);
     // Leech shield (lifesteal Mythic) absorbs before HP.
-    let toHp = reduced;
-    if (this.playerShield > 0) {
-      const absorbed = Math.min(this.playerShield, toHp);
-      this.playerShield -= absorbed;
-      toHp -= absorbed;
-    }
+    const toHp = this.absorbWithShield(reduced);
     // DEV god mode: still take the hit (sfx/knockback/damage number all play
     // out normally above/below) but never drop below 1 HP or die.
     const appliedDamage = this.devGodMode ? Math.min(toHp, Math.max(0, this.health.value() - 1)) : toHp;
@@ -10477,6 +10586,16 @@ export class MainScene extends Phaser.Scene {
     }
     // Undying Mythic can save one fatal hit per run before the death path fires.
     if (died && !this.devGodMode && !this.tryUndyingRevive()) this.onPlayerDeath();
+  }
+
+  // Route damage through the Leech overshield (playerShield) before HP and
+  // return what's left for HP. Shared by direct hits and the DoT ticks (poison/
+  // bleed) so every damage source chips the shield consistently.
+  private absorbWithShield(amount: number): number {
+    if (this.playerShield <= 0) return amount;
+    const absorbed = Math.min(this.playerShield, amount);
+    this.playerShield -= absorbed;
+    return amount - absorbed;
   }
 
   private onPlayerDeath(): void {
@@ -10671,6 +10790,10 @@ export class MainScene extends Phaser.Scene {
         this.runEndUI.hide();
         this.showRunEndUI([], 0);
       },
+      // Test-mode "keep playing" button on the death screen. Intentionally live
+      // in production too for now (the user — may be removed once balance settles),
+      // so hardcore death is currently NOT terminal on the deployed build.
+      onDevContinue: () => this.resumeFromDeath(),
     });
   }
 
@@ -10701,6 +10824,40 @@ export class MainScene extends Phaser.Scene {
         .setDepth(2850); // fixed-HUD band (above WORLD_H, below menus)
     }
     this.inProgressBanner.setVisible(true);
+  }
+
+  // DEV test-mode "Continue" from the death screen (see showRunEndUI's
+  // onDevContinue). Respawn where you fell at full HP/stamina, drop every
+  // debuff, grant a generous invuln window, and shove nearby enemies back to
+  // their spawn — a universal deaggro that works for every enemy type (they all
+  // expose homeX/homeY) without touching each subclass's aggro-state model.
+  private resumeFromDeath(): void {
+    this.runEndUI.hide();
+    this.runOver = false;
+    this.isDead = false;
+    // Full pools + a clean slate (onPlayerDeath already cleared buffs/bleed/
+    // poison, but re-clear defensively in case anything re-applied since).
+    this.health.reset();
+    this.stamina.restore(this.stamina.max);
+    this.buffs.clear();
+    this.bleed.clear();
+    this.poison.clear();
+    this.playerShield = 0;
+    this.buffBarUI.sync(this.buffs.active());
+    this.statusBarUI.sync(this.statusEffects());
+    this.refreshHealthBar();
+    this.refreshStaminaBar();
+    this.reviveUsed = false; // let Undying trigger again after a test continue
+    this.invulnerableUntil = this.time.now + 3000; // generous window to relocate
+    // Send anything close back home so it stops mid-fight and re-idles from
+    // spawn; its own leash/steer logic takes over from there.
+    for (const e of this.enemies) {
+      if (!e.active || e.depleted) continue;
+      if (Phaser.Math.Distance.Between(e.x, e.y, this.player.x, this.player.y) > 900) continue;
+      e.setPosition(e.homeX, e.homeY);
+      (e.body as Phaser.Physics.Arcade.Body | undefined)?.setVelocity(0, 0);
+    }
+    this.eventLog.add("combat", "Continued (test mode) — respawned where you fell");
   }
 
   private respawnPlayer(): void {
@@ -11516,7 +11673,22 @@ export class MainScene extends Phaser.Scene {
   // A scene method rather than a free function only so it can reach the
   // run-scoped pity counter, which has to be shared across every container.
   private rollContainerLoot(loot: LootContainer, table: LootRollEntry[]): void {
-    loot.rollIfEmpty(table, { epics: epicPoolFor(table), pity: this.epicPity });
+    // Never hand out a special/epic item the player already owns — those are
+    // maxStack-1 uniques (usually ability-granting), so a duplicate is pure
+    // waste. Filter the pool against current ownership before rolling; if that
+    // empties it, rollIfEmpty simply skips the epic (and doesn't burn pity).
+    const pool = epicPoolFor(table);
+    const keys = pool.keys.filter((k) => !this.ownsItemAnywhere(k));
+    loot.rollIfEmpty(table, { epics: { chance: pool.chance, keys }, pity: this.epicPity });
+  }
+
+  // True if the player holds `key` anywhere it can live: backpack, hotbar, or
+  // any equipment slot. Used to keep duplicate uniques out of loot rolls.
+  private ownsItemAnywhere(key: string): boolean {
+    if (this.backpack.count(key) > 0) return true;
+    if (this.hotbar.container.count(key) > 0) return true;
+    for (const s of EQUIP_SLOTS) if (this.equipment.get(s.id)?.key === key) return true;
+    return false;
   }
 
   // Is any live enemy currently HUNTING the player from close enough to matter.
@@ -11549,18 +11721,27 @@ export class MainScene extends Phaser.Scene {
   private updateComfortRegen(): void {
     // Comfort's Resting regen takes the same penalty as every other heal source.
     if (this.currentRegenMult <= 0) return;
-    const resting = this.placedObjects.some(
-      (obj) =>
-        obj.getData("itemKey") === "comfort" &&
-        Phaser.Math.Distance.Between(this.player.x, this.player.y, obj.x, obj.y) <= COMFORT_RANGE &&
-        this.isNearCampfire(obj.x, obj.y, COMFORT_CAMPFIRE_RANGE),
-    );
-    if (resting && !this.isAnyEnemyAggro()) {
-      // Applied at FULL rate — the regen penalty is applied once, centrally, in
-      // buffs.tick(). Pre-scaling here as well would penalize Comfort twice
-      // (0.5 x 0.5 = 0.25 while poisoned) and silently make it the one heal
-      // source with different math.
-      this.buffs.apply({ id: "comfort_rest", name: "Resting", icon: "icon_comfort", hpPerSec: 1, durationMs: 400 });
+    // Highest campfire tier fuelling a Bedroll the player is resting on. -1 = not
+    // resting (no qualifying Bedroll+Campfire pair). The rate scales with the fire
+    // (the user: "resting regen should go up based on your campfire level").
+    let campfireTier = -1;
+    for (const bed of this.placedObjects) {
+      if (bed.getData("itemKey") !== "comfort") continue;
+      if (Phaser.Math.Distance.Between(this.player.x, this.player.y, bed.x, bed.y) > COMFORT_RANGE) continue;
+      for (const fire of this.placedObjects) {
+        if (fire.getData("itemKey") !== "campfire") continue;
+        if (Phaser.Math.Distance.Between(bed.x, bed.y, fire.x, fire.y) > COMFORT_CAMPFIRE_RANGE) continue;
+        campfireTier = Math.max(campfireTier, (fire.getData("tier") as number | undefined) ?? 0);
+      }
+    }
+    if (campfireTier >= 0 && !this.isAnyEnemyAggro()) {
+      // Lvl 1 (tier 0) → 1 HP/s (still under the weakest food buff), each campfire
+      // level adds +1. Applied at FULL rate — the regen penalty is applied once,
+      // centrally, in buffs.tick(). Pre-scaling here too would penalize Comfort
+      // twice (0.5 × 0.5 while poisoned) and make it the one heal source with
+      // different math.
+      const hpPerSec = 1 + campfireTier;
+      this.buffs.apply({ id: "comfort_rest", name: "Resting", icon: "icon_comfort", hpPerSec, durationMs: 400 });
     }
   }
 
@@ -11925,6 +12106,21 @@ export class MainScene extends Phaser.Scene {
         applied: appliedAugmentIds(eq),
       });
     }
+    // Weapons live in the hotbar, not an equipment slot — scan it too, or an
+    // equipped weapon never appears in the Set Gems list (the user: "weapons not
+    // showing up in the Set Gems section").
+    const hb = this.hotbar.container.all();
+    for (let i = 0; i < hb.length; i++) {
+      const st = hb[i];
+      if (!st || !isAugmentableItem(st.key)) continue;
+      out.push({
+        id: `hotbar:${i}`,
+        label: `${itemDef(st.key)?.name ?? st.key} (equipped)`,
+        key: st.key,
+        texture: itemDef(st.key)?.texture ?? "",
+        applied: appliedAugmentIds(st),
+      });
+    }
     const all = this.backpack.all();
     for (let i = 0; i < all.length; i++) {
       const st = all[i];
@@ -11947,7 +12143,11 @@ export class MainScene extends Phaser.Scene {
     if (!aug) return false;
     const [kind, ref] = targetId.split(":");
     const equipped = kind === "equip" ? this.equipment.get(ref as EquipSlot) : null;
-    const stack = kind === "equip" ? null : this.backpack.slot(Number(ref));
+    // "hotbar:" routes to the hotbar container (equipped weapons); "bag:" to the
+    // backpack. Previously anything non-equip was assumed to be the backpack,
+    // which mis-addressed a hotbar weapon's slot index.
+    const container = kind === "hotbar" ? this.hotbar.container : kind === "bag" ? this.backpack : null;
+    const stack = container ? container.slot(Number(ref)) : null;
     const inst = equipped ?? stack;
     if (!inst) return false;
     if (!aug.appliesToItemKeys.includes(inst.key)) return false;
@@ -11962,8 +12162,8 @@ export class MainScene extends Phaser.Scene {
     const next = [...(inst.upgrades ?? []), aug.id];
     if (equipped) {
       this.equipment.set(ref as EquipSlot, { ...equipped, upgrades: next });
-    } else if (stack) {
-      this.backpack.set(Number(ref), { ...stack, upgrades: next });
+    } else if (stack && container) {
+      container.set(Number(ref), { ...stack, upgrades: next });
     }
     this.sfx.upgrade();
     this.eventLog.add("recipe", `${itemDef(inst.key)?.name ?? inst.key} augmented: ${aug.name}`, itemDef(inst.key)?.texture);
@@ -12102,28 +12302,24 @@ export class MainScene extends Phaser.Scene {
       this.placedUpgradeGlyphs.delete(obj);
     }
 
+    // Destroy drops any loaded slots as loose pickups at the destroyed object
+    // (Minecraft-style recovery). drainAll clears the slots first, so the
+    // closeDryingRackMenu below finds nothing to refund — no double-drop.
     const rackIndex = this.dryingRacks.findIndex((r) => r.image === obj);
     if (rackIndex !== -1) {
       const station = this.dryingRacks[rackIndex].station;
-      if (station.input) {
-        this.spawnLooseDrop(
-          station.input.key,
-          station.input.count,
-          obj.x,
-          obj.y,
-          DROPPED_ITEM_MAGNET_COOLDOWN_MS,
-        );
+      for (const slot of station.drainAll()) {
+        this.spawnLooseDrop(slot.key, slot.count, obj.x, obj.y, DROPPED_ITEM_MAGNET_COOLDOWN_MS);
       }
       if (this.openRack === station) this.closeDryingRackMenu();
       this.dryingRacks.splice(rackIndex, 1);
     }
 
-    // Same refund + cleanup for a placed Smelter's loaded ore, reagent AND fuel.
+    // Same for a placed Smelter's loaded ore, reagent AND fuel.
     const smelterIndex = this.smelters.findIndex((s) => s.image === obj);
     if (smelterIndex !== -1) {
       const station = this.smelters[smelterIndex].station;
-      for (const slot of [station.input, station.reagent, station.fuel]) {
-        if (!slot) continue;
+      for (const slot of station.drainAll()) {
         this.spawnLooseDrop(slot.key, slot.count, obj.x, obj.y, DROPPED_ITEM_MAGNET_COOLDOWN_MS);
       }
       if (this.openRack === station) this.closeDryingRackMenu();
@@ -12201,8 +12397,19 @@ export class MainScene extends Phaser.Scene {
       ...armorUpgradesForItem(itemKey),
       ...toolUpgradesForItem(itemKey),
     ].find((u) => u.resultTier === tier + 1);
-    if (!next) return false;
-    return this.upgradeIngredientsKnown(next) && this.canAffordUpgrade(next);
+    if (next && this.upgradeIngredientsKnown(next) && this.canAffordUpgrade(next)) return true;
+    // Stations (no-ladder model) can be upgraded too, so a station sitting in the
+    // hotbar should show the arrow like a placed one does (the user: "workstations
+    // should show the upgrade yellow triangle while in the hotbar"). Approximate
+    // the applied count by tier (level == #applied): ready if this instance still
+    // has an un-applied, discovered, affordable station upgrade.
+    const stationUps = upgradesForItem(itemKey);
+    if (
+      stationUps.length > tier &&
+      stationUps.some((u) => this.upgradeIngredientsKnown(u) && this.canAffordUpgrade(u))
+    )
+      return true;
+    return false;
   }
 
   // Station equivalent: a placed station has an affordable upgrade ready if any
@@ -12697,7 +12904,7 @@ export class MainScene extends Phaser.Scene {
         id: "poison",
         name: "Poisoned",
         icon: "icon_status_poison",
-        detail: `${this.poison.dps()} dmg/s · ignores armor · healing -${Math.round((1 - POISON_REGEN_MULT) * 100)}%`,
+        detail: `${this.poison.dps()} dmg/s · ignores armor`,
         color: 0x8fd94a,
         remainingMs: this.poison.remainingMs(),
         durationMs: POISON_METER_FULL_MS,
@@ -12724,10 +12931,9 @@ export class MainScene extends Phaser.Scene {
         color: 0xc9a24a,
       });
     }
-    // Only shown when regen is blocked by something OTHER than poison — poison's
-    // own tooltip already says it stops healing, so pairing the two icons every
-    // time would be pure noise.
-    if (this.currentRegenMult < 1 && !this.poison.isPoisoned()) {
+    // Shown whenever a ZONE (miasma/mire) cuts regen. Poison no longer affects
+    // regen (2026-07-23), so this is independent of the poison status now.
+    if (this.currentRegenMult < 1) {
       const pct = Math.round((1 - this.currentRegenMult) * 100);
       out.push({
         id: "noregen",

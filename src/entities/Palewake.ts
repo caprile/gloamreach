@@ -1,6 +1,10 @@
 import Phaser from "phaser";
 import { Enemy } from "./Enemy";
 import type { IncomingDamageType } from "../systems/Weapons";
+import { enemyStat } from "../systems/enemyStats";
+
+// Combat stats from the Phaser-free source of truth (also read by the balancing dashboard).
+const S = enemyStat("palewake");
 
 // The gloam crypt's warden (biome 3 Phase 4c). Bespoke AI: extends Enemy for the
 // HP-bar/loot/death machinery, fully overrides update() (Snake/Gloamwarden
@@ -31,7 +35,7 @@ export type PalewakeState = "stalking" | "manifest" | "tether" | "unravel" | "va
 export const PALEWAKE_SCALE = 1.5;
 export const PALEWAKE_UNRAVEL_DAMAGE_MULTIPLIER = 1.6; // punish-window bonus (its analog of a stagger)
 
-const MAX_HEALTH = 240;
+const MAX_HEALTH = S.hp;
 const AGGRO_RADIUS = 300;
 const LEASH_RADIUS = 900; // crypt-sized; it owns the vault room, not the whole dungeon
 const DEAGGRO_REGEN_PER_SEC = 10;
@@ -118,8 +122,12 @@ export class Palewake extends Enemy {
       texture: "palewake",
       displayName: "The Palewake",
       // The vault nodes it seals are the real payoff (MainScene cracks them on
-      // death); this is the taste on top, mirroring the Gloamwarden.
+      // death); this is the taste on top. Now mirrors the Gloamwarden/Cinderwrought
+      // properly with a guaranteed REFINED TROPHY — the bayou miniboss tier (T3),
+      // so a crypt clear is a guaranteed relic roll (the user: "where are my
+      // guaranteed uncommon T3 trophies from minibosses?").
       loot: [
+        { resource: "refined_trophy_uncommon_t3", min: 1, max: 1 },
         { resource: "moonsilver", min: 2, max: 3 },
         { resource: "gloam_shard", min: 2, max: 4 },
       ],

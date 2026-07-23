@@ -40,7 +40,7 @@ requires standing near a placed Workbench (`MainScene.isNearWorkbench`).
 | Drying Rack | Crafting | 1 | Yes | 5 Wood, 4 Leather Scraps, 2 Bones | — | Item (placeable, station) |
 | Relic Forge | Crafting | 1 | Yes | 7 Stone, 5 Bones, 1 Gremlin Trophy | — | Item (placeable, station — roll relics) |
 | Gremlin Cap | Armor | 1 | Yes | 1 Gremlin Leather, 5 Blackberries | Light Armor 0 | Item (armor, helmet) |
-| Gremlin Shirt | Armor | 1 | Yes | 3 Gremlin Leather, 1 Leather Scraps, 5 Bones | Light Armor 0 | Item (armor, chest) |
+| Gremlin Shirt | Armor | 1 | Yes | 3 Gremlin Leather, 1 Leather Scraps, 5 Bones | Light Armor 0 | Item (armor, chest, **heavy** — the earliest heavy piece; Cap/Pants stay light) |
 | Gremlin Pants | Armor | 1 | Yes | 2 Gremlin Leather, 2 Leather Scraps, 1 Blackberry | Light Armor 0 | Item (armor, legs) |
 | Gremlin Totem | Misc | 1 | Yes | 3 Gremlin Trophy, 1 Wood, 1 Gremlin Guck | — | Item (ritual — summons the Gremlin King at the Boss Altar) |
 | Effigy of the Duneshaper | Misc | 1 | Yes | 3 Gloam-Bone Totem, 2 Gloam Shard, 8 Bones | — | Item (ritual — summons the Duneshaper at a badlands altar; crafting it reveals the altars on the map) |
@@ -318,10 +318,10 @@ B4-P5 alloy recipes ended up smelting with no heat source at all.
 
 | Input | Reagent (per ingot) | Fuel (per ingot) | Output | Smelter Tier |
 |---|---|---|---|---|
-| Sunscorch Ore (common, scattered badlands) | 1 Hex Essence | 2 Wood | Sunsteel Ingot | Any (Lvl 1) |
-| Cinderforged Ore (rare veins + Sunken Forge POI) | 1 Hex Essence | 3 Wood | Embersteel Ingot | Lvl 2 (Ember Crucible) |
-| Bog Ore (bayou — **surface-mineable since Phase 4a**) | 1 **Moonsilver** (crypt vaults only) | 3 Wood | Gloamsteel Ingot | Lvl 2 (Ember Crucible) |
-| Sunsteel Ingot | 2 **Bog Ore** | 3 Wood | Mirebronze Ingot | Lvl 2 (Ember Crucible) |
+| Sunscorch Ore (common, scattered badlands) | 1 Hex Essence | 1 Wood | Sunsteel Ingot | Any (Lvl 1) |
+| Cinderforged Ore (rare veins + Cinder Forge POI) | 1 Hex Essence | 1 Wood | Embersteel Ingot | Lvl 2 (Ember Crucible) |
+| Bog Ore (bayou — **surface-mineable since Phase 4a**) | 1 **Moonsilver** (crypt vaults only) | 1 Wood | Gloamsteel Ingot | Lvl 2 (Ember Crucible) |
+| Sunsteel Ingot | 2 **Bog Ore** | 1 Wood | Mirebronze Ingot | Lvl 2 (Ember Crucible) |
 
 Ore ratio is **1 : 1** (S1 rebalance — the old 2:1 made forging grindy). Clay (Smelter build material), Sunscorch Ore, and rare Cinderforged
 veins are mineable `mine` nodes scattered in the badlands (Stone Pickaxe,

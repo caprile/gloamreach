@@ -1,5 +1,11 @@
 import Phaser from "phaser";
 import { Enemy } from "./Enemy";
+import { enemyStat } from "../systems/enemyStats";
+
+// Combat stats sourced from the Phaser-free source of truth (also read by the
+// balancing dashboard, so the two can never drift). Tune numbers there.
+const S = enemyStat("boar");
+const ELITE = S.elite!;
 
 // Boar — the bruiser / standout beast of the roster. Its souls-like identity is
 // a committed CHARGE (a locked-direction gore-rush that overshoots past the
@@ -13,7 +19,7 @@ import { Enemy } from "./Enemy";
 
 const AGGRO_RADIUS = 120; // px — the boar notices and commits from a fair range
 const DEAGGRO_RADIUS = 230; // hysteresis gap above aggro, avoids boundary flicker
-const CHASE_SPEED = 60; // px/s — deliberate approach; slower than the player so it relies on the charge to close
+const CHASE_SPEED = S.moveSpeed; // px/s — deliberate approach; slower than the player so it relies on the charge to close
 const WANDER_SPEED = 20;
 // Idle wander is now anchored to the spawn point (playtest: "things wander too
 // far from their spawn — needs an anchor"). Targets are drawn fresh from spawn
@@ -22,8 +28,8 @@ const WANDER_SPEED = 20;
 // back home instead of walking off.
 const WANDER_RADIUS = 90;
 
-const MAX_HEALTH = 20;
-const BITE_DAMAGE = 25; // shared "hit" value for both the gore bite and the charge
+const MAX_HEALTH = S.hp;
+const BITE_DAMAGE = S.attacks[0].damage; // shared "hit" value for both the gore bite and the charge
 
 // Point-blank gore bite — short, snappy, keeps a cornered player honest.
 // Also doubles as the boar's melee standoff distance now that it holds here
@@ -43,7 +49,7 @@ const GORE_KNOCKBACK = 120;
 // and the overshoot + recovery leave the boar's flank exposed.
 const CHARGE_TRIGGER_MAX = 220; // px — beyond this it just chases to close the gap
 const CHARGE_WINDUP_MS = 620; // paws-the-ground tell — long enough to read and sidestep
-const CHARGE_SPEED = 270; // px/s — clearly faster than chase, so it closes a kiter
+const CHARGE_SPEED = S.burstSpeed!; // px/s — clearly faster than chase, so it closes a kiter
 // Overshoot + recovery both trimmed per playtest feedback ("recover faster,
 // don't overshoot so much") — still a real punish window, just less brutal.
 const CHARGE_MAX_DISTANCE = 170; // travels this far, overshooting past the player (was 230)
@@ -89,17 +95,17 @@ export class Boar extends Enemy {
             { resource: "boar_meat", min: 1, max: 1 },
             { resource: "bones", min: 1, max: 2 },
           ],
-      maxHealth: elite ? Math.round(MAX_HEALTH * 1.5) : MAX_HEALTH,
-      biteDamage: elite ? Math.round(BITE_DAMAGE * 1.5) : BITE_DAMAGE,
+      maxHealth: elite ? Math.round(MAX_HEALTH * ELITE.hp) : MAX_HEALTH,
+      biteDamage: elite ? Math.round(BITE_DAMAGE * ELITE.damage) : BITE_DAMAGE,
       elite,
       eliteTrophy: "boar_trophy",
     });
     this.spawnX = cfg.x;
     this.spawnY = cfg.y;
     if (elite) {
-      this.speedMult = 1.1;
-      this.setScale(1.3);
-      this.baseScale = 1.3; // wind-up pulse throbs around the elite's size
+      this.speedMult = ELITE.speed;
+      this.setScale(ELITE.scale);
+      this.baseScale = ELITE.scale; // wind-up pulse throbs around the elite's size
     }
   }
 

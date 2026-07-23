@@ -1,6 +1,12 @@
 import Phaser from "phaser";
 import { Enemy } from "./Enemy";
 import type { SwingConfig } from "./Enemy";
+import { enemyStat } from "../systems/enemyStats";
+
+// Combat stats from the Phaser-free source of truth (also read by the balancing
+// dashboard — tune numbers there). attacks[0] = claw.
+const S = enemyStat("murkling");
+const ELITE = S.elite!;
 
 // Murkling — the bayou's FAST MELEE SWARM (biome 3 Phase 4b), the Duskrunner
 // analog. Small gloam-warped sprite-beasts that boil out of the reeds in packs
@@ -21,17 +27,17 @@ const DEAGGRO_RADIUS = 640;
 // swarm's identity: you cannot outrun a Murkling nest, you kill it, sweep it
 // with an AOE arc, or blink out. Every other bayou creature is escapable on
 // foot; this one makes you spend something.
-const CHASE_SPEED = 172;
+const CHASE_SPEED = S.moveSpeed;
 const WANDER_SPEED = 30;
 const MELEE_RANGE = 26;
 const PACK_AGGRO_RADIUS = 340; // wide: one Murkling waking means the whole reed-bed wakes
 
-const MAX_HEALTH = 40; // still ~one bayou-tier hit for a strong weapon — by design
+const MAX_HEALTH = S.hp; // still ~one bayou-tier hit for a strong weapon — by design
 // 62 raw. Bayou armor is thick (Gloamsteel full set = 42 flat), so a swarm unit
 // needs a real number to land more than the floor-of-1 chip; at 62 it nets ~20
 // through full plate and ~32 through Mirehide light — with 4-6 of them swinging
 // on a 130ms cooldown, a nest you ignore genuinely kills you.
-const CLAW_DAMAGE = 62;
+const CLAW_DAMAGE = S.attacks[0].damage;
 
 // The shortest swing in the roster — a skitter-and-slash, not a telegraphed
 // commitment. You don't dodge an individual Murkling claw; you kill the pack or
@@ -63,8 +69,8 @@ export class Murkling extends Enemy {
       loot: elite
         ? [{ resource: "gloam_dust", min: 2, max: 3 }]
         : [{ resource: "gloam_dust", min: 1, max: 2 }],
-      maxHealth: elite ? Math.round(MAX_HEALTH * 1.5) : MAX_HEALTH,
-      biteDamage: elite ? Math.round(CLAW_DAMAGE * 1.5) : CLAW_DAMAGE,
+      maxHealth: elite ? Math.round(MAX_HEALTH * ELITE.hp) : MAX_HEALTH,
+      biteDamage: elite ? Math.round(CLAW_DAMAGE * ELITE.damage) : CLAW_DAMAGE,
       elite,
       eliteTrophy: "murkling_trophy",
       // Deliberately NEUTRAL to every damage type: the swarm is the roster's
@@ -74,9 +80,9 @@ export class Murkling extends Enemy {
     this.packAggro = true;
     this.packAggroRadius = PACK_AGGRO_RADIUS;
     this.weaveOffset = Phaser.Math.FloatBetween(-SWARM_SPREAD, SWARM_SPREAD);
-    this.setScale(elite ? 1.15 : 0.85); // small — the swarm reads as many little things
-    this.baseScale = elite ? 1.15 : 0.85;
-    if (elite) this.speedMult = 1.1;
+    this.setScale(elite ? ELITE.scale : S.scale); // small — the swarm reads as many little things
+    this.baseScale = elite ? ELITE.scale : S.scale;
+    if (elite) this.speedMult = ELITE.speed;
   }
 
   update(_delta: number, playerX: number, playerY: number, now: number): boolean {

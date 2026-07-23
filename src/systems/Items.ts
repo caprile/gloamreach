@@ -841,11 +841,15 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     maxStack: 1,
     hotbarable: false,
     armorSlot: "chest",
-    armorType: "light_armor",
+    // HEAVY (2026-07-23, the user): the game's earliest heavy piece, so a biome-1
+    // player has an on-ramp to heavy-armor's magic/fire mitigation + heavy_armor
+    // skill XP well before the badlands forged sets. The Cap/Pants stay light, so
+    // the Gremlin set is a deliberate mix.
+    armorType: "heavy_armor",
     armorDefense: 3,
     stats: [
       { label: "Type", value: "Armor (Chest)" },
-      { label: "Armor Type", value: "Light" },
+      { label: "Armor Type", value: "Heavy" },
       { label: "Armor", value: "3" },
     ],
   },
@@ -1467,7 +1471,9 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     texture: "icon_cloak_mireborn",
     maxStack: 1,
     hotbarable: false,
-    armorSlot: "back",
+    // The stat "Cloak" slot, NOT "back" — that's the R-ability cape slot, and a
+    // utility cloak shouldn't evict your R ability (the user 2026-07-23).
+    armorSlot: "cloak",
     passive: { statusResistPct: 30 },
   },
 

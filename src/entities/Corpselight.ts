@@ -1,6 +1,12 @@
 import Phaser from "phaser";
 import { Enemy } from "./Enemy";
 import type { ProjectileConfig, ProjectileHost } from "./Projectile";
+import { enemyStat } from "../systems/enemyStats";
+
+// Combat stats from the Phaser-free source of truth (also read by the balancing
+// dashboard — tune there). attacks[0] = homing orb.
+const S = enemyStat("corpselight");
+const ELITE = S.elite!;
 
 // Corpselight — the bayou's ONE ranged creature (biome 3 Phase 4b), and
 // deliberately UNCOMMON. The roster is melee-core by design (locked), so this is
@@ -30,8 +36,8 @@ const DRIFT_SPEED = 85; // a weightless float — still far under a sprint, it n
 const WANDER_SPEED = 18;
 const WANDER_RADIUS = 90;
 
-const MAX_HEALTH = 190;
-const ORB_DAMAGE = 34; // magic — bypasses armor entirely, so this IS very close to the net number
+const MAX_HEALTH = S.hp;
+const ORB_DAMAGE = S.attacks[0].damage; // magic — bypasses armor entirely, so this IS very close to the net number
 // Orb tuning (2026-07-22, the user: "the projectiles fade away really soon"). The
 // first pass paired 110px/s with a 4.2s lifetime = a ~460px leash, so an orb
 // died almost as soon as it was fired and the Corpselight read as harmless. Now
@@ -40,7 +46,7 @@ const ORB_DAMAGE = 34; // magic — bypasses armor entirely, so this IS very clo
 // bayou-tier sprint (166-229), so running in a straight line outruns it outright;
 // the turn rate only punishes standing still or turning into it.
 const ORB_SPEED = 170;
-const ORB_TURN_RATE = 1.9; // rad/s — a wider arc than before, still out-turnable at speed
+const ORB_TURN_RATE = 1.2; // rad/s — loosened 1.9→1.2 (2026-07-23): the orb was too sticky to shake; now movement/dash genuinely dodges it
 // Hard expiry (a curving orb never trips distance-despawn). 9000 at 170px/s was
 // ~1.5km of chase — the orb outlived the whole engagement. The Projectile miss
 // rule ends most orbs well before this; this is just the backstop for one that
@@ -69,7 +75,7 @@ export class Corpselight extends Enemy {
       loot: elite
         ? [{ resource: "hex_essence", min: 6, max: 8 }]
         : [{ resource: "hex_essence", min: 3, max: 5 }],
-      maxHealth: elite ? Math.round(MAX_HEALTH * 1.5) : MAX_HEALTH,
+      maxHealth: elite ? Math.round(MAX_HEALTH * ELITE.hp) : MAX_HEALTH,
       biteDamage: 0, // never melees — every point of its damage is an orb
       elite,
       eliteTrophy: "corpselight_trophy",
@@ -81,13 +87,13 @@ export class Corpselight extends Enemy {
       resistances: { fire: 1.25, magic: 1.25 },
       upright: true, // a hovering wisp-shroud — mirror, never rotate
     });
-    this.orbDamage = elite ? Math.round(ORB_DAMAGE * 1.5) : ORB_DAMAGE;
+    this.orbDamage = elite ? Math.round(ORB_DAMAGE * ELITE.damage) : ORB_DAMAGE;
     this.spawnX = cfg.x;
     this.spawnY = cfg.y;
     if (elite) {
-      this.speedMult = 1.1;
-      this.setScale(1.3);
-      this.baseScale = 1.3;
+      this.speedMult = ELITE.speed;
+      this.setScale(ELITE.scale);
+      this.baseScale = ELITE.scale;
     }
   }
 

@@ -2,6 +2,15 @@ import Phaser from "phaser";
 import { Enemy } from "./Enemy";
 import type { SwingConfig } from "./Enemy";
 import type { ProjectileConfig, ProjectileHost } from "./Projectile";
+import { enemyStat } from "../systems/enemyStats";
+
+// Combat stats from the Phaser-free source of truth (also read by the balancing
+// dashboard, so the two can't drift). attacks[0] = rock, attacks[1] = claw for
+// the ranged variant; attacks[0] = claw for the melee Gremling. Tune there.
+const SR = enemyStat("ranged_gremlin");
+const SR_ELITE = SR.elite!;
+const SM = enemyStat("melee_gremling");
+const SM_ELITE = SM.elite!;
 
 // Two variants (per the first-biome content plan's Milestone C note, added
 // 2026-07-07): a stronger ranged+melee one, called "Gremlin", and a weaker
@@ -20,10 +29,10 @@ const RANGED_AGGRO_RADIUS = 136; // larger than melee — ranged notices earlier
 const RANGED_DEAGGRO_RADIUS = 400;
 const KITE_SPEED = 55; // backs away while too close (below RANGED_MIN_KITE_DIST)
 const RANGED_MIN_KITE_DIST = 140; // closer than this -> flee; keeps some daylight before melee range
-const RANGED_PURSUE_SPEED = 70; // chases in while out of shot range (beyond PROJECTILE_MAX_RANGE)
+const RANGED_PURSUE_SPEED = SR.moveSpeed; // chases in while out of shot range (beyond PROJECTILE_MAX_RANGE)
 const RANGED_MELEE_RANGE = 20; // player closing to this -> switches to melee mode (~15% shorter, playtest feedback)
 const RANGED_MELEE_EXIT_RANGE = 34; // must back out past this (not just RANGED_MELEE_RANGE) to leave melee mode — hysteresis gap, same reasoning as AGGRO/DEAGGRO_RADIUS elsewhere: without it, the player-enemy physics collider's constant separation jitter flips the mode every frame right at the boundary
-const RANGED_CLAW_DAMAGE = 15; // was 10 — light enemy-dmg buff (2026-07-11 rebalance): gremlins were floored to 1 dmg vs Lvl2+ armor
+const RANGED_CLAW_DAMAGE = SR.attacks[1].damage; // was 10 — light enemy-dmg buff (2026-07-11 rebalance): gremlins were floored to 1 dmg vs Lvl2+ armor
 // Telegraphed close-range claw — a rare "back off!" swipe the kiter only does
 // when the player is right on top of it (the user: it should rarely fire). The
 // shove knockback reinforces its kiter identity: it hits, pushes you away, and
@@ -37,10 +46,10 @@ const RANGED_CLAW_SWING: SwingConfig = {
   cooldownMs: 600,
   knockback: 210,
 };
-const PROJECTILE_SPEED = 220;
-const PROJECTILE_DAMAGE = 11; // was 8 — light enemy-dmg buff (2026-07-11 rebalance)
+const PROJECTILE_SPEED = SR.attacks[0].projectileSpeed!;
+const PROJECTILE_DAMAGE = SR.attacks[0].damage; // was 8 — light enemy-dmg buff (2026-07-11 rebalance)
 const PROJECTILE_MAX_RANGE = 220; // ~15% shorter, playtest feedback
-const RANGED_MAX_HEALTH = 32; // doubled 2026-07-07 (was 16) — tanky enough to trade at range
+const RANGED_MAX_HEALTH = SR.hp; // doubled 2026-07-07 (was 16) — tanky enough to trade at range
 // Burst pattern (2026-07-07 spec): once the player is in range, fire a quick
 // 2-shot burst, then wait out a longer cooldown before the next burst — not a
 // flat per-shot cooldown. BURST_SHOT_INTERVAL_MS is deliberately short (a
@@ -105,16 +114,16 @@ export class RangedGremlin extends Enemy {
             { resource: "gremlin_skin", min: 1, max: 1 },
             { resource: "gremlin_blood", min: 1, max: 1 },
           ],
-      maxHealth: elite ? Math.round(RANGED_MAX_HEALTH * 1.5) : RANGED_MAX_HEALTH,
-      biteDamage: elite ? Math.round(RANGED_CLAW_DAMAGE * 1.5) : RANGED_CLAW_DAMAGE, // reuses Enemy's shared "melee hit" field name
+      maxHealth: elite ? Math.round(RANGED_MAX_HEALTH * SR_ELITE.hp) : RANGED_MAX_HEALTH,
+      biteDamage: elite ? Math.round(RANGED_CLAW_DAMAGE * SR_ELITE.damage) : RANGED_CLAW_DAMAGE, // reuses Enemy's shared "melee hit" field name
       elite,
     });
     this.spawnX = cfg.x;
     this.spawnY = cfg.y;
     if (elite) {
-      this.speedMult = 1.1;
-      this.setScale(1.4);
-      this.baseScale = 1.4; // so the wind-up pulse throbs around the elite's size
+      this.speedMult = SR_ELITE.speed;
+      this.setScale(SR_ELITE.scale);
+      this.baseScale = SR_ELITE.scale; // so the wind-up pulse throbs around the elite's size
     }
   }
 
@@ -301,11 +310,11 @@ export class RangedGremlin extends Enemy {
 
 const MELEE_AGGRO_RADIUS = 110; // ~15% shorter, playtest feedback
 const MELEE_DEAGGRO_RADIUS = 220;
-const MELEE_CHASE_SPEED = 70;
+const MELEE_CHASE_SPEED = SM.moveSpeed;
 const MELEE_WANDER_SPEED = 20;
 const MELEE_RANGE = 20; // ~15% shorter, playtest feedback
-const MELEE_CLAW_DAMAGE = 12; // was 8 — light enemy-dmg buff (2026-07-11); still weaker than the ranged variant's claw (15) and Boar's bite (25)
-const MELEE_MAX_HEALTH = 12;
+const MELEE_CLAW_DAMAGE = SM.attacks[0].damage; // was 8 — light enemy-dmg buff (2026-07-11); still weaker than the ranged variant's claw (15) and Boar's bite (25)
+const MELEE_MAX_HEALTH = SM.hp;
 // Snappy telegraphed claw for the weak trash Gremling — the intentionally
 // simple, still-kiteable baseline: a quick wind-up + short recovery, just
 // enough of a tell/punish window that it can't be pure-facetanked.
@@ -357,15 +366,15 @@ export class MeleeGremling extends Enemy {
       loot: elite
         ? [{ resource: "gremlin_blood", min: 2, max: 2 }]
         : [{ resource: "gremlin_blood", min: 1, max: 1 }],
-      maxHealth: elite ? Math.round(MELEE_MAX_HEALTH * 1.5) : MELEE_MAX_HEALTH,
-      biteDamage: elite ? Math.round(MELEE_CLAW_DAMAGE * 1.5) : MELEE_CLAW_DAMAGE,
+      maxHealth: elite ? Math.round(MELEE_MAX_HEALTH * SM_ELITE.hp) : MELEE_MAX_HEALTH,
+      biteDamage: elite ? Math.round(MELEE_CLAW_DAMAGE * SM_ELITE.damage) : MELEE_CLAW_DAMAGE,
       elite,
     });
     this.wanderAnchor = cfg.wanderAnchor ?? { x: cfg.x, y: cfg.y, radius: 80 };
     if (elite) {
-      this.speedMult = 1.1;
-      this.setScale(1.4);
-      this.baseScale = 1.4; // wind-up pulse throbs around the elite's size
+      this.speedMult = SM_ELITE.speed;
+      this.setScale(SM_ELITE.scale);
+      this.baseScale = SM_ELITE.scale; // wind-up pulse throbs around the elite's size
     }
   }
 

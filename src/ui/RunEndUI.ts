@@ -11,6 +11,10 @@ export interface RunEndDeps {
   onNewRun: () => void;
   onContinue: () => void; // only wired to a button on a win (keep exploring)
   onClearScores: () => void;
+  // Escape hatch on the death screen: respawn where you fell at full HP/stamina
+  // and keep playing (test-mode). Currently wired in production too (see
+  // MainScene); leave optional so it can be gated off again later.
+  onDevContinue?: () => void;
 }
 
 // Terminal run-end / score screen (M-R1). Full-screen scrim + centered panel,
@@ -173,6 +177,20 @@ export class RunEndUI {
         0.5,
       );
       mkButton(cx - 96, "[ Continue ]", "#7ac27a", () => deps.onContinue());
+      mkButton(cx + 96, "[ New Run ]", "#e3b25a", () => deps.onNewRun());
+    } else if (deps.onDevContinue) {
+      // Death screen in a DEV build: offer a test-mode continue that respawns
+      // you where you fell (full HP/stamina, nearby enemies sent home) so the
+      // run's later content can be reached without a clean playthrough.
+      this.text(
+        cx,
+        btnY - 24,
+        "Continue = test mode: respawn here at full HP, deaggro nearby enemies",
+        10,
+        "#8a93a3",
+        0.5,
+      );
+      mkButton(cx - 108, "[ Continue (test) ]", "#7ac27a", () => deps.onDevContinue!());
       mkButton(cx + 96, "[ New Run ]", "#e3b25a", () => deps.onNewRun());
     } else {
       mkButton(cx, "[ New Run ]", "#e3b25a", () => deps.onNewRun());

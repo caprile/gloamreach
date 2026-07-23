@@ -1,6 +1,10 @@
 import Phaser from "phaser";
 import { Enemy } from "./Enemy";
 import type { IncomingDamageType } from "../systems/Weapons";
+import { enemyStat } from "../systems/enemyStats";
+
+// Combat stats from the Phaser-free source of truth (also read by the balancing dashboard).
+const S = enemyStat("sanguinarch");
 
 // The blood crypt's warden (biome 3 Phase 4c). Bespoke AI: extends Enemy, fully
 // overrides update(). The third of three deliberately different crypt machines —
@@ -29,7 +33,7 @@ export const SANGUINARCH_SCALE = 1.5;
 export const SANGUINARCH_ENGORGED_SCALE = 1.85; // the sac visibly swells when it drinks
 export const SANGUINARCH_ENGORGED_DAMAGE_MULTIPLIER = 1.7;
 
-const MAX_HEALTH = 280;
+const MAX_HEALTH = S.hp;
 const AGGRO_RADIUS = 300;
 const LEASH_RADIUS = 900;
 const DEAGGRO_REGEN_PER_SEC = 10;
@@ -86,7 +90,10 @@ export class Sanguinarch extends Enemy {
       y: cfg.y,
       texture: "sanguinarch",
       displayName: "The Sanguinarch",
+      // Guaranteed REFINED TROPHY (T3, bayou miniboss tier) + the vault it seals,
+      // mirroring the Gloamwarden(T1)/Cinderwrought(T2) — see Palewake.
       loot: [
+        { resource: "refined_trophy_uncommon_t3", min: 1, max: 1 },
         { resource: "moonsilver", min: 2, max: 3 },
         { resource: "gloam_shard", min: 2, max: 4 },
       ],

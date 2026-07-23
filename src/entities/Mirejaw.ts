@@ -1,6 +1,12 @@
 import Phaser from "phaser";
 import { Enemy } from "./Enemy";
 import type { SwingConfig } from "./Enemy";
+import { enemyStat } from "../systems/enemyStats";
+
+// Combat stats from the Phaser-free source of truth (also read by the balancing
+// dashboard — tune there). attacks[0] = chomp, attacks[1] = lunge.
+const S = enemyStat("mirejaw");
+const ELITE = S.elite!;
 
 // Mirejaw — the Duskmire Bayou's SIGNATURE AMBUSHER (biome 3 Phase 4b). A
 // gloam-corrupted alligator that lies half-sunk in the muck until something
@@ -44,19 +50,19 @@ const STALK_PATIENCE_MS = 2400;
 
 // Faster than a player's WALK (95) and most of a sprint, so escaping on foot
 // means actually committing to a sprint/dash instead of strolling off.
-const CHASE_SPEED = 138;
+const CHASE_SPEED = S.moveSpeed;
 const DEAGGRO_RADIUS = 720; // sticky (the Duskrunner's 620 precedent) — an apex predator commits
 
-const MAX_HEALTH = 320; // ~5-6 bayou-tier hits; the badlands' 95-HP Hexling was two
+const MAX_HEALTH = S.hp; // ~5-6 bayou-tier hits; the badlands' 95-HP Hexling was two
 
 // The ambush: a long telegraph, then a fast locked-line lunge. It has to cover
 // enough ground to catch a sprinting player, so the lunge outruns a sprint while
 // it lasts — the counterplay is the 430ms tell + the locked direction, not speed.
 const LUNGE_WINDUP_MS = 430; // jaw-open/coil tell — the sidestep window
-const LUNGE_SPEED = 560;
+const LUNGE_SPEED = S.burstSpeed!;
 const LUNGE_MAX_DIST = 340;
 const LUNGE_HIT_RADIUS = 44;
-const LUNGE_DAMAGE = 120; // ~78 net through a full Gloamsteel set — being caught really hurts
+const LUNGE_DAMAGE = S.attacks[1].damage; // ~78 net through a full Gloamsteel set — being caught really hurts
 const LUNGE_KNOCKBACK = 190;
 const LUNGE_RECOVER_MS = 720; // beached/planted after the snap — the punish window
 const LUNGE_COOLDOWN_MS = 2600;
@@ -65,7 +71,7 @@ const LUNGE_BLEED_DPS = 9;
 const LUNGE_BLEED_MS = 6000;
 
 // The surfaced melee chomp — its bread-and-butter once hunting.
-const CHOMP_DAMAGE = 85;
+const CHOMP_DAMAGE = S.attacks[0].damage;
 const CHOMP_BLEED_DPS = 6;
 const CHOMP_BLEED_MS = 4000;
 const CHOMP_SWING: SwingConfig = {
@@ -111,8 +117,8 @@ export class Mirejaw extends Enemy {
             { resource: "mirehide", min: 1, max: 2 },
             { resource: "mirejaw_meat", min: 1, max: 2 },
           ],
-      maxHealth: elite ? Math.round(MAX_HEALTH * 1.5) : MAX_HEALTH,
-      biteDamage: elite ? Math.round(CHOMP_DAMAGE * 1.5) : CHOMP_DAMAGE,
+      maxHealth: elite ? Math.round(MAX_HEALTH * ELITE.hp) : MAX_HEALTH,
+      biteDamage: elite ? Math.round(CHOMP_DAMAGE * ELITE.damage) : CHOMP_DAMAGE,
       elite,
       eliteTrophy: "mirejaw_trophy",
       barScale: 1.5, // big sprite, readable overhead bar
@@ -123,14 +129,14 @@ export class Mirejaw extends Enemy {
       // spread the badlands used to make carrying two weapons matter.
       resistances: { pierce: 0.5, slash: 1.25 },
     });
-    this.lungeDamage = elite ? Math.round(LUNGE_DAMAGE * 1.5) : LUNGE_DAMAGE;
+    this.lungeDamage = elite ? Math.round(LUNGE_DAMAGE * ELITE.damage) : LUNGE_DAMAGE;
     this.setAlpha(LURK_ALPHA);
     // A gloam-gorged alligator should read as the biggest thing in the swamp
     // (the user: "the gators are too small"). The texture itself also grew to
     // 48x22; this scales it past every other common creature.
-    this.setScale(elite ? 2.0 : 1.55);
-    this.baseScale = elite ? 2.0 : 1.55;
-    if (elite) this.speedMult = 1.1;
+    this.setScale(elite ? ELITE.scale : S.scale);
+    this.baseScale = elite ? ELITE.scale : S.scale;
+    if (elite) this.speedMult = ELITE.speed;
   }
 
   update(delta: number, playerX: number, playerY: number, now: number): boolean {

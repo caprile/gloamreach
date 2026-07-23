@@ -1,5 +1,11 @@
 import Phaser from "phaser";
 import { Enemy } from "./Enemy";
+import { enemyStat } from "../systems/enemyStats";
+
+// Combat stats from the Phaser-free source of truth (also read by the balancing
+// dashboard — tune numbers there so the two can't drift).
+const S = enemyStat("snake");
+const ELITE = S.elite!;
 
 // First hidden/ambush enemy — structurally different from Boar, not just a
 // re-tuned copy (see CLAUDE.md's "per-enemy tunable combat stats" decision
@@ -9,7 +15,7 @@ import { Enemy } from "./Enemy";
 type SnakeMode = "hidden" | "striking" | "fleeing";
 
 const AMBUSH_RADIUS = 45; // px — much tighter than Boar's 140; a trigger, not a chase range
-const STRIKE_SPEED = 150; // px/s — a fast committed lunge along the locked direction (was a slower homing chase)
+const STRIKE_SPEED = S.moveSpeed; // px/s — a fast committed lunge along the locked direction (was a slower homing chase)
 const FLEE_SPEED = 70; // px/s — retreat after striking
 const MELEE_RANGE = 22; // px
 // Coil wind-up (the tell + dodge window) then a short locked-direction lunge.
@@ -21,8 +27,8 @@ const FLEE_DURATION_MS = 1200; // post-bite retreat before fully re-hiding
 const RETALIATION_FLEE_MS = 2500; // "a few seconds" retreat after being hit post-bite, before wanting to strike again
 const REHIDE_COOLDOWN_MS = 3500; // can't ambush again until this long after fully re-hiding
 const HIDDEN_ALPHA = 0.35; // "in the grass" — reuses the placeholder texture, no new art
-const MAX_HEALTH = 11;
-const BITE_DAMAGE = 20; // a landed ambush bite should hurt — low HP is the tradeoff, not low damage
+const MAX_HEALTH = S.hp;
+const BITE_DAMAGE = S.attacks[0].damage; // a landed ambush bite should hurt — low HP is the tradeoff, not low damage
 
 // Own deaggro condition (per CLAUDE.md's "different condition, not just
 // different number" standing decision) — Snake is a hit-and-run ambusher, so
@@ -65,16 +71,16 @@ export class Snake extends Enemy {
             { resource: "leather", min: 1, max: 1 },
             { resource: "snake_meat", min: 1, max: 1 },
           ],
-      maxHealth: elite ? Math.round(MAX_HEALTH * 1.5) : MAX_HEALTH,
-      biteDamage: elite ? Math.round(BITE_DAMAGE * 1.5) : BITE_DAMAGE,
+      maxHealth: elite ? Math.round(MAX_HEALTH * ELITE.hp) : MAX_HEALTH,
+      biteDamage: elite ? Math.round(BITE_DAMAGE * ELITE.damage) : BITE_DAMAGE,
       elite,
       eliteTrophy: "snake_trophy",
     });
     this.setAlpha(HIDDEN_ALPHA);
     if (elite) {
-      this.speedMult = 1.1;
-      this.setScale(1.3);
-      this.baseScale = 1.3; // wind-up pulse throbs around the elite's size
+      this.speedMult = ELITE.speed;
+      this.setScale(ELITE.scale);
+      this.baseScale = ELITE.scale; // wind-up pulse throbs around the elite's size
     }
   }
 

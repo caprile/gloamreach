@@ -37,6 +37,13 @@ import { EPIC_ITEM_KEYS, EPIC_POOL_T1, EPIC_POOL_T2, EPIC_POOL_T3 } from "../sys
 import type { EpicPool } from "../systems/LootContainer";
 import { PROCESS_RECIPES } from "../systems/Processing";
 import { COOK_RECIPES } from "../systems/Cooking";
+import { PLAYER_WALK_SPEED } from "../systems/movement";
+import {
+  ALL_ENEMY_STATS,
+  enemyBurstDps,
+  type EnemyStat as EnemyStatLive,
+  type EnemyDamageClass,
+} from "../systems/enemyStats";
 import {
   RELIC_DEFS,
   RELIC_RARITIES,
@@ -366,7 +373,7 @@ const ENEMIES: EnemyStat[] = [
     ],
     loot: "5-8 Ember Shard + 1 Ember-Refined Trophy (Uncommon, Tier 2). Its ring of shielded Ember Deposits cracks open on death.",
     notes:
-      "Sunken Forge guardian (badlands Phase 3 POI 2). 5 forges × 1 Cinderwrought each = 5. PB17 REWORK (the user: the old 2v1 of stationary fire-swingers felt awkward/incohesive vs the solo Gloamwarden): now ONE solo boss, HP 260→650, and CANNOT be staggered (poise mechanic removed entirely — a pure survive-and-DPS wall). Both attacks now RE-AIM at the player at execute (lock at execute, track through the wind-up) with wide/long hitboxes, so a slow-walking player (95px/s) can't sidestep or back-pedal out — the only reliable dodge is a dash's i-frames. Attack cooldown 850ms (was 1050 for the 2v1). Cinder Cone deals FIRE (bypasses flat armor); Forge Hammer is PHYSICAL (armor applies) — one fire + one physical attack. Scale 1.8, scored as an elite kill. Regens 12 HP/s while deaggro'd. On death, its shielded Ember Deposits crack open into mineable Cinderforged Ore.",
+      "Cinder Forge guardian (badlands Phase 3 POI 2). 5 forges × 1 Cinderwrought each = 5. PB17 REWORK (the user: the old 2v1 of stationary fire-swingers felt awkward/incohesive vs the solo Gloamwarden): now ONE solo boss, HP 260→650, and CANNOT be staggered (poise mechanic removed entirely — a pure survive-and-DPS wall). Both attacks now RE-AIM at the player at execute (lock at execute, track through the wind-up) with wide/long hitboxes, so a slow-walking player (95px/s) can't sidestep or back-pedal out — the only reliable dodge is a dash's i-frames. Attack cooldown 850ms (was 1050 for the 2v1). Cinder Cone deals FIRE (bypasses flat armor); Forge Hammer is PHYSICAL (armor applies) — one fire + one physical attack. Scale 1.8, scored as an elite kill. Regens 12 HP/s while deaggro'd. On death, its shielded Ember Deposits crack open into mineable Cinderforged Ore.",
   },
   {
     name: "The Duneshaper (BADLANDS BOSS)",
@@ -835,10 +842,11 @@ function renderRelics(): string {
 
 function renderEnemies(): string {
   let html = `<h2>Enemies</h2>
-    <p class="note"><b>⚠ Manually mirrored</b> from the entity files (Boar/Snake/Gremlin/
-    GremlinKing) — unlike every other tab, these aren't imported live, since enemy stats
-    live inside Phaser sprite subclasses. Keep in sync when tuning. Elite variants:
-    +50% HP/dmg, +10% speed, larger scale, 2× loot, + a species trophy.</p>
+    <p class="note"><b>Combat stats are now LIVE</b> — see the <b>Balance Audit</b> tab, which imports
+    <code>src/systems/enemyStats.ts</code> (the same module the entities read). This older table's
+    loot / aggro / telegraph columns are still hand-authored (those live in the entity AI, not the
+    stat module) — treat HP/damage/speed here as legacy; the Audit tab is the source of truth.
+    Elite variants: +50% HP/dmg, +10% speed, larger scale, 2× loot, + a species trophy.</p>
     <table><thead><tr>
       <th>Enemy</th><th class="num">HP</th><th class="num">Elite HP</th><th>Attacks (dmg)</th>
       <th class="num">Speed</th><th class="num">Aggro</th><th>Loot</th>
@@ -1083,6 +1091,196 @@ function renderEpicLoot(): string {
 }
 
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// Balance Audit (Tier 1) — objective, live-data view of the 2026-07-23 playtest
+// balance questions. All enemy numbers come from the Phaser-free enemyStats
+// module (the same one the entities read), so this can't drift. Static
+// computation only — no bot-play (that's a later Tier 2).
+// ---------------------------------------------------------------------------
+
+// Player progression checkpoints. Concrete, documented loadouts — NOT the five
+// character classes (a per-character matrix is a future extension); these model
+// a generic build at three stages so the ratios have a player to measure against.
+// HP: Health base 100 + Vitality×4 (M-SS). Sprint mult is Running-skill-only
+// (relics/character move% can push real sprint toward the 166-229 px/s envelope
+// noted in feedback_size_enemies_against_player — flagged, not modelled here).
+interface Checkpoint {
+  id: string;
+  name: string;
+  loadout: string;
+  sprintMult: number;
+  hp: number;
+  armorKeys: string[];
+  weapon: WeaponType;
+  heavyLvl: number; // heavy-armor skill level → magic/fire % mitigation
+}
+const DASH_SPEED_PX = 450; // Player.ts DASH_SPEED (dev-tool mirror; a display stat, not a ratio input)
+const CHECKPOINTS: Checkpoint[] = [
+  {
+    id: "start", name: "Start",
+    loadout: "Lvl 1 · no armor · Wood Club · 0 stat points",
+    sprintMult: 1.15, hp: 100, armorKeys: [], weapon: "wood_club", heavyLvl: 0,
+  },
+  {
+    id: "mid", name: "Mid (post-badlands)",
+    loadout: "~Lvl 12 · full Sunsteel heavy set · Sunsteel Longsword · +5 Vitality",
+    sprintMult: 1.3, hp: 100 + 5 * 4, armorKeys: ["sunsteel_helm", "sunsteel_cuirass", "sunsteel_greaves"],
+    weapon: "sunsteel_sword", heavyLvl: 15,
+  },
+  {
+    id: "geared", name: "Geared (bayou-ready)",
+    loadout: "~Lvl 22 · full Embersteel heavy set · Embersteel Pike · +10 Vitality",
+    sprintMult: 1.45, hp: 100 + 10 * 4, armorKeys: ["embersteel_helm", "embersteel_cuirass", "embersteel_greaves"],
+    weapon: "embersteel_pike", heavyLvl: 30,
+  },
+];
+
+const sprintSpeed = (c: Checkpoint) => PLAYER_WALK_SPEED * c.sprintMult;
+const setArmor = (c: Checkpoint) => c.armorKeys.reduce((s, k) => s + armorDefenseForTier(k, 0), 0);
+// Heavy-armor skill magic/fire mitigation (Skills.heavyArmorMagicMitigation:
+// -0.4%/lvl, cap -30%) — computed inline so this stays Phaser-free.
+const magicMit = (c: Checkpoint) => Math.min(0.3, 0.004 * c.heavyLvl);
+const weaponDps = (w: WeaponType) => weaponDamage(w) * weaponAttacksPerSecond(w);
+
+// Damage the player actually TAKES from one enemy attack at a checkpoint: flat
+// armor subtracts for physical (floored at 1); magic/fire/poison bypass flat
+// armor and take only the heavy-armor % mitigation. This split is the whole
+// "bosses do -1/-2 while trash 1-shots" story.
+function dealtToPlayer(dmg: number, cls: EnemyDamageClass, c: Checkpoint): number {
+  if (cls === "physical") return Math.max(1, dmg - setArmor(c));
+  return Math.max(1, Math.round(dmg * (1 - magicMit(c))));
+}
+
+// Color a value red/amber/green by comparing to two thresholds. `higherWorse`
+// flips the sense (e.g. kite ratio: higher is worse).
+function ratioColor(v: number, amber: number, red: number, higherWorse = true): string {
+  const bad = higherWorse ? v >= red : v <= red;
+  const warn = higherWorse ? v >= amber : v <= amber;
+  return bad ? "#e06a6a" : warn ? "#e0b64a" : "#6ac27a";
+}
+const colored = (txt: string, color: string) => `<span style="color:${color};font-weight:600">${txt}</span>`;
+
+function renderBalanceAudit(): string {
+  let html = `<h2>Balance Audit <span class="muted" style="font-size:13px">(Tier 1 — static)</span></h2>
+    <p class="note">Objective answers to the balance questions from the 2026-07-23 playtest.
+    <b>Enemy numbers are imported live</b> from <code>src/systems/enemyStats.ts</code> (the same
+    module the entity classes read), so nothing here is hand-mirrored. Ratios are computed against
+    the <b>Geared (bayou-ready)</b> checkpoint below unless noted. Green = healthy, amber = borderline,
+    red = the complaint is real.</p>`;
+
+  // ---- Player checkpoints ----
+  html += `<h3>Player checkpoints</h3>
+    <table><thead><tr>
+      <th>Checkpoint</th><th class="num">Walk</th><th class="num">Sprint</th><th class="num">Dash</th>
+      <th class="num">HP</th><th class="num">Armor</th><th>Weapon</th>
+      <th class="num">Dmg/hit</th><th class="num">DPS</th><th class="num">Stam/hit</th>
+    </tr></thead><tbody>`;
+  for (const c of CHECKPOINTS) {
+    html += `<tr>
+      <td><b>${esc(c.name)}</b><br><span class="muted" style="font-size:11.5px">${esc(c.loadout)}</span></td>
+      <td class="num">${PLAYER_WALK_SPEED}</td>
+      <td class="num">${Math.round(sprintSpeed(c))}</td>
+      <td class="num">${DASH_SPEED_PX}</td>
+      <td class="num">${c.hp}</td>
+      <td class="num">${setArmor(c)}</td>
+      <td>${esc(c.weapon)}</td>
+      <td class="num">${weaponDamage(c.weapon)}</td>
+      <td class="num">${weaponDps(c.weapon).toFixed(1)}</td>
+      <td class="num">${weaponStaminaCost(c.weapon)}</td>
+    </tr>`;
+  }
+  html += `</tbody></table>
+    <p class="note" style="font-size:11.5px">Sprint = walk × Running-skill mult (relics/character move% can add ~+20-60 px/s on top — the real envelope reaches ~166-229). Dash burst lasts 105ms (~47px). DPS excludes weapon-skill/crit bonuses (base weapon only).</p>`;
+
+  // ---- Per-enemy audit vs the Geared checkpoint ----
+  const cp = CHECKPOINTS[2]; // Geared
+  const sprint = sprintSpeed(cp);
+  const dps = weaponDps(cp.weapon);
+  const wType = weaponPrimaryDamageType(cp.weapon);
+  const wDmgHit = weaponDamage(cp.weapon);
+
+  html += `<h3>Enemies vs Geared checkpoint <span class="muted" style="font-size:12px">(sprint ${Math.round(sprint)} px/s · ${esc(cp.weapon)} ${dps.toFixed(1)} DPS, ${wDmgHit}/hit ${damageTypeDisplayName(wType)})</span></h3>`;
+
+  const biomes: EnemyStatLive["biome"][] = ["forest", "badlands", "bayou"];
+  for (const biome of biomes) {
+    html += `<h4 style="margin:14px 0 4px">${prettify(biome)}</h4>
+      <table><thead><tr>
+        <th>Enemy</th><th class="num">HP</th><th class="num">Top hit</th><th class="num">Speed</th>
+        <th class="num">DPS</th><th class="num">Poise</th>
+        <th class="num" title="enemy speed ÷ player sprint — &gt;1 = uncatchable">Kite</th>
+        <th class="num" title="player HP ÷ damage taken per hit">Hits-to-die</th>
+        <th class="num" title="enemy HP ÷ player DPS (resist-adjusted)">TTK</th>
+        <th class="num" title="enemy poise ÷ player dmg/hit — low = perma-stagger">Stagger</th>
+      </tr></thead><tbody>`;
+
+    for (const e of ALL_ENEMY_STATS.filter((x) => x.biome === biome)) {
+      // Render a base row and (if it has a variant) an elite row.
+      const variants: { tag: string; mult: EnemyStatLive["elite"] }[] = [{ tag: "", mult: null }];
+      if (e.elite) variants.push({ tag: "Elite ", mult: e.elite });
+
+      for (const v of variants) {
+        const hpMult = v.mult ? v.mult.hp : 1;
+        const dmgMult = v.mult ? v.mult.damage : 1;
+        const spdMult = v.mult ? v.mult.speed : 1;
+        const hp = Math.round(e.hp * hpMult);
+        const speed = Math.round(e.moveSpeed * spdMult);
+        // Top threat: highest damage-taken-per-hit attack (not raw damage — a
+        // magic 34 through armor beats a physical 60 that armor eats).
+        const hits = e.attacks.filter((a) => a.kind !== "dot");
+        let top = hits[0];
+        let topDealt = 0;
+        for (const a of hits) {
+          const d = dealtToPlayer(a.damage * dmgMult, a.cls, cp);
+          if (d >= topDealt) { topDealt = d; top = a; }
+        }
+        const rawTop = Math.round((top?.damage ?? 0) * dmgMult);
+
+        // Kite: enemy sustained speed vs sprint. Elites +10%. >1 uncatchable.
+        const kite = speed / sprint;
+        // Hits-to-die from the top attack's dealt damage.
+        const htd = topDealt > 0 ? cp.hp / topDealt : Infinity;
+        // TTK: enemy HP ÷ resist-adjusted player DPS.
+        const resist = e.resistances?.[wType] ?? 1;
+        const effDps = dps * resist;
+        const ttk = effDps > 0 ? hp / effDps : Infinity;
+        // Stagger: hits to break poise (poise chips 1:1 with damage). null if unstaggerable.
+        const staggerHits = e.poise != null ? e.poise / wDmgHit : null;
+        // Whether the player's poise-DPS can outpace the enemy's poise regen
+        // (= a genuine stagger-LOCK, not just a slow one).
+        const outpaces = e.poise != null && e.poiseRegenPerSec != null && dps > e.poiseRegenPerSec;
+
+        const burst = enemyBurstDps(e) * dmgMult;
+        html += `<tr>
+          <td>${v.tag}<b>${esc(e.name)}</b> <span class="muted">${e.role !== "normal" ? e.role : ""}</span></td>
+          <td class="num">${hp}</td>
+          <td class="num">${topDealt} <span class="muted">(${rawTop} ${top?.cls ?? ""})</span></td>
+          <td class="num">${speed}${e.burstSpeed ? `<span class="muted"> /${Math.round(e.burstSpeed)}</span>` : ""}</td>
+          <td class="num">${burst.toFixed(0)}</td>
+          <td class="num">${e.poise ?? "—"}</td>
+          <td class="num">${colored(kite.toFixed(2), ratioColor(kite, 0.9, 1.0, true))}</td>
+          <td class="num">${colored(htd === Infinity ? "∞" : htd.toFixed(1), ratioColor(htd, 3, 2, false))}</td>
+          <td class="num">${
+            // A high TTK is a problem for TRASH (a sponge) but expected for a
+            // boss/mini-boss — only red-flag normal enemies as sponges.
+            e.role === "normal"
+              ? colored(ttk === Infinity ? "∞" : ttk.toFixed(1) + "s", ratioColor(ttk, 20, 40, true))
+              : `<span class="muted">${ttk === Infinity ? "∞" : ttk.toFixed(1) + "s"}</span>`
+          }</td>
+          <td class="num">${staggerHits == null ? "—" : colored(staggerHits.toFixed(1) + (outpaces ? "⚠" : ""), ratioColor(staggerHits, 8, 4, false))}</td>
+        </tr>`;
+      }
+    }
+    html += `</tbody></table>`;
+  }
+
+  html += `<p class="note" style="font-size:11.5px">
+    <b>Kite</b> ≥1.0 red = enemy outruns your sprint (can't disengage). <b>Hits-to-die</b> ≤2 red = near-one-shot.
+    <b>TTK</b> ≥40s red = damage sponge (resist-adjusted to your weapon's ${damageTypeDisplayName(wType)}). <b>Stagger</b> ≤4 red = perma-stagger risk;
+    ⚠ = your poise-DPS also outpaces the enemy's poise regen (true lock). "Top hit" shows damage TAKEN after armor/mitigation with the raw value + class in parens.</p>`;
+  return html;
+}
+
+// ---------------------------------------------------------------------------
 // Shell: tabbed nav + live search filtering
 // ---------------------------------------------------------------------------
 
@@ -1095,6 +1293,7 @@ const TABS: { id: string; label: string; render: () => string }[] = [
   { id: "characters", label: "Characters", render: renderCharacters },
   { id: "epic", label: "Epic Loot", render: renderEpicLoot },
   { id: "enemies", label: "Enemies", render: renderEnemies },
+  { id: "audit", label: "Balance Audit", render: renderBalanceAudit },
   { id: "balance", label: "Balance Overview", render: renderBalance },
   { id: "items", label: "All Items", render: renderItems },
 ];

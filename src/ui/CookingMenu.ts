@@ -40,7 +40,7 @@ export interface CookingMenuDeps {
 const DEPTH_BG = 3000;
 const DEPTH_ITEM = 3001;
 const DEPTH_TEXT = 3002;
-const ROW_H = 74;
+const ROW_H = 86; // tall enough for name + up to 2 wrapped ingredient lines + the edible line
 const ROW_GAP = 8;
 const HEADER_H = 30; // tier section-header row height
 const VIEW_H = 372; // fixed height of the scrollable recipe-list viewport
@@ -443,8 +443,14 @@ export class CookingMenu {
       const name = itemDef(key)?.name ?? key;
       return { text: `${name} ${have}/${need}`, ok: have >= need };
     });
-    let ix = x + 52;
-    const iy = y + 32;
+    // Flow the tokens left-to-right, wrapping to a new line when one would run
+    // past the row's right edge — 4-ingredient dishes overflowed a single line
+    // and got clipped by the panel mask ("recipe cut off going past box").
+    const left = x + 52;
+    const rowRight = x + rowW - 8;
+    const lineH = 16;
+    let ix = left;
+    let iy = y + 32;
     for (const p of parts) {
       const t = this.scene.add
         .text(ix, iy, p.text, {
@@ -454,6 +460,11 @@ export class CookingMenu {
         })
         .setScrollFactor(0)
         .setDepth(DEPTH_TEXT);
+      if (ix > left && ix + t.width > rowRight) {
+        iy += lineH;
+        ix = left;
+        t.setPosition(ix, iy);
+      }
       this.mask(t);
       this.rows.push(t);
       ix += t.width + 14;
@@ -462,8 +473,8 @@ export class CookingMenu {
     if (def?.edible) {
       this.mask(
         this.addText(
-          x + 52,
-          y + 50,
+          left,
+          iy + lineH, // below the last ingredient line (which may have wrapped)
           `+${def.edible.hpPerSec} HP/s for ${Math.round(def.edible.durationMs / 1000)}s`,
           11,
           "#c9a86a",

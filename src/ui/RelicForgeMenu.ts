@@ -812,7 +812,8 @@ export class RelicForgeMenu {
     const oldRefund = refunds.keepOld;
     const rowY = y + 16;
     const btnW = (this.panelW - 32 - 10) / 2;
-    const btnH = 52;
+    const btnH = 78; // tall enough for a name + a wrapped effect line + the refund line
+    const wrapW = btnW - 16; // keep every line inside the button so columns can't overlap
 
     const drawChoice = (bx: number, def: RelicDef, tier: number, refundKey: string, refundAmt: number, onPick: () => void) => {
       const box = this.scene.add
@@ -824,12 +825,17 @@ export class RelicForgeMenu {
         .setInteractive({ useHandCursor: true })
         .on("pointerdown", onPick);
       this.rows.push(box);
-      this.addText(bx + 8, rowY + 6, `Keep ${def.name}`, 12, rarityHex(def.rarity));
-      this.addText(bx + 8, rowY + 22, relicEffectText(def, tier), 10, "#8a93a3");
+      // Stack the lines by measured height so a wrapped name/effect never lands
+      // on top of the next line (the old fixed +16/+34 offsets overlapped).
+      let ty = rowY + 6;
+      const nameT = this.addText(bx + 8, ty, `Keep ${def.name}`, 12, rarityHex(def.rarity), 0, 0, wrapW);
+      ty += nameT.height + 2;
+      const effT = this.addText(bx + 8, ty, relicEffectText(def, tier), 10, "#8a93a3", 0, 0, wrapW);
+      ty += effT.height + 2;
       // Refund line only when something is actually restored (zero by default
       // now — displacement is no longer a shard source; see Relics.shardRefund).
       const line = refundAmt > 0 ? `discards other → +${refundAmt} ${itemDef(refundKey)?.name ?? refundKey}` : "discards the other relic";
-      this.addText(bx + 8, rowY + 34, line, 9, "#6a7280");
+      this.addText(bx + 8, ty, line, 9, "#6a7280", 0, 0, wrapW);
     };
 
     drawChoice(x, newDef, newTier, newRefund.refundShardKey, newRefund.refundShardAmount, () => this.resolveChoice(true));
@@ -943,12 +949,19 @@ export class RelicForgeMenu {
     color: string,
     originX = 0,
     originY = 0,
-  ): void {
+    wrapWidth?: number,
+  ): Phaser.GameObjects.Text {
     const t = this.scene.add
-      .text(x, y, str, { fontFamily: "monospace", fontSize: `${size + 1}px`, color })
+      .text(x, y, str, {
+        fontFamily: "monospace",
+        fontSize: `${size + 1}px`,
+        color,
+        wordWrap: wrapWidth ? { width: wrapWidth } : undefined,
+      })
       .setOrigin(originX, originY)
       .setScrollFactor(0)
       .setDepth(DEPTH_TEXT);
     this.rows.push(t);
+    return t;
   }
 }

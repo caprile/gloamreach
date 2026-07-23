@@ -1,5 +1,10 @@
 import Phaser from "phaser";
 import { Enemy } from "./Enemy";
+import { enemyStat } from "../systems/enemyStats";
+
+// Combat stats from the Phaser-free source of truth (also read by the balancing
+// dashboard). attacks[0]=smash, [1]=charge, [2]=slam. Tune numbers there.
+const S = enemyStat("gremlin_king");
 
 // First boss — the "tutorial biome" boss. Fully bespoke telegraph/execute/
 // recover state machine (does NOT reuse Enemy.update()'s idle/chase/bite
@@ -13,11 +18,11 @@ import { Enemy } from "./Enemy";
 export type BossState = "idle" | "telegraphing" | "executing" | "recovering" | "staggered";
 export type BossAttackType = "smash" | "charge" | "slam";
 
-const BOSS_MAX_HEALTH = 600;
+const BOSS_MAX_HEALTH = S.hp;
 const BOSS_SCALE = 2.4;
 const BOSS_AGGRO_RADIUS = 260;
 const BOSS_ARENA_LEASH_RADIUS = 500; // from spawn point — kiting this far fully deaggros
-const BOSS_MOVE_SPEED = 45; // slow deliberate approach outside of an attack
+const BOSS_MOVE_SPEED = S.moveSpeed; // slow deliberate approach outside of an attack
 
 // Regen while fully deaggro'd (player kited past the leash / never engaged) so
 // running away to heal/rest isn't a free reset of chip damage — the boss claws
@@ -26,7 +31,7 @@ const BOSS_MOVE_SPEED = 45; // slow deliberate approach outside of an attack
 // empty, meaningful but not instant.
 const BOSS_DEAGGRO_REGEN_PER_SEC = 12;
 
-export const BOSS_MAX_POISE = 100; // exported for the fixed-HUD BossHealthUI's poise-bar fraction
+export const BOSS_MAX_POISE = S.poise!; // exported for the fixed-HUD BossHealthUI's poise-bar fraction
 const STAGGER_DURATION_MS = 3000;
 export const STAGGER_DAMAGE_MULTIPLIER = 1.5; // exported for MainScene.tryAttackEnemy's bonus-damage check
 const POISE_REGEN_DELAY_MS = 4000; // only resumes this long after the last hit that chipped it
@@ -51,12 +56,12 @@ const MELEE_STOP_RANGE = 90; // boss stops approaching (and may attack) inside t
 // so the smash was undodgeable by movement (dash i-frames aside). 95 makes
 // walking laterally out of the circle a real dodge; sprint/dash gives margin.
 const SMASH_RADIUS = 95;
-const SMASH_DAMAGE = 60; // ~2-shots a full-armor (Lvl3 = 13) 100-HP player: (60-13)*2 = 94
+const SMASH_DAMAGE = S.attacks[0].damage; // ~2-shots a full-armor (Lvl3 = 13) 100-HP player: (60-13)*2 = 94
 const SMASH_KNOCKBACK = 220;
 const SMASH_LAND_EPS = 10; // px — treat as "arrived" within this of the locked point
 
 const CHARGE_TELEGRAPH_MS = 850; // dodge window stays readable — only the dash itself sped up
-const CHARGE_SPEED = 480; // was 340 — playtest: "line attack should be faster"
+const CHARGE_SPEED = S.burstSpeed!; // was 340 — playtest: "line attack should be faster"
 const CHARGE_MAX_DISTANCE = 420;
 const CHARGE_RECOVER_MS = 900;
 // Point+radius approximation, not a true capsule/segment check. Scaled by
@@ -66,13 +71,13 @@ const CHARGE_RECOVER_MS = 900;
 // MainScene.enemyReach()'s attack/prompt-reach scaling for normal enemies,
 // just not previously applied to the boss's own charge math.
 const CHARGE_HIT_RADIUS = 34 * BOSS_SCALE;
-const CHARGE_DAMAGE = 55; // was 40 — 2026-07-11 boss dmg bump (~2-shot a full-armor player)
+const CHARGE_DAMAGE = S.attacks[1].damage; // was 40 — 2026-07-11 boss dmg bump (~2-shot a full-armor player)
 
 const SLAM_TELEGRAPH_MS = 950;
 const SLAM_EXECUTE_MS = 150;
 const SLAM_RECOVER_MS = 800;
 const SLAM_RADIUS = 150; // was 110 — playtest: "aoes should be bigger"
-const SLAM_DAMAGE = 55; // was 45 — 2026-07-11 boss dmg bump (~2-shot a full-armor player)
+const SLAM_DAMAGE = S.attacks[2].damage; // was 45 — 2026-07-11 boss dmg bump (~2-shot a full-armor player)
 const SLAM_KNOCKBACK = 260;
 
 // Phase 2 (<50% HP): shorter telegraphs/recovery + faster approach — NOT more

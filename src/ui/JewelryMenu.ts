@@ -333,13 +333,16 @@ export class JewelryMenu {
     for (const t of ["craft", "gems"] as const) {
       const active = this.tab === t;
       const label = t === "craft" ? "Craft" : "Set Gems";
+      // Both tabs get a background box so an inactive tab still reads as a
+      // clickable tab (the user: "Set Gems tab kind of hard to see") — the active
+      // one is brighter/highlighted, the inactive one a legible dim box.
       const btn = this.scene.add
         .text(tx, y, label, {
           fontFamily: "monospace",
           fontSize: "15px",
-          color: active ? "#ffffff" : "#8a93a3",
-          backgroundColor: active ? "#2a3a55" : undefined,
-          padding: { x: 6, y: 3 },
+          color: active ? "#ffffff" : "#c2cad6",
+          backgroundColor: active ? "#3a5a88" : "#232c3a",
+          padding: { x: 8, y: 4 },
         })
         .setScrollFactor(0)
         .setDepth(DEPTH_TEXT)

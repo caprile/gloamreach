@@ -7,7 +7,9 @@ export type EquipSlot =
   | "helmet"
   | "chest"
   | "legs"
-  | "back"
+  | "back" // the R-ability cape slot (SLOT_ABILITY_KEY back→r) — grants Q/E/R capes
+  | "cloak" // stat back-armor (Mireborn Cloak) — SEPARATE from the R-ability cape so a
+  //           utility cloak no longer competes with your R ability (the user 2026-07-23)
   | "necklace"
   | "ring1"
   | "ring2"
@@ -32,7 +34,8 @@ export interface EquippedItem {
 export const EQUIP_SLOTS: { id: EquipSlot; label: string }[] = [
   { id: "helmet", label: "Head" },
   { id: "necklace", label: "Neck" },
-  { id: "back", label: "Back" },
+  { id: "back", label: "Cape" }, // R-ability cape (bloodpact/aegis) — relabelled so it's not confused with back-armor
+  { id: "cloak", label: "Cloak" }, // stat back-armor, distinct from the R cape
   { id: "chest", label: "Chest" },
   { id: "ring1", label: "Ring1" },
   { id: "ring2", label: "Ring2" },
@@ -48,6 +51,7 @@ export class Equipment {
     chest: null,
     legs: null,
     back: null,
+    cloak: null,
     necklace: null,
     ring1: null,
     ring2: null,

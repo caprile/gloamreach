@@ -2,19 +2,102 @@
 
 ## Current State
 
-_Living snapshot — edit in place, never append. Last shipped: **Smelter fix — unloadable alloy
-recipes, reagent/fuel split** (2026-07-23, Opus, no plan file). A playtest report ("Bog Ore + Hex
-Essence in the Smelter does nothing") turned out to be a **dead-end bug**: fuel became per-recipe in
-B4-P5, but `ProcessingStation` still assumed one shared fuel key, so the slot **refused Moonsilver
-and Bog Ore outright** — Gloamsteel and Mirebronze were impossible to smelt at all, failing as a
-silently-zero slider. Fixing it surfaced the design problem underneath: that slot was never really
-fuel (it's a generic second-ingredient slot named for its first case), and the two B4-P5 alloy
-recipes were melting metal **with no heat source at all**. Locked via `AskUserQuestion`: the Smelter
-is now **three slots, all required** — Input + Reagent (ends up in the ingot, per-recipe) + **Fuel
-(always Wood)**, laid out as ingot-ingredients on row 1 and fuel on row 2. Both secondaries route
-through one `side: SecondarySide` parameter rather than duplicated code, which is the shape that
-caused the original bug. Wood gains a sink that outlasts the early game. Verified live; `tsc` clean.
-**Next: a playtest** — the Wood-per-ingot costs (2/3/3/3) are first-pass.
+_Living snapshot — edit in place, never append. Last shipped: **Batch C — data-driven bayou
+rebalance** (2026-07-23, Opus, no plan file), guided by the Balance Audit built just before it.
+Headline structural fix: **enemies now inherit the terrain move-slow the player suffers** — in deep
+bayou water the player wades at 50% but enemies used to ignore it entirely (verified live: an enemy
+in a 0.6 cell now has `envSpeedMult 0.6`), which was the #1 "can't run away from anything in the
+bayou" cause. Applied at the single `updateEnemies` envSpeedMult choke point (bounded — only active
+near-player enemies), and the player's dash stays terrain-exempt so it still escapes. Enemy tuning
+(edited in the single source `enemyStats.ts` + each entity **wired** to read it, so the audit and
+game can't drift): **Murkling** 172→118 speed (was faster than sprint = un-kiteable) + claw 62→38;
+**Mirejaw** 138→108 + lunge 120→80 / chomp 85→52; **Mosswretch** smash 135→78 (elite 202 one-shot
+killed); **Corpselight** orb 34→22 magic + homing turn-rate 1.9→1.2 (dodgeable); **Blighttoad** bite
+66→44 + poison 6→4/stack (3-stack cap already existed); **Miretyrant** (win-con boss) attacks bumped
+(52-58 → 82-95, so armor stops nullifying it to -1/-2) + poise 450→800 & regen 24→28 (kills the sword
+perma-stagger) + HP 4600→3600; **Palewake/Kilnborn/Sanguinarch** crypt wardens 240-300→420-440 (were
+4-hit trivial). **Fenlurker CUT entirely** (the user: boring burrower) — entity file deleted, removed
+from all spawn tables + the dev spawn table + the module. Verified live: every changed value flows
+through (Miretyrant poise 800, Murkling dmg 38, terrain slow 0.6), `tsc` + `npm run build` clean,
+zero console errors. **All forest + bayou entities now read the module; badlands still mirror the
+code** (wire them when next tuned — module WIRING STATUS block tracks it).
+**Batch B — POI overlap FIXED (2026-07-23):** a shared `tooCloseToAnyPoi(x,y,POI_MIN_SEPARATION)`
+check is now enforced in every POI picker (den / tyrant-altar / bayou), so no two different-type POIs
+land within 800px (was: badlands pickers enforced only their own ~200-360 clear radii, bayou pickers
+avoided only a subset — hence Cinder-Forge-on-Warren, Duneshaper-altar-next-to-Sunken-Gorge). Verified
+live: min cross-type POI distance **803px** across 73 POIs, all 30 dens still placed (den guard tries
+80→160). The redundant partial `clearsOtherPois` was removed. **The enemy-border-bleed half is only
+partly addressed** (POIs no longer cluster at borders; `steerEnemyHome`'s 800px leash still lets an
+enemy stray ~800px into a neighbouring blob — full biome containment deferred).
+**Batch D quick wins + cloak-slot separation — DONE (2026-07-23):** (1) **Resting regen scales with
+campfire level** — `updateComfortRegen` now sets `hpPerSec = 1 + campfireTier` (Lvl 1→1, Lvl 2→2, …)
+from the nearest campfire fuelling the Bedroll. (2) **Gremlin Shirt → heavy armor** (`Items.ts`) — the
+earliest heavy piece, so a biome-1 player has an on-ramp to heavy-armor magic/fire mitigation + heavy
+XP; Cap/Pants stay light (deliberate mixed set). (3) **Poison no longer halves HP regen** —
+`currentRegenMult` = `env.regenMult` only; the miasma/mire ZONES still cut regen (terrain hazard), but
+a creature's poison dose is now just a DoT (status tooltip + "Weakened Healing" indicator updated to
+match). (4) **Cloak → its own equip slot** — new `cloak` `EquipSlot` for stat back-armor (Mireborn
+Cloak moved there), while `back` stays the R-ability cape slot (relabelled "Cape"); a utility cloak no
+longer evicts your R ability. Paper-doll auto-flows (11 slots still 4 rows at 3 cols, no overflow);
+passives aggregate over `EQUIP_SLOTS` so the cloak's `statusResistPct` still applies. All verified live
+(`tsc` + `npm run build` clean, zero console errors).
+**Economy questions — RESOLVED (2026-07-23):** (a) **bayou crypt wardens (Palewake/Kilnborn/
+Sanguinarch) now drop a guaranteed `refined_trophy_uncommon_t3`** — completing the miniboss refined-
+trophy ladder (Gloamwarden T1 / Cinderwrought T2 / crypt-warden T3); added `refined_trophy_uncommon_t3`
+to the `ResourceType` union (was roll-only). (b) **Bayou elites ~2× more common** (new
+`BAYOU_ELITE_CHANCE_MULT = 2`, ~8%→16%, verified live at 15.6% surface) — elites feed the relic loop
+and read as "really rare". (c) **Mire Shards** already have a source — the deep but functional chain
+Relic Forge Lvl 2 (Gloam Conduit → refine) → Lvl 3 Ember Kiln (Gloam→Ember) → Lvl 4 Mire Crucible
+(Ember→Mire); left as-is (works), just undiscoverable — a future hint could surface it.
+**Mini-boss big HP bars — DONE (2026-07-23):** the five mini-bosses (Gloamwarden / Cinderwrought /
+Palewake / Kilnborn / Sanguinarch) now feed the big top-of-screen `BossHealthUI` while engaged
+(the user: "fire guy's health bar is missing" — the floating world bar was too easy to lose). Done via
+a scene-side `engagedMiniBoss()` **adapter** (no edits to five entity files): HP + name off base
+`Enemy`, `isEngaged`→`isAggro()`, and the poise strip shows **only** for one that exposes a poise
+meter — the others pass `poiseMax 0` and render HP alone (`BossHealthUI` now hides the empty strip).
+Big bosses still take priority. Verified live: Kilnborn shows "The Kilnborn" 440/440 HP-only bar, no
+poise strip; zero console errors.
+**Themed bayou spawns — DONE (2026-07-23):** a soft zone/water preference in `pickBayouPoint`
+(`preferZone`/`preferWater`, enforced for the first ¾ of attempts then relaxed so a spawn never
+fails) biases each species to its macro-zone. Verified live: **Murkling 90% hammock** (reed-bed
+swarms), **Blighttoad 95% miasma** (poison frogs in the poison fog — the creek "lilypad" water was
+too sparse to congregate on, so they went to the abundant + thematic poison zone), **Mosswretch 78%
+bonemire** + **Corpselight 47% bonemire** (husks & haunts in the drowned boneyard), Mirejaw favours
+the wet miasma/water. **This clears the ENTIRE ~45-item 2026-07-23 playtest dump** — every item
+across continue-on-death, Batch A (12 fixes), the Balance Audit tool + Phaser-free enemy-stat
+extraction, the systematic bayou rebalance, POI-overlap, Batch D, the cloak-slot separation, the
+economy fixes, mini-boss HP bars, and now themed spawns is shipped + verified. **Next: a full
+playtest** — all the rebalance/spawn/economy numbers are first-pass and want real play.
+Prior: **Balance Audit dashboard tab +
+Phaser-free enemy-stat extraction** (2026-07-23, Opus, no plan file). Built BEFORE the bayou
+rebalance (the user's call) as the objective tool to guide it. New **`src/systems/enemyStats.ts`** — a
+Phaser-free single source of truth for every enemy's combat stats (HP, per-attack damage + class +
+cadence, move/burst speed, poise, scale, resistances, elite mults, biome), extracted from the entity
+classes. The **entities now READ from it** (forest roster — Boar/Snake/Gremlin×2/GremlinKing — fully
+wired + verified behavior-preserving in-game; badlands/bayou values mirror the code today and get
+wired as each is next tuned, tracked in the module's WIRING STATUS block). The dashboard's new
+**Balance Audit** tab (`/dashboard.html`) imports it live and computes the four ratios the playtest
+complaints map to, color-coded red/amber/green against thresholds anchored to
+[[feedback_size_enemies_against_player]]: **Kite** (enemy speed ÷ player sprint), **Hits-to-die**
+(player HP ÷ damage-taken-per-hit, armor/mitigation applied), **TTK** (enemy HP ÷ resist-adjusted
+player DPS), **Stagger** (enemy poise ÷ player dmg/hit, ⚠ if poise-DPS outpaces regen), across three
+documented player checkpoints (Start/Mid/Geared). It objectively confirms the complaints: **Murkling
+kite 1.25 (outruns your 138 sprint)**, **elite Mosswretch hits-to-die 0.8 (a literal one-shot)**,
+**Corpselight 30 magic bypassing armor**, and the boss "-1/-2" being physical damage eaten by armor +
+the 75% reduction cap. Extraction is Phaser-free (esbuild: 9.7kb, 0 Phaser refs); `tsc` +
+`npm run build` clean; dashboard verified rendering with correct ratios + zero console errors. This
+already surfaced real drift in the old hand-mirror (it claimed Cinderwrought resists blunt/pierce —
+code resists nothing; called Hexling magic-resistant — it's magic-WEAK). **Next: the actual bayou
+rebalance (Batch C), now data-driven.**
+Also this session (detail above / in `### playtest-batch-2026-07-23`): the **Balance Audit dashboard
+tab + Phaser-free enemy-stat extraction** that guided Batch C, **Playtest batch A (12 quick bug/UI
+fixes)**, and the **continue-on-death test-mode button**. Still open from the ~45-item dump: **Batch B**
+(POI/biome-border
+overlap), **Batch D leftovers** (poison→regen-halving removal; resting scales with campfire level;
+themed bayou spawns; Gremlin chest → heavy armor), the **cloak→R-slot** separation (locked: give
+back-armor its own equip slot), trophy/elite-rarity + **Mire-Shard source** economy questions, and
+**mini-boss big HP bars** (Cinderwrought/crypt wardens — differing second-meters, folds into a
+boss-feel pass).
 Prior: **B4-P6 — Perf regression
 (display-list streaming), culled-enemy drift, 5 playtest fixes** (2026-07-22, Opus, no plan file —
 a fix batch). The headline is a **structural perf fix**: the world had grown to **17,041 display
@@ -155,6 +238,47 @@ below + [[survivor-rpg-dev-console]].
 ## Recent Entries
 
 > Older entries in STATUS-archive.md.
+
+### playtest-batch-2026-07-23 — continue-on-death + the triaged remaining work (Opus)
+
+A ~45-item bayou-heavy playtest dump. Triaged with the user; **continue-on-death shipped first**
+(above / Current State). Locked directions: **systematic** bayou rebalance (not targeted nerfs) —
+measure enemy speed/HP/damage against the player's real envelope per
+[[feedback_size_enemies_against_player]]; **remove the Fenlurker** (burrower) entirely. The rest is
+Sonnet-class fixes/tuning. The full remaining list, grouped:
+
+**Batch A — quick bugs/UI — SHIPPED (2026-07-23), except two deferred (cloak→R-slot design call;
+mini-boss big HP bars → boss-feel pass). See Current State for the per-item detail.** enemy HP bars render dark-red for some enemies; campfire recipe text
+cut off past the box; relic "replace"/dominance modal text overlaps (needs wrap + auto-sized boxes);
+dungeon chests not glowing; a cloak going into the R (ability) slot wrongly; Smelter should return
+loaded items to inventory on close (like the ask that drove the Smelter-fix entry — verify it does);
+bayou miniboss (Cinderwrought / "fire guy") big HP bar missing; workstations should show the yellow
+upgrade-triangle while in the hotbar; "Set Gems" tab hard to see + **weapons not appearing in Set
+Gems**; poison damage bypasses the overshield (should chip it, like other damage); never grant a
+**duplicate special item from a box**; rename Sunken Gorge **or** Sunken Forge (too similar);
+smelting simplify to **1 Wood per ore** (the user — supersedes the 2/3/3/3 just shipped).
+
+**Batch B — world/POI overlap:** Cinderwrought (Sunken Forge) overlaps a Warren; Duneshaper altar
+spawning in the bayou next to another POI / next to the Sunken Gorge (flagged twice); badlands↔bayou
+**border bleed** — POIs too close, enemies crossing biomes. (Root cause is almost always a missing
+spawn-exclusion zone — [[feedback_poi_busy_not_placeholder]] — and POI-position pickers not honoring
+each other's clear radii + biome coverage.)
+
+**Batch C — bayou combat rebalance (the big one):** enemies far too fast (can't kite/dodge/run from
+anything — even god-mode-only survivable); wild power disparity (some ~no HP, some 1-shot); Corpselight /
+ranged haunts do insane damage AND **don't stop to shoot** (AI bug — they should plant like a Hexling);
+ranged gap-close makes player ranged unplayable; elite Mosswretch nearly 1-shots; heavy armor doesn't
+feel tanky + poison stacks (~6) melt you + even max Embersteel gets owned; **Miretyrant does ~nothing
+(−1/−2 dmg) and perma-staggers to a sword**; Palewake dies in ~4 hits (trivial) — bosses feel weak
+while trash 1-shots; Reaver takes too much damage / lesser Bloodpact too weak (consider passive
+lifesteal or a buffed innate); **new weapons' stamina cost too high** (attacks-per-weapon feels flat
+despite stat investment); trophies/elites feel rare in bayou; "where are the guaranteed Uncommon T3
+miniboss trophies?"; "where do I get Mire Shards?" (surface the source or add one). Also: themed bayou
+spawns (toads at the lilypad POI, ranged at the docks); make the Gremlin chest piece heavy armor.
+
+**Batch D — design tweaks:** remove poison's regen-reduction, make a regen-cut an enemy-kit thing
+instead; resting regen buff scales with campfire level; Palewake fight-clarity pass (reads as unclear /
+not epic).
 
 ### Smelter fix — unloadable alloy recipes, reagent/fuel split (2026-07-23, Opus)
 

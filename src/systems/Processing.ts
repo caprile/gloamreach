@@ -54,19 +54,19 @@ export const PROCESS_RECIPES: ProcessRecipe[] = [
 // input, one reagent, one fuel — so there's no optional slot to special-case, and
 // gives Wood a sink that lasts past the early game.
 export const SMELT_RECIPES: ProcessRecipe[] = [
-  { input: "sunscorch_ore", output: "sunsteel_ingot", inputPerOutput: 1, reagent: { key: "hex_essence", per: 1 }, fuel: { key: "wood", per: 2 }, slotLabels: { input: "Ore", reagent: "Reagent" } },
-  { input: "ember_ore", output: "embersteel_ingot", inputPerOutput: 1, reagent: { key: "hex_essence", per: 1 }, fuel: { key: "wood", per: 3 }, slotLabels: { input: "Ore", reagent: "Reagent" }, minStationTier: 1 },
+  { input: "sunscorch_ore", output: "sunsteel_ingot", inputPerOutput: 1, reagent: { key: "hex_essence", per: 1 }, fuel: { key: "wood", per: 1 }, slotLabels: { input: "Ore", reagent: "Reagent" } },
+  { input: "ember_ore", output: "embersteel_ingot", inputPerOutput: 1, reagent: { key: "hex_essence", per: 1 }, fuel: { key: "wood", per: 1 }, slotLabels: { input: "Ore", reagent: "Reagent" }, minStationTier: 1 },
   // Biome 3 Phase 3: bayou ore. Same tier-1 Smelter as rare badlands ore (the
   // Ember Crucible is the "can melt the hard stuff" gate; the bayou doesn't
   // need a second one) — the real gate is finding Bog Ore at all.
   // B4-P5: Gloamsteel's reagent is MOONSILVER, which only comes from crypt vaults
   // behind a warden. That is what rewards the Embersteel route (locked decision
   // 3) — the longer road is the one that needs dungeon clears.
-  { input: "bog_ore", output: "gloamsteel_ingot", inputPerOutput: 1, reagent: { key: "moonsilver", per: 1 }, fuel: { key: "wood", per: 3 }, slotLabels: { input: "Ore", reagent: "Alloy" }, minStationTier: 1 },
+  { input: "bog_ore", output: "gloamsteel_ingot", inputPerOutput: 1, reagent: { key: "moonsilver", per: 1 }, fuel: { key: "wood", per: 1 }, slotLabels: { input: "Ore", reagent: "Alloy" }, minStationTier: 1 },
   // The SUNSTEEL branch metal. Input is the ingot (not the ore) so its recipe
   // key stays unique — two recipes sharing an input would make processRecipeFor
   // ambiguous — and so it reads literally as "Sunsteel + Bog Ore".
-  { input: "sunsteel_ingot", output: "mirebronze_ingot", inputPerOutput: 1, reagent: { key: "bog_ore", per: 2 }, fuel: { key: "wood", per: 3 }, slotLabels: { input: "Metal", reagent: "Alloy" }, minStationTier: 1 },
+  { input: "sunsteel_ingot", output: "mirebronze_ingot", inputPerOutput: 1, reagent: { key: "bog_ore", per: 2 }, fuel: { key: "wood", per: 1 }, slotLabels: { input: "Metal", reagent: "Alloy" }, minStationTier: 1 },
 ];
 
 export function processRecipeFor(inputKey: string): ProcessRecipe | undefined {
@@ -229,6 +229,18 @@ export class ProcessingStation {
   // hardcoded input-key switch.
   recipeForLoaded(): ProcessRecipe | undefined {
     return this.input ? this.recipeFor(this.input.key) : undefined;
+  }
+
+  // Empty every loaded slot and return what was in them, so the caller can hand
+  // it back to the player (on menu close) or drop it (on destroy). Instant,
+  // stateless processing means nothing should ever be stranded in a station.
+  drainAll(): ProcSlot[] {
+    const out: ProcSlot[] = [];
+    for (const slot of [this.input, this.reagent, this.fuel]) if (slot) out.push(slot);
+    this.input = null;
+    this.reagent = null;
+    this.fuel = null;
+    return out;
   }
 
   // How many whole output units the loaded input could ever produce — the

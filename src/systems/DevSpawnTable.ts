@@ -11,7 +11,6 @@ import { Mirejaw } from "../entities/Mirejaw";
 import { Blighttoad } from "../entities/Blighttoad";
 import { Mosswretch } from "../entities/Mosswretch";
 import { Murkling } from "../entities/Murkling";
-import { Fenlurker } from "../entities/Fenlurker";
 import { Corpselight } from "../entities/Corpselight";
 import { GremlinKing } from "../entities/GremlinKing";
 import { Gloamwarden } from "../entities/Gloamwarden";
@@ -41,7 +40,6 @@ export const DEV_ENEMY_SPAWN_TABLE: Record<string, SpawnFactory> = {
   blighttoad: (scene, x, y, elite) => new Blighttoad(scene, { x, y, elite }),
   mosswretch: (scene, x, y, elite) => new Mosswretch(scene, { x, y, elite }),
   murkling: (scene, x, y, elite) => new Murkling(scene, { x, y, elite }),
-  fenlurker: (scene, x, y, elite) => new Fenlurker(scene, { x, y, elite }),
   corpselight: (scene, x, y, elite) => new Corpselight(scene, { x, y, elite }),
   gremlin_king: (scene, x, y) => new GremlinKing(scene, { x, y }),
   gloamwarden: (scene, x, y) => new Gloamwarden(scene, { x, y }),

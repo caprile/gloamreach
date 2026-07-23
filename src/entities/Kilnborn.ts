@@ -1,6 +1,10 @@
 import Phaser from "phaser";
 import { Enemy } from "./Enemy";
 import type { IncomingDamageType } from "../systems/Weapons";
+import { enemyStat } from "../systems/enemyStats";
+
+// Combat stats from the Phaser-free source of truth (also read by the balancing dashboard).
+const S = enemyStat("kilnborn");
 
 // The ember crypt's warden (biome 3 Phase 4c). Bespoke AI: extends Enemy, fully
 // overrides update(). Like the Palewake it deliberately avoids the
@@ -26,7 +30,7 @@ export type KilnbornState = "stoking" | "lash" | "overheat" | "backdraft" | "ven
 export const KILNBORN_SCALE = 1.6;
 export const KILNBORN_VENT_DAMAGE_MULTIPLIER = 1.7; // punish-window bonus while venting
 
-const MAX_HEALTH = 300;
+const MAX_HEALTH = S.hp;
 const AGGRO_RADIUS = 300;
 const LEASH_RADIUS = 900;
 const DEAGGRO_REGEN_PER_SEC = 12;
@@ -93,7 +97,10 @@ export class Kilnborn extends Enemy {
       y: cfg.y,
       texture: "kilnborn",
       displayName: "The Kilnborn",
+      // Guaranteed REFINED TROPHY (T3, bayou miniboss tier) + the vault it seals,
+      // mirroring the Gloamwarden(T1)/Cinderwrought(T2) — see Palewake.
       loot: [
+        { resource: "refined_trophy_uncommon_t3", min: 1, max: 1 },
         { resource: "moonsilver", min: 2, max: 3 },
         { resource: "gloam_shard", min: 2, max: 4 },
       ],

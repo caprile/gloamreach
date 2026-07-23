@@ -1,6 +1,12 @@
 import Phaser from "phaser";
 import { Enemy } from "./Enemy";
 import type { SwingConfig } from "./Enemy";
+import { enemyStat } from "../systems/enemyStats";
+
+// Combat stats from the Phaser-free source of truth (also read by the balancing
+// dashboard — tune there). attacks[0] = toxic bite (+ poison payload).
+const S = enemyStat("blighttoad");
+const ELITE = S.elite!;
 
 // Blighttoad — the bayou's POISON carrier (biome 3 Phase 4b). A bloated,
 // gloam-sick toad that hops in on you and bites, injecting a stacking poison
@@ -29,13 +35,13 @@ const HOP_GAP_MS = 330; // planted beat between hops (the burst-move rhythm)
 const WANDER_SPEED = 20;
 const PACK_AGGRO_RADIUS = 240;
 
-const MAX_HEALTH = 150; // squishier than the Mirejaw/Mosswretch — it trades HP for the DoT
-const BITE_DAMAGE = 66; // physical, mostly eaten by bayou-tier armor — the poison is the payload
+const MAX_HEALTH = S.hp; // squishier than the Mirejaw/Mosswretch — it trades HP for the DoT
+const BITE_DAMAGE = S.attacks[0].damage; // physical, mostly eaten by bayou-tier armor — the poison is the payload
 // The dose. 9/s over 6s = 54 damage that armor CANNOT stop, and it halves every
 // heal source while it runs (Poison.ts) — so it also blocks you from eating your
 // way out of a fight. Stacks per bite (to 4×), which is the real pressure: a
 // clump of toads you don't break off from ramps to 36 armor-ignoring dps.
-const BITE_POISON_DPS = 6; // 9 -> 6 alongside the 3-stack poison cap (was 45 dps at full stacks)
+const BITE_POISON_DPS = S.attacks[0].poisonDps!; // 6 -> 4 (2026-07-23): with the 3-stack cap, full stacks were still melting through armor-bypassing poison
 const BITE_POISON_MS = 6000;
 
 const BITE_SWING: SwingConfig = {
@@ -62,8 +68,8 @@ export class Blighttoad extends Enemy {
       loot: elite
         ? [{ resource: "blight_gland", min: 2, max: 3 }]
         : [{ resource: "blight_gland", min: 1, max: 1 }],
-      maxHealth: elite ? Math.round(MAX_HEALTH * 1.5) : MAX_HEALTH,
-      biteDamage: elite ? Math.round(BITE_DAMAGE * 1.5) : BITE_DAMAGE,
+      maxHealth: elite ? Math.round(MAX_HEALTH * ELITE.hp) : MAX_HEALTH,
+      biteDamage: elite ? Math.round(BITE_DAMAGE * ELITE.damage) : BITE_DAMAGE,
       elite,
       eliteTrophy: "blighttoad_trophy",
       // Full of the stuff itself, so its own venom-kin magic slides off; a
@@ -73,9 +79,9 @@ export class Blighttoad extends Enemy {
     this.packAggro = true;
     this.packAggroRadius = PACK_AGGRO_RADIUS;
     if (elite) {
-      this.speedMult = 1.1;
-      this.setScale(1.3);
-      this.baseScale = 1.3;
+      this.speedMult = ELITE.speed;
+      this.setScale(ELITE.scale);
+      this.baseScale = ELITE.scale;
     }
   }
 

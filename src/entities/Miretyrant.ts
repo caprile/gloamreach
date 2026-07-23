@@ -1,5 +1,10 @@
 import Phaser from "phaser";
 import { Enemy } from "./Enemy";
+import { enemyStat } from "../systems/enemyStats";
+
+// Combat stats from the Phaser-free source of truth (also read by the balancing
+// dashboard — tune there). attacks[0]=chomp, [1]=sweep, [2]=slam, [3]=roll.
+const S = enemyStat("miretyrant");
 
 // The Miretyrant — the DUSKMIRE BAYOU final boss and the game's win-condition
 // (biome 3 Phase 4d), demoting the Duneshaper to a mid-boss. A colossal
@@ -32,19 +37,19 @@ export type MiretyrantAttack = "chomp" | "sweep" | "slam" | "roll";
 // fight "too easy and boring". The boring half is answered by the phase-3 mire
 // pools below (an arena that closes in, rather than a longer bar); this is the
 // half that just needed to be bigger.
-const MAX_HEALTH = 4600;
+const MAX_HEALTH = S.hp;
 export const MIRETYRANT_SCALE = 2.6;
 const AGGRO_RADIUS = 330;
 const LEASH_RADIUS = 620; // retreat past this and it resets (there is no arena seal — locked)
-const MOVE_SPEED = 66; // a bruiser: slower than a player sprint, faster than the Duneshaper's drift
+const MOVE_SPEED = S.moveSpeed; // a bruiser: slower than a player sprint, faster than the Duneshaper's drift
 const PREFERRED_RANGE = 96; // closes to here and stays — it fights in your face
 const DEAGGRO_REGEN_PER_SEC = 16;
 
-export const MIRETYRANT_MAX_POISE = 450;
+export const MIRETYRANT_MAX_POISE = S.poise!; // 450→800 (2026-07-23): a sword could perma-stagger the win-con boss
 export const MIRETYRANT_STAGGER_DAMAGE_MULTIPLIER = 1.35;
 const STAGGER_DURATION_MS = 2200;
 const POISE_REGEN_DELAY_MS = 3000;
-const POISE_REGEN_PER_SEC = 24;
+const POISE_REGEN_PER_SEC = S.poiseRegenPerSec!; // 24→28: recovers poise faster so stagger stays earned, not a lock
 const POISE_BAR_H = 7;
 
 const ATTACK_COOLDOWN_MS = 720;
@@ -67,7 +72,7 @@ const CHOMP_BITE_MS = 150; // planted snap at the end of the lunge — the strik
 const CHOMP_RECOVER_MS = 620;
 const CHOMP_MAX_LUNGE = 300;
 const CHOMP_RADIUS = 74; // tight: this one you step out of the LINE of
-const CHOMP_DAMAGE = 52;
+const CHOMP_DAMAGE = S.attacks[0].damage;
 const CHOMP_KNOCKBACK = 150;
 const CHOMP_LAND_EPS = 10;
 
@@ -79,7 +84,7 @@ const SWEEP_IMPACT_MS = 320;
 const SWEEP_RECOVER_MS = 780;
 const SWEEP_RADIUS = 165;
 const SWEEP_HALF_ANGLE = Phaser.Math.DegToRad(120); // rear-to-front — only the far side is safe
-const SWEEP_DAMAGE = 46;
+const SWEEP_DAMAGE = S.attacks[1].damage;
 const SWEEP_KNOCKBACK = 300;
 
 // --- Muck Slam — radial AoE under itself, growing-circle telegraph. ---
@@ -87,7 +92,7 @@ const SLAM_TELEGRAPH_MS = 820;
 const SLAM_IMPACT_MS = 200;
 const SLAM_RECOVER_MS = 700;
 const SLAM_RADIUS = 150;
-const SLAM_DAMAGE = 58;
+const SLAM_DAMAGE = S.attacks[2].damage;
 const SLAM_KNOCKBACK = 240;
 
 // --- Death Roll (phase 2) — a travelling multi-hit spin along a locked line. ---
@@ -96,9 +101,9 @@ const SLAM_KNOCKBACK = 240;
 const ROLL_TELEGRAPH_MS = 780;
 const ROLL_TRAVEL_MS = 900;
 const ROLL_RECOVER_MS = 1000;
-const ROLL_SPEED = 300;
+const ROLL_SPEED = S.burstSpeed!;
 const ROLL_RADIUS = 82;
-const ROLL_DAMAGE = 40;
+const ROLL_DAMAGE = S.attacks[3].damage;
 const ROLL_KNOCKBACK = 200;
 const ROLL_HIT_INTERVAL_MS = 420; // it can catch you more than once if you run with it
 
