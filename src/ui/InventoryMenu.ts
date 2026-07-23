@@ -149,7 +149,7 @@ const BP_SEARCH_H = 22;
 const BP_GRID_TOP = PANEL_Y + 110;
 const BP_GRID_BOTTOM = BACKPACK_Y + BACKPACK_H; // unchanged bottom edge
 const BP_GRID_VIEW_H = BP_GRID_BOTTOM - BP_GRID_TOP;
-const BP_SECTION_H = 18; // height of a "Materials"/"Gear"/... section header row
+const BP_SECTION_H = 21; // height of a "Materials"/"Gear"/... section header row
 
 // Section order + labels within a biome tab (matches ItemContainer's sort).
 const CATEGORY_SECTIONS: { cat: ItemCategory; label: string }[] = [
@@ -194,7 +194,7 @@ const RELICS_W = RELICS_COLS * SLOT + (RELICS_COLS - 1) * GAP;
 const RELIC_GRID_ROWS = Math.ceil(8 / RELICS_COLS); // 4
 const RELIC_GRID_H = RELIC_GRID_ROWS * SLOT + (RELIC_GRID_ROWS - 1) * GAP;
 const RELIC_FX_Y = RELICS_Y + RELIC_GRID_H + 16; // "Effects" header baseline
-const RELIC_FX_ROW_H = 15;
+const RELIC_FX_ROW_H = 17;
 const RELIC_FX_MAX_ROWS = 9;
 const RELIC_FX_BOTTOM = RELIC_FX_Y + 18 + RELIC_FX_MAX_ROWS * RELIC_FX_ROW_H;
 
@@ -456,7 +456,7 @@ export class InventoryMenu {
   // fade, shown when that slot's item has an affordable upgrade ready (S3).
   private addUpgradeArrow(slotX: number, slotY: number): void {
     const arrow = this.scene.add
-      .text(slotX + SLOT - 2, slotY + 1, "▲", { fontFamily: "monospace", fontSize: "14px", color: "#ffd24a" })
+      .text(slotX + SLOT - 2, slotY + 1, "▲", { fontFamily: "monospace", fontSize: "16px", color: "#ffd24a" })
       .setOrigin(1, 0)
       .setScrollFactor(0)
       .setDepth(3003);
@@ -547,7 +547,7 @@ export class InventoryMenu {
     const str = `${row.label}  ${row.total}\n${lines}`;
     if (!this.relicTipText) {
       this.relicTipText = this.scene.add
-        .text(0, 0, str, { fontFamily: "monospace", fontSize: "11px", color: "#e8ecf2", wordWrap: { width: 220 } })
+        .text(0, 0, str, { fontFamily: "monospace", fontSize: "13px", color: "#e8ecf2", wordWrap: { width: 220 } })
         .setScrollFactor(0)
         .setDepth(3010);
       this.relicTipBg = this.scene.add
@@ -675,7 +675,7 @@ export class InventoryMenu {
     const str = `${def.name}\n${rarityName(def.rarity)} ${relicFamilyName(group.family)} · Power T${group.powerTier}\n${relicEffectText(def, group.powerTier)}`;
     if (!this.relicTipText) {
       this.relicTipText = this.scene.add
-        .text(0, 0, str, { fontFamily: "monospace", fontSize: "11px", color: "#e8ecf2", wordWrap: { width: 220 } })
+        .text(0, 0, str, { fontFamily: "monospace", fontSize: "13px", color: "#e8ecf2", wordWrap: { width: 220 } })
         .setScrollFactor(0)
         .setDepth(3010);
       this.relicTipBg = this.scene.add
@@ -718,7 +718,7 @@ export class InventoryMenu {
     const x = BACKPACK_X + BACKPACK_W;
     const y = PANEL_Y + 36;
     const t = this.scene.add
-      .text(x, y, "Sort", { fontFamily: "monospace", fontSize: "12px", color: "#8a93a3" })
+      .text(x, y, "Sort", { fontFamily: "monospace", fontSize: "14px", color: "#8a93a3" })
       .setOrigin(1, 0)
       .setScrollFactor(0)
       .setDepth(3002)
@@ -795,7 +795,7 @@ export class InventoryMenu {
         const lbl = this.scene.add
           .text(x + 9, y + 10, abilityKey.toUpperCase(), {
             fontFamily: "monospace",
-            fontSize: "15px",
+            fontSize: "17px",
             fontStyle: "bold",
             color: "#bfe0ff",
             stroke: "#000000",
@@ -840,7 +840,7 @@ export class InventoryMenu {
       const t = this.scene.add
         .text(x, BP_TABS_Y, labels[tab], {
           fontFamily: "monospace",
-          fontSize: "12px",
+          fontSize: "14px",
           color: active ? "#ffffff" : "#8a93a3",
         })
         .setScrollFactor(0)
@@ -897,7 +897,7 @@ export class InventoryMenu {
       const clear = this.scene.add
         .text(BACKPACK_X + BACKPACK_W - 8, BP_SEARCH_Y + BP_SEARCH_H / 2, "✕", {
           fontFamily: "monospace",
-          fontSize: "13px",
+          fontSize: "15px",
           color: "#8a93a3",
         })
         .setOrigin(1, 0.5)

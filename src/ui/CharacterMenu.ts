@@ -76,7 +76,7 @@ export class CharacterMenu {
     this.tooltip = scene.add
       .text(0, 0, "", {
         fontFamily: "monospace",
-        fontSize: "11px",
+        fontSize: "13px",
         color: "#ffe08a",
         backgroundColor: "#000000cc",
         padding: { x: 6, y: 4 },
@@ -152,7 +152,7 @@ export class CharacterMenu {
       const tab = this.scene.add
         .text(tx, y, label, {
           fontFamily: "monospace",
-          fontSize: "13px",
+          fontSize: "15px",
           color: active ? "#ffffff" : "#8a93a3",
           backgroundColor: active ? "#2a3a55" : undefined,
           padding: { x: 6, y: 3 },
@@ -345,7 +345,7 @@ export class CharacterMenu {
     const btn = this.scene.add
       .text(this.panelX + PANEL_W - 16, y + 4, "[ + ]", {
         fontFamily: "monospace",
-        fontSize: "16px",
+        fontSize: "18px",
         color: canSpend ? "#0a0a0a" : "#4a4a4a",
         backgroundColor: canSpend ? "#e3b25a" : "#2a2a2a",
         padding: { x: 8, y: 4 },

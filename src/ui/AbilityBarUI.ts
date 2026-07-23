@@ -114,7 +114,7 @@ export class AbilityBarUI {
       const keyLabel = this.scene.add
         .text(lx, ly, key.toUpperCase(), {
           fontFamily: "monospace",
-          fontSize: "15px",
+          fontSize: "17px",
           fontStyle: "bold",
           color: "#bfe0ff",
           stroke: "#000000",
@@ -132,7 +132,7 @@ export class AbilityBarUI {
       const cdText = this.scene.add
         .text(x + ICON / 2, y + ICON / 2, "", {
           fontFamily: "monospace",
-          fontSize: "16px",
+          fontSize: "18px",
           fontStyle: "bold",
           color: "#ffffff",
           stroke: "#000000",
@@ -245,7 +245,7 @@ export class AbilityBarUI {
     const str = `[${e.key.toUpperCase()}] ${title}\n${body}`;
     if (!this.tipText) {
       this.tipText = this.scene.add
-        .text(0, 0, str, { fontFamily: "monospace", fontSize: "12px", color: "#e8ecf2", wordWrap: { width: 240 } })
+        .text(0, 0, str, { fontFamily: "monospace", fontSize: "14px", color: "#e8ecf2", wordWrap: { width: 240 } })
         .setScrollFactor(0)
         .setDepth(DEPTH_TIP);
       this.tipBg = this.scene.add

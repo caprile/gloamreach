@@ -198,6 +198,17 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   // feedback_boar_zigzag_movement) — a plain straight-line chaser will wedge.
   collidesWithTerrain = false;
 
+  // Where this enemy was spawned. Every subclass's idle wander is an incremental
+  // random walk, and a chase can end anywhere the player led it, so over a long
+  // run creatures migrate a long way from where they belong (the user: badlands
+  // Duskrunners turning up in the starting forest). MainScene.steerEnemyHome()
+  // uses this to walk a non-aggro'd enemy back when it strays too far — a
+  // post-update steer, exactly like steerCryptEnemy, so no subclass wander code
+  // changes. Subclasses with their OWN tighter anchor (den/shack guards) keep it;
+  // this is the coarse backstop for everything else.
+  readonly homeX: number;
+  readonly homeY: number;
+
   // Temporary slow (Executioner crit relic). A timestamp + factor (0.7 = 30%
   // slower); the scene folds slowMult() into envSpeedMult each frame so it
   // rides the same aggressive-movement path with no per-subclass wiring.
@@ -282,6 +293,8 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     this.health = cfg.maxHealth;
     this.biteDamageValue = cfg.biteDamage;
     this.resistances = cfg.resistances ?? {};
+    this.homeX = cfg.x;
+    this.homeY = cfg.y;
     scene.add.existing(this);
     scene.physics.add.existing(this);
     this.setCollideWorldBounds(true); // matches Player — without this, chase/flee/kite AI can walk enemies off the map

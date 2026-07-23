@@ -107,7 +107,7 @@ export class RunEndUI {
     const clearBtn = this.scene.add
       .text(this.panelX + PANEL_W - 28, y, "[ Clear ]", {
         fontFamily: "monospace",
-        fontSize: "12px",
+        fontSize: "14px",
         color: "#7c8494",
       })
       .setOrigin(1, 0)
@@ -149,7 +149,7 @@ export class RunEndUI {
         this.scene.add
           .text(bx, btnY, label, {
             fontFamily: "monospace",
-            fontSize: "18px",
+            fontSize: "20px",
             color: "#0a0a0a",
             backgroundColor: bg,
             padding: { x: 16, y: 8 },

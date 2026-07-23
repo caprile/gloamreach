@@ -73,7 +73,7 @@ export class HintUI {
     const header = this.scene.add
       .text(0, 0, style.label, {
         fontFamily: "monospace",
-        fontSize: "11px",
+        fontSize: "13px",
         color: style.css,
       })
       .setScrollFactor(0);
@@ -81,7 +81,7 @@ export class HintUI {
     const body = this.scene.add
       .text(0, 0, text, {
         fontFamily: "monospace",
-        fontSize: "13px",
+        fontSize: "15px",
         color: "#dfe6f0",
         wordWrap: { width: wrapWidth },
       })

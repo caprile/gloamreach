@@ -119,7 +119,7 @@ export class PauseMenuUI {
     const btn = this.scene.add
       .text(cx, y, label, {
         fontFamily: "monospace",
-        fontSize: "16px",
+        fontSize: "18px",
         color: "#dfe6f0",
         backgroundColor: "#1a1f2a",
         padding: { x: 20, y: 8 },

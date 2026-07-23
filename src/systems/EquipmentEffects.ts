@@ -32,6 +32,10 @@ const CHANNELS: (keyof EquipPassive)[] = [
   "statusResistPct",
 ];
 
+// World-px light a piece with 100% lightRadiusPct would emit on its own (see
+// innateLightRadius). Sized under a Torch's 180px on purpose.
+const JEWELRY_LIGHT_BASE = 200;
+
 // Human-readable effect lines for a passive record — reused by the JewelryMenu
 // row and the item Tooltip so display can't drift from the mechanical numbers.
 export function describePassive(p: EquipPassive): string[] {
@@ -40,7 +44,7 @@ export function describePassive(p: EquipPassive): string[] {
   if (p.abilityPowerPct) out.push(`+${p.abilityPowerPct}% ability power`);
   if (p.magnetRadiusPct) out.push(`+${p.magnetRadiusPct}% pickup radius`);
   if (p.gatherBonusPct) out.push(`+${p.gatherBonusPct}% bonus-gather chance`);
-  if (p.lightRadiusPct) out.push(`+${p.lightRadiusPct}% light radius`);
+  if (p.lightRadiusPct) out.push(`Sheds light; +${p.lightRadiusPct}% light radius`);
   if (p.statusResistPct) out.push(`-${p.statusResistPct}% bleed/poison taken`);
   return out;
 }
@@ -85,6 +89,17 @@ export class EquipmentEffects {
   }
   lightRadiusMult(): number {
     return 1 + this.sums.lightRadiusPct / 100;
+  }
+  // A light-bearing trinket (the Amulet of Farsight's "pale lantern-stone")
+  // should actually give off light, not merely widen a torch you might not be
+  // holding — lightRadiusPct alone multiplies the HELD radius, which is 0 with
+  // an axe in hand, so the amulet read as doing nothing (the user: "lantern
+  // should auto give light radius"). Its own glow is derived from the same
+  // percentage rather than a second stat, so one number still describes the
+  // piece; the base is deliberately below a torch's 180px, so a torch is still
+  // the brighter choice and the two combine.
+  innateLightRadius(): number {
+    return (JEWELRY_LIGHT_BASE * this.sums.lightRadiusPct) / 100;
   }
   // Scales an incoming bleed/poison dose. Floored at 0.25 so no stack of gear
   // can make status effects a non-mechanic — same "never zero it out" instinct

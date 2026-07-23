@@ -111,7 +111,7 @@ export class WorldMapUI {
     this.titleText = scene.add
       .text(px + 16, py + 12, "World Map", {
         fontFamily: "monospace",
-        fontSize: "18px",
+        fontSize: "20px",
         color: "#ffe08a",
       })
       .setScrollFactor(0)
@@ -121,7 +121,7 @@ export class WorldMapUI {
     this.hintText = scene.add
       .text(px + pw / 2, py + ph - 18, "Scroll to zoom  ·  Drag to pan  ·  M / Esc to close", {
         fontFamily: "monospace",
-        fontSize: "12px",
+        fontSize: "14px",
         color: "#8a93a3",
       })
       .setOrigin(0.5, 0.5)
@@ -132,7 +132,7 @@ export class WorldMapUI {
     this.closeBtn = scene.add
       .text(px + pw - 16, py + 12, "✕", {
         fontFamily: "monospace",
-        fontSize: "18px",
+        fontSize: "20px",
         color: "#c8d0dc",
       })
       .setOrigin(1, 0)
@@ -298,7 +298,7 @@ export class WorldMapUI {
         const label = this.scene.add
           .text(0, 0, lm.label, {
             fontFamily: "monospace",
-            fontSize: "12px",
+            fontSize: "14px",
             color: "#e8e0cc",
             backgroundColor: "#000000aa",
             padding: { x: 3, y: 1 },

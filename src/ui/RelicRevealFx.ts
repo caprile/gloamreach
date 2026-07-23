@@ -276,7 +276,7 @@ export class RelicRevealFx {
       const banner = this.scene.add
         .text(cx, gemY - 58, `★ ${rarityName(rarity).toUpperCase()}! ★`, {
           fontFamily: "monospace",
-          fontSize: "22px",
+          fontSize: "24px",
           color: rarityHex(rarity),
           fontStyle: "bold",
         })

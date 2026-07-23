@@ -1,4 +1,103 @@
 # STATUS Archive — older milestone entries (grep by id; never Read in full)
+
+### B4-P4 — 25-item playtest omnibus: bugs, bayou gaps, world density, combat feel (2026-07-22, Opus)
+
+Plan: `.claude/plans/b4-p4-playtest-omnibus.md`. the user's 95-minute Ascetic run (lvl 18, ~60 in
+three stats) cleared the **whole bayou and killed the final boss in EMBERSTEEL gear** — a full tier
+below the set that content gates. That, not any single bug, is the thesis: the endgame tier was
+never necessary and the map was too big for the materials in it. 25 items, all four buckets in one
+session (an explicit override of the one-milestone-per-chat convention). Four design calls locked
+via `AskUserQuestion`, all as recommended: magic = **on-hit AOE**, set bonuses **span tiers**,
+bosses get **new mechanics + presentation**, and **densify hard while keeping `WORLD_RADIUS`**.
+
+**Three reported bugs turned out to be the same class of defect — a reference to something that
+was never built:** the crypt chest pointed at texture `shack_chest` (BootScene only makes
+`gremlin_shack_chest`), so it drew as Phaser's missing-texture placeholder — exactly the "black box
+with green outline"; the crypt gem geodes wore `gloaming_vein_shielded`, *literally the surface
+gloam-ore texture*, which is why a gem node read as a Gloam Shard node while the purpose-built
+`geode_gloam/ember/blood` textures went unused; and `refreshDiscovery()` announced station and tool
+upgrades but simply **had no loop for `WEAPON_UPGRADES` or `ARMOR_UPGRADES`**, so an entire
+progression axis could never be discovered ("I never got any weapon upgrade unlocks").
+
+**Perf ("overall performance feels worse") was structural, not incremental.** `updateEnemies` ran
+full AI for *every* enemy in the world each frame — measured live at **1142**, including every
+dweller in every prebuilt dungeon interior tens of thousands of pixels away. A distance cull
+(`ENEMY_ACTIVE_RADIUS` 2000, comfortably past both the ~1536px camera and the roster's longest
+620px leash) drops that to **115 per frame**. Safe because every give-up/attack timer is absolute
+rather than an accumulator, so nothing drifts while an enemy sits out frames.
+
+**"I can see crypts next to the one I am in"** was fixed by making interiors *not render* unless
+occupied (`setDungeonVisible`) rather than by separating them — separation can't win, since the
+camera sees ~1536px and the dead corners are finite. That inverted the constraint on dungeon
+density: cells only need to not overlap, so `CRYPT_REALM` grew to the largest square that still
+clears `WORLD_RADIUS` (3700 square, inner corner 14283 > 14000) and packs **4x3 = 12 crypts, up
+from 6**.
+
+**Other fixes:** the Emberblink nova and Gloam Nova both damaged submerged/stalking enemies (they
+skipped the `isTargetable()` guard every other damage sweep honors); Comfort's rest check was
+aggro-only **world-wide**, so on a 28000px map with a 620px-leash Duskrunner *something* was always
+hunting you and resting silently never fired again in the badlands (now scoped to 900px); dungeon
+dwellers got a free hit on arrival (descending now calls a new `Enemy.resetAttackState`, so the
+first swing you see underground plays its full telegraph); epic loot at 4/6/8% made "never saw one"
+the *likely* outcome for a run, so rates went to 10/16/22% **plus a pity counter** (guaranteed after
+8 dud containers — verified forcing at exactly 8); the Corpselight orb's 9000ms lifetime at 170px/s
+was ~1.5km of chase, now 4200ms **plus a real miss rule** in `Projectile` (once it has come close
+and is drifting away again, the dodge *succeeded* — it stops tracking and fizzles); and a Class tab
+was added to the Character menu, deriving its text from `affinityLines` so it can't drift from the
+picker card.
+
+**Content gaps closed:** the bayou had **no food at all** — `mirejaw_meat` shipped in Phase 4b
+marked "cooking recipes land later" and that never happened — so three dishes now land, also giving
+`swamp_moss`/`water_lily` their first use. And all six bayou trophies are Common/**Tier 3** with
+`REFINE_RECIPES` stopping at tier 2, so the deepest trophies could only ever be gambled raw: added
+**Mire Shard**, a tier-3 refine row, and a **Mire Crucible** (Relic Forge Lvl 4). The Convert tab
+was generalized over a new `SHARD_CONVERSIONS` table rather than gaining a second hardcoded block.
+Note `tsc` *passed* on the half-done version of this — TypeScript's arity rule let the old
+zero-arg `convertGloamToEmber` satisfy the new `convert(id)` signature while silently ignoring the
+id; caught by reading, not by the compiler.
+
+**World:** the content-less **Windswept Dunes are gone** from the biome pool (`Dunes.ts` kept on
+disk unreferenced — tier 4 is where the next real biome slots in, per the user: "1 but there will
+eventually be another biome"). Bayou's unlock radius came in 6500 to 4200, `LOWER_FALLOFF` 0.9 to
+1.2, and the bayou content band tightened to r 4400-9000. Measured live: **0 dunes coverage**, and
+beyond the badlands the mix is **63% bayou / 24% badlands / 8% forest**. POI counts up across the
+board (dens 16 to 30, forges/shrines/lodges 4-5 to 9, shacks 8 to 14), and the Sunken Gorge now has
+**two maws into one interior** — separate lairs would mean two bosses and two win conditions in a
+one-life run, whereas separate doors just mean the finale isn't a cross-map trek.
+
+**Combat feel:** magic weapons' whole selling point was bypassing flat armor — but **enemies have
+no armor stat**, so against them the bypass did *nothing*, leaving the Gloam Brand at 44 DPS vs the
+Pike's 52 and Sword's 53 *and* resisted by the gloam-casters. They now carry a data-driven on-hit
+detonation (`WEAPON_ON_HIT_BURST`), fired only from the primary hit so it can never chain. Set
+bonuses now match on **lineage + rank**, granting the bonus of the **weakest piece worn**, so
+crafting one next-tier piece no longer deletes it (verified: 1 and 2 Mirehide pieces both keep
+Emberblink; the full set upgrades to Mireblink). Poison capped **5 to 3 stacks** with the dose cut
+9 to 6 dps (45 dps that bypassed armor *and* halved healing was a delete button; measured 18 now).
+The Mosswretch now **rears back** and swells 1.4x in green via a new optional `SwingConfig.tell`,
+so its reach is readable without violating the "no world-space red arcs" lock. Every named fight
+now announces itself with a **name card, camera kick and sting** (`BOSS_SUBTITLES` — a future boss
+is one row), and the Miretyrant went 3200 to 4600 HP and gained a phase-3 hazard: its slams and
+rolls leave **permanent mire pools** that slow and poison, so the arena closes in rather than the
+bar just getting longer.
+
+**Verified live throughout** (`preview_eval`): 12 crypts all hidden and outside the world circle
+with zero overlaps, 2 maws, biome mix, the 1142 to 115 cull, the set-bonus matrix across both
+lineages, magic burst hitting a 40px neighbour for 60 while a 400px one is untouched and the source
+is never double-hit, poison capping at 18 dps, epic pity firing at container 8, upgrade-ladder
+discovery holding lvl3 back until lvl2, attack reset on descend, Comfort ignoring a 5000px hunter
+but not a 100px one, and the boss card being idempotent. `tsc` + `npm run build` clean, zero
+console errors. **One caveat worth a playtest:** a dodged homing orb still trails for ~2.4s when the
+player is only just outpacing it (170px/s orb vs sprint) — much better than the old 9s, not instant.
+
+**Two verification traps worth remembering.** The preview tab throttles when backgrounded (frame
+73 to 75 across a whole call), which made a projectile look immortal; and a fresh reload sits behind
+the character picker, which uses the **pause freeze** — so physics never steps and *nothing moves*,
+which reads exactly like a broken projectile. Both were mine, not the game's. Drive the loop with
+`game.loop.step()` and check `isPaused`/`physics.world.running` before trusting any motion test.
+
+**Next: a playtest.** Every number here is first-pass, and the density/biome-mix changes especially
+want real play rather than sampling.
+
 ### Biome 2 — Phase 3: Duskrunner Warren POI (two-wave destructible den)
 
 Plan: `.claude/plans/biome-2-sunscorch-badlands.md` (Phase 3, umbrella). Built on **Opus** (new

@@ -42,7 +42,7 @@ const PANEL_H_MIN = 360;
 // Clearance kept below the panel for the HP/stamina bars + hotbar + XP bar.
 const BOTTOM_CLEARANCE = 190;
 // Row pitch of the recipe list, and the wheel step for scrolling it.
-const ROW_H = 22;
+const ROW_H = 25;
 const SCROLL_STEP = ROW_H * 3;
 const LIST_COL_W = 190;
 const DETAIL_GAP = 20;
@@ -248,7 +248,7 @@ export class CraftingMenu {
       const t = this.scene.add
         .text(x, tabY, cat.label, {
           fontFamily: "monospace",
-          fontSize: "13px",
+          fontSize: "15px",
           color: active ? "#ffffff" : "#8a93a3",
           backgroundColor: active ? "#2a3a55" : undefined,
           padding: { x: 4, y: 2 },
@@ -294,7 +294,7 @@ export class CraftingMenu {
     if (recipes.length === 0) {
       const t = this.scene.add.text(x0, listTop, "No known recipes yet.", {
         fontFamily: "monospace",
-        fontSize: "13px",
+        fontSize: "15px",
         color: "#6b7280",
       });
       t.setScrollFactor(0).setDepth(3001);
@@ -330,7 +330,7 @@ export class CraftingMenu {
       const t = this.scene.add
         .text(nameX, y, label, {
           fontFamily: "monospace",
-          fontSize: "14px",
+          fontSize: "16px",
           color: isSelected ? "#ffe08a" : affordable ? "#ffffff" : "#5b6472",
           backgroundColor: isSelected ? "#20242e" : undefined,
           padding: { x: 4, y: 2 },
@@ -368,7 +368,7 @@ export class CraftingMenu {
 
   private addScrollHint(x: number, y: number, glyph: string): void {
     const t = this.scene.add
-      .text(x, y, glyph, { fontFamily: "monospace", fontSize: "11px", color: "#5b6472" })
+      .text(x, y, glyph, { fontFamily: "monospace", fontSize: "13px", color: "#5b6472" })
       .setScrollFactor(0)
       .setDepth(3002);
     this.rows.push(t);
@@ -400,7 +400,7 @@ export class CraftingMenu {
 
     const desc = this.scene.add.text(x0, y, recipe.description, {
       fontFamily: "monospace",
-      fontSize: "13px",
+      fontSize: "15px",
       color: "#c8d0dc",
       wordWrap: { width: this.panelX + PANEL_W - 12 - x0 },
     });
@@ -419,7 +419,7 @@ export class CraftingMenu {
         `Set Bonus — ${set.bonusName}: ${set.bonusDesc}`,
         {
           fontFamily: "monospace",
-          fontSize: "13px",
+          fontSize: "15px",
           color: "#e3b25a",
           wordWrap: { width: this.panelX + PANEL_W - 12 - x0 },
         },
@@ -437,7 +437,7 @@ export class CraftingMenu {
       for (const stat of def.stats) {
         const t = this.scene.add.text(x0, y, `${stat.label}: ${this.statValue(def, stat)}`, {
           fontFamily: "monospace",
-          fontSize: "13px",
+          fontSize: "15px",
           color: "#9adfff",
         });
         t.setScrollFactor(0).setDepth(3001);
@@ -471,7 +471,7 @@ export class CraftingMenu {
       const resourceName = itemDef(resource)?.name ?? resource;
       const t = this.scene.add.text(x0, y, `${resourceName}: ${have}/${need}`, {
         fontFamily: "monospace",
-        fontSize: "13px",
+        fontSize: "15px",
         color: have >= need ? "#8fe38f" : "#e38f8f",
       });
       t.setScrollFactor(0).setDepth(3001);
@@ -483,7 +483,7 @@ export class CraftingMenu {
     if (recipe.tier >= 1 && !this.deps.isNearWorkbench()) {
       const t = this.scene.add.text(x0, y, "Requires a nearby Workbench", {
         fontFamily: "monospace",
-        fontSize: "13px",
+        fontSize: "15px",
         color: "#e3b25a",
       });
       t.setScrollFactor(0).setDepth(3001);
@@ -496,7 +496,7 @@ export class CraftingMenu {
       // Near a Workbench, but not an upgraded-enough one (forged gear needs Lvl 3).
       const t = this.scene.add.text(x0, y, `Requires Workbench Lvl ${recipe.requiresWorkbenchTier + 1}`, {
         fontFamily: "monospace",
-        fontSize: "13px",
+        fontSize: "15px",
         color: "#e3b25a",
       });
       t.setScrollFactor(0).setDepth(3001);
@@ -511,7 +511,7 @@ export class CraftingMenu {
       const have = this.deps.backpack.count(outputKey(recipe));
       const t = this.scene.add.text(x0, y, `In inventory: ${have}`, {
         fontFamily: "monospace",
-        fontSize: "13px",
+        fontSize: "15px",
         color: "#9aa4b5",
       });
       t.setScrollFactor(0).setDepth(3001);
@@ -522,7 +522,7 @@ export class CraftingMenu {
     if (stackable) {
       const t = this.scene.add.text(x0, y, `Qty: ${qty} / ${maxQty}`, {
         fontFamily: "monospace",
-        fontSize: "13px",
+        fontSize: "15px",
         color: "#e8ecf2",
       });
       t.setScrollFactor(0).setDepth(3001);
@@ -566,7 +566,7 @@ export class CraftingMenu {
     const btn = this.scene.add
       .text(x0, btnY, btnLabel, {
         fontFamily: "monospace",
-        fontSize: "14px",
+        fontSize: "16px",
         color: clickable ? "#0a0a0a" : "#4a4a4a",
         backgroundColor: clickable ? "#8fe38f" : "#2a2a2a",
         padding: { x: 10, y: 5 },

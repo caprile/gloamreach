@@ -101,7 +101,7 @@ export class JewelryMenu {
     this.panelW = 520;
 
     const measure = scene.add
-      .text(0, 0, INTRO_BLURB, { fontFamily: "monospace", fontSize: "11px", wordWrap: { width: this.panelW - 32 } })
+      .text(0, 0, INTRO_BLURB, { fontFamily: "monospace", fontSize: "13px", wordWrap: { width: this.panelW - 32 } })
       .setVisible(false);
     const descH = measure.height;
     measure.destroy();
@@ -336,7 +336,7 @@ export class JewelryMenu {
       const btn = this.scene.add
         .text(tx, y, label, {
           fontFamily: "monospace",
-          fontSize: "13px",
+          fontSize: "15px",
           color: active ? "#ffffff" : "#8a93a3",
           backgroundColor: active ? "#2a3a55" : undefined,
           padding: { x: 6, y: 3 },
@@ -602,7 +602,7 @@ export class JewelryMenu {
     const iy = y + 32;
     for (const p of parts) {
       const t = this.scene.add
-        .text(ix, iy, p.text, { fontFamily: "monospace", fontSize: "11px", color: p.ok ? "#8fe38f" : "#e08a8a" })
+        .text(ix, iy, p.text, { fontFamily: "monospace", fontSize: "13px", color: p.ok ? "#8fe38f" : "#e08a8a" })
         .setScrollFactor(0)
         .setDepth(DEPTH_TEXT);
       this.mask(t);
@@ -683,7 +683,7 @@ export class JewelryMenu {
     const btn = this.scene.add
       .text(btnX, btnY, this.busy ? "Crafting…" : stackable ? `Craft x${batch}` : "Craft", {
         fontFamily: "monospace",
-        fontSize: "14px",
+        fontSize: "16px",
         color: canCraft ? "#0a0a0a" : "#4a4a4a",
         backgroundColor: canCraft ? "#8fe38f" : "#2a2a2a",
         padding: { x: 12, y: 6 },

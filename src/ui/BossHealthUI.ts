@@ -43,7 +43,7 @@ export class BossHealthUI {
     this.nameText = scene.add
       .text(scene.scale.width / 2, nameY, "", {
         fontFamily: "monospace",
-        fontSize: "22px",
+        fontSize: "24px",
         color: "#f0d080",
         stroke: "#000000",
         strokeThickness: 5,
@@ -87,7 +87,7 @@ export class BossHealthUI {
     this.poiseText = scene.add
       .text(scene.scale.width / 2, poiseY + POISE_BAR_H / 2, "", {
         fontFamily: "monospace",
-        fontSize: "12px",
+        fontSize: "14px",
         color: "#ffffff",
         stroke: "#000000",
         strokeThickness: 3,

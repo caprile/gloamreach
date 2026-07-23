@@ -5,8 +5,8 @@ const PANEL_X = 12;
 // M-R1). EventLogUI anchors to this panel's top, so it follows automatically.
 const PANEL_Y = 44;
 const PANEL_W = 260;
-const HEADER_H = 22;
-const LINE_H = 18;
+const HEADER_H = 26;
+const LINE_H = 21;
 const PADDING = 8;
 
 // Collapsible keybind reference, anchored top-left. Starts collapsed so the
@@ -84,7 +84,7 @@ export class KeybindsUI {
       this.scene.add
         .text(PANEL_X + 8, PANEL_Y + 4, "Keybinds", {
           fontFamily: "monospace",
-          fontSize: "13px",
+          fontSize: "15px",
           color: "#ffffff",
         })
         .setScrollFactor(0)
@@ -94,7 +94,7 @@ export class KeybindsUI {
       this.scene.add
         .text(PANEL_X + PANEL_W - 8, PANEL_Y + 4, this.collapsed ? "[+]" : "[-]", {
           fontFamily: "monospace",
-          fontSize: "13px",
+          fontSize: "15px",
           color: "#8a93a3",
         })
         .setOrigin(1, 0)
@@ -119,7 +119,7 @@ export class KeybindsUI {
         this.scene.add
           .text(PANEL_X + 8, y, line, {
             fontFamily: "monospace",
-            fontSize: "12px",
+            fontSize: "14px",
             color: "#c8d0dc",
           })
           .setScrollFactor(0)

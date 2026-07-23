@@ -144,7 +144,7 @@ export class HotbarUI {
   // fade, shown when that slot's item has an affordable upgrade ready (S3).
   private addUpgradeArrow(slotX: number, slotY: number): void {
     const arrow = this.scene.add
-      .text(slotX + SLOT_SIZE - 2, slotY + 1, "▲", { fontFamily: "monospace", fontSize: "14px", color: "#ffd24a" })
+      .text(slotX + SLOT_SIZE - 2, slotY + 1, "▲", { fontFamily: "monospace", fontSize: "16px", color: "#ffd24a" })
       .setOrigin(1, 0)
       .setScrollFactor(0)
       .setDepth(2902);
@@ -217,7 +217,7 @@ export class HotbarUI {
       const num = this.scene.add
         .text(x + 3, y + 2, `${col + 1}`, {
           fontFamily: "monospace",
-          fontSize: "11px",
+          fontSize: "13px",
           color: isRow2 ? "#e8c040" : "#8a93a3",
         })
         .setScrollFactor(0)
@@ -243,7 +243,7 @@ export class HotbarUI {
           const c = this.scene.add
             .text(x + SLOT_SIZE - 3, y + SLOT_SIZE - 2, `${stack.count}`, {
               fontFamily: "monospace",
-              fontSize: "11px",
+              fontSize: "13px",
               color: "#ffffff",
             })
             .setOrigin(1, 1)

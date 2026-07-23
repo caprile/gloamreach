@@ -279,12 +279,13 @@ const WORLD_CY = WORLD_RADIUS;
 // a centered square.
 const WORLD_W = WORLD_SIZE;
 const WORLD_H = WORLD_SIZE;
-// World camera zoom. 1.25 pulls the view in so the leftmost/rightmost 1/10th of
-// the OLD viewport is now off-screen (visible width = 0.8x, 1/0.8 = 1.25) — a
-// modest zoom-in requested after the bigger character sprites made things read
-// small. Only the WORLD camera zooms; a separate zoom-1 UI camera keeps the HUD
-// pixel-perfect (see setupCameras/syncCameras).
-const WORLD_ZOOM = 1.25;
+// World camera zoom. Raised 1.25 -> 1.5 (the user: "my guy looks so tiny — did
+// the camera zoom out?"), so the player and every creature read 20% larger and
+// the visible world is 1280x720 of a 1920x1080 canvas. Only the WORLD camera
+// zooms; a separate zoom-1 UI camera keeps the HUD pixel-perfect (see
+// setupCameras/syncCameras). Note updateSceneStreaming derives its radius from
+// the camera's worldView, so it tracks any change here automatically.
+const WORLD_ZOOM = 1.5;
 // The terrain-baked biome region: a centered square inscribing the biome
 // circle. Kept well under the GPU max-texture-size so the one-shot bake stays a
 // single RenderTexture (BIOME_SIZE x BIOME_SIZE).
@@ -1270,6 +1271,11 @@ export class MainScene extends Phaser.Scene {
   // Accumulates frame delta toward the next fog-top-up respawn check (see
   // updateRespawns / RESPAWN_TICK_MS). Reset each run.
   private respawnAccumMs = 0;
+  // World objects currently held OUT of the scene display list because they're
+  // far from the player (see updateSceneStreaming). They keep existing — bodies,
+  // state, everything — they just aren't rendered or iterated.
+  private streamedOut: Phaser.GameObjects.GameObject[] = [];
+  private nextStreamAt = 0;
 
   // Placement mode: crafting a placeable recipe (e.g. campfire) enters this
   // instead of landing in the backpack. A ghost preview follows the cursor,
@@ -1341,6 +1347,10 @@ export class MainScene extends Phaser.Scene {
     this.nightSpawns = [];
     this.equippedLightRadius = 0;
     this.respawnAccumMs = 0;
+    // scene.restart() destroys every GameObject, so any streamed-out refs from
+    // the previous run are dead — drop them rather than re-adding corpses.
+    this.streamedOut = [];
+    this.nextStreamAt = 0;
 
     this.nodes = [];
     this.obstacleNodes = [];
@@ -2038,6 +2048,10 @@ export class MainScene extends Phaser.Scene {
     // return — menus (pause/run-end) can be opened while the sim is frozen and
     // still need routing to the zoom-1 uiCam so they don't render zoomed.
     this.syncCameras();
+    // Park distant world objects out of the display list before anything else
+    // reads it. Runs even while frozen (below) — a paused frame still renders,
+    // and the whole point is to keep the render list small at all times.
+    this.updateSceneStreaming();
 
     // Run ended (death/win screen up) — freeze the whole world sim + input. The
     // RunEndUI is tween/pointer-driven, so it stays live regardless.
@@ -2273,7 +2287,13 @@ export class MainScene extends Phaser.Scene {
     });
     // The player's own light. Underground there's always SOME (see
     // CRYPT_AMBIENT_LIGHT) — a torch widens it rather than being required.
-    const carried = this.equippedLightRadius * this.equipEffects.lightRadiusMult();
+    // A light-bearing trinket glows on its own; a held torch is brighter and the
+    // trinket's % widens it. Max, not sum — two light sources on one body is one
+    // pool of light, whichever is bigger.
+    const carried = Math.max(
+      this.equippedLightRadius * this.equipEffects.lightRadiusMult(),
+      this.equipEffects.innateLightRadius(),
+    );
     const ownLight = this.activeDungeon ? Math.max(CRYPT_AMBIENT_LIGHT, carried) : carried;
     if (ownLight > 0) {
       const p = toScreen(this.player.x, this.player.y);
@@ -4462,6 +4482,17 @@ export class MainScene extends Phaser.Scene {
   private static readonly OVERLAY_TEX = 4096; // texture resolution
   private static readonly OVERLAY_STEP = 4; // texel block size baked per fill
 
+  // Display-list streaming (see updateSceneStreaming). The interval is a
+  // compromise: often enough that a sprinting/dashing player can't outrun the
+  // window, rare enough that the ~17k-object scan is amortised to nothing. The
+  // margin is generous for the same reason — at max sprint the player covers
+  // ~230px/s, so 900px is several seconds of slack past the screen edge.
+  private static readonly STREAM_INTERVAL_MS = 250;
+  private static readonly STREAM_MARGIN = 900;
+  // Anything bigger than this is a ground bake / zone decal whose x,y is its
+  // centre, not a point you can be "far from" — never park those.
+  private static readonly STREAM_MAX_SIZE = 900;
+
   // Camera-locked ground-grain overlay (see the speckleLayer field note). Sized to
   // the camera viewport and pinned with scrollFactor(0), so its canvas stays
   // small no matter how big the world is; syncSpeckleLayer() offsets tilePosition
@@ -4482,6 +4513,82 @@ export class MainScene extends Phaser.Scene {
     const cam = this.cameras.main;
     // Specks stay locked to world coords: shift the tiling by the camera scroll.
     this.speckleLayer.setTilePosition(cam.scrollX, cam.scrollY);
+  }
+
+  // DISPLAY-LIST STREAMING. The world had grown to ~17,000 display objects (5000+
+  // miasma fumes, 2300 crypt/dungeon wall rects, 2200 resource nodes, 1100
+  // enemies, and every decorative prop in three biomes). Phaser walks the WHOLE
+  // display list every frame — to cull, to render, and again in syncCameras —
+  // and re-sorts all 17,000 whenever any depth changes, which is every frame the
+  // player is moving. Measured: ~22ms/frame even with the sim paused, dropping to
+  // ~4ms once distant objects are out of the list. That is the hitching the user
+  // felt specifically while walking/sprinting (standing still = no depth change =
+  // no re-sort).
+  //
+  // So: anything far enough away that it CANNOT be on screen is removed from the
+  // display list and parked in `streamedOut`. Nothing else changes — Arcade
+  // bodies live in the physics world and Sprite.preUpdate runs off the scene's
+  // update list, so collision, AI and animation are all untouched. This is
+  // purely "don't ask the renderer about things it can't draw".
+  private updateSceneStreaming(): void {
+    const now = this.time.now;
+    if (now < this.nextStreamAt) return;
+    this.nextStreamAt = now + MainScene.STREAM_INTERVAL_MS;
+
+    const px = this.player.x;
+    const py = this.player.y;
+    // Derived from the actual zoomed viewport, so a wider window or a zoom
+    // change can never stream out something that is still on screen.
+    const view = this.cameras.main.worldView;
+    const radius = Math.hypot(view.width, view.height) / 2 + MainScene.STREAM_MARGIN;
+    const r2 = radius * radius;
+
+    const list = this.children.list;
+    for (let i = list.length - 1; i >= 0; i--) {
+      const o = list[i] as Phaser.GameObjects.GameObject & { x: number; y: number };
+      if (!this.isStreamable(o)) continue;
+      const dx = o.x - px;
+      const dy = o.y - py;
+      if (dx * dx + dy * dy <= r2) continue;
+      this.children.remove(o);
+      this.streamedOut.push(o);
+    }
+
+    const keep: Phaser.GameObjects.GameObject[] = [];
+    for (const o of this.streamedOut) {
+      // destroy() clears `scene`, so a parked object that died while out of the
+      // list (a node depleted by a set-bonus proc, a run reset) is simply dropped.
+      if (!o.scene) continue;
+      const t = o as Phaser.GameObjects.GameObject & { x: number; y: number };
+      const dx = t.x - px;
+      const dy = t.y - py;
+      if (dx * dx + dy * dy <= r2) this.children.add(o);
+      else keep.push(o);
+    }
+    this.streamedOut = keep;
+  }
+
+  // Whether a display object is safe to park out of the display list. Requires a
+  // real world position, so it excludes: HUD (scrollFactor 0), the ground bakes /
+  // overlays / zone decals (depth < 0 or huge), and every Graphics object — those
+  // draw in absolute world coordinates from a transform parked at (0, 0), so
+  // their x/y says nothing about where they appear on screen.
+  private isStreamable(o: Phaser.GameObjects.GameObject): boolean {
+    const a = o as Phaser.GameObjects.GameObject & {
+      scrollFactorX?: number;
+      depth?: number;
+      displayWidth?: number;
+      displayHeight?: number;
+      x?: number;
+      y?: number;
+    };
+    if (a.scrollFactorX === 0) return false;
+    if (typeof a.x !== "number" || typeof a.y !== "number") return false;
+    if ((a.depth ?? 0) < 0) return false;
+    if (o instanceof Phaser.GameObjects.Graphics) return false;
+    if ((a.displayWidth ?? 0) > MainScene.STREAM_MAX_SIZE) return false;
+    if ((a.displayHeight ?? 0) > MainScene.STREAM_MAX_SIZE) return false;
+    return true;
   }
 
   // Route every display object to exactly one camera each frame: screen-locked
@@ -7229,6 +7336,28 @@ export class MainScene extends Phaser.Scene {
   // change, not a movement system, and the enemy's own logic is untouched.
   private static readonly CRYPT_NAV_REACHED = 34; // px — close enough, pick the next one
   private static readonly CRYPT_NAV_REFRESH_MS = 1200; // re-plan even if not reached (the player moves)
+  // Walk a strayed enemy back toward where it spawned. Applied AFTER update()
+  // and only while it is NOT aggro'd or attacking, so it can never bend a
+  // committed lunge or pull a creature off a live chase — it only overrides idle
+  // wander, which is the drift that actually accumulates. This is the coarse
+  // backstop behind each subclass's own tighter anchor (den/shack guards);
+  // HOME_LEASH is deliberately loose enough that ordinary roaming still reads as
+  // roaming, and only a genuine migration gets corrected.
+  private steerEnemyHome(enemy: Enemy): void {
+    if (enemy.isAggro() || enemy.isAttacking()) return;
+    const dx = enemy.homeX - enemy.x;
+    const dy = enemy.homeY - enemy.y;
+    const d = Math.hypot(dx, dy);
+    if (d <= MainScene.HOME_LEASH) return;
+    const body = enemy.body as Phaser.Physics.Arcade.Body | undefined;
+    if (!body) return;
+    body.setVelocity((dx / d) * MainScene.HOME_RETURN_SPEED, (dy / d) * MainScene.HOME_RETURN_SPEED);
+  }
+  // px from spawn before a non-aggro'd enemy starts walking home, and how fast
+  // it does (a touch above a typical idle-wander speed, so it actually closes).
+  private static readonly HOME_LEASH = 800;
+  private static readonly HOME_RETURN_SPEED = 34;
+
   private steerCryptEnemy(enemy: Enemy): void {
     const crypt = this.activeDungeon;
     if (!crypt?.layout || !this.cryptEnemies.has(enemy)) return;
@@ -9950,7 +10079,17 @@ export class MainScene extends Phaser.Scene {
       // resumes when the player comes back into range.
       const dx = enemy.x - px;
       const dy = enemy.y - py;
-      if (dx * dx + dy * dy > ENEMY_ACTIVE_RADIUS_SQ) continue;
+      if (dx * dx + dy * dy > ENEMY_ACTIVE_RADIUS_SQ) {
+        // Stop it dead on the way out. Arcade velocity persists with no drag, so
+        // an enemy culled mid-chase (or mid-pounce, at 330px/s) kept coasting in
+        // a straight line for as long as the player stayed away — which is how
+        // Warren guards ended up thousands of px from their den (leaving the POI
+        // permanently stuck on wave 1) and how badlands Duskrunners drifted all
+        // the way into the starting forest.
+        const body = enemy.body as Phaser.Physics.Arcade.Body | null;
+        if (body && (body.velocity.x !== 0 || body.velocity.y !== 0)) body.setVelocity(0, 0);
+        continue;
+      }
       // Fold any temporary slow (Executioner crit relic) into the same envSpeedMult
       // path every aggressive-movement velocity already reads — no per-subclass wiring.
       enemy.envSpeedMult = envSpeedMult * enemy.slowMult(now);
@@ -9973,6 +10112,7 @@ export class MainScene extends Phaser.Scene {
       // Steering only redirects existing velocity: the AI still sees the real
       // player for every range/attack/give-up decision.
       this.steerCryptEnemy(enemy);
+      this.steerEnemyHome(enemy);
       if (bit) {
         // Most melee hits carry no knockback; a telegraphed attack that opts
         // into one (ranged Gremlin shove, Boar charge gore) sets it on the

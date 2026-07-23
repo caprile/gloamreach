@@ -144,7 +144,7 @@ export class StatusBarUI {
         timeText = this.scene.add
           .text(x + ICON - 2, y + 1, "", {
             fontFamily: "monospace",
-            fontSize: "10px",
+            fontSize: "12px",
             fontStyle: "bold",
             color: "#ffe0e0",
             stroke: "#000000",
@@ -180,7 +180,7 @@ export class StatusBarUI {
     const str = `${eff.name}\n${eff.detail}${secs}`;
     if (!this.tipText) {
       this.tipText = this.scene.add
-        .text(0, 0, str, { fontFamily: "monospace", fontSize: "11px", color: "#f2e8e8" })
+        .text(0, 0, str, { fontFamily: "monospace", fontSize: "13px", color: "#f2e8e8" })
         .setScrollFactor(0)
         .setDepth(DEPTH_TIP);
       this.tipBg = this.scene.add

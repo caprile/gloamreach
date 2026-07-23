@@ -151,7 +151,7 @@ export class ChestMenu {
     const descText = this.scene.add
       .text(this.panelX + 16, this.panelY + 38, "Loot recovered from the shack's guards.", {
         fontFamily: "monospace",
-        fontSize: "11px",
+        fontSize: "13px",
         color: "#8a93a3",
         wordWrap: { width: this.panelW - 32 },
       })

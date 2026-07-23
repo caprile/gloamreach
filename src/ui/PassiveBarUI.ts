@@ -127,7 +127,7 @@ export class PassiveBarUI {
       const countText = this.scene.add
         .text(x + ICON - 2, y + ICON - 2, "", {
           fontFamily: "monospace",
-          fontSize: "13px",
+          fontSize: "15px",
           fontStyle: "bold",
           color: "#ffe08a",
           stroke: "#000000",
@@ -142,7 +142,7 @@ export class PassiveBarUI {
         badge = this.scene.add
           .text(x + 1, y + 1, e.badge, {
             fontFamily: "monospace",
-            fontSize: "9px",
+            fontSize: "11px",
             color: "#9fd0ff",
             stroke: "#000000",
             strokeThickness: 3,
@@ -204,7 +204,7 @@ export class PassiveBarUI {
     const str = `${e.name}\n${e.desc}`;
     if (!this.tipText) {
       this.tipText = this.scene.add
-        .text(0, 0, str, { fontFamily: "monospace", fontSize: "12px", color: "#e8ecf2", wordWrap: { width: 230 } })
+        .text(0, 0, str, { fontFamily: "monospace", fontSize: "14px", color: "#e8ecf2", wordWrap: { width: 230 } })
         .setScrollFactor(0)
         .setDepth(DEPTH_TIP);
       this.tipBg = this.scene.add

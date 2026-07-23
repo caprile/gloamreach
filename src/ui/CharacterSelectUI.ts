@@ -256,7 +256,7 @@ export class CharacterSelectUI {
     const btn = this.scene.add
       .text(x, y, label, {
         fontFamily: "monospace",
-        fontSize: "18px",
+        fontSize: "20px",
         color: "#dfe6f0",
         backgroundColor: "#2a2140",
         padding: { x: 26, y: 10 },

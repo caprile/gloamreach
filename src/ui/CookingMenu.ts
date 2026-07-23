@@ -110,7 +110,7 @@ export class CookingMenu {
     // Measure the intro blurb's wrapped height once (its wrap width is the fixed
     // panel width, so it doesn't change) to size the fixed intro band.
     const measure = scene.add
-      .text(0, 0, INTRO_BLURB, { fontFamily: "monospace", fontSize: "11px", wordWrap: { width: this.panelW - 32 } })
+      .text(0, 0, INTRO_BLURB, { fontFamily: "monospace", fontSize: "13px", wordWrap: { width: this.panelW - 32 } })
       .setVisible(false);
     const descH = measure.height;
     measure.destroy();
@@ -449,7 +449,7 @@ export class CookingMenu {
       const t = this.scene.add
         .text(ix, iy, p.text, {
           fontFamily: "monospace",
-          fontSize: "11px",
+          fontSize: "13px",
           color: p.ok ? "#8fe38f" : "#e08a8a",
         })
         .setScrollFactor(0)
@@ -545,7 +545,7 @@ export class CookingMenu {
     const btn = this.scene.add
       .text(btnX, btnY, this.busy ? "Cooking…" : stackable ? `Cook x${batch}` : "Cook", {
         fontFamily: "monospace",
-        fontSize: "14px",
+        fontSize: "16px",
         color: canCook ? "#0a0a0a" : "#4a4a4a",
         backgroundColor: canCook ? "#8fe38f" : "#2a2a2a",
         padding: { x: 12, y: 6 },

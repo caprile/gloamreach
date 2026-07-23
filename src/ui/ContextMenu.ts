@@ -70,7 +70,7 @@ export class ContextMenu {
       const t = this.scene.add
         .text(this.x + 10, rowY + ITEM_H / 2, item.label, {
           fontFamily: "monospace",
-          fontSize: "13px",
+          fontSize: "15px",
           color: item.enabled ? "#ffffff" : "#5b6472",
         })
         .setOrigin(0, 0.5)

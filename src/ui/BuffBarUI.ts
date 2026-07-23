@@ -129,7 +129,7 @@ export class BuffBarUI {
     const str = `${b.name}\n+${b.hpPerSec} HP/s · ${secs}s left`;
     if (!this.tipText) {
       this.tipText = this.scene.add
-        .text(0, 0, str, { fontFamily: "monospace", fontSize: "11px", color: "#e8ecf2" })
+        .text(0, 0, str, { fontFamily: "monospace", fontSize: "13px", color: "#e8ecf2" })
         .setScrollFactor(0)
         .setDepth(DEPTH_TIP);
       this.tipBg = this.scene.add

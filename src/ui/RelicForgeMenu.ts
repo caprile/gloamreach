@@ -907,7 +907,7 @@ export class RelicForgeMenu {
     const str = `${def.name}\n${rarityName(def.rarity)} · Power T${powerTier}\n${relicEffectText(def, powerTier)}`;
     if (!this.tipText) {
       this.tipText = this.scene.add
-        .text(0, 0, str, { fontFamily: "monospace", fontSize: "11px", color: "#e8ecf2", wordWrap: { width: 220 } })
+        .text(0, 0, str, { fontFamily: "monospace", fontSize: "13px", color: "#e8ecf2", wordWrap: { width: 220 } })
         .setScrollFactor(0)
         .setDepth(DEPTH_TIP);
       this.tipBg = this.scene.add

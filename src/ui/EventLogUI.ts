@@ -3,8 +3,8 @@ import type { EventLog, LogEntry, LogKind } from "../systems/EventLog";
 import { PANEL_X as INVENTORY_PANEL_X } from "./InventoryMenu";
 
 const PANEL_W = 260;
-const HEADER_H = 22;
-const LINE_H = 18;
+const HEADER_H = 26;
+const LINE_H = 21;
 const MAX_LINES = 6;
 
 const KIND_COLORS: Record<LogKind, { text: string; border: number; fill: number }> = {
@@ -55,6 +55,10 @@ const RECIPE_TOAST_STAGGER_MS = 200;
 // this the oldest is evicted so the top-anchored stack can't reach the player.
 const MAX_CENTER_TOASTS = 4;
 
+// Same idea for the left-hand recipe/material stack: at ~46px a slot, six is
+// about as tall as the free left column gets before it reaches the minimap.
+const MAX_RECIPE_TOASTS = 6;
+
 // A live center toast + its GameObjects, so the stack can be repositioned.
 interface CenterToast {
   text: Phaser.GameObjects.Text;
@@ -86,15 +90,18 @@ export class EventLogUI {
   private topY: number;
   private recipeToastQueue: LogEntry[] = [];
   private recipeToastQueueBusy = false;
-  // Heights of currently-visible recipe toasts — used only to know when the
-  // stack is fully empty (so the upward cursor below can reset to the baseline).
-  private activeRecipeToasts: { height: number }[] = [];
-  // A monotonic cursor for the TOP edge of the next recipe toast. The stack
-  // grows UPWARD from the baseline (newest at the baseline, older ones above),
-  // so the cursor only ever moves up and resets to the baseline once the stack
-  // empties — the same reasoning as `centerStackNextY`: a slot freed by a
-  // faded toast is never reused under a still-visible one.
-  private recipeStackTopY = -1;
+  // Currently-visible recipe/material toasts, OLDEST first. Each keeps its
+  // container so the stack can be repacked (relayoutRecipeToasts) whenever one
+  // is added, evicted or fades — the same treatment the center stack gets.
+  // It used to be a monotonic upward cursor with no cap, which meant a burst of
+  // crafts (each holds ~7s) marched the stack straight off the top of the screen
+  // and left holes at the bottom as older toasts faded out from under it
+  // (the user: "the side menu gets weird with where it puts the banner").
+  private activeRecipeToasts: {
+    height: number;
+    container: Phaser.GameObjects.Container;
+    tween?: Phaser.Tweens.Tween;
+  }[] = [];
 
   // `x`/`topY` are this panel's fixed top-left anchor — the caller
   // (MainScene) computes `x` once from KeybindsUI's right edge so the two
@@ -177,7 +184,7 @@ export class EventLogUI {
       this.scene.add
         .text(leftX + 8, headerTop + 4, "Log", {
           fontFamily: "monospace",
-          fontSize: "13px",
+          fontSize: "15px",
           color: "#ffffff",
         })
         .setScrollFactor(0)
@@ -187,7 +194,7 @@ export class EventLogUI {
       this.scene.add
         .text(rightX - 8, headerTop + 4, this.collapsed ? "[+]" : "[-]", {
           fontFamily: "monospace",
-          fontSize: "13px",
+          fontSize: "15px",
           color: "#8a93a3",
         })
         .setOrigin(1, 0)
@@ -218,7 +225,7 @@ export class EventLogUI {
         this.scene.add
           .text(leftX + 8, y, this.truncate(entry.message), {
             fontFamily: "monospace",
-            fontSize: "12px",
+            fontSize: "14px",
             color: KIND_COLORS[entry.kind].text,
           })
           .setScrollFactor(0)
@@ -229,7 +236,7 @@ export class EventLogUI {
   }
 
   private truncate(msg: string): string {
-    return msg.length > 34 ? msg.slice(0, 33) + "…" : msg;
+    return msg.length > 29 ? msg.slice(0, 28) + "…" : msg;
   }
 
   private showToast(entry: LogEntry): void {
@@ -241,7 +248,7 @@ export class EventLogUI {
     const text = this.scene.add
       .text(0, 0, entry.message, {
         fontFamily: "monospace",
-        fontSize: "16px",
+        fontSize: "18px",
         color: colors.text,
         align: "center",
       })
@@ -332,26 +339,27 @@ export class EventLogUI {
     // stack slot) instead of overflowing into whatever's below it.
     const text = this.scene.add.text(0, 0, entry.message, {
       fontFamily: "monospace",
-      fontSize: "12px",
+      fontSize: "14px",
       color: colors.text,
       wordWrap: { width: wrapWidth },
     });
     const toastH = Math.max(RECIPE_TOAST_H, text.height + 16);
 
-    const stackEntry = { height: toastH };
-    // Grow upward: the newest toast's bottom sits at the baseline (when the
-    // stack is empty) or just above the current stack top otherwise. `y` is the
-    // toast's TOP edge, since the container/box use origin (0, 0).
-    const baselineBottom = this.scene.scale.height - RECIPE_TOAST_BOTTOM_MARGIN;
-    if (this.activeRecipeToasts.length === 0) this.recipeStackTopY = baselineBottom - toastH;
-    else this.recipeStackTopY -= toastH + RECIPE_TOAST_GAP;
-    const y = this.recipeStackTopY;
-    this.activeRecipeToasts.push(stackEntry);
-
     const restX = RECIPE_TOAST_LEFT;
     const startX = -RECIPE_TOAST_W - 20;
 
-    const container = this.scene.add.container(startX, y).setScrollFactor(0).setDepth(6000);
+    // y is set by relayoutRecipeToasts once this toast has joined the stack.
+    const container = this.scene.add.container(startX, 0).setScrollFactor(0).setDepth(6000);
+    const stackEntry: (typeof this.activeRecipeToasts)[number] = { height: toastH, container };
+    this.activeRecipeToasts.push(stackEntry);
+    // Cap the stack the same way the center one is capped: past the cap the
+    // OLDEST is evicted, so a long crafting spree can never climb off-screen.
+    while (this.activeRecipeToasts.length > MAX_RECIPE_TOASTS) {
+      const oldest = this.activeRecipeToasts.shift()!;
+      oldest.tween?.remove();
+      oldest.container.destroy();
+    }
+    this.relayoutRecipeToasts();
 
     const box = this.scene.add
       .rectangle(0, 0, RECIPE_TOAST_W, toastH, colors.fill, 0.95)
@@ -369,13 +377,13 @@ export class EventLogUI {
     text.setPosition(textX, toastH / 2 - text.height / 2);
     container.add(text);
 
-    this.scene.tweens.add({
+    stackEntry.tween = this.scene.tweens.add({
       targets: container,
       x: restX,
       duration: RECIPE_TOAST_SLIDE_MS,
       ease: "Cubic.easeOut",
       onComplete: () => {
-        this.scene.tweens.add({
+        stackEntry.tween = this.scene.tweens.add({
           targets: container,
           alpha: 0,
           delay: RECIPE_TOAST_HOLD_MS,
@@ -383,10 +391,27 @@ export class EventLogUI {
           onComplete: () => {
             container.destroy();
             const idx = this.activeRecipeToasts.indexOf(stackEntry);
-            if (idx !== -1) this.activeRecipeToasts.splice(idx, 1);
+            if (idx !== -1) {
+              this.activeRecipeToasts.splice(idx, 1);
+              this.relayoutRecipeToasts();
+            }
           },
         });
       },
     });
+  }
+
+  // Stack the live toasts upward from a fixed low baseline — newest at the
+  // bottom, older ones climbing above it. Recomputed from scratch every time the
+  // stack changes, so gaps close as toasts fade and the top of the stack is
+  // always bounded by MAX_RECIPE_TOASTS worth of height. Only the Y is touched:
+  // X is owned by the slide-in tween.
+  private relayoutRecipeToasts(): void {
+    let bottom = this.scene.scale.height - RECIPE_TOAST_BOTTOM_MARGIN;
+    for (let i = this.activeRecipeToasts.length - 1; i >= 0; i--) {
+      const t = this.activeRecipeToasts[i];
+      t.container.setY(bottom - t.height);
+      bottom -= t.height + RECIPE_TOAST_GAP;
+    }
   }
 }

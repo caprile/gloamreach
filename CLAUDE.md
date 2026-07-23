@@ -1736,6 +1736,43 @@ below.**
    as a build input — it is dev-server-only, so that leak cost the dashboard's dev page load,
    not the shipped bundle. All numbers first-pass/tunable. See `STATUS.md`.
 
+5aq. **B4-P6 — Display-list streaming (perf), culled-enemy drift, playtest fixes** (no plan
+   file — a fix batch; built on Opus). Two structural findings worth carrying forward.
+   **(1) The render list, not the game logic, is the frame-rate ceiling.** The world had
+   reached **17,041 display objects**; Phaser iterates the whole list every frame (cull,
+   render, and again in `syncCameras`) and **re-sorts all of it whenever any depth changes**
+   — which, because every world object Y-sorts via `ysortDepth`, means every frame the player
+   moves and never while standing still. That is why the hitching was specifically a
+   *walking/sprinting* symptom. Measured 22.3ms/frame **with the sim paused**; hiding objects
+   barely helps (invisible children are still iterated), *removing* them is what matters. New
+   **`MainScene.updateSceneStreaming()`** parks any world object that can't be on screen out
+   of `scene.children` into a `streamedOut` array and re-adds it on approach — every 250ms,
+   with a 900px margin past `cameras.main.worldView` (so it tracks zoom automatically).
+   Physics bodies live in the physics world and `Sprite.preUpdate` runs off the scene's update
+   list, so **collision/AI/animation are untouched**. 17,041 → ~1,550 in the list; 22.3 → 9.3ms
+   while sprinting. `isStreamable` excludes HUD (`scrollFactor 0`), ground bakes/decals
+   (`depth < 0` or >900px) and **every `Graphics` object** — Graphics draw in absolute world
+   coords from a transform parked at (0,0), so their x/y is meaningless for culling. **Any
+   future bulk-prop system should assume this exists rather than adding a second cull.**
+   **(2) A distance-culled enemy must be stopped, not just skipped.** B4-P4's AI cull
+   `continue`d past 2000px without zeroing the body, and Arcade velocity persists with no drag
+   — so anything culled mid-chase (or mid-pounce at 330px/s) **coasted in a straight line
+   indefinitely**. That single defect produced three separate playtest reports: Warren dens
+   permanently stuck on wave 1 (guards alive but thousands of px away, so the elite wave can
+   never trigger), gremlin camps looking unguarded, and badlands Duskrunners appearing in the
+   starting forest. Fixed at the cull site, plus a coarse backstop — base `Enemy` now records
+   `homeX/homeY` and `MainScene.steerEnemyHome()` walks a **non-aggro'd, non-attacking** enemy
+   back past an 800px leash, a post-`update()` steer exactly like `steerCryptEnemy` so **no
+   subclass wander code changed**. Also: light-bearing jewelry now sheds its own light
+   (`EquipmentEffects.innateLightRadius()` — `lightRadiusPct` alone multiplied a held-torch
+   radius that is 0 with an axe in hand, so the Amulet of Farsight did literally nothing); the
+   left-hand craft/material toast stack is capped at 6 and repacked from its baseline on every
+   add/evict/fade (it was a monotonic upward cursor with no cap, so a crafting burst climbed
+   off-screen); `WORLD_ZOOM` 1.25 → **1.5**; and every `src/ui` font is **+2px** (74 sites)
+   with the layout constants coupled to those metrics adjusted alongside — note MainScene's
+   world-space text is deliberately untouched, since the camera zoom already enlarges it. All
+   numbers first-pass/tunable. See `STATUS.md`.
+
 **Not yet built — next up in rough order:**
 6. **World & discovery** — much bigger generated world, biomes, map, a single giant
    circular Valheim-style map (spawn at center, danger increases outward). **The circular

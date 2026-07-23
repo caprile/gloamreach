@@ -121,7 +121,7 @@ export class Tooltip {
     const text = this.scene.add
       .text(0, 0, lines.join("\n"), {
         fontFamily: "monospace",
-        fontSize: "13px",
+        fontSize: "15px",
         color: "#e8ecf2",
         wordWrap: { width: 180 },
       })

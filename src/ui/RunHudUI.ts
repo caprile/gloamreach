@@ -18,7 +18,7 @@ export class RunHudUI {
     this.text = scene.add
       .text(X, Y, "", {
         fontFamily: "monospace",
-        fontSize: "15px",
+        fontSize: "17px",
         color: "#ffffff",
         backgroundColor: "#000000aa",
         padding: { x: 8, y: 4 },

@@ -183,7 +183,7 @@ export class WelcomeUI {
     const btn = this.scene.add
       .text(x, y, label, {
         fontFamily: "monospace",
-        fontSize: "16px",
+        fontSize: "18px",
         color: "#dfe6f0",
         backgroundColor: "#1a1f2a",
         padding: { x: 16, y: 8 },

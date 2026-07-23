@@ -257,7 +257,7 @@ export class DryingRackMenu {
     const descText = this.scene.add
       .text(this.panelX + 16, this.panelY + 38, desc, {
         fontFamily: "monospace",
-        fontSize: "11px",
+        fontSize: "13px",
         color: "#8a93a3",
         wordWrap: { width: this.panelW - 32 },
       })
@@ -345,7 +345,7 @@ export class DryingRackMenu {
       const t = this.scene.add
         .text(x, y, label, {
           fontFamily: "monospace",
-          fontSize: "11px",
+          fontSize: "13px",
           color: "#c8d0dc",
           backgroundColor: "#20242e",
           padding: { x: 5, y: 2 },
@@ -380,7 +380,7 @@ export class DryingRackMenu {
     const amountText = this.scene.add
       .text(px, amountY, amountLabel, {
         fontFamily: "monospace",
-        fontSize: "12px",
+        fontSize: "14px",
         color: "#e8ecf2",
       })
       .setScrollFactor(0)
@@ -465,7 +465,7 @@ export class DryingRackMenu {
     const btn = this.scene.add
       .text(px, btnY, this.busy ? (this.deps.busyLabel?.() ?? "Drying…") : (this.deps.actionLabel?.() ?? "Process"), {
         fontFamily: "monospace",
-        fontSize: "14px",
+        fontSize: "16px",
         color: canProcess ? "#0a0a0a" : "#4a4a4a",
         backgroundColor: canProcess ? "#8fe38f" : "#2a2a2a",
         padding: { x: 10, y: 5 },
