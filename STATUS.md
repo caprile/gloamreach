@@ -18,8 +18,14 @@ Also: light-bearing jewelry now actually sheds light (its % multiplied a torch r
 the craft-toast stack is capped and repacked instead of climbing off-screen, `WORLD_ZOOM` 1.25 →
 1.5, and every `src/ui` font is +2px with the coupled layout constants adjusted. Verified live
 throughout — panel overflow checked by measuring real text bounds, not by eye. `tsc` +
-`npm run build` clean, zero console errors. **Next: a playtest** — the zoom, type size, home leash
-and streaming window are all first-pass numbers.
+`npm run build` clean, zero console errors. A **second batch** in the same session cleared four
+older items: the Sunken Gorge's **second maw was unusable** (reach was measured against maw #1, so
+the other door gave no prompt and ate the click — this is what blocked the user's effigy run);
+surface enemies can no longer be inside a dungeon (**hard invariant** now, since CRYPT_REALM sits
+in the world square but outside the world circle, so the geometry permitting it is permanent);
+dungeon transitions **snap the camera and fade up from black** instead of easing 14000px across the
+world in full view; and the Ironshod Pickaxe finally has its own tier art like the axe. **Next: a
+playtest** — the zoom, type size, home leash and streaming window are all first-pass numbers.
 Prior: **B4-P5 — Gear branching, set
 bonuses to jewelry, pickaxe gate, Gemwright UI** (2026-07-22, Opus, plan
 `.claude/plans/b4-p5-gear-branch-and-jewelry.md`). **Gear now branches**: Sunsteel was a dead end
@@ -371,6 +377,39 @@ station menus all render with **zero text past any panel edge and nothing off-sc
 
 `tsc` + `npm run build` clean; zero console errors. **Every number here is first-pass** — the zoom,
 the 800px home leash, the 250ms/900px streaming window and the +2px type all want real play.
+
+**Second batch (same session)** — four more items the user flagged as predating the above.
+
+**7. The Sunken Gorge's SECOND maw was dead** ("I built an effigy and couldn't interact with the
+boss dungeon opening"). Nothing to do with guards: `promptForGorge()` measured reach against
+`lair.x/lair.y`, which is only ever **maw #1**, so standing at the other door gave no prompt and
+the click fell straight through. The lair deliberately has two doors into one interior (B4-P4), and
+they were ~9,200px apart in the test seed. `hoveredGorge` now carries `{ lair, maw }` so reach —
+and the hover highlight, which had the same bug — measure against the door actually under the
+cursor. Verified end to end from maw #2: prompt → break seal → descend.
+
+**8. Enemies in the dungeons.** The `CRYPT_REALM` pocket sits in the dead corner of the world
+**square**, which is inside `collideWorldBounds` even though it's outside the world **circle** the
+player is clamped to — so anything that travelled far enough simply arrived there, and the
+now-fixed coasting bug (#2 above) supplied the ~14,000px. Since the geometry that permits it is
+permanent, this is now a **hard invariant** in `updateEnemies` rather than a consequence of
+movement behaving: anything not in `cryptEnemies` found inside either underground rect
+(`insideUndergroundRealm`, covering CRYPT_REALM and LAIR_REALM with a 600px margin) is snapped back
+to its spawn. Verified by dropping a surface Boar into the crypt pocket — one tick and it's home.
+
+**9. The dungeon transition.** "You can clearly see the camera moving to the other area." The
+camera follows with **lerp 0.1**, so teleporting the player ~14,000px underground made it *ease*
+the whole way — and the existing 260ms `flash` couldn't hide a pan that long. New
+`transitionCameraTo()` does both halves: `centerOn()` kills the in-flight travel outright, then a
+**420ms fade up from black on BOTH cameras** (world-only would leave the HUD floating over black)
+reads as a scene change instead of a jump cut. Verified: on entry and exit the camera is already
+within 1px of the player, and both fade effects run.
+
+**10. Ironshod Pickaxe art.** The tier-art mechanism was already generic (`tieredStationTexture`
+looks for `<icon>_t{n}`) — the pickaxe simply never had one drawn, so it kept its base icon while
+the axe changed. Added `icon_stone_pickaxe_t1`, drawn to match the Ironshod Axe (sunsteel head,
+bright bevel, gold haft bands) so the pair reads as one upgrade family. Verified the resolver
+returns the tiered key for both tools and still falls back to base for an item with no tier art.
 
 ### B4-P5 — Gear branching, set bonuses → jewelry, pickaxe gate, Gemwright UI (2026-07-22, Opus)
 

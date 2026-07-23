@@ -668,7 +668,24 @@ const TYRANT_ALTAR_GUARD_COUNT = 4; // elite Hexlings guarding each altar
 // Packing this tightly is only safe because an interior is now hidden unless
 // you're inside it (see setDungeonVisible) — cells still never overlap, so no
 // interior's wall bodies reach into another's floor.
+// How long the black fade covering a dungeon transition takes to lift (see
+// transitionCameraTo). Long enough to read as a scene change, short enough not
+// to be a loading screen.
+const TRANSITION_FADE_MS = 420;
 const CRYPT_REALM = { x: 200, y: 200, w: 3700, h: 3700 };
+// Both underground pockets (this and LAIR_REALM, declared below) with a generous
+// margin, so "nearly in there" counts too — see the invariant in updateEnemies.
+// Both rects sit outside the world circle by construction, so no surface content
+// can legitimately be here and the margin can't catch anything real.
+const UNDERGROUND_GUARD = 600;
+function insideUndergroundRealm(x: number, y: number): boolean {
+  const inRect = (r: { x: number; y: number; w: number; h: number }) =>
+    x >= r.x - UNDERGROUND_GUARD &&
+    x <= r.x + r.w + UNDERGROUND_GUARD &&
+    y >= r.y - UNDERGROUND_GUARD &&
+    y <= r.y + r.h + UNDERGROUND_GUARD;
+  return inRect(CRYPT_REALM) || inRect(LAIR_REALM);
+}
 const CRYPT_GRID_COLS = 4;
 const CRYPT_GRID_ROWS = 3;
 const CRYPT_COUNT = CRYPT_GRID_COLS * CRYPT_GRID_ROWS; // 12 — four per gem theme
@@ -1069,7 +1086,10 @@ export class MainScene extends Phaser.Scene {
   private gorgePositions: { x: number; y: number }[] = [];
   private lair: MiretyrantLair | null = null;
   private gorgeLightPoints: { x: number; y: number }[] = [];
-  private hoveredGorge: MiretyrantLair | null = null;
+  // The hovered maw, not just the lair: there are TWO doors into the one
+  // interior, and reach/highlight have to be measured against whichever one the
+  // cursor is actually on (see promptForGorge).
+  private hoveredGorge: { lair: MiretyrantLair; maw: MiretyrantLair["maws"][number] } | null = null;
   private lairRevealed = false; // crafting the effigy puts the maw on the map, once
   private miretyrant: Miretyrant | null = null;
   private lodgePositions: { x: number; y: number }[] = [];
@@ -7172,8 +7192,13 @@ export class MainScene extends Phaser.Scene {
   // Prompted even while sealed (the tyrant-altar precedent) so the site reads as
   // real content before you can use it — clicking without the effigy just needs
   // to say why nothing happened.
-  private promptForGorge(lair: MiretyrantLair): string | null {
-    const inReach = Phaser.Math.Distance.Between(this.player.x, this.player.y, lair.x, lair.y) <= REACH;
+  // NOTE the reach is measured against the HOVERED maw, not lair.x/lair.y — that
+  // is only ever the FIRST maw, so measuring against it made the second door
+  // permanently unusable: no prompt, and the click fell through (the user: "I
+  // built an effigy and couldn't interact with the boss dungeon opening").
+  private promptForGorge(hover: { lair: MiretyrantLair; maw: { x: number; y: number } }): string | null {
+    const { lair, maw } = hover;
+    const inReach = Phaser.Math.Distance.Between(this.player.x, this.player.y, maw.x, maw.y) <= REACH;
     if (!inReach) return null;
     return lair.unsealed ? "[LMB] Descend into the Sunken Gorge" : "[LMB] Break the seal";
   }
@@ -7248,7 +7273,23 @@ export class MainScene extends Phaser.Scene {
     }
   }
 
-  // A short camera fade sells the transition (and hides the one-frame jump).
+  // Cover a teleport. The camera follows the player with lerp 0.1, so moving him
+  // ~14000px into an underground pocket made the camera EASE all the way there —
+  // you watched it fly across the whole world (the user: "you can clearly see the
+  // camera moving to the other area and it's really distracting"). A `flash`
+  // couldn't hide that: it's ~260ms and the pan takes far longer.
+  //
+  // So do both things: snap the camera onto its new subject so there is no pan
+  // at all, then fade UP from black over it, which reads as a scene transition
+  // instead of a jump cut. Both cameras fade — the world camera alone would
+  // leave the HUD floating over a black screen.
+  private transitionCameraTo(x: number, y: number): void {
+    const cam = this.cameras.main;
+    cam.centerOn(x, y); // kills the follow lerp's in-flight travel
+    cam.fadeIn(TRANSITION_FADE_MS, 0, 0, 0);
+    this.uiCam?.fadeIn(TRANSITION_FADE_MS, 0, 0, 0);
+  }
+
   private enterCrypt(crypt: DungeonInterior): void {
     if (this.activeDungeon) return;
     this.cryptReturn = { x: this.player.x, y: this.player.y };
@@ -7262,7 +7303,7 @@ export class MainScene extends Phaser.Scene {
     }
     this.player.setPosition(crypt.entryPoint.x, crypt.entryPoint.y);
     (this.player.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0);
-    this.cameras.main.flash(260, 0, 0, 0);
+    this.transitionCameraTo(crypt.entryPoint.x, crypt.entryPoint.y);
     this.clearHoverState();
     this.eventLog.add("poi", `Entered the ${crypt.name}`);
     this.hints.trigger("crypt_dark");
@@ -7279,7 +7320,7 @@ export class MainScene extends Phaser.Scene {
     this.cryptReturn = null;
     this.player.setPosition(back.x, back.y + 30);
     (this.player.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0);
-    this.cameras.main.flash(260, 0, 0, 0);
+    this.transitionCameraTo(back.x, back.y + 30);
     this.clearHoverState();
   }
 
@@ -8345,13 +8386,13 @@ export class MainScene extends Phaser.Scene {
     // `best` and win by nulling the others. Never reachable from inside a crypt.
     let hoveredShrine: SunkenShrine | null = null;
     let hoveredLodgeHut: { lodge: DrownedLodge; hut: DrownedLodge["huts"][number] } | null = null;
-    let hoveredGorge: MiretyrantLair | null = null;
+    let hoveredGorge: { lair: MiretyrantLair; maw: MiretyrantLair["maws"][number] } | null = null;
     if (!this.activeDungeon) {
       if (this.lair) {
         for (const maw of this.lair.maws) {
           const d = hits(maw.image);
           if (d !== null) {
-            hoveredGorge = this.lair;
+            hoveredGorge = { lair: this.lair, maw };
             hoveredCrypt = null;
             takeCryptHover(d);
           }
@@ -8473,7 +8514,7 @@ export class MainScene extends Phaser.Scene {
       this.hoveredCryptChest?.chestImage ??
       this.hoveredShrine?.image ??
       this.hoveredLodgeHut?.hut.image ??
-      this.hoveredGorge?.image ??
+      this.hoveredGorge?.maw.image ??
       this.hoveredAltar?.image ??
       this.hoveredWorkbench ??
       this.hoveredCampfire ??
@@ -8746,7 +8787,7 @@ export class MainScene extends Phaser.Scene {
       return;
     }
     if (this.hoveredGorge) {
-      if (this.promptForGorge(this.hoveredGorge)) this.tryOpenGorge(this.hoveredGorge);
+      if (this.promptForGorge(this.hoveredGorge)) this.tryOpenGorge(this.hoveredGorge.lair);
       return;
     }
     if (this.hoveredAltar) {
@@ -10077,6 +10118,21 @@ export class MainScene extends Phaser.Scene {
       // give-up/attack timers are absolute (`now`-based), not accumulators, so
       // nothing drifts while an enemy sits out frames. A culled enemy simply
       // resumes when the player comes back into range.
+      // HARD INVARIANT: nothing that wasn't placed underground may BE
+      // underground. the user found forest gremlins wandering around inside the
+      // crypts — the CRYPT_REALM pocket sits in the dead corner of the world
+      // SQUARE, so it is inside `collideWorldBounds` even though it is outside
+      // the world circle the player is clamped to, and a creature drifting far
+      // enough would simply arrive there. The coasting bug above was how they
+      // got the ~14000px to make that trip, but the geometry that ALLOWS it is
+      // permanent, so this stays as the guard rather than relying on movement
+      // never going wrong again. Snapping home (not just nudging) is right: an
+      // enemy this far off the map has no meaningful local position.
+      if (!this.cryptEnemies.has(enemy) && insideUndergroundRealm(enemy.x, enemy.y)) {
+        enemy.setPosition(enemy.homeX, enemy.homeY);
+        (enemy.body as Phaser.Physics.Arcade.Body | undefined)?.reset(enemy.homeX, enemy.homeY);
+        continue;
+      }
       const dx = enemy.x - px;
       const dy = enemy.y - py;
       if (dx * dx + dy * dy > ENEMY_ACTIVE_RADIUS_SQ) {

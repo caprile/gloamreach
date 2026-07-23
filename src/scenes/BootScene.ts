@@ -1238,6 +1238,25 @@ export class BootScene extends Phaser.Scene {
     g.fillTriangle(19, 6, 23, 6, 21, 9);
     g.generateTexture("icon_stone_pickaxe", ICON, ICON);
 
+    // Ironshod Pickaxe (stone_pickaxe tier 1): the mining-side mirror of the
+    // Ironshod Axe above, and drawn to match it so the pair reads as one
+    // upgrade family — sunsteel head with a bright bevel, gold ingot bands on
+    // the haft (the user: "pickaxe level up art should be different, like the axe
+    // does"). Base texture key + "_t1" is all tieredStationTexture needs.
+    g.clear();
+    g.fillStyle(0x6a3f1d, 1);
+    g.fillRect(11, 5, 3, 17); // darker haft
+    g.fillStyle(0xd8a838, 1); // gold ingot bands
+    g.fillRect(9, 11, 7, 2);
+    g.fillRect(9, 16, 7, 2);
+    g.fillStyle(0x8f8f96, 1); // steel head body
+    g.fillRect(3, 4, 19, 4); // heavier crossbar
+    g.fillTriangle(1, 5, 5, 5, 3, 9);
+    g.fillTriangle(20, 5, 24, 5, 22, 9);
+    g.fillStyle(0xe6e2d0, 1); // bright bevel along the head's striking edge
+    g.fillRect(3, 4, 19, 1);
+    g.generateTexture("icon_stone_pickaxe_t1", ICON, ICON);
+
     // Torch: brown handle, orange flame.
     g.clear();
     g.fillStyle(0x7a4a22, 1);

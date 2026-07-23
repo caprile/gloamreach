@@ -1770,8 +1770,22 @@ below.**
    add/evict/fade (it was a monotonic upward cursor with no cap, so a crafting burst climbed
    off-screen); `WORLD_ZOOM` 1.25 → **1.5**; and every `src/ui` font is **+2px** (74 sites)
    with the layout constants coupled to those metrics adjusted alongside — note MainScene's
-   world-space text is deliberately untouched, since the camera zoom already enlarges it. All
-   numbers first-pass/tunable. See `STATUS.md`.
+   world-space text is deliberately untouched, since the camera zoom already enlarges it.
+   **A second batch in the same session** cleared four older items. **(a) A POI with more than one
+   entrance must measure reach against the HOVERED one** — the Sunken Gorge has two maws into one
+   interior, but `promptForGorge` measured `lair.x/lair.y` (always maw #1), so the second door gave
+   no prompt and silently ate the click; `hoveredGorge` now carries `{ lair, maw }`. This is the
+   trap for any future multi-entrance POI. **(b) "Nothing surface may be underground" is now a hard
+   invariant** in `updateEnemies` (`insideUndergroundRealm`, covering `CRYPT_REALM` + `LAIR_REALM`),
+   not a consequence of movement behaving: those pockets sit in the dead corner of the world
+   SQUARE, so they're inside `collideWorldBounds` even though they're outside the world CIRCLE the
+   player is clamped to — anything travelling far enough just arrives there. **(c) Teleports must
+   snap the camera**: it follows with lerp 0.1, so a ~14000px descent made it EASE across the whole
+   world in plain view, which no `flash` is long enough to hide; new `transitionCameraTo()` calls
+   `centerOn()` then fades up from black on BOTH cameras (world-only leaves the HUD over black).
+   **(d)** Tier art is already generic (`tieredStationTexture` looks for `<icon>_t{n}`) — the
+   Ironshod Pickaxe just needed `icon_stone_pickaxe_t1` drawn; **adding tiered art for any item is
+   only ever a BootScene texture, never wiring.** All numbers first-pass/tunable. See `STATUS.md`.
 
 **Not yet built — next up in rough order:**
 6. **World & discovery** — much bigger generated world, biomes, map, a single giant
