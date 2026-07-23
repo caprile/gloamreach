@@ -24,7 +24,12 @@ the other door gave no prompt and ate the click — this is what blocked the use
 surface enemies can no longer be inside a dungeon (**hard invariant** now, since CRYPT_REALM sits
 in the world square but outside the world circle, so the geometry permitting it is permanent);
 dungeon transitions **snap the camera and fade up from black** instead of easing 14000px across the
-world in full view; and the Ironshod Pickaxe finally has its own tier art like the axe. **Next: a
+world in full view; and the Ironshod Pickaxe finally has its own tier art like the axe. A **third
+batch** then made **no character start with any gear** (`startingItems` emptied on all five — the
+ability-granting `startingEquip` is untouched, since that *is* the class's ability, not gear;
+verified the bare-handed opening still unlocks the Woodcutter's Axe off ground pickups) and split
+the **upgrade-unlock toasts** by what the unlock buys: stations and tools keep theirs, gear ladder
+rungs are logged silently. Same saturated inventory went from **88 toasts to 14**. **Next: a
 playtest** — the zoom, type size, home leash and streaming window are all first-pass numbers.
 Prior: **B4-P5 — Gear branching, set
 bonuses to jewelry, pickaxe gate, Gemwright UI** (2026-07-22, Opus, plan
@@ -410,6 +415,33 @@ looks for `<icon>_t{n}`) — the pickaxe simply never had one drawn, so it kept 
 the axe changed. Added `icon_stone_pickaxe_t1`, drawn to match the Ironshod Axe (sunsteel head,
 bright bevel, gold haft bands) so the pair reads as one upgrade family. Verified the resolver
 returns the tiered key for both tools and still falls back to base for an item with no tier art.
+
+**11. No character starts with gear.** Three of the five handed out an axe (the Warden a pickaxe
+too), which quietly made the class pick partly a decision about how fast you got through the
+opening minutes — and it made the Ascetic's empty hands, its entire stated identity, not actually
+special. Every `startingItems` is now `[]`. **`startingEquip` is untouched**: that is the
+ability-granting special item, which by B4-P1's locked decision 4 *is* the class's ability rather
+than gear in any ordinary sense — stripping it would delete Q/E/R from every card. Knock-on edits,
+all of which follow from the roster being uniform: the Ascetic's blurb no longer says "starts with
+nothing but nerve" (it leans on Hunted instead), the card's KIT section is **skipped when empty**
+rather than printing "Nothing but nerve" on all five, and the picker subtitle no longer promises "a
+different kit". The field itself stays — it's the obvious lever for a future unlock or difficulty
+option, and `applyCharacter`'s routing already handles both cases. **Checked the opening isn't a
+dead end**: bare-handed, ground branches + rocks unlock the Woodcutter's Axe immediately (along
+with Torch/Wood Club/Campfire/Workbench), so every run bootstraps the same way it always did before
+a starting axe existed. Verified all five spawn with an empty hotbar and backpack.
+
+**12. Upgrade-unlock toast flood.** Weapon/armor upgrades are ladders — dozens of rungs across the
+gear tiers — and learning one common material unlocks a whole column of them on the same frame.
+Measured on a saturated inventory: **88 "New Upgrade Unlocked!" toasts**, which is the unruliness
+the user hit. Split by what the unlock actually buys, per his call: a **station** upgrade or a
+**tool** upgrade grants a capability you did not have (a new recipe tier, a node you couldn't fell)
+and keeps its toast; a **gear** rung is only a bigger number on something you already own, so it is
+now logged with `EventLog`'s existing `silent` flag. The entry still lands in the scrollable Log
+and the rung still appears in the Upgrade menu — only the popup is gone. Same flood now yields
+**14 toasts** (12 stations + the 2 Ironshod tools) and **74 silent**, with all 74 still in
+`discoveredGearUpgradeIds`. Applying an upgrade still announces normally; that's one deliberate
+click, never a burst.
 
 ### B4-P5 — Gear branching, set bonuses → jewelry, pickaxe gate, Gemwright UI (2026-07-22, Opus)
 

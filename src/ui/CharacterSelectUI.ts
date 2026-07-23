@@ -109,7 +109,10 @@ export class CharacterSelectUI {
     this.text(
       cx,
       this.panelY + 60,
-      "Each survivor carries a different kit, a granted ability, and a lasting trade-off. The choice is locked for the run.",
+      // No mention of a kit: everyone now starts empty-handed (see
+      // CharacterDef.startingItems), so the card's four real axes are what the
+      // subtitle should name.
+      "Everyone starts empty-handed. What differs is where you begin, what you can already do, how you grow, and what it costs. Locked for the run.",
       13,
       "#8a93a3",
       0.5,
@@ -197,13 +200,19 @@ export class CharacterSelectUI {
     cy += stats.length * 18 + 10;
 
     // --- kit ---
-    this.text(x + 14, cy, "KIT", 10, "#5b6472");
-    cy += 16;
-    const kit = def.startingItems
-      .map((it) => `${it.count > 1 ? `${it.count}x ` : ""}${itemDef(it.key)?.name ?? it.key}`)
-      .join("\n");
-    this.text(x + 14, cy, kit || "Nothing but nerve", 12, "#c8d0dc");
-    cy += Math.max(1, def.startingItems.length) * 18 + 12;
+    // Skipped entirely when empty, which is every card today (see
+    // CharacterDef.startingItems) — a "KIT: nothing" row on all five is pure
+    // noise. The section still renders if a kit ever comes back, and the card
+    // measures its own height, so nothing needs re-tuning either way.
+    if (def.startingItems.length > 0) {
+      this.text(x + 14, cy, "KIT", 10, "#5b6472");
+      cy += 16;
+      const kit = def.startingItems
+        .map((it) => `${it.count > 1 ? `${it.count}x ` : ""}${itemDef(it.key)?.name ?? it.key}`)
+        .join("\n");
+      this.text(x + 14, cy, kit, 12, "#c8d0dc");
+      cy += def.startingItems.length * 18 + 12;
+    }
 
     // --- run modifier (boon + bane) ---
     this.text(x + 14, cy, def.modifier.name.toUpperCase(), 11, "#8a6ec0");

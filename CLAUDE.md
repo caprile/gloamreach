@@ -1785,7 +1785,24 @@ below.**
    `centerOn()` then fades up from black on BOTH cameras (world-only leaves the HUD over black).
    **(d)** Tier art is already generic (`tieredStationTexture` looks for `<icon>_t{n}`) — the
    Ironshod Pickaxe just needed `icon_stone_pickaxe_t1` drawn; **adding tiered art for any item is
-   only ever a BootScene texture, never wiring.** All numbers first-pass/tunable. See `STATUS.md`.
+   only ever a BootScene texture, never wiring.**
+   **A third batch** changed two design rules. **(e) No character starts with gear** (the user):
+   every `CharacterDef.startingItems` is now `[]` — three of the five used to hand out an axe, which
+   made the class pick partly a decision about how fast the opening minutes went, and made the
+   Ascetic's empty hands (its whole stated identity) not special. **`startingEquip` is deliberately
+   untouched** — that is the ability-granting special item, which per B4-P1's locked decision 4 *is*
+   the class's ability rather than gear, so stripping it would delete Q/E/R from every card. The
+   field stays (not deleted) as the lever for a future unlock/difficulty option. Knock-ons: the
+   Ascetic's blurb, the card's KIT section (skipped when empty) and the picker subtitle all had to
+   stop referring to kits. Confirmed the bare-handed opening isn't a dead end — ground branches +
+   rocks unlock the Woodcutter's Axe immediately. **(f) Upgrade-unlock toasts are split by what the
+   unlock BUYS**: a station or tool upgrade grants a capability you didn't have (a recipe tier, a
+   node you couldn't fell) and keeps its toast; a weapon/armor **ladder rung** is only a bigger
+   number on something you already own, so it now uses `EventLog`'s `silent` flag — still in the
+   scrollable Log, still in the Upgrade menu, just no popup. Ladders have dozens of rungs and one
+   common material can unlock a whole column on the same frame: a saturated inventory went from
+   **88 toasts to 14**. Apply the same test to any future unlock announcement.
+   All numbers first-pass/tunable. See `STATUS.md`.
 
 **Not yet built — next up in rough order:**
 6. **World & discovery** — much bigger generated world, biomes, map, a single giant

@@ -62,6 +62,16 @@ export interface CharacterDef {
   startingEquip: { slot: EquipSlot; key: string }[];
   // Loose kit. Hotbarable items (tools/weapons) get routed to the hotbar by
   // MainScene.applyCharacter; everything else lands in the backpack.
+  //
+  // EMPTY on every character as of B4-P7 (the user: "no classes start with any
+  // gear"). Three of the five used to hand out an axe, which meant the class
+  // pick partly decided how fast you got through the opening minutes, and the
+  // Ascetic's empty hands were its whole identity. Now every run starts the same
+  // way — branches and rocks off the ground, into a Stone Axe — and a card is
+  // expressed purely through stats, ability, modifier and affinity. The field
+  // stays (not deleted) because it is the obvious lever for a future unlockable
+  // or a difficulty option, and applyCharacter's routing already handles both
+  // cases.
   startingItems: { key: string; count: number }[];
   modifier: RunModifier;
   affinity?: ClassAffinity;
@@ -85,10 +95,7 @@ export const CHARACTER_DEFS: CharacterDef[] = [
     icon: "ability_blink",
     startingStats: { endurance: 2, vitality: 2 },
     startingEquip: [{ slot: "special1", key: "special_gloamstep_band_lesser" }],
-    startingItems: [
-      { key: "stone_axe", count: 1 },
-      { key: "wood", count: 5 },
-    ],
+    startingItems: [],
     modifier: {
       name: "Well-Travelled",
       boon: "+10% move speed",
@@ -108,7 +115,7 @@ export const CHARACTER_DEFS: CharacterDef[] = [
     icon: "ability_bloodpact",
     startingStats: { strength: 4 },
     startingEquip: [{ slot: "back", key: "back_bloodpact_shroud_lesser" }],
-    startingItems: [{ key: "stone_club", count: 1 }],
+    startingItems: [],
     modifier: {
       name: "Bloodthirst",
       boon: "+25% damage dealt",
@@ -128,10 +135,7 @@ export const CHARACTER_DEFS: CharacterDef[] = [
     icon: "ability_nova",
     startingStats: { intelligence: 3, wisdom: 2 },
     startingEquip: [{ slot: "special2", key: "special_gloam_focus_lesser" }],
-    startingItems: [
-      { key: "wood_club", count: 1 },
-      { key: "torch", count: 1 },
-    ],
+    startingItems: [],
     modifier: {
       name: "Gloam-Touched",
       boon: "+30% skill XP",
@@ -151,10 +155,7 @@ export const CHARACTER_DEFS: CharacterDef[] = [
     icon: "ability_blink",
     startingStats: { vitality: 3, endurance: 2 },
     startingEquip: [{ slot: "special1", key: "special_gloamstep_band_lesser" }],
-    startingItems: [
-      { key: "stone_axe", count: 1 },
-      { key: "stone_pickaxe", count: 1 },
-    ],
+    startingItems: [],
     modifier: {
       name: "Ironbound",
       boon: "+20% max HP",
@@ -172,7 +173,10 @@ export const CHARACTER_DEFS: CharacterDef[] = [
   {
     id: "ascetic",
     name: "The Ascetic",
-    blurb: "Starts with nothing but nerve. The world sends its worst.",
+    // Reworded in B4-P7: "starts with nothing but nerve" stopped meaning
+    // anything once every card starts empty-handed, so the blurb now leans on
+    // what actually still distinguishes it — the Hunted modifier.
+    blurb: "Hard to put a mark on, and the world sends its worst to try.",
     icon: "ability_nova",
     startingStats: { agility: 3, strength: 2 },
     startingEquip: [{ slot: "special2", key: "special_gloam_focus_lesser" }],

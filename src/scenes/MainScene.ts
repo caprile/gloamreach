@@ -10923,10 +10923,22 @@ export class MainScene extends Phaser.Scene {
       const icon = itemDef(upg.appliesToItemKey)?.texture;
       this.eventLog.add("recipe", `New Upgrade Unlocked! ${upg.name}`, icon);
     }
-    // Weapon + armor upgrades. Unlike stations/tools these are LADDERS (Lvl 2
-    // then Lvl 3), so a tier is only announced once the tier below it already
-    // has been — otherwise a player who just learned the base weapon gets both
-    // steps at once, which reads as noise and spoils the ladder's shape.
+    // Weapon + armor upgrades. These are LADDERS (Lvl 2 then Lvl 3), and unlike
+    // a station or tool upgrade a rung buys no new capability — just bigger
+    // numbers on a thing you already have. There are dozens of them across the
+    // gear tiers, and learning one common material can unlock a whole column of
+    // rungs on the same frame, which is the toast flood the user hit ("upgrade
+    // notifications are unruly when you get a bunch at once — not needed for
+    // lvl 1->2 type upgrades").
+    //
+    // So these are logged SILENTLY: the entry still lands in the scrollable Log
+    // and the rung still appears in the Upgrade menu (the discovery bookkeeping
+    // below is unchanged — only the popup is suppressed). Stations keep their
+    // toast outright, and so do tool upgrades, because both of those unlock
+    // something you could not do at all before (a new recipe tier, a node you
+    // couldn't fell) rather than a bigger number.
+    //
+    // The below-tier gate stays: it keeps the LOG readable in ladder order.
     for (const upg of [...WEAPON_UPGRADES, ...ARMOR_UPGRADES]) {
       if (this.discoveredGearUpgradeIds.has(upg.id)) continue;
       if (!this.upgradeIngredientsKnown(upg)) continue;
@@ -10938,7 +10950,7 @@ export class MainScene extends Phaser.Scene {
       }
       this.discoveredGearUpgradeIds.add(upg.id);
       const icon = itemDef(upg.appliesToItemKey)?.texture;
-      this.eventLog.add("recipe", `New Upgrade Unlocked! ${upg.name}`, icon);
+      this.eventLog.add("recipe", `New Upgrade Unlocked! ${upg.name}`, icon, true);
     }
     this.announceCookRecipes();
     this.craftingMenu?.refresh();
