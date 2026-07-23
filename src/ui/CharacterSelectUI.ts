@@ -17,21 +17,29 @@ const DEPTH_SCRIM = 3620;
 const DEPTH_PANEL = 3621;
 const DEPTH_TEXT = 3622;
 
-const PANEL_W = 1500;
+// Scaled up ~25% (the user: "text in the choose your survivor menu is too
+// small"). This file sizes its type by passing NUMBERS to text()/block() rather
+// than `fontSize: "Npx"` string literals, which is why the project-wide font
+// bump missed it entirely — worth remembering for any other UI built this way.
+//
+// Type, line steps and card WIDTH all had to move together: bigger text in a
+// 272px card just wraps into more lines, so the card gets taller and thinner
+// instead of more readable. Panel width follows the card row.
+const PANEL_W = 1780; // 1920 canvas, so this still leaves a 70px gutter each side
 // Headroom for the self-sizing cards below (CARD_TOP + tallest card + the
 // Begin Run button). The canvas is a fixed 1920x1080, so this still centres.
-// Measured live: the tallest card (4 affinity boons) bottoms out 493px below
-// CARD_TOP, leaving a ~65px gap to the button at this height.
-const PANEL_H = 690;
-const CARD_W = 272;
-const CARD_GAP = 18;
-const CARD_TOP = 96;
+// Measured live at the new type size: the tallest card runs 519px below
+// CARD_TOP, which puts the Begin Run button ~45px clear of the card row.
+const PANEL_H = 740;
+const CARD_W = 330;
+const CARD_GAP = 20;
+const CARD_TOP = 108;
 // MINIMUM card height. The card box now measures itself: renderCard returns its
 // real content bottom and render() grows every rect to the tallest card + a
 // margin, so adding a section (as B4-P3's AFFINITIES block did) can never clip
 // content or need this constant re-guessed. PANEL_H just needs enough headroom.
-const CARD_MIN_H = 400;
-const CARD_PAD_BOTTOM = 14;
+const CARD_MIN_H = 480;
+const CARD_PAD_BOTTOM = 16;
 
 // Boon/bane use amber/dim-grey, not green/red — red/green stay reserved for
 // buff/debuff deltas (standing convention).
@@ -105,15 +113,15 @@ export class CharacterSelectUI {
         .setDepth(DEPTH_PANEL),
     );
 
-    this.text(cx, this.panelY + 24, "Choose Your Survivor", 26, "#c9a4f0", 0.5);
+    this.text(cx, this.panelY + 22, "Choose Your Survivor", 32, "#c9a4f0", 0.5);
     this.text(
       cx,
-      this.panelY + 60,
+      this.panelY + 66,
       // No mention of a kit: everyone now starts empty-handed (see
       // CharacterDef.startingItems), so the card's four real axes are what the
       // subtitle should name.
       "Everyone starts empty-handed. What differs is where you begin, what you can already do, how you grow, and what it costs. Locked for the run.",
-      13,
+      16,
       "#8a93a3",
       0.5,
     );
@@ -156,21 +164,21 @@ export class CharacterSelectUI {
     this.objects.push(card);
 
     const cx = x + CARD_W / 2;
-    let cy = y + 16;
-    this.text(cx, cy, def.name, 18, isSel ? "#e8dcff" : "#c8d0dc", 0.5);
-    cy += 30;
+    let cy = y + 18;
+    this.text(cx, cy, def.name, 22, isSel ? "#e8dcff" : "#c8d0dc", 0.5);
+    cy += 36;
 
     // The granted ability's icon doubles as the card's portrait — no new art.
     const icon = this.scene.add
-      .image(cx, cy + 22, def.icon)
-      .setScale(2)
+      .image(cx, cy + 26, def.icon)
+      .setScale(2.5)
       .setScrollFactor(0)
       .setDepth(DEPTH_TEXT);
     this.objects.push(icon);
-    cy += 54;
+    cy += 64;
 
-    cy = this.block(x + 14, cy, def.blurb, 12, "#7f8798", CARD_W - 28);
-    cy += 10;
+    cy = this.block(x + 16, cy, def.blurb, 15, "#7f8798", CARD_W - 32);
+    cy += 12;
 
     // --- ability (delivered as a pre-equipped special item) ---
     const special = def.startingEquip.find((e) => itemDef(e.key)?.grantsAbility);
@@ -178,26 +186,26 @@ export class CharacterSelectUI {
       const abilityId = itemDef(special.key)!.grantsAbility!;
       const ability = ABILITY_DEFS[abilityId];
       const key = SLOT_ABILITY_KEY[special.slot];
-      this.text(x + 14, cy, "ABILITY", 10, "#5b6472");
-      cy += 16;
-      this.text(x + 14, cy, `${ability.name}  [${(key ?? "?").toUpperCase()}]`, 13, "#a9b6ff");
+      this.text(x + 16, cy, "ABILITY", 13, "#5b6472");
       cy += 20;
-      cy = this.block(x + 14, cy, itemDef(special.key)!.name, 11, "#6a7280", CARD_W - 28);
-      cy += 8;
+      this.text(x + 16, cy, `${ability.name}  [${(key ?? "?").toUpperCase()}]`, 16, "#a9b6ff");
+      cy += 25;
+      cy = this.block(x + 16, cy, itemDef(special.key)!.name, 14, "#6a7280", CARD_W - 32);
+      cy += 10;
     }
 
     // --- starting stats ---
     const stats = Object.entries(def.startingStats) as [StatType, number][];
-    this.text(x + 14, cy, "STARTING STATS", 10, "#5b6472");
-    cy += 16;
+    this.text(x + 16, cy, "STARTING STATS", 13, "#5b6472");
+    cy += 20;
     this.text(
-      x + 14,
+      x + 16,
       cy,
       stats.length ? stats.map(([s, n]) => `+${n} ${statDisplayName(s)}`).join("\n") : "—",
-      12,
+      15,
       "#c8d0dc",
     );
-    cy += stats.length * 18 + 10;
+    cy += stats.length * 22 + 12;
 
     // --- kit ---
     // Skipped entirely when empty, which is every card today (see
@@ -205,30 +213,30 @@ export class CharacterSelectUI {
     // noise. The section still renders if a kit ever comes back, and the card
     // measures its own height, so nothing needs re-tuning either way.
     if (def.startingItems.length > 0) {
-      this.text(x + 14, cy, "KIT", 10, "#5b6472");
-      cy += 16;
+      this.text(x + 16, cy, "KIT", 13, "#5b6472");
+      cy += 20;
       const kit = def.startingItems
         .map((it) => `${it.count > 1 ? `${it.count}x ` : ""}${itemDef(it.key)?.name ?? it.key}`)
         .join("\n");
-      this.text(x + 14, cy, kit, 12, "#c8d0dc");
-      cy += def.startingItems.length * 18 + 12;
+      this.text(x + 16, cy, kit, 15, "#c8d0dc");
+      cy += def.startingItems.length * 22 + 14;
     }
 
     // --- run modifier (boon + bane) ---
-    this.text(x + 14, cy, def.modifier.name.toUpperCase(), 11, "#8a6ec0");
-    cy += 18;
-    cy = this.block(x + 14, cy, def.modifier.boon, 12, BOON_COLOR, CARD_W - 28);
-    cy = this.block(x + 14, cy + 2, def.modifier.bane, 12, BANE_COLOR, CARD_W - 28);
+    this.text(x + 16, cy, def.modifier.name.toUpperCase(), 14, "#8a6ec0");
+    cy += 22;
+    cy = this.block(x + 16, cy, def.modifier.boon, 15, BOON_COLOR, CARD_W - 32);
+    cy = this.block(x + 16, cy + 2, def.modifier.bane, 15, BANE_COLOR, CARD_W - 32);
 
     // --- class identity (B4-P3): how this survivor GROWS, vs the modifier's
     // flat numbers above. Derived from the affinity maps so it can't drift.
     const { boons, banes } = affinityLines(def);
     if (boons.length || banes.length) {
-      cy += 10;
-      this.text(x + 14, cy, "AFFINITIES", 10, "#5b6472");
-      cy += 16;
-      if (boons.length) cy = this.block(x + 14, cy, boons.join("\n"), 11, BOON_COLOR, CARD_W - 28);
-      if (banes.length) cy = this.block(x + 14, cy + 2, banes.join("\n"), 11, BANE_COLOR, CARD_W - 28);
+      cy += 12;
+      this.text(x + 16, cy, "AFFINITIES", 13, "#5b6472");
+      cy += 20;
+      if (boons.length) cy = this.block(x + 16, cy, boons.join("\n"), 14, BOON_COLOR, CARD_W - 32);
+      if (banes.length) cy = this.block(x + 16, cy + 2, banes.join("\n"), 14, BANE_COLOR, CARD_W - 32);
     }
 
     return { rect: card, bottom: cy };
@@ -265,10 +273,10 @@ export class CharacterSelectUI {
     const btn = this.scene.add
       .text(x, y, label, {
         fontFamily: "monospace",
-        fontSize: "20px",
+        fontSize: "24px",
         color: "#dfe6f0",
         backgroundColor: "#2a2140",
-        padding: { x: 26, y: 10 },
+        padding: { x: 32, y: 12 },
       })
       .setOrigin(0.5, 0.5)
       .setScrollFactor(0)

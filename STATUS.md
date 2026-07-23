@@ -443,6 +443,18 @@ and the rung still appears in the Upgrade menu — only the popup is gone. Same 
 `discoveredGearUpgradeIds`. Applying an upgrade still announces normally; that's one deliberate
 click, never a burst.
 
+**13. Character picker type.** The project-wide +2px font bump (#6) missed this menu almost
+entirely — `CharacterSelectUI` sizes its type by passing **numbers** to its own `text()`/`block()`
+helpers rather than writing `fontSize: "Npx"` literals, so the sweep found exactly one site in the
+file. Worth remembering for any other UI built that way. Bumped ~25% across the card (labels 10→13,
+body 12→15, ability 13→16, name 18→22, title 26→32, button 20→24) — but type alone would have made
+it *worse*: bigger text in a 272px card just wraps into more lines, so the card gets taller and
+narrower rather than more readable. Card width 272→330 and the panel 1500→1780 moved with it (still
+a 70px gutter each side of the 1920 canvas), plus every paired line-step. Panel height then
+re-measured against real bounds rather than guessed: cards run 519px, leaving the Begin Run button
+55px clear. Verified all five cards at 330×519 with zero text past any card edge and nothing
+off-screen.
+
 ### B4-P5 — Gear branching, set bonuses → jewelry, pickaxe gate, Gemwright UI (2026-07-22, Opus)
 
 Plan: `.claude/plans/b4-p5-gear-branch-and-jewelry.md`. Follow-up to B4-P4 from the user's
