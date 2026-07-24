@@ -434,6 +434,16 @@ const COMFORT_THREAT_RADIUS = 900;
 const MIRE_POOL_RADIUS = 90;
 const MIRE_POOL_SLOW_MULT = 0.55;
 const MIRE_POOL_POISON_DPS = 7;
+// C2: the Mosswretch's spore cloud. A timed, creature-placed sibling of the
+// mire pool above, and it rides the exact same environmentEffectAt path — so it
+// inherits the slow, the poison DoT, the regen suppression and the
+// status-resist scaling with no bespoke damage code. Weaker and much shorter
+// than a boss arena hazard: this is a common enemy denying you a patch of
+// ground for a few seconds, not a phase mechanic.
+const SPORE_CLOUD_RADIUS = 85;
+const SPORE_CLOUD_SLOW_MULT = 0.6;
+const SPORE_CLOUD_POISON_DPS = 5;
+const SPORE_CLOUD_MS = 6000;
 // Every named fight, keyed by displayName, with the one-line read that tells the
 // player what KIND of fight they just walked into. Presence in this table is
 // what makes an enemy announce itself (see announceBossEncounter) — a future
@@ -950,6 +960,9 @@ export class MainScene extends Phaser.Scene {
   // Phase-3 Miretyrant arena hazard (see updateMiretyrantBellow). Permanent for
   // the fight — the arena closing in IS the phase.
   private mirePools: { x: number; y: number; image: Phaser.GameObjects.Image }[] = [];
+  // Active Mosswretch spore clouds (C2) — surface hazards with an expiry, unlike
+  // the boss-arena mire pools which live for the whole fight.
+  private sporeClouds: { x: number; y: number; expiresAt: number; image: Phaser.GameObjects.Image }[] = [];
   // Cook recipes (Cooking.ts) discovered so far — one-shot "New Recipe
   // Unlocked!" toast tracking, same as discoveredUpgradeIds but for the cook
   // table. Tier-0 dishes unlock on first campfire placement; tier-1 on upgrade.
@@ -1464,6 +1477,7 @@ export class MainScene extends Phaser.Scene {
     this.epicsGranted = new Set<string>();
     this.announcedBosses = new Set();
     this.mirePools = [];
+    this.sporeClouds = [];
     this.discoveredCookRecipeIds = new Set<string>();
     this.campfireMaxTierSeen = -1;
     this.equippedTool = null;
@@ -6142,6 +6156,16 @@ export class MainScene extends Phaser.Scene {
       }
       return { moveMult: 1, regenMult: 1 };
     }
+    // Compute the terrain-only effect, then fold in any C2 spore cloud on top —
+    // this way a cloud stacks correctly with a thornfield, water, or a miasma
+    // zone (harsher slow wins, and the cloud always adds its poison + regen
+    // suppression) rather than one silently replacing the other.
+    return this.foldSporeCloud(x, y, this.baseSurfaceEnvironmentAt(x, y));
+  }
+
+  // The terrain-only surface effect (no spore clouds, no crypt) — factored out
+  // of environmentEffectAt so the C2 spore-cloud fold can wrap it.
+  private baseSurfaceEnvironmentAt(x: number, y: number): { moveMult: number; regenMult: number; poisonDps?: number } {
     const z = this.subZoneAt(x, y);
     if (z && z.type === "thornfield") return { moveMult: BRAMBLE_SLOW_MULT, regenMult: 1 };
     // Biome 3 zones are resolved BEFORE the early return so a zone sitting over a
@@ -6161,6 +6185,30 @@ export class MainScene extends Phaser.Scene {
     // feature layer would otherwise read as shallow water.
     if (bz?.type === "hammock") return { moveMult: 1, regenMult: 1 };
     return { moveMult: water, regenMult: 1 };
+  }
+
+  // Overlay any active Mosswretch spore cloud (C2) onto a base terrain effect:
+  // the harsher slow wins, and a cloud always contributes its poison DoT + the
+  // shared poison regen suppression. Keeps the harsher of two poison DPS values
+  // if the base already poisons (a cloud dropped inside a miasma).
+  private foldSporeCloud(
+    x: number,
+    y: number,
+    base: { moveMult: number; regenMult: number; poisonDps?: number },
+  ): { moveMult: number; regenMult: number; poisonDps?: number } {
+    let inCloud = false;
+    for (const c of this.sporeClouds) {
+      if (Phaser.Math.Distance.Between(x, y, c.x, c.y) <= SPORE_CLOUD_RADIUS) {
+        inCloud = true;
+        break;
+      }
+    }
+    if (!inCloud) return base;
+    return {
+      moveMult: Math.min(base.moveMult, SPORE_CLOUD_SLOW_MULT),
+      regenMult: Math.min(base.regenMult, POISON_REGEN_MULT),
+      poisonDps: Math.max(base.poisonDps ?? 0, SPORE_CLOUD_POISON_DPS),
+    };
   }
 
   // The bayou's water movement multiplier at a point (1 = unaffected). Gated on
@@ -10059,6 +10107,33 @@ export class MainScene extends Phaser.Scene {
     this.sfx.upgrade();
   }
 
+  // C2: spawn a dead Mosswretch's fragments. Placed in a tight ring around the
+  // corpse (not on the player) so a kill doesn't teleport a swarm onto you.
+  // Registered exactly like any other enemy — and if the parent was somehow a
+  // dungeon dweller, the fragments inherit that too (a Mosswretch is a surface
+  // creature today, so this is defensive rather than a live path).
+  private spawnMosslings(parent: Mosswretch): void {
+    const count = parent.deathSpawnCount();
+    if (count <= 0) return;
+    const inDungeon = this.cryptEnemies.has(parent);
+    for (let i = 0; i < count; i++) {
+      const ang = (i / count) * Math.PI * 2 + Math.random() * 0.5;
+      const d = 26 + Math.random() * 14;
+      const x = parent.x + Math.cos(ang) * d;
+      const y = parent.y + Math.sin(ang) * d;
+      const m = new Mosswretch(this, { x, y, spawnling: true });
+      if (inDungeon && this.activeDungeon) {
+        this.addDungeonEnemy(this.activeDungeon, m);
+      } else {
+        this.enemies.push(m);
+        this.enemyGroup.add(m);
+      }
+      // Come out already angry: a fragment that has to be re-aggroed defeats the
+      // "swarmed the moment you relax" point.
+      m.forceAggro(this.time.now);
+    }
+  }
+
   // Weapon-cooldown multiplier. 1 normally; Bloodrush's window scales it down.
   // Every attack path (melee, ranged, den smash) multiplies its weapon cooldown
   // by this, so a new attack path gets the haste for free.
@@ -10110,6 +10185,11 @@ export class MainScene extends Phaser.Scene {
       }
     });
     this.enemies = this.enemies.filter((e) => e !== enemy);
+    // C2: a Mosswretch comes apart into smaller husks on death (the creature
+    // ASKS via deathSpawnCount; the scene spawns, so the spawnlings get terrain
+    // collision / dungeon nav / containment for free, same split as the
+    // Miretyrant's bellow). A spawnling reports 0, so this never chains.
+    if (enemy instanceof Mosswretch) this.spawnMosslings(enemy);
     this.onShackGuardKilled(enemy);
     this.onDenGuardKilled(enemy);
     if (enemy instanceof Gloamwarden) this.onGloamwardenKilled();
@@ -10579,6 +10659,13 @@ export class MainScene extends Phaser.Scene {
       const subtitle = BOSS_SUBTITLES[enemy.displayName];
       if (subtitle !== undefined && enemy.isAggro()) this.announceBossEncounter(enemy, subtitle);
       const bit = enemy.update(delta, this.player.x, this.player.y, now);
+      // C2: a Mosswretch that just resolved a spore burst hands the scene a
+      // ground position; spawn the lingering hazard there (same "creature asks,
+      // scene places" split the Miretyrant's mire pools use).
+      if (enemy instanceof Mosswretch) {
+        const cloud = enemy.consumeSporeCloud();
+        if (cloud) this.spawnSporeCloud(cloud.x, cloud.y, now);
+      }
       // Dungeon navigation (Phase 4c): re-aim whatever movement the AI just
       // decided on down the corridor toward the player, so the whole roster
       // pathfinds through a crypt unmodified. Applied AFTER update() on purpose
@@ -10658,6 +10745,37 @@ export class MainScene extends Phaser.Scene {
     this.updateDuskrunnerPacks(now);
     this.containCryptEnemies();
     this.updateMiretyrantBellow();
+    this.expireSporeClouds(now);
+  }
+
+  // Place a lingering Mosswretch spore cloud (C2). Purely a hazard record +
+  // its own faint visual; damage/slow/regen come entirely through
+  // environmentEffectAt, so there's no per-cloud damage code. Reuses the mire
+  // pool's soft blob art in a paler spore-green.
+  private spawnSporeCloud(x: number, y: number, now: number): void {
+    const img = this.add
+      .image(x, y, "poi_floor_gorge")
+      .setScale((SPORE_CLOUD_RADIUS / 90) * 1.1)
+      .setAlpha(0.5)
+      .setTint(0x9fd66a)
+      .setDepth(-6);
+    this.sporeClouds.push({ x, y, expiresAt: now + SPORE_CLOUD_MS, image: img });
+  }
+
+  // Sweep expired clouds each frame (their images too). Also fades the last
+  // second so a cloud doesn't wink out — purely cosmetic, the hazard is gone
+  // the instant it expires from the list.
+  private expireSporeClouds(now: number): void {
+    for (let i = this.sporeClouds.length - 1; i >= 0; i--) {
+      const c = this.sporeClouds[i];
+      if (now >= c.expiresAt) {
+        c.image.destroy();
+        this.sporeClouds.splice(i, 1);
+      } else {
+        const remaining = c.expiresAt - now;
+        if (remaining < 1000) c.image.setAlpha(0.5 * (remaining / 1000));
+      }
+    }
   }
 
   // Duskrunner pack-attack sync (the user: "attack as a pack"). When one dog is

@@ -54,43 +54,161 @@ const SMASH_SWING: SwingConfig = {
   knockback: 300,
 };
 
+// --- C2 (2026-07-23): the SPORE BURST and the death-spawn ---
+//
+// the user: it "lacks attack moves" and "feels a bit weird." Both complaints
+// have the same root — a creature whose entire kit is one slow overhead swing,
+// on the slowest body in the game, is trivially walked away from. These two
+// additions answer that without making it faster (its slowness is the point):
+//
+//   * It can't CATCH you, so it STOPS you. The spore burst is a mid-range
+//     ground-slam that leaves a lingering cloud which slows and poisons. It
+//     deals no impact damage at all — the cloud is the payload, and its job is
+//     to cut off the ground you were going to retreat across so the next smash
+//     becomes a real threat. Used only at mid-range (in smash reach it just
+//     smashes), so the two attacks never compete for the same moment.
+//   * It doesn't die cleanly. A husk of animate moss comes apart INTO smaller
+//     husks — so killing one in a bad spot costs you.
+const SPORE_RANGE_MIN = 90; // just past smash reach — never used point-blank
+const SPORE_RANGE_MAX = 300;
+const SPORE_WINDUP_MS = 700; // a heavy planted heave; you can be gone before it lands
+const SPORE_RECOVER_MS = 620;
+const SPORE_COOLDOWN_MS = S.attacks[1].intervalMs;
+const SPORE_TELL_COLOR = 0xb7e07a;
+
+const DEATH_SPAWN_COUNT = 3;
+// A spawnling is the same creature scaled down — same AI, no new entity class,
+// no new texture (the placeholder-art ethos). Deliberately fragile and quick:
+// the threat is being swarmed at the exact moment you'd started to relax.
+const SPAWNLING_SCALE = 0.58;
+const SPAWNLING_HP_FRAC = 0.16;
+const SPAWNLING_DMG_FRAC = 0.42;
+const SPAWNLING_SPEED_MULT = 1.9; // still not fast, but no longer strollable-away-from
+
 export class Mosswretch extends Enemy {
   private wanderTgt: { x: number; y: number } | null = null;
   private nextRoamAt = 0;
+  // True for a husk spawned by another husk's death (C2). A spawnling never
+  // spawns more on its own death — that's the recursion guard, and it's also
+  // just correct: there's nothing left to come apart.
+  readonly isSpawnling: boolean;
+  // --- spore burst state ---
+  private sporeCooldownUntil = 0;
+  private sporeWindupEndsAt = 0;
+  private sporeRecoverEndsAt = 0;
+  private casting = false;
+  // Set the frame the burst resolves; drained by the scene (consumeSporeCloud).
+  private pendingCloud: { x: number; y: number } | null = null;
 
-  constructor(scene: Phaser.Scene, cfg: { x: number; y: number; elite?: boolean }) {
+  constructor(scene: Phaser.Scene, cfg: { x: number; y: number; elite?: boolean; spawnling?: boolean }) {
     const elite = cfg.elite ?? false;
+    const spawnling = cfg.spawnling ?? false;
     super(scene, {
       x: cfg.x,
       y: cfg.y,
       texture: elite ? "mosswretch_elite" : "mosswretch",
-      displayName: elite ? "Elite Mosswretch" : "Mosswretch",
+      displayName: spawnling ? "Mossling" : elite ? "Elite Mosswretch" : "Mosswretch",
       // A husk of dead wood and living moss comes apart into exactly that —
       // reusing existing keys rather than inventing a bespoke drop for it.
-      loot: elite
-        ? [
-            { resource: "swamp_moss", min: 4, max: 6 },
-            { resource: "wood", min: 3, max: 4 },
-          ]
-        : [
-            { resource: "gravemark_rubbing", min: 1, max: 1, chance: 0.06 },
-            { resource: "swamp_moss", min: 2, max: 3 },
-            { resource: "wood", min: 1, max: 2 },
-          ],
-      maxHealth: elite ? Math.round(MAX_HEALTH * ELITE.hp) : MAX_HEALTH,
-      biteDamage: elite ? Math.round(SMASH_DAMAGE * ELITE.damage) : SMASH_DAMAGE,
-      elite,
+      // A spawnling is a scrap of the parent, not a second full creature — a
+      // token drop so a killed pack isn't literally worthless, but nowhere near
+      // enough to make farming the death-spawn better than killing the parent.
+      loot: spawnling
+        ? [{ resource: "swamp_moss", min: 1, max: 1 }]
+        : elite
+          ? [
+              { resource: "swamp_moss", min: 4, max: 6 },
+              { resource: "wood", min: 3, max: 4 },
+            ]
+          : [
+              { resource: "gravemark_rubbing", min: 1, max: 1, chance: 0.06 },
+              { resource: "swamp_moss", min: 2, max: 3 },
+              { resource: "wood", min: 1, max: 2 },
+            ],
+      maxHealth: spawnling
+        ? Math.max(1, Math.round(MAX_HEALTH * SPAWNLING_HP_FRAC))
+        : elite
+          ? Math.round(MAX_HEALTH * ELITE.hp)
+          : MAX_HEALTH,
+      biteDamage: spawnling
+        ? Math.round(SMASH_DAMAGE * SPAWNLING_DMG_FRAC)
+        : elite
+          ? Math.round(SMASH_DAMAGE * ELITE.damage)
+          : SMASH_DAMAGE,
+      // A spawnling is never elite — it must not drop a trophy, or one elite
+      // kill would pay out four.
+      elite: spawnling ? false : elite,
       eliteTrophy: "mosswretch_trophy",
       // Spongy sodden moss eats a concussive blow; an edge parts it; fire is the
       // real answer (×1.5 — deliberately above the biome-2-normalized ×1.25, this
       // is the one creature meant to visibly melt to fire).
       resistances: { blunt: 0.5, slash: 1.25, fire: 1.5 },
       upright: true, // a shambling humanoid husk — mirror, never rotate
-      barScale: 1.3, // bigger sprite, readable bar
+      barScale: spawnling ? 0.7 : 1.3,
     });
-    this.setScale(elite ? ELITE.scale : S.scale); // looms over the rest of the roster
-    this.baseScale = elite ? ELITE.scale : S.scale;
-    if (elite) this.speedMult = ELITE.speed;
+    this.isSpawnling = spawnling;
+    const scale = spawnling ? SPAWNLING_SCALE : elite ? ELITE.scale : S.scale;
+    this.setScale(scale); // looms over the rest of the roster
+    this.baseScale = scale;
+    if (spawnling) {
+      this.speedMult = SPAWNLING_SPEED_MULT;
+      // A paler, sicklier green so a spawnling reads as a fragment at a glance
+      // rather than looking like a distant full-size Mosswretch.
+      this.setTint(0xa8c98a);
+    } else if (elite) {
+      this.speedMult = ELITE.speed;
+    }
+  }
+
+  // How many husks this one comes apart into. The scene resolves the actual
+  // spawn (see MainScene.resolveKill) — same "the creature asks, the scene
+  // spawns" split the Miretyrant's bellow uses, which is what gets the
+  // spawnlings terrain collision, dungeon nav and containment for free.
+  deathSpawnCount(): number {
+    return this.isSpawnling ? 0 : DEATH_SPAWN_COUNT;
+  }
+
+  private startSporeBurst(now: number): void {
+    this.casting = true;
+    this.sporeWindupEndsAt = now + SPORE_WINDUP_MS;
+    this.sporeRecoverEndsAt = 0;
+    (this.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0);
+    this.playWindupTell(SPORE_WINDUP_MS, SPORE_TELL_COLOR, 1.25);
+  }
+
+  // Planted heave → the cloud drops on the player's ground position AT THE
+  // MOMENT IT RESOLVES (not a locked spot from wind-up start), so standing
+  // still through the tell is what gets you covered; moving during it means the
+  // cloud lands where you WERE. Then a long planted recovery — the punish.
+  private tickSporeBurst(
+    body: Phaser.Physics.Arcade.Body,
+    playerX: number,
+    playerY: number,
+    now: number,
+  ): boolean {
+    body.setVelocity(0, 0);
+    if (this.sporeRecoverEndsAt === 0) {
+      if (now < this.sporeWindupEndsAt) return false;
+      this.endWindupTell();
+      this.pendingCloud = { x: playerX, y: playerY };
+      this.sporeRecoverEndsAt = now + SPORE_RECOVER_MS;
+      // Attempted, not landed: the cloud may well be dodged, so this must not
+      // reset the give-up clock (the markAttackLanded/-Attempted split).
+      this.markAttackAttempted(now);
+      return false;
+    }
+    if (now >= this.sporeRecoverEndsAt) {
+      this.casting = false;
+      this.sporeCooldownUntil = now + SPORE_COOLDOWN_MS;
+    }
+    return false;
+  }
+
+  // Drained by the scene each frame; non-null on the frame a burst resolves.
+  consumeSporeCloud(): { x: number; y: number } | null {
+    const c = this.pendingCloud;
+    this.pendingCloud = null;
+    return c;
   }
 
   update(_delta: number, playerX: number, playerY: number, now: number): boolean {
@@ -110,7 +228,22 @@ export class Mosswretch extends Enemy {
       }
     }
 
+    // Spore burst runs BEFORE the smash branch but only fires outside smash
+    // reach, so the two attacks never contend for the same moment: point-blank
+    // it always smashes, mid-range it denies the ground instead.
+    if (this.casting) return this.tickSporeBurst(body, playerX, playerY, now);
+
     if (this.state === "chasing") {
+      if (
+        !this.isAttacking() &&
+        !this.isSpawnling && // fragments are just angry, not spore-bearing
+        now >= this.sporeCooldownUntil &&
+        dist > SPORE_RANGE_MIN + this.reachBonus() &&
+        dist <= SPORE_RANGE_MAX
+      ) {
+        this.startSporeBurst(now);
+        return false;
+      }
       if (this.isAttacking() || dist <= SMASH_SWING.reach + this.reachBonus()) {
         const hit = this.tickMeleeSwing(body, playerX, playerY, now, SMASH_SWING);
         if (hit) {

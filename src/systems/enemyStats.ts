@@ -227,7 +227,17 @@ const BAYOU: EnemyStat[] = [
     // Smash 135 (elite 202) one-shot a full-Embersteel player. 78 (elite 117 →
     // ~85 net through 32 armor) is a big telegraphed heavy that costs ~60% HP,
     // not a kill — the bruiser still hits like a truck, just survivably (2026-07-23).
-    attacks: [{ name: "Smash", damage: 78, cls: "physical", kind: "melee", intervalMs: 1600 }],
+    attacks: [
+      { name: "Smash", damage: 78, cls: "physical", kind: "melee", intervalMs: 1600 },
+      // C2 (2026-07-23): the user — "[Mosswretch] lacks attack moves... feels a
+      // bit weird." It had exactly one. The spore burst is the answer to its own
+      // core problem: it is the slowest thing in the game and cannot catch you,
+      // so instead of chasing it DENIES GROUND — a lingering cloud that slows
+      // and poisons, used at mid-range to cut off your escape and set up the
+      // smash you can no longer simply walk out of. No direct impact damage;
+      // the cloud is the whole payload.
+      { name: "Spore burst (lingering cloud: slow + poison)", damage: 0, cls: "physical", kind: "aoe", intervalMs: 9000, poisonDps: 5 },
+    ],
     poise: null, resistances: { blunt: 0.5, slash: 1.25, fire: 1.5 }, elite: STD_ELITE(1.75),
   },
   {
