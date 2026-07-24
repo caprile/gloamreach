@@ -26,7 +26,7 @@ const ELITE = S.elite!;
 // standing "own numbers, don't share one config table" rule. Fully overrides
 // update() (no super.update() — Snake/Sandmaw precedent).
 
-type MirejawMode = "lurk" | "lunging" | "hunting";
+type MirejawMode = "lurk" | "lunging" | "hunting" | "rolling";
 
 // Tuning pass (2026-07-22, the user): the first numbers were sized against the
 // BADLANDS roster, not against what a bayou-ready player actually is — sprinting
@@ -95,6 +95,31 @@ const CHOMP_SWING: SwingConfig = {
   knockback: 110,
 };
 
+// --- the DEATH ROLL (C1, 2026-07-23) ---
+// the user: the Mirejaw "feels like a glorified boar." It was right — lunge in,
+// bite, repeat is a Boar's kit with a bigger sprite. This is the move that makes
+// it read as an alligator: a landed chomp LATCHES, and it thrashes.
+//
+// Design contract, matching the roster's souls-like rules:
+//   * It is a PUNISH FOR BEING CAUGHT, not a new way to catch you. It can only
+//     start from a chomp that already connected — never opened cold.
+//   * Each tick re-checks the player's CURRENT position against a tight radius,
+//     so rolling away mid-roll cuts your losses. Per-tick damage is deliberately
+//     modest; eating all three is what hurts.
+//   * It ends PLANTED for a long recovery — the biggest punish window the
+//     creature offers, and the reward for having escaped the roll.
+//   * Long cooldown so it stays a signature moment rather than every bite.
+// Damage/bleed come from enemyStats' third attack entry (the dashboard mirrors it).
+const DEATHROLL_TICKS = 3;
+const DEATHROLL_TICK_MS = 360;
+const DEATHROLL_RADIUS = 62; // tight — this is a latched grip, not an AoE
+const DEATHROLL_TICK_DAMAGE = S.attacks[2].damage;
+const DEATHROLL_BLEED_DPS = S.attacks[2].bleedDps ?? 7;
+const DEATHROLL_BLEED_MS = 3000;
+const DEATHROLL_RECOVER_MS = 1000; // dizzy and beached afterwards
+const DEATHROLL_COOLDOWN_MS = S.attacks[2].intervalMs;
+const DEATHROLL_SPIN_RAD_PER_SEC = 15; // the visual: it barrel-rolls
+
 export class Mirejaw extends Enemy {
   private mode: MirejawMode = "lurk";
   private lungeAngle = 0;
@@ -110,6 +135,16 @@ export class Mirejaw extends Enemy {
   // When the current uninterrupted stalk began (-1 = not stalking). Drives the
   // give-up-on-stealth escalation above.
   private stalkingSince = -1;
+  // --- death-roll state (C1) ---
+  private rollTicksDone = 0;
+  private rollNextTickAt = 0;
+  private rollEndsAt = 0;
+  private rollCooldownUntil = 0;
+  private readonly rollTickDamage: number;
+  // Set on a tick frame; consumed by checkPlayerHit() the same frame (the scene
+  // queries it right after update()). Mirrors how the mini-bosses hand the scene
+  // an area hit rather than using update()'s plain boolean bite contract.
+  private pendingRollHit = false;
 
   constructor(scene: Phaser.Scene, cfg: { x: number; y: number; elite?: boolean }) {
     const elite = cfg.elite ?? false;
@@ -143,6 +178,11 @@ export class Mirejaw extends Enemy {
       resistances: { pierce: 0.5, slash: 1.25 },
     });
     this.lungeDamage = elite ? Math.round(LUNGE_DAMAGE * ELITE.damage) : LUNGE_DAMAGE;
+    this.rollTickDamage = elite ? Math.round(DEATHROLL_TICK_DAMAGE * ELITE.damage) : DEATHROLL_TICK_DAMAGE;
+    // At home in the water (C1): the player wades at 50% in the deep bayou, this
+    // does not. Out on dry ground you can still outpace it — in the water you
+    // cannot, which is what makes the swamp its territory. See Enemy.ignoresTerrainSlow.
+    this.ignoresTerrainSlow = true;
     this.setAlpha(LURK_ALPHA);
     // A gloam-gorged alligator should read as the biggest thing in the swamp
     // (the user: "the gators are too small"). The texture itself also grew to
@@ -158,6 +198,7 @@ export class Mirejaw extends Enemy {
     const dist = Phaser.Math.Distance.Between(this.x, this.y, playerX, playerY);
 
     if (this.mode === "lunging") return this.updateLunge(delta, playerX, playerY, now);
+    if (this.mode === "rolling") return this.updateDeathRoll(delta, playerX, playerY, now);
 
     if (this.mode === "lurk") {
       if (dist <= AMBUSH_RADIUS && now >= this.lungeCooldownUntil && this.canAggro(dist, now)) {
@@ -208,6 +249,10 @@ export class Mirejaw extends Enemy {
       if (hit) {
         this.pendingBleed = { dmgPerSec: CHOMP_BLEED_DPS, durationMs: CHOMP_BLEED_MS };
         this.markAttackLanded(now);
+        // The chomp LATCHES: a connected bite off cooldown rolls straight into
+        // the death roll (C1). Only ever entered from a hit that already landed,
+        // so it's a punish for being caught rather than another way to catch you.
+        if (now >= this.rollCooldownUntil) this.startDeathRoll(now);
         return true;
       }
       return false;
@@ -255,6 +300,11 @@ export class Mirejaw extends Enemy {
     this.mode = "lurk";
     this.attackPhase = "none";
     this.stalkingSince = -1;
+    // Abandon any in-flight roll cleanly — without this a submerge mid-roll
+    // would leave the sprite rotated and a tick pending for the next surface.
+    this.pendingRollHit = false;
+    this.rollTicksDone = DEATHROLL_TICKS;
+    this.setRotation(0);
     this.setAlpha(LURK_ALPHA);
     (this.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0);
     this.lungeCooldownUntil = this.scene.time.now + LUNGE_COOLDOWN_MS;
@@ -322,6 +372,77 @@ export class Mirejaw extends Enemy {
       this.surface(); // a committed ambush always graduates into the hunt
     }
     return false;
+  }
+
+  // --- death roll (C1) ---
+
+  private startDeathRoll(now: number): void {
+    this.mode = "rolling";
+    // Counts as "attacking" so the hunting-branch deaggro checks can't fire
+    // mid-roll and the base playHitFeedback() skips its position-shake (the
+    // standing "a committed attack plays out" rule).
+    this.attackPhase = "strike";
+    this.attackStartedAt = now;
+    this.rollTicksDone = 0;
+    this.rollNextTickAt = now + DEATHROLL_TICK_MS;
+    this.rollEndsAt = 0;
+    (this.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0);
+  }
+
+  private updateDeathRoll(delta: number, playerX: number, playerY: number, now: number): boolean {
+    const body = this.body as Phaser.Physics.Arcade.Body;
+    body.setVelocity(0, 0); // latched in place — it's thrashing, not travelling
+
+    // The spin is driven MANUALLY rather than by a tween: Enemy.playHitFeedback
+    // calls killTweensOf(this) whenever a planted enemy is struck, which would
+    // silently stop a rotation tween mid-roll and leave the sprite crooked.
+    if (this.rollTicksDone < DEATHROLL_TICKS) {
+      this.rotation += (DEATHROLL_SPIN_RAD_PER_SEC * delta) / 1000;
+    }
+
+    if (this.rollTicksDone < DEATHROLL_TICKS) {
+      if (now >= this.rollNextTickAt) {
+        this.rollTicksDone += 1;
+        this.rollNextTickAt = now + DEATHROLL_TICK_MS;
+        // Re-checked against the player's CURRENT position every tick, so
+        // breaking away mid-roll genuinely cuts your losses.
+        const dist = Phaser.Math.Distance.Between(this.x, this.y, playerX, playerY);
+        if (dist <= DEATHROLL_RADIUS + this.reachBonus()) {
+          this.pendingRollHit = true;
+          this.markAttackLanded(now);
+        }
+        if (this.rollTicksDone >= DEATHROLL_TICKS) {
+          // Out of thrashes → planted, dizzy, punishable.
+          this.attackPhase = "recover";
+          this.attackStartedAt = now;
+          this.rollEndsAt = now + DEATHROLL_RECOVER_MS;
+          this.setRotation(0); // stop crooked; upright facing takes over again
+        }
+      }
+      return false;
+    }
+
+    if (now >= this.rollEndsAt) {
+      this.attackPhase = "none";
+      this.rollCooldownUntil = now + DEATHROLL_COOLDOWN_MS;
+      this.mode = "hunting";
+    }
+    return false;
+  }
+
+  // Area-hit contract (the mini-boss/Sandmaw pattern): the scene queries this
+  // right after update() and routes it through applyDamageToPlayer, so dash
+  // i-frames and armor apply to a roll tick exactly like any other hit.
+  checkPlayerHit(_playerX: number, _playerY: number): {
+    damage: number;
+    bleed?: { dmgPerSec: number; durationMs: number };
+  } | null {
+    if (!this.pendingRollHit) return null;
+    this.pendingRollHit = false;
+    return {
+      damage: this.rollTickDamage,
+      bleed: { dmgPerSec: DEATHROLL_BLEED_DPS, durationMs: DEATHROLL_BLEED_MS },
+    };
   }
 
   // The ambush chomp hits far harder than the standing one, so the damage the

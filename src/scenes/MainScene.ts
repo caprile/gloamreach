@@ -10563,7 +10563,12 @@ export class MainScene extends Phaser.Scene {
       // Only runs for already-active (near-player) enemies, so the per-enemy
       // environment lookup cost is bounded. GremlinKing/bosses that override
       // update() and ignore envSpeedMult stay exempt with no branch here.
-      enemy.envSpeedMult = envSpeedMult * enemy.slowMult(now) * this.environmentEffectAt(enemy.x, enemy.y).moveMult;
+      // `ignoresTerrainSlow` (C1) exempts a creature that's at home in the
+      // terrain — the Mirejaw in bayou water. Only the TERRAIN term is skipped:
+      // night speed and the Executioner slow still apply, so it isn't a blanket
+      // immunity.
+      const terrainMult = enemy.ignoresTerrainSlow ? 1 : this.environmentEffectAt(enemy.x, enemy.y).moveMult;
+      enemy.envSpeedMult = envSpeedMult * enemy.slowMult(now) * terrainMult;
       // The Sanguinarch's whole phase machine runs on whether the PLAYER is
       // bleeding, which update()'s (delta, x, y, now) signature can't express —
       // so the scene pushes it, the same way envSpeedMult is pushed above.
@@ -10626,7 +10631,8 @@ export class MainScene extends Phaser.Scene {
         enemy instanceof Miretyrant ||
         enemy instanceof Palewake ||
         enemy instanceof Kilnborn ||
-        enemy instanceof Sanguinarch
+        enemy instanceof Sanguinarch ||
+        enemy instanceof Mirejaw // C1: death-roll ticks are area hits, not bites
       ) {
         const areaHit = enemy.checkPlayerHit(this.player.x, this.player.y) as
           | {

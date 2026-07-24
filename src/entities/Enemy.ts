@@ -218,6 +218,20 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   // feedback_boar_zigzag_movement) — a plain straight-line chaser will wedge.
   collidesWithTerrain = false;
 
+  // Whether this creature is exempt from the environmental move-slow the player
+  // suffers (deep bayou water, thornfield bramble — see
+  // MainScene.environmentEffectAt). Default FALSE: an earlier pass deliberately
+  // made enemies inherit the same terrain slow, because in the swamp the player
+  // wades at 50% while enemies ignored it entirely and nothing could be outrun.
+  //
+  // A creature that is genuinely AT HOME in the terrain sets this true (C1: the
+  // Mirejaw). That inverts the relationship on purpose — in open ground you can
+  // outpace it, but the moment you're both in the water it is faster than you
+  // are, which is what makes the water ITS territory rather than just scenery.
+  // Kept as a flag on the base class rather than a Mirejaw special-case so a
+  // future aquatic creature gets the same treatment for free.
+  ignoresTerrainSlow = false;
+
   // Where this enemy was spawned. Every subclass's idle wander is an incremental
   // random walk, and a chase can end anywhere the player led it, so over a long
   // run creatures migrate a long way from where they belong (the user: badlands

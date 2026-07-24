@@ -200,6 +200,13 @@ const BAYOU: EnemyStat[] = [
     attacks: [
       { name: "Chomp", damage: 52, cls: "physical", kind: "melee", intervalMs: 1200, bleedDps: 6 },
       { name: "Lunge", damage: 80, cls: "physical", kind: "aoe", intervalMs: 3750, bleedDps: 9 },
+      // C1 (2026-07-23): the signature DEATH ROLL. the user: the Mirejaw "feels
+      // like a glorified boar" — lunge-then-bite is exactly a Boar's kit. This
+      // is the move that makes it a gator: a landed chomp latches and thrashes,
+      // ticking damage+bleed in a tight radius, then leaves it planted for a
+      // long punish window. Per-tick damage is modest; being held through all 3
+      // is what hurts. Long cooldown, so it's a signature moment, not every bite.
+      { name: "Death roll (3 ticks, latched)", damage: 18, cls: "physical", kind: "aoe", intervalMs: 7000, bleedDps: 7 },
     ],
     poise: null, resistances: { pierce: 0.5, slash: 1.25 }, elite: STD_ELITE(2.0),
   },
