@@ -10719,7 +10719,8 @@ export class MainScene extends Phaser.Scene {
         enemy instanceof Palewake ||
         enemy instanceof Kilnborn ||
         enemy instanceof Sanguinarch ||
-        enemy instanceof Mirejaw // C1: death-roll ticks are area hits, not bites
+        enemy instanceof Mirejaw || // C1: death-roll ticks are area hits, not bites
+        enemy instanceof Corpselight // C3: collapse slam / dissolve puff are area hits
       ) {
         const areaHit = enemy.checkPlayerHit(this.player.x, this.player.y) as
           | {

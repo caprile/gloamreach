@@ -256,7 +256,20 @@ const BAYOU: EnemyStat[] = [
     // Orb 34 magic (armor can't touch it) + homing every 1.9s read as "so much
     // damage" — 22 magic is a real poke you can't just tank, and the entity's
     // homing turn-rate is loosened so the orb is dodgeable by movement (2026-07-23).
-    attacks: [{ name: "Homing orb", damage: 22, cls: "magic", kind: "ranged", intervalMs: 1900, projectileSpeed: 170, homing: true }],
+    attacks: [
+      { name: "Homing orb (wisp form)", damage: 22, cls: "magic", kind: "ranged", intervalMs: 1900, projectileSpeed: 170, homing: true },
+      // C3 (2026-07-23): the TRANSFORM. the user — "make that guy cooler besides
+      // just a ranged gremlin... maybe it transforms when you get within melee
+      // range to a bigger melee focused dude with more HP." Close to melee and
+      // the wisp COLLAPSES into the drowned corpse the light was luring you to:
+      // bigger, slow, and it hits with a real physical maul (armor answers this
+      // form, unlike the armor-bypassing orb). Back off and it dissolves back.
+      // One shared HP pool; the husk just takes reduced damage. attacks[1] =
+      // husk maul (physical), attacks[2] = the collapse drop-slam (magic AoE the
+      // transform-in deals). The dissolve puff is a fraction of the slam.
+      { name: "Husk maul (melee, corporeal form)", damage: 30, cls: "physical", kind: "melee", intervalMs: 1300 },
+      { name: "Collapse slam (magic AoE on transform)", damage: 26, cls: "magic", kind: "aoe", intervalMs: 4000 },
+    ],
     poise: null, resistances: { fire: 1.25, magic: 1.25 }, elite: STD_ELITE(1.3),
   },
   // Fenlurker (bayou burrower) CUT 2026-07-23 — the user found it boring to fight;

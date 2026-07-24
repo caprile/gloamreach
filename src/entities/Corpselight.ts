@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import { Enemy } from "./Enemy";
+import type { SwingConfig } from "./Enemy";
 import type { ProjectileConfig, ProjectileHost } from "./Projectile";
 import { enemyStat } from "../systems/enemyStats";
 
@@ -26,8 +27,27 @@ const ELITE = S.elite!;
 // It also drops Hex Essence: the bayou's Gloamsteel tier is smelted with essence
 // that until now only badlands Hexlings supplied, so hunting haunts is the local
 // answer to "must I walk back to the badlands to forge bayou gear?".
+//
+// C3 (2026-07-23): the TWO-FORM TRANSFORM. the user rejected the phase-out and
+// blink ideas as done-before ("we've done untargetable windows and teleporting,
+// get more creative") and asked for exactly this: close to melee and the wisp
+// COLLAPSES into the drowned corpse the light was luring you toward — bigger,
+// slow, and it swings a real physical maul (armor answers the husk, where it
+// does nothing against the wisp's armor-bypassing orbs). Back off and it
+// DISSOLVES back into the wisp. The player picks the fight: commit to melee and
+// face the tanky husk, or kite and eat homing orbs indefinitely.
+//
+// The design rules that make it a fight rather than two statlines:
+//   * ONE shared HP pool. Chipping the wisp at range is real progress — but the
+//     husk takes reduced damage (HUSK_DAMAGE_TAKEN_MULT), so the same DPS goes
+//     further at range. That's the reward for committing to a strategy.
+//   * BOTH transitions hurt. The collapse is a telegraphed drop-slam; the
+//     dissolve puffs gloam. Plus a transform COOLDOWN — so flickering at the
+//     range boundary to dodge both forms is not free.
+//   * The husk lumbers after you and DISSOLVES back on its own if you stay out
+//     of its reach for a beat, so disengaging works but costs you ground.
 
-type HauntMode = "idle" | "engaged";
+type HauntMode = "idle" | "engaged" | "collapsing" | "husk" | "dissolving";
 
 const AGGRO_RADIUS = 340;
 // Trimmed 700→520 (the user playtest: "ranged dudes do not deaggro and they shoot
@@ -73,6 +93,48 @@ const ORB_LIFETIME_MS = 3000;
 const ORB_MAX_RANGE = 2200; // unused by the homing path, kept honest for the despawn contract
 const CAST_COOLDOWN_MS = 1900;
 
+// --- C3 transform ---
+// The wisp collapses into the husk when the player is this close (just past the
+// husk's own melee reach, so getting into melee IS what triggers it).
+const TRANSFORM_RANGE = 96;
+// The husk dissolves back if the player stays beyond this for HUSK_REVERT_MS.
+// Wider than TRANSFORM_RANGE so there's hysteresis — you can't sit exactly on
+// the boundary and strobe the forms.
+const HUSK_REVERT_RANGE = 190;
+const HUSK_REVERT_MS = 2000;
+// After ANY transform, neither can fire again for this long — the hard stop on
+// boundary-flicker cheese.
+const TRANSFORM_COOLDOWN_MS = 1600;
+// The husk takes reduced damage: chipping the wisp at range is real progress,
+// but a given DPS goes further at range than into the armored corpse. That's
+// the whole "commit to a strategy" lever.
+const HUSK_DAMAGE_TAKEN_MULT = 0.5;
+const HUSK_SCALE = 1.7; // it looms once corporeal (vs the wisp's base ~1.3 elite / 1)
+const HUSK_TINT = 0x6d8a6a; // waterlogged drowned-flesh green
+const HUSK_CHASE_SPEED = 62; // slow — a lurching corpse; well under a sprint
+
+// Collapse: a telegraphed drop-slam as the light crashes down into a body.
+const COLLAPSE_WINDUP_MS = 560; // the tell — you can be clear before it lands
+const COLLAPSE_SLAM_RADIUS = 104;
+const COLLAPSE_SLAM_DAMAGE = S.attacks[2].damage; // magic AoE — bypasses armor
+const COLLAPSE_SLAM_KNOCKBACK = 150;
+// Dissolve: a smaller gloam puff as the body comes apart back into light.
+const DISSOLVE_MS = 420;
+const DISSOLVE_PUFF_RADIUS = 84;
+const DISSOLVE_PUFF_DAMAGE = Math.round(S.attacks[2].damage * 0.5);
+
+// The husk's physical maul (armor answers this, unlike the orb).
+const HUSK_MAUL_DAMAGE = S.attacks[1].damage;
+const HUSK_MAUL_SWING: SwingConfig = {
+  reach: 74,
+  windupMs: 520,
+  strikeMs: 100,
+  recoverMs: 560, // the punish window — a slow corpse is punishable between swings
+  cooldownMs: 480,
+  knockback: 130,
+  tell: { punchScale: 1.28, color: 0x8fbf7a },
+};
+
 export class Corpselight extends Enemy {
   private mode: HauntMode = "idle";
   private readonly spawnX: number;
@@ -85,6 +147,17 @@ export class Corpselight extends Enemy {
   private castingUntil = 0; // >0 while planted mid-wind-up
   private castAimX = 0; // locked at wind-up start — the orb does NOT re-aim during the tell
   private castAimY = 0;
+  // --- C3 transform state ---
+  private readonly wispScale: number; // the resting wisp size, to restore on dissolve
+  private transformReadyAt = 0; // no transform until now — anti-flicker
+  private collapseEndsAt = 0; // >0 while the collapse telegraph plays
+  private dissolveEndsAt = 0; // >0 while dissolving back
+  private outOfReachSince = -1; // when the player left husk reach (-1 = in reach / not husk)
+  private readonly huskMaulDamage: number;
+  private readonly collapseSlamDamage: number;
+  private readonly dissolvePuffDamage: number;
+  // Set the frame a transform's AoE resolves; drained by checkPlayerHit().
+  private pendingAreaHit: { damage: number; radius: number; knockback: number } | null = null;
 
   constructor(scene: Phaser.Scene, cfg: { x: number; y: number; elite?: boolean }) {
     const elite = cfg.elite ?? false;
@@ -112,6 +185,11 @@ export class Corpselight extends Enemy {
       upright: true, // a hovering wisp-shroud — mirror, never rotate
     });
     this.orbDamage = elite ? Math.round(ORB_DAMAGE * ELITE.damage) : ORB_DAMAGE;
+    const dmgMult = elite ? ELITE.damage : 1;
+    this.huskMaulDamage = Math.round(HUSK_MAUL_DAMAGE * dmgMult);
+    this.collapseSlamDamage = Math.round(COLLAPSE_SLAM_DAMAGE * dmgMult);
+    this.dissolvePuffDamage = Math.round(DISSOLVE_PUFF_DAMAGE * dmgMult);
+    this.wispScale = elite ? ELITE.scale : 1;
     this.spawnX = cfg.x;
     this.spawnY = cfg.y;
     // Desynchronise the cast clock. A Drowned Lodge fields 2-3 haunts and they
@@ -131,8 +209,14 @@ export class Corpselight extends Enemy {
     const body = this.body as Phaser.Physics.Arcade.Body;
     const dist = Phaser.Math.Distance.Between(this.x, this.y, playerX, playerY);
 
+    // --- C3 transform modes: handled before the wisp logic below ---
+    if (this.mode === "collapsing") return this.updateCollapse(playerX, playerY, now);
+    if (this.mode === "dissolving") return this.updateDissolve(now);
+    if (this.mode === "husk") return this.updateHusk(delta, playerX, playerY, now);
+
     // A slow vertical bob so it reads as floating rather than walking. Purely
     // cosmetic (it rides rotation, not position, so it can't desync the body).
+    // Wisp-only — the husk lurches, it doesn't hover.
     this.bobPhase += delta * 0.0026;
     this.setRotation(Math.sin(this.bobPhase) * 0.09);
 
@@ -161,6 +245,15 @@ export class Corpselight extends Enemy {
     }
 
     if (Math.abs(playerX - this.x) > 3) this.setFlipX(playerX < this.x); // face the player without the tilt
+
+    // C3: the player closed to melee → the wisp COLLAPSES into the husk. Gated
+    // on the transform cooldown so you can't strobe the forms at the boundary.
+    // An in-flight cast is abandoned — the light is crashing down, not shooting.
+    if (dist <= TRANSFORM_RANGE && now >= this.transformReadyAt) {
+      this.abortCast();
+      this.startCollapse(now);
+      return false;
+    }
 
     // Mid-cast: PLANTED. It has committed to this orb — it neither drifts nor
     // re-aims, so the wind-up is a real window (sidestep the line, or dash).
@@ -208,6 +301,136 @@ export class Corpselight extends Enemy {
     this.endWindupTell();
   }
 
+  // --- C3 transform handlers ---
+
+  private startCollapse(now: number): void {
+    this.mode = "collapsing";
+    this.collapseEndsAt = now + COLLAPSE_WINDUP_MS;
+    this.setRotation(0); // stop the wisp bob; it's crashing down
+    (this.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0);
+    this.playWindupTell(COLLAPSE_WINDUP_MS, 0x8fbf7a, 1.35);
+    // Attempted, not landed — the slam may be dodged (see the split rule).
+    this.markAttackAttempted(now);
+  }
+
+  // Telegraphed drop-slam, then it's a corpse. The slam re-checks the player's
+  // CURRENT position (below, in checkPlayerHit's caller frame) so stepping out
+  // of the growing tell before it lands dodges it.
+  private updateCollapse(playerX: number, playerY: number, now: number): boolean {
+    (this.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0);
+    if (now < this.collapseEndsAt) return false;
+    this.endWindupTell();
+    // Land the slam if the player is still inside it.
+    const dist = Phaser.Math.Distance.Between(this.x, this.y, playerX, playerY);
+    if (dist <= COLLAPSE_SLAM_RADIUS + this.reachBonus()) {
+      this.pendingAreaHit = {
+        damage: this.collapseSlamDamage,
+        radius: COLLAPSE_SLAM_RADIUS,
+        knockback: COLLAPSE_SLAM_KNOCKBACK,
+      };
+    }
+    // Become the husk.
+    this.mode = "husk";
+    this.setScale(HUSK_SCALE);
+    this.baseScale = HUSK_SCALE;
+    this.setTint(HUSK_TINT);
+    this.outOfReachSince = -1;
+    this.transformReadyAt = now + TRANSFORM_COOLDOWN_MS;
+    this.attackPhase = "none";
+    return false;
+  }
+
+  private updateHusk(delta: number, playerX: number, playerY: number, now: number): boolean {
+    const body = this.body as Phaser.Physics.Arcade.Body;
+    const dist = Phaser.Math.Distance.Between(this.x, this.y, playerX, playerY);
+
+    // Revert-on-distance: if the player stays out of the husk's reach long
+    // enough (and the transform cooldown has elapsed), it dissolves back into
+    // the wisp — disengaging works, but the dissolve puff makes it cost ground.
+    if (!this.isAttacking()) {
+      if (dist > HUSK_REVERT_RANGE) {
+        if (this.outOfReachSince < 0) this.outOfReachSince = now;
+        else if (now - this.outOfReachSince >= HUSK_REVERT_MS && now >= this.transformReadyAt) {
+          this.startDissolve(now);
+          return false;
+        }
+      } else {
+        this.outOfReachSince = -1;
+      }
+      // Full deaggro / give-up while a corpse → dissolve back rather than idle
+      // as a husk (an idle husk in the water reads wrong).
+      if (
+        (dist > DEAGGRO_RADIUS && !this.withinAggroPersist(now)) ||
+        this.hasGivenUpPursuit(now)
+      ) {
+        if (this.hasGivenUpPursuit(now)) this.enterGivenUpState(now);
+        this.startDissolve(now);
+        return false;
+      }
+    }
+
+    // In reach (or mid-swing) → maul. Else lurch toward the player.
+    if (this.isAttacking() || dist <= HUSK_MAUL_SWING.reach + this.reachBonus()) {
+      const hit = this.tickMeleeSwing(body, playerX, playerY, now, HUSK_MAUL_SWING);
+      if (hit) {
+        this.markAttackLanded(now);
+        return true; // physical maul — the boolean-bite path (armor applies)
+      }
+      return false;
+    }
+    const ang = Phaser.Math.Angle.Between(this.x, this.y, playerX, playerY);
+    const spd = HUSK_CHASE_SPEED * this.speedMult * this.envSpeedMult;
+    body.setVelocity(Math.cos(ang) * spd, Math.sin(ang) * spd);
+    if (Math.abs(Math.cos(ang)) > 0.1) this.setFlipX(Math.cos(ang) < 0);
+    return false;
+  }
+
+  private startDissolve(now: number): void {
+    this.mode = "dissolving";
+    this.dissolveEndsAt = now + DISSOLVE_MS;
+    this.attackPhase = "none";
+    (this.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0);
+    // The gloam puff resolves immediately (a quick pop, not a telegraphed
+    // heave) — its cost is paid the instant the corpse comes apart.
+    this.pendingAreaHit = { damage: this.dissolvePuffDamage, radius: DISSOLVE_PUFF_RADIUS, knockback: 0 };
+  }
+
+  private updateDissolve(now: number): boolean {
+    (this.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0);
+    if (now < this.dissolveEndsAt) return false;
+    // Back to the wisp.
+    this.mode = "engaged";
+    this.setScale(this.wispScale);
+    this.baseScale = this.wispScale;
+    this.applyHpTint(); // restore the HP-based tint (drop the husk green)
+    this.outOfReachSince = -1;
+    this.transformReadyAt = now + TRANSFORM_COOLDOWN_MS;
+    this.nextCastAt = now + CAST_COOLDOWN_MS; // a beat before it starts casting again
+    return false;
+  }
+
+  // Area-hit contract (mini-boss/Sandmaw pattern): the scene queries this right
+  // after update() and routes it through applyDamageToPlayer, so dash i-frames
+  // and armor-vs-magic apply to the collapse slam / dissolve puff exactly like
+  // any other hit. Both are `magic` (gloam bursts bypass flat armor), which is
+  // the deliberate contrast with the husk maul's physical damage.
+  checkPlayerHit(_playerX: number, _playerY: number): {
+    damage: number;
+    knockback?: number;
+    dmgType: "magic";
+  } | null {
+    if (!this.pendingAreaHit) return null;
+    const h = this.pendingAreaHit;
+    this.pendingAreaHit = null;
+    return { damage: h.damage, knockback: h.knockback || undefined, dmgType: "magic" };
+  }
+
+  // Whether the creature is in a corporeal (husk / mid-collapse) form right now
+  // — drives the reduced-damage rule in takeHit.
+  private isCorporeal(): boolean {
+    return this.mode === "husk" || this.mode === "collapsing";
+  }
+
   private updateWander(body: Phaser.Physics.Arcade.Body, now: number): void {
     if (now >= this.nextRoamAt) {
       const angle = Phaser.Math.FloatBetween(0, Math.PI * 2);
@@ -250,12 +473,25 @@ export class Corpselight extends Enemy {
   }
 
   takeHit(damage: number): boolean {
-    const depleted = super.takeHit(damage);
+    // C3: the corporeal husk soaks damage — chipping the wisp at range is real
+    // progress, but a given DPS goes further at range than into the corpse. This
+    // is on top of the fire/magic weakness (applied earlier in resolveWeaponHit),
+    // so a fire weapon still bites a husk harder than a physical one does.
+    const effective = this.isCorporeal() ? damage * HUSK_DAMAGE_TAKEN_MULT : damage;
+    const depleted = super.takeHit(effective);
     if (!depleted && this.mode === "idle") {
       this.mode = "engaged";
       this.startPursuit(this.scene.time.now);
     }
     return depleted;
+  }
+
+  // The husk maul is the ONLY source of the boolean-bite contract for this
+  // creature (the wisp deals damage via projectiles + the transform AoEs via
+  // checkPlayerHit), so biteDamage always reports the maul's physical hit. 0 in
+  // wisp form is never read, since the wisp never returns true from update().
+  get biteDamage(): number {
+    return this.huskMaulDamage;
   }
 
   isAggro(): boolean {
