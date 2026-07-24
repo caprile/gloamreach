@@ -49,7 +49,10 @@ const MANIFEST_MS = 460;
 const TETHER_MAX_MS = 4200; // ride it out and you get NO punish window
 const TETHER_RANGE = 330;
 const TETHER_TICK_MS = 450;
-const TETHER_TICK_DAMAGE = 10; // magic — armor does not apply
+// Per-second rate from the table, converted to this entity's own tick cadence.
+// Was a hardcoded 10 that silently ignored the table's 14 for a whole balance
+// pass — hence the wiring (2026-07-24).
+const TETHER_TICK_DAMAGE = Math.round((S.attacks[0].damage * TETHER_TICK_MS) / 1000); // magic — armor does not apply
 const TETHER_BREAK_GRACE_MS = 320; // how long LOS/range must stay broken before it unravels
 
 const UNRAVEL_MS = 2600;
@@ -227,6 +230,8 @@ export class Palewake extends Enemy {
     this.stateEnteredAt = now;
     this.setAlpha(STALK_ALPHA);
     this.tetherGfx.clear();
+    // The drain carries over into the stalk (2026-07-24) — see updateStalking.
+    this.nextTetherTickAt = now + TETHER_TICK_MS;
     this.pickFlank(playerX, playerY);
   }
 
@@ -267,6 +272,21 @@ export class Palewake extends Enemy {
       this.applyFacing(vx, vy);
     } else {
       body.setVelocity(0, 0);
+    }
+    // The tether does NOT drop while it's faded out (the user: "palewake should
+    // stay connected when invis"). It used to be cleared on entering this state,
+    // so ~a third of every cycle was free time in which the fight's one and only
+    // damage source did nothing — and since you cannot hit it while it stalks,
+    // that third was dead air for both sides. Keeping the drain live makes the
+    // counterplay CONSISTENT: line of sight is the answer in both phases, and
+    // the walls matter the whole fight rather than only during the channel.
+    // Deliberately no unravel here, though — the punish window is earned by
+    // breaking the COMMITTED channel, not by walking behind a pillar early.
+    const connected = this.tetherConnected(playerX, playerY);
+    this.drawTether(playerX, playerY, connected, true);
+    if (connected && now >= this.nextTetherTickAt) {
+      this.nextTetherTickAt = now + TETHER_TICK_MS;
+      this.pendingTetherDamage = TETHER_TICK_DAMAGE;
     }
     if (now - this.stateEnteredAt >= STALK_MS) {
       this.wakeState = "manifest";
@@ -360,16 +380,20 @@ export class Palewake extends Enemy {
     if (frac >= 1) this.enterStalking(now, playerX, playerY);
   }
 
-  private drawTether(playerX: number, playerY: number, connected: boolean): void {
+  // `faint` = drawn during the stalk, where the beam is the one thing that gives
+  // an otherwise near-invisible creature away. Dimmer than the committed
+  // channel so the manifest still reads as the escalation it is.
+  private drawTether(playerX: number, playerY: number, connected: boolean, faint = false): void {
     const g = this.tetherGfx;
+    const k = faint ? 0.45 : 1;
     g.clear();
     g.setDepth(this.depth + 0.5);
     if (connected) {
-      g.lineStyle(5, 0x6a3ec8, 0.35);
+      g.lineStyle(5, 0x6a3ec8, 0.35 * k);
       g.lineBetween(this.x, this.y, playerX, playerY);
-      g.lineStyle(2, 0xd8c0ff, 0.85);
+      g.lineStyle(2, 0xd8c0ff, 0.85 * k);
       g.lineBetween(this.x, this.y, playerX, playerY);
-      g.fillStyle(0xd8c0ff, 0.5);
+      g.fillStyle(0xd8c0ff, 0.5 * k);
       g.fillCircle(playerX, playerY, 7);
     } else {
       // Frayed stub: the beam is visibly severed at the obstruction, so the

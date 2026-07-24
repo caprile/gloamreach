@@ -657,18 +657,20 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     return this.health <= 0;
   }
 
-  // Don't disrupt a committed attack that's mid-MOVEMENT: a charging Boar /
-  // lunging Snake should PLAY OUT when hit (souls-like — you can't stunlock a
-  // committed attack out of it). The x-shake tween below fights the attack's
-  // own body velocity and snaps position back on complete, which read as
-  // "attacking cancels the charge." When the attacker is planted (wind-up /
-  // recovery punish window) the shake is harmless and still gives hit
-  // feedback, so only skip it while actually moving under attack velocity.
+  // Never disrupt a committed attack — the x-shake below writes this.x directly
+  // and snaps it back on complete, which reads as an interrupt whether or not it
+  // technically is one (souls-like: you can't stunlock a committed attack).
+  //
+  // 2026-07-24: this used to skip the shake only while the attacker was MOVING,
+  // on the theory that jittering a planted one was harmless. It wasn't. A
+  // planted attacker is exactly the case a ranged player creates — you stand off
+  // and plink a caster all the way through its wind-up, so every shot visibly
+  // knocked it sideways and the user read the bow as carrying a mini-stun ("the
+  // stagger thing with bows needs to go away"). Any committed attack phase now
+  // suppresses it; the HP tint is still the hit confirmation, and a genuine
+  // stagger remains a real, separate, poise-driven mechanic on the bosses.
   private playHitFeedback(): void {
-    const body = this.body as Phaser.Physics.Arcade.Body | undefined;
-    const movingAttack =
-      this.isAttacking() && !!body && (Math.abs(body.velocity.x) > 1 || Math.abs(body.velocity.y) > 1);
-    if (movingAttack) {
+    if (this.isAttacking()) {
       this.applyHpTint();
       return;
     }

@@ -89,6 +89,7 @@ export class UpgradeMenu {
   private deps: UpgradeMenuDeps;
   private bg: Phaser.GameObjects.Rectangle;
   private open = false;
+  private refreshQueued = false;
   private rows: Phaser.GameObjects.GameObject[] = [];
   // True while an upgrade bar is filling — greys every row + blocks re-clicks.
   private busy = false;
@@ -148,10 +149,18 @@ export class UpgradeMenu {
     return this.open;
   }
 
-  // MainScene calls this after applying an upgrade so the panel immediately
-  // reflects the new tier (next row unlocked, just-applied row now greyed).
+  // MainScene calls this after applying an upgrade so the panel reflects the new
+  // tier (next row unlocked, just-applied row now greyed). Coalesced to one
+  // repaint per frame (same pattern as InventoryMenu/CraftingMenu): applying an
+  // upgrade lands here up to three times in one frame — directly, and again via
+  // afterItemMove's recompute chain — each a full row teardown-and-rebuild.
   refresh(): void {
-    if (this.open) this.render();
+    if (!this.open || this.refreshQueued) return;
+    this.refreshQueued = true;
+    this.scene.events.once(Phaser.Scenes.Events.POST_UPDATE, () => {
+      this.refreshQueued = false;
+      if (this.open) this.render();
+    });
   }
 
   containsPoint(screenX: number, screenY: number): boolean {

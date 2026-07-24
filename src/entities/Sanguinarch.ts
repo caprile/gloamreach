@@ -49,7 +49,7 @@ const SLASH_STRIKE_MS = 80;
 const SLASH_RECOVER_MS = 260;
 const SLASH_COOLDOWN_MS = 380;
 const SLASH_REACH = 68;
-const SLASH_DAMAGE = 15;
+const SLASH_DAMAGE = S.attacks[0].damage;
 const SLASH_BLEED = { dmgPerSec: 6, durationMs: 5000 };
 
 const FEED_INTERVAL_MS = 5200; // how often it tries to drink
@@ -64,7 +64,7 @@ const SLAM_STRIKE_MS = 140;
 const SLAM_RECOVER_MS = 620;
 const SLAM_COOLDOWN_MS = 700;
 const SLAM_RADIUS = 96;
-const SLAM_DAMAGE = 50;
+const SLAM_DAMAGE = S.attacks[1].damage;
 const SLAM_KNOCKBACK = 220;
 
 export class Sanguinarch extends Enemy {

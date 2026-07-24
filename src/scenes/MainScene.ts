@@ -451,6 +451,13 @@ const SPORE_CLOUD_RADIUS = 85;
 const SPORE_CLOUD_SLOW_MULT = 0.6;
 const SPORE_CLOUD_POISON_DPS = 5;
 const SPORE_CLOUD_MS = 6000;
+// Concurrent food/Comfort buffs allowed by default. A run character's modifier
+// may override it (Characters.ts `maxBuffs`).
+const DEFAULT_MAX_BUFFS = 3;
+// A killed Blighttoad's delayed death bloom (see spawnDeathBloom). Long enough
+// to read the swelling corpse and step off it, short enough that it still
+// punishes standing in a pack you just AOE'd down.
+const DEATH_BLOOM_FUSE_MS = 1100;
 // Every named fight, keyed by displayName, with the one-line read that tells the
 // player what KIND of fight they just walked into. Presence in this table is
 // what makes an enemy announce itself (see announceBossEncounter) — a future
@@ -564,6 +571,19 @@ const NIGHT_ELITE_CHANCE_MULT = 3;
 // source that feeds the relic meta-loop, and the user found them "really rare" out
 // there. Applied to the bayou surface spawns (spawnBayouEnemies).
 const BAYOU_ELITE_CHANCE_MULT = 2;
+// Bayou INTERIORS (the six Sunken Crypts and the Miretyrant's lair) roll far
+// hotter still: ~40%. Two 2026-07-24 complaints share this one lever —
+// "dungeons are easy" and "trophies feel so rare in the bayou... maybe the
+// dungeons should be all elites" — because a crypt is both the hardest content
+// in the biome and a fixed, finite, non-respawning population, so it can afford
+// a density the open world can't. Deliberately not 100%: an all-elite room
+// erases the elite recolor as a "this one is dangerous" read.
+const CRYPT_ELITE_CHANCE_MULT = 5;
+// Rite/garrison waves at the two bayou surface POIs. These bypassed the elite
+// roll ENTIRELY (both Sunken Shrine waves 1-2 and every Drowned Lodge resident
+// were hardcoded normal), which is a large part of why the biome's trophy
+// supply felt dry — its two dedicated POIs contributed almost none.
+const BAYOU_POI_ELITE_CHANCE_MULT = 3;
 
 // Gremlin Shack chest loot — re-rolled per "empty cycle" (see
 // LootContainer.rollIfEmpty/rearmIfEmpty), not per guard-respawn. First-pass,
@@ -1594,8 +1614,10 @@ export class MainScene extends Phaser.Scene {
     this.poison = new PoisonManager();
     this.buffs = new BuffManager();
     // 2 -> 3: Comfort's "Resting" buff shouldn't have to fight two
-    // simultaneous food buffs for one of only 2 slots.
-    this.buffs.setMaxBuffs(3);
+    // simultaneous food buffs for one of only 2 slots. A run character may
+    // override this (the Ashcaller runs on exactly one, much longer buff) —
+    // applyCharacter re-applies the cap once a card is chosen.
+    this.buffs.setMaxBuffs(DEFAULT_MAX_BUFFS);
     this.invulnerableUntil = 0;
     this.rangedFireSlowUntil = 0;
     // Relic unique-proc state (2026-07-15) — reset per run (scene.restart gotcha).
@@ -3147,13 +3169,21 @@ export class MainScene extends Phaser.Scene {
       return;
     }
 
-    // Inventory menu open: dropping onto its matching paper-doll slot equips
-    // an armor item. Dropping a non-armor item, or an armor item on the
-    // wrong slot, just falls through and snaps back (nothing was removed).
+    // Inventory menu open: dropping onto a compatible paper-doll slot equips
+    // the item THERE specifically. The gate is by GROUP, not slot identity —
+    // an item declares a group, not a destination (see EquipSlot), so every
+    // ability item nominally says "ability1" and would otherwise only ever be
+    // droppable on Q. Naming the slot is the point of the drag: it's how the
+    // player picks which of Q/E/R (or which special) a piece goes to.
+    // Dropping a non-equippable item, or one on a foreign group's slot, just
+    // falls through and snaps back (nothing was removed).
     if (this.inventoryMenu.isOpen()) {
       const armorSlot = this.inventoryMenu.armorSlotAt(pointer.x, pointer.y);
       if (armorSlot !== null) {
-        if (itemDef(stack.key)?.armorSlot === armorSlot) this.equipArmorFromContainer(src.container, src.index);
+        const declared = itemDef(stack.key)?.armorSlot;
+        if (declared && slotGroup(declared) === slotGroup(armorSlot)) {
+          this.equipArmorFromContainer(src.container, src.index, armorSlot);
+        }
         return;
       }
     }
@@ -3233,9 +3263,10 @@ export class MainScene extends Phaser.Scene {
   }
 
   // Resolves a drag started from an equipped paper-doll slot — the
-  // drag-to-unequip gesture. Dropping back on any paper-doll slot (itself or
-  // another) is a no-op/snap-back; dropping on a backpack slot unequips there
-  // specifically; dropping outside every panel/HUD unequips to the floor.
+  // drag-to-unequip gesture, plus rearranging within a group. Dropping on
+  // another slot of the same group swaps the two; dropping on a backpack slot
+  // unequips there specifically; dropping outside every panel/HUD unequips to
+  // the floor.
   private resolveArmorDrag(slot: EquipSlot, pointer: Phaser.Input.Pointer): void {
     if (!this.inventoryMenu.isOpen()) return; // can't have started this drag otherwise
     // Drag an equipped piece onto the trash box to permanently destroy it —
@@ -3244,7 +3275,15 @@ export class MainScene extends Phaser.Scene {
       this.destroyEquippedSlot(slot);
       return;
     }
-    if (this.inventoryMenu.armorSlotAt(pointer.x, pointer.y) !== null) return;
+    const overSlot = this.inventoryMenu.armorSlotAt(pointer.x, pointer.y);
+    if (overSlot !== null) {
+      // Slot-to-slot within one group is a reorder, not a no-op — for abilities
+      // that's the only way to change which of Q/E/R an already-worn ability
+      // sits on, since position IS the hotkey (SLOT_ABILITY_KEY). Group-generic,
+      // so the four specials get it too. Cross-group drops still snap back.
+      if (overSlot !== slot && slotGroup(overSlot) === slotGroup(slot)) this.swapEquippedSlots(slot, overSlot);
+      return;
+    }
 
     // Over the backpack grid: unequip into the backpack (first free slot —
     // the auto-organized view has no manual placement).
@@ -3256,6 +3295,22 @@ export class MainScene extends Phaser.Scene {
     if (!this.inventoryMenu.containsPoint(pointer.x, pointer.y) && !this.pointerOverHud(pointer)) {
       this.unequipArmorSlot(slot);
     }
+  }
+
+  // Swap (or move, if the target is empty) two equipped slots of the same
+  // group. Nothing leaves the equipment, so there's no backpack-full case to
+  // handle — unlike every other equip path.
+  private swapEquippedSlots(from: EquipSlot, to: EquipSlot): void {
+    const a = this.equipment.get(from);
+    if (!a) return;
+    const b = this.equipment.get(to);
+    // An open Upgrade panel is pinned to a SLOT, so a swap would silently
+    // repoint it at a different piece (same reasoning as unequipArmorSlot).
+    const t = this.upgradeTarget;
+    if (t && "armorSlot" in t && (t.armorSlot === from || t.armorSlot === to)) this.closeUpgradeMenu();
+    this.equipment.set(to, a);
+    this.equipment.set(from, b);
+    this.afterItemMove();
   }
 
   // Permanently destroy the item equipped in a paper-doll slot (drag-to-trash)
@@ -3360,11 +3415,11 @@ export class MainScene extends Phaser.Scene {
     this.equipEffects.recompute(this.equipment);
     this.reconcileBackpackDiscovery();
     this.inventoryMenu.refresh();
-    // The hotbar's "upgrade ready" arrow depends on backpack materials, which
-    // this move may have changed even when nothing NEW was discovered (so
+    // The "upgrade ready" glyphs depend on backpack materials, which this move
+    // may have changed even when nothing NEW was discovered (so
     // reconcileBackpackDiscovery's refreshDiscovery path didn't fire) — refresh
-    // the hotbar + station glyphs here too so both track affordability (S3).
-    this.hotbarUI.refresh();
+    // the station glyphs so they track affordability (S3). The hotbar's own
+    // arrows are already covered by recomputeEquipped's refresh above.
     this.refreshStationUpgradeIndicators();
     this.dryingRackMenu.refresh();
     this.cookingMenu.refresh();
@@ -7228,18 +7283,18 @@ export class MainScene extends Phaser.Scene {
       if (roll <= weights.swarm) {
         for (let i = 0; i < rng.between(3, 5); i++) {
           const p = spot();
-          addEnemy(new Murkling(this, { x: p.x, y: p.y, elite: this.rollElite(rng) }));
+          addEnemy(new Murkling(this, { x: p.x, y: p.y, elite: this.rollElite(rng, CRYPT_ELITE_CHANCE_MULT) }));
         }
       } else if (roll <= weights.poison) {
         for (let i = 0; i < rng.between(1, 2); i++) {
           const p = spot();
-          addEnemy(new Blighttoad(this, { x: p.x, y: p.y, elite: this.rollElite(rng) }));
+          addEnemy(new Blighttoad(this, { x: p.x, y: p.y, elite: this.rollElite(rng, CRYPT_ELITE_CHANCE_MULT) }));
         }
       } else {
         // A bruiser room. (Fenlurker cut 2026-07-23 — its share folded into the
         // Mosswretch, keeping the crypt's "one big thing" rooms.)
         const p = spot();
-        addEnemy(new Mosswretch(this, { x: p.x, y: p.y, elite: this.rollElite(rng, 2) }));
+        addEnemy(new Mosswretch(this, { x: p.x, y: p.y, elite: this.rollElite(rng, CRYPT_ELITE_CHANCE_MULT) }));
       }
     }
 
@@ -7403,12 +7458,12 @@ export class MainScene extends Phaser.Scene {
       if (roll <= 5) {
         for (let i = 0; i < rng.between(3, 5); i++) {
           const p = spot();
-          this.addDungeonEnemy(lair, new Murkling(this, { x: p.x, y: p.y, elite: this.rollElite(rng) }));
+          this.addDungeonEnemy(lair, new Murkling(this, { x: p.x, y: p.y, elite: this.rollElite(rng, CRYPT_ELITE_CHANCE_MULT) }));
         }
       } else {
         // roll 6-10: a bruiser. (Fenlurker cut 2026-07-23 — folded into Mosswretch.)
         const p = spot();
-        this.addDungeonEnemy(lair, new Mosswretch(this, { x: p.x, y: p.y, elite: this.rollElite(rng, 2) }));
+        this.addDungeonEnemy(lair, new Mosswretch(this, { x: p.x, y: p.y, elite: this.rollElite(rng, CRYPT_ELITE_CHANCE_MULT) }));
       }
     }
 
@@ -7472,10 +7527,18 @@ export class MainScene extends Phaser.Scene {
         room.y + LAIR_ADD_SPAWN_INSET,
         room.y + room.h - LAIR_ADD_SPAWN_INSET,
       );
+      // Adds are ELITE, and the mix now favours the Blighttoad (2026-07-24).
+      // the user: "the ADDs are useless because my crit splash insta kills them."
+      // Elite is the roster's existing +50% HP/dmg lever, so a swing that
+      // splashes them still has to actually spend the swing. The ratio flip is
+      // the more important half: a Murkling's claw is physical and so is the
+      // first thing an endgame armour pool erases, while a Blighttoad's payload
+      // is POISON, which bypasses flat armour entirely — the adds stay relevant
+      // no matter how well geared the player who reaches this fight is.
       const add =
-        rng.frac() < 0.7
-          ? new Murkling(this, { x, y })
-          : new Blighttoad(this, { x, y });
+        rng.frac() < 0.45
+          ? new Murkling(this, { x, y, elite: true })
+          : new Blighttoad(this, { x, y, elite: true });
       this.addDungeonEnemy(lair, add);
       lair.adds.push(add);
       spawned++;
@@ -7962,28 +8025,37 @@ export class MainScene extends Phaser.Scene {
       // The rite CALLED them — they don't wander in and notice you later.
       e.forceAggro(this.time.now);
     };
+    // Elites ESCALATE across the rite (2026-07-24). Waves 1-2 previously passed
+    // no elite flag at all and wave 3 hardcoded exactly one, so the bayou's only
+    // wave content was also nearly its only content that couldn't drop a trophy
+    // — the user: "trophies feel so rare in the bayou... maybe there needs to be
+    // some kind of elite waves thing like the dusk warren." The Warren's shape
+    // is exactly the model: rolled early, guaranteed by the last wave, so the
+    // rite pays out for finishing it rather than for starting it.
+    const eliteRoll = () => this.rollElite(rng, BAYOU_POI_ELITE_CHANCE_MULT);
     if (wave === 1) {
       for (let i = 0; i < 5; i++) {
         const p = spawnAt(i, 5);
-        add(new Murkling(this, { x: p.x, y: p.y }));
+        add(new Murkling(this, { x: p.x, y: p.y, elite: eliteRoll() }));
       }
     } else if (wave === 2) {
       for (let i = 0; i < 3; i++) {
         const p = spawnAt(i, 6);
-        add(new Blighttoad(this, { x: p.x, y: p.y }));
+        add(new Blighttoad(this, { x: p.x, y: p.y, elite: eliteRoll() }));
       }
       for (let i = 3; i < 7; i++) {
         const p = spawnAt(i, 7);
-        add(new Murkling(this, { x: p.x, y: p.y }));
+        add(new Murkling(this, { x: p.x, y: p.y, elite: eliteRoll() }));
       }
     } else {
+      // Final wave: all elite, no roll. This is the payout the rite is for.
       for (let i = 0; i < 2; i++) {
         const p = spawnAt(i, 4);
-        add(new Mosswretch(this, { x: p.x, y: p.y, elite: i === 0 }));
+        add(new Mosswretch(this, { x: p.x, y: p.y, elite: true }));
       }
       for (let i = 2; i < 5; i++) {
         const p = spawnAt(i, 5);
-        add(new Blighttoad(this, { x: p.x, y: p.y }));
+        add(new Blighttoad(this, { x: p.x, y: p.y, elite: true }));
       }
     }
     shrine.wave = wave;
@@ -8138,9 +8210,12 @@ export class MainScene extends Phaser.Scene {
     const hauntCount = Math.max(2, Math.round(lodge.huts.length / 2));
     for (let i = 0; i < hauntCount; i++) {
       const hut = lodge.huts[i % lodge.huts.length];
+      // Rolled elite (2026-07-24): every lodge resident was hardcoded normal,
+      // so a garrison POI in the endgame biome dropped no trophies at all.
       const c = new Corpselight(this, {
         x: hut.image.x + rng.between(-30, 30),
         y: hut.image.y - 34 + rng.between(-14, 14),
+        elite: this.rollElite(rng, BAYOU_POI_ELITE_CHANCE_MULT),
       });
       haunts.push(c);
       this.enemies.push(c);
@@ -8155,6 +8230,7 @@ export class MainScene extends Phaser.Scene {
       const m = new Mirejaw(this, {
         x: lodge.x + rng.between(-LODGE_SPAN, LODGE_SPAN),
         y: lodge.y + (i % 2 === 0 ? 1 : -1) * rng.between(46, 120),
+        elite: this.rollElite(rng, BAYOU_POI_ELITE_CHANCE_MULT),
       });
       lurkers.push(m);
       this.enemies.push(m);
@@ -10181,7 +10257,10 @@ export class MainScene extends Phaser.Scene {
   // Every attack path (melee, ranged, den smash) multiplies its weapon cooldown
   // by this, so a new attack path gets the haste for free.
   private attackCooldownMult(): number {
-    return this.time.now < this.hasteUntil ? this.hasteMult : 1;
+    // The run character's own attack-speed term multiplies in here rather than at
+    // the three attack sites, so melee/arc/ranged all inherit it (>1 = slower).
+    const haste = this.time.now < this.hasteUntil ? this.hasteMult : 1;
+    return haste * this.character.attackSpeedMult();
   }
 
   // Aim fallback when the pointer is basically on the player: the facing dir.
@@ -10213,6 +10292,15 @@ export class MainScene extends Phaser.Scene {
       this.runLog.recordHealing("On-kill relic heal", killHeal);
       this.refreshHealthBar();
     }
+    // The Reaver's Bloodthirst rides the SAME on-kill moment, but recorded under
+    // its own label so the end-of-run healing breakdown can tell the class edge
+    // apart from a relic the player also happens to be carrying.
+    const charKillHeal = this.character.killHealBonus();
+    if (charKillHeal > 0) {
+      this.health.heal(charKillHeal);
+      this.runLog.recordHealing(`${this.character.modifierName()} kill heal`, charKillHeal);
+      this.refreshHealthBar();
+    }
     // On-kill relic procs: Fleetfoot move burst, Second Wind stamina, Prodigy streak.
     this.applyOnKillRelicProcs();
     for (const armorType of armorTypesWornPerPiece(EQUIP_SLOTS.map((s) => this.equipment.get(s.id)))) {
@@ -10222,9 +10310,14 @@ export class MainScene extends Phaser.Scene {
     const dropX = enemy.x;
     const dropY = enemy.y;
     const loot = enemy.rollLoot();
+    // The Ascetic's Hunted pays out here: elites are twice as common for it AND
+    // worth twice as much, which is what turns "the world sends its worst" from
+    // a pure tax into the roster's greed card. Elites only — trash is unchanged,
+    // so the bonus tracks the risk the modifier actually adds.
+    const lootMult = enemy.elite ? this.character.eliteLootMult() : 1;
     enemy.playDeathFeedback(() => {
       for (const drop of loot) {
-        this.spawnLooseDrop(drop.resource, drop.amount, dropX, dropY);
+        this.spawnLooseDrop(drop.resource, Math.round(drop.amount * lootMult), dropX, dropY);
       }
     });
     this.enemies = this.enemies.filter((e) => e !== enemy);
@@ -10233,6 +10326,7 @@ export class MainScene extends Phaser.Scene {
     // collision / dungeon nav / containment for free, same split as the
     // Miretyrant's bellow). A spawnling reports 0, so this never chains.
     if (enemy instanceof Mosswretch) this.spawnMosslings(enemy);
+    if (enemy instanceof Blighttoad) this.spawnDeathBloom(dropX, dropY, enemy.elite);
     this.onShackGuardKilled(enemy);
     this.onDenGuardKilled(enemy);
     if (enemy instanceof Gloamwarden) this.onGloamwardenKilled();
@@ -10806,6 +10900,54 @@ export class MainScene extends Phaser.Scene {
     this.sporeClouds.push({ x, y, expiresAt: now + SPORE_CLOUD_MS, image: img });
   }
 
+  // A killed Blighttoad's corpse swells and BURSTS after a short fuse, leaving a
+  // poison cloud where it fell (2026-07-24, the user: "maybe some enemies should
+  // have a delayed poison explosion on death").
+  //
+  // Why this creature and why poison: the complaint it answers is that clearing
+  // the bayou had no cost, because crit-splash deletes a whole pack in one swing
+  // and every physical counter-attack was being erased by flat armour anyway.
+  // Poison bypasses armour outright, so this stays a real cost at ANY gear
+  // level — it is specifically the thing endgame defence cannot stat its way
+  // past — and the fuse is what makes it a decision: the corpse is a hazard you
+  // now have to walk away from, so mowing a clump down while standing in it
+  // costs you something. It reuses the spore-cloud hazard record wholesale, so
+  // there is no new damage code, no new expiry sweep and no new environment hook.
+  private spawnDeathBloom(x: number, y: number, elite: boolean): void {
+    // Telegraph the fuse — an unexplained delayed hit the player can't see
+    // coming is just unfair damage, not a mechanic.
+    const warn = this.add
+      .image(x, y, "poi_floor_gorge")
+      .setScale((SPORE_CLOUD_RADIUS / 90) * 0.5)
+      .setAlpha(0.3)
+      .setTint(0x9fd66a)
+      .setDepth(-6);
+    this.tweens.add({
+      targets: warn,
+      scale: (SPORE_CLOUD_RADIUS / 90) * 1.1,
+      alpha: 0.55,
+      duration: DEATH_BLOOM_FUSE_MS,
+      ease: "Quad.easeIn",
+      onComplete: () => {
+        warn.destroy();
+        // Fuse survives the corpse but not the run — bail if the scene moved on.
+        if (this.runOver) return;
+        this.spawnSporeCloud(x, y, this.time.now);
+        // An elite denies MORE GROUND rather than more damage per tick: stacking
+        // clouds on one spot would be a silent no-op, since foldSporeCloud is a
+        // boolean "inside any cloud" test that maxes the dps rather than summing
+        // it. Two offset clouds actually widen the patch you have to leave.
+        if (elite) {
+          const a = Math.random() * Math.PI * 2;
+          const r = SPORE_CLOUD_RADIUS * 0.7;
+          this.spawnSporeCloud(x + Math.cos(a) * r, y + Math.sin(a) * r, this.time.now);
+          this.spawnSporeCloud(x - Math.cos(a) * r, y - Math.sin(a) * r, this.time.now);
+        }
+        this.sfx.hit();
+      },
+    });
+  }
+
   // Sweep expired clouds each frame (their images too). Also fades the last
   // second so a cloud doesn't wink out — purely cosmetic, the hazard is gone
   // the instant it expires from the list.
@@ -11204,6 +11346,8 @@ export class MainScene extends Phaser.Scene {
       }
       this.discoverMaterial(it.key);
     }
+
+    this.buffs.setMaxBuffs(this.character.maxBuffs() ?? DEFAULT_MAX_BUFFS);
 
     this.afterItemMove();
     this.syncStatBonuses();
@@ -11663,25 +11807,36 @@ export class MainScene extends Phaser.Scene {
     // still add directly if a flat relic ever ships.
     // The run character's % is a third INDEPENDENT linear add off the same 100
     // base (never multiplied into the relic/stat total), for the same reason.
+    // The run character's maxHpMult is applied LAST, as a true multiplier on the
+    // assembled pool (2026-07-24) — unlike the stat/relic terms above, which stay
+    // independent linear adds. It was previously a flat % of the 100 base, which
+    // meant a "frail" card stopped being frail once the pool grew (the Ashcaller's
+    // -15% was worth 5% of an endgame pool). Kept bane-only on the roster so it
+    // can never inflate a pool a Vitality potency has already multiplied.
     const finalMaxHp =
-      100 +
-      this.progression.vitalityHealthBonus() +
-      this.relics.maxHpBonus() +
-      100 * (this.relics.maxHpPctMult() - 1) +
-      this.character.maxHpBonus();
+      (100 +
+        this.progression.vitalityHealthBonus() +
+        this.relics.maxHpBonus() +
+        100 * (this.relics.maxHpPctMult() - 1)) *
+      this.character.maxHpMult();
     this.health.setBonusMax(finalMaxHp - 100);
+    // NB the literal here is the pool's own base (Stamina.MAX_STAMINA = 130), not
+    // the 100 the relic-% terms are measured against — they only coincided while
+    // both were 100, and setBonusMax needs the real base to subtract.
     const finalMaxStam =
-      100 +
+      130 +
       this.progression.enduranceStaminaBonus() +
       this.relics.maxStaminaBonus() +
-      100 * (this.relics.maxStaminaPctMult() - 1) +
-      this.character.maxStaminaBonus();
-    this.stamina.setBonusMax(finalMaxStam - 100);
+      100 * (this.relics.maxStaminaPctMult() - 1);
+    this.stamina.setBonusMax(finalMaxStam - 130);
     // Secondary stat axes (M-SS): Vitality healing-received, Endurance stamina
     // regen, Wisdom buff duration — pushed into the pools/managers that own each.
+    // Each also folds in the run character's own multiplier for that axis; the
+    // one-axis-one-lever rule in Characters.ts is what stops a card from
+    // multiplying the same axis twice (once here and once via stat potency).
     this.health.setHealMult(this.progression.healingReceivedMult());
-    this.stamina.setRegenMult(this.progression.staminaRegenMult());
-    this.buffs.setDurationMult(this.progression.buffDurationMult());
+    this.stamina.setRegenMult(this.progression.staminaRegenMult() * this.character.staminaRegenMult());
+    this.buffs.setDurationMult(this.progression.buffDurationMult() * this.character.buffDurationMult());
     this.refreshHealthBar();
     this.refreshStaminaBar();
   }
@@ -13068,7 +13223,12 @@ export class MainScene extends Phaser.Scene {
   // swapping whatever was previously worn there back to the backpack (or
   // dropping it on the floor if the backpack is full). Shared by the
   // right-click-to-equip gesture and drag-onto-slot.
-  private equipArmorFromContainer(container: ItemContainer, index: number): void {
+  //
+  // `requestedSlot` is the drag path's explicit target — the slot the player
+  // actually dropped on. Auto-equip gestures (double-click / Ctrl-click /
+  // starting kit) pass nothing and keep the first-free-in-group routing, so
+  // only a deliberate drag ever has to name a destination.
+  private equipArmorFromContainer(container: ItemContainer, index: number, requestedSlot?: EquipSlot): void {
     const stack = container.slot(index);
     if (!stack) return;
     const def = itemDef(stack.key);
@@ -13082,7 +13242,8 @@ export class MainScene extends Phaser.Scene {
     // full. Generalised from what used to be a ring1/ring2 special case, which
     // was the only pair that could do this.
     const group = slotGroup(slot);
-    const targetSlot: EquipSlot = this.equipment.firstFreeIn(group) ?? slot;
+    const explicit = requestedSlot && slotGroup(requestedSlot) === group ? requestedSlot : undefined;
+    const targetSlot: EquipSlot = explicit ?? this.equipment.firstFreeIn(group) ?? slot;
     const previous = this.equipment.get(targetSlot);
     this.equipment.set(targetSlot, { key: stack.key, tier: stack.tier ?? 0, upgrades: stack.upgrades });
     container.set(index, null);

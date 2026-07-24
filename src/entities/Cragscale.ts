@@ -1,6 +1,12 @@
 import Phaser from "phaser";
 import { Enemy } from "./Enemy";
 import type { SwingConfig } from "./Enemy";
+import { enemyStat } from "../systems/enemyStats";
+
+// Combat stats from the Phaser-free source of truth (also read by the balancing
+// dashboard, so the two can never drift). Tune numbers there, not here.
+const S = enemyStat("cragscale");
+
 
 // Cragscale — the badlands armored rock reptile (biome 2 Phase 2). Slow, tanky,
 // hits hard: the enemy that TEACHES the Phase 1 damage-type layer. Its
@@ -25,11 +31,11 @@ const WANDER_SPEED = 14;
 const WANDER_RADIUS = 70;
 const MELEE_RANGE = 30; // its big body needs a slightly longer basher threshold
 
-const MAX_HEALTH = 60; // "noticeably tougher" = a real damage sponge vs the forest roster
+const MAX_HEALTH = S.hp; // "noticeably tougher" = a real damage sponge vs the forest roster
 // 48, not 40: badlands still read "a bit weak" in full armor (the user). The tank
 // should be the scariest single hit out here — 48 - 13 = 35 net through max
 // (Lvl-3, 13 flat) armor, on top of its resist-slash/weak-pierce gimmick + bleed.
-const BITE_DAMAGE = 48; // shared "hit" value for both the basher and the roll
+const BITE_DAMAGE = S.attacks[0].damage; // shared "hit" value for both the basher and the roll
 
 // Heavy basher — a long, readable wind-up + long recovery (the punish window),
 // with a solid shove on connect.

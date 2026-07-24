@@ -2,6 +2,12 @@ import Phaser from "phaser";
 import { Enemy } from "./Enemy";
 import type { DamageType } from "../systems/Weapons";
 import type { ProjectileConfig, ProjectileHost } from "./Projectile";
+import { enemyStat } from "../systems/enemyStats";
+
+// Combat stats from the Phaser-free source of truth (also read by the balancing
+// dashboard, so the two can never drift). Tune numbers there, not here.
+const S = enemyStat("hexling");
+
 
 // Hexling — the badlands MAGE (biome 2 Phase 2). The first enemy to deal
 // non-physical damage: its bolts + flame strike are `magic`, BYPASSING the
@@ -26,7 +32,7 @@ const APPROACH_SPEED = 46; // slow walk to close into cast range (it does NOT ki
 const WANDER_SPEED = 16;
 const WANDER_RADIUS = 60;
 
-const MAX_HEALTH = 95; // was 55, was 30 — playtest: badlands enemies died too fast even in Woods-tier gear; a stand-and-cast caster needs to actually survive being closed on to threaten its Flame Strike punish
+const MAX_HEALTH = S.hp; // was 55, was 30 — playtest: badlands enemies died too fast even in Woods-tier gear; a stand-and-cast caster needs to actually survive being closed on to threaten its Flame Strike punish
 // 22, not 14 — badlands-rebalance pass: magic bypasses armor entirely, so a
 // Hexling's raw number IS the net damage. the user: "base hexlings should kill
 // you in like 3 hits" — bolt + flame (below) are both bumped to make that true
@@ -35,7 +41,7 @@ const MAX_HEALTH = 95; // was 55, was 30 — playtest: badlands enemies died too
 // per-bolt number came down from the old single-shot 26 so a stationary
 // point-target hit by exactly one bolt (the common case) deals about the same
 // as before; a player caught square in the cone can eat more than one.
-const BOLT_DAMAGE = 16; // magic — bypasses armor, per bolt (was a single 26 pre-volley-rework)
+const BOLT_DAMAGE = S.attacks[0].damage; // magic — bypasses armor, per bolt (was a single 26 pre-volley-rework)
 const BOLT_COUNT = 3;
 const BOLT_SPREAD = Phaser.Math.DegToRad(7); // tight cone-line (the user: "more cone-line", not a wide fan — cf. Duneshaper's 18° volley)
 const CAST_COOLDOWN_MS = 1700;
@@ -51,7 +57,7 @@ const FLAME_TRIGGER = 150; // player within this (and flame ready) → flame str
 const FLAME_TELEGRAPH_MS = 820; // growing-circle tell (the dodge window)
 const FLAME_IMPACT_MS = 240; // detonation window checkPlayerHit fires in
 const FLAME_COOLDOWN_MS = 4600;
-const FLAME_DAMAGE = 40; // magic, bypasses armor — the close-range punish, ~3-hit-kills a base player
+const FLAME_DAMAGE = S.attacks[1].damage; // magic, bypasses armor — the close-range punish, ~3-hit-kills a base player
 const FLAME_RADIUS = 48; // each circle's damage radius
 const FLAME_SPREAD = 62; // gap between the 3 clustered circles
 

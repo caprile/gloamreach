@@ -61,6 +61,7 @@ export class HotbarUI {
   private scene: Phaser.Scene;
   private hotbar: Hotbar;
   private deps: HotbarUIDeps;
+  private refreshQueued = false;
   private rows: Phaser.GameObjects.GameObject[] = [];
   // Looping alpha tweens for the "upgrade ready" arrows — tracked so they're
   // killed on every re-render (rows are destroyed each render; an orphaned
@@ -105,8 +106,18 @@ export class HotbarUI {
     return this.row2Y + SLOT_SIZE;
   }
 
+  // Coalesced repaint, same pattern as InventoryMenu/CraftingMenu. render() is a
+  // full teardown-and-rebuild of every slot, and MainScene calls this several
+  // times in a single frame — twice per armor equip, and once per collected node
+  // while a magnet sweep is pulling drops in. Rebuilding interactive objects
+  // repeatedly under a stationary cursor is what strobes the bar.
   refresh(): void {
-    this.render();
+    if (this.refreshQueued) return;
+    this.refreshQueued = true;
+    this.scene.events.once(Phaser.Scenes.Events.POST_UPDATE, () => {
+      this.refreshQueued = false;
+      this.render(true);
+    });
   }
 
   hideTooltip(): void {
@@ -173,9 +184,13 @@ export class HotbarUI {
     }
   }
 
-  private render(): void {
+  // `keepTooltip` is set only by the coalesced refresh path — rebuilding destroys
+  // the slot the pointer is over and Phaser won't re-fire pointerover until the
+  // pointer moves, so unconditionally hiding here made the tooltip vanish (and
+  // stay vanished) on every pickup. Mirrors InventoryMenu.render.
+  private render(keepTooltip = false): void {
     this.clear();
-    this.hideTooltip();
+    if (!keepTooltip) this.hideTooltip();
     const selected = this.hotbar.selected();
 
     for (let i = 0; i < TOTAL_SLOTS; i++) {

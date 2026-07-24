@@ -1,5 +1,11 @@
 import Phaser from "phaser";
 import { Enemy } from "./Enemy";
+import { enemyStat } from "../systems/enemyStats";
+
+// Combat stats from the Phaser-free source of truth (also read by the balancing
+// dashboard, so the two can never drift). Tune numbers there, not here.
+const S = enemyStat("sandmaw");
+
 
 // Sandmaw — the badlands BURROWING AMBUSHER (biome 2 Phase 2b, the deferred 4th
 // native creature). A gloam-touched sand predator that lurks submerged beneath
@@ -26,11 +32,11 @@ const AMBUSH_RADIUS = 62; // player this close (+ off cooldown) → surface & er
 const STALK_RADIUS = 240; // submerged, drifts slowly toward a player within this (outside ambush) to re-ambush
 const SUBMERGED_DRIFT = 30; // px/s — slow underground reposition; low so it isn't an invisible shove
 
-const MAX_HEALTH = 45; // between Duskrunner (20) and Cragscale (60) — an ambusher with burst, not a tank
+const MAX_HEALTH = S.hp; // between Duskrunner (20) and Cragscale (60) — an ambusher with burst, not a tank
 // Physical burst. Badlands-rebalance tier: it must hurt through max (Lvl-3, 13
 // flat) armor — 38 - 13 = 25 net, in line with the Duskrunner/Cragscale bumps.
 // It's a heavy committed hit but fully telegraphed + movement-dodgeable.
-const ERUPT_DAMAGE = 46; // bumped 38→46 — a big committed ambush should really punish getting caught (badlands damage pass)
+const ERUPT_DAMAGE = S.attacks[0].damage; // bumped 38→46 — a big committed ambush should really punish getting caught (badlands damage pass)
 const BURST_RADIUS = 95; // AoE radius around the Sandmaw (the tremor telegraph previews exactly this)
 const ERUPT_KNOCKBACK = 220; // a strong sand-blast shove (near-cosmetic today — see Player.update knockback note)
 // Signature bleed (2026-07-15): the sand-blast leaves grit in the wound — a DoT

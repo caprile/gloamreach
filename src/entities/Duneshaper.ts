@@ -2,6 +2,11 @@ import Phaser from "phaser";
 import { Enemy } from "./Enemy";
 import type { DamageType } from "../systems/Weapons";
 import type { ProjectileConfig, ProjectileHost } from "./Projectile";
+import { enemyStat } from "../systems/enemyStats";
+
+// Combat stats from the Phaser-free source of truth (also read by the balancing
+// dashboard, so the two can never drift). Tune numbers there, not here.
+const S = enemyStat("duneshaper");
 
 // The Duneshaper (a.k.a. the Gloam Tyrant) — the SUNSCORCH BADLANDS FINAL BOSS
 // (biome 2 Phase 3). It WAS the game's win-condition until biome 3's Miretyrant
@@ -27,7 +32,7 @@ import type { ProjectileConfig, ProjectileHost } from "./Projectile";
 export type TyrantState = "idle" | "telegraphing" | "executing" | "recovering" | "staggered";
 export type TyrantAttack = "volley" | "spikes" | "nova" | "lance" | "barrage";
 
-const MAX_HEALTH = 2500; // 1250→2500 (PB17: the user wanted the final boss ≥2× tankier — a real endurance fight)
+const MAX_HEALTH = S.hp; // 1250→2500 (PB17: the user wanted the final boss ≥2× tankier — a real endurance fight)
 export const DUNESHAPER_SCALE = 2.3;
 const AGGRO_RADIUS = 300;
 const LEASH_RADIUS = 580; // kited past this -> fully deaggros
@@ -73,7 +78,7 @@ const VOLLEY_EXECUTE_MS = 200;
 const VOLLEY_RECOVER_MS = 550;
 const VOLLEY_BOLTS = 6;
 const VOLLEY_SPREAD = Phaser.Math.DegToRad(9);
-const VOLLEY_BOLT_DAMAGE = 22; // magic — bypasses armor, per bolt
+const VOLLEY_BOLT_DAMAGE = S.attacks[0].damage; // magic — bypasses armor, per bolt
 const VOLLEY_BOLT_SPEED = 460;
 const VOLLEY_BOLT_RANGE = 520;
 
@@ -91,7 +96,7 @@ const SPIKES_RECOVER_MS = 640;
 const SPIKES_RADIUS = 44;
 const SPIKES_SPREAD = 64; // arm distance from center
 const SPIKES_LOCK_FRAC = 0.5; // track the player for the first half of the wind-up
-const SPIKES_DAMAGE = 56; // physical pierce — the flat-armor subtraction applies
+const SPIKES_DAMAGE = S.attacks[1].damage; // physical pierce — the flat-armor subtraction applies
 const SPIKES_KNOCKBACK = 70;
 
 // --- Blink Nova — teleport near the player, detonate a radial magic burst. ---
@@ -100,7 +105,7 @@ const NOVA_IMPACT_MS = 200;
 const NOVA_RECOVER_MS = 650;
 const NOVA_BLINK_STANDOFF = 96; // lands this far from the player, on the near side
 const NOVA_RADIUS = 132;
-const NOVA_DAMAGE = 50; // 42→50 magic (S2: more dmg)
+const NOVA_DAMAGE = S.attacks[2].damage; // 42→50 magic (S2: more dmg)
 const NOVA_KNOCKBACK = 220;
 
 // --- Gloamfire Lance (phase 2) — a tracking-then-committed sweeping beam. ---
@@ -116,7 +121,7 @@ const LANCE_RANGE = 360;
 const LANCE_HALF_ANGLE = Phaser.Math.DegToRad(11);
 const LANCE_LOCK_FRAC = 0.6; // re-aim at the player until 60% through the wind-up, then commit
 const LANCE_SWEEP_HALF = Phaser.Math.DegToRad(20); // beam sweeps across ±20° during the strike
-const LANCE_DAMAGE = 54; // magic — bypasses armor
+const LANCE_DAMAGE = S.attacks[3].damage; // magic — bypasses armor
 const LANCE_KNOCKBACK = 120;
 
 // --- Sunscorch Barrage (phase 3) — a carpet of meteor circles. ---
@@ -126,7 +131,7 @@ const BARRAGE_RECOVER_MS = 850;
 const BARRAGE_RING_COUNT = 6;
 const BARRAGE_RING_RADIUS = 145; // ring of impacts around the player + one on them
 const BARRAGE_CIRCLE_RADIUS = 54;
-const BARRAGE_DAMAGE = 34; // 30→34 magic (S2: more dmg)
+const BARRAGE_DAMAGE = S.attacks[4].damage; // 30→34 magic (S2: more dmg)
 const BARRAGE_KNOCKBACK = 80;
 
 function telegraphMsFor(a: TyrantAttack): number {

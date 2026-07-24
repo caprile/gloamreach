@@ -1,5 +1,10 @@
 import Phaser from "phaser";
 import { Enemy } from "./Enemy";
+import { enemyStat } from "../systems/enemyStats";
+
+// Combat stats from the Phaser-free source of truth (also read by the balancing
+// dashboard, so the two can never drift). Tune numbers there, not here.
+const S = enemyStat("gloamwarden");
 
 // The Gloaming Vein's guardian mini-boss (Gloaming Vein POI). Bespoke AI
 // following GremlinKing's telegraph/poise pattern but LIGHTER — two telegraphed
@@ -23,7 +28,7 @@ import { Enemy } from "./Enemy";
 export type WardenState = "idle" | "telegraphing" | "executing" | "recovering" | "staggered";
 export type WardenAttackType = "smash" | "eruption";
 
-const WARDEN_MAX_HEALTH = 260; // between an elite (~/) and the Gremlin King (600)
+const WARDEN_MAX_HEALTH = S.hp; // between an elite (~/) and the Gremlin King (600)
 export const GLOAMWARDEN_SCALE = 1.7;
 const AGGRO_RADIUS = 240;
 const LEASH_RADIUS = 480; // kited past this -> fully deaggros
@@ -47,7 +52,7 @@ const SMASH_IMPACT_MS = 130; // planted beat on landing — the strike window
 const SMASH_RECOVER_MS = 720;
 const SMASH_MAX_LEAP = 340;
 const SMASH_RADIUS = 95; // walk-dodgeable in the telegraph+leap window (same reasoning as GremlinKing)
-const SMASH_DAMAGE = 22;
+const SMASH_DAMAGE = S.attacks[0].damage;
 const SMASH_KNOCKBACK = 200;
 const SMASH_LAND_EPS = 10;
 
@@ -57,7 +62,7 @@ const ERUPT_TELEGRAPH_MS = 920; // long/readable — punish the channel, or leav
 const ERUPT_IMPACT_MS = 180; // spikes-up window checkPlayerHit fires in
 const ERUPT_RECOVER_MS = 620;
 const ERUPT_RADIUS = 72; // tight — a precise "get off this ground" dodge
-const ERUPT_DAMAGE = 24;
+const ERUPT_DAMAGE = S.attacks[1].damage;
 const ERUPT_KNOCKBACK = 120; // small upward launch
 const ERUPT_MAX_RANGE = 420; // won't target the player further than this (clamped)
 

@@ -225,8 +225,12 @@ export class CharacterSelectUI {
     // --- run modifier (boon + bane) ---
     this.text(x + 16, cy, def.modifier.name.toUpperCase(), 14, "#8a6ec0");
     cy += 22;
-    cy = this.block(x + 16, cy, def.modifier.boon, 15, BOON_COLOR, CARD_W - 32);
-    cy = this.block(x + 16, cy + 2, def.modifier.bane, 15, BANE_COLOR, CARD_W - 32);
+    // Joined with \n and handed to one block apiece, exactly like the affinity
+    // lines below — the card measures its own height, so extra lines just grow it.
+    if (def.modifier.boons.length)
+      cy = this.block(x + 16, cy, def.modifier.boons.join("\n"), 15, BOON_COLOR, CARD_W - 32);
+    if (def.modifier.banes.length)
+      cy = this.block(x + 16, cy + 2, def.modifier.banes.join("\n"), 15, BANE_COLOR, CARD_W - 32);
 
     // --- class identity (B4-P3): how this survivor GROWS, vs the modifier's
     // flat numbers above. Derived from the affinity maps so it can't drift.

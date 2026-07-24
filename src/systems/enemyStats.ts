@@ -13,9 +13,26 @@
 // un-wired one's numbers here match its code TODAY but must be kept in sync
 // until wired. The plan is to wire each remaining entity as it's next tuned
 // (edit the number HERE + swap the entity's const to read it, in one pass).
-//   WIRED: boar, snake, ranged_gremlin, melee_gremling, gremlin_king (all forest).
-//   NOT YET WIRED (values here mirror the code, verified 2026-07-23): all
-//     badlands + bayou enemies. Wire during their next balance pass.
+//   WIRED: everything. The last un-wired entities (all of badlands, plus
+//     Palewake/Kilnborn/Sanguinarch) were wired during the 2026-07-24 damage
+//     pass — which is also when the drift they were left exposed to actually
+//     bit: this table said Sanguinarch did 34/88 and Kilnborn's backdraft 72,
+//     while the entities were still running 15/50 and 58. The HP half of that
+//     buff had landed; the damage half never did, and nothing could catch it.
+//     Keep it that way — a new enemy reads its numbers from here, full stop.
+//
+// SIZING RULE (2026-07-24). Player mitigation is FLAT SUBTRACTION and is not
+// capped, so an attack's paper damage is meaningless on its own — it only means
+// something against the armor of the biome it lives in. Reference full sets:
+//   forest  Gremlin      7 → 13
+//   badlands Sunsteel   24 → 36    Embersteel 38 → 56
+//   bayou   Gloamsteel  50 → 74 (83 with augments)   Mirehide 24 → 36
+// Armor grew 10.5x across three biomes while the strongest attack grew 2x, so
+// by 2026-07-24 essentially every physical attack in biomes 2 and 3 was pinned
+// to applyDamageToPlayer's `max(1, ...)` floor — the win-con boss included.
+// Size a new attack by the NET number you want it to land through its biome's
+// armor: net = round(raw * (1 - relicReduction) - armor), relicReduction ~0.16
+// typical. Do not tune raw damage without doing that arithmetic.
 //
 // KEEP IT PHASER-FREE. The dashboard bundles this standalone; a transitive
 // import of anything under src/entities (which import Phaser) would drag the
@@ -165,9 +182,14 @@ const BADLANDS: EnemyStat[] = [
   {
     id: "gloamwarden", name: "Gloamwarden", biome: "badlands", role: "miniboss", hp: 260, scale: 1.7,
     moveSpeed: 55,
+    // 22/24 → 78/84 (2026-07-24). These were BELOW a full Sunsteel set's flat
+    // armor, so the vein's guardian literally could not exceed 1 damage against
+    // any badlands heavy build — a miniboss hitting softer than a forest
+    // Gremling. Now lands ~36/41 net through Sunsteel, ~10/15 through a
+    // fully-reforged Embersteel set (end-of-biome gear should trivialize it).
     attacks: [
-      { name: "Leaping smash", damage: 22, cls: "physical", kind: "aoe", intervalMs: 1400 },
-      { name: "Gloam eruption", damage: 24, cls: "physical", kind: "aoe", intervalMs: 1400 },
+      { name: "Leaping smash", damage: 78, cls: "physical", kind: "aoe", intervalMs: 1400 },
+      { name: "Gloam eruption", damage: 84, cls: "physical", kind: "aoe", intervalMs: 1400 },
     ],
     poise: 60, poiseRegenPerSec: 10, elite: null,
   },
@@ -175,8 +197,16 @@ const BADLANDS: EnemyStat[] = [
     id: "duneshaper", name: "Duneshaper", biome: "badlands", role: "boss", hp: 2500, scale: 2.3,
     moveSpeed: 48,
     attacks: [
-      { name: "Gloam volley (x3)", damage: 22, cls: "magic", kind: "ranged", intervalMs: 1600, projectileSpeed: 460 },
-      { name: "Sand spikes", damage: 56, cls: "physical", kind: "aoe", intervalMs: 1600 },
+      { name: "Gloam volley (x6)", damage: 22, cls: "magic", kind: "ranged", intervalMs: 1600, projectileSpeed: 460 },
+      // 56 → 125 (2026-07-24). the user: "5 circle duneshaper attack only does
+      // -1 dmg" — this is that attack (buildSpikesCross = centre + 4 arms), and
+      // it was the boss's ONLY physical one, so it alone ate the flat-armor
+      // subtraction while its four magic attacks bypassed it and landed full.
+      // Sized to land ~48 net through end-of-badlands Embersteel, i.e. roughly
+      // in line with the magic attacks — heavy armor still answers it better
+      // than the rest of the kit, which is the intended damage-type read, it
+      // just no longer answers it completely.
+      { name: "Sand spikes", damage: 125, cls: "physical", kind: "aoe", intervalMs: 1600 },
       { name: "Blink nova", damage: 50, cls: "magic", kind: "aoe", intervalMs: 1600 },
       { name: "Gloamfire lance", damage: 54, cls: "magic", kind: "aoe", intervalMs: 1600 },
       { name: "Sunscorch barrage", damage: 34, cls: "magic", kind: "aoe", intervalMs: 1600 },
@@ -197,16 +227,22 @@ const BAYOU: EnemyStat[] = [
     // the 560 lunge (telegraphed, dodgeable) is how it closes. Lunge 120→80 and
     // chomp 85→52 so a caught hit is a heavy punish, not a one-shot (2026-07-23).
     moveSpeed: 108, burstSpeed: 560,
+    // 52/80 → 135/170 (2026-07-24 damage pass). The old numbers were sized
+    // against 32 armor; a bayou-geared player carries 74, which pinned both to
+    // 1. Now ~40 net (chomp) and ~69 (lunge) through Gloamsteel.
     attacks: [
-      { name: "Chomp", damage: 52, cls: "physical", kind: "melee", intervalMs: 1200, bleedDps: 6 },
-      { name: "Lunge", damage: 80, cls: "physical", kind: "aoe", intervalMs: 3750, bleedDps: 9 },
+      { name: "Chomp", damage: 135, cls: "physical", kind: "melee", intervalMs: 1200, bleedDps: 6 },
+      { name: "Lunge", damage: 170, cls: "physical", kind: "aoe", intervalMs: 3750, bleedDps: 9 },
       // C1 (2026-07-23): the signature DEATH ROLL. the user: the Mirejaw "feels
       // like a glorified boar" — lunge-then-bite is exactly a Boar's kit. This
       // is the move that makes it a gator: a landed chomp latches and thrashes,
       // ticking damage+bleed in a tight radius, then leaves it planted for a
       // long punish window. Per-tick damage is modest; being held through all 3
       // is what hurts. Long cooldown, so it's a signature moment, not every bite.
-      { name: "Death roll (3 ticks, latched)", damage: 18, cls: "physical", kind: "aoe", intervalMs: 7000, bleedDps: 7 },
+      // 18 → 105: a per-tick 18 was below armor three times over, so the whole
+      // signature move landed 3 damage total. ~14 net per tick, ~42 for a full
+      // latch — modest per tick, being held through all three is the punish.
+      { name: "Death roll (3 ticks, latched)", damage: 105, cls: "physical", kind: "aoe", intervalMs: 7000, bleedDps: 7 },
     ],
     poise: null, resistances: { pierce: 0.5, slash: 1.25 }, elite: STD_ELITE(2.0),
   },
@@ -216,7 +252,10 @@ const BAYOU: EnemyStat[] = [
     moveSpeed: 300, // hops in bursts (150px hops); not a steady walk
     // Bite 66→44 (the poison is the payload, not the bite); poison per-stack 6→4
     // with a hard 3-stack cap so a swarm can't melt you (2026-07-23 rebalance).
-    attacks: [{ name: "Toxic bite", damage: 44, cls: "physical", kind: "melee", intervalMs: 1200, poisonDps: 4 }],
+    // Bite 44 → 125 (2026-07-24): ~31 net through Gloamsteel. The poison is
+    // still the payload — it bypasses armor, so it was the only part of this
+    // creature that ever actually worked at bayou gear levels.
+    attacks: [{ name: "Toxic bite", damage: 125, cls: "physical", kind: "melee", intervalMs: 1200, poisonDps: 4 }],
     poise: null, resistances: { magic: 0.6, fire: 1.25 }, elite: STD_ELITE(1.3),
   },
   {
@@ -228,7 +267,14 @@ const BAYOU: EnemyStat[] = [
     // ~85 net through 32 armor) is a big telegraphed heavy that costs ~60% HP,
     // not a kill — the bruiser still hits like a truck, just survivably (2026-07-23).
     attacks: [
-      { name: "Smash", damage: 78, cls: "physical", kind: "melee", intervalMs: 1600 },
+      // 78 → 165 (2026-07-24): ~65 net through Gloamsteel, ~135 as an elite.
+      // the user: "mosswretch elites do way more damage than any of the
+      // minibosses" — which was true, because 78 was one of the only two
+      // physical attacks in the bayou big enough to clear 74 armor at all. It
+      // stays the roster's biggest common hit (it is a slow, hugely telegraphed
+      // overhead from the slowest thing in the game), but the crypt wardens and
+      // the boss now out-hit it, which is the ordering that was inverted.
+      { name: "Smash", damage: 165, cls: "physical", kind: "melee", intervalMs: 1600 },
       // C2 (2026-07-23): the user — "[Mosswretch] lacks attack moves... feels a
       // bit weird." It had exactly one. The spore burst is the answer to its own
       // core problem: it is the slowest thing in the game and cannot catch you,
@@ -246,7 +292,11 @@ const BAYOU: EnemyStat[] = [
     // sprint (124) so a swarm can be out-walked. Claw 62→38 — swarm damage should
     // be chip that adds up, not a per-hit spike (2026-07-23 rebalance).
     moveSpeed: 118, packAggro: true,
-    attacks: [{ name: "Claw", damage: 38, cls: "physical", kind: "melee", intervalMs: 900 }],
+    // 38 → 108 (2026-07-24): the user — "murklings deal only 1 dmg to me", and
+    // they did, exactly. Deliberately the SMALLEST net number in the bayou
+    // (~17 through Gloamsteel) because a swarm's threat is the count, not the
+    // hit: six connecting is ~100, which is the pressure a swarm should apply.
+    attacks: [{ name: "Claw", damage: 108, cls: "physical", kind: "melee", intervalMs: 900 }],
     poise: null, elite: STD_ELITE(1.15),
   },
   {
@@ -267,7 +317,12 @@ const BAYOU: EnemyStat[] = [
       // One shared HP pool; the husk just takes reduced damage. attacks[1] =
       // husk maul (physical), attacks[2] = the collapse drop-slam (magic AoE the
       // transform-in deals). The dissolve puff is a fraction of the slam.
-      { name: "Husk maul (melee, corporeal form)", damage: 30, cls: "physical", kind: "melee", intervalMs: 1300 },
+      // 30 → 118 (2026-07-24). The orb and the collapse slam are MAGIC and so
+      // were landing their full paper value all along — which is precisely why
+      // the user read the Corpselight/Mosswretch woods as the one area tuned
+      // correctly. Only the physical husk maul was broken; the two magic
+      // attacks are deliberately untouched.
+      { name: "Husk maul (melee, corporeal form)", damage: 118, cls: "physical", kind: "melee", intervalMs: 1300 },
       { name: "Collapse slam (magic AoE on transform)", damage: 26, cls: "magic", kind: "aoe", intervalMs: 4000 },
     ],
     poise: null, resistances: { fire: 1.25, magic: 1.25 }, elite: STD_ELITE(1.3),
@@ -293,7 +348,15 @@ const BAYOU: EnemyStat[] = [
     moveSpeed: 96, // HP 240→420: died in ~4 Embersteel hits, too easy for a build-defining crypt warden (2026-07-23)
     // Tether 10→14/s so it clears the commons' own damage now that the fight
     // (per its own higher HP) runs longer.
-    attacks: [{ name: "Drain tether", damage: 14, cls: "magic", kind: "dot", intervalMs: 1000 }],
+    // 2026-07-24. Careful with the units here — this is a `dot`, so `damage` is
+    // PER SECOND (intervalMs 1000) while the entity ticks every 450ms. The old
+    // hardcoded 10-per-tick was therefore 22/s, i.e. the entity was doing MORE
+    // than the 14 this table advertised, not less; wiring it converts the rate
+    // properly so the two can't disagree about units again.
+    // 22/s → 30/s, and the tether now also drains while it's faded out, so a
+    // full stalk+tether cycle is ~185 rather than ~92 — the drain is this
+    // warden's entire kit and it was worth ~20% of an endgame HP pool.
+    attacks: [{ name: "Drain tether", damage: 30, cls: "magic", kind: "dot", intervalMs: 1000 }],
     poise: null, elite: null,
   },
   {
@@ -301,9 +364,14 @@ const BAYOU: EnemyStat[] = [
     id: "kilnborn", name: "Kilnborn", biome: "bayou", role: "miniboss", hp: 1000, scale: 1.6,
     moveSpeed: 50, // HP 300→440 for parity with Palewake — build-defining crypt fights should last (2026-07-23)
     attacks: [
-      { name: "Flame lash", damage: 30, cls: "fire", kind: "melee", intervalMs: 1400 },
-      { name: "Backdraft", damage: 72, cls: "fire", kind: "aoe", intervalMs: 2000 }, // 58→72
-      { name: "Burning ground", damage: 7, cls: "fire", kind: "dot", intervalMs: 1000 },
+      // 2026-07-24: all fire, so all three BYPASS flat armor and land close to
+      // paper — these were never armor-broken, just small for a 1000-HP warden.
+      // The entity was also still on 58 backdraft vs this table's 72 (drift).
+      { name: "Flame lash", damage: 48, cls: "fire", kind: "melee", intervalMs: 1400 },
+      { name: "Backdraft", damage: 105, cls: "fire", kind: "aoe", intervalMs: 2000 },
+      // Per SECOND (see Palewake). The entity ticked 7 every 620ms = 11/s, so
+      // the table's old 7 understated it; 20/s is the real increase.
+      { name: "Burning ground", damage: 20, cls: "fire", kind: "dot", intervalMs: 1000 },
     ],
     poise: null, resistances: { blunt: 0.75, pierce: 1.25, fire: 0.4 }, elite: null,
   },
@@ -317,8 +385,13 @@ const BAYOU: EnemyStat[] = [
     id: "sanguinarch", name: "Sanguinarch", biome: "bayou", role: "miniboss", hp: 1350, scale: 1.5,
     moveSpeed: 88, // HP 280→420 for parity with the other crypt wardens (2026-07-23)
     attacks: [
-      { name: "Slash", damage: 34, cls: "physical", kind: "melee", intervalMs: 900 },
-      { name: "Slam", damage: 88, cls: "physical", kind: "aoe", intervalMs: 1600 }, // 72→88
+      // 2026-07-24: the worst drift case in the file — the entity was STILL on
+      // 15/50, the pre-buff numbers this comment block describes as the bug.
+      // Both attacks are physical, so even the intended 34/88 would have landed
+      // 1 and 1 against Gloamsteel. 118/205 = ~25/~99 net, which finally makes
+      // the crypt trio's toughest fight hit like its toughest fight.
+      { name: "Slash", damage: 118, cls: "physical", kind: "melee", intervalMs: 900 },
+      { name: "Slam", damage: 205, cls: "physical", kind: "aoe", intervalMs: 1600 },
     ],
     poise: null, resistances: { slash: 1.3, blunt: 0.75 }, elite: null,
   },
@@ -331,15 +404,22 @@ const BAYOU: EnemyStat[] = [
     // 15→28 stops the sword perma-stagger (stagger stays earnable, not a lock).
     // HP 4600→3600 so a fair fight isn't a 110s marathon (2026-07-23 rebalance).
     attacks: [
-      // Re-bumped: the previous pass tuned these against 32 armor, but a geared
-      // player now carries 50-74 flat armor (full Gloamsteel plus its reforge
-      // levels), which ate almost all of it again — the user reported the same
-      // "minimal damage" a second run running. Sized so the win-con boss lands
-      // 35-55 net through 74 armor and stays lethal, not survivable-by-stat.
-      { name: "Chomp", damage: 110, cls: "physical", kind: "melee", intervalMs: 1100 },
-      { name: "Tail sweep", damage: 98, cls: "physical", kind: "aoe", intervalMs: 1100 },
-      { name: "Slam", damage: 124, cls: "physical", kind: "aoe", intervalMs: 1100 },
-      { name: "Death roll", damage: 92, cls: "physical", kind: "aoe", intervalMs: 1100 },
+      // 2026-07-24, third pass — and this time the arithmetic was actually done.
+      // The previous two both claimed to target "~35-55 net through 74 armor"
+      // and both failed the same way: they picked raw numbers and never
+      // subtracted. 124 - 74 is 30 BEFORE the relic reduction, and once the
+      // Gloam Bulwark amulet is worn it is 3, then 1. the user measured -1, -2
+      // and -12 off a win-con boss and killed it in ~50 sword hits.
+      //
+      // Sized from the target backwards instead: the fight should be over in
+      // 4-5 connects at a ~450-500 HP endgame pool, i.e. ~95-140 NET per hit,
+      // i.e. raw = (net + 74) / 0.842. Every attack is physical, so the whole
+      // kit moves together. Being hit by this must cost roughly a quarter of
+      // your health — it is the win condition, and dodging is the mechanic.
+      { name: "Chomp", damage: 225, cls: "physical", kind: "melee", intervalMs: 1100 },
+      { name: "Tail sweep", damage: 210, cls: "physical", kind: "aoe", intervalMs: 1100 },
+      { name: "Slam", damage: 255, cls: "physical", kind: "aoe", intervalMs: 1100 },
+      { name: "Death roll", damage: 200, cls: "physical", kind: "aoe", intervalMs: 1100 },
     ],
     poise: 800, poiseRegenPerSec: 28, resistances: { slash: 0.8, blunt: 1.2, poison: 0.25 }, elite: null,
   },

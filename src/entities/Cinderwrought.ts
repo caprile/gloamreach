@@ -1,6 +1,12 @@
 import Phaser from "phaser";
 import { Enemy } from "./Enemy";
 import type { IncomingDamageType } from "../systems/Weapons";
+import { enemyStat } from "../systems/enemyStats";
+
+// Combat stats from the Phaser-free source of truth (also read by the balancing
+// dashboard, so the two can never drift). Tune numbers there, not here.
+const S = enemyStat("cinderwrought");
+
 
 // The Sunken Forge's guardian mini-boss (biome 2 Phase 3, POI 2). Bespoke AI
 // following the Gloamwarden/GremlinKing telegraph pattern but its OWN identity:
@@ -24,7 +30,7 @@ import type { IncomingDamageType } from "../systems/Weapons";
 export type WroughtState = "idle" | "telegraphing" | "executing" | "recovering";
 export type WroughtAttackType = "cone" | "hammer";
 
-const WROUGHT_MAX_HEALTH = 650; // solo & unstaggerable now — a real tanky wall (was 260 across two guards)
+const WROUGHT_MAX_HEALTH = S.hp; // solo & unstaggerable now — a real tanky wall (was 260 across two guards)
 export const CINDERWROUGHT_SCALE = 1.8;
 const AGGRO_RADIUS = 260;
 const LEASH_RADIUS = 520; // kited past this -> fully deaggros
@@ -47,7 +53,7 @@ const CONE_HALF_ANGLE = Phaser.Math.DegToRad(44); // ~88deg fan
 // Fire damage — bypasses flat armor (like magic), so it hurts even in full
 // plate. Solo boss now, so restored to a real threat (was nerfed to 32 for the
 // 2v1). Getting caught should really sting.
-const CONE_DAMAGE = 44;
+const CONE_DAMAGE = S.attacks[0].damage;
 const CONE_KNOCKBACK = 140;
 
 // Forge Hammer — heavy overhead front-arc smash. Locks direction at execute and
@@ -60,7 +66,7 @@ const HAMMER_RANGE = 235; // long front reach — can't back-pedal out at 95px/s
 const HAMMER_HALF_ARC = Phaser.Math.DegToRad(70); // wide front wedge
 // Physical (armor matters against the crushing blow) — restored to a solo-boss
 // value (was 40 for the 2v1). Big knockback.
-const HAMMER_DAMAGE = 52;
+const HAMMER_DAMAGE = S.attacks[1].damage;
 const HAMMER_KNOCKBACK = 260;
 
 const MELEE_STOP_RANGE = 150; // both attacks reach from here; stops approaching inside it

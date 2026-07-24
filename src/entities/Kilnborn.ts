@@ -51,17 +51,19 @@ const LASH_STRIKE_MS = 110;
 const LASH_RECOVER_MS = 400;
 const LASH_COOLDOWN_MS = 620;
 const LASH_REACH = 118;
-const LASH_DAMAGE = 30; // fire
+const LASH_DAMAGE = S.attacks[0].damage; // fire
 const LASH_KNOCKBACK = 110;
 
 const OVERHEAT_MS = 1600; // the "get to cold ground" window
 const BACKDRAFT_MS = 320;
-const BACKDRAFT_DAMAGE = 58; // fire — punishing, but only on lit ground
+const BACKDRAFT_DAMAGE = S.attacks[1].damage; // fire — punishing, but only on lit ground
 const BACKDRAFT_KNOCKBACK = 260;
 const VENTING_MS = 3200;
 
 const BURN_TICK_MS = 620;
-const BURN_TICK_DAMAGE = 7; // standing in fire
+// Table rate is per SECOND; this entity ticks every BURN_TICK_MS. Convert, so
+// the two can't silently disagree about units (see Palewake's tether).
+const BURN_TICK_DAMAGE = Math.round((S.attacks[2].damage * BURN_TICK_MS) / 1000); // standing in fire
 
 interface Rect {
   x: number;

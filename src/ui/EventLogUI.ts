@@ -78,6 +78,7 @@ export class EventLogUI {
   private scene: Phaser.Scene;
   private log: EventLog;
   private collapsed = true;
+  private refreshQueued = false;
   private scrollOffset = 0; // entries scrolled up from the newest
   private rows: Phaser.GameObjects.GameObject[] = [];
   // Currently-visible center toasts, oldest first — each carries its own
@@ -124,7 +125,22 @@ export class EventLogUI {
       if (entry.kind === "recipe" || entry.kind === "material") this.enqueueRecipeToast(entry);
       else this.showToast(entry);
     }
-    this.render();
+    this.queueRender();
+  }
+
+  // Coalesced repaint (InventoryMenu/CraftingMenu pattern). render() is a full
+  // teardown-and-rebuild including the interactive header, and one beat can add
+  // many entries in a single frame — a chest take-all, or a skill level-up
+  // unlocking several recipes at once. Interaction-driven renders (collapse
+  // toggle, wheel scroll) stay immediate: those are one call and want to feel
+  // instant.
+  private queueRender(): void {
+    if (this.refreshQueued) return;
+    this.refreshQueued = true;
+    this.scene.events.once(Phaser.Scenes.Events.POST_UPDATE, () => {
+      this.refreshQueued = false;
+      this.render();
+    });
   }
 
   private onWheel(pointer: Phaser.Input.Pointer, _objs: unknown, _dx: number, dy: number): void {

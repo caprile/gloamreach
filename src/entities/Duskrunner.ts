@@ -1,6 +1,12 @@
 import Phaser from "phaser";
 import { Enemy } from "./Enemy";
 import type { SwingConfig } from "./Enemy";
+import { enemyStat } from "../systems/enemyStats";
+
+// Combat stats from the Phaser-free source of truth (also read by the balancing
+// dashboard, so the two can never drift). Tune numbers there, not here.
+const S = enemyStat("duskrunner");
+
 
 // Duskrunner — the badlands canid swarm (biome 2 Phase 2). A gloam-touched
 // jackal that hunts the dry flats in packs: fast, low-HP, and the first real
@@ -32,11 +38,11 @@ const ANCHOR_LEASH = 90; // den guards: wander stays within this of the den, and
 // attacks don't hit me at some angles"). 30 clears the body-separation gap.
 const MELEE_RANGE = 30;
 
-const MAX_HEALTH = 20; // noticeably tougher than a Gremling (12), still low for a swarm unit
+const MAX_HEALTH = S.hp; // noticeably tougher than a Gremling (12), still low for a swarm unit
 // 42, not 34: badlands damage still read "a bit weak" in a full-armor playtest
 // (the user). 42 - 13 = 29 net per bite; a pack of 3-4 landing that on the same
 // beat is a real threat you have to break line-of-sight or dash out of.
-const BITE_DAMAGE = 42;
+const BITE_DAMAGE = S.attacks[0].damage;
 
 const PACK_AGGRO_RADIUS = 260; // a woken packmate within this range also engages
 

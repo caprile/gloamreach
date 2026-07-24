@@ -124,17 +124,22 @@ const WEAPON_DAMAGE: Record<WeaponType, number> = {
   sunsteel_warhammer: 17,
   sunsteel_sword: 14,
   sunsteel_pike: 19, // S7: pierce single-target king — edges out the sword's DPS
-  // Forged ranged (D3, 2026-07-23 rebalance — was 11/15/20, +40%): the user
-  // called bow damage AND rate of fire "abysmal" after the ammo system was cut
-  // and ranged was left to stand on stamina/range/attack-speed alone. Lands
-  // bow DPS much closer to forged melee, paying for its 380-420px safe reach
-  // with no arc, no on-hit burst, and no lifelink — not with chip damage.
-  sunsteel_warbow: 15,
+  // Forged ranged. D3 (2026-07-23) bumped these +40% AND cut their cooldowns
+  // 25%, off the user calling bow damage and rate of fire "abysmal". The
+  // cooldown half of that was right and is untouched; the damage half
+  // overshot — it put every bow ABOVE its same-tier sword on per-hit damage
+  // (15>14, 21>19, 28>25) at 92-98% of its DPS, from 380-420px away with no
+  // risk. the user, 2026-07-24: "no reason why longsword should be dealing less
+  // dmg than the bow" / "feels better with just melee... ranged makes it super
+  // easy." Each bow now sits clearly under its tier's sword per hit and at
+  // ~73% of its DPS — range and safety ARE the compensation, so they cannot
+  // also be the bigger number.
+  sunsteel_warbow: 12,
   // Enhanced tier: a real step over the base forged numbers (~+35-45%).
   embersteel_warhammer: 23,
   embersteel_sword: 19,
   embersteel_pike: 25, // S7: keeps pierce the single-target DPS leader at T2 (>= sunsteel_pike + 5 invariant)
-  embersteel_warbow: 21, // D3: was 15 (+40%)
+  embersteel_warbow: 16,
   // The magic brand's raw number sits mid-pack; its DPS lands near the
   // Embersteel Pike on a NEUTRAL target, but its "magic" type is shrugged off
   // (~x0.4-0.5) by the gloam-casters (Hexlings, the Duneshaper). It's the only
@@ -146,7 +151,7 @@ const WEAPON_DAMAGE: Record<WeaponType, number> = {
   gloamsteel_warhammer: 30,
   gloamsteel_sword: 25,
   gloamsteel_pike: 32,
-  gloamsteel_warbow: 28, // D3: was 20 (+40%)
+  gloamsteel_warbow: 21,
   gloam_brand: 29,
   // Deliberately BELOW the Gloam Brand: its per-hit lifelink is the payoff,
   // so it trades raw numbers for sustain rather than adding both.

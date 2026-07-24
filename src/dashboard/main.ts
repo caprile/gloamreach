@@ -1042,8 +1042,8 @@ function renderCharacters(): string {
       <td>${esc(stats || "—")}</td>
       <td>${esc(kit || "—")}</td>
       <td><span class="tag">${esc(c.modifier.name)}</span></td>
-      <td>${esc(c.modifier.boon)}</td>
-      <td class="muted">${esc(c.modifier.bane)}</td>
+      <td>${esc(c.modifier.boons.join(" · "))}</td>
+      <td class="muted">${esc(c.modifier.banes.join(" · "))}</td>
       <td>${esc(affinityLines(c).boons.join(" · ") || "—")}</td>
       <td class="muted">${esc(affinityLines(c).banes.join(" · ") || "—")}</td>
     </tr>`;

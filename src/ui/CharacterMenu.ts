@@ -202,10 +202,11 @@ export class CharacterMenu {
 
     this.text(x0, y, `Trait — ${def.modifier.name}`, 12, "#e3b25a");
     y += 20;
-    this.text(x0 + 8, y, def.modifier.boon, 12, "#c8d0dc");
-    y += 18;
-    this.text(x0 + 8, y, def.modifier.bane, 12, "#c8d0dc");
-    y += 28;
+    for (const line of [...def.modifier.boons, ...def.modifier.banes]) {
+      this.text(x0 + 8, y, line, 12, "#c8d0dc");
+      y += 18;
+    }
+    y += 10;
 
     const { boons, banes } = affinityLines(def);
     if (boons.length > 0 || banes.length > 0) {

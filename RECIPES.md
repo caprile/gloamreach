@@ -308,15 +308,18 @@ weapon uses, so leveling it turns chip damage into real damage over a run.
 |---|---|---|---|---|---|
 | Slingshot | 2 / 650ms / 6 | 3.1 | 420 px/s | 260px | None |
 | Javelin | 5 / 900ms / 16 | 5.6 | 300 px/s | 220px | Self — the equipped hotbar stack IS the projectile (1 per throw) |
-| Sunsteel Warbow | 15 / 560ms / 8 | 26.8 | 600 px/s | 380px | None |
-| Embersteel Warbow | 21 / 545ms / 11 | 38.5 | 640 px/s | 400px | None |
-| Gloamsteel Warbow | 28 / 540ms / 12 | 51.9 | 680 px/s | 420px | None |
+| Sunsteel Warbow | 12 / 560ms / 8 | 21.4 | 600 px/s | 380px | None |
+| Embersteel Warbow | 16 / 545ms / 11 | 29.4 | 640 px/s | 400px | None |
+| Gloamsteel Warbow | 21 / 540ms / 12 | 38.9 | 680 px/s | 420px | None |
 
-**D3 bow buff (2026-07-23):** damage +40% and cooldown -25% across all three Warbow tiers
-(the user: bow damage AND rate of fire were both "abysmal"). Lands each bow's DPS solidly inside
-its own tier's forged-melee band — e.g. the Sunsteel Warbow's 26.8 DPS sits between the Sunsteel
-Warhammer's 21.3 and the Sunsteel Sword/Pike's 29-31 — paying for its 380-420px safe reach with no
-AOE arc, no on-hit burst, and no lifelink, rather than with chip damage. Stamina costs untouched.
+**D3 bow buff (2026-07-23), half-reverted (2026-07-24):** D3 raised bow damage +40% AND cut
+cooldowns -25%. The cooldown half was right and is untouched — the rate of fire genuinely was
+bad. The damage half overshot: it put every Warbow ABOVE its same-tier Sword on per-hit damage
+(15>14, 21>19, 28>25) while reaching 92-98% of its DPS, from 380-420px away at no risk. the user:
+"no reason why longsword should be dealing less dmg than the bow" and "feels better with just
+melee... ranged makes it super easy." Each bow now sits clearly under its tier's Sword per hit
+and at a consistent **73% of its DPS** — range and safety ARE the compensation, so they cannot
+also be the bigger number. Stamina costs and projectile speed/range untouched.
 
 **Consumable ammo was removed entirely** (2026-07-23). There is no Ammo equipment
 slot and no arrow/pellet items: a bow just fires. Ammo never governed anything —
