@@ -2765,7 +2765,7 @@ export class MainScene extends Phaser.Scene {
       if (!node.isDrop || !node.loose || node.depleted || node.exploding) continue;
       if (this.time.now < node.magnetReadyAt) continue; // player-dropped cooldown
       const dist = Phaser.Math.Distance.Between(this.player.x, this.player.y, node.x, node.y);
-      if (dist > MAGNET_RADIUS * this.equipEffects.magnetRadiusMult()) continue;
+      if (dist > MAGNET_RADIUS) continue;
       // The idle bob tween keeps yoyo-ing `y` on its own schedule; kill it
       // once the magnet takes over the node's position, or it fights the
       // pull and the piece appears to hover at a fixed offset instead of

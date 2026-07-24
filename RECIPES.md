@@ -423,8 +423,8 @@ ability sits on is your arrangement, not a property of the item.
 |---|---|---|---|---|
 | Ring of Quickening | Lvl 1 | 2 Moonsilver, 2 Gloam Shard | Ring | −15% ability cooldown |
 | Amulet of Channeling | Lvl 1 | 3 Moonsilver, 3 Gloam Shard | Neck | +20% ability power (nova dmg/radius, blink distance) |
-| Ring of the Forager | Lvl 1 | 2 Moonsilver, 2 Twine | Ring | +15% bonus-gather chance, +30% pickup radius |
-| Amulet of Farsight | Lvl 1 | 3 Moonsilver, 2 Gloam Shard | Neck | +40% light radius, +20% pickup radius |
+| Ring of the Forager | Lvl 1 | 2 Moonsilver, 2 Twine | Ring | +30% bonus-gather chance |
+| Amulet of Farsight | Lvl 1 | 3 Moonsilver, 2 Gloam Shard | Neck | +40% light radius, +10% bonus-gather chance |
 | Gloamstep Band | Lvl 2 | 2 Moonsilver, 1 Gloam Gem | Ability | Grants Gloamstep Blink |
 | Gloam Focus | Lvl 2 | 2 Moonsilver, 1 Ember Gem | Ability | Grants Gloam Nova |
 | Bloodpact Shroud | Lvl 2 | 3 Moonsilver, 1 Blood Gem | Ability | Grants Bloodpact |
@@ -679,7 +679,7 @@ one above it. Source of truth: `src/systems/EpicLoot.ts` (and the dashboard's
 | Item | Slot | Effect |
 |---|---|---|
 | Sparkbound Band | Ring | +18% ability power, −12% ability cooldown |
-| Lantern of the Long Dark | Neck | +60% light radius, +40% pickup radius |
+| Lantern of the Long Dark | Neck | +60% light radius, +20% bonus-gather chance |
 | Gloamwrought Signet | Ring | −25% ability cooldown |
 | Ring of the Deep Vein | Ring | +20% bonus-gather chance |
 | Choirbone Amulet | Neck | +35% ability power |

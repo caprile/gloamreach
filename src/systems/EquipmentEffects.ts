@@ -8,13 +8,17 @@ import { itemDef } from "./Items";
 // `ItemDef.passive`; this class sums the equipped pieces (recomputed on every
 // equipment change) and MainScene reads the getters at the ability + utility
 // hook points (NOT the relic combat hooks). Modeled on Relics.ts's summer shape.
+//
+// D5 (2026-07-23): `magnetRadiusPct` was cut — the user: "pickup radius is a
+// useless ability, change it to something useful." The three pieces that had
+// it were folded into `gatherBonusPct` instead (a real chance at extra drops
+// from trees/rocks/ore), which is already a wired, meaningful channel.
 
 export interface EquipPassive {
   // --- ability-augment (tune the equipped Q/E/R actives) ---
   abilityCooldownPct?: number; // reduce all ability cooldowns (15 = -15%)
   abilityPowerPct?: number; // scale ability effect magnitudes (nova dmg/radius, blink distance)
   // --- utility / explorer (things relics never touch) ---
-  magnetRadiusPct?: number; // bigger loose-drop magnet radius
   gatherBonusPct?: number; // added chance for a bonus +1 on a depleted node (15 = +15%)
   lightRadiusPct?: number; // bigger equipped/night light radius
   // B4-P2: status (bleed/poison) mitigation. A genuinely new axis — nothing in
@@ -26,7 +30,6 @@ export interface EquipPassive {
 const CHANNELS: (keyof EquipPassive)[] = [
   "abilityCooldownPct",
   "abilityPowerPct",
-  "magnetRadiusPct",
   "gatherBonusPct",
   "lightRadiusPct",
   "statusResistPct",
@@ -42,7 +45,6 @@ export function describePassive(p: EquipPassive): string[] {
   const out: string[] = [];
   if (p.abilityCooldownPct) out.push(`-${p.abilityCooldownPct}% ability cooldown`);
   if (p.abilityPowerPct) out.push(`+${p.abilityPowerPct}% ability power`);
-  if (p.magnetRadiusPct) out.push(`+${p.magnetRadiusPct}% pickup radius`);
   if (p.gatherBonusPct) out.push(`+${p.gatherBonusPct}% bonus-gather chance`);
   if (p.lightRadiusPct) out.push(`Sheds light; +${p.lightRadiusPct}% light radius`);
   if (p.statusResistPct) out.push(`-${p.statusResistPct}% bleed/poison taken`);
@@ -53,7 +55,6 @@ export class EquipmentEffects {
   private sums: Record<keyof EquipPassive, number> = {
     abilityCooldownPct: 0,
     abilityPowerPct: 0,
-    magnetRadiusPct: 0,
     gatherBonusPct: 0,
     lightRadiusPct: 0,
     statusResistPct: 0,
@@ -78,9 +79,6 @@ export class EquipmentEffects {
   }
   abilityPowerMult(): number {
     return 1 + this.sums.abilityPowerPct / 100;
-  }
-  magnetRadiusMult(): number {
-    return 1 + this.sums.magnetRadiusPct / 100;
   }
   // A probability fraction (0.15 = +15%), added onto the chopping/mining skill
   // bonus-drop roll in MainScene.

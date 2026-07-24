@@ -1446,12 +1446,13 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
   amulet_long_dark: {
     key: "amulet_long_dark",
     name: "Lantern of the Long Dark",
-    description: "A caged ember that refuses to go out, and pulls loose things toward its light.",
+    description: "A caged ember that refuses to go out, and picks out what's worth keeping in its glow.",
     texture: "icon_amulet_long_dark",
     maxStack: 1,
     hotbarable: false,
     armorSlot: "special1",
-    passive: { lightRadiusPct: 60, magnetRadiusPct: 40 },
+    // D5: was magnetRadiusPct 40 — folded into gatherBonusPct (see EquipmentEffects.ts header).
+    passive: { lightRadiusPct: 60, gatherBonusPct: 20 },
   },
   ring_gloamwrought_signet: {
     key: "ring_gloamwrought_signet",
@@ -1634,23 +1635,26 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
   ring_forager: {
     key: "ring_forager",
     name: "Ring of the Forager",
-    description: "A woven-moonsilver band that draws loose spoils to your hand and coaxes an extra scrap from every harvest.",
+    description: "A woven-moonsilver band that coaxes a noticeably larger scrap from every harvest.",
     texture: "icon_ring_forager",
     maxStack: 1,
     hotbarable: false,
     armorSlot: "special1",
-    passive: { gatherBonusPct: 15, magnetRadiusPct: 30 },
+    // D5: was gatherBonusPct 15 + magnetRadiusPct 30 — folded into one channel
+    // (see EquipmentEffects.ts header), making this the dedicated gather ring.
+    passive: { gatherBonusPct: 30 },
     stats: [{ label: "Type", value: "Ring" }],
   },
   amulet_farsight: {
     key: "amulet_farsight",
     name: "Amulet of Farsight",
-    description: "A pale lantern-stone that pushes back the dark and pulls loose spoils a little closer.",
+    description: "A pale lantern-stone that pushes back the dark and sharpens your eye for what's worth taking.",
     texture: "icon_amulet_farsight",
     maxStack: 1,
     hotbarable: false,
     armorSlot: "special1",
-    passive: { lightRadiusPct: 40, magnetRadiusPct: 20 },
+    // D5: was magnetRadiusPct 20 — folded into gatherBonusPct (see EquipmentEffects.ts header).
+    passive: { lightRadiusPct: 40, gatherBonusPct: 10 },
     stats: [{ label: "Type", value: "Amulet" }],
   },
 
