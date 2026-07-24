@@ -1,0 +1,490 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Gloamreach — Closed Playtest</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Jacquard+12&family=Silkscreen:wght@400;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #0a0d17;
+    --panel: #131829;
+    --panel-edge: #232b47;
+    --gloam: #a78bff;
+    --gloam-deep: #6b4fc8;
+    --ember: #e29a3d;
+    --bone: #e9e1cc;
+    --dim: #8e93a6;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 1200px; background: var(--ink); }
+  body {
+    height: 1710px;
+    overflow: hidden;
+    font-family: "IBM Plex Sans", system-ui, sans-serif;
+    color: var(--bone);
+    position: relative;
+  }
+
+  /* ---------- hero ---------- */
+  .hero { position: relative; height: 600px; }
+  .hero canvas { position: absolute; inset: 0; width: 1200px; height: 600px; }
+  .hero .fade {
+    position: absolute; inset: 0;
+    background: linear-gradient(180deg, rgba(10,13,23,0) 55%, rgba(10,13,23,0.72) 82%, var(--ink) 100%);
+  }
+  .hero .titles {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+    padding-top: 84px; text-align: center;
+  }
+  .eyebrow {
+    font-family: "Silkscreen", monospace;
+    font-size: 15px; letter-spacing: 5px; color: var(--ember);
+    text-shadow: 0 0 18px rgba(226,154,61,0.55), 0 2px 4px rgba(0,0,0,0.8);
+  }
+  h1 {
+    font-family: "Jacquard 12", serif;
+    font-weight: 400;
+    font-size: 168px;
+    line-height: 0.95;
+    margin-top: 10px;
+    color: #cdbcff;
+    text-shadow:
+      0 0 32px rgba(167,139,255,0.55),
+      0 0 90px rgba(107,79,200,0.5),
+      0 4px 0 #241a4a,
+      0 8px 24px rgba(0,0,0,0.9);
+  }
+  .tagline {
+    margin-top: 6px;
+    font-size: 21px; font-weight: 500; color: var(--bone);
+    text-shadow: 0 2px 8px rgba(0,0,0,0.9), 0 0 24px rgba(10,13,23,0.9);
+  }
+  .genre {
+    margin-top: 14px;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 16.5px; color: #c6c9d4;
+    text-shadow: 0 2px 6px rgba(0,0,0,0.9);
+  }
+
+  /* ---------- features (compact, quiet) ---------- */
+  .features {
+    padding: 30px 64px 0;
+    display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 18px 28px;
+  }
+  .feat {
+    border-left: 3px solid var(--gloam-deep);
+    padding-left: 13px;
+  }
+  .feat.ember { border-left-color: var(--ember); }
+  .feat h3 {
+    font-family: "Silkscreen", monospace; font-weight: 400;
+    font-size: 12.5px; letter-spacing: 0.5px; color: var(--gloam);
+    margin-bottom: 5px;
+  }
+  .feat.ember h3 { color: var(--ember); }
+  .feat p { font-size: 13px; line-height: 1.4; color: #9aa0b0; }
+
+  /* ---------- biome strip ---------- */
+  .journey { padding: 26px 64px 0; }
+  .journey .label {
+    font-family: "Silkscreen", monospace; font-size: 13px; letter-spacing: 4px;
+    color: var(--dim); text-align: center; margin-bottom: 14px;
+  }
+  .biomes { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; }
+  .biome {
+    border: 1px solid var(--panel-edge); border-radius: 3px; overflow: hidden;
+    background: var(--panel);
+  }
+  .biome canvas { display: block; width: 100%; height: 245px; }
+  .biome .meta { padding: 14px 16px 15px; }
+  .biome h4 {
+    font-family: "Silkscreen", monospace; font-weight: 400;
+    font-size: 16px; letter-spacing: 0.5px; margin-bottom: 6px;
+  }
+  .biome p { font-size: 14.5px; line-height: 1.42; color: #a7acba; }
+  .biome.b1 h4 { color: #8fce7a; }
+  .biome.b2 h4 { color: #e0925f; }
+  .biome.b3 h4 { color: #7fd0c0; }
+  .arrowline {
+    text-align: center; margin-top: 10px;
+    font-family: "IBM Plex Mono", monospace; font-size: 13px; color: var(--dim);
+  }
+  .arrowline b { color: var(--gloam); font-weight: 500; }
+
+  /* ---------- survivors ---------- */
+  .survivors { padding: 30px 64px 0; }
+  .survivors .label {
+    font-family: "Silkscreen", monospace; font-size: 13px; letter-spacing: 4px;
+    color: var(--dim); text-align: center; margin-bottom: 14px;
+  }
+  .cast { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; }
+  .surv {
+    background: linear-gradient(180deg, var(--panel), #101425);
+    border: 1px solid var(--panel-edge); border-radius: 3px;
+    padding: 13px 13px 12px;
+    display: flex; flex-direction: column; gap: 7px;
+  }
+  .surv h5 {
+    font-family: "Silkscreen", monospace; font-weight: 400;
+    font-size: 12.5px; letter-spacing: 0.5px; color: var(--gloam);
+  }
+  .surv .blurb { font-size: 12.5px; line-height: 1.38; color: #9aa0b0; flex: 1; }
+  .surv .mods { display: flex; flex-direction: column; gap: 2px; }
+  .surv .boon { font-size: 12px; color: #e0b263; }
+  .surv .bane { font-size: 12px; color: #8a8f99; }
+  .surv .abil {
+    font-family: "IBM Plex Mono", monospace; font-size: 11px; color: #7f86d9;
+    border-top: 1px solid var(--panel-edge); padding-top: 7px; margin-top: 2px;
+  }
+
+  /* ---------- footer ---------- */
+  .statrow {
+    margin: 30px 64px 0;
+    border-top: 1px solid var(--panel-edge);
+    border-bottom: 1px solid var(--panel-edge);
+    padding: 16px 0;
+    display: flex; justify-content: space-evenly; align-items: baseline;
+  }
+  .stat { text-align: center; }
+  .stat .n {
+    font-family: "Silkscreen", monospace; font-size: 26px; color: var(--bone);
+    font-variant-numeric: tabular-nums;
+  }
+  .stat .n.em { color: var(--ember); text-shadow: 0 0 14px rgba(226,154,61,0.45); }
+  .stat .t {
+    font-family: "IBM Plex Mono", monospace; font-size: 12px; letter-spacing: 2px;
+    color: var(--dim); margin-top: 4px;
+  }
+  .cta {
+    margin-top: 26px; text-align: center;
+  }
+  .cta .ask {
+    font-family: "Silkscreen", monospace; font-size: 19px; color: var(--ember);
+    letter-spacing: 1px;
+    text-shadow: 0 0 20px rgba(226,154,61,0.4);
+  }
+  .cta .note {
+    margin-top: 12px; font-size: 14px; color: var(--dim); line-height: 1.5;
+    max-width: 640px; margin-left: auto; margin-right: auto;
+  }
+  .cta .note b { color: #b9bdcc; font-weight: 500; }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <canvas id="key" width="2400" height="1200"></canvas>
+  <div class="fade"></div>
+  <div class="titles">
+    <h1>Gloamreach</h1>
+    <div class="genre">a top-down survival action-RPG &mdash; gather, craft, and fight through three biomes on a single life</div>
+  </div>
+</div>
+
+<div class="journey">
+  <div class="label">THREE BIOMES, ONE RUN</div>
+  <div class="biomes">
+    <div class="biome b1">
+      <canvas id="bio1" width="720" height="500"></canvas>
+      <div class="meta">
+        <h4>VERDANT WOODS</h4>
+        <p>Where every run starts: branches and rocks become tools, camps, and your first real fight.</p>
+      </div>
+    </div>
+    <div class="biome b2">
+      <canvas id="bio2" width="720" height="500"></canvas>
+      <div class="meta">
+        <h4>SUNSCORCH BADLANDS</h4>
+        <p>Packs hunt, casters burn, the ground itself ambushes. This is where the forge matters.</p>
+      </div>
+    </div>
+    <div class="biome b3">
+      <canvas id="bio3" width="720" height="500"></canvas>
+      <div class="meta">
+        <h4>DUSKMIRE BAYOU</h4>
+        <p>Poison water, crypts in the dark, and something waiting under the mire.</p>
+      </div>
+    </div>
+  </div>
+  <div class="arrowline">plus a <b>day/night cycle</b> that hunts you back &nbsp;&middot;&nbsp; <b>18 dungeons</b> &nbsp;&middot;&nbsp; hidden POIs, elites &amp; minibosses</div>
+</div>
+
+<div class="survivors">
+  <div class="label">FIVE SURVIVORS &nbsp;&middot;&nbsp; ONE PER RUN</div>
+  <div class="cast">
+    <div class="surv">
+      <h5>THE VAGABOND</h5>
+      <div class="blurb">A light-footed wanderer. Covers ground fast, tires faster.</div>
+      <div class="mods">
+        <div class="boon">+10% move speed</div>
+        <div class="bane">&minus;10% max stamina</div>
+      </div>
+      <div class="abil">starts with Gloamstep</div>
+    </div>
+    <div class="surv">
+      <h5>THE REAVER</h5>
+      <div class="blurb">Hits like a landslide and takes the return blow just as hard.</div>
+      <div class="mods">
+        <div class="boon">+25% damage dealt</div>
+        <div class="bane">+25% damage taken</div>
+      </div>
+      <div class="abil">starts with Bloodpact</div>
+    </div>
+    <div class="surv">
+      <h5>THE ASHCALLER</h5>
+      <div class="blurb">Learns from everything. Frail, but grows quickly.</div>
+      <div class="mods">
+        <div class="boon">+15% skill XP</div>
+        <div class="bane">&minus;15% max HP</div>
+      </div>
+      <div class="abil">starts with Gloam Nova</div>
+    </div>
+    <div class="surv">
+      <h5>THE WARDEN</h5>
+      <div class="blurb">Comes prepared and hard to put down &mdash; every swing costs more.</div>
+      <div class="mods">
+        <div class="boon">+20% max HP</div>
+        <div class="bane">+20% attack stamina cost</div>
+      </div>
+      <div class="abil">starts with Gloamstep</div>
+    </div>
+    <div class="surv">
+      <h5>THE ASCETIC</h5>
+      <div class="blurb">Hard to put a mark on, and the world sends its worst to try.</div>
+      <div class="mods">
+        <div class="boon">&minus;20% damage taken</div>
+        <div class="bane">Elites twice as common</div>
+      </div>
+      <div class="abil">starts with Gloam Nova</div>
+    </div>
+  </div>
+</div>
+
+<div class="features">
+  <div class="feat ember">
+    <h3>ONE LIFE. HIGH SCORE.</h3>
+    <p>Death ends the run and posts your score. Kills add up, but finishing fast multiplies.</p>
+  </div>
+  <div class="feat">
+    <h3>TELEGRAPHED COMBAT</h3>
+    <p>Read the wind-up, dash through it with i-frames, punish the recovery.</p>
+  </div>
+  <div class="feat">
+    <h3>CRAFT EVERYTHING</h3>
+    <p>Branch and rock to smelted steel: workbenches, smelters, cooking, gem augments, reforging.</p>
+  </div>
+  <div class="feat">
+    <h3>RELIC FORGE</h3>
+    <p>Feed elite trophies in and roll for passives, Common through Mythic.</p>
+  </div>
+  <div class="feat">
+    <h3>BOSSES WITH RULES</h3>
+    <p>Every boss and dungeon warden is built around a mechanic you have to figure out.</p>
+  </div>
+  <div class="feat">
+    <h3>DAY / NIGHT</h3>
+    <p>Night makes enemies faster, thicker, and meaner. Torchlight matters.</p>
+  </div>
+</div>
+
+<div class="statrow">
+  <div class="stat"><div class="n">3</div><div class="t">BIOMES</div></div>
+  <div class="stat"><div class="n">22</div><div class="t">CREATURES</div></div>
+  <div class="stat"><div class="n">8</div><div class="t">BOSSES</div></div>
+  <div class="stat"><div class="n">5</div><div class="t">SURVIVORS</div></div>
+  <div class="stat"><div class="n em">1</div><div class="t">LIFE</div></div>
+</div>
+
+<div class="cta">
+  <div class="note">Early build, <b>all placeholder dev art</b> &mdash; you're playing the game underneath, not the pixels. Tell me what felt great, what felt unfair, and where you died.</div>
+</div>
+
+<script>
+// All scenes share one chunky-pixel style: everything snaps to a coarse grid,
+// so the poster reads as "pixel game" without showing any real dev textures.
+function scene(canvasId, cfg) {
+  const cv = document.getElementById(canvasId);
+  const ctx = cv.getContext("2d");
+  const W = cv.width, H = cv.height, G = cfg.grid;
+  const px = (x, y, w, h, c) => { ctx.fillStyle = c; ctx.fillRect(x * G, y * G, w * G, h * G); };
+  const cols = Math.ceil(W / G), rows = Math.ceil(H / G);
+  let seed = cfg.seed;
+  const rnd = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
+
+  // sky
+  const grad = ctx.createLinearGradient(0, 0, 0, H);
+  cfg.sky.forEach(([stop, c]) => grad.addColorStop(stop, c));
+  ctx.fillStyle = grad; ctx.fillRect(0, 0, W, H);
+
+  // stars / motes in the sky
+  for (let i = 0; i < cfg.stars; i++) {
+    const x = Math.floor(rnd() * cols), y = Math.floor(rnd() * rows * 0.55);
+    px(x, y, 1, 1, rnd() > 0.8 ? cfg.moteBright : cfg.mote);
+  }
+
+  // moon or sun disc, quantized to grid
+  if (cfg.orb) {
+    const [ox, oy, r, c, glow] = cfg.orb;
+    const rg = ctx.createRadialGradient(ox * G, oy * G, r * G * 0.4, ox * G, oy * G, r * G * 3.2);
+    rg.addColorStop(0, glow); rg.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = rg; ctx.fillRect(0, 0, W, H);
+    for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
+      if (dx * dx + dy * dy <= r * r) px(ox + dx, oy + dy, 1, 1, c);
+    }
+    // craters
+    for (let i = 0; i < 5; i++) {
+      const a = rnd() * Math.PI * 2, d = rnd() * r * 0.6;
+      px(Math.floor(ox + Math.cos(a) * d), Math.floor(oy + Math.sin(a) * d), 1, 1, cfg.orbCrater);
+    }
+  }
+
+  // layered horizon silhouettes (conifers or mesas)
+  cfg.layers.forEach((layer) => {
+    const baseRow = Math.floor(rows * layer.base);
+    // ground fill for the layer
+    px(0, baseRow, cols, rows - baseRow, layer.color);
+    if (layer.kind === "trees") {
+      for (let x = 0; x < cols; x += 1 + Math.floor(rnd() * 3)) {
+        const h = layer.min + Math.floor(rnd() * layer.vary);
+        for (let i = 0; i < h; i++) {
+          const w = Math.max(1, Math.round((h - i) * 0.9));
+          px(x - Math.floor(w / 2), baseRow - 1 - i, w, 1, layer.color);
+        }
+      }
+    } else if (layer.kind === "mesa") {
+      let x = 0;
+      while (x < cols) {
+        const w = 6 + Math.floor(rnd() * 10), h = layer.min + Math.floor(rnd() * layer.vary);
+        px(x, baseRow - h, w, h, layer.color);
+        px(x + 1, baseRow - h - 1, w - 2, 1, layer.color);
+        x += w + 2 + Math.floor(rnd() * 8);
+      }
+    } else if (layer.kind === "deadtrees") {
+      for (let x = 2; x < cols; x += 4 + Math.floor(rnd() * 6)) {
+        const h = layer.min + Math.floor(rnd() * layer.vary);
+        px(x, baseRow - h, 1, h, layer.color);
+        for (let b = 0; b < 3; b++) {
+          const by = baseRow - h + 1 + Math.floor(rnd() * (h * 0.6));
+          const bw = 1 + Math.floor(rnd() * 2);
+          px(rnd() > 0.5 ? x + 1 : x - bw, by, bw, 1, layer.color);
+        }
+      }
+    }
+  });
+
+  // water band
+  if (cfg.water) {
+    const [frac, c1, c2] = cfg.water;
+    const wy = Math.floor(rows * frac);
+    px(0, wy, cols, rows - wy, c1);
+    for (let i = 0; i < cols * 1.5; i++) {
+      px(Math.floor(rnd() * cols), wy + Math.floor(rnd() * (rows - wy)), 1 + Math.floor(rnd() * 2), 1, c2);
+    }
+  }
+
+  // mist bands
+  (cfg.mist || []).forEach(([frac, c]) => {
+    ctx.fillStyle = c;
+    const y = H * frac;
+    ctx.fillRect(0, y, W, G * 2.2);
+  });
+
+  // torchbearer: a lone dark figure with a warm glow
+  if (cfg.torch) {
+    const [tx, ty] = cfg.torch;
+    const cxp = tx * G, cyp = ty * G;
+    const rg = ctx.createRadialGradient(cxp, cyp - G * 2, 2, cxp, cyp - G * 2, G * 26);
+    rg.addColorStop(0, "rgba(245,190,105,0.95)");
+    rg.addColorStop(0.3, "rgba(226,154,61,0.38)");
+    rg.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = rg; ctx.fillRect(cxp - G * 26, cyp - G * 28, G * 52, G * 52);
+    // lone survivor: 2-wide, 4-tall silhouette, torch arm raised
+    px(tx - 1, ty - 1, 2, 4, "#0c0918");        // body
+    px(tx - 1, ty - 2, 2, 1, "#0c0918");        // head
+    px(tx + 1, ty - 3, 1, 3, "#1c1633");        // arm + haft
+    px(tx + 1, ty - 4, 1, 1, "#f0b25a");        // flame
+    px(tx + 1, ty - 5, 1, 1, "#ffd98f");
+    // warm ground splash under the figure
+    ctx.fillStyle = "rgba(226,154,61,0.20)";
+    ctx.fillRect(cxp - G * 7, (ty + 3) * G, G * 15, G * 1.4);
+  }
+
+  // floating gloam motes in the foreground
+  for (let i = 0; i < cfg.foreMotes; i++) {
+    const x = rnd() * W, y = H * 0.45 + rnd() * H * 0.5;
+    ctx.fillStyle = rnd() > 0.6 ? cfg.moteBright : cfg.mote;
+    ctx.globalAlpha = 0.5 + rnd() * 0.5;
+    ctx.fillRect(x, y, G * 0.6, G * 0.6);
+    ctx.globalAlpha = 1;
+  }
+}
+
+const run = () => {
+  // hero: gloam night over the woods
+  scene("key", {
+    grid: 16, seed: 71,
+    sky: [[0, "#0a0c1a"], [0.45, "#171436"], [0.72, "#2b1e52"], [1, "#3a2a63"]],
+    stars: 130, mote: "#5a4d9a", moteBright: "#b9a5ff",
+    orb: [118, 16, 7, "#d9ccff", "rgba(167,139,255,0.30)"], orbCrater: "#b3a2e8",
+    layers: [
+      { kind: "trees", base: 0.62, color: "#332a63", min: 5, vary: 6 },
+      { kind: "trees", base: 0.74, color: "#211a49", min: 6, vary: 7 },
+      { kind: "trees", base: 0.9, color: "#100d2b", min: 7, vary: 8 },
+    ],
+    mist: [[0.56, "rgba(140,116,230,0.18)"], [0.68, "rgba(122,98,214,0.13)"]],
+    torch: [44, 52],
+    foreMotes: 90,
+  });
+
+  // verdant woods: dusk over conifers + creek
+  scene("bio1", {
+    grid: 10, seed: 5,
+    sky: [[0, "#12281c"], [0.6, "#1e4028"], [1, "#2c5a34"]],
+    stars: 20, mote: "#6fae7d", moteBright: "#c2eec9",
+    layers: [
+      { kind: "trees", base: 0.62, color: "#173321", min: 4, vary: 4 },
+      { kind: "trees", base: 0.78, color: "#0e2416", min: 5, vary: 5 },
+    ],
+    water: [0.84, "#2b5f6e", "#4d8b99"],
+    mist: [[0.6, "rgba(140,206,122,0.10)"]],
+    foreMotes: 26,
+  });
+
+  // badlands: scorched sun over mesas
+  scene("bio2", {
+    grid: 10, seed: 23,
+    sky: [[0, "#3a1712"], [0.5, "#6e2f1a"], [1, "#a35426"]],
+    stars: 12, mote: "#c98a5a", moteBright: "#ffcf9e",
+    orb: [58, 10, 5, "#ffce8a", "rgba(255,180,100,0.35)"], orbCrater: "#f0b26a",
+    layers: [
+      { kind: "mesa", base: 0.72, color: "#4a2018", min: 5, vary: 6 },
+      { kind: "mesa", base: 0.9, color: "#2e120e", min: 4, vary: 5 },
+    ],
+    mist: [[0.66, "rgba(226,154,61,0.12)"]],
+    foreMotes: 20,
+  });
+
+  // bayou: sickly gloam over dead trees + poison water
+  scene("bio3", {
+    grid: 10, seed: 47,
+    sky: [[0, "#0c1a1c"], [0.55, "#123030"], [1, "#1d4340"]],
+    stars: 26, mote: "#4f8a80", moteBright: "#9fe8d8",
+    orb: [12, 8, 4, "#c9bfec", "rgba(167,139,255,0.22)"], orbCrater: "#a99ad4",
+    layers: [
+      { kind: "deadtrees", base: 0.7, color: "#132726", min: 6, vary: 5 },
+      { kind: "deadtrees", base: 0.86, color: "#0a1716", min: 5, vary: 4 },
+    ],
+    water: [0.8, "#16342e", "#2f6a52"],
+    mist: [[0.58, "rgba(127,208,192,0.10)"], [0.72, "rgba(167,139,255,0.08)"]],
+    foreMotes: 34,
+  });
+};
+
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(run); else run();
+run(); // canvases don't depend on fonts; draw immediately too
+</script>
+</body>
+</html>
