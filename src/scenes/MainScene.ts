@@ -2038,7 +2038,12 @@ export class MainScene extends Phaser.Scene {
     else this.openCharacterSelect();
 
     // Classify every object built above onto the world/ui camera before the
-    // first render (update() also does this each frame for later-created ones).
+    // first render. From here on the split is maintained on the game's
+    // PRE_RENDER, which is the ONLY hook late enough to catch everything — see
+    // syncCameras' note. off-then-on because create() re-runs on scene.restart()
+    // and would otherwise stack a listener per run.
+    this.game.events.off(Phaser.Core.Events.PRE_RENDER, this.syncCameras, this);
+    this.game.events.on(Phaser.Core.Events.PRE_RENDER, this.syncCameras, this);
     this.syncCameras();
 
     // Scene-level drag: a slot starts it, the pointer drags a ghost icon, and
@@ -2208,10 +2213,10 @@ export class MainScene extends Phaser.Scene {
   }
 
   update(_time: number, delta: number): void {
-    // Keep the world/HUD camera split in sync every frame, BEFORE any early
-    // return — menus (pause/run-end) can be opened while the sim is frozen and
-    // still need routing to the zoom-1 uiCam so they don't render zoomed.
-    this.syncCameras();
+    // NOTE: the world/HUD camera split is NOT synced here — it runs on the
+    // game's PRE_RENDER instead (registered in create()), which also covers the
+    // frozen-menu case since that event fires whether or not update() returns
+    // early. See syncCameras.
     // Park distant world objects out of the display list before anything else
     // reads it. Runs even while frozen (below) — a paused frame still renders,
     // and the whole point is to keep the render list small at all times.
@@ -4831,6 +4836,19 @@ export class MainScene extends Phaser.Scene {
   // hit-testing also respects, so clicks land on the right camera automatically.
   // Run every frame (not once) so dynamically-created objects — menus, tooltips,
   // damage numbers — are classified as soon as they appear.
+  //
+  // TIMING IS LOAD-BEARING: this runs on the game's PRE_RENDER, NOT in update().
+  // An unclassified object has cameraFilter 0, which means "render on EVERY
+  // camera" — a HUD panel drawn once more on the zoomed world camera, at 1.5x
+  // and in the wrong place. One frame of that is a full-screen flash. Phaser's
+  // step order is: scene.update -> POST_UPDATE -> PRE_RENDER (input handlers
+  // run here) -> render. So syncing from update() misses BOTH of the things
+  // that create objects in response to a click: the pointer handler itself, and
+  // the coalesced UI repaints that defer their teardown-and-rebuild to
+  // POST_UPDATE (HotbarUI/InventoryMenu/CraftingMenu). That was the "screen
+  // flickers and I see a flash of another view" on every equip/place — the
+  // 36-object hotbar rebuild landing after the sync. PRE_RENDER is the last
+  // hook before the renderer walks the display list, so it catches everything.
   // Exception: the speckle ground-grain tilesprite is scrollFactor 0 but is a
   // world UNDERLAY (depth < 0) that must zoom with and sit beneath the world, so
   // it stays on the world camera.

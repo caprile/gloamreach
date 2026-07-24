@@ -2,10 +2,15 @@
 
 ## Current State
 
-_Living snapshot — edit in place, never append._ Last shipped: **Survivor roster rework**
-(2026-07-24, Opus), immediately after the **Warden-run playtest batch — the flat-armor collapse**
-(same day, same session). Both off the user's Warden victory run (77:55, 633 kills, level 28, full
-Gloamsteel) and a ~17-item feedback dump.
+_Living snapshot — edit in place, never append._ Last shipped: **the full-screen flicker fix**
+(2026-07-24, Opus) — `syncCameras()` moved from `update()` to the game's `PRE_RENDER`. The earlier
+repaint-coalescing had only cut the strobe to one flash per equip/place; the flash itself was an
+unclassified object (`cameraFilter === 0` = "draw on every camera") being drawn a second time on the
+zoomed world camera. See the entry below — it establishes a general timing rule.
+
+Before that: the **Survivor roster rework**, immediately after the **Warden-run playtest batch —
+the flat-armor collapse** (same day, same session). Both off the user's Warden victory run (77:55,
+633 kills, level 28, full Gloamsteel) and a ~17-item feedback dump.
 
 **Roster rework (latest).** The flat-armor work surfaced that `maxHpPct`/`maxStaminaPct` were a %
 of the **100 base**, so they decayed to nothing as pools grew — which meant **two of the five
@@ -65,6 +70,52 @@ out-threatens the badlands.
 ## Recent Entries
 
 > Older entries in STATUS-archive.md.
+
+### Full-screen flicker on equip/place — the real root cause (2026-07-24, Opus)
+
+No plan file; a one-line fix off the user's report that the flicker "continues to be a thing —
+every time I equip an item or place a thing the whole screen flickers and I see a flash of another
+view for a split second."
+
+**The previous fix treated a symptom.** Coalescing the `HotbarUI`/`UpgradeMenu`/`EventLogUI`
+repaints (12 rebuilds/frame → 1) cut the flicker from a continuous strobe to a single flash per
+action, but the flash itself was a different bug — and the coalescing actually *created* the window
+it fires in.
+
+**Root cause: unclassified objects render on EVERY camera.** The scene runs a two-camera split
+(zoomed world cam + zoom-1 HUD cam); `syncCameras()` routes each object to exactly one via its
+`cameraFilter` bitmask. A brand-new object has `cameraFilter === 0`, which Phaser reads as "draw on
+all cameras" — so an unclassified HUD panel is drawn a second time on the **world** camera, at 1.5×
+and in the wrong place. One frame of that is a full-screen flash.
+
+`syncCameras()` was called from `update()`. Phaser's step order is
+`scene.update` → `POST_UPDATE` → `PRE_RENDER` (**input handlers run here** —
+`InputManager.preRender` is bound to the game's PRE_RENDER) → `render`. So syncing from `update()`
+misses *both* things that create objects in response to a click: the pointer handler itself (e.g.
+the placement ghost), and the coalesced UI repaints — which defer their teardown-and-rebuild to
+`POST_UPDATE`, i.e. one hook *after* the sync.
+
+**Measured live** (`javascript_tool`, probe registered on PRE_RENDER after the scene's own, so it
+sees what the renderer is about to see): settled frame `0` unclassified → click frame `0` (the
+refresh only queues) → **next frame `36`** — the entire 18-slot hotbar (18 rects 46×46 @depth 2900
++ 18 texts @2901) rebuilt and drawn on both cameras → frame after `0`. Exactly one flash per equip
+or placement, which is what the user sees.
+
+**Fix:** `syncCameras()` now runs on the game's `PRE_RENDER` (registered in `create()`, off-then-on
+so `scene.restart()` can't stack a listener per run) instead of in `update()`. That is the last hook
+before the renderer walks the display list, so it catches the input phase and the POST_UPDATE
+rebuilds alike. It also still covers the frozen-menu case the old `update()` call was placed early
+for, since PRE_RENDER fires whether or not `update()` returns early.
+
+**Verified live:** equip frames `[0,0,0,0,0]` (was `[…,36,…]`); an object created mid-input-phase
+`[0,0,0]`; across a `scene.restart()` the PRE_RENDER listener count is unchanged (4 → 4, no leak);
+and the split itself is still correct — 129/129 HUD objects UI-cam-only, 1344/1344 world objects
+world-cam-only, the `speckleLayer` exception still on the world cam. `tsc` + `npm run build` clean,
+zero console errors.
+
+**Rule this establishes:** any per-frame pass whose output the *renderer* consumes belongs on
+PRE_RENDER, not in `update()` — anything created by an input handler or a POST_UPDATE-coalesced
+repaint lands after `update()` has already run.
 
 ### Survivor roster rework — distinctive, non-decaying, double-edged (2026-07-24, Opus)
 
