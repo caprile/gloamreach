@@ -78,16 +78,27 @@ kits C1-C3, 3-session split). This entry covers the triage and **session 1 only*
   certainly `arrows` beside `gloam_arrows` with near-identical icons).
 - **D7, end-of-run summary.** New framework-free `src/systems/RunLog.ts` + a second column on
   `RunEndUI`: damage dealt **split by attack slice**, healing **split by source**, damage taken by
-  species, kills, a relic-roll ledger (settles "4 rares in a row?") and a milestone timeline.
+  species, kills, a relic-roll tally (settles "4 rares in a row?") and a milestone timeline.
   Deliberately **not** the requested event log — a craft list answers nothing; attribution is what
   no one can see from inside a run. Made player-facing per the user rather than a dev export.
+  **Nothing truncates silently** (the user: "what happens when that list gets huge?"): the two
+  genuinely unbounded categories are AGGREGATED rather than listed — 31 relic rolls become a
+  5-row outcome tally, not "the last 3" — and every top-N block carries a `+N more` tail with the
+  damage/kills it represents, with the timeline labelled "last 6 of 19". The panel is not
+  scrollable or collapsible **by design**: it stays a one-screen summary, and aggregating is
+  lossless at bounded height where a scroll pane would just be a longer list.
 - **"New Run" from the pause menu now ends the run** (`abandonRun`) — scored, recorded and
   summarised like any other. It used to `scene.restart()` silently, producing no score at all, and
   it is the path a player takes most often.
 - **D8**: chest menu dropped the backpack panel (600x400 -> 234x216); [R] Take All and
   double/Ctrl-click quick-move still do everything that actually moved items.
 - **B2**: `sunsteel_warbow`, `embersteel_warbow` and all three Mirebronze weapons had **no
-  upgrades registered at all** — a plain omission that dead-ended ranged and Sunsteel-branch builds.
+  upgrades registered at all** — a plain omission that dead-ended ranged and Sunsteel-branch
+  builds. Auditing every weapon and armor piece afterwards found the same bug one layer over: the
+  **entire Mirebronze (heavy) + Bogweave (light) armor sets** had none either. Now registered
+  (+3/+7 helm and greaves, +4/+8 cuirass, +2/+3 per Bogweave piece, Mirebronze Ingot at bench Lvl
+  4). Every armor piece with a defense stat now has a path; only `wood_club`/`slingshot`/`javelin`
+  lack one, deliberately — tier-0 starters.
 - **B6**: melee deaggro. Mirejaw `STALK_RADIUS` 460->330 and `DEAGGRO_RADIUS` 720->520 (both were
   outside the ~360px visible half-height / ~734px half-diagonal, so it aggro'd off-screen and could
   not lose you), plus a new **hard `MAX_PURSUIT_MS` ceiling on base `Enemy`** that a landed hit
@@ -114,8 +125,10 @@ by `enterGivenUpState`, but most subclasses deaggro by DISTANCE and never call i
 submerges) — a gator that lost you once would have carried a spent ceiling forever and
 insta-given-up on every later fight. Now re-stamped whenever the aggro-persistence window has
 lapsed, which every aggro path reaches. (2) `RunEndUI` at 600px tall fit the sparse test data and
-would have overflowed a real run; at 700 the last timeline row still ran into the button strip.
-Sized to 740 against a saturated log.
+would have overflowed a real run; at 700 the last timeline row still ran into the button strip,
+and 740 broke again once the `+N more` tails were added. Sized to **844**, verified against a
+saturated log (12 damage sources, 9 kill species, 31 relic rolls, 19 milestones) with 33px of
+button clearance — if a block ever gains rows, re-verify saturated, not on a typical run.
 
 `RECIPES.md` updated (ammo tables removed, warbow/Mirebronze upgrades noted). **Next: session 2,
 the balance pass (D2-D6, D9, D10) — all decided, verify in one run.**

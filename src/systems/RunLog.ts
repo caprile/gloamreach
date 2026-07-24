@@ -27,10 +27,21 @@ export interface Milestone {
 export interface RelicRollRecord {
   atMs: number;
   trophy: string;
-  // "Warrior's Idol (Uncommon)" on a success, "crumbled" on a failure, plus the
-  // family verdict where one applied ("replaced", "declined").
-  result: string;
+  // The bucket this roll lands in: "crumbled" for a failure, otherwise the
+  // produced rarity ("Common"/"Uncommon"/"Rare"/"Mythic"). A plain string
+  // supplied by the caller rather than a RelicRarity import, so this module
+  // stays ignorant of the relic system.
+  //
+  // Deliberately a BUCKET and not a description. Listing individual rolls
+  // doesn't fit on a summary screen — a long run makes 30+ of them — and
+  // showing "the last 3" silently hides the other 27, which defeats the point
+  // of having a ledger at all. Tallying is lossless at a bounded height.
+  outcome: string;
 }
+
+// Fixed display order for the relic tally, so the row order is stable across
+// runs regardless of what was rolled first.
+const RELIC_OUTCOME_ORDER = ["Mythic", "Rare", "Uncommon", "Common", "crumbled"];
 
 // One aggregated bucket, ready to render: label, total, and share of its category.
 export interface Bucket {
@@ -86,8 +97,8 @@ export class RunLog {
     this.add(this.killsBySpecies, species, 1);
   }
 
-  recordRelicRoll(atMs: number, trophy: string, result: string): void {
-    this.relicRolls.push({ atMs, trophy, result });
+  recordRelicRoll(atMs: number, trophy: string, outcome: string): void {
+    this.relicRolls.push({ atMs, trophy, outcome });
   }
 
   // Milestones are capped so a long run's timeline stays a readable shape
@@ -125,7 +136,39 @@ export class RunLog {
   // having to reconstruct it from memory.
   relicSummary(): { attempts: number; successes: number } {
     const attempts = this.relicRolls.length;
-    const successes = this.relicRolls.filter((r) => !/crumbled/i.test(r.result)).length;
+    const successes = this.relicRolls.filter((r) => r.outcome !== "crumbled").length;
     return { attempts, successes };
+  }
+
+  // Rolls tallied by outcome — at most 5 rows however many times you rolled.
+  relicTally(): Bucket[] {
+    const counts = new Map<string, number>();
+    for (const r of this.relicRolls) counts.set(r.outcome, (counts.get(r.outcome) ?? 0) + 1);
+    const total = this.relicRolls.length;
+    return RELIC_OUTCOME_ORDER.filter((k) => counts.has(k)).map((label) => ({
+      label,
+      value: counts.get(label)!,
+      pct: (counts.get(label)! / total) * 100,
+    }));
+  }
+
+  // What a top-N view is NOT showing. Damage-taken and kills are keyed by
+  // species, so across three biomes they run well past any sane row limit —
+  // without this the panel would drop the tail with nothing on screen saying so.
+  private hiddenOf(map: Map<string, number>, limit: number): { count: number; value: number } {
+    const rest = [...map.entries()].sort((a, b) => b[1] - a[1]).slice(limit);
+    return { count: rest.length, value: Math.round(rest.reduce((s, [, v]) => s + v, 0)) };
+  }
+  hiddenDamageDealt(limit: number) {
+    return this.hiddenOf(this.dealt, limit);
+  }
+  hiddenHealing(limit: number) {
+    return this.hiddenOf(this.healed, limit);
+  }
+  hiddenDamageTaken(limit: number) {
+    return this.hiddenOf(this.taken, limit);
+  }
+  hiddenKills(limit: number) {
+    return this.hiddenOf(this.killsBySpecies, limit);
   }
 }

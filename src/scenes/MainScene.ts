@@ -3603,16 +3603,13 @@ export class MainScene extends Phaser.Scene {
   // the end screen instead of scrolling away.
   private recordRelicRollToLog(result: RollResult | null): void {
     const trophy = this.lastRollTrophyKey ? itemDef(this.lastRollTrophyKey)?.name ?? this.lastRollTrophyKey : "Trophy";
+    // The BUCKET this roll counts toward, not a description of it — RunLog
+    // tallies these rather than listing individual rolls (see its header).
     let outcome = "crumbled";
     if (result?.success && result.candidates?.length && !result.id) {
-      outcome = `choice of ${result.candidates.length} Mythics`;
+      outcome = rarityName(result.rarity ?? "mythic");
     } else if (result?.success && result.id) {
-      const def = RELIC_DEFS[result.id];
-      const verdict = result.familyConflict?.verdict;
-      outcome = `${def.name} (${rarityName(def.rarity)})`;
-      if (verdict === "replaced") outcome += " — replaced";
-      else if (verdict === "declined") outcome += " — declined";
-      else if (verdict === "choice") outcome += " — contested";
+      outcome = rarityName(RELIC_DEFS[result.id].rarity);
     }
     this.runLog.recordRelicRoll(this.run.elapsedMs, trophy, outcome);
     if (result?.success && result.id) {

@@ -39,7 +39,7 @@ const PANEL_W = COL_W + SUMMARY_W;
 // block at its row limit plus the timeline runs ~640px, and a sparse test run
 // hides that (caught in verification — the first pass at 600 fit the test data
 // and would have overflowed a real run).
-const PANEL_H = 740;
+const PANEL_H = 844;
 // The one place red/green are allowed (a win/lose state marker) — everywhere
 // else they're reserved for buff/debuff deltas.
 const WIN_COLOR = "#7ac27a";
@@ -229,10 +229,11 @@ export class RunEndUI {
     this.text(x, y, "Run Summary", 16, "#e3b25a");
     y += 26;
 
-    // A titled block of "label ......... value (pct%)" rows. An empty bucket
-    // still prints its heading with a dash, so "nothing healed you all run" is
-    // visible information rather than a missing section.
-    const block = (title: string, rows: Bucket[], total: string) => {
+    // A titled block of "label ......... value (pct%)" rows, with an explicit
+    // tail line for whatever the row limit is hiding. An empty bucket still
+    // prints its heading with a dash, so "nothing healed you all run" is visible
+    // information rather than a missing section.
+    const block = (title: string, rows: Bucket[], total: string, hidden?: { count: number; value: number }) => {
       this.text(x, y, title, 13, "#c8d0dc");
       this.text(right, y, total, 12, "#8a93a3", 1);
       y += 19;
@@ -245,31 +246,38 @@ export class RunEndUI {
         this.text(right, y, `${r.value}  (${Math.round(r.pct)}%)`, 12, "#7c8494", 1);
         y += 17;
       }
+      // Never truncate silently: a top-5 across three biomes' worth of species
+      // drops a long tail, and a summary that hides that is worse than no
+      // summary because it reads as complete.
+      if (hidden && hidden.count > 0) {
+        this.text(x + 10, y, `+${hidden.count} more`, 12, "#5b6472");
+        this.text(right, y, `${hidden.value}`, 12, "#5b6472", 1);
+        y += 17;
+      }
       y += 8;
     };
 
-    block("Damage Dealt", log.topDamageDealt(5), `${log.totalDealt()}`);
-    block("Healing Received", log.topHealing(4), `${log.totalHealed()}`);
-    block("Damage Taken", log.topDamageTaken(5), `${log.totalTaken()}`);
-    block("Kills", log.topKills(4), `${deps.run.kills}`);
+    block("Damage Dealt", log.topDamageDealt(5), `${log.totalDealt()}`, log.hiddenDamageDealt(5));
+    block("Healing Received", log.topHealing(4), `${log.totalHealed()}`, log.hiddenHealing(4));
+    block("Damage Taken", log.topDamageTaken(5), `${log.totalTaken()}`, log.hiddenDamageTaken(5));
+    block("Kills", log.topKills(4), `${deps.run.kills}`, log.hiddenKills(4));
 
+    // Relic rolls are TALLIED, not listed. A long run makes 30+ of them, so any
+    // "last N" view hides most of the evidence — the whole reason the ledger
+    // exists is to answer questions like "four Rares in a row, is that even
+    // possible?", which needs the totals, not the tail.
     const relics = log.relicSummary();
-    this.text(x, y, "Relic Rolls", 13, "#c8d0dc");
-    this.text(right, y, `${relics.successes}/${relics.attempts}`, 12, "#8a93a3", 1);
-    y += 19;
-    // Most recent first: the late-run rolls are the ones that shaped the build.
-    const shown = [...log.relicRolls].reverse().slice(0, 3);
-    if (shown.length === 0) {
-      this.text(x + 10, y, "—", 12, "#5b6472");
-      y += 17;
-    }
-    for (const r of shown) {
-      this.text(x + 10, y, r.result, 12, "#7c8494");
-      y += 17;
-    }
-    y += 8;
+    block(
+      "Relic Rolls",
+      log.relicTally(),
+      relics.attempts ? `${relics.successes}/${relics.attempts}` : "0",
+    );
 
+    // The timeline IS a tail by nature (the end of a run is where the turns
+    // are), so it says how many it's showing out of how many happened.
+    const marksTotal = log.milestones.length;
     this.text(x, y, "Timeline", 13, "#c8d0dc");
+    if (marksTotal > 6) this.text(right, y, `last 6 of ${marksTotal}`, 12, "#5b6472", 1);
     y += 19;
     // Tail, not head: the end of a run is where the interesting turns are, and
     // the early rows are the predictable ones.
