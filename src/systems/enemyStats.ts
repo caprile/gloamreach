@@ -188,7 +188,11 @@ const BADLANDS: EnemyStat[] = [
 // ===== BAYOU (biome 3) =====
 const BAYOU: EnemyStat[] = [
   {
-    id: "mirejaw", name: "Mirejaw", biome: "bayou", role: "normal", hp: 320, scale: 1.55,
+    // HP 320→260 (D10, 2026-07-23): bayou commons had crept up on the crypt
+    // wardens guarding their own doors (miniboss÷toughest-common was 1.0-1.5×
+    // where badlands runs 2.7-6.8×) — see enemyStats.ts's own note below on the
+    // miniboss trio for the full ratio table. Damage untouched; it was fine.
+    id: "mirejaw", name: "Mirejaw", biome: "bayou", role: "normal", hp: 260, scale: 1.55,
     // Chase 138 = the Geared sprint (couldn't disengage); 108 is kiteable while
     // the 560 lunge (telegraphed, dodgeable) is how it closes. Lunge 120→80 and
     // chomp 85→52 so a caught hit is a heavy punish, not a one-shot (2026-07-23).
@@ -200,7 +204,8 @@ const BAYOU: EnemyStat[] = [
     poise: null, resistances: { pierce: 0.5, slash: 1.25 }, elite: STD_ELITE(2.0),
   },
   {
-    id: "blighttoad", name: "Blighttoad", biome: "bayou", role: "normal", hp: 150, scale: 1.3,
+    // HP 150→130 (D10). See Mirejaw's note above.
+    id: "blighttoad", name: "Blighttoad", biome: "bayou", role: "normal", hp: 130, scale: 1.3,
     moveSpeed: 300, // hops in bursts (150px hops); not a steady walk
     // Bite 66→44 (the poison is the payload, not the bite); poison per-stack 6→4
     // with a hard 3-stack cap so a swarm can't melt you (2026-07-23 rebalance).
@@ -208,7 +213,9 @@ const BAYOU: EnemyStat[] = [
     poise: null, resistances: { magic: 0.6, fire: 1.25 }, elite: STD_ELITE(1.3),
   },
   {
-    id: "mosswretch", name: "Mosswretch", biome: "bayou", role: "normal", hp: 420, scale: 1.35,
+    // HP 420→300 (D10) — the outlier that started the audit: it was the
+    // exact same HP as the Palewake miniboss next to it. See Mirejaw's note above.
+    id: "mosswretch", name: "Mosswretch", biome: "bayou", role: "normal", hp: 300, scale: 1.35,
     moveSpeed: 74,
     // Smash 135 (elite 202) one-shot a full-Embersteel player. 78 (elite 117 →
     // ~85 net through 32 armor) is a big telegraphed heavy that costs ~60% HP,
@@ -226,7 +233,8 @@ const BAYOU: EnemyStat[] = [
     poise: null, elite: STD_ELITE(1.15),
   },
   {
-    id: "corpselight", name: "Corpselight", biome: "bayou", role: "normal", hp: 190, scale: 1.3,
+    // HP 190→160 (D10). See Mirejaw's note above.
+    id: "corpselight", name: "Corpselight", biome: "bayou", role: "normal", hp: 160, scale: 1.3,
     moveSpeed: 85,
     // Orb 34 magic (armor can't touch it) + homing every 1.9s read as "so much
     // damage" — 22 magic is a real poke you can't just tank, and the entity's
@@ -236,18 +244,35 @@ const BAYOU: EnemyStat[] = [
   },
   // Fenlurker (bayou burrower) CUT 2026-07-23 — the user found it boring to fight;
   // the Sandmaw already owns the burrow-ambush niche. Entity + spawns removed.
+  // D10 (2026-07-23) — the bayou common→miniboss gap. Measured: miniboss HP ÷
+  // toughest common was 1.0-1.5× here vs 2.7-6.8× in badlands (Gloamwarden/
+  // Cinderwrought vs the 95-HP Hexling), because bayou COMMONS had scaled ×4.1
+  // from badlands while these three minibosses only moved ×1.08 — Mosswretch at
+  // 420 HP was literally IDENTICAL to Palewake, so a crypt warden read as no
+  // tougher than the trash guarding its own door. Fixed from BOTH ends per the
+  // locked, revised-EVEN split (commons -15-30% above, wardens roughly double
+  // here) rather than wardens alone: matching badlands ratios against the OLD
+  // 420-HP Mosswretch would have put Sanguinarch at ~2860 HP — 79% of the
+  // Miretyrant's own HP, on something fought across 18 crypts. Result: spread
+  // 2.8-4.5× (badlands 2.7-6.8×), miniboss→boss 3.4× (badlands 5.5×). The
+  // Miretyrant itself is untouched — it died in ~1 minute to the lifesteal
+  // loop (see D2), not because its own HP was wrong.
   {
-    id: "palewake", name: "Palewake", biome: "bayou", role: "miniboss", hp: 420, scale: 1.5,
+    // HP 420→850 (2.8× the new 300-HP Mosswretch, the toughest common).
+    id: "palewake", name: "Palewake", biome: "bayou", role: "miniboss", hp: 850, scale: 1.5,
     moveSpeed: 96, // HP 240→420: died in ~4 Embersteel hits, too easy for a build-defining crypt warden (2026-07-23)
-    attacks: [{ name: "Drain tether", damage: 10, cls: "magic", kind: "dot", intervalMs: 1000 }],
+    // Tether 10→14/s so it clears the commons' own damage now that the fight
+    // (per its own higher HP) runs longer.
+    attacks: [{ name: "Drain tether", damage: 14, cls: "magic", kind: "dot", intervalMs: 1000 }],
     poise: null, elite: null,
   },
   {
-    id: "kilnborn", name: "Kilnborn", biome: "bayou", role: "miniboss", hp: 440, scale: 1.6,
+    // HP 440→1000 (3.3× the toughest common).
+    id: "kilnborn", name: "Kilnborn", biome: "bayou", role: "miniboss", hp: 1000, scale: 1.6,
     moveSpeed: 50, // HP 300→440 for parity with Palewake — build-defining crypt fights should last (2026-07-23)
     attacks: [
       { name: "Flame lash", damage: 30, cls: "fire", kind: "melee", intervalMs: 1400 },
-      { name: "Backdraft", damage: 58, cls: "fire", kind: "aoe", intervalMs: 2000 },
+      { name: "Backdraft", damage: 72, cls: "fire", kind: "aoe", intervalMs: 2000 }, // 58→72
       { name: "Burning ground", damage: 7, cls: "fire", kind: "dot", intervalMs: 1000 },
     ],
     poise: null, resistances: { blunt: 0.75, pierce: 1.25, fire: 0.4 }, elite: null,
@@ -257,11 +282,13 @@ const BAYOU: EnemyStat[] = [
     // common Mirejaw next to it (320 HP, 52/80), so the crypt warden read as
     // weaker than the trash guarding the way in (the user: "sanguinarch does less
     // dmg and has less hp than the alligators. can't even tell what it's doing").
-    id: "sanguinarch", name: "Sanguinarch", biome: "bayou", role: "miniboss", hp: 620, scale: 1.5,
+    // HP 620→1350 (4.5× the toughest common) — the widest gap of the three,
+    // matching its position as the crypt trio's own toughest fight.
+    id: "sanguinarch", name: "Sanguinarch", biome: "bayou", role: "miniboss", hp: 1350, scale: 1.5,
     moveSpeed: 88, // HP 280→420 for parity with the other crypt wardens (2026-07-23)
     attacks: [
       { name: "Slash", damage: 34, cls: "physical", kind: "melee", intervalMs: 900 },
-      { name: "Slam", damage: 72, cls: "physical", kind: "aoe", intervalMs: 1600 },
+      { name: "Slam", damage: 88, cls: "physical", kind: "aoe", intervalMs: 1600 }, // 72→88
     ],
     poise: null, resistances: { slash: 1.3, blunt: 0.75 }, elite: null,
   },

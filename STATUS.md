@@ -2,66 +2,146 @@
 
 ## Current State
 
-_Living snapshot — edit in place, never append._ Last shipped: **"God run" triage session 1 —
-bug fixes, ammo removal, end-of-run summary** (2026-07-23, Opus,
-plan: `.claude/plans/vagabond-god-run-triage.md`).
+_Living snapshot — edit in place, never append._ Last shipped: **"God run" triage session 2 —
+the balance pass** (2026-07-23, Sonnet, plan: `.claude/plans/vagabond-god-run-triage.md`).
+Session 3 (creature identity: Mirejaw/Mosswretch/Corpselight kits) is next and unstarted.
 
-**What just landed.** the user's ~100-minute Ashcaller run trivialised biome 3 (Miretyrant dead in
-~1 min, ended on an overshield). The whole dump was triaged into a committed plan with 10 locked
-decisions (D1-D10) + 3 creature kits (C1-C3) and split across three sessions; **this was session 1
-(bugs + plumbing)**. Shipped: **ammo removed entirely** (D1) — no Ammo equip slot, no
-arrow/pellet items or recipes, no `reconcileAmmoSlot`; bows just fire, governed by stamina/range/
-attack-speed, and the Javelin still self-consumes because it *is* the projectile. A
-**player-facing end-of-run summary** (D7) now fills a second column on `RunEndUI`, fed by a new
-framework-free `src/systems/RunLog.ts`: damage dealt split by attack slice, healing split by
-source, damage taken by species, kills, a relic-roll ledger and a milestone timeline. **"New Run"
-from the pause menu now ends the run properly** instead of silently restarting it with no score
-and no summary. Plus six bug fixes — inventory flicker, six weapons missing their upgrades,
-gem-augment text before the Gemwright exists, gator aggro/deaggro, and ability descriptions
-without numbers.
+**What just landed — all 6 remaining locked decisions from the triage, shipped and verified:**
+- **D2** — lifesteal is now capped at 1.5x the primary hit's contribution PER SWING (the
+  actual god-run fix). New `MainScene.budgetedSwingHeal()` wraps Leech relic / Bloodpact /
+  weapon lifelink; the primary hit always heals in full (it DEFINES the cap), everything an
+  arc sweep adds on top is clamped to whatever room remains. Verified: a 6-target Gloamdrinker
+  swing with all three sources active clamped at exactly budget=applied=15 (was ~55+
+  uncapped) across three consecutive swings with no carry-over; single-target melee and a
+  single ranged shot both heal fully uncapped, since neither has anything to clamp against.
+- **D3** — all 3 Warbows: damage +40% (11/15/20 -> 15/21/28), cooldown -25%
+  (750/730/720ms -> 560/545/540ms). Lands each tier's bow DPS inside its own tier's
+  forged-melee band (e.g. Sunsteel 26.8 DPS between the Warhammer's 21.3 and Sword/Pike's
+  29-31), paying for reach with no arc/burst/lifelink instead of chip damage.
+- **D4** — raised the baseline XP curve (`Progression.ts` `XP_BASE` 110->85) and trimmed the
+  Ashcaller's stacked multipliers (`xpMult` 1.3->1.15, `skillXpMult` magic 1.6->1.35/ranged
+  1.4->1.2, `statPotency.intelligence` 1.5->1.25). **Correctness catch mid-implementation:**
+  `Skills.ts`'s `skillXpToNext` coefficient looked like an equivalent lever but is a NO-OP for
+  player-level pace (proven by simulation — a skill level's cost literally IS the player-XP
+  it feeds, so lowering the coefficient only re-chunks the same total into more/smaller
+  deposits). Lowered it anyway (70->54) since it's a real, independent win for skill-level
+  pace, but the code comments now say what it actually does rather than repeat the original,
+  also-inaccurate S1-batch claim.
+- **D5** — jewelry's `magnetRadiusPct` passive (pickup radius) removed entirely and folded
+  into the existing `gatherBonusPct` channel on the 3 items that had it (Ring of the Forager,
+  Lantern of the Long Dark, Amulet of Farsight).
+- **D9** — stat caps are now SURFACED, not blocked. A "(CAPPED — this axis is maxed)" note
+  appears on the Stats tab once an axis saturates: Wisdom's ability-cooldown (self-contained,
+  100 points) and Strength/Agility's crit contribution (build-dependent — new `critCapped`
+  dep reads live off the equipped weapon). No universal hard allocation ceiling — Endurance/
+  Vitality/Intelligence/Wisdom's-other-axis are all genuinely uncapped by design.
+- **D10** — the bayou common->miniboss gap. Commons down 15-30% (Mosswretch 420->300,
+  Mirejaw 320->260, Corpselight 190->160, Blighttoad 150->130); the 3 crypt wardens roughly
+  doubled (Palewake 420->850, Kilnborn 440->1000, Sanguinarch 620->1350) plus matching damage
+  bumps. Spread now 2.8-4.5x (was 1.0-1.5x; badlands runs 2.7-6.8x), boss->toughest-common
+  12x. **Self-caught error:** my own plan doc claimed "miniboss->boss 3.4x" and badlands
+  "5.5x" — both were arithmetic slips; re-measured live as 2.67x and 3.85x respectively, and
+  the plan doc's now corrected in place rather than left wrong.
+- Along the way: found the dashboard's Enemies tab (`src/dashboard/main.ts`) was ALREADY
+  stale for Palewake/Kilnborn (a same-day 240->420/300->440 bump from earlier today's other
+  session never reached it) — resynced all 8 touched enemies' entries. **Known remaining
+  drift, explicitly NOT fixed this session** (out of scope, flagged rather than silently
+  expanded into): Mirejaw/Blighttoad/Mosswretch/Murkling/Corpselight's dashboard ATTACK
+  damage numbers are stale from that same earlier rebalance pass, and the CUT Fenlurker is
+  still listed as a live enemy in the dashboard.
 
-**The finding that drove the triage** (measured, not inferred): `resolveWeaponHit` runs once per
-target hit — primary, arc sweep, on-hit burst, crit splash — and weapon lifelink / the Leech relic
-/ Bloodpact all heal *inside* it. **Lifesteal scales linearly with target count; incoming damage
-does not** (~40 HP/s against a 308 HP pool). The new summary's "Damage Dealt" split is exactly the
-readout that makes this visible in-game. Two compounding issues the user hadn't flagged: **Wisdom's
--50% ability-cooldown cap is reached at exactly 100 points** and he had 112, and **Intelligence is
-a closed feedback loop** (Int -> skill XP -> skill level-ups are the only player-XP source -> stat
-points -> Int) with no damping.
-
-**Next — session 2 (balance), all decided, no design calls left.** Lifesteal per-swing cap (D2),
-bow buff +40% dmg / -25% cooldown (D3), XP rebaseline (D4), jewelry pickup-radius -> gather yield
-(D5), stat caps (D9), and the **bayou common->miniboss rescale (D10)**: bayou commons drop 15-30%
-(Mosswretch 420->300, Mirejaw 320->260, Corpselight 190->160, Blighttoad 150->130) while crypt
-wardens roughly double (420/440/620 -> 850/1000/1350). These must ship together and be verified in
-one run — enemy HP feeds the lifesteal cap directly, and the summary from this session is what
-makes the result readable. **Session 3** is the creature identity pass (C1-C3).
-
-**Known issues / notes.**
-- Two of the user's items are still unresolved: **"lvl 2 when I started bayou"** (unclear what was
-  at level 2) and whether the two non-combining stacks were `arrows` beside `gloam_arrows` with
-  near-identical icons — D1 deletes both items, so it resolves either way.
-- `BootScene` still generates `icon_arrows` / `icon_gloam_arrows` / `icon_slingshot_pellets`.
-  Deliberately kept: the art is harmless and still reads as "arrows" if a future recipe wants it.
-- Every number in D2-D4 and D10 is first-pass and unplayed.
+**Next — session 3, creature identity (Opus, new mechanics):** Mirejaw death-roll thrash +
+water-territory exemption (C1); Mosswretch death-spawn Mosslings + spore cloud (C2);
+Corpselight two-form transform, wisp<->corporeal husk (C3). All fully speced in the plan doc.
 
 
-### Run summary timeline: boss kills only (2026-07-23, Sonnet)
+### "God run" triage session 2 — the balance pass, D2/D3/D4/D5/D9/D10 (2026-07-23, Sonnet)
 
-Follow-up to the god-run triage's D7 (end-of-run summary). the user: the timeline was "kind of
-pointless" — put boss kills there instead. First pass added miniboss kills + biome-entry milestones
-alongside boss kills (level-ups were cut outright: they fired every 5 levels into a timeline capped
-at the last 6, so a long run's timeline was 100% "Reached Level N" with every real event pushed
-off). the user then narrowed it further mid-session: **"the only milestones I care about are the
-boss ones, not even miniboss or biome discovery matters."** Cut both. `RunLog.Milestone` dropped its
-`kind` field entirely (with exactly one milestone type left, it encoded zero information) and
-`RunEndUI`'s "Timeline" section is now labelled **"Boss Kills"**. Extracted a shared
-`MainScene.isMiniboss()` (Gloamwarden/Cinderwrought/Palewake/Kilnborn/Sanguinarch) used by
-`classifyKill` so the instanceof list can't drift even though milestones no longer read it. Verified
-live: level-ups produce zero milestones even after 8 forced level-ups; a Gremlin King kill produces
-exactly one `Defeated Gremlin King` entry; a regular elite or miniboss kill produces none; the
-defensive 6-row cap (matched to the panel height already verified for it) shows `last 6 of 8`
-correctly when pushed past. `tsc` + `npm run build` clean, zero console errors.
+Plan: `.claude/plans/vagabond-god-run-triage.md`. Session 1 (bugs, ammo removal, the
+end-of-run summary) shipped earlier the same day; this closes out every remaining locked
+decision from the triage except the creature-identity pass (session 3, next).
+
+**D2 — per-swing lifesteal cap.** The actual fix for the god-run's headline finding
+(`resolveWeaponHit` runs once per target an AOE swing hits, and Leech/Bloodpact/weapon
+lifelink each heal inside it independently, so total healing scaled with target count while
+incoming damage didn't). New `swingHealBudget`/`swingHealCapArmed`/`swingHealApplied` fields +
+a `budgetedSwingHeal()` helper: reset when a swing's primary hit fires (`isBurstSource`),
+armed right after that hit's own heals resolve so "the primary's contribution" is the SUM
+across every active source, not any one alone. Every heal source (including Leech's
+overheal->shield banking, budgeted BEFORE the shield conversion so capping only stops the HP
+portion) routes through it instead of calling `health.heal()` directly. Verified live: a
+6-target Gloamdrinker swing with Leech + Bloodpact + weapon lifelink all active clamped at
+exactly budget=applied=15 across 3 consecutive fresh swings (no carry-over); a single-target
+swing and a lone ranged shot both healed fully uncapped (nothing to clamp against).
+
+**D3 — bow buff.** All 3 Warbows +40% damage / -25% cooldown (11/15/20 -> 15/21/28 dmg,
+750/730/720 -> 560/545/540ms). Verified each tier's bow DPS now sits inside its own tier's
+forged-melee band (Sunsteel 26.8 vs Warhammer 21.3/Sword-Pike 29-31; Embersteel 38.5 vs
+28.75/40-41; Gloamsteel 51.9 vs 37.5/52.5-53.2) rather than trailing it. `RECIPES.md`'s bow
+table gained a DPS column.
+
+**D4 — XP rebaseline.** `Progression.ts` `XP_BASE` 110->85 (~1.29x) is the real player-level
+pace fix, sized to roughly match what the Ashcaller's own `character.xpMult` (1.3) gave a
+neutral class for free. **Correctness finding caught mid-implementation and fixed before
+shipping:** `Skills.ts`'s `skillXpToNext` coefficient looks like an equivalent lever but is
+provably a NO-OP for player-level pace — verified by simulation (a fixed raw-XP budget fed
+through the real skill->player feed produces MORE skill level-ups at a lower coefficient but
+the IDENTICAL player level), because a skill level's cost literally IS the player-XP it
+feeds; lowering the coefficient just re-chunks the same total into smaller deposits. Lowered
+it anyway (70->54, a real independent win for skill-level/recipe-unlock pace) but rewrote
+both files' comments to state the correct mechanism rather than repeat the original S1-batch
+comment's same (also unverified) claim. Ashcaller (`Characters.ts`) trimmed: `xpMult`
+1.3->1.15, `skillXpMult` magic 1.6->1.35/ranged 1.4->1.2, `statPotency.intelligence`
+1.5->1.25 — these three stack MULTIPLICATIVELY (skillXpMult applies outside the additive
+bonus bucket xpMult and Intelligence both feed), so a magic-heavy Ashcaller could earn 2x+ XP
+on its main skill before a single stat point. Bane and the heavy_armor penalty untouched.
+Verified live via the real `awardSkillXp` path: trimmed Ashcaller now gives ~1.63x on its
+favored skill vs neutral (was 2.08x+ pre-trim, before any stat investment).
+
+**D5 — jewelry pickup-radius replaced.** `magnetRadiusPct` removed entirely from
+`EquipmentEffects` (channel, sums, describePassive, the getter, its one MainScene call
+site) — not left dead. Folded into the already-wired `gatherBonusPct` on the 3 affected items
+(Ring of the Forager merged 15+30->30 into the dedicated gather ring; Lantern of the Long
+Dark 40->20; Amulet of Farsight 20->10). `RECIPES.md` jewelry table updated.
+
+**D9 — stat caps surfaced, not blocked.** Wisdom's -50% ability-cooldown cap (100 points,
+the user had 112) now shows "(CAPPED — this axis is maxed)" on the Stats tab once reached —
+self-contained in `Progression.ts` (`wisdomAbilityCdrCapped()`) since it depends only on the
+stat. Same audit found Strength/Agility's crit contribution is ALSO capped
+(`CRIT_MULT_CAP`/`CRIT_CHANCE_CAP`) but build-dependent (weapon + stat + relics + gear
+augments combined), so those read live off the equipped weapon via a new optional
+`critCapped` dep rather than a fixed point threshold. Deliberately NO universal hard
+allocation ceiling — Endurance/Vitality/Intelligence and Wisdom's OTHER axis (buff duration)
+are genuinely uncapped by design; blocking them would remove real value to fix a problem only
+3 of 6 stat axes actually have. Verified: the boolean flips at exactly 100 Wisdom points (99
+false/100 true); the marker renders/omits correctly across all 3 capped axes and is absent
+when unarmed (crit has no context without a weapon).
+
+**D10 — bayou common->miniboss gap.** Measured: miniboss HP ÷ toughest common was 1.0-1.5x
+here vs 2.7-6.8x in badlands, because bayou commons had scaled x4.1 from badlands while the 3
+crypt wardens only moved x1.08 (Mosswretch was literally the SAME HP as the Palewake next to
+it). Fixed from both ends per the locked even split: commons -15-30% (Mosswretch 420->300,
+Mirejaw 320->260, Corpselight 190->160, Blighttoad 150->130, Murkling unchanged at 40 —
+swarm), wardens roughly doubled (Palewake 420->850, Kilnborn 440->1000, Sanguinarch
+620->1350) with matching damage bumps (Kilnborn backdraft 58->72, Sanguinarch slam 72->88,
+Palewake tether 10->14/s). Verified live via `enemyStat()` AND real spawned entities: spread
+now 2.8-4.5x (target hit exactly), boss->toughest-common 12x. **Self-caught arithmetic error
+in my own plan doc:** it had claimed "miniboss->boss 3.4x" and cited badlands at "5.5x" —
+both were slips from earlier in the session; re-measured live as 2.67x (3600/1350) and 3.85x
+(2500/650) respectively, and the plan doc corrected in place with the real numbers rather
+than left standing. Also found and fixed pre-existing dashboard drift while in
+`enemyStats.ts`: Palewake/Kilnborn's `src/dashboard/main.ts` HP entries were stale from an
+EARLIER same-day rebalance pass that never reached the dashboard (240/300 shown, code already
+at 420/440 before this session even started) — resynced all 8 touched enemies' dashboard
+entries. **Known remaining drift, explicitly out of scope this session:**
+Mirejaw/Blighttoad/Mosswretch/Murkling/Corpselight's dashboard ATTACK damage numbers are
+stale from that same earlier pass, and the CUT Fenlurker is still listed as a live enemy in
+the dashboard — flagged, not silently expanded into.
+
+All changes verified live via `preview_eval`; `tsc` + `npm run build` clean throughout, zero
+console errors/warnings across every check. `RECIPES.md` updated (bow DPS table, jewelry
+table). **Next: session 3, the creature-identity pass (Opus) — Mirejaw/Mosswretch/Corpselight
+kits, fully speced in the plan doc.**
 
 ## Recent Entries
 

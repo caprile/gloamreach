@@ -187,7 +187,7 @@ first proposal (commons −40%).
 Plus warden damage bumps so they clear the commons: Kilnborn backdraft 58→72, Sanguinarch
 slam 72→88, Palewake tether 10→14/s.
 
-Resulting spread 2.8-4.5× (badlands 2.7-6.8×), miniboss→boss 3.4×, boss→toughest-common 12×.
+Resulting spread 2.8-4.5x (badlands 2.7-6.8x), boss->toughest-common 12x. miniboss->boss came out 2.67x (3600/1350) once actually shipped and measured -- the plan's original "3.4x" here was an arithmetic slip, corrected post-verification. Badlands' own miniboss->boss is 3.85x (2500/650, also re-measured -- an earlier "5.5x" claim was likewise wrong), so the bayou's gap closed a lot (was 8.18x pre-fix) without landing exactly at badlands' figure. Fine on its own terms: the LOCKED table only fixed warden HP + spread + common HP; miniboss->boss and boss->common are derived from those plus the fixed Miretyrant HP (3600, untouched per D2's own finding), not independently chosen, so hitting all four ratios at once isn't generally possible with only two free variables (common baseline, warden baseline).
 **Miretyrant held at 3600** — it died in ~1 minute to the lifesteal loop, not because its HP
 is wrong; D2 is the fix for that.
 

@@ -231,7 +231,7 @@ const ENEMIES: EnemyStat[] = [
   },
   {
     name: "Mirejaw (BAYOU)",
-    hp: 320,
+    hp: 260, // D10 2026-07-23: was 320
     speed: 138,
     aggro: 240,
     attacks: [
@@ -244,7 +244,7 @@ const ENEMIES: EnemyStat[] = [
   },
   {
     name: "Blighttoad (BAYOU)",
-    hp: 150,
+    hp: 130, // D10 2026-07-23: was 150
     speed: 300,
     aggro: 270,
     attacks: [{ label: "Venom bite (+POISON 9/s×6s, STACKS to 4x, bypasses armor)", damage: 66, telegraphMs: 340 }],
@@ -254,7 +254,7 @@ const ENEMIES: EnemyStat[] = [
   },
   {
     name: "Mosswretch (BAYOU)",
-    hp: 420,
+    hp: 300, // D10 2026-07-23: was 420
     speed: 74,
     aggro: 250,
     attacks: [{ label: "Overhead smash (88px reach, +300 knockback)", damage: 135, telegraphMs: 780 }],
@@ -286,7 +286,7 @@ const ENEMIES: EnemyStat[] = [
   },
   {
     name: "Corpselight (BAYOU, uncommon)",
-    hp: 190,
+    hp: 160, // D10 2026-07-23: was 190
     speed: 85,
     aggro: 340,
     attacks: [{ label: "Gloam orb (HOMING projectile 170px/s, 9s, magic — BYPASSES armor)", damage: 34 }],
@@ -296,11 +296,11 @@ const ENEMIES: EnemyStat[] = [
   },
   {
     name: "The Palewake (CRYPT WARDEN — gloam)",
-    hp: 240,
+    hp: 850, // D10 2026-07-23: was 240 (already stale pre-D10 — a same-day 240->420 bump never reached this file)
     speed: 96,
     aggro: 300,
     attacks: [
-      { label: "Gloam tether (channel, 10 dmg / 450ms, MAGIC — bypasses armor)", damage: 10, telegraphMs: 460 },
+      { label: "Gloam tether (channel, 14 dmg / 450ms, MAGIC — bypasses armor)", damage: 14, telegraphMs: 460 }, // D10: was 10
     ],
     loot: "2-3 Moonsilver + 2-4 Gloam Shard — and unseals the vault's Gloam Geodes + Moonsilver seams",
     notes:
@@ -308,12 +308,12 @@ const ENEMIES: EnemyStat[] = [
   },
   {
     name: "The Kilnborn (CRYPT WARDEN — ember)",
-    hp: 300,
+    hp: 1000, // D10 2026-07-23: was 300 (already stale pre-D10 — a same-day 300->440 bump never reached this file)
     speed: 50,
     aggro: 300,
     attacks: [
       { label: "Ember lash (fire jab)", damage: 30, telegraphMs: 440 },
-      { label: "BACKDRAFT (sweeps the burning floor — cold tiles are safe)", damage: 58, telegraphMs: 1600 },
+      { label: "BACKDRAFT (sweeps the burning floor — cold tiles are safe)", damage: 72, telegraphMs: 1600 }, // D10: was 58
       { label: "Burning floor tick (standing in fire)", damage: 7 },
     ],
     loot: "2-3 Moonsilver + 2-4 Gloam Shard — and unseals the vault's Ember Geodes + Moonsilver seams",
@@ -322,12 +322,12 @@ const ENEMIES: EnemyStat[] = [
   },
   {
     name: "The Sanguinarch (CRYPT WARDEN — blood)",
-    hp: 620,
+    hp: 1350, // D10 2026-07-23: was 620
     speed: 88,
     aggro: 300,
     attacks: [
       { label: "Flurry (fast, stacks BLEED 6 dps / 5s — the bleed is the payload)", damage: 34, telegraphMs: 300 },
-      { label: "Engorged slam (AoE 96px + 220 knockback)", damage: 72, telegraphMs: 720 },
+      { label: "Engorged slam (AoE 96px + 220 knockback)", damage: 88, telegraphMs: 720 }, // D10: was 72
       { label: "Feed (channel — heals 45 ONLY if you are bleeding)", damage: 0, telegraphMs: 1500 },
     ],
     loot: "2-3 Moonsilver + 2-4 Gloam Shard — and unseals the vault's Blood Geodes + Moonsilver seams",
