@@ -124,15 +124,17 @@ const WEAPON_DAMAGE: Record<WeaponType, number> = {
   sunsteel_warhammer: 17,
   sunsteel_sword: 14,
   sunsteel_pike: 19, // S7: pierce single-target king — edges out the sword's DPS
-  // Forged ranged (S8) — a real tier above the Slingshot's chip damage (2),
-  // but its DPS (~14.7) still sits well below forged melee: the 380px safe
-  // reach is what it's paying for, per the locked "ranged is an opener" design.
-  sunsteel_warbow: 11,
+  // Forged ranged (D3, 2026-07-23 rebalance — was 11/15/20, +40%): the user
+  // called bow damage AND rate of fire "abysmal" after the ammo system was cut
+  // and ranged was left to stand on stamina/range/attack-speed alone. Lands
+  // bow DPS much closer to forged melee, paying for its 380-420px safe reach
+  // with no arc, no on-hit burst, and no lifelink — not with chip damage.
+  sunsteel_warbow: 15,
   // Enhanced tier: a real step over the base forged numbers (~+35-45%).
   embersteel_warhammer: 23,
   embersteel_sword: 19,
   embersteel_pike: 25, // S7: keeps pierce the single-target DPS leader at T2 (>= sunsteel_pike + 5 invariant)
-  embersteel_warbow: 15, // S8: ~+36% over the Sunsteel Warbow, the reforged ranged option
+  embersteel_warbow: 21, // D3: was 15 (+40%)
   // The magic brand's raw number sits mid-pack; its DPS lands near the
   // Embersteel Pike on a NEUTRAL target, but its "magic" type is shrugged off
   // (~x0.4-0.5) by the gloam-casters (Hexlings, the Duneshaper). It's the only
@@ -144,7 +146,7 @@ const WEAPON_DAMAGE: Record<WeaponType, number> = {
   gloamsteel_warhammer: 30,
   gloamsteel_sword: 25,
   gloamsteel_pike: 32,
-  gloamsteel_warbow: 20,
+  gloamsteel_warbow: 28, // D3: was 20 (+40%)
   gloam_brand: 29,
   // Deliberately BELOW the Gloam Brand: its per-hit lifelink is the payoff,
   // so it trades raw numbers for sustain rather than adding both.
@@ -160,6 +162,9 @@ export function weaponDamage(weapon: WeaponType): number {
   return WEAPON_DAMAGE[weapon];
 }
 
+// D3 (2026-07-23): the three Warbows' cooldowns cut 25% alongside their +40%
+// damage bump above — the user: bow rate of fire AND damage were both
+// "abysmal." Every other weapon's cooldown is untouched.
 const WEAPON_COOLDOWN_MS: Record<WeaponType, number> = {
   wood_club: 450,
   stone_club: 550,
@@ -170,16 +175,16 @@ const WEAPON_COOLDOWN_MS: Record<WeaponType, number> = {
   sunsteel_warhammer: 800,
   sunsteel_sword: 480,
   sunsteel_pike: 620,
-  sunsteel_warbow: 750,
+  sunsteel_warbow: 560, // D3: was 750 (-25%)
   embersteel_warhammer: 800,
   embersteel_sword: 470,
   embersteel_pike: 610,
-  embersteel_warbow: 730,
+  embersteel_warbow: 545, // D3: was 730 (-25%)
   ember_brand: 520,
   gloamsteel_warhammer: 800,
   gloamsteel_sword: 470,
   gloamsteel_pike: 610,
-  gloamsteel_warbow: 720,
+  gloamsteel_warbow: 540, // D3: was 720 (-25%)
   gloam_brand: 520,
   gloamdrinker: 560,
   mirebronze_warhammer: 800,

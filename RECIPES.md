@@ -304,13 +304,19 @@ either — the Sunsteel → Embersteel **reforge** is their upgrade. All feed th
 `ranged` weapon skill via the same `weaponSkillDamageMultiplier` every melee
 weapon uses, so leveling it turns chip damage into real damage over a run.
 
-| Weapon | Dmg / Cooldown / Stamina | Projectile Speed | Range | Firing cost |
-|---|---|---|---|---|
-| Slingshot | 2 / 650ms / 6 | 420 px/s | 260px | None |
-| Javelin | 5 / 900ms / 16 | 300 px/s | 220px | Self — the equipped hotbar stack IS the projectile (1 per throw) |
-| Sunsteel Warbow | 11 / 750ms / 12 | 600 px/s | 380px | None |
-| Embersteel Warbow | 15 / 730ms / 15 | 640 px/s | 400px | None |
-| Gloamsteel Warbow | 20 / 720ms / 12 | 680 px/s | 420px | None |
+| Weapon | Dmg / Cooldown / Stamina | DPS | Projectile Speed | Range | Firing cost |
+|---|---|---|---|---|---|
+| Slingshot | 2 / 650ms / 6 | 3.1 | 420 px/s | 260px | None |
+| Javelin | 5 / 900ms / 16 | 5.6 | 300 px/s | 220px | Self — the equipped hotbar stack IS the projectile (1 per throw) |
+| Sunsteel Warbow | 15 / 560ms / 8 | 26.8 | 600 px/s | 380px | None |
+| Embersteel Warbow | 21 / 545ms / 11 | 38.5 | 640 px/s | 400px | None |
+| Gloamsteel Warbow | 28 / 540ms / 12 | 51.9 | 680 px/s | 420px | None |
+
+**D3 bow buff (2026-07-23):** damage +40% and cooldown -25% across all three Warbow tiers
+(the user: bow damage AND rate of fire were both "abysmal"). Lands each bow's DPS solidly inside
+its own tier's forged-melee band — e.g. the Sunsteel Warbow's 26.8 DPS sits between the Sunsteel
+Warhammer's 21.3 and the Sunsteel Sword/Pike's 29-31 — paying for its 380-420px safe reach with no
+AOE arc, no on-hit burst, and no lifelink, rather than with chip damage. Stamina costs untouched.
 
 **Consumable ammo was removed entirely** (2026-07-23). There is no Ammo equipment
 slot and no arrow/pellet items: a bow just fires. Ammo never governed anything —
