@@ -27,12 +27,9 @@ requires standing near a placed Workbench (`MainScene.isNearWorkbench`).
 | Stone Club | Weapons | 1 | Yes | 3 Wood, 2 Stone, 1 Leather Scraps | Blunt 3 | Item (weapon, blunt) |
 | Bone Knife | Weapons | 1 | Yes | 1 Leather Scraps, 4 Bones | — | Item (weapon, slash) |
 | Primal Spear | Weapons | 1 | Yes | 4 Wood, 2 Stone, 1 Leather Scraps | — | Item (weapon, pierce) |
-| Slingshot | Weapons | 1 | Yes | 2 Wood, 2 Leather Scraps | — | Item (weapon, ranged — uses the Ammo slot) |
-| Slingshot Pellets | Weapons | 0 | No\* | 3 Stone | — | Item x25 (ammo) |
+| Slingshot | Weapons | 1 | Yes | 2 Wood, 2 Leather Scraps | — | Item (weapon, ranged — no ammo) |
 | Javelin | Weapons | 1 | Yes | 3 Wood, 1 Stone | Pierce 5 | Item x2 (weapon, ranged, disposable — self-consuming stack) |
-| Sunsteel Warbow | Weapons | 1 | Yes (Lvl 3) | 2 Sunsteel Ingot, 3 Ironbark, 2 Duskrunner Pelt | Ranged 0 | Item (weapon, ranged — uses the Ammo slot, fires Arrows) |
-| Arrows | Weapons | 1 | Yes (Lvl 3) | 1 Sunsteel Ingot, 5 Wood | — (needs Warbow discovered) | Item x50 (ammo) |
-| Arrows (Embersteel) | Weapons | 1 | Yes (Lvl 4) | 1 Embersteel Ingot, 5 Wood | — (needs Warbow discovered) | Item x50 (ammo — same arrows, alt metal) |
+| Sunsteel Warbow | Weapons | 1 | Yes (Lvl 3) | 2 Sunsteel Ingot, 3 Ironbark, 2 Duskrunner Pelt | Ranged 0 | Item (weapon, ranged — no ammo) |
 | Shishkabob | Misc | 0 | No | 1 Wood | — | Item x2 |
 | Campfire | Crafting | 0 | No | 5 Wood, 2 Stone | — | Item (placeable) |
 | Workbench | Crafting | 0 | No | 10 Wood | — | Item (placeable) |
@@ -79,7 +76,6 @@ requires standing near a placed Workbench (`MainScene.isNearWorkbench`).
 | Gloamsteel Warbow | Weapons | 1 | Yes (Lvl 5) | 1 Embersteel Warbow, 3 Gloamsteel Ingot, 3 Mirehide, 1 Ember Gem | Ranged 0 | Item (weapon, ranged — reforge) |
 | Gloam Brand | Weapons | 1 | Yes (Lvl 5) | 1 Ember Brand, 3 Gloamsteel Ingot, 4 Hex Essence, 2 Gloam Gem | Magic 0 | Item (weapon, **magic** — reforge) |
 | Gloamdrinker | Weapons | 1 | Yes (Lvl 5) | 3 Gloamsteel Ingot, 2 Blood Gem, 3 Hex Essence, 2 Moonsilver | Magic 0 | Item (weapon, **magic** — bespoke, **not** a reforge) |
-| Arrows (Gloamsteel) | Weapons | 1 | Yes (Lvl 5) | 1 Gloamsteel Ingot, 5 Wood | — | Item (60x **Gloamsteel Arrows** — its own ammo tier) |
 
 The **bayou (Gloamsteel/Mirehide) tier is now FULLY sourced.** **Bog Ore** is
 surface-mineable in the bayou (Phase 4a) and **Mirehide** drops from the
@@ -113,10 +109,6 @@ rare-ore-exclusive; its `magic` hits swing hard through the damage-type resist
 layer (super-effective vs most badlands beasts, resisted by Hexlings/the
 Duneshaper).
 
-\* Slingshot Pellets is tier 0 (no Workbench needed) but has an extra discovery
-gate beyond tier/ingredients: it stays hidden until the player has crafted a
-Slingshot at least once (`Recipe.requiresDiscovered`), so it doesn't advertise
-ammo before there's a launcher to load it into.
 
 ## Station Upgrades (`src/systems/StationUpgrades.ts`)
 
@@ -243,9 +235,14 @@ out-hits a fully-upgraded starter weapon.
 
 The enhanced (T2) weapons **reforge** the base weapon (full standalone recipes,
 see the crafting table). On top of that, **every** forged weapon — Sunsteel,
-Embersteel, and the Ember Brand — now gets **two right-click damage levels**
+Embersteel, Mirebronze, Gloamsteel, both brands and all three Warbows — gets
+**two right-click damage levels**
 (`+2` then `+2`, = **+4 damage at Lvl 3**): Lvl 2 = 2 ingot, Lvl 3 = 3 ingot
-(Sunsteel Ingot for the base weapons, Embersteel Ingot for the T2 + Ember Brand).
+(Sunsteel Ingot for the base weapons, Embersteel Ingot for the T2 + Ember Brand,
+Mirebronze/Gloamsteel Ingot for their own tiers). The **Sunsteel/Embersteel
+Warbows and all three Mirebronze weapons were missing their upgrades entirely**
+until 2026-07-23 — a plain registration omission, so a ranged or Sunsteel-branch
+build's gear dead-ended at base.
 Tuned so a base (Lvl 1) ember weapon out-damages a fully-upgraded (Lvl 3) steel
 one. Stamina costs were also bumped so each tier is a clear step up (the user):
 starter < Sunsteel < Ember. AOE arc widths in `Weapons.ts` `WEAPON_ARC`.
@@ -301,14 +298,20 @@ either — the Sunsteel → Embersteel **reforge** is their upgrade. All feed th
 `ranged` weapon skill via the same `weaponSkillDamageMultiplier` every melee
 weapon uses, so leveling it turns chip damage into real damage over a run.
 
-| Weapon | Dmg / Cooldown / Stamina | Projectile Speed | Range | Ammo |
+| Weapon | Dmg / Cooldown / Stamina | Projectile Speed | Range | Firing cost |
 |---|---|---|---|---|
-| Slingshot | 2 / 650ms / 6 | 420 px/s | 260px | Slingshot Pellets, loaded into the new **Ammo** equipment slot |
-| Javelin | 5 / 900ms / 16 | 300 px/s | 220px | None — the equipped hotbar stack is the ammo (1 consumed per throw) |
-| Sunsteel Warbow | 11 / 750ms / 12 | 600 px/s | 380px | Arrows, loaded into the shared **Ammo** slot (evicts any pellets) |
-| Embersteel Warbow | 15 / 730ms / 15 | 640 px/s | 400px | Arrows (same slot) |
+| Slingshot | 2 / 650ms / 6 | 420 px/s | 260px | None |
+| Javelin | 5 / 900ms / 16 | 300 px/s | 220px | Self — the equipped hotbar stack IS the projectile (1 per throw) |
+| Sunsteel Warbow | 11 / 750ms / 12 | 600 px/s | 380px | None |
+| Embersteel Warbow | 15 / 730ms / 15 | 640 px/s | 400px | None |
+| Gloamsteel Warbow | 20 / 720ms / 12 | 680 px/s | 420px | None |
 
-One shared Ammo slot: loading Arrows swaps out Slingshot Pellets and vice versa.
+**Consumable ammo was removed entirely** (2026-07-23). There is no Ammo equipment
+slot and no arrow/pellet items: a bow just fires. Ammo never governed anything —
+stamina, bounded range and attack speed are the real anti-kite levers — while
+costing an equipment slot, three craftable items, and a class of bug where
+reforging a bow silently unloaded arrows it could no longer draw. The Javelin is
+unaffected: it *is* the projectile, not a launcher.
 
 Aiming reuses the existing click-a-hovered-enemy-in-reach model (not free-aim),
 just with `maxRangePx` above replacing melee's reach.
@@ -428,11 +431,6 @@ heals **8% of the damage dealt** (12% → 8%, 2026-07-23 — it beat the wide-ar
 Gloam Brand at the Brand's own job because sustain outweighed everything). It's always on, costs no relic family slot, and stacks
 with the Leech relic + the Bloodpact ability — paid for with a raw damage number below the
 Gloam Brand's and a deliberately tighter arc.
-
-**Ammo tiers.** Sunsteel and Embersteel arrow recipes both produce the same plain
-`arrows` (either metal, one stock). The bayou breaks that: **Gloamsteel Arrows** are their
-own item, and the **Gloamsteel Warbow fires only them** (it will not draw plain arrows) —
-the same single-ammo-slot swap the Slingshot/Warbow split already asks for.
 
 ## Gem Augments (`src/systems/GearAugments.ts`) — B3-P3
 

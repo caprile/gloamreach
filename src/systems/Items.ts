@@ -209,35 +209,6 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
       { label: "Attack Speed", value: "1.1/s" },
     ],
   },
-  slingshot_pellets: {
-    key: "slingshot_pellets",
-    name: "Slingshot Pellets",
-    description: "Rounded stones sized for a Slingshot. Load them into the Ammo slot.",
-    texture: "icon_slingshot_pellets",
-    maxStack: 99,
-    hotbarable: false,
-    armorSlot: "ammo",
-  },
-  arrows: {
-    key: "arrows",
-    name: "Arrows",
-    description: "Metal-tipped arrows for a Warbow. Load them into the Ammo slot — one shared slot, so they swap out any loaded pellets.",
-    texture: "icon_arrows",
-    maxStack: 99,
-    hotbarable: false,
-    armorSlot: "ammo",
-  },
-
-  gloam_arrows: {
-    key: "gloam_arrows",
-    name: "Gloamsteel Arrows",
-    description: "Gloamsteel-headed arrows, cut for a Gloamsteel Warbow — nothing lighter will hold the draw. Load them into the Ammo slot.",
-    texture: "icon_gloam_arrows",
-    maxStack: 99,
-    hotbarable: false,
-    armorSlot: "ammo",
-  },
-
   // --- forged weapons (biome 2 Phase 4 — one per melee damage type) ---
   sunsteel_warhammer: {
     key: "sunsteel_warhammer",
@@ -2280,7 +2251,7 @@ export function itemCategory(key: string): ItemCategory {
   if (def.armorSlot && slotGroup(def.armorSlot) === "special") return "special";
   // Real gear only — the ammo "slot" (slingshot pellets) is a material, not
   // a wearable, so it groups with other stackable materials.
-  if (def.weapon || def.tool || (def.armorSlot && def.armorSlot !== "ammo")) return "gear";
+  if (def.weapon || def.tool || (def.armorSlot)) return "gear";
   if (CURIO_ITEM_KEYS.has(key) || key.includes("trophy")) return "curio";
   return "material";
 }

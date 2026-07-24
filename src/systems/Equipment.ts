@@ -29,21 +29,15 @@ export type EquipSlot =
   | "special4"
   | "ability1"
   | "ability2"
-  | "ability3"
-  | "ammo";
+  | "ability3";
 
 // Which family a slot belongs to. An item can only be equipped into a slot of
 // its own group, and any slot within the group will do.
-export type EquipSlotGroup = "gear" | "special" | "ability" | "ammo";
+export type EquipSlotGroup = "gear" | "special" | "ability";
 
 export interface EquippedItem {
   key: string;
   tier: number;
-  // Set only for the "ammo" slot (a stack of ranged ammo), which needs a
-  // quantity — every other slot holds a single qty-1 item and leaves this
-  // undefined. Armor-equip logic swaps whole items; ammo-equip logic merges
-  // counts of the same key instead (see MainScene.equipArmorFromContainer).
-  count?: number;
   // Applied gem-augment ids (Biome-3 Phase 3, GearAugments.ts) — the same
   // per-instance field name ItemStack.upgrades uses, so a piece keeps its
   // augments across equip -> backpack -> equip with no translation step.
@@ -51,7 +45,9 @@ export interface EquippedItem {
 }
 
 // Declaration order drives the paper-doll layout (see InventoryMenu): gear
-// column, then the special column, then the QER row, then ammo.
+// column, then the special column, then the QER row. The Ammo slot that used to
+// close this list is gone with the ammo system itself (see Weapons.ts's
+// RangedWeaponConfig.ammo) — ranged weapons now just fire.
 export const EQUIP_SLOTS: { id: EquipSlot; label: string; group: EquipSlotGroup }[] = [
   { id: "helmet", label: "Head", group: "gear" },
   { id: "chest", label: "Chest", group: "gear" },
@@ -67,7 +63,6 @@ export const EQUIP_SLOTS: { id: EquipSlot; label: string; group: EquipSlotGroup 
   { id: "ability1", label: "Q", group: "ability" },
   { id: "ability2", label: "E", group: "ability" },
   { id: "ability3", label: "R", group: "ability" },
-  { id: "ammo", label: "Ammo", group: "ammo" },
 ];
 
 const SLOT_GROUP: Record<EquipSlot, EquipSlotGroup> = EQUIP_SLOTS.reduce(
@@ -93,7 +88,6 @@ export const GROUP_LABEL: Record<EquipSlotGroup, string> = {
   gear: "Gear",
   special: "Special",
   ability: "Ability",
-  ammo: "Ammo",
 };
 
 export class Equipment {
@@ -108,7 +102,6 @@ export class Equipment {
     ability1: null,
     ability2: null,
     ability3: null,
-    ammo: null,
   };
 
   get(slot: EquipSlot): EquippedItem | null {

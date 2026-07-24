@@ -1347,7 +1347,8 @@ export class BootScene extends Phaser.Scene {
     g.fillTriangle(1, 4, 7, 4, 4, 0);
     g.generateTexture("javelin_projectile", 8, 16);
 
-    // Arrows (ammo item) — a small bundle of steel-tipped, fletched arrows.
+    // Arrow bundle icon. The ammo ITEM is gone (see Weapons.ts), but the art
+    // is kept: it still reads as "arrows" if a future recipe wants it.
     g.clear();
     for (const ax of [7, 12, 17]) {
       g.fillStyle(0x6b4a26, 1);
@@ -1368,7 +1369,7 @@ export class BootScene extends Phaser.Scene {
     g.fillTriangle(12, 0, 12, 6, 16, 3); // steel head, pointing right
     g.generateTexture("arrow_projectile", 16, 6);
 
-    // Gloamsteel Arrows (bayou ammo) + their in-flight projectile — the same
+    // Gloamsteel arrow icon + its in-flight projectile (still fired) — the same
     // shafts with violet-lit heads, so the tier reads at a glance.
     g.clear();
     for (const ax of [7, 12, 17]) {

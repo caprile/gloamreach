@@ -75,7 +75,6 @@ export type ResourceType =
   | "bog_ore" // gloam-soaked bayou ore — smelts into Gloamsteel (no node yet)
   | "gloamsteel_ingot"
   | "mirebronze_ingot" // B4-P5: the SUNSTEEL branch metal — Sunsteel Ingot smelted with Bog Ore // the bayou forged ingot: Bog Ore + Hex Essence at a Lvl 2 Smelter
-  | "gloam_arrows" // the bayou arrow tier - Gloamsteel-headed shafts for a Warbow
   | "mirehide" // bayou creature hide — the light-armor half of the bayou reforge
   | "swamp_moss" // bayou harvestable — a future alchemy/food ingredient (no recipe yet)
   | "water_lily" // bayou harvestable, grows on the water — future alchemy/food ingredient

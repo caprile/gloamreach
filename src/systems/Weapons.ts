@@ -326,7 +326,19 @@ export function weaponBaseCritMult(weapon: WeaponType): number {
 export interface RangedWeaponConfig {
   projectileSpeed: number; // px/s
   maxRangePx: number; // replaces melee reach for both the attack gate + hover prompt
-  ammoItemKey: string | null; // null = self-consumes from the equipped hotbar stack (Javelin)
+  // What firing costs, in items.
+  //   "none" — nothing; the weapon just fires (every launcher and bow).
+  //   "self" — consumes one from its own equipped hotbar stack (the Javelin,
+  //            which IS the projectile rather than launching a separate one).
+  //
+  // Consumable AMMO was removed entirely (the user, twice: "I'm contemplating
+  // getting rid of ammo and just letting ranged weapons have infinite ammo" /
+  // "I think we should get rid of the resource / arrows restriction"). It never
+  // governed anything — stamina, bounded range and attack speed are the real
+  // anti-kite levers — while costing a dedicated equipment slot, three craftable
+  // items, a reconcile routine to keep the slot honest, and the class of bug
+  // where reforging a bow silently unloaded arrows it could no longer draw.
+  ammo: "none" | "self";
   projectileTexture: string;
   // Rotation offset (radians) for the in-flight sprite when its art's "forward"
   // isn't +x — the javelin streak points up, so +90° makes it fly nose-first.
@@ -334,18 +346,15 @@ export interface RangedWeaponConfig {
 }
 
 const RANGED_WEAPONS: Partial<Record<WeaponType, RangedWeaponConfig>> = {
-  slingshot: { projectileSpeed: 420, maxRangePx: 260, ammoItemKey: "slingshot_pellets", projectileTexture: "pellet_projectile" },
-  javelin: { projectileSpeed: 300, maxRangePx: 220, ammoItemKey: null, projectileTexture: "javelin_projectile", projectileArtAngleOffset: Math.PI / 2 },
-  // S8 bows — both fire the same `arrows` (shared with... nothing else; the
-  // single ammo slot means loading arrows evicts any slingshot pellets). The
-  // arrow art points +x, so no artAngleOffset. Longer reach + faster arrows
-  // than the slingshot: the bow is the badlands ranged upgrade.
-  sunsteel_warbow: { projectileSpeed: 600, maxRangePx: 380, ammoItemKey: "arrows", projectileTexture: "arrow_projectile" },
-  embersteel_warbow: { projectileSpeed: 640, maxRangePx: 400, ammoItemKey: "arrows", projectileTexture: "arrow_projectile" },
-  // Its own ammo tier: a gloamsteel head needs a gloamsteel shaft, so the bayou
-  // bow burns Gloamsteel Arrows rather than sharing the badlands stock (the same
-  // single-ammo-slot swap the slingshot/bow split already asks for).
-  gloamsteel_warbow: { projectileSpeed: 680, maxRangePx: 420, ammoItemKey: "gloam_arrows", projectileTexture: "gloam_arrow_projectile" },
+  slingshot: { projectileSpeed: 420, maxRangePx: 260, ammo: "none", projectileTexture: "pellet_projectile" },
+  javelin: { projectileSpeed: 300, maxRangePx: 220, ammo: "self", projectileTexture: "javelin_projectile", projectileArtAngleOffset: Math.PI / 2 },
+  // S8 bows — longer reach + faster arrows than the slingshot: the bow is the
+  // badlands ranged upgrade. The arrow art points +x, so no artAngleOffset.
+  // Each keeps its own arrow TEXTURE (a gloamsteel bow still visibly looses a
+  // gloamsteel shaft) now that the arrow ITEM behind it is gone.
+  sunsteel_warbow: { projectileSpeed: 600, maxRangePx: 380, ammo: "none", projectileTexture: "arrow_projectile" },
+  embersteel_warbow: { projectileSpeed: 640, maxRangePx: 400, ammo: "none", projectileTexture: "arrow_projectile" },
+  gloamsteel_warbow: { projectileSpeed: 680, maxRangePx: 420, ammo: "none", projectileTexture: "gloam_arrow_projectile" },
 };
 
 export function rangedWeaponConfig(weapon: WeaponType): RangedWeaponConfig | undefined {

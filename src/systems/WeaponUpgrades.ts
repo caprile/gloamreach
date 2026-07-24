@@ -117,9 +117,14 @@ WEAPON_UPGRADES.push(
   ...forgedWeaponUpgrades("sunsteel_warhammer", "Sunsteel Warhammer", "sunsteel_ingot"),
   ...forgedWeaponUpgrades("sunsteel_sword", "Sunsteel Longsword", "sunsteel_ingot"),
   ...forgedWeaponUpgrades("sunsteel_pike", "Sunsteel Pike", "sunsteel_ingot"),
+  // The bows were simply never registered (the user: "does embersteel warbow not
+  // have any upgrades?") — every other forged weapon of their own tier had two
+  // levels and these had none, so a ranged build's gear dead-ended at base.
+  ...forgedWeaponUpgrades("sunsteel_warbow", "Sunsteel Warbow", "sunsteel_ingot"),
   ...forgedWeaponUpgrades("embersteel_warhammer", "Embersteel Warhammer", "embersteel_ingot"),
   ...forgedWeaponUpgrades("embersteel_sword", "Embersteel Longsword", "embersteel_ingot"),
   ...forgedWeaponUpgrades("embersteel_pike", "Embersteel Pike", "embersteel_ingot"),
+  ...forgedWeaponUpgrades("embersteel_warbow", "Embersteel Warbow", "embersteel_ingot"),
   ...forgedWeaponUpgrades("ember_brand", "Ember Brand", "embersteel_ingot"),
   // Bayou tier (biome 3 Phase 3) — sunk in Gloamsteel. Stacks with gem
   // augments (GearAugments.ts), which live on the instance's `upgrades` set
@@ -130,6 +135,12 @@ WEAPON_UPGRADES.push(
   ...forgedWeaponUpgrades("gloamsteel_warbow", "Gloamsteel Warbow", "gloamsteel_ingot"),
   ...forgedWeaponUpgrades("gloam_brand", "Gloam Brand", "gloamsteel_ingot"),
   ...forgedWeaponUpgrades("gloamdrinker", "Gloamdrinker", "gloamsteel_ingot"),
+  // Mirebronze (the Sunsteel branch) shipped without upgrades too — the same
+  // omission as the bows. The longer road already pays less in base damage; it
+  // shouldn't also be the only forged tier that can't be levelled.
+  ...forgedWeaponUpgrades("mirebronze_warhammer", "Mirebronze Warhammer", "mirebronze_ingot"),
+  ...forgedWeaponUpgrades("mirebronze_sword", "Mirebronze Longsword", "mirebronze_ingot"),
+  ...forgedWeaponUpgrades("mirebronze_pike", "Mirebronze Pike", "mirebronze_ingot"),
 );
 
 // The upgrades that could apply to a given weapon item, ordered by the tier

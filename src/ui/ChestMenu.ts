@@ -15,20 +15,26 @@ export interface ChestMenuDeps {
 
 const SLOT = 46;
 const GAP = 6;
-const COLS = 6;
-const ROWS = 6;
-const BACKPACK_W = COLS * SLOT + (COLS - 1) * GAP; // 306
 const DEPTH_BG = 3000;
 const DEPTH_ITEM = 3001;
 const DEPTH_TEXT = 3002;
 const CHEST_COLS = 4;
 const CHEST_ROWS = 2; // 8 slots — see GremlinShack.SHACK_CHEST_SIZE
+const CHEST_W = CHEST_COLS * SLOT + (CHEST_COLS - 1) * GAP;
 
 // A lootable world container's menu (first use: the Gremlin Shack's chest).
 // Modeled on DryingRackMenu's structure (flat scrollFactor(0) GameObjects, no
-// Container per the standing Phaser-Container-input-bug rule) but simpler:
-// two side-by-side grids (backpack | chest), no slider/process step — items
-// move purely via the shared moveSlot() primitive.
+// Container per the standing Phaser-Container-input-bug rule).
+//
+// The player's backpack grid used to be rendered alongside the chest, mirroring
+// the Drying Rack's load-from-bag layout. It's gone (the user: "since inventory
+// management isn't really a thing, I don't think we need to show the inventory
+// at all when opening a chest to view its contents") — a loot chest is a
+// one-directional thing you empty, not a place you organise. Everything that
+// actually moved items still works: [R] takes all, and double-click/Ctrl-click
+// on a chest slot quick-moves it to the backpack. Only the drag-INTO-chest
+// gesture is lost, and stashing loot back into a shack chest was never a real
+// use case.
 export class ChestMenu {
   private scene: Phaser.Scene;
   private deps: ChestMenuDeps;
@@ -41,8 +47,6 @@ export class ChestMenu {
   private panelY: number;
   private panelW: number;
   private panelH: number;
-  private backpackX: number;
-  private backpackY: number;
   private chestX: number;
   private chestY: number;
 
@@ -51,14 +55,12 @@ export class ChestMenu {
     this.deps = deps;
     this.tooltipUI = new Tooltip(scene, deps.skills);
 
-    this.panelW = 600;
-    this.panelH = 400;
+    this.panelW = CHEST_W + 32;
+    this.panelH = 90 + CHEST_ROWS * (SLOT + GAP) + 22;
     this.panelX = scene.scale.width / 2 - this.panelW / 2;
     this.panelY = scene.scale.height / 2 - this.panelH / 2;
-    this.backpackX = this.panelX + 16;
-    this.backpackY = this.panelY + 90;
-    this.chestX = this.backpackX + BACKPACK_W + 30;
-    this.chestY = this.backpackY;
+    this.chestX = this.panelX + 16;
+    this.chestY = this.panelY + 90;
 
     this.bg = scene.add
       .rectangle(this.panelX, this.panelY, this.panelW, this.panelH, 0x0a0a0a, 0.95)
@@ -100,12 +102,6 @@ export class ChestMenu {
       screenY >= this.panelY &&
       screenY <= this.panelY + this.panelH
     );
-  }
-
-  // Backpack slot index under a screen point, or null.
-  slotIndexAt(screenX: number, screenY: number): number | null {
-    if (!this.open) return null;
-    return this.gridSlotAt(screenX, screenY, this.backpackX, this.backpackY, COLS, ROWS, this.deps.backpack.size);
   }
 
   // Chest slot index under a screen point, or null.
@@ -159,11 +155,8 @@ export class ChestMenu {
       .setDepth(DEPTH_TEXT);
     this.rows.push(descText);
 
-    this.addText(this.backpackX, this.backpackY - 18, "Backpack", 12, "#8a93a3");
-    this.renderGrid(this.deps.backpack, this.backpackX, this.backpackY, COLS, ROWS);
-
     this.addText(this.chestX, this.chestY - 18, "Chest", 12, "#8a93a3");
-    this.addText(this.chestX + CHEST_COLS * (SLOT + GAP) - GAP, this.chestY - 18, "[R] Take All", 11, "#e8c040", 1, 0);
+    this.addText(this.chestX + CHEST_W, this.chestY - 18, "[R] Take All", 11, "#e8c040", 1, 0);
     this.renderGrid(chest, this.chestX, this.chestY, CHEST_COLS, CHEST_ROWS);
   }
 

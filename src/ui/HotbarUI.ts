@@ -206,7 +206,7 @@ export class HotbarUI {
           if (pointer.rightButtonDown()) {
             const def = stack ? itemDef(stack.key) : undefined;
             if (def?.edible) this.deps.eatItem(this.hotbar.container, i);
-            else if (def && (def.weapon || def.tool || (def.armorSlot && def.armorSlot !== "ammo")))
+            else if (def && (def.weapon || def.tool || def.armorSlot))
               this.deps.openGearUpgrade(this.hotbar.container, i);
             return;
           }

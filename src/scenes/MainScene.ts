@@ -189,6 +189,7 @@ const BIOME_NAMES: Record<BiomeId | "base", string> = {
 };
 import { ysortDepth } from "../systems/depth";
 import { Run, type RunOutcome, type KillCategory } from "../systems/Run";
+import { RunLog } from "../systems/RunLog";
 import { clearHighScores, recordHighScore } from "../systems/HighScores";
 import type { ScoreEntry } from "../systems/HighScores";
 import { RunHudUI } from "../ui/RunHudUI";
@@ -1298,6 +1299,7 @@ export class MainScene extends Phaser.Scene {
   // Run/score meta-loop (M-R1). `run` tracks elapsed time + kills + score;
   // `runOver` freezes the world once the run-end screen is up.
   private run!: Run;
+  private runLog!: RunLog;
   private runHudUI!: RunHudUI;
   private runEndUI!: RunEndUI;
   private runOver = false;
@@ -1423,6 +1425,9 @@ export class MainScene extends Phaser.Scene {
     this.physics.world.resume();
     this.time.paused = false;
     this.run = new Run();
+    // Per-run attribution for the end-of-run summary. Fresh instance per run,
+    // same scene.restart() field-init rule as everything else in this block.
+    this.runLog = new RunLog();
     // No character until this run's picker is confirmed — neutral modifiers.
     this.character = new RunCharacter();
     // Day/night resets to dawn each run (M-DN). NightOverlayUI is a GameObject,
@@ -1831,7 +1836,14 @@ export class MainScene extends Phaser.Scene {
       // Pass the projectile's damage type so a Hexling's "magic" bolt bypasses
       // the player's flat armor (Phase 1 hook); a physical Gremlin rock leaves
       // damageType undefined and subtracts armor as usual.
-      this.applyDamageToPlayer(projectile.damage, undefined, projectile.damageType);
+      this.applyDamageToPlayer(
+        projectile.damage,
+        undefined,
+        projectile.damageType,
+        undefined,
+        undefined,
+        projectile.sourceEnemy?.displayName ?? "Projectile",
+      );
       // A CONNECTING shot is what resets its caster's give-up clock — firing
       // alone no longer does (see Enemy.markAttackAttempted). Without this a
       // ranged enemy could never time out of a pursuit, which is why nothing
@@ -1848,7 +1860,7 @@ export class MainScene extends Phaser.Scene {
     this.physics.add.overlap(this.playerProjectiles, this.enemyGroup, (a, b) => {
       const projectile = (a instanceof Projectile ? a : b) as Projectile;
       const enemy = (a instanceof Enemy ? a : b) as Enemy;
-      if (!enemy.depleted) this.resolveWeaponHit(enemy, projectile.damage, "ranged", projectile.isCrit, true);
+      if (!enemy.depleted) this.resolveWeaponHit(enemy, projectile.damage, "ranged", projectile.isCrit, true, "Ranged");
       projectile.destroy();
     });
 
@@ -2120,6 +2132,10 @@ export class MainScene extends Phaser.Scene {
       // compete for the same screen space (playtest). Still logged to the
       // persistent side panel.
       this.eventLog.add("levelup", `Level Up! You are now Level ${level} (+${points} points)`, undefined, true);
+      // Every 5th level only: a 29-level run would otherwise contribute 29 rows
+      // and the timeline would stop showing a shape. The pace is still legible
+      // from where the 5s land.
+      if (level % 5 === 0) this.runLog.recordMilestone(this.run.elapsedMs, "level", `Reached Level ${level}`);
       this.characterMenu?.refresh();
       this.refreshXpBar();
       this.refreshStatPointsBadge();
@@ -2845,43 +2861,8 @@ export class MainScene extends Phaser.Scene {
     // the player at night. Data-driven per item key so a bigger-radius upgrade
     // just adds a row here. 0 = no light emitted.
     this.equippedLightRadius = stack ? (LIGHT_RADIUS_BY_ITEM[stack.key] ?? 0) : 0;
-    this.reconcileAmmoSlot();
     this.hotbarUI.refresh();
     this.refreshHud();
-  }
-
-  // Keep the shared Ammo slot consistent with the equipped ranged weapon: a
-  // Warbow only ever holds Arrows, the Slingshot only Pellets. The slot itself
-  // is generic (any `armorSlot:"ammo"` item fits), so without this a stack of
-  // pellets left over from Slingshot use would sit "loaded" while a bow is
-  // equipped — the bow can't fire them, which reads as the game loading the
-  // wrong ammo (playtest report). When what's loaded doesn't match the equipped
-  // weapon's required ammo, evict it to the backpack and auto-load the correct
-  // ammo from the backpack if any is carried, so switching bow<->slingshot swaps
-  // ammo seamlessly. No-op for melee/unarmed and for the self-consuming Javelin
-  // (ammoItemKey null). Called from recomputeEquipped, so it also blocks
-  // manually loading the wrong ammo type into a bow's slot.
-  private reconcileAmmoSlot(): void {
-    if (!this.equipment || !this.backpack || !this.inventoryMenu) return; // pre-init guard
-    const weapon = this.equippedWeapon;
-    if (!weapon) return;
-    const cfg = rangedWeaponConfig(weapon);
-    const required = cfg?.ammoItemKey;
-    if (!required) return; // melee, or a self-consuming ranged weapon (Javelin)
-    const eq = this.equipment.get("ammo");
-    if (eq && eq.key === required) return; // already correct — no churn
-    if (eq) {
-      this.returnArmorToBackpack(eq); // wrong ammo → back to the backpack
-      this.equipment.set("ammo", null);
-    }
-    const have = this.backpack.count(required);
-    if (have > 0) {
-      const take = Math.min(itemDef(required)?.maxStack ?? 0, have);
-      this.equipment.set("ammo", { key: required, tier: 0, count: take });
-      this.backpack.removeCount(required, take);
-    }
-    this.inventoryMenu.refresh();
-    this.hotbarUI.refresh();
   }
 
   // Subtle reach preview — visible whenever a tool or weapon is equipped
@@ -3105,22 +3086,9 @@ export class MainScene extends Phaser.Scene {
         this.afterItemMove();
         return;
       }
-      const chestBagIndex = this.chestMenu.slotIndexAt(pointer.x, pointer.y);
-      if (chestBagIndex !== null) {
-        // Click-in-place on the chest menu's own backpack grid: double-click
-        // or Ctrl-click quick-moves that stack into the chest instead.
-        if (src.container === this.backpack && src.index === chestBagIndex) {
-          if (chestContainer && this.isQuickMoveClick(pointer, `chestin:${chestBagIndex}`)) {
-            const to = chestContainer.findAssignable(stack.key);
-            if (to !== null) moveSlot(this.backpack, chestBagIndex, chestContainer, to);
-            this.afterItemMove();
-          }
-          return;
-        }
-        moveSlot(src.container, src.index, this.backpack, chestBagIndex);
-        this.afterItemMove();
-        return;
-      }
+      // No backpack-side branch any more: the chest menu shows only the chest
+      // (see ChestMenu's header note), so there is no in-panel bag grid to
+      // rearrange or drag into.
       if (!this.chestMenu.containsPoint(pointer.x, pointer.y)) {
         this.dropStackToWorld(src.container, src.index, stack);
       }
@@ -3628,8 +3596,38 @@ export class MainScene extends Phaser.Scene {
 
   // Log the outcome + re-sync the HUD/stat bonuses. Called at reveal time by the
   // forge menu's deferred announceRoll, or inline for any non-menu roll path.
+  // Append one line to the run summary's relic ledger. Logged at the REVEAL
+  // rather than at the click, matching announceRelicResult's own deferral — the
+  // ledger should say what the player saw. Settles questions the event log
+  // can't ("4 rares in a row, is that even possible?") because it survives to
+  // the end screen instead of scrolling away.
+  private recordRelicRollToLog(result: RollResult | null): void {
+    const trophy = this.lastRollTrophyKey ? itemDef(this.lastRollTrophyKey)?.name ?? this.lastRollTrophyKey : "Trophy";
+    let outcome = "crumbled";
+    if (result?.success && result.candidates?.length && !result.id) {
+      outcome = `choice of ${result.candidates.length} Mythics`;
+    } else if (result?.success && result.id) {
+      const def = RELIC_DEFS[result.id];
+      const verdict = result.familyConflict?.verdict;
+      outcome = `${def.name} (${rarityName(def.rarity)})`;
+      if (verdict === "replaced") outcome += " — replaced";
+      else if (verdict === "declined") outcome += " — declined";
+      else if (verdict === "choice") outcome += " — contested";
+    }
+    this.runLog.recordRelicRoll(this.run.elapsedMs, trophy, outcome);
+    if (result?.success && result.id) {
+      const def = RELIC_DEFS[result.id];
+      // Only Rare/Mythic make the timeline — a run rolls dozens of Commons and
+      // a milestone list that includes all of them stops being a shape.
+      if (def.rarity === "rare" || def.rarity === "mythic") {
+        this.runLog.recordMilestone(this.run.elapsedMs, "relic", `${rarityName(def.rarity)} relic: ${def.name}`);
+      }
+    }
+  }
+
   private announceRelicResult(result: RollResult | null): void {
     const tex = this.lastRollTrophyKey ? itemDef(this.lastRollTrophyKey)?.texture : undefined;
+    this.recordRelicRollToLog(result);
     // Phase 5 (biome 3): a boss trophy landed on a CHOICE of candidates — there's
     // no relic to name or grant yet, so the real announce is deferred to the pick
     // (commitRelicCandidate). Only the HUD/menu refresh runs now.
@@ -9251,7 +9249,7 @@ export class MainScene extends Phaser.Scene {
           (1 + onsBonus + (critS ? this.critBonus(this.equippedWeapon) : 0)) *
           this.staggerMultiplierFor(other) *
           arc.falloff;
-        this.resolveWeaponHit(other, secDmg, dmgType, critS);
+        this.resolveWeaponHit(other, secDmg, dmgType, critS, false, "Arc sweep");
       }
     }
   }
@@ -9395,7 +9393,7 @@ export class MainScene extends Phaser.Scene {
     return Math.max(0, radius - MainScene.BASELINE_ENEMY_RADIUS);
   }
 
-  // Ranged: cooldown/stamina/ammo-gated fire-and-forget. Damage (including
+  // Ranged: cooldown/stamina-gated fire-and-forget. Damage (including
   // any stagger multiplier) is computed once now — same "captured at
   // commit time" precedent GremlinKing's enrage math already uses — and
   // carried by the projectile, applied on impact via resolveWeaponHit rather
@@ -9414,33 +9412,10 @@ export class MainScene extends Phaser.Scene {
     const staminaCost = Math.round(weaponStaminaCost(this.equippedWeapon) * this.effectiveStaminaCostMult());
     if (!this.stamina.canAfford(staminaCost)) return; // exhausted — silent, same as melee's guard
 
-    // Ammo gate — unlike the stamina/cooldown guards above, this one DOES
-    // give feedback (playtest: firing empty silently was confusing). If the
-    // shot empties the loaded stack, auto-refill from the backpack before
-    // giving up the slot, so a full pellet pouch doesn't force a manual
-    // re-equip mid-fight.
-    if (cfg.ammoItemKey) {
-      const eq = this.equipment.get("ammo");
-      if (!eq || eq.key !== cfg.ammoItemKey || (eq.count ?? 0) < 1) {
-        this.spawnFeedbackText(this.player.x, this.player.y, "Out of ammo!");
-        return;
-      }
-      const remaining = (eq.count ?? 0) - 1;
-      if (remaining > 0) {
-        this.equipment.set("ammo", { key: eq.key, tier: 0, count: remaining });
-      } else {
-        const max = itemDef(eq.key)?.maxStack ?? 0;
-        const haveInBackpack = this.backpack.count(eq.key);
-        if (haveInBackpack > 0) {
-          const take = Math.min(max, haveInBackpack);
-          this.equipment.set("ammo", { key: eq.key, tier: 0, count: take });
-          this.backpack.removeCount(eq.key, take);
-        } else {
-          this.equipment.set("ammo", null);
-        }
-      }
-    } else {
-      // Self-consuming (Javelin): burn 1 from the equipped hotbar stack itself.
+    // Firing cost, in items. `"none"` (every launcher and bow) is free — see
+    // RangedWeaponConfig.ammo for why consumable ammo was removed outright.
+    if (cfg.ammo === "self") {
+      // The Javelin IS the projectile: burn 1 from the equipped hotbar stack.
       const selectedIndex = this.hotbar.selected();
       const selStack = this.hotbar.container.slot(selectedIndex);
       if (!selStack || itemDef(selStack.key)?.weapon !== this.equippedWeapon) return;
@@ -9498,6 +9473,11 @@ export class MainScene extends Phaser.Scene {
     // True only for the swing's PRIMARY target / a projectile's impact — the
     // one hit allowed to trigger the weapon's on-hit burst.
     isBurstSource = false,
+    // Which slice of an attack produced this hit, for the end-of-run summary's
+    // damage attribution (RunLog). Every AOE slice funnels through here, which
+    // is exactly why the breakdown is worth having: a single swing can report
+    // as five separate hits and the player has no way to see that ratio live.
+    source: "Weapon (direct)" | "Arc sweep" | "Ranged" = "Weapon (direct)",
   ): void {
     // Waking on hit is handled by takeHit() itself — the base Enemy.takeHit()
     // flips idle->chasing for state-field enemies, and Boar/Snake/RangedGremlin/
@@ -9515,6 +9495,7 @@ export class MainScene extends Phaser.Scene {
     const effectiveness: DamageEffectiveness =
       resistMult > 1.001 ? "weak" : resistMult < 0.999 ? "resist" : "normal";
     const depleted = enemy.takeHit(finalDmg);
+    this.runLog.recordDamageDealt(source, finalDmg);
     this.awardSkillXp(dmgType, 30); // weapon-hit XP to the primary damage type's skill
     this.spawnDamageNumber(enemy.x, enemy.y, Math.round(finalDmg), isCrit, effectiveness);
     // Blunt weapon identity (S7): a blunt hit cripples the target's movement.
@@ -9534,7 +9515,9 @@ export class MainScene extends Phaser.Scene {
     // dealt while its active window lasts. Parallel to the Leech relic, its own
     // source; overheal at full HP is simply wasted (no shield bank).
     if (this.time.now < this.bloodpactUntil) {
-      this.health.heal(Math.max(1, Math.round(finalDmg * this.bloodpactLifelink)));
+      const amt = Math.max(1, Math.round(finalDmg * this.bloodpactLifelink));
+      this.health.heal(amt);
+      this.runLog.recordHealing("Bloodpact", amt);
       this.refreshHealthBar();
     }
     // Weapon lifelink (the Gloamdrinker): an ALWAYS-on drain that costs no relic
@@ -9543,7 +9526,9 @@ export class MainScene extends Phaser.Scene {
     // ranged weapons have no lifelink row today.
     const lifelink = this.equippedWeapon ? weaponLifelinkPct(this.equippedWeapon) : 0;
     if (lifelink > 0) {
-      this.health.heal(Math.max(1, Math.round(finalDmg * lifelink)));
+      const amt = Math.max(1, Math.round(finalDmg * lifelink));
+      this.health.heal(amt);
+      this.runLog.recordHealing("Weapon lifelink", amt);
       this.refreshHealthBar();
     }
     if (isCrit) this.applyCritSplash(enemy, finalDmg, dmgType);
@@ -10079,9 +10064,11 @@ export class MainScene extends Phaser.Scene {
     // Kill: relic on-kill heal (M-RL), then armor-skill XP per WORN PIECE (M-SS
     // — changed from per-distinct-type, so a mix-and-match loadout is rewarded
     // per piece and heavy_armor accrues once biome-2 heavy gear exists).
+    this.runLog.recordKill(enemy.displayName);
     const killHeal = this.relics.killHeal();
     if (killHeal > 0) {
       this.health.heal(killHeal);
+      this.runLog.recordHealing("On-kill relic heal", killHeal);
       this.refreshHealthBar();
     }
     // On-kill relic procs: Fleetfoot move burst, Second Wind stamina, Prodigy streak.
@@ -10115,7 +10102,11 @@ export class MainScene extends Phaser.Scene {
     // demoted the Gremlin King: both are still "boss" scores, and the
     // Duneshaper's Heart is finally obtainable now that killing it doesn't end
     // the run (it gates the Gemwright's Table's ability-jewelry tier).
-    this.run.recordKill(this.classifyKill(enemy));
+    const killCategory = this.classifyKill(enemy);
+    this.run.recordKill(killCategory);
+    if (killCategory === "boss") {
+      this.runLog.recordMilestone(this.run.elapsedMs, "boss", `Defeated ${enemy.displayName}`);
+    }
     if (enemy instanceof Miretyrant) {
       this.time.delayedCall(1200, () => this.endRun("won"));
     }
@@ -10275,6 +10266,7 @@ export class MainScene extends Phaser.Scene {
     const before = this.health.value();
     this.health.heal(heal);
     const applied = this.health.value() - before;
+    this.runLog.recordHealing("Leech relic", applied);
     this.refreshHealthBar();
     if (u.params.shieldPct) {
       const overheal = Math.max(0, heal - applied);
@@ -10543,6 +10535,7 @@ export class MainScene extends Phaser.Scene {
           undefined,
           enemy.pendingBleed ?? undefined,
           enemy.pendingPoison ?? undefined,
+          enemy.displayName,
         );
         enemy.pendingBleed = null; // consumed this frame
         enemy.pendingPoison = null;
@@ -10589,6 +10582,8 @@ export class MainScene extends Phaser.Scene {
             areaHit.knockback ? { fromX: enemy.x, fromY: enemy.y, speed: areaHit.knockback } : undefined,
             areaHit.dmgType,
             areaHit.bleed,
+            undefined,
+            enemy.displayName,
           );
         }
       }
@@ -10712,6 +10707,10 @@ export class MainScene extends Phaser.Scene {
     dmgType?: IncomingDamageType,
     bleed?: { dmgPerSec: number; durationMs: number },
     poison?: { dmgPerSec: number; durationMs: number },
+    // Who hit you, for the end-of-run summary's damage-taken breakdown. Recorded
+    // AFTER every reduction, so it reports what actually cost you HP rather than
+    // the attack's paper number — which is the only version worth balancing on.
+    sourceLabel?: string,
   ): void {
     if (this.isDead) return;
     if (this.time.now < this.invulnerableUntil) return;
@@ -10795,6 +10794,7 @@ export class MainScene extends Phaser.Scene {
     // DEV god mode: still take the hit (sfx/knockback/damage number all play
     // out normally above/below) but never drop below 1 HP or die.
     const appliedDamage = this.devGodMode ? Math.min(toHp, Math.max(0, this.health.value() - 1)) : toHp;
+    this.runLog.recordDamageTaken(sourceLabel ?? "Unattributed", appliedDamage);
     const died = this.health.takeDamage(appliedDamage);
     this.refreshHealthBar();
     this.hints.trigger("took_damage"); // first hit taken this run -> nudge toward healing
@@ -10883,9 +10883,25 @@ export class MainScene extends Phaser.Scene {
       sfxEnabled: () => this.sfx.isEnabled(),
       onToggleSfx: () => this.sfx.setEnabled(!this.sfx.isEnabled()),
       onResume: () => this.resumeGame(),
-      onNewRun: () => this.scene.restart(),
+      // Abandoning mid-run ENDS the run rather than silently restarting it
+      // (D7). This is the path a player takes most often, and it used to be the
+      // one case that produced no summary and no score at all — the run simply
+      // evaporated. Ending it as a death is honest: you didn't finish.
+      onNewRun: () => this.abandonRun(),
       onTips: () => this.openTips(),
     });
+  }
+
+  // "New Run" from the pause menu: close the pause overlay, un-freeze just
+  // enough for the end screen to work, and route through the normal endRun()
+  // path so the abandoned run is scored, recorded, and summarised like any
+  // other. The end screen's own "New Run" button then does the restart.
+  private abandonRun(): void {
+    this.pauseMenu.hide();
+    this.isPaused = false;
+    this.physics.world.resume();
+    this.time.paused = false;
+    this.endRun("died");
   }
 
   private resumeGame(): void {
@@ -11015,6 +11031,7 @@ export class MainScene extends Phaser.Scene {
   private showRunEndUI(entries: ScoreEntry[], rank: number): void {
     this.runEndUI.show({
       run: this.run,
+      runLog: this.runLog,
       level: this.progression.level,
       entries,
       rank,
@@ -11534,12 +11551,12 @@ export class MainScene extends Phaser.Scene {
     const outDef = itemDef(outputKey(recipe));
     if (!outDef) return null;
     const outIsGear =
-      !!outDef.weapon || !!outDef.tool || (!!outDef.armorSlot && outDef.armorSlot !== "ammo");
+      !!outDef.weapon || !!outDef.tool || !!outDef.armorSlot;
     if (!outIsGear) return null;
     for (const ingredient of Object.keys(recipe.costs)) {
       const def = itemDef(ingredient);
       if (!def) continue;
-      const isGear = !!def.weapon || !!def.tool || (!!def.armorSlot && def.armorSlot !== "ammo");
+      const isGear = !!def.weapon || !!def.tool || !!def.armorSlot;
       if (!isGear) continue;
       // A backpack copy is consumed first — leave the result in the backpack.
       if (this.backpack.count(ingredient) > 0) return null;
@@ -12114,6 +12131,10 @@ export class MainScene extends Phaser.Scene {
         if (!inst || !isAugmentableItem(inst.key)) return null;
         return new Set(appliedAugmentIds(inst));
       },
+      // Recipe discovery, not placement: knowing the Gemwright's Table exists is
+      // what makes "set gems at the Gemwright's Table" a useful pointer rather
+      // than a spoiler for a station the player has never heard of.
+      gemsUnlocked: () => this.crafting.discoveredRecipes().some((r) => r.id === "jewelry_station"),
       extraBlockReason: (upg) => this.upgradeBlockReason(upg),
       formatCost: (upg) => this.formatUpgradeCost(upg),
       displayName: (itemKey, tier) => stationDisplayName(itemKey, tier),
@@ -12728,7 +12749,7 @@ export class MainScene extends Phaser.Scene {
   private armorSlots(): ArmorSlotView[] {
     return EQUIP_SLOTS.map((s) => {
       const eq = this.equipment.get(s.id);
-      return { id: s.id, label: s.label, itemKey: eq?.key ?? null, tier: eq?.tier, count: eq?.count, upgrades: eq?.upgrades };
+      return { id: s.id, label: s.label, itemKey: eq?.key ?? null, tier: eq?.tier, upgrades: eq?.upgrades };
     });
   }
 
@@ -12736,18 +12757,8 @@ export class MainScene extends Phaser.Scene {
   // mirrors the exact same math Tooltip's weapon "base (adjusted)" lines and
   // tryAttackEnemy/applyDamageToPlayer already use, just rolled up into one
   // view instead of per-item tooltips.
-  // Loaded ranged ammo for display — the Ammo equipment slot's count/name, or
-  // null if empty. Independent of which weapon (if any) is equipped, same as
-  // armor showing regardless of weapon choice.
-  private ammoView(): { name: string; count: number } | null {
-    const eq = this.equipment.get("ammo");
-    if (!eq || !eq.count) return null;
-    return { name: itemDef(eq.key)?.name ?? eq.key, count: eq.count };
-  }
-
   private combatStats(): CombatStatsView {
     const armor = totalPlayerDefense(this.equipment);
-    const ammo = this.ammoView();
     const setBonuses = [...this.activeSetIds].map((id) => {
       const s = setById(id);
       return { name: s.bonusName, desc: s.bonusDesc };
@@ -12761,7 +12772,6 @@ export class MainScene extends Phaser.Scene {
         staminaCost: 0,
         armor,
         attackRange: REACH,
-        ammo,
         critChance: 0,
         critMult: 0,
         identity: null,
@@ -12788,7 +12798,6 @@ export class MainScene extends Phaser.Scene {
       staminaCost,
       armor,
       attackRange,
-      ammo,
       critChance,
       critMult,
       identity: weaponIdentityLine(this.equippedWeapon),
@@ -12827,30 +12836,6 @@ export class MainScene extends Phaser.Scene {
     const slot = def?.armorSlot;
     if (!slot) return;
 
-    // The ammo slot holds a *stack* (count), not a single item — merge into a
-    // matching key (topped up to maxStack) instead of an unconditional swap.
-    // A different key already loaded is returned to the backpack first, same
-    // as armor's swap-out below.
-    if (slot === "ammo") {
-      const existing = this.equipment.get(slot);
-      const max = def.maxStack;
-      if (existing && existing.key === stack.key) {
-        const room = Math.max(0, max - (existing.count ?? 0));
-        const take = Math.min(room, stack.count);
-        if (take <= 0) return; // full — no-op, snaps back
-        this.equipment.set(slot, { key: stack.key, tier: 0, count: (existing.count ?? 0) + take });
-        container.removeCount(stack.key, take);
-      } else {
-        if (existing) this.returnArmorToBackpack(existing);
-        const take = Math.min(max, stack.count);
-        this.equipment.set(slot, { key: stack.key, tier: 0, count: take });
-        container.removeCount(stack.key, take);
-      }
-      this.eventLog.add("info", `Loaded ${def.name}`);
-      this.afterItemMove();
-      return;
-    }
-
     // An item declares a GROUP, not a destination: any special fits any of the
     // four special slots and any ability item fits any of the three Q/E/R slots
     // (see EquipSlot). So route to the first FREE slot in the item's group, and
@@ -12871,7 +12856,7 @@ export class MainScene extends Phaser.Scene {
   }
 
   private returnArmorToBackpack(item: EquippedItem): void {
-    const stack: ItemStack = { key: item.key, count: item.count ?? 1, tier: item.tier || undefined, upgrades: item.upgrades };
+    const stack: ItemStack = { key: item.key, count: 1, tier: item.tier || undefined, upgrades: item.upgrades };
     if (!this.backpack.addStack(stack)) {
       this.spawnLooseDrop(item.key, stack.count, this.player.x, this.player.y, DROPPED_ITEM_MAGNET_COOLDOWN_MS, item.tier || undefined);
     }
@@ -12892,7 +12877,7 @@ export class MainScene extends Phaser.Scene {
     if (t && "armorSlot" in t && t.armorSlot === slot) this.closeUpgradeMenu();
     this.equipment.set(slot, null);
     if (toIndex !== undefined && this.backpack.slot(toIndex) === null) {
-      this.backpack.set(toIndex, { key: eq.key, count: eq.count ?? 1, tier: eq.tier || undefined, upgrades: eq.upgrades });
+      this.backpack.set(toIndex, { key: eq.key, count: 1, tier: eq.tier || undefined, upgrades: eq.upgrades });
     } else {
       this.returnArmorToBackpack(eq);
     }
@@ -12921,15 +12906,6 @@ export class MainScene extends Phaser.Scene {
 
   private openArmorContextMenu(slot: EquipSlot, screenX: number, screenY: number): void {
     const eq = this.equipment.get(slot);
-    // The ammo slot has no upgrade path (it holds a plain ammo stack, not an
-    // upgradable armor piece) — just a bare Unequip.
-    if (slot === "ammo") {
-      if (!eq) return;
-      this.contextMenu.show(screenX, screenY, [
-        { label: "Unequip", enabled: true, onClick: () => this.unequipArmorSlot(slot) },
-      ]);
-      return;
-    }
     const items: ContextMenuItem[] = eq
       ? [
           {
@@ -13416,6 +13392,7 @@ export class MainScene extends Phaser.Scene {
     if (b !== "base" && !this.discoveredBiomes.has(b)) {
       this.discoveredBiomes.add(b);
       this.eventLog.add("biome", `Discovered: ${BIOME_NAMES[b]}`);
+      this.runLog.recordMilestone(this.run.elapsedMs, "biome", `Entered the ${BIOME_NAMES[b]}`);
     }
   }
 

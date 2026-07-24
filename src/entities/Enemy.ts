@@ -84,6 +84,20 @@ const CLOSE_REAGGRO_RADIUS = 50; // px — overrides the immunity window even be
 // check is allowed to fire.
 const AGGRO_PERSIST_MS = 4000;
 
+// Absolute ceiling on one continuous pursuit, measured from when it began and
+// NEVER reset — only cleared when the enemy actually disengages.
+//
+// CHASE_GIVEUP_MS above is reset by every landed hit, which is correct on its
+// own terms (a fight that's connecting shouldn't time out mid-swing) but means
+// anything that keeps touching you can never give up: a Mirejaw chomping every
+// 1.2s refreshed a 30s clock forever. That's the melee half of the same defect
+// the ranged casters had (see markAttackAttempted) — they got fixed, melee
+// didn't. So landing hits still extends pursuit via the 30s clock, but nothing
+// can push past this ceiling; eventually the thing has to break off and you get
+// to leave. Shared on the base class so every melee species inherits it rather
+// than each one growing its own leash.
+const MAX_PURSUIT_MS = 45000;
+
 // One independently-rolled drop entry. Most enemies (Boar, Snake) have a
 // single entry; the ranged Gremlin variant drops two (skin + blood) — see
 // EnemyConfig.loot below, which is why this is an array rather than a single
@@ -177,6 +191,8 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   // future subclass overriding update() entirely can still reuse the same
   // clock/helpers below rather than reimplementing the mechanism.
   protected pursuitClockStart = 0;
+  // -1 = not currently pursuing. See MAX_PURSUIT_MS.
+  protected pursuitHardStart = -1;
   protected aggroImmuneUntil = 0;
   // Movement-speed multiplier (default 1). Elite variants set this >1 and
   // multiply their chase/pursue/kite speeds by it in update(). Base value keeps
@@ -449,7 +465,21 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   // Refresh the aggro-persistence window (see AGGRO_PERSIST_MS above) — called
   // on every aggro trigger: starting pursuit, landing a hit, and taking a hit.
   protected extendAggroPersist(now: number): void {
+    // Stamp the hard-ceiling clock at the start of an ENGAGEMENT. Done here
+    // rather than in startPursuit() because several subclasses drive their own
+    // private mode field and never call startPursuit — but every aggro path
+    // (pursuit start, landed hit, taking a hit) reaches this method, so the
+    // ceiling can't be silently skipped.
+    //
+    // "A new engagement" = the persistence window had already lapsed, i.e. this
+    // enemy had genuinely lost you rather than being mid-fight. Keying off that
+    // instead of only enterGivenUpState() matters because most subclasses
+    // deaggro by DISTANCE and never call it (Mirejaw just submerges) — without
+    // this, a gator that lost you once would carry a spent ceiling forever and
+    // insta-give-up on every later fight. Caught in verification.
+    const newEngagement = this.pursuitHardStart < 0 || now >= this.aggroPersistUntil;
     this.aggroPersistUntil = now + AGGRO_PERSIST_MS;
+    if (newEngagement) this.pursuitHardStart = now;
   }
 
   // True while still within the persistence window — a subclass's distance-
@@ -462,7 +492,9 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   // True once continuous pursuit has run long enough without landing a hit
   // that the default "back off for a while" behavior should kick in.
   protected hasGivenUpPursuit(now: number): boolean {
-    return now - this.pursuitClockStart >= CHASE_GIVEUP_MS;
+    if (now - this.pursuitClockStart >= CHASE_GIVEUP_MS) return true;
+    // The hard ceiling: unlike the clock above, landing a hit does not reset it.
+    return this.pursuitHardStart >= 0 && now - this.pursuitHardStart >= MAX_PURSUIT_MS;
   }
 
   // Whether normal aggro-radius proximity should be allowed to (re-)trigger
@@ -477,6 +509,9 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   // takeHit()) both override it early.
   protected enterGivenUpState(now: number): void {
     this.aggroImmuneUntil = now + POST_GIVEUP_IMMUNITY_MS;
+    // Disengaging is the only thing that clears the hard ceiling, so the next
+    // engagement gets a fresh full-length pursuit.
+    this.pursuitHardStart = -1;
   }
 
   // Called every frame from MainScene.updateEnemies(). Returns true if a

@@ -87,7 +87,13 @@ export const ABILITY_DEFS: Record<AbilityId, AbilityDef> = {
     family: "blink",
     power: 1,
     name: "Gloamstep Blink",
-    description: "Blink a short distance toward your aim, briefly untouchable. Gap-close or escape.",
+    // Every description below STATES ITS NUMBERS (the user: "descriptions of
+    // abilities need to be defined with numbers in the table menu"). Half the
+    // roster described only the mood, which left an ability's worth unreadable
+    // next to one that did quote a figure. Values here are the full-power
+    // magnitudes from MainScene's ABILITY_* constants; a `power` variant quotes
+    // its own scaled numbers rather than the base ones.
+    description: "Blink 220px toward your aim, untouchable for 250ms. Gap-close or escape.",
     cooldownMs: 6000,
     icon: "ability_blink",
   },
@@ -96,7 +102,7 @@ export const ABILITY_DEFS: Record<AbilityId, AbilityDef> = {
     family: "nova",
     power: 1,
     name: "Gloam Nova",
-    description: "Burst gloam outward, damaging and knocking back everything around you.",
+    description: "Deals 30 magic damage (ignores armor) to everything within 150px and shoves it back.",
     cooldownMs: 10000,
     icon: "ability_nova",
   },
@@ -105,7 +111,7 @@ export const ABILITY_DEFS: Record<AbilityId, AbilityDef> = {
     family: "lifelink",
     power: 1,
     name: "Bloodpact",
-    description: "For a few seconds, your strikes siphon life — healing you for part of the damage dealt.",
+    description: "For 6s your strikes heal you for 35% of the damage dealt.",
     cooldownMs: 24000,
     activeMs: 6000,
     icon: "ability_bloodpact",
@@ -120,7 +126,7 @@ export const ABILITY_DEFS: Record<AbilityId, AbilityDef> = {
     family: "blink",
     power: 0.6,
     name: "Lesser Gloamstep",
-    description: "A short, unsteady hop through the gloam. Barely enough to slip a blow.",
+    description: "A short, unsteady hop — 132px, untouchable for 150ms. Barely enough to slip a blow.",
     cooldownMs: 9000,
     icon: "ability_blink_lesser",
   },
@@ -129,7 +135,7 @@ export const ABILITY_DEFS: Record<AbilityId, AbilityDef> = {
     family: "nova",
     power: 0.55,
     name: "Lesser Gloamburst",
-    description: "A thin pop of gloam — it stings and shoves, but only what's already on top of you.",
+    description: "A thin pop of gloam: 17 magic damage within 82px. Only what's already on top of you.",
     cooldownMs: 14000,
     icon: "ability_nova_lesser",
   },
@@ -138,7 +144,7 @@ export const ABILITY_DEFS: Record<AbilityId, AbilityDef> = {
     family: "lifelink",
     power: 0.5,
     name: "Lesser Bloodpact",
-    description: "A shallow pact. Your strikes give back a little of what they take, for a little while.",
+    description: "A shallow pact: for 3s your strikes heal you for 18% of the damage dealt.",
     cooldownMs: 30000,
     activeMs: 6000, // scaled by `power` at cast → ~3s
     icon: "ability_bloodpact_lesser",
@@ -150,7 +156,7 @@ export const ABILITY_DEFS: Record<AbilityId, AbilityDef> = {
     family: "gravebind",
     power: 1,
     name: "Gravebind",
-    description: "Drag everything nearby into your reach and leave it staggering. Deals no damage — it sets the table.",
+    description: "Drags everything within 260px up to 170px inward and slows it to 30% for 2.2s. Deals no damage — it sets the table.",
     cooldownMs: 14000,
     icon: "ability_gravebind",
   },
@@ -159,7 +165,7 @@ export const ABILITY_DEFS: Record<AbilityId, AbilityDef> = {
     family: "lance",
     power: 1,
     name: "Spirit Lance",
-    description: "Drive a lance of pale gloam straight through everything in a line.",
+    description: "Drives a 420px lance of pale gloam through everything in a line for 55 magic damage (ignores armor).",
     cooldownMs: 12000,
     icon: "ability_lance",
   },

@@ -120,24 +120,11 @@ export const RECIPES: Recipe[] = [
   {
     id: "slingshot",
     name: "Slingshot",
-    description: "A simple ranged launcher. Weak on its own — load it with pellets and lean on practice.",
+    description: "A simple ranged launcher. Weak on its own — it never runs dry, but practice is what makes it hurt.",
     category: "weapons",
     tier: 1,
     costs: { wood: 2, leather: 2 },
     output: { kind: "item", itemId: "slingshot", itemName: "Slingshot" },
-  },
-  {
-    id: "slingshot_pellets",
-    name: "Slingshot Pellets",
-    description: "A handful of rounded stones sized for a Slingshot.",
-    category: "weapons",
-    tier: 0,
-    costs: { stone: 3 },
-    // Stone is common enough that this would otherwise appear immediately —
-    // gate its discovery on having actually crafted a Slingshot first, so it
-    // doesn't show up before there's anything to load it into.
-    requiresDiscovered: ["slingshot"],
-    output: { kind: "item", itemId: "slingshot_pellets", itemName: "Slingshot Pellets", count: 25 },
   },
   {
     id: "javelin",
@@ -421,29 +408,6 @@ export const RECIPES: Recipe[] = [
     requiredSkills: [{ skill: "ranged", level: 0 }],
     output: { kind: "item", itemId: "sunsteel_warbow", itemName: "Sunsteel Warbow" },
   },
-  {
-    id: "arrows",
-    name: "Arrows",
-    description: "A bundle of metal-tipped arrows for a Warbow, forged from a Sunsteel Ingot.",
-    category: "weapons",
-    tier: 1,
-    requiresWorkbenchTier: 2,
-    // Gate discovery on owning a Warbow first, like Slingshot Pellets → Slingshot.
-    requiresDiscovered: ["sunsteel_warbow"],
-    costs: { sunsteel_ingot: 1, wood: 5 },
-    output: { kind: "item", itemId: "arrows", itemName: "Arrows", count: 50 },
-  },
-  {
-    id: "arrows_embersteel",
-    name: "Arrows (Embersteel)",
-    description: "The same Warbow arrows, forged from an Embersteel Ingot instead — for when Sunsteel is short.",
-    category: "weapons",
-    tier: 1,
-    requiresWorkbenchTier: 3,
-    requiresDiscovered: ["sunsteel_warbow"],
-    costs: { embersteel_ingot: 1, wood: 5 },
-    output: { kind: "item", itemId: "arrows", itemName: "Arrows", count: 50 },
-  },
 
   // === enhanced / T2 tier (biome 2 Phase 4 Session 2, Workbench Lvl 4) ===
   // Each REFORGES its base forged piece — the base item is consumed as an
@@ -592,21 +556,6 @@ export const RECIPES: Recipe[] = [
   // have been made. DORMANT until biome 3 sources Bog Ore / Mirehide.
 
   // --- bayou HEAVY armor: Gloamsteel set ---
-  {
-    id: "arrows_gloamsteel",
-    name: "Arrows (Gloamsteel)",
-    // NOT interchangeable with the badlands stock, unlike the Sunsteel/Embersteel
-    // pair (which both make plain `arrows`): a Gloamsteel Warbow's draw needs a
-    // gloamsteel shaft, so these are their own ammo item and the only thing that
-    // bow will fire — see RANGED_WEAPONS.gloamsteel_warbow.
-    description: "Warbow arrows headed and shafted in gloamsteel. Only a Gloamsteel Warbow can draw them — and it will draw nothing else.",
-    category: "weapons",
-    tier: 1,
-    requiresWorkbenchTier: 4,
-    costs: { gloamsteel_ingot: 1, wood: 5 },
-    requiresDiscovered: ["sunsteel_warbow"],
-    output: { kind: "item", itemId: "gloam_arrows", itemName: "Gloamsteel Arrows", count: 60 },
-  },
   {
     id: "gloamdrinker",
     name: "Gloamdrinker",

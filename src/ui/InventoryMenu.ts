@@ -17,8 +17,6 @@ export interface ArmorSlotView {
   tier?: number;
   // Applied gem-augment ids on the worn instance (biome 3 Phase 3).
   upgrades?: string[];
-  // Set only for the "ammo" slot — every other slot holds a single item.
-  count?: number;
 }
 
 // Live rollup of the player's current combat loadout — computed fresh by
@@ -32,7 +30,6 @@ export interface CombatStatsView {
   staminaCost: number; // per hit, 0 if no weapon
   armor: number; // total flat defense from all worn armor
   attackRange: number; // px, same reach used for interact/attack gating
-  ammo: { name: string; count: number } | null; // loaded ranged ammo, if any
   critChance: number; // 0..0.6 fraction (weapon base + Agility + relics), 0 if no weapon
   critMult: number; // crit damage multiplier (weapon base + Strength + relics), 0 if no weapon
   identity: string | null; // S7 weapon-type identity line (e.g. "Focused — …"); null if no weapon
@@ -189,7 +186,6 @@ const ARMOR_LAYOUT: Record<EquipSlot, { col: number; row: number }> = {
   ability1: { col: 0, row: 4 },
   ability2: { col: 1, row: 4 },
   ability3: { col: 2, row: 4 },
-  ammo: { col: 0, row: 5 },
 };
 const ARMOR_ROWS_MAX = Math.max(...Object.values(ARMOR_LAYOUT).map((p) => p.row)) + 1;
 const ARMOR_H = ARMOR_ROWS_MAX * ARMOR_ROW_PITCH - GAP;
@@ -252,6 +248,7 @@ export class InventoryMenu {
   private deps: InventoryMenuDeps;
   private bg: Phaser.GameObjects.Rectangle;
   private open = false;
+  private refreshQueued = false;
   private rows: Phaser.GameObjects.GameObject[] = [];
   // Looping alpha tweens for the "upgrade ready" arrows — killed on every
   // re-render (rows are destroyed each render; an orphaned repeat:-1 tween
@@ -377,8 +374,24 @@ export class InventoryMenu {
     return this.open;
   }
 
+  // Coalesced repaint. `render()` is a full teardown-and-rebuild of every
+  // GameObject in the panel, and `afterItemMove()` calls this on EVERY item
+  // movement — including each individual magnet pickup. With drops streaming in
+  // that was several complete rebuilds a second underneath the cursor, which is
+  // the flicker (the user: "weird flicker if I have my inventory open when I pick
+  // stuff up"): interactive objects are destroyed and recreated under the
+  // pointer, so hover state and the tooltip strobe.
+  //
+  // Collapsing a burst into one repaint per frame fixes the burst case; the
+  // steady-state case is fixed by render() no longer dropping the tooltip (see
+  // below), so a repaint under a stationary cursor is now visually inert.
   refresh(): void {
-    if (this.open) this.render();
+    if (!this.open || this.refreshQueued) return;
+    this.refreshQueued = true;
+    this.scene.events.once(Phaser.Scenes.Events.POST_UPDATE, () => {
+      this.refreshQueued = false;
+      if (this.open) this.render(true);
+    });
   }
 
   hideTooltip(): void {
@@ -517,9 +530,15 @@ export class InventoryMenu {
     }
   }
 
-  private render(): void {
+  // `keepTooltip` is set only by the coalesced refresh path. Rebuilding destroys
+  // the object the pointer is over, and Phaser won't re-fire pointerover until
+  // the pointer actually moves — so unconditionally hiding here made the tooltip
+  // vanish (and stay vanished) every time a pickup landed. Interaction-driven
+  // renders — tab switch, scroll, search, open/close — still drop it, because
+  // there the thing under the cursor genuinely changed.
+  private render(keepTooltip = false): void {
     this.clearRows();
-    this.hideTooltip();
+    if (!keepTooltip) this.hideTooltip();
     const x0 = PANEL_X + 12;
 
     this.addText(x0, PANEL_Y + 10, "Inventory", 15, "#ffffff");
@@ -643,7 +662,6 @@ export class InventoryMenu {
     y += lineGap;
     this.addText(x0, y, `Attack Range: ${stats.attackRange}`, 12, "#8a93a3");
     y += lineGap;
-    this.addText(x0, y, `Ammo: ${stats.ammo ? `${stats.ammo.count} ${stats.ammo.name}` : "-"}`, 12, "#8a93a3");
     y += lineGap;
     const speed = this.deps.runSpeedBreakdown();
     this.addText(x0, y, `Move Speed: ${speed.walk} / ${speed.sprint} spr`, 12, "#8a93a3");
@@ -801,9 +819,6 @@ export class InventoryMenu {
             .setDepth(3002);
           this.fitIcon(icon);
           this.rows.push(icon);
-        }
-        if (slot.count && slot.count > 1) {
-          this.addText(x + SLOT - 4, y + SLOT - 3, `${slot.count}`, 11, "#ffffff", 1, 1);
         }
         if (this.deps.upgradeReady(slot.itemKey, slot.tier ?? 0, slot.upgrades)) this.addUpgradeArrow(x, y);
         this.addGemPips(x, y, slot.itemKey, slot.upgrades);
@@ -1062,7 +1077,7 @@ export class InventoryMenu {
         if (pointer.rightButtonDown()) {
           const def = itemDef(stack.key);
           if (def?.edible) this.deps.eatItem(backpack, index);
-          else if (def?.weapon || def?.tool || (def?.armorSlot && def.armorSlot !== "ammo"))
+          else if (def?.weapon || def?.tool || def?.armorSlot)
             this.deps.openGearUpgrade(backpack, index);
           else if (def?.placeable) this.deps.openPlaceContextMenu(backpack, index, pointer.x, pointer.y);
           return;

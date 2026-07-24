@@ -46,6 +46,13 @@ export interface UpgradeMenuDeps {
   // a piece can hold both (Lvl 2/3 tiers AND up to MAX_AUGMENTS_PER_ITEM gems),
   // which is why this is a separate dep rather than reusing appliedUpgradeIds.
   appliedAugmentIds?: () => Set<string> | null;
+  // Whether the player knows the Gemwright's Table yet. The gem-slot readout
+  // below points at a station that, pre-discovery, the player has never heard
+  // of — so on a first-biome weapon it advertised a whole system that doesn't
+  // exist for them yet (the user: "gem augments shouldn't even show up on
+  // weapons until the gemwright table is discovered"). Absent = show, so a
+  // caller that doesn't care keeps the old behaviour.
+  gemsUnlocked?: () => boolean;
   // Extra non-material gate beyond canAfford (e.g. armor upgrades that also
   // require a nearby Workbench at a given tier) — returns a short blocking
   // reason to display, or null when unblocked. Optional: station upgrades
@@ -208,7 +215,7 @@ export class UpgradeMenu {
 
     // Gem-slot readout for augmentable gear, so the 2-per-item cap is visible
     // before a player finds every row greyed out.
-    if (augApplied !== null) {
+    if (augApplied !== null && (this.deps.gemsUnlocked?.() ?? true)) {
       this.addText(
         this.panelX + 16,
         cursor - 12,

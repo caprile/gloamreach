@@ -41,7 +41,7 @@ export interface ProjectileConfig {
   // rather than an `Enemy` import (Enemy imports this module — a named type
   // would be a cycle). Only a LANDED shot resets a ranged enemy's give-up clock;
   // see Enemy.markAttackAttempted for why firing alone must not.
-  sourceEnemy?: { onProjectileHitPlayer(now: number): void };
+  sourceEnemy?: { onProjectileHitPlayer(now: number): void; displayName: string };
 }
 
 // Miss rule for homing projectiles (see preUpdate). "Came close" is generous
@@ -64,7 +64,7 @@ export class Projectile extends Phaser.Physics.Arcade.Sprite {
   readonly sourceIsPlayer: boolean;
   readonly isCrit: boolean;
   readonly damageType?: IncomingDamageType;
-  readonly sourceEnemy?: { onProjectileHitPlayer(now: number): void };
+  readonly sourceEnemy?: { onProjectileHitPlayer(now: number): void; displayName: string };
   private readonly spawnX: number;
   private readonly spawnY: number;
   private readonly maxRangePx: number;

@@ -36,7 +36,13 @@ type MirejawMode = "lurk" | "lunging" | "hunting";
 // in two swings. Everything below is scaled to that reality: this is the bayou's
 // apex regular and it has to be able to genuinely run you down.
 const AMBUSH_RADIUS = 240; // lurking, player this close → commit the lunge
-const STALK_RADIUS = 460; // lurking, drifts toward a player inside this to line one up
+// 460 -> 330. Stalking escalates into an open hunt after STALK_PATIENCE_MS
+// regardless of distance, so this radius is effectively the creature's real
+// aggro range — and 460 is beyond the ~360px visible half-height, i.e. a gator
+// committed to you from off the top of the screen (the user: "aggro radius for
+// alligators is absolutely absurd - aggrod onto before and they werent even on
+// my screen"). 330 keeps it on-screen while staying well above its 240 ambush ring.
+const STALK_RADIUS = 330; // lurking, drifts toward a player inside this to line one up
 const LURK_DRIFT = 44; // px/s — a submerged gator repositioning, still slow enough to spot
 const LURK_ALPHA = 0.4; // half-sunk, not invisible (cf. Sandmaw's 0.18)
 // Stalking is SLOW (that's what makes a lurking gator readable), which means a
@@ -51,7 +57,13 @@ const STALK_PATIENCE_MS = 2400;
 // Faster than a player's WALK (95) and most of a sprint, so escaping on foot
 // means actually committing to a sprint/dash instead of strolling off.
 const CHASE_SPEED = S.moveSpeed;
-const DEAGGRO_RADIUS = 720; // sticky (the Duskrunner's 620 precedent) — an apex predator commits
+// 720 -> 520. At WORLD_ZOOM 1.5 the visible world is roughly 1280x720px, so the
+// screen half-diagonal is ~734 and the half-HEIGHT only ~360: a 720 deaggro
+// radius meant a gator essentially could not lose you anywhere on screen
+// (the user: "gator dudes still not really deaggroing... chasing me forever").
+// Apex-predator commitment is now carried by the base-class aggro persistence
+// plus the sticky STALK_RADIUS below, not by a radius the player can't see out of.
+const DEAGGRO_RADIUS = 520;
 
 const MAX_HEALTH = S.hp; // ~5-6 bayou-tier hits; the badlands' 95-HP Hexling was two
 

@@ -75,7 +75,7 @@ export class Tooltip {
     // in my inventory, the specials, it doesn't tell me what slot it can go
     // into"). Ammo is excluded — it reads as a material, and the Ammo slot is
     // labelled on the doll anyway.
-    if (def.armorSlot && def.armorSlot !== "ammo") {
+    if (def.armorSlot) {
       const group = slotGroup(def.armorSlot);
       lines.push("");
       lines.push(
