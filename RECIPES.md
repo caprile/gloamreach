@@ -240,9 +240,15 @@ Embersteel, Mirebronze, Gloamsteel, both brands and all three Warbows — gets
 (`+2` then `+2`, = **+4 damage at Lvl 3**): Lvl 2 = 2 ingot, Lvl 3 = 3 ingot
 (Sunsteel Ingot for the base weapons, Embersteel Ingot for the T2 + Ember Brand,
 Mirebronze/Gloamsteel Ingot for their own tiers). The **Sunsteel/Embersteel
-Warbows and all three Mirebronze weapons were missing their upgrades entirely**
-until 2026-07-23 — a plain registration omission, so a ranged or Sunsteel-branch
-build's gear dead-ended at base.
+Warbows, all three Mirebronze weapons, and the whole Mirebronze + Bogweave armor
+sets were missing their upgrades entirely** until 2026-07-23 — one registration
+omission repeated across the Sunsteel branch and the bows, so a ranged or
+Sunsteel-branch build's gear dead-ended at base while every other forged set had
+two levels. Mirebronze armor is +3/+7 (helm, greaves), +4/+8 (cuirass); Bogweave
+is +2/+3 per piece; both cost Mirebronze Ingots at Workbench Lvl 4, matching
+their own craft recipes. Only `wood_club`, `slingshot` and `javelin` now have no
+upgrade path, which is deliberate — they are tier-0 starters meant to be
+superseded.
 Tuned so a base (Lvl 1) ember weapon out-damages a fully-upgraded (Lvl 3) steel
 one. Stamina costs were also bumped so each tier is a clear step up (the user):
 starter < Sunsteel < Ember. AOE arc widths in `Weapons.ts` `WEAPON_ARC`.

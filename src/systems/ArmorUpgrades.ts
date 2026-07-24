@@ -179,6 +179,26 @@ ARMOR_UPGRADES.push(
   ...forgedArmorUpgrades("mirehide_leggings", "Mirehide Leggings", "gloamsteel_ingot", 4, [2, 4]),
 );
 
+// Mirebronze / Bogweave (B4-P5, the SUNSTEEL branch) shipped with NO upgrades at
+// all — the same plain registration omission the Mirebronze *weapons* and both
+// Warbows had (fixed 2026-07-23). Left as-is it meant the entire alternate route
+// through the gear tree dead-ended at base while every other forged set had two
+// levels, which is precisely the "longer road pays less" trap the branch is meant
+// to avoid.
+//
+// Bonuses follow the same ~25%-of-the-piece rule and sit between the Embersteel
+// and Gloamsteel steps, matching where these sets sit in the ladder: Mirebronze
+// heavy is 14/16/14 armor, Bogweave light is 7/7/7. Bench tier 4 and the
+// mirebronze ingot mirror their own craft recipes.
+ARMOR_UPGRADES.push(
+  ...forgedArmorUpgrades("mirebronze_helm", "Mirebronze Helm", "mirebronze_ingot", 4, [3, 7]),
+  ...forgedArmorUpgrades("mirebronze_cuirass", "Mirebronze Cuirass", "mirebronze_ingot", 4, [4, 8]),
+  ...forgedArmorUpgrades("mirebronze_greaves", "Mirebronze Greaves", "mirebronze_ingot", 4, [3, 7]),
+  ...forgedArmorUpgrades("bogweave_hood", "Bogweave Hood", "mirebronze_ingot", 4, [2, 3]),
+  ...forgedArmorUpgrades("bogweave_vest", "Bogweave Vest", "mirebronze_ingot", 4, [2, 3]),
+  ...forgedArmorUpgrades("bogweave_leggings", "Bogweave Leggings", "mirebronze_ingot", 4, [2, 3]),
+);
+
 // The upgrades that could apply to a given equipped armor item, ordered by
 // the tier they grant.
 export function armorUpgradesForItem(itemKey: string): ArmorUpgradeDef[] {
