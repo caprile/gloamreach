@@ -2,57 +2,109 @@
 
 ## Current State
 
-_Living snapshot — edit in place, never append._ Last shipped: **"God run" triage session 2 —
-the balance pass** (2026-07-23, Sonnet, plan: `.claude/plans/vagabond-god-run-triage.md`).
-Session 3 (creature identity: Mirejaw/Mosswretch/Corpselight kits) is next and unstarted.
+_Living snapshot — edit in place, never append._ Last shipped: **"God run" triage session 3 —
+the creature-identity pass (C1/C2/C3)** (2026-07-23, Opus, plan:
+`.claude/plans/vagabond-god-run-triage.md`). **The entire god-run triage (sessions 1-3) is now
+complete** — every locked decision D1-D10 and every creature kit C1-C3 has shipped.
 
-**What just landed — all 6 remaining locked decisions from the triage, shipped and verified:**
-- **D2** — lifesteal is now capped at 1.5x the primary hit's contribution PER SWING (the
-  actual god-run fix). New `MainScene.budgetedSwingHeal()` wraps Leech relic / Bloodpact /
-  weapon lifelink; the primary hit always heals in full (it DEFINES the cap), everything an
-  arc sweep adds on top is clamped to whatever room remains. Verified: a 6-target Gloamdrinker
-  swing with all three sources active clamped at exactly budget=applied=15 (was ~55+
-  uncapped) across three consecutive swings with no carry-over; single-target melee and a
-  single ranged shot both heal fully uncapped, since neither has anything to clamp against.
-- **D3** — all 3 Warbows: damage +40% (11/15/20 -> 15/21/28), cooldown -25%
-  (750/730/720ms -> 560/545/540ms). Lands each tier's bow DPS inside its own tier's
-  forged-melee band (e.g. Sunsteel 26.8 DPS between the Warhammer's 21.3 and Sword/Pike's
-  29-31), paying for reach with no arc/burst/lifelink instead of chip damage.
-- **D4** — raised the baseline XP curve (`Progression.ts` `XP_BASE` 110->85) and trimmed the
-  Ashcaller's stacked multipliers (`xpMult` 1.3->1.15, `skillXpMult` magic 1.6->1.35/ranged
-  1.4->1.2, `statPotency.intelligence` 1.5->1.25). **Correctness catch mid-implementation:**
-  `Skills.ts`'s `skillXpToNext` coefficient looked like an equivalent lever but is a NO-OP for
-  player-level pace (proven by simulation — a skill level's cost literally IS the player-XP
-  it feeds, so lowering the coefficient only re-chunks the same total into more/smaller
-  deposits). Lowered it anyway (70->54) since it's a real, independent win for skill-level
-  pace, but the code comments now say what it actually does rather than repeat the original,
-  also-inaccurate S1-batch claim.
-- **D5** — jewelry's `magnetRadiusPct` passive (pickup radius) removed entirely and folded
-  into the existing `gatherBonusPct` channel on the 3 items that had it (Ring of the Forager,
-  Lantern of the Long Dark, Amulet of Farsight).
-- **D9** — stat caps are now SURFACED, not blocked. A "(CAPPED — this axis is maxed)" note
-  appears on the Stats tab once an axis saturates: Wisdom's ability-cooldown (self-contained,
-  100 points) and Strength/Agility's crit contribution (build-dependent — new `critCapped`
-  dep reads live off the equipped weapon). No universal hard allocation ceiling — Endurance/
-  Vitality/Intelligence/Wisdom's-other-axis are all genuinely uncapped by design.
-- **D10** — the bayou common->miniboss gap. Commons down 15-30% (Mosswretch 420->300,
-  Mirejaw 320->260, Corpselight 190->160, Blighttoad 150->130); the 3 crypt wardens roughly
-  doubled (Palewake 420->850, Kilnborn 440->1000, Sanguinarch 620->1350) plus matching damage
-  bumps. Spread now 2.8-4.5x (was 1.0-1.5x; badlands runs 2.7-6.8x), boss->toughest-common
-  12x. **Self-caught error:** my own plan doc claimed "miniboss->boss 3.4x" and badlands
-  "5.5x" — both were arithmetic slips; re-measured live as 2.67x and 3.85x respectively, and
-  the plan doc's now corrected in place rather than left wrong.
-- Along the way: found the dashboard's Enemies tab (`src/dashboard/main.ts`) was ALREADY
-  stale for Palewake/Kilnborn (a same-day 240->420/300->440 bump from earlier today's other
-  session never reached it) — resynced all 8 touched enemies' entries. **Known remaining
-  drift, explicitly NOT fixed this session** (out of scope, flagged rather than silently
-  expanded into): Mirejaw/Blighttoad/Mosswretch/Murkling/Corpselight's dashboard ATTACK
-  damage numbers are stale from that same earlier rebalance pass, and the CUT Fenlurker is
-  still listed as a live enemy in the dashboard.
+**What just landed — three bespoke bayou-creature reworks, each answering a specific the user
+complaint:**
+- **C1 — Mirejaw ("feels like a glorified boar").** A landed chomp now LATCHES into a DEATH ROLL
+  (3 ticks in a tight 62px grip @360ms, 18 dmg + 7/s bleed each, then a 1s planted recovery;
+  break away mid-roll to cut losses — each tick re-checks your position). And it's now EXEMPT from
+  the deep-water move-slow (new generic `Enemy.ignoresTerrainSlow`), so on dry ground you outpace
+  it but in the water it's faster than you — the swamp is its territory. Roll ticks route through
+  `checkPlayerHit`.
+- **C2 — Mosswretch ("lacks attack moves / feels weird").** Gained a SPORE BURST (mid-range only:
+  a planted heave drops a lingering cloud that slows 0.6x + poisons 5/s for 6s, cutting off your
+  retreat to set up the smash — no impact damage, the cloud IS the payload), and it now
+  DEATH-SPAWNS 3 Mosslings (scale 0.58, 16% HP, forceAggro'd; guarded against recursion/trophy-
+  farming). The cloud rides the same `environmentEffectAt` path the Miretyrant's mire pools use
+  (new `baseSurfaceEnvironmentAt`+`foldSporeCloud` split); the death-spawn uses the "creature asks
+  (`deathSpawnCount`), scene spawns (`spawnMosslings`)" split the bellow uses.
+- **C3 — Corpselight ("just a ranged gremlin").** A genuine TWO-FORM TRANSFORM (the user rejected
+  phase-out/blink as done-before). At range = the wisp (unchanged homing orbs); close to melee it
+  COLLAPSES into a corporeal husk (1.7x, slow, physical maul that armor answers, takes 0.5x
+  damage); back off and it DISSOLVES back. ONE shared HP pool, both transitions deal telegraphed
+  magic AoE (collapse slam 26 + dissolve puff 13), 1.6s transform cooldown kills boundary-flicker.
+  The player picks the fight: commit to melee and face the tanky husk, or kite and eat orbs.
 
-**Next — session 3, creature identity (Opus, new mechanics):** Mirejaw death-roll thrash +
-water-territory exemption (C1); Mosswretch death-spawn Mosslings + spore cloud (C2);
-Corpselight two-form transform, wisp<->corporeal husk (C3). All fully speced in the plan doc.
+All three verified live (with a page reload each to clear the HMR dual-class artifact that makes
+`instanceof` lie in the test harness): full state cycles, correct damage/scales, counterplay
+(breaking the death-roll grip / dodging the collapse slam), the husk 0.5x reduction, and the
+scene-integrated AoE actually reaching the player through `applyDamageToPlayer`. Every kit's
+numbers live in `enemyStats.ts`; the dashboard Enemies tab was resynced for all three (and their
+stale primary-damage numbers corrected in passing, since I was editing those entries anyway —
+Blighttoad/Murkling's remain flagged as before). `tsc`+`npm run build` clean throughout, zero
+console errors.
+
+**Next: a playtest.** Every number across sessions 1-3 is first-pass — the balance pass (D2/D3/
+D4/D10 especially) and the three new creature kits all want real-play validation. No further
+planned work is queued; the god-run triage is closed.
+
+## Recent Entries
+
+> Older entries in STATUS-archive.md.
+
+### "God run" triage session 3 — creature identity pass, C1/C2/C3 (2026-07-23, Opus)
+
+Plan: `.claude/plans/vagabond-god-run-triage.md`. Sessions 1 (bugs/ammo/summary) and 2 (the
+balance pass) shipped earlier the same day; this is the final session, closing the whole triage.
+Three bespoke bayou-creature reworks, each off a specific the user complaint and each following the
+roster's "own state machine, own numbers in enemyStats.ts, no shared config table" rule.
+
+**C1 — Mirejaw ("feels like a glorified boar").** Two additions give it an alligator's identity.
+(1) DEATH ROLL: a chomp that CONNECTS (and is off cooldown) latches into a thrashing roll — 3
+ticks @360ms in a tight 62px grip, each re-checked against the player's CURRENT position (break
+away to cut losses), 18 dmg + 7/s bleed each, ending in a 1s planted recovery (the biggest punish
+the creature offers), 7s cooldown. Only ever entered from a hit that already landed — a punish for
+being caught, not a new way to catch you. Routed through `checkPlayerHit` (Mirejaw added to that
+union); the barrel-roll spin is driven manually rather than by a tween because
+`Enemy.playHitFeedback` calls `killTweensOf(this)` on a planted enemy and would strand the sprite
+crooked. (2) WATER TERRITORY: new generic `Enemy.ignoresTerrainSlow` (default false) exempts a
+creature from the environmental move-slow the player suffers — only the TERRAIN term, so night
+speed + Executioner slow still apply. On dry ground you outpace it; in deep water the player wades
+at 0.5x and it doesn't, inverting the relationship. Verified live: full cycle fires 3 ticks at
+900/1260/1620ms; breaking the grip after tick 1/2 takes exactly 1/2 hits; on a sampled 0.62-
+moveMult tile the Mirejaw reads envSpeedMult 1.0 vs a Murkling's 0.62.
+
+**C2 — Mosswretch ("lacks attack moves / feels weird").** Its whole kit was one slow overhead
+swing on the slowest body in the game — trivially walked away from. (1) SPORE BURST: it can't
+catch you so it stops you — a mid-range (outside smash reach) planted 700ms heave with NO impact
+damage drops a lingering cloud on your CURRENT ground that slows 0.6x + poisons 5/s for 6s, used
+to cut off the retreat so the next smash lands. Rides the same `environmentEffectAt` path the
+Miretyrant's mire pools use (refactored into `baseSurfaceEnvironmentAt` + `foldSporeCloud`, so a
+cloud stacks correctly with water/thornfield/miasma — harsher slow wins, poison max'd), inheriting
+slow + poison + regen-suppression + status-resist with zero bespoke damage code. (2) DEATH-SPAWN:
+comes apart into 3 Mosslings (same class scaled 0.58, 16% HP / 42% dmg / 1.9x speed, forceAggro'd
+so they swarm the moment you'd relaxed), via the "creature asks (`deathSpawnCount`), scene spawns
+(`spawnMosslings`)" split the bellow uses. Guarded 3 ways: a spawnling reports deathSpawnCount 0
+(no recursion), is never elite (one kill can't pay 4 trophies), drops only 1 token swamp_moss.
+Verified live (after page-reload to fix an HMR dual-class `instanceof` artifact): a real
+dev-spawned kill spawns exactly 3 aggro'd Mosslings, killing a Mossling spawns none, the cloud
+reads moveMult 0.6 / poison 5 / regen 0.75 inside and neutral outside.
+
+**C3 — Corpselight ("just a ranged gremlin").** A genuine TWO-FORM TRANSFORM — the user explicitly
+rejected phase-out and blink as done-before and asked for a melee-form transform, so this is a new
+shape for the roster (nothing else transforms). At range = the wisp (unchanged: fragile, floaty,
+armor-bypassing homing orbs). Within 96px it COLLAPSES into a corporeal husk: 1.7x scale, slow
+62px/s lurch, a PHYSICAL maul (30 — armor answers the husk, unlike the wisp's magic orbs), and it
+takes only 0.5x damage. Stay 190px away for 2s and it DISSOLVES back (hysteresis: revert range >
+transform range, so no boundary strobe). ONE shared HP pool (chipping the wisp is real progress,
+but a given DPS goes further at range than into the tanky husk — the "commit to a strategy"
+lever). BOTH transitions deal telegraphed magic AoE (collapse drop-slam 26 + 150kb, dodgeable by
+stepping out of the 104px tell; dissolve puff 13) via `checkPlayerHit` (Corpselight added to the
+union); the husk maul uses the boolean-bite path with `biteDamage` overridden to the maul value.
+1.6s transform cooldown caps flicker. Verified live: full wisp->collapse->husk->dissolve->wisp
+cycle with correct scales/damage; husk takes exactly 0.5x (40->-40 wisp, -20 husk); collapse slam
+lands 26 standing still / whiffs when you sprint clear; the scene loop dealt slam+maul to the
+player through the real applyDamageToPlayer path (138->82).
+
+`enemyStats.ts` holds every number (new attack entries per creature); dashboard Enemies tab
+resynced for all three (stale primary-damage numbers corrected in passing since those entries were
+being edited anyway — Blighttoad/Murkling's stay flagged). `tsc` + `npm run build` clean, zero
+console errors. **The god-run triage (sessions 1-3, D1-D10 + C1-C3) is complete; next is a
+playtest.**
 
 
 ### "God run" triage session 2 — the balance pass, D2/D3/D4/D5/D9/D10 (2026-07-23, Sonnet)

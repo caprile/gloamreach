@@ -235,12 +235,16 @@ const ENEMIES: EnemyStat[] = [
     speed: 138,
     aggro: 240,
     attacks: [
-      { label: "Ambush lunge (locked line, 340px @560px/s, +190 kb, +BLEED 9/s×6s)", damage: 120, telegraphMs: 430 },
-      { label: "Chomp (56px reach, +110 kb, +BLEED 6/s×4s)", damage: 85, telegraphMs: 440 },
+      { label: "Ambush lunge (locked line, 340px @560px/s, +190 kb, +BLEED 9/s×6s)", damage: 80, telegraphMs: 430 },
+      { label: "Chomp (56px reach, +110 kb, +BLEED 6/s×4s)", damage: 52, telegraphMs: 440 },
+      // C1 (2026-07-23): a landed chomp latches into a death roll — 3 ticks in a
+      // tight 62px grip, then a long planted recovery. Break away mid-roll to
+      // cut your losses (each tick re-checks your position).
+      { label: "Death roll (3 latched ticks @360ms, 62px grip, +BLEED 7/s×3s, 1s recover)", damage: 18, telegraphMs: 0 },
     ],
     loot: "1-2 Mirehide + 1-2 Mirejaw Meat",
     trophy: "Mirejaw Trophy (elite)",
-    notes: "Biome 3 SIGNATURE AMBUSHER and the game's ONLY Mirehide source (locked) — the bayou light-armor reforge tier is gated behind hunting it. Sprite drawn BIG (48x22 at 1.55x = 74x34 on screen, the largest common creature — the user: 'the gators are too small'). STALK PATIENCE: stalking is slow by design, so a player who just keeps walking could never be ambushed (it fell 537px behind and never engaged) — after 2.4s of fruitless stalking it ABANDONS STEALTH and hunts at 138px/s. Walking away = it closes on you; sprinting away = clean escape. Lurks half-sunk (alpha 0.4 — VISIBLE, unlike the Sandmaw's 0.18) and creeps into position, then commits a LOCKED-LINE lunge chomp you sidestep. Unlike the Sandmaw it does NOT re-submerge after one attempt: it surfaces and HUNTS, chomping in melee and re-lunging from mid-range, and only re-buries once it loses you. Resists pierce ×0.5 (bony scutes), weak slash ×1.25 (soft belly) — the inverse of the Fenlurker. TUNING PASS 2026-07-22 (the user: 'remember how powerful the player is - think about how fast players will be'): the first numbers were sized against the BADLANDS roster, not a bayou-ready player (sprint 166-229px/s, dash 450, 220px blink, hits for 45-70 / 130-200 crit). Speeds, HP and damage were all raised so the roster can actually reach and threaten that player.",
+    notes: "Biome 3 SIGNATURE AMBUSHER and the game's ONLY Mirehide source (locked) — the bayou light-armor reforge tier is gated behind hunting it. C1 (2026-07-23): given an alligator's identity so it stops reading as 'a glorified boar' (the user) — a landed chomp LATCHES into a DEATH ROLL (3 ticks in a tight grip + long recovery punish; break away mid-roll to cut losses), and it's now EXEMPT from the deep-water move-slow (ignoresTerrainSlow), so on dry ground you outpace it but in the water it's faster than you — the swamp is its territory. Sprite drawn BIG (48x22 at 1.55x = 74x34 on screen, the largest common creature — the user: 'the gators are too small'). STALK PATIENCE: stalking is slow by design, so a player who just keeps walking could never be ambushed (it fell 537px behind and never engaged) — after 2.4s of fruitless stalking it ABANDONS STEALTH and hunts at 138px/s. Lurks half-sunk (alpha 0.4 — VISIBLE, unlike the Sandmaw's 0.18) then commits a LOCKED-LINE lunge chomp you sidestep. Resists pierce ×0.5 (bony scutes), weak slash ×1.25 (soft belly). Damage NOT bumped in the badlands-scaled tuning pass — chomp 52 / lunge 80 are current (D2 rebalance).",
   },
   {
     name: "Blighttoad (BAYOU)",
@@ -257,10 +261,16 @@ const ENEMIES: EnemyStat[] = [
     hp: 300, // D10 2026-07-23: was 420
     speed: 74,
     aggro: 250,
-    attacks: [{ label: "Overhead smash (88px reach, +300 knockback)", damage: 135, telegraphMs: 780 }],
+    attacks: [
+      { label: "Overhead smash (88px reach, +300 knockback)", damage: 78, telegraphMs: 780 },
+      // C2 (2026-07-23): mid-range only. A planted heave drops a lingering cloud
+      // on your current ground (slow 0.6x + poison 5/s for 6s) — no impact
+      // damage; it cuts off your retreat to set up the smash.
+      { label: "Spore burst (mid-range; lingering cloud: 0.6x slow + POISON 5/s, 6s)", damage: 0, telegraphMs: 700 },
+    ],
     loot: "2-3 Swamp Moss + 1-2 Wood",
     trophy: "Mosswretch Trophy (elite)",
-    notes: "Biome 3 BRUISER (the Cragscale analog) — the slowest common enemy in the game (36px/s, always outwalkable) and the tankiest (190 HP). ONE attack with the longest common-roster wind-up (780ms) and a 720ms recovery, so every hit it lands is one you chose not to walk out of, and baiting it is the intended fight. THE FIRE LESSON of the roster: fire ×1.5 — the biggest weakness multiplier on any common enemy (above the biome-2-normalized ×1.25), so Ember Brand / the set-bonus novas + thorns become a deliberate answer to a specific creature. Resists blunt ×0.5 (you can't concuss wet moss), weak slash ×1.25. TUNING PASS 2026-07-22 (the user: 'remember how powerful the player is - think about how fast players will be'): the first numbers were sized against the BADLANDS roster, not a bayou-ready player (sprint 166-229px/s, dash 450, 220px blink, hits for 45-70 / 130-200 crit). Speeds, HP and damage were all raised so the roster can actually reach and threaten that player.",
+    notes: "Biome 3 BRUISER (the Cragscale analog) — the slowest common enemy and the tankiest. C2 (2026-07-23): fixed the user's 'lacks attack moves / feels weird' — it can't catch you so it now STOPS you (a mid-range SPORE BURST that drops a slowing/poisoning cloud on your retreat path, setting up the smash), and on death it comes apart into 3 MOSSLINGS (scale 0.58, 16% HP, forceAggro'd — killing one in a bad spot swarms you; spawnlings never chain-spawn and drop no trophy). ONE main attack with the longest common-roster wind-up (780ms) + 720ms recovery, so baiting the smash is the intended fight. THE FIRE LESSON: fire ×1.5 (the biggest weakness on any common enemy). Resists blunt ×0.5, weak slash ×1.25. Smash 78 is current (D2 rebalance); NOT the badlands-scaled number.",
   },
   {
     name: "Murkling (BAYOU)",
@@ -289,10 +299,16 @@ const ENEMIES: EnemyStat[] = [
     hp: 160, // D10 2026-07-23: was 190
     speed: 85,
     aggro: 340,
-    attacks: [{ label: "Gloam orb (HOMING projectile 170px/s, 9s, magic — BYPASSES armor)", damage: 34 }],
+    attacks: [
+      { label: "Gloam orb (WISP form; HOMING 170px/s, 3s, magic — BYPASSES armor)", damage: 22 },
+      // C3 (2026-07-23): the two-form transform.
+      { label: "Husk maul (CORPOREAL form; PHYSICAL — armor applies, 74px reach, +130 kb)", damage: 30, telegraphMs: 520 },
+      { label: "Collapse slam (magic AoE 104px on transform-IN, +150 kb — dodge the tell)", damage: 26, telegraphMs: 560 },
+      { label: "Dissolve puff (magic AoE 84px on transform-OUT, instant)", damage: 13, telegraphMs: 0 },
+    ],
     loot: "3-5 Hex Essence",
     trophy: "Corpselight Trophy (elite)",
-    notes: "Biome 3's ONE ranged creature and deliberately UNCOMMON (~1/3 of any melee species) — the exception that keeps the roster reading melee-core. Fires the game's FIRST HOMING projectile (Projectile.homing): a bounded reversal of the anti-kite governor — 110px/s (under a walking player), 1.5 rad/s turn rate (lateral movement out-turns it into a lazy overshoot), 9s hard lifetime / ~1500px of pursuit (an overshot orb expires instead of orbiting forever). The first pass paired 110px/s with a 4.2s lifetime = a ~460px leash, so orbs 'faded away really soon' and it read as harmless (the user). STANDING STILL is what gets you hit — 170px/s is still under a sprint, so running straight outruns it outright. Magic damage bypasses flat armor, so bayou plate is no answer — footwork is. Holds a ~210px standoff and drifts, but has NO blink/escape, so closing the gap really does beat it. Neutral to physical on purpose (the Hexling's old flat physical resist felt unkillable); weak fire ×1.25 + magic ×1.25. Also the bayou's local HEX ESSENCE source, so forging Gloamsteel doesn't require walking back to the badlands. TUNING PASS 2026-07-22 (the user: 'remember how powerful the player is - think about how fast players will be'): the first numbers were sized against the BADLANDS roster, not a bayou-ready player (sprint 166-229px/s, dash 450, 220px blink, hits for 45-70 / 130-200 crit). Speeds, HP and damage were all raised so the roster can actually reach and threaten that player.",
+    notes: "Biome 3's ONE ranged creature, deliberately UNCOMMON. C3 (2026-07-23): TWO-FORM TRANSFORM (the user rejected phase-out/blink as done-before, asked for this). At range = the WISP (fragile, floaty, armor-bypassing HOMING orbs — first Projectile.homing; 170px/s, 1.2 rad/s turn, 3s lifetime; standing still gets you hit). Close to melee (96px) and it COLLAPSES into a corporeal HUSK: 1.7x scale, slow 62px/s lurch, a PHYSICAL maul (30 — armor answers it, unlike the orb), and it takes only 0.5x damage. Back off 190px for 2s and it DISSOLVES back. ONE shared HP pool (chip the wisp at range = real progress, but DPS goes further at range than into the tanky husk — commit to a strategy). BOTH transitions hurt (telegraphed collapse slam 26 + dissolve puff 13, both magic AoE) + a 1.6s transform cooldown, so boundary-flickering isn't free. Neutral to physical (wisp); weak fire ×1.25 + magic ×1.25. Bayou's local HEX ESSENCE source. Orb 22 / hp 160 are current (D2/D10 rebalance).",
   },
   {
     name: "The Palewake (CRYPT WARDEN — gloam)",
