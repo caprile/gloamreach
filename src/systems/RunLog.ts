@@ -16,11 +16,17 @@
 // run summary... Slay the Spire has something similar"), which is why the
 // buckets carry display labels rather than ids.
 
-export type MilestoneKind = "level" | "boss" | "relic" | "biome";
-
+// The timeline is BOSS KILLS ONLY (the user: it was "kind of pointless" with
+// level-ups dominating it; asked for boss kills instead, then — once
+// miniboss/biome entries were tried — clarified further: "the only milestones
+// I care about are the boss ones, not even miniboss or biome discovery
+// matters"). Level-ups fired every 5 levels into a timeline capped at the last
+// 6, so a long run's timeline was 100% "Reached Level N" with every real event
+// pushed off the end; miniboss/relic/biome turned out to be noise too, not the
+// fix. No `kind` field — with exactly one milestone type it would encode zero
+// information, so it's just a timestamped line.
 export interface Milestone {
   atMs: number;
-  kind: MilestoneKind;
   text: string;
 }
 
@@ -101,11 +107,10 @@ export class RunLog {
     this.relicRolls.push({ atMs, trophy, outcome });
   }
 
-  // Milestones are capped so a long run's timeline stays a readable shape
-  // rather than a wall — level-ups in particular fire dozens of times, so the
-  // caller is expected to only log notable ones (see MainScene).
-  recordMilestone(atMs: number, kind: MilestoneKind, text: string): void {
-    this.milestones.push({ atMs, kind, text });
+  // Boss kills only (see the header note above) — the caller is trusted not to
+  // spam this with anything else.
+  recordMilestone(atMs: number, text: string): void {
+    this.milestones.push({ atMs, text });
   }
 
   topDamageDealt(limit = 6): Bucket[] {

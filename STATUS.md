@@ -45,6 +45,24 @@ makes the result readable. **Session 3** is the creature identity pass (C1-C3).
   Deliberately kept: the art is harmless and still reads as "arrows" if a future recipe wants it.
 - Every number in D2-D4 and D10 is first-pass and unplayed.
 
+
+### Run summary timeline: boss kills only (2026-07-23, Sonnet)
+
+Follow-up to the god-run triage's D7 (end-of-run summary). the user: the timeline was "kind of
+pointless" — put boss kills there instead. First pass added miniboss kills + biome-entry milestones
+alongside boss kills (level-ups were cut outright: they fired every 5 levels into a timeline capped
+at the last 6, so a long run's timeline was 100% "Reached Level N" with every real event pushed
+off). the user then narrowed it further mid-session: **"the only milestones I care about are the
+boss ones, not even miniboss or biome discovery matters."** Cut both. `RunLog.Milestone` dropped its
+`kind` field entirely (with exactly one milestone type left, it encoded zero information) and
+`RunEndUI`'s "Timeline" section is now labelled **"Boss Kills"**. Extracted a shared
+`MainScene.isMiniboss()` (Gloamwarden/Cinderwrought/Palewake/Kilnborn/Sanguinarch) used by
+`classifyKill` so the instanceof list can't drift even though milestones no longer read it. Verified
+live: level-ups produce zero milestones even after 8 forced level-ups; a Gremlin King kill produces
+exactly one `Defeated Gremlin King` entry; a regular elite or miniboss kill produces none; the
+defensive 6-row cap (matched to the panel height already verified for it) shows `last 6 of 8`
+correctly when pushed past. `tsc` + `npm run build` clean, zero console errors.
+
 ## Recent Entries
 
 > Older entries in STATUS-archive.md.

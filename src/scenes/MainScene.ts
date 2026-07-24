@@ -2132,10 +2132,12 @@ export class MainScene extends Phaser.Scene {
       // compete for the same screen space (playtest). Still logged to the
       // persistent side panel.
       this.eventLog.add("levelup", `Level Up! You are now Level ${level} (+${points} points)`, undefined, true);
-      // Every 5th level only: a 29-level run would otherwise contribute 29 rows
-      // and the timeline would stop showing a shape. The pace is still legible
-      // from where the 5s land.
-      if (level % 5 === 0) this.runLog.recordMilestone(this.run.elapsedMs, "level", `Reached Level ${level}`);
+      // No longer logged to the end-of-run timeline (the user: "kind of
+      // pointless") — level-ups fire every 5 levels and the timeline is capped
+      // at the last 6, so a long run's timeline was 100% "Reached Level N"
+      // with every boss/miniboss/biome-entry pushed off the end. `Player Level`
+      // is already its own line in the score breakdown; the pace is legible
+      // from there without eating the timeline's whole budget.
       this.characterMenu?.refresh();
       this.refreshXpBar();
       this.refreshStatPointsBadge();
@@ -3612,14 +3614,8 @@ export class MainScene extends Phaser.Scene {
       outcome = rarityName(RELIC_DEFS[result.id].rarity);
     }
     this.runLog.recordRelicRoll(this.run.elapsedMs, trophy, outcome);
-    if (result?.success && result.id) {
-      const def = RELIC_DEFS[result.id];
-      // Only Rare/Mythic make the timeline — a run rolls dozens of Commons and
-      // a milestone list that includes all of them stops being a shape.
-      if (def.rarity === "rare" || def.rarity === "mythic") {
-        this.runLog.recordMilestone(this.run.elapsedMs, "relic", `${rarityName(def.rarity)} relic: ${def.name}`);
-      }
-    }
+    // No timeline entry here — the timeline is boss kills only (see RunLog.ts).
+    // Rare/Mythic relics still show in full via the Relic Rolls tally above.
   }
 
   private announceRelicResult(result: RollResult | null): void {
@@ -10101,8 +10097,12 @@ export class MainScene extends Phaser.Scene {
     // the run (it gates the Gemwright's Table's ability-jewelry tier).
     const killCategory = this.classifyKill(enemy);
     this.run.recordKill(killCategory);
+    // Timeline is boss kills ONLY (the user, after trying miniboss/relic/biome
+    // too: "the only milestones I care about are the boss ones"). isMiniboss()
+    // stays as the shared classifyKill helper even though nothing else reads it
+    // right now.
     if (killCategory === "boss") {
-      this.runLog.recordMilestone(this.run.elapsedMs, "boss", `Defeated ${enemy.displayName}`);
+      this.runLog.recordMilestone(this.run.elapsedMs, `Defeated ${enemy.displayName}`);
     }
     if (enemy instanceof Miretyrant) {
       this.time.delayedCall(1200, () => this.endRun("won"));
@@ -10321,20 +10321,24 @@ export class MainScene extends Phaser.Scene {
 
   // Kill category for run scoring: the final boss, an elite variant, or a plain
   // enemy. Kept here (not on Enemy) since it's a scoring concern, not behavior.
-  private classifyKill(enemy: Enemy): KillCategory {
-    if (enemy instanceof GremlinKing || enemy instanceof Duneshaper || enemy instanceof Miretyrant) return "boss";
-    // The Gloamwarden/Cinderwrought are mini-bosses — no dedicated score band
-    // exists, so they're scored at the elite tier (per the plan's "simplest"
-    // open sub-decision).
-    if (
+  // The 5 mini-bosses — no dedicated score band exists for them (they score at
+  // the elite tier, per the plan's "simplest" open sub-decision), but they ARE
+  // a run's real turning points and belong on the end-of-run timeline the same
+  // way a true boss does. Shared by classifyKill and the milestone hook below
+  // so the list can't drift between the two.
+  private isMiniboss(enemy: Enemy): boolean {
+    return (
       enemy instanceof Gloamwarden ||
       enemy instanceof Cinderwrought ||
       enemy instanceof Palewake ||
       enemy instanceof Kilnborn ||
-      enemy instanceof Sanguinarch ||
-      enemy.elite
-    )
-      return "elite";
+      enemy instanceof Sanguinarch
+    );
+  }
+
+  private classifyKill(enemy: Enemy): KillCategory {
+    if (enemy instanceof GremlinKing || enemy instanceof Duneshaper || enemy instanceof Miretyrant) return "boss";
+    if (this.isMiniboss(enemy) || enemy.elite) return "elite";
     return "normal";
   }
 
@@ -13389,7 +13393,8 @@ export class MainScene extends Phaser.Scene {
     if (b !== "base" && !this.discoveredBiomes.has(b)) {
       this.discoveredBiomes.add(b);
       this.eventLog.add("biome", `Discovered: ${BIOME_NAMES[b]}`);
-      this.runLog.recordMilestone(this.run.elapsedMs, "biome", `Entered the ${BIOME_NAMES[b]}`);
+      // No timeline entry — the timeline is boss kills only (see RunLog.ts);
+      // biome discovery already has its own event-log toast.
     }
   }
 

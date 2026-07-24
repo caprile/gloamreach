@@ -273,14 +273,16 @@ export class RunEndUI {
       relics.attempts ? `${relics.successes}/${relics.attempts}` : "0",
     );
 
-    // The timeline IS a tail by nature (the end of a run is where the turns
-    // are), so it says how many it's showing out of how many happened.
+    // Boss kills only (the user, after miniboss/relic/biome all turned out to be
+    // noise: "the only milestones I care about are the boss ones") — a handful
+    // of entries at most, so no scroll/truncation concern here; the cap below
+    // is just a defensive bound, not an expected case.
     const marksTotal = log.milestones.length;
-    this.text(x, y, "Timeline", 13, "#c8d0dc");
+    this.text(x, y, "Boss Kills", 13, "#c8d0dc");
+    // Capped at 6 (not a bigger defensive number) because that's what the
+    // panel height below is actually verified against.
     if (marksTotal > 6) this.text(right, y, `last 6 of ${marksTotal}`, 12, "#5b6472", 1);
     y += 19;
-    // Tail, not head: the end of a run is where the interesting turns are, and
-    // the early rows are the predictable ones.
     const marks = log.milestones.slice(-6);
     if (marks.length === 0) {
       this.text(x + 10, y, "—", 12, "#5b6472");
