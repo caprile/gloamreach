@@ -182,10 +182,25 @@ balancing dashboard). Bayou entities are already wired to read it.
 **Ships in session 2**, bundled with D2/D3/D4 — enemy HP interacts directly with the
 lifesteal cap, so the two must be verified in the same run, not separately.
 
-### D9 — Cap or surface stat caps
-Wisdom's −50% ability-cooldown cap is reachable at 100 points and nothing says so. Either
-block allocation past the cap or show "CAPPED" in the Stats tab. Also decide whether stats
-get a hard ceiling at all (skills already have one at 100).
+### D9 — Cap or surface stat caps (SHIPPED 2026-07-23)
+Wisdom's -50% ability-cooldown cap is reachable at 100 points and nothing said so. Shipped as
+a **surfaced live indicator, not a hard allocation block** — a "(CAPPED — this axis is
+maxed)" note on the Stats tab's "Now:" line, appearing exactly once the axis saturates.
+
+Also audited every stat for the same silent-dead-point trap while in there, and found it's
+NOT unique to Wisdom: Strength (crit multiplier) and Agility (crit chance) are ALSO capped
+(`CRIT_MULT_CAP`/`CRIT_CHANCE_CAP` in MainScene), just build-dependent — the total combines
+weapon base + the stat + relics + gear augments, so "how many points is too many" changes
+with loadout. Both get the same marker, read LIVE off the currently equipped weapon via a new
+`critCapped` dep (false/false when unarmed) rather than a fixed point threshold, which would
+be wrong the moment gear changes.
+
+**No universal hard ceiling on stat allocation** (the plan's other open question) — deliberately
+rejected. Endurance (max stamina + regen%), Vitality (max HP + healing%), Intelligence (skill
+XP%), and Wisdom's OTHER axis (buff/food duration) are all genuinely uncapped/linear-forever by
+design; blocking allocation past some arbitrary point would contradict that and remove real
+value from those stats. Only the 3 axes that actually saturate (Wisdom-CDR, Strength-crit-mult,
+Agility-crit-chance) get the marker; nothing is blocked.
 
 ---
 

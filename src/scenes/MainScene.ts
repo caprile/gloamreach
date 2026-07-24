@@ -11450,6 +11450,17 @@ export class MainScene extends Phaser.Scene {
       progression: this.progression,
       allocate: (stat) => this.allocateStat(stat),
       character: () => this.character,
+      // D9: read live off the currently equipped weapon, since crit caps
+      // combine weapon base + Strength/Agility + relics + gear augments — a
+      // fixed point threshold would be wrong the moment the player switches
+      // weapons or relics. Unarmed has no crit to cap.
+      critCapped: () => {
+        if (!this.equippedWeapon) return { chance: false, mult: false };
+        return {
+          chance: this.critChanceTotal(this.equippedWeapon) >= CRIT_CHANCE_CAP,
+          mult: this.critMultTotal(this.equippedWeapon) >= CRIT_MULT_CAP,
+        };
+      },
     });
   }
 

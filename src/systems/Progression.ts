@@ -113,7 +113,10 @@ const WISDOM_BUFF_DURATION_PCT_PER_POINT = 0.02; // +2% buff/food duration
 // Vitality=HP, Str/Agi=crit, Int=XP) and it is felt every single cast. Capped so
 // it can't collapse cooldowns entirely.
 const WISDOM_ABILITY_CDR_PER_POINT = 0.005; // -0.5% ability cooldown
-const WISDOM_ABILITY_CDR_CAP = 0.5;
+// Exported (not just local) so wisdomAbilityCdrCapped() below and the Stats-tab
+// "CAPPED" marker (D9) can both compare against the exact same number rather
+// than duplicating "100 points" as a magic constant in two files.
+export const WISDOM_ABILITY_CDR_CAP = 0.5;
 
 type LevelUpListener = (level: number, pointsAwarded: number) => void;
 
@@ -228,5 +231,17 @@ export class PlayerProgression {
       this.stats.wisdom * WISDOM_ABILITY_CDR_PER_POINT * this.potency("wisdom"),
     );
     return 1 - cdr;
+  }
+
+  // D9 (2026-07-23): Wisdom's ability-cooldown axis is reachable at exactly 100
+  // points (the user had 112 and 12 of them were doing nothing, with no on-screen
+  // indication). Unlike Strength/Agility's crit caps — which combine with
+  // weapon base + relics + gear augments, so "how many points is too many"
+  // depends on the whole build (see MainScene's critCapped dep) — this one
+  // depends ONLY on the stat itself, so it can live here as a clean boolean.
+  // Wisdom's OTHER axis (buff/food duration) is uncapped, so this being true
+  // does not mean the stat as a whole has stopped mattering.
+  wisdomAbilityCdrCapped(): boolean {
+    return this.stats.wisdom * WISDOM_ABILITY_CDR_PER_POINT * this.potency("wisdom") >= WISDOM_ABILITY_CDR_CAP;
   }
 }

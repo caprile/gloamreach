@@ -28,6 +28,13 @@ export interface CharacterMenuDeps {
   // A GETTER, not a reference: applyCharacter replaces MainScene's RunCharacter
   // instance, so holding the object here would go stale after the picker.
   character: () => RunCharacter;
+  // D9: whether Strength/Agility's crit contribution is already at the total
+  // (weapon + relics + gear-augment) cap. Unlike Wisdom's ability-cooldown cap
+  // (self-contained in Progression.ts — see wisdomAbilityCdrCapped), crit
+  // caps depend on the whole build, so this reads live off the equipped
+  // weapon rather than being a fixed point threshold. Optional so a caller
+  // that doesn't care (there is only one — MainScene) isn't forced to wire it.
+  critCapped?: () => { chance: boolean; mult: boolean };
 }
 
 const PANEL_W = 460;
@@ -339,7 +346,17 @@ export class CharacterMenu {
     this.text(x0, y + 17, statDescription(stat), 10, "#5b6472");
     // Current cumulative effect of the points already spent (playtest ask) —
     // amber to set it apart from the grey per-point rate above it.
-    this.text(x0, y + 31, `Now: ${statTotalEffect(stat, p)}`, 11, "#e3b25a");
+    // D9: append a plain-language "CAPPED" note once further points on this
+    // AXIS stop doing anything — Wisdom's ability-cooldown line is the one
+    // that prompted this (100 points reaches it, nothing said so), but the
+    // same silent-dead-point trap applies to Strength/Agility's crit
+    // contribution once it's saturated against the current build.
+    const capped =
+      (stat === "wisdom" && p.wisdomAbilityCdrCapped()) ||
+      (stat === "strength" && (this.deps.critCapped?.().mult ?? false)) ||
+      (stat === "agility" && (this.deps.critCapped?.().chance ?? false));
+    const nowLine = `Now: ${statTotalEffect(stat, p)}${capped ? "  (CAPPED — this axis is maxed)" : ""}`;
+    this.text(x0, y + 31, nowLine, 11, "#e3b25a");
 
     // "+" button, right-aligned. Greyed/no-op when no points are unspent.
     const btn = this.scene.add
