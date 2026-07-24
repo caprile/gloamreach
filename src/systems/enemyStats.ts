@@ -153,7 +153,7 @@ const BADLANDS: EnemyStat[] = [
       { name: "Basher", damage: 48, cls: "physical", kind: "melee", intervalMs: 1200 },
       { name: "Rolling charge", damage: 48, cls: "physical", kind: "aoe", intervalMs: 1600 },
     ],
-    poise: null, resistances: { slash: 0.5, pierce: 1.25, fire: 0.5 }, elite: STD_ELITE(1.3),
+    poise: null, elite: STD_ELITE(1.3), // resistances removed (2026-07-24 pt2)
   },
   {
     id: "hexling", name: "Hexling", biome: "badlands", role: "normal", hp: 95, scale: 1,
@@ -162,13 +162,13 @@ const BADLANDS: EnemyStat[] = [
       { name: "Hex bolt", damage: 16, cls: "magic", kind: "ranged", intervalMs: 1600, projectileSpeed: 210 },
       { name: "Flame strike", damage: 40, cls: "magic", kind: "aoe", intervalMs: 1400 },
     ],
-    poise: null, resistances: { magic: 1.25, fire: 1.25 }, elite: STD_ELITE(1.3),
+    poise: null, elite: STD_ELITE(1.3), // resistances removed (2026-07-24 pt2)
   },
   {
     id: "sandmaw", name: "Sandmaw", biome: "badlands", role: "normal", hp: 45, scale: 1,
     moveSpeed: 30, // submerged stalk; surfaces to erupt
     attacks: [{ name: "Sand eruption", damage: 46, cls: "physical", kind: "aoe", intervalMs: 3500 }],
-    poise: null, resistances: { pierce: 0.5, blunt: 1.25, fire: 0.5 }, elite: STD_ELITE(1.3),
+    poise: null, elite: STD_ELITE(1.3), // resistances removed (2026-07-24 pt2)
   },
   {
     id: "cinderwrought", name: "Cinderwrought", biome: "badlands", role: "miniboss", hp: 650, scale: 1.8,
@@ -211,7 +211,7 @@ const BADLANDS: EnemyStat[] = [
       { name: "Gloamfire lance", damage: 54, cls: "magic", kind: "aoe", intervalMs: 1600 },
       { name: "Sunscorch barrage", damage: 34, cls: "magic", kind: "aoe", intervalMs: 1600 },
     ],
-    poise: 400, poiseRegenPerSec: 15, resistances: { fire: 1.25 }, elite: null,
+    poise: 400, poiseRegenPerSec: 15, elite: null, // resistances removed (2026-07-24 pt2)
   },
 ];
 
@@ -227,24 +227,31 @@ const BAYOU: EnemyStat[] = [
     // the 560 lunge (telegraphed, dodgeable) is how it closes. Lunge 120→80 and
     // chomp 85→52 so a caught hit is a heavy punish, not a one-shot (2026-07-23).
     moveSpeed: 108, burstSpeed: 560,
-    // 52/80 → 135/170 (2026-07-24 damage pass). The old numbers were sized
-    // against 32 armor; a bayou-geared player carries 74, which pinned both to
-    // 1. Now ~40 net (chomp) and ~69 (lunge) through Gloamsteel.
+    // 135/170 → 68/100 (2026-07-24 pt2). The pt1 pass sized against 74 armor
+    // (end-of-bayou Gloamsteel), but players FIGHT the bayou in badlands gear
+    // (~16-36), so those landed near full and 2-shot an undergeared player.
+    // the user: commons should be a clear FRACTION of Sanguinarch (118/205), not
+    // out-hit the minibosses. Now ~52/84 net at 16 armor (5-6 hits to kill),
+    // near-nothing through full Gloamsteel — heavy armor still trivializes it.
     attacks: [
-      { name: "Chomp", damage: 135, cls: "physical", kind: "melee", intervalMs: 1200, bleedDps: 6 },
-      { name: "Lunge", damage: 170, cls: "physical", kind: "aoe", intervalMs: 3750, bleedDps: 9 },
+      { name: "Chomp", damage: 68, cls: "physical", kind: "melee", intervalMs: 1200, bleedDps: 6 },
+      { name: "Lunge", damage: 100, cls: "physical", kind: "aoe", intervalMs: 3750, bleedDps: 9 },
       // C1 (2026-07-23): the signature DEATH ROLL. the user: the Mirejaw "feels
       // like a glorified boar" — lunge-then-bite is exactly a Boar's kit. This
       // is the move that makes it a gator: a landed chomp latches and thrashes,
       // ticking damage+bleed in a tight radius, then leaves it planted for a
       // long punish window. Per-tick damage is modest; being held through all 3
       // is what hurts. Long cooldown, so it's a signature moment, not every bite.
-      // 18 → 105: a per-tick 18 was below armor three times over, so the whole
-      // signature move landed 3 damage total. ~14 net per tick, ~42 for a full
-      // latch — modest per tick, being held through all three is the punish.
-      { name: "Death roll (3 ticks, latched)", damage: 105, cls: "physical", kind: "aoe", intervalMs: 7000, bleedDps: 7 },
+      // 105 → 42 per tick (2026-07-24 pt2, same undergeared rescale). ~26 net
+      // per tick at 16 armor, ~78 for a full 3-tick latch — a heavy punish for
+      // being caught, not a delete.
+      { name: "Death roll (3 ticks, latched)", damage: 42, cls: "physical", kind: "aoe", intervalMs: 7000, bleedDps: 7 },
     ],
-    poise: null, resistances: { pierce: 0.5, slash: 1.25 }, elite: STD_ELITE(2.0),
+    // Resistances/weaknesses removed entirely (2026-07-24 pt2, the user: "remove
+    // resistances and weakness from enemies in general. Doesn't make sense").
+    // The whole damage-type layer is retired — every weapon does full damage to
+    // every enemy; flat armor is the only mitigation axis now.
+    poise: null, elite: STD_ELITE(2.0),
   },
   {
     // HP 150→130 (D10). See Mirejaw's note above.
@@ -252,11 +259,12 @@ const BAYOU: EnemyStat[] = [
     moveSpeed: 300, // hops in bursts (150px hops); not a steady walk
     // Bite 66→44 (the poison is the payload, not the bite); poison per-stack 6→4
     // with a hard 3-stack cap so a swarm can't melt you (2026-07-23 rebalance).
-    // Bite 44 → 125 (2026-07-24): ~31 net through Gloamsteel. The poison is
-    // still the payload — it bypasses armor, so it was the only part of this
-    // creature that ever actually worked at bayou gear levels.
-    attacks: [{ name: "Toxic bite", damage: 125, cls: "physical", kind: "melee", intervalMs: 1200, poisonDps: 4 }],
-    poise: null, resistances: { magic: 0.6, fire: 1.25 }, elite: STD_ELITE(1.3),
+    // 125 → 48 (2026-07-24 pt2). the user: "1 regular frog is chunking me HP
+    // wise. That plus the poison is absurd damage." ~32 net at 16 armor; the
+    // poison (armor-bypassing, the real payload) is untouched, so the toad still
+    // matters — the bite just no longer chunks on its own.
+    attacks: [{ name: "Toxic bite", damage: 48, cls: "physical", kind: "melee", intervalMs: 1200, poisonDps: 4 }],
+    poise: null, elite: STD_ELITE(1.3), // resistances removed (2026-07-24 pt2)
   },
   {
     // HP 420→300 (D10) — the outlier that started the audit: it was the
@@ -267,14 +275,11 @@ const BAYOU: EnemyStat[] = [
     // ~85 net through 32 armor) is a big telegraphed heavy that costs ~60% HP,
     // not a kill — the bruiser still hits like a truck, just survivably (2026-07-23).
     attacks: [
-      // 78 → 165 (2026-07-24): ~65 net through Gloamsteel, ~135 as an elite.
-      // the user: "mosswretch elites do way more damage than any of the
-      // minibosses" — which was true, because 78 was one of the only two
-      // physical attacks in the bayou big enough to clear 74 armor at all. It
-      // stays the roster's biggest common hit (it is a slow, hugely telegraphed
-      // overhead from the slowest thing in the game), but the crypt wardens and
-      // the boss now out-hit it, which is the ordering that was inverted.
-      { name: "Smash", damage: 165, cls: "physical", kind: "melee", intervalMs: 1600 },
+      // 165 → 98 (2026-07-24 pt2). Still the roster's biggest COMMON hit (a slow,
+      // hugely telegraphed overhead from the slowest thing in the game) and ~half
+      // of Sanguinarch's slam (205) per the anchor. Elite ×1.5 = 147 — the user's
+      // "192 from elite tree guy" is gone; it costs ~a third of your HP, not a kill.
+      { name: "Smash", damage: 98, cls: "physical", kind: "melee", intervalMs: 1600 },
       // C2 (2026-07-23): the user — "[Mosswretch] lacks attack moves... feels a
       // bit weird." It had exactly one. The spore burst is the answer to its own
       // core problem: it is the slowest thing in the game and cannot catch you,
@@ -284,7 +289,7 @@ const BAYOU: EnemyStat[] = [
       // the cloud is the whole payload.
       { name: "Spore burst (lingering cloud: slow + poison)", damage: 0, cls: "physical", kind: "aoe", intervalMs: 9000, poisonDps: 5 },
     ],
-    poise: null, resistances: { blunt: 0.5, slash: 1.25, fire: 1.5 }, elite: STD_ELITE(1.75),
+    poise: null, elite: STD_ELITE(1.75), // resistances removed (2026-07-24 pt2)
   },
   {
     id: "murkling", name: "Murkling", biome: "bayou", role: "normal", hp: 40, scale: 0.85,
@@ -292,11 +297,10 @@ const BAYOU: EnemyStat[] = [
     // sprint (124) so a swarm can be out-walked. Claw 62→38 — swarm damage should
     // be chip that adds up, not a per-hit spike (2026-07-23 rebalance).
     moveSpeed: 118, packAggro: true,
-    // 38 → 108 (2026-07-24): the user — "murklings deal only 1 dmg to me", and
-    // they did, exactly. Deliberately the SMALLEST net number in the bayou
-    // (~17 through Gloamsteel) because a swarm's threat is the count, not the
-    // hit: six connecting is ~100, which is the pressure a swarm should apply.
-    attacks: [{ name: "Claw", damage: 108, cls: "physical", kind: "melee", intervalMs: 900 }],
+    // 108 → 38 (2026-07-24 pt2). Swarm threat is the COUNT, not the hit — the
+    // smallest number in the bayou by design; ~22 net at 16 armor, so six
+    // connecting is the ~130 pressure a swarm should apply, not a per-hit spike.
+    attacks: [{ name: "Claw", damage: 38, cls: "physical", kind: "melee", intervalMs: 900 }],
     poise: null, elite: STD_ELITE(1.15),
   },
   {
@@ -317,15 +321,13 @@ const BAYOU: EnemyStat[] = [
       // One shared HP pool; the husk just takes reduced damage. attacks[1] =
       // husk maul (physical), attacks[2] = the collapse drop-slam (magic AoE the
       // transform-in deals). The dissolve puff is a fraction of the slam.
-      // 30 → 118 (2026-07-24). The orb and the collapse slam are MAGIC and so
-      // were landing their full paper value all along — which is precisely why
-      // the user read the Corpselight/Mosswretch woods as the one area tuned
-      // correctly. Only the physical husk maul was broken; the two magic
-      // attacks are deliberately untouched.
-      { name: "Husk maul (melee, corporeal form)", damage: 118, cls: "physical", kind: "melee", intervalMs: 1300 },
+      // 118 → 55 (2026-07-24 pt2, undergeared rescale). The orb + collapse slam
+      // are MAGIC (bypass armor) and were fine — untouched; only the physical
+      // husk maul was chunking, so only it comes down.
+      { name: "Husk maul (melee, corporeal form)", damage: 55, cls: "physical", kind: "melee", intervalMs: 1300 },
       { name: "Collapse slam (magic AoE on transform)", damage: 26, cls: "magic", kind: "aoe", intervalMs: 4000 },
     ],
-    poise: null, resistances: { fire: 1.25, magic: 1.25 }, elite: STD_ELITE(1.3),
+    poise: null, elite: STD_ELITE(1.3), // resistances removed (2026-07-24 pt2)
   },
   // Fenlurker (bayou burrower) CUT 2026-07-23 — the user found it boring to fight;
   // the Sandmaw already owns the burrow-ambush niche. Entity + spawns removed.
@@ -373,7 +375,7 @@ const BAYOU: EnemyStat[] = [
       // the table's old 7 understated it; 20/s is the real increase.
       { name: "Burning ground", damage: 20, cls: "fire", kind: "dot", intervalMs: 1000 },
     ],
-    poise: null, resistances: { blunt: 0.75, pierce: 1.25, fire: 0.4 }, elite: null,
+    poise: null, elite: null, // resistances removed (2026-07-24 pt2)
   },
   {
     // Was HP 420 / Slash 15 / Slam 50 — LESS damage and barely more HP than the
@@ -393,7 +395,7 @@ const BAYOU: EnemyStat[] = [
       { name: "Slash", damage: 118, cls: "physical", kind: "melee", intervalMs: 900 },
       { name: "Slam", damage: 205, cls: "physical", kind: "aoe", intervalMs: 1600 },
     ],
-    poise: null, resistances: { slash: 1.3, blunt: 0.75 }, elite: null,
+    poise: null, elite: null, // resistances removed (2026-07-24 pt2)
   },
   {
     id: "miretyrant", name: "Miretyrant", biome: "bayou", role: "boss", hp: 3600, scale: 2.6,
@@ -421,7 +423,7 @@ const BAYOU: EnemyStat[] = [
       { name: "Slam", damage: 255, cls: "physical", kind: "aoe", intervalMs: 1100 },
       { name: "Death roll", damage: 200, cls: "physical", kind: "aoe", intervalMs: 1100 },
     ],
-    poise: 800, poiseRegenPerSec: 28, resistances: { slash: 0.8, blunt: 1.2, poison: 0.25 }, elite: null,
+    poise: 800, poiseRegenPerSec: 28, elite: null, // resistances removed (2026-07-24 pt2)
   },
 ];
 

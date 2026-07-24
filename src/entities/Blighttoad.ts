@@ -75,9 +75,7 @@ export class Blighttoad extends Enemy {
       biteDamage: elite ? Math.round(BITE_DAMAGE * ELITE.damage) : BITE_DAMAGE,
       elite,
       eliteTrophy: "blighttoad_trophy",
-      // Full of the stuff itself, so its own venom-kin magic slides off; a
-      // water-fat toad hates being dried out.
-      resistances: { magic: 0.6, fire: 1.25 },
+      // Resistances/weaknesses removed (2026-07-24, the user) — damage-type layer retired.
     });
     this.packAggro = true;
     this.packAggroRadius = PACK_AGGRO_RADIUS;

@@ -109,8 +109,7 @@ export class Sanguinarch extends Enemy {
       maxHealth: MAX_HEALTH,
       biteDamage: SLASH_DAMAGE, // the flurry uses the base bite path (update() -> true)
       barScale: 2.4,
-      // A bloated sac: slashing opens it up, blunt just squashes.
-      resistances: { slash: 1.3, blunt: 0.75 },
+      // Resistances/weaknesses removed (2026-07-24, the user) — damage-type layer retired.
     });
     this.spawnX = cfg.x;
     this.spawnY = cfg.y;

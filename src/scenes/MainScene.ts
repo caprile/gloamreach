@@ -666,16 +666,12 @@ const MIASMA_POISON_DPS = 3;
 // hazard, not for the poison status — a creature's poison dose stopped touching
 // regen in the 2026-07-23 batch; only standing in the fog does.
 //
-// 0.5 -> 0.75 (the user: "1 poison, 3 food buffs, 32 vitality and my hp is barely
-// going up"). At 0.5 the miasma was double-taxing the same fantasy: it ticks
-// poison damage AND halves the healing you'd use to answer it, and miasma covers
-// a large share of the bayou, so the tax was closer to permanent than
-// situational. Doing the arithmetic on his run — ~7 HP/s of food, +93% from
-// Vitality, ~13.5 HP/s gross — the old multiplier took it to ~6.8 against up to
-// 12 dps of poison, i.e. net NEGATIVE while actively drinking three buffs. At
-// 0.75 the zone is still clearly worse to fight in without making healing feel
-// broken.
-const POISON_REGEN_MULT = 0.75;
+// 0.75 -> 1.0 (2026-07-24, the user: "get rid of the healing reduction
+// entirely"). Miasma/mire zones now only deal their poison DAMAGE; they no
+// longer weaken healing at all. Kept as a named constant (not deleted) so a
+// future zone could reintroduce a heal debuff deliberately, but nothing does
+// today — the "This ground weakens healing" status simply never fires now.
+const POISON_REGEN_MULT = 1.0;
 // Bonemire: waterlogged boneyard muck. Harsher than shallow water, gentler than
 // a deep channel — crossing one is a real commitment.
 const BONEMIRE_SLOW_MULT = 0.62;
@@ -7327,7 +7323,10 @@ export class MainScene extends Phaser.Scene {
       warden = pw;
     } else if (crypt.theme === "ember") {
       const kb = new Kilnborn(this, { x: vault.cx, y: vault.cy });
-      kb.arena = { x: vault.x, y: vault.y, w: vault.w, h: vault.h }; // its fire grid IS this room
+      kb.arena = { x: vault.x, y: vault.y, w: vault.w, h: vault.h }; // fallback if floorRects is ever empty
+      // Whole-dungeon lava (the user): the fire grid spans every room + corridor,
+      // not just the vault, so there's no cold room to retreat to as heat climbs.
+      kb.floorRects = [...layout.rooms, ...layout.corridors].map((r) => ({ x: r.x, y: r.y, w: r.w, h: r.h }));
       warden = kb;
     } else {
       warden = new Sanguinarch(this, { x: vault.cx, y: vault.cy });
@@ -9687,6 +9686,9 @@ export class MainScene extends Phaser.Scene {
     const finalDmg = dmg * resistMult;
     const effectiveness: DamageEffectiveness =
       resistMult > 1.001 ? "weak" : resistMult < 0.999 ? "resist" : "normal";
+    // Bow-only ministagger removal (the user): a ranged hit suppresses the
+    // position-shake in playHitFeedback for this one call; melee still shakes.
+    if (source === "Ranged") enemy.suppressHitShake = true;
     const depleted = enemy.takeHit(finalDmg);
     this.runLog.recordDamageDealt(source, finalDmg);
     this.awardSkillXp(dmgType, 30); // weapon-hit XP to the primary damage type's skill

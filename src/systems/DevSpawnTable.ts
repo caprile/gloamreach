@@ -17,6 +17,9 @@ import { Gloamwarden } from "../entities/Gloamwarden";
 import { Cinderwrought } from "../entities/Cinderwrought";
 import { Duneshaper } from "../entities/Duneshaper";
 import { Miretyrant } from "../entities/Miretyrant";
+import { Palewake } from "../entities/Palewake";
+import { Kilnborn } from "../entities/Kilnborn";
+import { Sanguinarch } from "../entities/Sanguinarch";
 
 // DEV-only spawn table for the `spawn <name>` console command. Kept in its
 // own file (rather than inline in MainScene) so the name list is easy to
@@ -42,8 +45,19 @@ export const DEV_ENEMY_SPAWN_TABLE: Record<string, SpawnFactory> = {
   murkling: (scene, x, y, elite) => new Murkling(scene, { x, y, elite }),
   corpselight: (scene, x, y, elite) => new Corpselight(scene, { x, y, elite }),
   gremlin_king: (scene, x, y) => new GremlinKing(scene, { x, y }),
+  // Minibosses. The badlands pair is self-contained; the bayou CRYPT WARDENS
+  // normally get their crypt's occluders/arena/floorRects wired at spawn, but
+  // all three default those safely (Palewake occluders=[] & arena=null, Kilnborn
+  // falls back to a square fire grid around itself, Sanguinarch needs nothing),
+  // so a bare surface spawn works for testing. Caveat: with no walls, Palewake's
+  // tether has no counterplay (you can't break line-of-sight), and Kilnborn's
+  // fire covers a square patch of open ground rather than a whole dungeon.
   gloamwarden: (scene, x, y) => new Gloamwarden(scene, { x, y }),
   cinderwrought: (scene, x, y) => new Cinderwrought(scene, { x, y }),
+  palewake: (scene, x, y) => new Palewake(scene, { x, y }),
+  kilnborn: (scene, x, y) => new Kilnborn(scene, { x, y }),
+  sanguinarch: (scene, x, y) => new Sanguinarch(scene, { x, y }),
+  // Bosses (no elite variant).
   duneshaper: (scene, x, y) => new Duneshaper(scene, { x, y }),
   miretyrant: (scene, x, y) => new Miretyrant(scene, { x, y }),
 };

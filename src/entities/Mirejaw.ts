@@ -170,12 +170,9 @@ export class Mirejaw extends Enemy {
       elite,
       eliteTrophy: "mirejaw_trophy",
       barScale: 1.5, // big sprite, readable overhead bar
-      // Overlapping bony scutes turn a thrust; the belly under them doesn't like
-      // an edge. Deliberately the INVERSE of the Fenlurker (resist slash / weak
-      // blunt) and distinct from the Mosswretch (resist blunt / weak fire), so
-      // all three physical types have a bayou creature they beat — the same
-      // spread the badlands used to make carrying two weapons matter.
-      resistances: { pierce: 0.5, slash: 1.25 },
+      // Resistances removed (2026-07-24, the user) — the whole damage-type layer
+      // is retired; every weapon does full damage. Fixes "why is the alligator
+      // taking half damage from spear????".
     });
     this.lungeDamage = elite ? Math.round(LUNGE_DAMAGE * ELITE.damage) : LUNGE_DAMAGE;
     this.rollTickDamage = elite ? Math.round(DEATHROLL_TICK_DAMAGE * ELITE.damage) : DEATHROLL_TICK_DAMAGE;

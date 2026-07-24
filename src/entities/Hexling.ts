@@ -117,14 +117,7 @@ export class Hexling extends Enemy {
       biteDamage: 0, // all damage flows through the bolt/flame paths, never a melee bite
       elite,
       eliteTrophy: "hexling_trophy",
-      // NEUTRAL to physical now (playtest: the user — the flat 0.5 physical resist
-      // made a caster that already bypasses armor + teleports feel un-killable with
-      // a normal weapon). It keeps its two WEAKNESSES (they favor the player): weak
-      // to magic (magic weapons are its counter) and weak to fire (S2 decision 3 —
-      // the one badlands enemy fire is meant to be strong against). Physical types
-      // are omitted → default 1.0.
-      // Normalized (2026-07-15): weak = ×1.25 across the biome.
-      resistances: { magic: 1.25, fire: 1.25 },
+      // Resistances/weaknesses removed (2026-07-24, the user) — damage-type layer retired.
       upright: true, // humanoid mage — mirror left/right, never rotate upside-down
     });
     this.boltDamage = elite ? Math.round(BOLT_DAMAGE * 1.5) : BOLT_DAMAGE;

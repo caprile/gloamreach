@@ -89,6 +89,12 @@ export class Kilnborn extends Enemy {
   // built from it; with no arena set it falls back to a square around spawn so
   // the boss is still functional if ever placed outside a crypt.
   arena: Rect | null = null;
+  // The WHOLE crypt's floor (every room + corridor), assigned by MainScene. When
+  // set, the fire grid spans all of it instead of just the vault, so the burning
+  // floor spreads through the entire dungeon as heat rises — the user: "kilnborn
+  // should make whole dungeon lava not just his room." No safe cold room to
+  // retreat to; at full heat MAX_BURN_FRACTION of the ENTIRE crypt is alight.
+  floorRects: Rect[] | null = null;
   private tiles: { x: number; y: number }[] = [];
   private litCount = 0;
   private fireGfx: Phaser.GameObjects.Graphics;
@@ -118,9 +124,7 @@ export class Kilnborn extends Enemy {
       maxHealth: MAX_HEALTH,
       biteDamage: 0, // everything flows through checkPlayerHit()
       barScale: 2.4,
-      // Molten slag shell: shrugs off blunt, splits along its cracks to pierce.
-      // Same "carry more than one weapon" nudge the badlands roster teaches.
-      resistances: { blunt: 0.75, pierce: 1.25, fire: 0.4 },
+      // Resistances/weaknesses removed (2026-07-24, the user) — damage-type layer retired.
     });
     this.spawnX = cfg.x;
     this.spawnY = cfg.y;
@@ -145,9 +149,22 @@ export class Kilnborn extends Enemy {
 
   private ensureTiles(): void {
     if (this.tiles.length > 0) return;
-    const a: Rect = this.arena ?? { x: this.x - 220, y: this.y - 180, w: 440, h: 360 };
-    for (let y = a.y + TILE / 2; y < a.y + a.h; y += TILE) {
-      for (let x = a.x + TILE / 2; x < a.x + a.w; x += TILE) this.tiles.push({ x, y });
+    // Whole-dungeon mode: tile every room + corridor, deduping the doorway
+    // overlaps (rooms and corridors share cells). Falls back to the single arena
+    // rect (or a square around spawn) when no floor plan was handed in.
+    const rects: Rect[] = this.floorRects && this.floorRects.length > 0
+      ? this.floorRects
+      : [this.arena ?? { x: this.x - 220, y: this.y - 180, w: 440, h: 360 }];
+    const seen = new Set<string>();
+    for (const a of rects) {
+      for (let y = a.y + TILE / 2; y < a.y + a.h; y += TILE) {
+        for (let x = a.x + TILE / 2; x < a.x + a.w; x += TILE) {
+          const key = `${Math.round(x)},${Math.round(y)}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          this.tiles.push({ x, y });
+        }
+      }
     }
     // Shuffle once so tiles ignite in a scattered order rather than sweeping
     // left-to-right (which would make "cold ground" a trivially readable band).

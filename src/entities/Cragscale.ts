@@ -83,6 +83,11 @@ export class Cragscale extends Enemy {
   private rollTraveled = 0;
   private rollHit = false;
   private rollCooldownUntil = 0;
+  // Roll-lane telegraph (2026-07-24, the user: "anything that has an invisible
+  // radius like the spinny guys in badlands needs to show the radius somehow when
+  // doing the attack"). The rolling charge's hit lane is now drawn on the ground
+  // during the tuck-in windup + the roll itself, so the danger zone is readable.
+  private telegraphGfx: Phaser.GameObjects.Graphics;
 
   constructor(scene: Phaser.Scene, cfg: { x: number; y: number; elite?: boolean }) {
     const elite = cfg.elite ?? false;
@@ -98,16 +103,12 @@ export class Cragscale extends Enemy {
       biteDamage: elite ? Math.round(BITE_DAMAGE * 1.5) : BITE_DAMAGE,
       elite,
       eliteTrophy: "cragscale_trophy",
-      // Locked resist profile: stone-hard plates turn aside blades (slash), take
-      // blunt normally, and crack under a thrust (pierce = the Primal Spear).
-      // ranged/magic left neutral (absent = 1).
-      // fire ×0.5: a sun-baked rock-scale hide shrugs off flame (S2 decision 3 —
-      // the counterweight to the player's Emberblink fire-nova being dominant).
-      // Normalized (2026-07-15): weak = ×1.25, resist = ×0.5 across the biome.
-      resistances: { slash: 0.5, pierce: 1.25, fire: 0.5 },
+      // Resistances removed (2026-07-24, the user): the damage-type layer is
+      // retired game-wide — flat armor is the only mitigation axis now.
     });
     this.spawnX = cfg.x;
     this.spawnY = cfg.y;
+    this.telegraphGfx = scene.add.graphics();
     if (elite) {
       this.speedMult = 1.1;
       this.setScale(1.3);
@@ -208,6 +209,8 @@ export class Cragscale extends Enemy {
 
     if (this.attackPhase === "windup") {
       body.setVelocity(0, 0);
+      // Telegraph the roll lane during the tuck-in, ramping in as the tell.
+      this.drawRollLane(0.12 + 0.24 * Phaser.Math.Clamp(this.attackElapsed(now) / ROLL_WINDUP_MS, 0, 1));
       if (this.attackElapsed(now) >= ROLL_WINDUP_MS) {
         this.attackPhase = "strike";
         this.attackStartedAt = now;
@@ -221,6 +224,7 @@ export class Cragscale extends Enemy {
     if (this.attackPhase === "strike") {
       this.rotation += ROLL_SPIN_RATE * delta; // spin while rolling (the visual tell)
       this.rollTraveled += (ROLL_SPEED * this.speedMult * delta) / 1000;
+      this.drawRollLane(0.36); // solid danger lane while it barrels through
       const dist = Phaser.Math.Distance.Between(this.x, this.y, playerX, playerY);
       if (!this.rollHit && dist <= ROLL_HIT_RADIUS + this.reachBonus()) {
         this.rollHit = true;
@@ -229,6 +233,7 @@ export class Cragscale extends Enemy {
         this.markAttackLanded(now);
         body.setVelocity(0, 0);
         this.faceAngle(this.rollAngle); // stop spinning, settle facing
+        this.telegraphGfx.clear();
         this.attackPhase = "recover";
         this.attackStartedAt = now;
         return true; // roll connects
@@ -236,6 +241,7 @@ export class Cragscale extends Enemy {
       if (this.rollTraveled >= ROLL_MAX_DIST) {
         body.setVelocity(0, 0);
         this.faceAngle(this.rollAngle); // stop spinning, settle facing
+        this.telegraphGfx.clear();
         this.attackPhase = "recover";
         this.attackStartedAt = now;
       }
@@ -250,5 +256,51 @@ export class Cragscale extends Enemy {
       this.rollCooldownUntil = now + ROLL_COOLDOWN_MS;
     }
     return false;
+  }
+
+  // Draw the roll's hit lane on the ground — a capsule-ish quad from the
+  // Cragscale forward along the locked rollAngle, ROLL_MAX_DIST long and
+  // 2×ROLL_HIT_RADIUS wide, plus a rounded cap at the far end. This is the
+  // "show the radius" telegraph; it's translucent and sits under the sprite.
+  private drawRollLane(alpha: number): void {
+    const g = this.telegraphGfx;
+    g.clear();
+    g.setDepth(this.depth - 0.5);
+    const dx = Math.cos(this.rollAngle);
+    const dy = Math.sin(this.rollAngle);
+    const px = -dy; // perpendicular
+    const py = dx;
+    const hw = ROLL_HIT_RADIUS + this.reachBonus();
+    const len = ROLL_MAX_DIST;
+    const ax = this.x + px * hw;
+    const ay = this.y + py * hw;
+    const bx = this.x - px * hw;
+    const by = this.y - py * hw;
+    const cx = this.x + dx * len - px * hw;
+    const cy = this.y + dy * len - py * hw;
+    const ex = this.x + dx * len + px * hw;
+    const ey = this.y + dy * len + py * hw;
+    g.fillStyle(0xd6603a, alpha);
+    g.fillPoints([
+      new Phaser.Geom.Point(ax, ay),
+      new Phaser.Geom.Point(ex, ey),
+      new Phaser.Geom.Point(cx, cy),
+      new Phaser.Geom.Point(bx, by),
+    ], true);
+    g.fillCircle(this.x + dx * len, this.y + dy * len, hw); // rounded far cap
+    g.lineStyle(2, 0xff7a44, Math.min(1, alpha + 0.3));
+    g.strokePoints([
+      new Phaser.Geom.Point(ax, ay),
+      new Phaser.Geom.Point(ex, ey),
+      new Phaser.Geom.Point(cx, cy),
+      new Phaser.Geom.Point(bx, by),
+    ], true);
+  }
+
+  // Tear down the telegraph Graphics with the sprite (separate GameObject).
+  playDeathFeedback(onComplete: () => void): void {
+    this.telegraphGfx.clear();
+    this.telegraphGfx.destroy();
+    super.playDeathFeedback(onComplete);
   }
 }

@@ -182,10 +182,7 @@ export class Miretyrant extends Enemy {
       ],
       maxHealth: MAX_HEALTH,
       biteDamage: 0, // everything flows through checkPlayerHit()
-      // A thick swamp hide: cuts skate off it, and it is steeped in its own
-      // element. Blunt is the answer. Deliberately NOT the Duneshaper's
-      // fire-weakness — the two finales should reward different loadouts.
-      resistances: { slash: 0.8, blunt: 1.2, poison: 0.25 },
+      // Resistances/weaknesses removed (2026-07-24, the user) — damage-type layer retired.
       upright: true,
       barScale: 2.6,
     });

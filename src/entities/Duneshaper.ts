@@ -196,13 +196,7 @@ export class Duneshaper extends Enemy {
       ],
       maxHealth: MAX_HEALTH,
       biteDamage: 0, // all damage flows through checkPlayerHit() / projectiles
-      // Standout weakness = FIRE (2026-07-15): physical types are now neutral so
-      // the finale isn't a free melee-nuke on top of crit/Onslaught, and burning it
-      // down is the intended counter. The magic resist was DROPPED (the user: fire is
-      // a subtype of magic + the Ember Brand deals fire) — resisting magic while
-      // weak to fire was contradictory and punished the ember/fire path it's meant
-      // to reward. So: fire ×1.25 weak, everything else neutral.
-      resistances: { fire: 1.25 },
+      // Resistances/weaknesses removed (2026-07-24, the user) — damage-type layer retired.
       upright: true, // humanoid sorcerer — mirror left/right, never rotate
     });
     this.spawnX = cfg.x;

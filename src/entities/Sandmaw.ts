@@ -89,15 +89,7 @@ export class Sandmaw extends Enemy {
       biteDamage: 0, // all damage flows through the radial erupt (checkPlayerHit), never a melee bite
       elite,
       eliteTrophy: "sandmaw_trophy",
-      // A burrower is hard to pin with a thrust but concussed by a heavy blow:
-      // resists pierce, weak to blunt (slash/ranged/magic neutral). Complements
-      // Cragscale's inverse (weak-pierce/resist-slash), so clubs/warhammer shine
-      // here where the Primal Spear shines there — the damage-type layer rewards
-      // carrying more than one weapon into the badlands.
-      // fire ×0.5: a sand-burrower is at home in the heat (S2 decision 3 — makes
-      // the player's Emberblink fire-nova situational, not a blanket answer).
-      // Normalized (2026-07-15): weak = ×1.25, resist = ×0.5.
-      resistances: { pierce: 0.5, blunt: 1.25, fire: 0.5 },
+      // Resistances/weaknesses removed (2026-07-24, the user) — damage-type layer retired.
     });
     this.eruptDamage = elite ? Math.round(ERUPT_DAMAGE * 1.5) : ERUPT_DAMAGE;
     this.telegraphGfx = scene.add.graphics();

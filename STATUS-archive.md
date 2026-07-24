@@ -1,5 +1,65 @@
 # STATUS Archive — older milestone entries (grep by id; never Read in full)
 
+### "God run" triage session 3 — creature identity pass, C1/C2/C3 (2026-07-23, Opus)
+
+Plan: `.claude/plans/vagabond-god-run-triage.md`. Sessions 1 (bugs/ammo/summary) and 2 (the
+balance pass) shipped earlier the same day; this is the final session, closing the whole triage.
+Three bespoke bayou-creature reworks, each off a specific the user complaint and each following the
+roster's "own state machine, own numbers in enemyStats.ts, no shared config table" rule.
+
+**C1 — Mirejaw ("feels like a glorified boar").** Two additions give it an alligator's identity.
+(1) DEATH ROLL: a chomp that CONNECTS (and is off cooldown) latches into a thrashing roll — 3
+ticks @360ms in a tight 62px grip, each re-checked against the player's CURRENT position (break
+away to cut losses), 18 dmg + 7/s bleed each, ending in a 1s planted recovery (the biggest punish
+the creature offers), 7s cooldown. Only ever entered from a hit that already landed — a punish for
+being caught, not a new way to catch you. Routed through `checkPlayerHit` (Mirejaw added to that
+union); the barrel-roll spin is driven manually rather than by a tween because
+`Enemy.playHitFeedback` calls `killTweensOf(this)` on a planted enemy and would strand the sprite
+crooked. (2) WATER TERRITORY: new generic `Enemy.ignoresTerrainSlow` (default false) exempts a
+creature from the environmental move-slow the player suffers — only the TERRAIN term, so night
+speed + Executioner slow still apply. On dry ground you outpace it; in deep water the player wades
+at 0.5x and it doesn't, inverting the relationship. Verified live: full cycle fires 3 ticks at
+900/1260/1620ms; breaking the grip after tick 1/2 takes exactly 1/2 hits; on a sampled 0.62-
+moveMult tile the Mirejaw reads envSpeedMult 1.0 vs a Murkling's 0.62.
+
+**C2 — Mosswretch ("lacks attack moves / feels weird").** Its whole kit was one slow overhead
+swing on the slowest body in the game — trivially walked away from. (1) SPORE BURST: it can't
+catch you so it stops you — a mid-range (outside smash reach) planted 700ms heave with NO impact
+damage drops a lingering cloud on your CURRENT ground that slows 0.6x + poisons 5/s for 6s, used
+to cut off the retreat so the next smash lands. Rides the same `environmentEffectAt` path the
+Miretyrant's mire pools use (refactored into `baseSurfaceEnvironmentAt` + `foldSporeCloud`, so a
+cloud stacks correctly with water/thornfield/miasma — harsher slow wins, poison max'd), inheriting
+slow + poison + regen-suppression + status-resist with zero bespoke damage code. (2) DEATH-SPAWN:
+comes apart into 3 Mosslings (same class scaled 0.58, 16% HP / 42% dmg / 1.9x speed, forceAggro'd
+so they swarm the moment you'd relaxed), via the "creature asks (`deathSpawnCount`), scene spawns
+(`spawnMosslings`)" split the bellow uses. Guarded 3 ways: a spawnling reports deathSpawnCount 0
+(no recursion), is never elite (one kill can't pay 4 trophies), drops only 1 token swamp_moss.
+Verified live (after page-reload to fix an HMR dual-class `instanceof` artifact): a real
+dev-spawned kill spawns exactly 3 aggro'd Mosslings, killing a Mossling spawns none, the cloud
+reads moveMult 0.6 / poison 5 / regen 0.75 inside and neutral outside.
+
+**C3 — Corpselight ("just a ranged gremlin").** A genuine TWO-FORM TRANSFORM — the user explicitly
+rejected phase-out and blink as done-before and asked for a melee-form transform, so this is a new
+shape for the roster (nothing else transforms). At range = the wisp (unchanged: fragile, floaty,
+armor-bypassing homing orbs). Within 96px it COLLAPSES into a corporeal husk: 1.7x scale, slow
+62px/s lurch, a PHYSICAL maul (30 — armor answers the husk, unlike the wisp's magic orbs), and it
+takes only 0.5x damage. Stay 190px away for 2s and it DISSOLVES back (hysteresis: revert range >
+transform range, so no boundary strobe). ONE shared HP pool (chipping the wisp is real progress,
+but a given DPS goes further at range than into the tanky husk — the "commit to a strategy"
+lever). BOTH transitions deal telegraphed magic AoE (collapse drop-slam 26 + 150kb, dodgeable by
+stepping out of the 104px tell; dissolve puff 13) via `checkPlayerHit` (Corpselight added to the
+union); the husk maul uses the boolean-bite path with `biteDamage` overridden to the maul value.
+1.6s transform cooldown caps flicker. Verified live: full wisp->collapse->husk->dissolve->wisp
+cycle with correct scales/damage; husk takes exactly 0.5x (40->-40 wisp, -20 husk); collapse slam
+lands 26 standing still / whiffs when you sprint clear; the scene loop dealt slam+maul to the
+player through the real applyDamageToPlayer path (138->82).
+
+`enemyStats.ts` holds every number (new attack entries per creature); dashboard Enemies tab
+resynced for all three (stale primary-damage numbers corrected in passing since those entries were
+being edited anyway — Blighttoad/Murkling's stay flagged). `tsc` + `npm run build` clean, zero
+console errors. **The god-run triage (sessions 1-3, D1-D10 + C1-C3) is complete; next is a
+playtest.**
+
 ### B4-P5 — Gear branching, set bonuses → jewelry, pickaxe gate, Gemwright UI (2026-07-22, Opus)
 
 Plan: `.claude/plans/b4-p5-gear-branch-and-jewelry.md`. Follow-up to B4-P4 from the user's

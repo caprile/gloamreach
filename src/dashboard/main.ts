@@ -202,7 +202,7 @@ const ENEMIES: EnemyStat[] = [
     ],
     loot: "1-2 Cragscale Plate",
     trophy: "Cragscale Trophy (elite)",
-    notes: "Biome 2 armored bruiser (tanky, slow). Signature ROLLING CHARGE closes on kiters + a point-blank basher. Roll reworked 2026-07-12: faster (240→300) + wider (30→40px hit) so it forces a real dash/dodge, and a connect opens a BLEED wound (5/s for 4s, stacks) + 230 shove — the heavy must-dodge threat vs the Duskrunner's light pounce. Resist profile (normalized 2026-07-15 — weak ×1.25 / resist ×0.5 across the biome): slash ×0.5, pierce ×1.25 (weak), FIRE ×0.5; blunt now neutral — teaches the damage-type layer (Primal Spear favored, blades bounce); fire-resistant so Emberblink's nova isn't a blanket answer.",
+    notes: "Biome 2 armored bruiser (tanky, slow). Signature ROLLING CHARGE closes on kiters + a point-blank basher. Roll reworked 2026-07-12: faster (240→300) + wider (30→40px hit) so it forces a real dash/dodge, and a connect opens a BLEED wound (5/s for 4s, stacks) + 230 shove — the heavy must-dodge threat vs the Duskrunner's light pounce. 2026-07-24: damage-type resistances REMOVED game-wide (the user) — every weapon does full damage; the roll now shows a ground-lane telegraph.",
   },
   {
     name: "Hexling (BADLANDS)",
@@ -215,7 +215,7 @@ const ENEMIES: EnemyStat[] = [
     ],
     loot: "1 Hex Essence",
     trophy: "Hexling Trophy (elite)",
-    notes: "Biome 2 MAGE (redesigned 2026-07-12 — was a reskinned gremlin kiter). Distinct taller robed/staff texture. STANDS AND CASTS (no kite — only repositions via blink). Close-range punish: FLAME STRIKE calls down 3 delayed fire circles at your locked position (walk out to dodge) that detonate as magic AoE (18, bypasses armor), then it BLINKS ~220px away. Blink is also the cornered fallback. HP 30→55→95 (playtest: died too fast even in Woods-tier gear). Resist profile (normalized 2026-07-15 — weak ×1.25 across the biome): magic ×1.25 (weak), FIRE ×1.25 (weak), physical neutral — magic AND fire weapons hurt it. S2: BLINK cooldown 2600→5200ms + no longer blinks after every flame strike (playtest: 'teleports too much') — commits to standing and casting far more.",
+    notes: "Biome 2 MAGE (redesigned 2026-07-12 — was a reskinned gremlin kiter). Distinct taller robed/staff texture. STANDS AND CASTS (no kite — only repositions via blink). Close-range punish: FLAME STRIKE calls down 3 delayed fire circles at your locked position (walk out to dodge) that detonate as magic AoE (18, bypasses armor), then it BLINKS ~220px away. Blink is also the cornered fallback. HP 30→55→95 (playtest: died too fast even in Woods-tier gear). 2026-07-24: damage-type resistances REMOVED game-wide (the user). S2: BLINK cooldown 2600→5200ms + no longer blinks after every flame strike (playtest: 'teleports too much') — commits to standing and casting far more.",
   },
   {
     name: "Sandmaw (BADLANDS)",
@@ -227,7 +227,7 @@ const ENEMIES: EnemyStat[] = [
     ],
     loot: "1-2 Sandmaw Chitin",
     trophy: "Sandmaw Trophy (elite)",
-    notes: "Biome 2 Phase 2b BURROWING AMBUSHER — the 4th native creature. Lurks submerged (near-invisible, alpha 0.18) until you enter its 62px ambush ring, then ERUPTS: a 560ms tremor telegraph (growing dust ring previews the 95px burst) → radial sand-burst (38 physical + 220 knockback, dodge by clearing the ring — movement/dash-dodgeable, i-frames negate) → planted 'exposed' punish window → burrows back under (2.6s re-ambush cooldown) and slow-stalks toward you (30px/s) to re-ambush. AoE routed through checkPlayerHit (like the bosses/Hexling flame), not a melee bite. Resist profile (normalized 2026-07-15): pierce ×0.5, blunt ×1.25 (weak), FIRE ×0.5 — inverse of Cragscale, so clubs/warhammer shine here where the spear shines there; fire-resistant (at home in the heat). Signature BLEED (4/s×5s) on the erupt hit + a snappier 470ms telegraph (2026-07-15). Attacked while submerged → surfaces & retaliates (like Snake). No pack.",
+    notes: "Biome 2 Phase 2b BURROWING AMBUSHER — the 4th native creature. Lurks submerged (near-invisible, alpha 0.18) until you enter its 62px ambush ring, then ERUPTS: a 560ms tremor telegraph (growing dust ring previews the 95px burst) → radial sand-burst (38 physical + 220 knockback, dodge by clearing the ring — movement/dash-dodgeable, i-frames negate) → planted 'exposed' punish window → burrows back under (2.6s re-ambush cooldown) and slow-stalks toward you (30px/s) to re-ambush. AoE routed through checkPlayerHit (like the bosses/Hexling flame), not a melee bite. 2026-07-24: damage-type resistances REMOVED game-wide (the user). Signature BLEED (4/s×5s) on the erupt hit + a snappier 470ms telegraph (2026-07-15). Attacked while submerged → surfaces & retaliates (like Snake). No pack.",
   },
   {
     name: "Mirejaw (BAYOU)",
@@ -235,26 +235,26 @@ const ENEMIES: EnemyStat[] = [
     speed: 138,
     aggro: 240,
     attacks: [
-      { label: "Ambush lunge (locked line, 340px @560px/s, +190 kb, +BLEED 9/s×6s)", damage: 80, telegraphMs: 430 },
-      { label: "Chomp (56px reach, +110 kb, +BLEED 6/s×4s)", damage: 52, telegraphMs: 440 },
+      { label: "Ambush lunge (locked line, 340px @560px/s, +190 kb, +BLEED 9/s×6s)", damage: 100, telegraphMs: 430 },
+      { label: "Chomp (56px reach, +110 kb, +BLEED 6/s×4s)", damage: 68, telegraphMs: 440 },
       // C1 (2026-07-23): a landed chomp latches into a death roll — 3 ticks in a
       // tight 62px grip, then a long planted recovery. Break away mid-roll to
       // cut your losses (each tick re-checks your position).
-      { label: "Death roll (3 latched ticks @360ms, 62px grip, +BLEED 7/s×3s, 1s recover)", damage: 18, telegraphMs: 0 },
+      { label: "Death roll (3 latched ticks @360ms, 62px grip, +BLEED 7/s×3s, 1s recover)", damage: 42, telegraphMs: 0 },
     ],
     loot: "1-2 Mirehide + 1-2 Mirejaw Meat",
     trophy: "Mirejaw Trophy (elite)",
-    notes: "Biome 3 SIGNATURE AMBUSHER and the game's ONLY Mirehide source (locked) — the bayou light-armor reforge tier is gated behind hunting it. C1 (2026-07-23): given an alligator's identity so it stops reading as 'a glorified boar' (the user) — a landed chomp LATCHES into a DEATH ROLL (3 ticks in a tight grip + long recovery punish; break away mid-roll to cut losses), and it's now EXEMPT from the deep-water move-slow (ignoresTerrainSlow), so on dry ground you outpace it but in the water it's faster than you — the swamp is its territory. Sprite drawn BIG (48x22 at 1.55x = 74x34 on screen, the largest common creature — the user: 'the gators are too small'). STALK PATIENCE: stalking is slow by design, so a player who just keeps walking could never be ambushed (it fell 537px behind and never engaged) — after 2.4s of fruitless stalking it ABANDONS STEALTH and hunts at 138px/s. Lurks half-sunk (alpha 0.4 — VISIBLE, unlike the Sandmaw's 0.18) then commits a LOCKED-LINE lunge chomp you sidestep. Resists pierce ×0.5 (bony scutes), weak slash ×1.25 (soft belly). Damage NOT bumped in the badlands-scaled tuning pass — chomp 52 / lunge 80 are current (D2 rebalance).",
+    notes: "Biome 3 SIGNATURE AMBUSHER and the game's ONLY Mirehide source (locked) — the bayou light-armor reforge tier is gated behind hunting it. C1 (2026-07-23): given an alligator's identity so it stops reading as 'a glorified boar' (the user) — a landed chomp LATCHES into a DEATH ROLL (3 ticks in a tight grip + long recovery punish; break away mid-roll to cut losses), and it's now EXEMPT from the deep-water move-slow (ignoresTerrainSlow), so on dry ground you outpace it but in the water it's faster than you — the swamp is its territory. Sprite drawn BIG (48x22 at 1.55x = 74x34 on screen, the largest common creature — the user: 'the gators are too small'). STALK PATIENCE: stalking is slow by design, so a player who just keeps walking could never be ambushed (it fell 537px behind and never engaged) — after 2.4s of fruitless stalking it ABANDONS STEALTH and hunts at 138px/s. Lurks half-sunk (alpha 0.4 — VISIBLE, unlike the Sandmaw's 0.18) then commits a LOCKED-LINE lunge chomp you sidestep. 2026-07-24: damage-type resistances REMOVED game-wide (the user) — every weapon does full damage. Damage rescaled DOWN for an undergeared bayou entry (chomp 68 / lunge 100 / death-roll 42/tick) — commons are now ~half of Sanguinarch, no 2-shots.",
   },
   {
     name: "Blighttoad (BAYOU)",
     hp: 130, // D10 2026-07-23: was 150
     speed: 300,
     aggro: 270,
-    attacks: [{ label: "Venom bite (+POISON 9/s×6s, STACKS to 4x, bypasses armor)", damage: 66, telegraphMs: 340 }],
+    attacks: [{ label: "Venom bite (+POISON 4/s×6s, STACKS to 3x, bypasses armor)", damage: 48, telegraphMs: 340 }],
     loot: "1 Blight Gland",
     trophy: "Blighttoad Trophy (elite)",
-    notes: "Biome 3 POISON carrier — the creature half of the biome's signature status effect. The bite itself is mostly eaten by bayou-tier armor; the POISON is the payload: it's a magic subtype so it BYPASSES flat armor, it STACKS per bite (discrete doses, unlike the miasma's refresh-only sustain), and it halves every heal source while it runs — so it also stops you eating your way out. Semi-swarm via pack-aggro (radius 200, base-state pattern), spawns in loose clumps of 2-3. Burst HOP locomotion (150px/s hops with a 620ms planted beat = well under player walk speed on average). Resists magic ×0.6, weak fire ×1.25. TUNING PASS 2026-07-22 (the user: 'remember how powerful the player is - think about how fast players will be'): the first numbers were sized against the BADLANDS roster, not a bayou-ready player (sprint 166-229px/s, dash 450, 220px blink, hits for 45-70 / 130-200 crit). Speeds, HP and damage were all raised so the roster can actually reach and threaten that player.",
+    notes: "Biome 3 POISON carrier — the creature half of the biome's signature status effect. 2026-07-24 (the user: '1 regular frog is chunking me + poison is absurd'): bite 66→48; damage-type resistances REMOVED game-wide; and the healing reduction is GONE (poison no longer weakens heals anywhere — it's pure DoT now). The POISON is still the payload: it's a magic subtype so it BYPASSES flat armor and STACKS per bite (to 3x). Semi-swarm via pack-aggro (radius 200, base-state pattern), spawns in loose clumps of 2-3. Burst HOP locomotion (150px/s hops with a 620ms planted beat = well under player walk speed on average). TUNING PASS 2026-07-22 (the user: 'remember how powerful the player is - think about how fast players will be'): the first numbers were sized against the BADLANDS roster, not a bayou-ready player (sprint 166-229px/s, dash 450, 220px blink, hits for 45-70 / 130-200 crit). Speeds, HP and damage were all raised so the roster can actually reach and threaten that player.",
   },
   {
     name: "Mosswretch (BAYOU)",
@@ -262,7 +262,7 @@ const ENEMIES: EnemyStat[] = [
     speed: 74,
     aggro: 250,
     attacks: [
-      { label: "Overhead smash (88px reach, +300 knockback)", damage: 78, telegraphMs: 780 },
+      { label: "Overhead smash (88px reach, +300 knockback)", damage: 98, telegraphMs: 780 },
       // C2 (2026-07-23): mid-range only. A planted heave drops a lingering cloud
       // on your current ground (slow 0.6x + poison 5/s for 6s) — no impact
       // damage; it cuts off your retreat to set up the smash.
@@ -270,14 +270,14 @@ const ENEMIES: EnemyStat[] = [
     ],
     loot: "2-3 Swamp Moss + 1-2 Wood",
     trophy: "Mosswretch Trophy (elite)",
-    notes: "Biome 3 BRUISER (the Cragscale analog) — the slowest common enemy and the tankiest. C2 (2026-07-23): fixed the user's 'lacks attack moves / feels weird' — it can't catch you so it now STOPS you (a mid-range SPORE BURST that drops a slowing/poisoning cloud on your retreat path, setting up the smash), and on death it comes apart into 3 MOSSLINGS (scale 0.58, 16% HP, forceAggro'd — killing one in a bad spot swarms you; spawnlings never chain-spawn and drop no trophy). ONE main attack with the longest common-roster wind-up (780ms) + 720ms recovery, so baiting the smash is the intended fight. THE FIRE LESSON: fire ×1.5 (the biggest weakness on any common enemy). Resists blunt ×0.5, weak slash ×1.25. Smash 78 is current (D2 rebalance); NOT the badlands-scaled number.",
+    notes: "Biome 3 BRUISER (the Cragscale analog) — the slowest common enemy and the tankiest. C2 (2026-07-23): fixed the user's 'lacks attack moves / feels weird' — it can't catch you so it now STOPS you (a mid-range SPORE BURST that drops a slowing/poisoning cloud on your retreat path, setting up the smash), and on death it comes apart into 3 MOSSLINGS (scale 0.58, 16% HP, forceAggro'd — killing one in a bad spot swarms you; spawnlings never chain-spawn and drop no trophy). ONE main attack with the longest common-roster wind-up (780ms) + 720ms recovery, so baiting the smash is the intended fight. 2026-07-24: damage-type resistances REMOVED game-wide (the user); smash 78→98 (still the biggest COMMON hit, ~half of Sanguinarch, elite ×1.5=147 — the user's '192 from elite tree guy' is fixed).",
   },
   {
     name: "Murkling (BAYOU)",
     hp: 40,
     speed: 172,
     aggro: 300,
-    attacks: [{ label: "Claw (skitter-slash, shortest telegraph in the game)", damage: 62, telegraphMs: 150 }],
+    attacks: [{ label: "Claw (skitter-slash, shortest telegraph in the game)", damage: 38, telegraphMs: 150 }],
     loot: "1-2 Gloam Dust",
     trophy: "Murkling Trophy (elite)",
     notes: "Biome 3 FAST MELEE SWARM (the Duskrunner analog) and the AOE-arc payoff enemy. Dies to a single bayou-tier weapon hit; the threat is 4-6 at once. Faster than the player's walk, so you can't stroll away. Wide pack-aggro (radius 300) with the base-state zero-override pattern — one waking wakes the reed-bed. No pounce (that's the Duskrunner's): it just swarms, weaving in at a per-instance angular offset that straightens as it closes, so a nest fans out instead of stacking into one pixel. DELIBERATELY NEUTRAL to every damage type — it's the baseline you measure a weapon's sweep against. TUNING PASS 2026-07-22 (the user: 'remember how powerful the player is - think about how fast players will be'): the first numbers were sized against the BADLANDS roster, not a bayou-ready player (sprint 166-229px/s, dash 450, 220px blink, hits for 45-70 / 130-200 crit). Speeds, HP and damage were all raised so the roster can actually reach and threaten that player.",
@@ -302,13 +302,13 @@ const ENEMIES: EnemyStat[] = [
     attacks: [
       { label: "Gloam orb (WISP form; HOMING 170px/s, 3s, magic — BYPASSES armor)", damage: 22 },
       // C3 (2026-07-23): the two-form transform.
-      { label: "Husk maul (CORPOREAL form; PHYSICAL — armor applies, 74px reach, +130 kb)", damage: 30, telegraphMs: 520 },
+      { label: "Husk maul (CORPOREAL form; PHYSICAL — armor applies, 74px reach, +130 kb)", damage: 55, telegraphMs: 520 },
       { label: "Collapse slam (magic AoE 104px on transform-IN, +150 kb — dodge the tell)", damage: 26, telegraphMs: 560 },
       { label: "Dissolve puff (magic AoE 84px on transform-OUT, instant)", damage: 13, telegraphMs: 0 },
     ],
     loot: "3-5 Hex Essence",
     trophy: "Corpselight Trophy (elite)",
-    notes: "Biome 3's ONE ranged creature, deliberately UNCOMMON. C3 (2026-07-23): TWO-FORM TRANSFORM (the user rejected phase-out/blink as done-before, asked for this). At range = the WISP (fragile, floaty, armor-bypassing HOMING orbs — first Projectile.homing; 170px/s, 1.2 rad/s turn, 3s lifetime; standing still gets you hit). Close to melee (96px) and it COLLAPSES into a corporeal HUSK: 1.7x scale, slow 62px/s lurch, a PHYSICAL maul (30 — armor answers it, unlike the orb), and it takes only 0.5x damage. Back off 190px for 2s and it DISSOLVES back. ONE shared HP pool (chip the wisp at range = real progress, but DPS goes further at range than into the tanky husk — commit to a strategy). BOTH transitions hurt (telegraphed collapse slam 26 + dissolve puff 13, both magic AoE) + a 1.6s transform cooldown, so boundary-flickering isn't free. Neutral to physical (wisp); weak fire ×1.25 + magic ×1.25. Bayou's local HEX ESSENCE source. Orb 22 / hp 160 are current (D2/D10 rebalance).",
+    notes: "Biome 3's ONE ranged creature, deliberately UNCOMMON. C3 (2026-07-23): TWO-FORM TRANSFORM (the user rejected phase-out/blink as done-before, asked for this). At range = the WISP (fragile, floaty, armor-bypassing HOMING orbs — first Projectile.homing; 170px/s, 1.2 rad/s turn, 3s lifetime; standing still gets you hit). Close to melee (96px) and it COLLAPSES into a corporeal HUSK: 1.7x scale, slow 62px/s lurch, a PHYSICAL maul (30 — armor answers it, unlike the orb), and it takes only 0.5x damage. Back off 190px for 2s and it DISSOLVES back. ONE shared HP pool (chip the wisp at range = real progress, but DPS goes further at range than into the tanky husk — commit to a strategy). BOTH transitions hurt (telegraphed collapse slam 26 + dissolve puff 13, both magic AoE) + a 1.6s transform cooldown, so boundary-flickering isn't free. 2026-07-24: damage-type resistances REMOVED game-wide (the user); husk maul 30→55 (the magic orb 22 + slams are untouched). Bayou's local HEX ESSENCE source.",
   },
   {
     name: "The Palewake (CRYPT WARDEN — gloam)",
@@ -334,7 +334,7 @@ const ENEMIES: EnemyStat[] = [
     ],
     loot: "2-3 Moonsilver + 2-4 Gloam Shard — and unseals the vault's Ember Geodes + Moonsilver seams",
     notes:
-      "Biome 3 Phase 4c. Driven by a HEAT meter that RISES AS IT ACTS, not a poise meter that falls as you hit it. Rising heat sets its vault's floor alight tile by tile (32px grid, up to 62% of the room), so the arena shrinks as the fight runs; at full heat it detonates a backdraft that sweeps exactly the ground that is already burning — the dodge is not a direction, it's standing on COLD ground. The punish window is `venting` (1.7× damage), which arrives on the BOSS's clock: you survive to it, you can't force it early. All damage is `fire` (bypasses flat armor; heavy-armor magic/fire mitigation is the counter). Resists blunt ×0.75 / fire ×0.4, weak to pierce ×1.25.",
+      "Biome 3 Phase 4c. Driven by a HEAT meter that RISES AS IT ACTS, not a poise meter that falls as you hit it. Rising heat sets its vault's floor alight tile by tile (32px grid, up to 62% of the room), so the arena shrinks as the fight runs; at full heat it detonates a backdraft that sweeps exactly the ground that is already burning — the dodge is not a direction, it's standing on COLD ground. The punish window is `venting` (1.7× damage), which arrives on the BOSS's clock: you survive to it, you can't force it early. All damage is `fire` (bypasses flat armor; heavy-armor magic/fire mitigation is the counter). 2026-07-24: damage-type resistances REMOVED game-wide (the user); the burning floor now spans the WHOLE crypt as heat rises, not just the vault.",
   },
   {
     name: "The Sanguinarch (CRYPT WARDEN — blood)",
@@ -348,7 +348,7 @@ const ENEMIES: EnemyStat[] = [
     ],
     loot: "2-3 Moonsilver + 2-4 Gloam Shard — and unseals the vault's Blood Geodes + Moonsilver seams",
     notes:
-      "Biome 3 Phase 4c. THE PLAYER sets its phase, not the boss. Its flurry stacks bleed; every ~5s it channels a feed that resolves against your state AT THE END — bleeding when it lands and it drinks (heals 45) and swells into `engorged`: slow, huge slams, and 1.7× incoming damage for 6.5s. Deny it (dodge the flurry, or outlast the stacks through the channel) and it simply stays a fast, frantic, never-vulnerable frenzy. So bleeding is the only way to buy an opening, and it costs you. Resists blunt ×0.75, weak slash ×1.3.",
+      "Biome 3 Phase 4c. THE PLAYER sets its phase, not the boss. Its flurry stacks bleed; every ~5s it channels a feed that resolves against your state AT THE END — bleeding when it lands and it drinks (heals 45) and swells into `engorged`: slow, huge slams, and 1.7× incoming damage for 6.5s. Deny it (dodge the flurry, or outlast the stacks through the channel) and it simply stays a fast, frantic, never-vulnerable frenzy. So bleeding is the only way to buy an opening, and it costs you. 2026-07-24: damage-type resistances REMOVED game-wide (the user) — Sanguinarch's 118/205 is the new bayou-common damage ANCHOR (commons scaled to ~half of it).",
   },
   {
     name: "Gremlin King (BOSS)",

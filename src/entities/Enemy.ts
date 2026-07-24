@@ -177,6 +177,12 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   // Per-damage-type incoming multiplier (Biome 2 Phase 1). Read by
   // MainScene.resolveWeaponHit via resistMultiplier(); empty for biome-1 enemies.
   private readonly resistances: Partial<Record<IncomingDamageType, number>>;
+  // Set true for a single takeHit() by MainScene.resolveWeaponHit when the hit
+  // came from a RANGED weapon, so the position-shake in playHitFeedback is
+  // suppressed (the user: "bow stagger is still there — every hit ministaggers").
+  // Melee keeps the shake for feel. Read+reset inside playHitFeedback, so it's a
+  // one-shot flag no subclass takeHit() override has to thread through.
+  suppressHitShake = false;
   // --- swarm pack-aggro (Biome 2 Phase 1, opt-in) ---
   // When true, this enemy both propagates aggro to and receives aggro from
   // nearby same-type pack members (MainScene.updatePackAggro drives it). Off by
@@ -670,7 +676,11 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   // suppresses it; the HP tint is still the hit confirmation, and a genuine
   // stagger remains a real, separate, poise-driven mechanic on the bosses.
   private playHitFeedback(): void {
-    if (this.isAttacking()) {
+    // Ranged hits never shake (bow-only, the user) — one-shot flag set by
+    // resolveWeaponHit, consumed here. Melee still shakes for feel.
+    const noShake = this.suppressHitShake;
+    this.suppressHitShake = false;
+    if (this.isAttacking() || noShake) {
       this.applyHpTint();
       return;
     }

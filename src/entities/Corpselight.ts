@@ -176,12 +176,7 @@ export class Corpselight extends Enemy {
       biteDamage: 0, // never melees — every point of its damage is an orb
       elite,
       eliteTrophy: "corpselight_trophy",
-      // Physical types are NEUTRAL on purpose: the Hexling's old flat physical
-      // resist made an armor-bypassing caster feel unkillable with a normal
-      // weapon (playtest), and that lesson applies double to something that
-      // drifts. It keeps only weaknesses — fire burns off a marsh-light, and
-      // magic unravels it.
-      resistances: { fire: 1.25, magic: 1.25 },
+      // Resistances/weaknesses removed (2026-07-24, the user) — damage-type layer retired.
       upright: true, // a hovering wisp-shroud — mirror, never rotate
     });
     this.orbDamage = elite ? Math.round(ORB_DAMAGE * ELITE.damage) : ORB_DAMAGE;

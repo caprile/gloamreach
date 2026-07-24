@@ -139,10 +139,7 @@ export class Mosswretch extends Enemy {
       // kill would pay out four.
       elite: spawnling ? false : elite,
       eliteTrophy: "mosswretch_trophy",
-      // Spongy sodden moss eats a concussive blow; an edge parts it; fire is the
-      // real answer (×1.5 — deliberately above the biome-2-normalized ×1.25, this
-      // is the one creature meant to visibly melt to fire).
-      resistances: { blunt: 0.5, slash: 1.25, fire: 1.5 },
+      // Resistances/weaknesses removed (2026-07-24, the user) — damage-type layer retired.
       upright: true, // a shambling humanoid husk — mirror, never rotate
       barScale: spawnling ? 0.7 : 1.3,
     });

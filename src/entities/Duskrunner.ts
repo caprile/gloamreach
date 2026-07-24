@@ -46,27 +46,30 @@ const BITE_DAMAGE = S.attacks[0].damage;
 
 const PACK_AGGRO_RADIUS = 260; // a woken packmate within this range also engages
 
-// Snappy point-blank bite — the fallback when the player is right on top of it.
-// Faster cooldown (the user: "faster on their cooldown to attack again"): a swarm
-// that's on top of you should be snapping almost continuously.
+// Point-blank bite. Given a REAL payoff window (2026-07-24, the user: "attack
+// speed on duskrunners is too fast — why can they dash instantly melee attack?
+// there is no payoff window with these enemies"). The old 180/200/140 cadence
+// let it snap almost continuously with no readable wind-up or recovery to punish;
+// a longer windup (a visible telegraph) + recovery + cooldown makes each bite a
+// commitment you can dodge and counter, without changing the pack's identity.
 const BITE_SWING: SwingConfig = {
   reach: MELEE_RANGE,
-  windupMs: 180,
+  windupMs: 300,
   strikeMs: 60,
-  recoverMs: 200,
-  cooldownMs: 140,
+  recoverMs: 360,
+  cooldownMs: 420,
 };
 
 // Pounce — a crouch tell then a fast locked-direction leap that overshoots
 // slightly (so it's sidestep-dodgeable), biting anything it crosses.
 const POUNCE_RANGE_MIN = 44; // closer than this → just bite
 const POUNCE_RANGE_MAX = 190; // within this (and past bite range) → pounce
-const POUNCE_WINDUP_MS = 260; // crouch/load tell
+const POUNCE_WINDUP_MS = 340; // crouch/load tell — longer so the leap is a readable telegraph, not an instant dash (2026-07-24)
 const POUNCE_SPEED = 330; // clearly faster than chase — closes the gap in a blink
 const POUNCE_MAX_DIST = 185; // travels this far before landing/recovering
 const POUNCE_HIT_RADIUS = 32; // contact check along the leap (was 22 — same body-gap fix as MELEE_RANGE)
-const POUNCE_RECOVER_MS = 300; // landing recovery — the punish window
-const POUNCE_COOLDOWN_MS = 560; // faster re-pounce (the user) — keeps the pressure up between leaps
+const POUNCE_RECOVER_MS = 460; // landing recovery — the punish window (was 300, widened for a real payoff)
+const POUNCE_COOLDOWN_MS = 900; // was 560 — a real gap between leaps so it isn't a relentless pounce spam
 const POUNCE_KNOCKBACK = 90; // a small shove on a landed pounce
 
 type DuskAttack = "bite" | "pounce";

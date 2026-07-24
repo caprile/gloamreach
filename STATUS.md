@@ -2,11 +2,23 @@
 
 ## Current State
 
-_Living snapshot — edit in place, never append._ Last shipped: **the full-screen flicker fix**
-(2026-07-24, Opus) — `syncCameras()` moved from `update()` to the game's `PRE_RENDER`. The earlier
-repaint-coalescing had only cut the strobe to one flash per equip/place; the flash itself was an
-unclassified object (`cameraFilter === 0` = "draw on every camera") being drawn a second time on the
-zoomed world camera. See the entry below — it establishes a general timing rule.
+_Living snapshot — edit in place, never append._ Last shipped: **Vagabond-run playtest batch —
+bayou over-correction + damage-type retirement** (2026-07-24, Opus; full writeup under Recent
+Entries). Off the user's "unplayable" bayou run, undergeared (fighting bayou commons in badlands
+Emberhide, ~16 armor). Design-confirmed with the user before applying. Headlines: (1) **the whole
+damage-type layer is RETIRED** — every enemy `resistances` block deleted, so every weapon does full
+damage and **flat armor is the only mitigation axis left**; (2) **bayou commons rescaled to ~half of
+Sanguinarch** (the unchanged 118/205 miniboss anchor) — the pt1 pass had wrongly sized them against
+74-armor Gloamsteel; (3) **healing reduction removed entirely** (`POISON_REGEN_MULT`→1.0); (4) **bow
+ministagger removed** (ranged-only, via a one-shot `Enemy.suppressHitShake`); (5) **Duskrunner given
+real windup/recovery/cooldown windows**; (6) **Cragscale roll now telegraphs its hit-lane**; (7)
+**Kilnborn fire spans the whole crypt**, not just the vault. `tsc` clean; all verified live. Nothing
+reached the Miretyrant/minibosses this run, so those are unchanged. **Next: playtest at these
+numbers.**
+
+Before that: **the full-screen flicker fix** — `syncCameras()` moved from `update()` to the game's
+`PRE_RENDER` (unclassified `cameraFilter === 0` objects were drawn twice; see the flicker entry
+below for the general timing rule).
 
 Before that: the **Survivor roster rework**, immediately after the **Warden-run playtest batch —
 the flat-armor collapse** (same day, same session). Both off the user's Warden victory run (77:55,
@@ -70,6 +82,62 @@ out-threatens the badlands.
 ## Recent Entries
 
 > Older entries in STATUS-archive.md.
+
+### Vagabond-run playtest batch — bayou over-correction + damage-type retirement (2026-07-24, Opus)
+
+No plan file — a fix/tuning batch off the user's "not even finishing this — it's unplayable" bayou
+run. Root cause of most of it: the 2026-07-24 pt1 damage pass sized bayou commons against
+end-of-bayou Gloamsteel (74 armor), but a player entering the bayou wears badlands gear (~16-36), so
+those raws landed near full and 2-shot. the user's own diagnosis in the dump: **Sanguinarch (118/205)
+feels right as a miniboss, and commons were doing 2-3× that** — the ordering was inverted. Every
+decision below was locked with him via `AskUserQuestion` before any code changed (he asked to review
+the exact damage numbers first, too).
+
+- **Damage-type layer RETIRED (the user: "remove resistances and weakness from enemies in general.
+  Doesn't make sense").** Deleted every `resistances` block from all 11 entity constructors
+  (Cragscale/Sandmaw/Hexling/Duneshaper/Mirejaw/Blighttoad/Mosswretch/Corpselight/Kilnborn/
+  Sanguinarch/Miretyrant — Cinderwrought's was already `{}`) and the mirrors in `enemyStats.ts`.
+  Every weapon now does full damage to every enemy; **flat armor is the only mitigation axis in the
+  game.** `Enemy.resistMultiplier()` still exists and returns 1 (no code paths broke). This is the
+  Phase-1 "bring the right weapon" system being deliberately retired — flagged to the user as such.
+  NOTE: this only affects damage the player DEALS; enemy attack CLASS (magic/fire/poison bypassing
+  the player's flat armor) is a separate axis and is unchanged.
+- **Bayou commons → ~half of Sanguinarch** (anchor 118/205, unchanged). Raws: Mirejaw chomp 135→68 /
+  lunge 170→100 / death-roll-tick 105→42; Blighttoad bite 125→48 (poison 4/s untouched — armor-
+  bypassing payload); Mosswretch smash 165→98 (elite ×1.5 = 147, fixes "192 from elite tree guy");
+  Murkling claw 108→38 (swarm = count, not per-hit); Corpselight husk maul 118→55 (its magic orb 22
+  + slams untouched — they bypass armor and were fine). Biggest normal common ≈ half of Sanguinarch;
+  no 2-shots; ~5-6 hits to kill at 16 armor. Minibosses/boss unchanged (not reached this run).
+- **Healing reduction removed entirely** (`POISON_REGEN_MULT` 0.75→1.0, the user: "get rid of the
+  healing reduction entirely"). Miasma/mire/spore zones deal only their poison DAMAGE now; the "This
+  ground weakens healing" status never fires. Constant kept as a future deliberate-debuff hook.
+- **Bow ministagger removed — RANGED ONLY** (the user chose ranged-only; melee keeps the shake for
+  feel). The prior 2026-07-24 fix only suppressed the `playHitFeedback` position-shake while the
+  enemy `isAttacking()`, so a *chasing* enemy still got knocked by every bow hit — the "forcing me to
+  fight every enemy with my bow" complaint. Fixed with a one-shot `Enemy.suppressHitShake` flag set
+  by `resolveWeaponHit` when `source === "Ranged"`, consumed+reset inside `playHitFeedback`, so no
+  subclass `takeHit()` override has to thread a parameter through.
+- **Duskrunner payoff windows** (the user: "too fast — why can they dash instantly melee attack? no
+  payoff window"). Bite windup/recover/cooldown 180/200/140 → 300/360/420; pounce windup 260→340,
+  recover 300→460, cooldown 560→900. Real telegraph + punish window between commitments.
+- **Cragscale roll telegraph** (the user: "anything with an invisible radius like the spinny guys …
+  needs to show the radius"). New `Cragscale.telegraphGfx` draws the roll's hit-lane on the ground —
+  a translucent quad along the locked roll direction (ROLL_MAX_DIST long, 2×ROLL_HIT_RADIUS wide) +
+  a rounded far cap — ramping in during windup, solid during the strike, cleared on recover;
+  destroyed in a new `playDeathFeedback` override. Same pattern as the Sandmaw's existing ring.
+- **Kilnborn whole-dungeon lava** (the user: "should make whole dungeon lava not just his room"). New
+  `Kilnborn.floorRects` (assigned `[...layout.rooms, ...layout.corridors]` in MainScene); `ensureTiles`
+  builds the fire grid across all of them, deduping doorway-overlap cells. At full heat
+  MAX_BURN_FRACTION of the ENTIRE crypt is alight — no cold room to retreat to. Falls back to the
+  single `arena` rect if `floorRects` is ever empty.
+
+**Verified live** (`javascript_tool`, zero console errors): damage numbers read
+[68,100,42]/[48]/[98,0]/[38]/[22,55,26]/[118,205]; `resistances` absent from the table + every
+`resistMultiplier('pierce'|'slash'|'fire')===1`; `suppressHitShake` consumed by `takeHit`; a Kilnborn
+built 92 tiles across two floor rects (multi-rect + dedup works, no throw); a Cragscale drove through
+a full roll (trigger→windup→strike, 80 frames) drawing the telegraph without error. `tsc` clean.
+Dashboard Enemies tab (the hand-mirror) updated: changed damage numbers + stripped the now-false
+resist/heal prose. No `RECIPES.md` change.
 
 ### Full-screen flicker on equip/place — the real root cause (2026-07-24, Opus)
 
@@ -408,63 +476,3 @@ changes target those two lines directly.
 Vite log during the Enemy.ts edit — traced to an 11-second window mid-edit before the closing brace
 was added, self-resolved on the next save, and predates every live verification in this batch.
 `RECIPES.md` updated (relic tables only — no recipe/cost changes otherwise).
-
-### "God run" triage session 3 — creature identity pass, C1/C2/C3 (2026-07-23, Opus)
-
-Plan: `.claude/plans/vagabond-god-run-triage.md`. Sessions 1 (bugs/ammo/summary) and 2 (the
-balance pass) shipped earlier the same day; this is the final session, closing the whole triage.
-Three bespoke bayou-creature reworks, each off a specific the user complaint and each following the
-roster's "own state machine, own numbers in enemyStats.ts, no shared config table" rule.
-
-**C1 — Mirejaw ("feels like a glorified boar").** Two additions give it an alligator's identity.
-(1) DEATH ROLL: a chomp that CONNECTS (and is off cooldown) latches into a thrashing roll — 3
-ticks @360ms in a tight 62px grip, each re-checked against the player's CURRENT position (break
-away to cut losses), 18 dmg + 7/s bleed each, ending in a 1s planted recovery (the biggest punish
-the creature offers), 7s cooldown. Only ever entered from a hit that already landed — a punish for
-being caught, not a new way to catch you. Routed through `checkPlayerHit` (Mirejaw added to that
-union); the barrel-roll spin is driven manually rather than by a tween because
-`Enemy.playHitFeedback` calls `killTweensOf(this)` on a planted enemy and would strand the sprite
-crooked. (2) WATER TERRITORY: new generic `Enemy.ignoresTerrainSlow` (default false) exempts a
-creature from the environmental move-slow the player suffers — only the TERRAIN term, so night
-speed + Executioner slow still apply. On dry ground you outpace it; in deep water the player wades
-at 0.5x and it doesn't, inverting the relationship. Verified live: full cycle fires 3 ticks at
-900/1260/1620ms; breaking the grip after tick 1/2 takes exactly 1/2 hits; on a sampled 0.62-
-moveMult tile the Mirejaw reads envSpeedMult 1.0 vs a Murkling's 0.62.
-
-**C2 — Mosswretch ("lacks attack moves / feels weird").** Its whole kit was one slow overhead
-swing on the slowest body in the game — trivially walked away from. (1) SPORE BURST: it can't
-catch you so it stops you — a mid-range (outside smash reach) planted 700ms heave with NO impact
-damage drops a lingering cloud on your CURRENT ground that slows 0.6x + poisons 5/s for 6s, used
-to cut off the retreat so the next smash lands. Rides the same `environmentEffectAt` path the
-Miretyrant's mire pools use (refactored into `baseSurfaceEnvironmentAt` + `foldSporeCloud`, so a
-cloud stacks correctly with water/thornfield/miasma — harsher slow wins, poison max'd), inheriting
-slow + poison + regen-suppression + status-resist with zero bespoke damage code. (2) DEATH-SPAWN:
-comes apart into 3 Mosslings (same class scaled 0.58, 16% HP / 42% dmg / 1.9x speed, forceAggro'd
-so they swarm the moment you'd relaxed), via the "creature asks (`deathSpawnCount`), scene spawns
-(`spawnMosslings`)" split the bellow uses. Guarded 3 ways: a spawnling reports deathSpawnCount 0
-(no recursion), is never elite (one kill can't pay 4 trophies), drops only 1 token swamp_moss.
-Verified live (after page-reload to fix an HMR dual-class `instanceof` artifact): a real
-dev-spawned kill spawns exactly 3 aggro'd Mosslings, killing a Mossling spawns none, the cloud
-reads moveMult 0.6 / poison 5 / regen 0.75 inside and neutral outside.
-
-**C3 — Corpselight ("just a ranged gremlin").** A genuine TWO-FORM TRANSFORM — the user explicitly
-rejected phase-out and blink as done-before and asked for a melee-form transform, so this is a new
-shape for the roster (nothing else transforms). At range = the wisp (unchanged: fragile, floaty,
-armor-bypassing homing orbs). Within 96px it COLLAPSES into a corporeal husk: 1.7x scale, slow
-62px/s lurch, a PHYSICAL maul (30 — armor answers the husk, unlike the wisp's magic orbs), and it
-takes only 0.5x damage. Stay 190px away for 2s and it DISSOLVES back (hysteresis: revert range >
-transform range, so no boundary strobe). ONE shared HP pool (chipping the wisp is real progress,
-but a given DPS goes further at range than into the tanky husk — the "commit to a strategy"
-lever). BOTH transitions deal telegraphed magic AoE (collapse drop-slam 26 + 150kb, dodgeable by
-stepping out of the 104px tell; dissolve puff 13) via `checkPlayerHit` (Corpselight added to the
-union); the husk maul uses the boolean-bite path with `biteDamage` overridden to the maul value.
-1.6s transform cooldown caps flicker. Verified live: full wisp->collapse->husk->dissolve->wisp
-cycle with correct scales/damage; husk takes exactly 0.5x (40->-40 wisp, -20 husk); collapse slam
-lands 26 standing still / whiffs when you sprint clear; the scene loop dealt slam+maul to the
-player through the real applyDamageToPlayer path (138->82).
-
-`enemyStats.ts` holds every number (new attack entries per creature); dashboard Enemies tab
-resynced for all three (stale primary-damage numbers corrected in passing since those entries were
-being edited anyway — Blighttoad/Murkling's stay flagged). `tsc` + `npm run build` clean, zero
-console errors. **The god-run triage (sessions 1-3, D1-D10 + C1-C3) is complete; next is a
-playtest.**
