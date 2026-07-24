@@ -578,6 +578,25 @@ export class CraftingMenu {
         .setScrollFactor(0)
         .setDepth(3003);
       this.rows.push(knob);
+
+      const maxBtn = this.scene.add
+        .text(x0 + SLIDER_W + 10, y + SLIDER_H / 2, "Max", {
+          fontFamily: "monospace",
+          fontSize: "13px",
+          color: batch >= maxBatch ? "#5a6272" : "#c9a86a",
+          backgroundColor: "#1a1f2a",
+          padding: { x: 6, y: 3 },
+        })
+        .setOrigin(0, 0.5)
+        .setScrollFactor(0)
+        .setDepth(3001)
+        .setInteractive({ useHandCursor: batch < maxBatch })
+        .on("pointerdown", () => {
+          if (this.batchAmount === maxBatch) return;
+          this.batchAmount = maxBatch;
+          this.render();
+        });
+      this.rows.push(maxBtn);
       y += SLIDER_H + 14;
     }
 

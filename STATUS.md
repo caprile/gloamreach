@@ -2,19 +2,28 @@
 
 ## Current State
 
-_Living snapshot — edit in place, never append._ Last shipped: **Vagabond-run playtest batch —
-bayou over-correction + damage-type retirement** (2026-07-24, Opus; full writeup under Recent
-Entries). Off the user's "unplayable" bayou run, undergeared (fighting bayou commons in badlands
-Emberhide, ~16 armor). Design-confirmed with the user before applying. Headlines: (1) **the whole
-damage-type layer is RETIRED** — every enemy `resistances` block deleted, so every weapon does full
-damage and **flat armor is the only mitigation axis left**; (2) **bayou commons rescaled to ~half of
-Sanguinarch** (the unchanged 118/205 miniboss anchor) — the pt1 pass had wrongly sized them against
-74-armor Gloamsteel; (3) **healing reduction removed entirely** (`POISON_REGEN_MULT`→1.0); (4) **bow
-ministagger removed** (ranged-only, via a one-shot `Enemy.suppressHitShake`); (5) **Duskrunner given
-real windup/recovery/cooldown windows**; (6) **Cragscale roll now telegraphs its hit-lane**; (7)
-**Kilnborn fire spans the whole crypt**, not just the vault. `tsc` clean; all verified live. Nothing
-reached the Miretyrant/minibosses this run, so those are unchanged. **Next: playtest at these
-numbers.**
+_Living snapshot — edit in place, never append._ Last shipped: **Ascetic-run playtest batch —
+Miretyrant escalating waves, Bog Ore clustering, Ashcaller buff-master rework, food-buff cap, Max
+buttons** (2026-07-24, Sonnet; full writeup under Recent Entries). Off the user's Ascetic win (77:59,
+510 kills, level 25, Primal Spear → Ember Brand). Design-confirmed via `AskUserQuestion` before
+applying. Headlines: (1) **Miretyrant bellow waves now escalate on a script** — waves 1-2 are frog
+swarms (elite Murkling/Blighttoad), wave 3 introduces elite Mirejaw gators, wave 4+ keeps them in the
+mix permanently, base interval tightened 15s→11s (enraged 8.5s→6.5s); boss damage/chase untouched
+per the user's note; (2) **Bog Ore now clusters in the bayou's miasma/bonemire zones** (10 clusters of
+3-4, plus a smaller flat baseline) — the user's "bunches in dangerous areas" ask, corrected mid-session
+from an initial gloam-ore misreading; (3) **food-buff cap 3→2**, with Comfort/Bedroll now fully exempt
+from the cap (`Buffs.ts` `COMFORT_BUFF_ID`) rather than competing for a slot; (4) **Ashcaller reworked
+from "one buff at a time" to "buff master"** — runs 3 buffs while everyone else runs 2, since the cap
+drop would have collapsed its old identity into "worse than everyone else"; (5) **a "Max" button on
+every crafting-menu quantity slider** (CraftingMenu/CookingMenu/DryingRackMenu/JewelryMenu). Also
+investigated the reported "Workbench Lvl 4→5 upgrade triangle doesn't show" — confirmed LIVE this is
+**not a bug**: `gloamforge_anvil`'s ingredients (Gloamsteel Ingot specifically) must be actually
+*discovered* (smelted at least once), and the user's run took the Sunsteel→Mirebronze branch, which
+never smelts Gloamsteel — the glyph mechanism was verified to self-heal correctly the instant the
+material is discovered. Stat spread (Int 100, heavy Pierce/Magic investment) reviewed and judged
+healthy — no rebalance; the "too easy" signal was scoped entirely to the Miretyrant encounter design,
+which item (1) addresses. `tsc` clean; all six changes verified live via `preview_eval`. **Next:
+playtest the reworked Miretyrant fight and the bayou Bog Ore density.**
 
 Before that: **the full-screen flicker fix** — `syncCameras()` moved from `update()` to the game's
 `PRE_RENDER` (unclassified `cameraFilter === 0` objects were drawn twice; see the flicker entry
@@ -82,6 +91,87 @@ out-threatens the badlands.
 ## Recent Entries
 
 > Older entries in STATUS-archive.md.
+
+### Ascetic-run playtest batch — Miretyrant waves, Bog Ore clustering, Ashcaller rework, Max buttons (2026-07-24, Sonnet)
+
+No plan file — a fix/tuning/content batch off the user's Ascetic win (77:59, 510 kills, level 25,
+Kill Points 9710, Speed Multiplier x1.00 — a full clear, not a speedrun). Used Primal Spear until
+Ember Brand dropped, then mixed both. Every design fork was locked via `AskUserQuestion` before any
+code changed; the numbers themselves (Int 100 dump, Strength-capped crit mult, Agility crit chance)
+were reviewed and judged healthy — no stat rebalance shipped, since the "too easy" complaint scoped
+entirely to the Miretyrant encounter, not the character sheet.
+
+- **Miretyrant bellow waves now escalate on a SCRIPT** (`src/entities/Miretyrant.ts` +
+  `MainScene.updateMiretyrantBellow`/`miretyrantWaveComposition`). the user: "Honestly just spawn
+  alligators instead of the frog dudes ... fighting strong adds the whole time ... hella frogs into
+  some big scary alligators." The boss itself only hands MainScene a 1-based wave INDEX
+  (`consumeBellow()`, renamed from a bare add-count — `pendingWave`/`bellowCount` replace the old
+  `pendingAdds`/`MIRETYRANT_ADDS_PER_BELLOW`/`_ENRAGED` constants), and MainScene's
+  `miretyrantWaveComposition(wave, enraged)` owns the script since it's the one that knows the
+  entity classes: waves 1-2 are pure frog swarms (4-5 elite Murkling/Blighttoad, the existing
+  45/55-favoured mix), wave 3 is the first elite-Mirejaw arrival (2 gators + 1 frog), wave 4+ keeps
+  gators in the mix permanently (2 gators + 2 frogs, +1 extra frog while enraged). Base interval
+  tightened `BELLOW_INTERVAL_MS` 15000→11000 and `BELLOW_ENRAGED_INTERVAL_MS` 8500→6500 for
+  near-constant pressure late in the fight. Boss damage numbers and its own chase/attack behavior are
+  explicitly UNCHANGED per the user's note ("damage was good, encounter was still too easy" — this is
+  purely an add-pressure fix). Verified live: `miretyrantWaveComposition(1..6, false|true)` returns
+  the exact scripted composition at every wave index and both enrage states.
+- **Bog Ore now clusters in the bayou's dangerous zones**
+  (`MainScene.spawnBayouNodes`). the user's actual ask, after a mid-session correction — he'd said
+  "gloam ore" but meant **Bog Ore** (the bayou's sole surface metal, gating the whole
+  Sunsteel→Mirebronze reforge flow he ran this session); gloam shards are a leftover-from-biome-2
+  material that were never touched. The flat 46-node scatter is now a 24-node baseline (general
+  presence) plus 10 clusters of 3-4 nodes biased into the **miasma** (poison fog) and **bonemire**
+  (haunted boneyard) zones — the bayou's two actual hazard zones — via the existing
+  `pickBayouPoint(..., { preferZone })` themed-spawn mechanism the enemy-pack spawner already uses,
+  with the same jitter/fallback-to-anchor pattern (a cluster member that jitters off-bayou or into
+  deep water snaps back to the verified anchor rather than being dropped). Net count ~24 + ~35
+  clustered ≈ 59-64, up from 46.
+- **Food-buff cap 3→2, Comfort/Bedroll fully exempt** (`src/systems/Buffs.ts`, `MainScene`
+  `DEFAULT_MAX_BUFFS`). Locked via `AskUserQuestion`: "2 food, Comfort exempt" — a Bedroll should
+  never compete with two cooked-food buffs for a slot. `BuffManager.apply()` now special-cases a new
+  `COMFORT_BUFF_ID` ("comfort_rest"): it's pushed without ever being counted against the cap or
+  considered for eviction, and the cap-eviction scan for a new FOOD buff explicitly skips the comfort
+  entry when picking what to evict. Verified live: 2 foods + Comfort coexist (3 buffs active,
+  Comfort untouched); adding a 3rd food correctly evicts the older food buff, never Comfort.
+- **The Ashcaller reworked from "one buff at a time" to "buff master"** (`src/systems/
+  Characters.ts`). The card's entire identity was built on `maxBuffs: 1` against a baseline of 3 —
+  dropping the baseline to 2 would have collapsed a distinctive downside into plain worse-than-
+  everyone-else. Locked via `AskUserQuestion` ("invert it"): `maxBuffs: 1` → `3`, so the Ashcaller
+  alone runs 3 concurrent buffs while the new baseline is 2 for the rest of the roster. Boons: +15%
+  skill XP, +60% buff/food duration, "Runs 3 buffs at once (everyone else: 2)"; bane stays -25% max
+  HP only (a `+damage taken` second bane was considered and dropped — Reaver already owns that axis
+  as its identity, and doubling it up would blur the two frail-glass-cannon cards together). Blurb
+  updated to match. Verified live: `characterById('ashcaller').modifier.maxBuffs === 3`.
+- **A "Max" button on every crafting-menu quantity slider** (`CraftingMenu`/`CookingMenu`/
+  `DryingRackMenu`/`JewelryMenu`) — snaps the batch/amount straight to the max currently affordable,
+  positioned to the right of each slider's knob within the existing panel width (no layout changes
+  needed — all four panels had 60-380px of unused width past the slider). Verified live: clicking
+  the CraftingMenu's Max button on a stackable recipe (Shishkabob, maxBatch 11286) snapped
+  `batchAmount` from 1 straight to 11286 in one call.
+- **Workbench Lvl 4→5 "upgrade ready" triangle — investigated, NOT a bug.** the user: "didn't show
+  right, maybe because it was already placed? not sure." Reproduced live via a placed test Workbench
+  stepped through all four upgrade tiers (`applyStationUpgrade` called directly for
+  tool_sharpener/forge_anvil/emberforge_anvil): the ▲ glyph (`refreshStationUpgradeIndicators`/
+  `stationHasReadyUpgrade`) correctly appeared and updated at every tier once ingredients were both
+  *discovered* and *affordable*. Isolated the real cause: `gloamforge_anvil` (Lvl4→5) requires
+  Gloamsteel Ingot specifically in its costs, and `upgradeIngredientsKnown` gates on the material
+  having been actually **discovered** (smelted/held at least once) — the exact same "you had to
+  actually smelt this" gate `emberforge_anvil` already uses for Embersteel. the user's run took the
+  **Sunsteel→Mirebronze** branch this session (his own words), which never touches Gloamsteel Ingot
+  at all, so the upgrade correctly stayed hidden — confirmed by forcing `discovered.delete
+  ('gloamsteel_ingot')` (glyph vanishes, matching the report) then `discoverMaterial('gloamsteel_
+  ingot')` (glyph reappears immediately). No code change; flagged to the user as working-as-designed
+  rather than silently "fixed."
+- **Numbers review (no changes shipped).** Reviewed the run's Skills/Stats screenshots (Pierce 51,
+  Magic 23, Heavy Armor 49, Intelligence 100/329 points, Strength crit-mult capped at 3.0x, Agility
+  20% crit chance). Judged healthy — Intelligence's uncapped skill-XP snowball is the same loop
+  confirmed intentional in the earlier god-run triage (the fun-from-leveling was the explicit point),
+  and the rest of the spread reads as a legitimate crit-focused pierce/magic build, not an imbalance.
+  No stat/skill numbers were touched this batch.
+
+`tsc` clean throughout. No `RECIPES.md` change (no recipe/cost changes — Bog Ore's yield/tool-tier
+gate is unchanged, only its spawn distribution moved).
 
 ### Vagabond-run playtest batch — bayou over-correction + damage-type retirement (2026-07-24, Opus)
 
@@ -386,93 +476,3 @@ own test harness were caught and fixed rather than reported as results — a wro
 **Housekeeping:** a stray duplicate `## Recent Entries` heading left mid-file by an earlier prune
 was removed, and the oldest entry moved to `STATUS-archive.md`.
 
-### Vagabond-run playtest fix batch 2 (2026-07-24, Sonnet)
-
-No plan file — a fix/tuning batch off the user's own end-of-run summary (Ashcaller, badlands+bayou
-kit: Embersteel Warbow + badlands light armor) plus a fresh round of playtest notes. Design
-decisions (nerf-ranged vs. buff-enemy-anti-kite vs. reduce-sustain vs. a light combined pass, plus
-crit-splash's scope and the bow's move-slow %) were confirmed via `AskUserQuestion` before touching
-anything; two ambiguous complaints ("little tree dudes don't hit me" / recipe-chain visibility) were
-resolved by live investigation rather than guessed at.
-
-**The diagnosis, confirmed by the user's own Run Summary after the fact:** 80% of all damage dealt
-was Ranged (48,965 of 60,982), melee only 20% combined; 72% of all healing was the Leech relic
-(3,439 of 4,747); only 6,639 total damage taken across a full run to two bosses. The two shipped
-changes target those two lines directly.
-
-**Balance (all locked decisions):**
-- **Crit-splash relics → melee-only** (`MainScene.resolveWeaponHit`, gated on `source !== "Ranged"`;
-  `Relics.ts` description text updated to say so). Ranged weapons carry no weapon-arc splash of
-  their own (`WEAPON_ARC` is `{range:0}` for every bow) — crit-splash was the ONLY thing turning a
-  single-target bow into horde-clear, and at a 60%-capped crit chance it fired on the majority of
-  shots. Verified live: a forced ranged crit (`resolveWeaponHit(..., "Ranged")`) no longer splashes
-  to a nearby enemy; the identical forced hit with `source: "Weapon (direct)"` still does.
-- **Ranged fire-slow** — firing any ranged weapon sets `rangedFireSlowUntil` (350ms), folded as a
-  separate multiplicative 0.72x term into `Player.update`'s envMult (kept OUT of
-  `currentEnvMoveMult` so the terrain tooltip doesn't misattribute it) — an anti-kite governor per
-  the user's "25-30%, not 40%" note. Verified live via `tryRangedAttack`.
-- **Leech relic trimmed**: Reaper Totem 3%→2%, Bloodlord's Mantle 5%→4% (`Relics.ts`). `RECIPES.md`
-  relic tables updated for both this and the crit-splash description change.
-- **Duneshaper arena poison** — the user: "doesn't normally have poison, it was from the overlap of
-  the bayou area." Root cause: `TYRANT_ALTAR_CLEAR_RADIUS` (360px) only gates where a bayou zone's
-  CENTER gets picked; a miasma zone's own radius (up to 780px, more with `selfSep` merging) can still
-  reach into the arena from just outside that exclusion. `baseSurfaceEnvironmentAt` now returns
-  neutral unconditionally within the clear radius of any tyrant altar. Verified live: injecting a
-  fake miasma zone dead-centered on a real altar reads neutral 100px from center, but still poisons
-  normally 700px out (regression check — the fix isn't a global miasma kill switch).
-
-**Bugs fixed (no design call needed):**
-- **CraftingMenu flicker was a gap in the earlier B1 fix.** `InventoryMenu.refresh()` was coalesced
-  to one repaint/frame; `CraftingMenu.refresh()` — shown right beside it under the same Tab panel,
-  and called once per collected node via `collectNode()` → `refreshDiscovery()` → `craftingMenu
-  .refresh()` — was still an uncoalesced direct `render()` every call. Given the exact same
-  `refreshQueued` + `POST_UPDATE`-deferred pattern `InventoryMenu` already used. Verified live: 5
-  rapid `refresh()` calls in one frame now produce exactly 1 deferred repaint instead of 5.
-- **Mosswretch's spore cloud did nothing underground.** `environmentEffectAt` short-circuited to
-  "only the Miretyrant's own mire pools matter" the instant `activeDungeon` was set, never reaching
-  `foldSporeCloud` at all — but Mosswretch IS themed crypt/lair-approach dweller content (see
-  `populateCrypt`'s "bruiser room" weight and the Miretyrant approach spawn). Fixed by routing the
-  dungeon branch's base effect through `foldSporeCloud` too. Verified live: injecting a spore cloud
-  and forcing `activeDungeon` truthy now correctly reads `moveMult 0.6/poisonDps 5` at the cloud's
-  position, neutral elsewhere.
-- **Stale weapon Stamina display.** Every weapon's `Items.ts` `stats` array is hand-authored text;
-  Damage/Attack Speed/Armor were already recomputed live in `Tooltip.statValue`/`CraftingMenu
-  .statValue`, but Stamina fell through to the raw authored string — drifted to "15" for the
-  Embersteel Warbow after a balance pass moved the real `WEAPON_STAMINA_COST` to 11. Both
-  `statValue` methods now read `weaponStaminaCost()` live, closing this class of drift for every
-  weapon at once (the dashboard was never affected — it already read live). Verified live via both
-  methods directly.
-- **"Little tree dudes don't hit me, even standing still" — misfiled as Murkling, actually
-  Mosswretch/Mossling.** Murkling was tested twice live (solo and a 6-pack) and connected correctly
-  both times — no bug there; the pack test, if anything, showed it can burst a full-HP player to 0
-  in under a second when several swings land on the same frame, the opposite problem. The real
-  defect: `SMASH_SWING`'s `tell.rearBackSpeed` (46px/s, added for an earlier "hard to predict"
-  telegraph complaint) reared the creature back for the FULL 780ms windup regardless of how close it
-  started — enough drift (~36px) to carry it clean past its own 88px reach before the strike-time
-  recheck, even against a player who never moved. Fixed in the shared `Enemy.tickMeleeSwing` engine:
-  the rear-back now stops once retreating would cross the swing's own effective reach (with a small
-  4px buffer for one-frame lag), affecting every current/future user of `tell.rearBackSpeed`, not
-  just this creature. **Verified live and rigorously** (multiple false leads caught and ruled out
-  along the way — a test-harness gotcha where splitting a timing-sensitive sim across separate
-  `preview_eval` calls feeds Phaser's loop a clock that jumps backward and corrupts its delta
-  tracking; always run one continuous script per timing test): a Mossling that missed 100% of the
-  time over a 10-second window pre-fix now lands hits reliably (33 dmg each, matching spec) at
-  84-90px, and the parent Mosswretch's identical code path was confirmed via the same mechanism.
-- **Transitive recipe discovery.** the user: seeing Emberhide's recipe should only require Duskhide's
-  RECIPE being known plus Embersteel — not an actual crafted Duskhide piece. `Crafting.ingredientsKnown`
-  now also treats an ingredient as known if any already-discovered recipe produces it
-  (`isKnownIngredient`, new), resolving transitively across repeated `refresh()` calls (which fire on
-  essentially every state change) without needing explicit recursion. Verified live: Emberhide Vest's
-  recipe unlocked in the same `refresh()` pass as Duskhide Vest's, with `duskhide_vest` never added
-  to the discovered-items set at all.
-- **Welcome popup reworded** (`WelcomeUI.ts`) — dropped the now-stale "this first biome is just the
-  start" line (three biomes and multiple bosses now exist), replaced with a general "the game keeps
-  growing between sessions" framing; removed the inline hotkey dump (Tab/K/Esc, Ctrl+Click/
-  Shift+Click) in favor of pointing players at Pause → Tips (the full how-to-play reference) and the
-  Keybinds panel (top-left, full control list) — per the user: "don't give them a bunch of hotkeys at
-  this time." Verified live: both pages render within the existing panel height with no overflow.
-
-`tsc` + `npm run build` clean throughout. A stray esbuild "Unexpected case" error appeared in the
-Vite log during the Enemy.ts edit — traced to an 11-second window mid-edit before the closing brace
-was added, self-resolved on the next save, and predates every live verification in this batch.
-`RECIPES.md` updated (relic tables only — no recipe/cost changes otherwise).

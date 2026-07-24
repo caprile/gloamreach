@@ -460,6 +460,27 @@ export class DryingRackMenu {
       .setDepth(DEPTH_ITEM + 2);
     this.rows.push(knob);
 
+    if (station.input) {
+      const maxBtn = this.scene.add
+        .text(track.x + track.w + 8, track.y + SLIDER_H / 2, "Max", {
+          fontFamily: "monospace",
+          fontSize: "11px",
+          color: this.selectedAmount >= max ? "#5a6272" : "#c9a86a",
+          backgroundColor: "#1a1f2a",
+          padding: { x: 4, y: 2 },
+        })
+        .setOrigin(0, 0.5)
+        .setScrollFactor(0)
+        .setDepth(DEPTH_ITEM + 1)
+        .setInteractive({ useHandCursor: this.selectedAmount < max })
+        .on("pointerdown", () => {
+          if (this.selectedAmount === max) return;
+          this.selectedAmount = max;
+          this.render();
+        });
+      this.rows.push(maxBtn);
+    }
+
     // --- Live preview + Process button ---
     // The slider/selectedAmount are already in output units — convert to
     // input units only here, at the previewFor/process call boundary.

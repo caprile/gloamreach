@@ -195,10 +195,14 @@ export const CHARACTER_DEFS: CharacterDef[] = [
   {
     id: "ashcaller",
     name: "The Ashcaller",
-    // Rebuilt around a single long buff rather than a stack of short ones, so
-    // its play pattern is "pick the right dish and protect it" — a genuinely
-    // different cooking/consumable game from every other card.
-    blurb: "Frail and fast-learning. One blessing at a time, but it lingers.",
+    // REWORKED 2026-07-24 (playtest: the game-wide food-buff cap dropped from
+    // 3 to 2, so "only ONE buff at a time" — this card's entire identity — was
+    // about to collapse into "worse than everyone else" rather than "different
+    // from everyone else"). Inverted instead of deleted: everyone else now runs
+    // 2 concurrent buffs, and the Ashcaller alone runs 3 — the "buff master"
+    // reading is the mirror image of the old "buff ascetic" one, and it reuses
+    // the exact same maxBuffs lever pointed the other direction.
+    blurb: "Frail and fast-learning. Juggles three blessings where anyone else carries two.",
     icon: "ability_nova",
     startingStats: { intelligence: 3, wisdom: 2 },
     startingEquip: [{ slot: "ability1", key: "special_gloam_focus_lesser" }],
@@ -213,12 +217,12 @@ export const CHARACTER_DEFS: CharacterDef[] = [
     // the user's own worked example of the double-stack problem.
     modifier: {
       name: "Gloam-Touched",
-      boons: ["+15% skill XP", "Buffs and food last 60% longer"],
-      banes: ["-25% max HP", "Only ONE buff at a time"],
+      boons: ["+15% skill XP", "Buffs and food last 60% longer", "Runs 3 buffs at once (everyone else: 2)"],
+      banes: ["-25% max HP"],
       xpMult: 1.15,
       buffDurationMult: 1.6,
       maxHpMult: 0.75,
-      maxBuffs: 1,
+      maxBuffs: 3,
     },
     affinity: {
       skillXpMult: { magic: 1.35, ranged: 1.2, heavy_armor: 0.8 },

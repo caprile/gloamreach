@@ -451,9 +451,10 @@ const SPORE_CLOUD_RADIUS = 85;
 const SPORE_CLOUD_SLOW_MULT = 0.6;
 const SPORE_CLOUD_POISON_DPS = 5;
 const SPORE_CLOUD_MS = 6000;
-// Concurrent food/Comfort buffs allowed by default. A run character's modifier
-// may override it (Characters.ts `maxBuffs`).
-const DEFAULT_MAX_BUFFS = 3;
+// Concurrent FOOD buffs allowed by default (Comfort/Bedroll is exempt — see
+// Buffs.ts COMFORT_BUFF_ID). A run character's modifier may override it
+// (Characters.ts `maxBuffs`) — the Ashcaller's "buff master" identity raises it.
+const DEFAULT_MAX_BUFFS = 2;
 // A killed Blighttoad's delayed death bloom (see spawnDeathBloom). Long enough
 // to read the swelling corpse and step off it, short enough that it still
 // punishes standing in a pack you just AOE'd down.
@@ -1609,10 +1610,10 @@ export class MainScene extends Phaser.Scene {
     this.bleed = new BleedManager();
     this.poison = new PoisonManager();
     this.buffs = new BuffManager();
-    // 2 -> 3: Comfort's "Resting" buff shouldn't have to fight two
-    // simultaneous food buffs for one of only 2 slots. A run character may
-    // override this (the Ashcaller runs on exactly one, much longer buff) —
-    // applyCharacter re-applies the cap once a card is chosen.
+    // Comfort's "Resting" buff is exempt from this cap entirely (Buffs.ts
+    // COMFORT_BUFF_ID) — it never has to fight a food buff for a slot. A run
+    // character may override the food cap itself (the Ashcaller runs 3 food
+    // buffs at once instead of 2) — applyCharacter re-applies it once chosen.
     this.buffs.setMaxBuffs(DEFAULT_MAX_BUFFS);
     this.invulnerableUntil = 0;
     this.rangedFireSlowUntil = 0;
@@ -5740,7 +5741,47 @@ export class MainScene extends Phaser.Scene {
     // minToolTier 1: needs the Ironshod Pickaxe (B4-P5), the mining mirror of
     // the Ironbark axe gate. Bog Ore is the bayou's only surface ore, so this is
     // the gate on the whole bayou metal economy.
-    scatter({ texture: "bog_ore_node", resource: "bog_ore", displayName: "Bog Ore", action: "mine", amountMin: 3, amountMax: 5, health: 3, count: 46, minToolTier: 1 });
+    //
+    // A baseline flat scatter for general presence, PLUS clustered bunches
+    // biased into the miasma/bonemire zones (the user: "put more gloam^H^H^H bog
+    // ore on the map — add bunches in dangerous areas") — poison fog and the
+    // haunted boneyard are the bayou's two hazard zones, so a Bog Ore hunt now
+    // pulls the player toward the parts of the swamp that actually bite back.
+    scatter({ texture: "bog_ore_node", resource: "bog_ore", displayName: "Bog Ore", action: "mine", amountMin: 3, amountMax: 5, health: 3, count: 24, minToolTier: 1 });
+    const BOG_ORE_CLUSTERS = 10;
+    for (let c = 0; c < BOG_ORE_CLUSTERS; c++) {
+      const zone = c % 2 === 0 ? "miasma" : "bonemire";
+      const center = this.pickBayouPoint(rng, 0.4, BAYOU_R_MIN, BAYOU_R_MAX, { avoidDeepWater: true, preferZone: zone });
+      if (!center) continue;
+      const count = rng.between(3, 4);
+      for (let i = 0; i < count; i++) {
+        let x = Phaser.Math.Clamp(center.x + rng.between(-70, 70), 60, WORLD_W - 60);
+        let y = Phaser.Math.Clamp(center.y + rng.between(-70, 70), 60, WORLD_H - 60);
+        // Jitter can push a member off bayou or into deep water — fall back to
+        // the (already-verified) anchor rather than dropping the node.
+        if (
+          this.worldBiomes.dominantBiomeAt(x, y) !== "bayou" ||
+          bayouWaterAt(x, y, this.outerFeatureBiome) === "deep"
+        ) {
+          x = center.x;
+          y = center.y;
+        }
+        const node = new ResourceNode(this, {
+          x,
+          y,
+          texture: "bog_ore_node",
+          resource: "bog_ore",
+          amount: rng.between(3, 5),
+          action: "mine",
+          displayName: "Bog Ore",
+          loose: false,
+          health: 3,
+          minToolTier: 1,
+        });
+        this.nodes.push(node);
+        this.obstacleNodes.push(node);
+      }
+    }
     // DELIBERATELY ABSENT: Moonsilver seams and the three ability geodes.
     //
     // Locked by the user (2026-07-22): the most precious materials are NOT found on
@@ -7524,13 +7565,15 @@ export class MainScene extends Phaser.Scene {
         .setDepth(-6);
       this.mirePools.push({ x: p.x, y: p.y, image: img });
     }
-    const wanted = boss.consumeBellow();
-    if (wanted <= 0) return;
+    const wave = boss.consumeBellow();
+    if (wave <= 0) return;
     lair.adds = lair.adds.filter((a) => !a.depleted);
     const room = lair.layout.vault;
     const rng = this.sessionRng();
+    const composition = this.miretyrantWaveComposition(wave, boss.health <= boss.maxHealth * 0.35);
     let spawned = 0;
-    for (let i = 0; i < wanted && lair.adds.length < MIRETYRANT_MAX_ADDS; i++) {
+    for (const kind of composition) {
+      if (lair.adds.length >= MIRETYRANT_MAX_ADDS) break;
       // Surface them around the arena's edge rather than on the player — a wave
       // that materializes on top of you isn't a wave, it's a mugging.
       const a = rng.frac() * Math.PI * 2;
@@ -7544,26 +7587,45 @@ export class MainScene extends Phaser.Scene {
         room.y + LAIR_ADD_SPAWN_INSET,
         room.y + room.h - LAIR_ADD_SPAWN_INSET,
       );
-      // Adds are ELITE, and the mix now favours the Blighttoad (2026-07-24).
-      // the user: "the ADDs are useless because my crit splash insta kills them."
-      // Elite is the roster's existing +50% HP/dmg lever, so a swing that
-      // splashes them still has to actually spend the swing. The ratio flip is
-      // the more important half: a Murkling's claw is physical and so is the
-      // first thing an endgame armour pool erases, while a Blighttoad's payload
-      // is POISON, which bypasses flat armour entirely — the adds stay relevant
-      // no matter how well geared the player who reaches this fight is.
+      // Adds are ELITE (Elite is the roster's existing +50% HP/dmg lever, so a
+      // splash-crit swing still has to spend the swing). "frog" keeps the
+      // 2026-07-24 Blighttoad-favoured mix (its payload is poison, which
+      // bypasses flat armour, so it stays relevant at any gear level); "gator"
+      // is the escalation — a tankier elite Mirejaw that the frog swarm alone
+      // never delivered (the user: "spawn alligators instead of the frog dudes
+      // ... fighting strong adds the whole time").
       const add =
-        rng.frac() < 0.45
-          ? new Murkling(this, { x, y, elite: true })
-          : new Blighttoad(this, { x, y, elite: true });
+        kind === "gator"
+          ? new Mirejaw(this, { x, y, elite: true })
+          : rng.frac() < 0.45
+            ? new Murkling(this, { x, y, elite: true })
+            : new Blighttoad(this, { x, y, elite: true });
       this.addDungeonEnemy(lair, add);
       lair.adds.push(add);
       spawned++;
     }
     if (spawned > 0) {
-      this.eventLog.add("combat", "The Miretyrant bellows — the mire answers.");
+      this.eventLog.add(
+        "combat",
+        wave >= 3 ? "The Miretyrant bellows — the mire's jaws answer." : "The Miretyrant bellows — the mire answers.",
+      );
       this.sfx.nightfall();
     }
+  }
+
+  // Scripted escalation for the Miretyrant's bellow waves (the user's "hella
+  // frogs into some big scary alligators" pitch): the first two waves are pure
+  // frog swarms, wave 3 is the first Mirejaw arrival, and every wave after that
+  // keeps gators in the mix permanently. Enraged (phase 3) adds one more frog
+  // on top of the apex mix, on top of its own halved bellow interval, so
+  // pressure escalates on two axes at once late in the fight.
+  private miretyrantWaveComposition(wave: number, enraged: boolean): ("frog" | "gator")[] {
+    if (wave === 1) return ["frog", "frog", "frog", "frog"];
+    if (wave === 2) return ["frog", "frog", "frog", "frog", "frog"];
+    if (wave === 3) return ["gator", "gator", "frog"];
+    return enraged
+      ? ["gator", "gator", "frog", "frog", "frog"]
+      : ["gator", "gator", "frog", "frog"];
   }
 
   // The maw. Sealed it takes the effigy; open it's a doorway like any other.

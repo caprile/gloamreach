@@ -689,6 +689,25 @@ export class JewelryMenu {
         .setScrollFactor(0)
         .setDepth(DEPTH_ITEM + 3);
       this.rows.push(knob);
+
+      const maxBtn = this.scene.add
+        .text(x + 12 + SLIDER_W + 10, trackY + SLIDER_H / 2, "Max", {
+          fontFamily: "monospace",
+          fontSize: "12px",
+          color: batch >= maxBatch ? "#5a6272" : "#c9a86a",
+          backgroundColor: "#1a1f2a",
+          padding: { x: 5, y: 2 },
+        })
+        .setOrigin(0, 0.5)
+        .setScrollFactor(0)
+        .setDepth(DEPTH_ITEM + 1)
+        .setInteractive({ useHandCursor: batch < maxBatch })
+        .on("pointerdown", () => {
+          if (this.batchAmount === maxBatch) return;
+          this.batchAmount = maxBatch;
+          this.render();
+        });
+      this.rows.push(maxBtn);
     }
 
     const btnX = x + rowW - 96;

@@ -22,10 +22,18 @@ export interface ActiveBuff extends BuffSpec {
   remainingMs: number;
 }
 
+// Comfort/Bedroll's buff id (MainScene). It sits OUTSIDE the food-buff cap
+// (the user: cap food at 2, Comfort exempt) — a Bedroll should never compete
+// with two cooked-food buffs for a slot, since it re-applies itself every
+// qualifying frame at a tiny remainingMs and would otherwise be the first
+// thing evicted the instant a second food buff landed.
+const COMFORT_BUFF_ID = "comfort_rest";
+
 export class BuffManager {
   private buffs: ActiveBuff[] = [];
-  // Max concurrent buffs. A locked design cap (currently 2) that future items/
-  // buffs may raise — hence a settable field, not a hardcoded constant.
+  // Max concurrent FOOD buffs. A locked design cap (currently 2) that future
+  // items/buffs may raise — hence a settable field, not a hardcoded constant.
+  // Comfort/Bedroll (see COMFORT_BUFF_ID) is exempt and never counted here.
   private maxBuffs = 2;
   // Wisdom's buff/food-duration amplifier (M-SS). Scales the durationMs of
   // every applied buff (and its refresh), so Wisdom lengthens food + Comfort.
@@ -51,12 +59,19 @@ export class BuffManager {
       Object.assign(existing, spec, { durationMs, remainingMs: durationMs });
       return;
     }
-    if (this.buffs.length >= this.maxBuffs) {
-      let minIdx = 0;
-      for (let i = 1; i < this.buffs.length; i++) {
-        if (this.buffs[i].remainingMs < this.buffs[minIdx].remainingMs) minIdx = i;
+    // Comfort never competes for a cap slot and is never evicted below.
+    if (spec.id === COMFORT_BUFF_ID) {
+      this.buffs.push({ ...spec, durationMs, remainingMs: durationMs });
+      return;
+    }
+    const foodCount = this.buffs.reduce((n, b) => n + (b.id === COMFORT_BUFF_ID ? 0 : 1), 0);
+    if (foodCount >= this.maxBuffs) {
+      let minIdx = -1;
+      for (let i = 0; i < this.buffs.length; i++) {
+        if (this.buffs[i].id === COMFORT_BUFF_ID) continue;
+        if (minIdx === -1 || this.buffs[i].remainingMs < this.buffs[minIdx].remainingMs) minIdx = i;
       }
-      this.buffs.splice(minIdx, 1);
+      if (minIdx !== -1) this.buffs.splice(minIdx, 1);
     }
     this.buffs.push({ ...spec, durationMs, remainingMs: durationMs });
   }

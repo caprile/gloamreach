@@ -9057,3 +9057,94 @@ All changes verified live via `preview_eval`; `tsc` + `npm run build` clean thro
 console errors/warnings across every check. `RECIPES.md` updated (bow DPS table, jewelry
 table). **Next: session 3, the creature-identity pass (Opus) — Mirejaw/Mosswretch/Corpselight
 kits, fully speced in the plan doc.**
+
+### Vagabond-run playtest fix batch 2 (2026-07-24, Sonnet)
+
+No plan file — a fix/tuning batch off the user's own end-of-run summary (Ashcaller, badlands+bayou
+kit: Embersteel Warbow + badlands light armor) plus a fresh round of playtest notes. Design
+decisions (nerf-ranged vs. buff-enemy-anti-kite vs. reduce-sustain vs. a light combined pass, plus
+crit-splash's scope and the bow's move-slow %) were confirmed via `AskUserQuestion` before touching
+anything; two ambiguous complaints ("little tree dudes don't hit me" / recipe-chain visibility) were
+resolved by live investigation rather than guessed at.
+
+**The diagnosis, confirmed by the user's own Run Summary after the fact:** 80% of all damage dealt
+was Ranged (48,965 of 60,982), melee only 20% combined; 72% of all healing was the Leech relic
+(3,439 of 4,747); only 6,639 total damage taken across a full run to two bosses. The two shipped
+changes target those two lines directly.
+
+**Balance (all locked decisions):**
+- **Crit-splash relics → melee-only** (`MainScene.resolveWeaponHit`, gated on `source !== "Ranged"`;
+  `Relics.ts` description text updated to say so). Ranged weapons carry no weapon-arc splash of
+  their own (`WEAPON_ARC` is `{range:0}` for every bow) — crit-splash was the ONLY thing turning a
+  single-target bow into horde-clear, and at a 60%-capped crit chance it fired on the majority of
+  shots. Verified live: a forced ranged crit (`resolveWeaponHit(..., "Ranged")`) no longer splashes
+  to a nearby enemy; the identical forced hit with `source: "Weapon (direct)"` still does.
+- **Ranged fire-slow** — firing any ranged weapon sets `rangedFireSlowUntil` (350ms), folded as a
+  separate multiplicative 0.72x term into `Player.update`'s envMult (kept OUT of
+  `currentEnvMoveMult` so the terrain tooltip doesn't misattribute it) — an anti-kite governor per
+  the user's "25-30%, not 40%" note. Verified live via `tryRangedAttack`.
+- **Leech relic trimmed**: Reaper Totem 3%→2%, Bloodlord's Mantle 5%→4% (`Relics.ts`). `RECIPES.md`
+  relic tables updated for both this and the crit-splash description change.
+- **Duneshaper arena poison** — the user: "doesn't normally have poison, it was from the overlap of
+  the bayou area." Root cause: `TYRANT_ALTAR_CLEAR_RADIUS` (360px) only gates where a bayou zone's
+  CENTER gets picked; a miasma zone's own radius (up to 780px, more with `selfSep` merging) can still
+  reach into the arena from just outside that exclusion. `baseSurfaceEnvironmentAt` now returns
+  neutral unconditionally within the clear radius of any tyrant altar. Verified live: injecting a
+  fake miasma zone dead-centered on a real altar reads neutral 100px from center, but still poisons
+  normally 700px out (regression check — the fix isn't a global miasma kill switch).
+
+**Bugs fixed (no design call needed):**
+- **CraftingMenu flicker was a gap in the earlier B1 fix.** `InventoryMenu.refresh()` was coalesced
+  to one repaint/frame; `CraftingMenu.refresh()` — shown right beside it under the same Tab panel,
+  and called once per collected node via `collectNode()` → `refreshDiscovery()` → `craftingMenu
+  .refresh()` — was still an uncoalesced direct `render()` every call. Given the exact same
+  `refreshQueued` + `POST_UPDATE`-deferred pattern `InventoryMenu` already used. Verified live: 5
+  rapid `refresh()` calls in one frame now produce exactly 1 deferred repaint instead of 5.
+- **Mosswretch's spore cloud did nothing underground.** `environmentEffectAt` short-circuited to
+  "only the Miretyrant's own mire pools matter" the instant `activeDungeon` was set, never reaching
+  `foldSporeCloud` at all — but Mosswretch IS themed crypt/lair-approach dweller content (see
+  `populateCrypt`'s "bruiser room" weight and the Miretyrant approach spawn). Fixed by routing the
+  dungeon branch's base effect through `foldSporeCloud` too. Verified live: injecting a spore cloud
+  and forcing `activeDungeon` truthy now correctly reads `moveMult 0.6/poisonDps 5` at the cloud's
+  position, neutral elsewhere.
+- **Stale weapon Stamina display.** Every weapon's `Items.ts` `stats` array is hand-authored text;
+  Damage/Attack Speed/Armor were already recomputed live in `Tooltip.statValue`/`CraftingMenu
+  .statValue`, but Stamina fell through to the raw authored string — drifted to "15" for the
+  Embersteel Warbow after a balance pass moved the real `WEAPON_STAMINA_COST` to 11. Both
+  `statValue` methods now read `weaponStaminaCost()` live, closing this class of drift for every
+  weapon at once (the dashboard was never affected — it already read live). Verified live via both
+  methods directly.
+- **"Little tree dudes don't hit me, even standing still" — misfiled as Murkling, actually
+  Mosswretch/Mossling.** Murkling was tested twice live (solo and a 6-pack) and connected correctly
+  both times — no bug there; the pack test, if anything, showed it can burst a full-HP player to 0
+  in under a second when several swings land on the same frame, the opposite problem. The real
+  defect: `SMASH_SWING`'s `tell.rearBackSpeed` (46px/s, added for an earlier "hard to predict"
+  telegraph complaint) reared the creature back for the FULL 780ms windup regardless of how close it
+  started — enough drift (~36px) to carry it clean past its own 88px reach before the strike-time
+  recheck, even against a player who never moved. Fixed in the shared `Enemy.tickMeleeSwing` engine:
+  the rear-back now stops once retreating would cross the swing's own effective reach (with a small
+  4px buffer for one-frame lag), affecting every current/future user of `tell.rearBackSpeed`, not
+  just this creature. **Verified live and rigorously** (multiple false leads caught and ruled out
+  along the way — a test-harness gotcha where splitting a timing-sensitive sim across separate
+  `preview_eval` calls feeds Phaser's loop a clock that jumps backward and corrupts its delta
+  tracking; always run one continuous script per timing test): a Mossling that missed 100% of the
+  time over a 10-second window pre-fix now lands hits reliably (33 dmg each, matching spec) at
+  84-90px, and the parent Mosswretch's identical code path was confirmed via the same mechanism.
+- **Transitive recipe discovery.** the user: seeing Emberhide's recipe should only require Duskhide's
+  RECIPE being known plus Embersteel — not an actual crafted Duskhide piece. `Crafting.ingredientsKnown`
+  now also treats an ingredient as known if any already-discovered recipe produces it
+  (`isKnownIngredient`, new), resolving transitively across repeated `refresh()` calls (which fire on
+  essentially every state change) without needing explicit recursion. Verified live: Emberhide Vest's
+  recipe unlocked in the same `refresh()` pass as Duskhide Vest's, with `duskhide_vest` never added
+  to the discovered-items set at all.
+- **Welcome popup reworded** (`WelcomeUI.ts`) — dropped the now-stale "this first biome is just the
+  start" line (three biomes and multiple bosses now exist), replaced with a general "the game keeps
+  growing between sessions" framing; removed the inline hotkey dump (Tab/K/Esc, Ctrl+Click/
+  Shift+Click) in favor of pointing players at Pause → Tips (the full how-to-play reference) and the
+  Keybinds panel (top-left, full control list) — per the user: "don't give them a bunch of hotkeys at
+  this time." Verified live: both pages render within the existing panel height with no overflow.
+
+`tsc` + `npm run build` clean throughout. A stray esbuild "Unexpected case" error appeared in the
+Vite log during the Enemy.ts edit — traced to an 11-second window mid-edit before the closing brace
+was added, self-resolved on the next save, and predates every live verification in this batch.
+`RECIPES.md` updated (relic tables only — no recipe/cost changes otherwise).

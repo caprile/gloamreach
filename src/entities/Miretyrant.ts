@@ -108,12 +108,16 @@ const ROLL_KNOCKBACK = 200;
 const ROLL_HIT_INTERVAL_MS = 420; // it can catch you more than once if you run with it
 
 // --- Bellow (adds) — on its own clock, see the file header. ---
-const BELLOW_INTERVAL_MS = 15000;
-const BELLOW_ENRAGED_INTERVAL_MS = 8500;
+// Escalating SCRIPTED waves (the user, playtest: "spawn alligators instead of
+// the frog dudes... fighting strong adds the whole time"): the first couple of
+// bellows are frog swarms (Murkling/Blighttoad), then Mirejaw gators arrive and
+// stay in the mix from then on. Wave COMPOSITION is decided by MainScene (which
+// owns the entity classes) off the wave index this file hands it; this file
+// only owns the clock + count.
+const BELLOW_INTERVAL_MS = 11000; // was 15000 — tightened for near-constant pressure
+const BELLOW_ENRAGED_INTERVAL_MS = 6500; // was 8500
 const BELLOW_FIRST_DELAY_MS = 6000; // never opens the fight with adds
 const BELLOW_TELL_MS = 700; // the rear-back is the tell; the spawn lands at the end of it
-export const MIRETYRANT_ADDS_PER_BELLOW = 3;
-export const MIRETYRANT_ADDS_ENRAGED = 5;
 export const MIRETYRANT_MAX_ADDS = 8; // hard cap so a slow fight can't drown the player
 
 function telegraphMsFor(a: MiretyrantAttack): number {
@@ -158,10 +162,13 @@ export class Miretyrant extends Enemy {
   private lastRollHitAt = -Infinity;
   private hasHitThisAttack = false;
 
-  // Bellow clock. `pendingAdds` is what MainScene drains via consumeBellow().
+  // Bellow clock. `pendingWave` is what MainScene drains via consumeBellow() —
+  // a 1-based wave index (0 = nothing pending), which MainScene turns into a
+  // scripted composition (early waves = frogs, wave 3+ = gators join in).
   private nextBellowAt = 0;
   private bellowingUntil = 0;
-  private pendingAdds = 0;
+  private bellowCount = 0;
+  private pendingWave = 0;
   private pendingPools: { x: number; y: number }[] = [];
 
   private poiseBarBg: Phaser.GameObjects.Rectangle;
@@ -222,12 +229,13 @@ export class Miretyrant extends Enemy {
     return MIRETYRANT_MAX_POISE;
   }
 
-  // How many adds the last bellow called up, drained by MainScene (which owns
-  // enemy registration). Returns 0 on every other frame.
+  // The 1-based wave index the last bellow just called up (0 = nothing
+  // pending), drained by MainScene (which owns enemy registration and decides
+  // what a given wave index actually spawns).
   consumeBellow(): number {
-    const n = this.pendingAdds;
-    this.pendingAdds = 0;
-    return n;
+    const w = this.pendingWave;
+    this.pendingWave = 0;
+    return w;
   }
 
   // Mire pools left by phase-3 impacts, drained by MainScene the same way (the
@@ -316,7 +324,8 @@ export class Miretyrant extends Enemy {
       this.applyFacing(playerX - this.x, playerY - this.y);
       if (now >= this.bellowingUntil) {
         this.bellowingUntil = 0;
-        this.pendingAdds = this.enraged ? MIRETYRANT_ADDS_ENRAGED : MIRETYRANT_ADDS_PER_BELLOW;
+        this.bellowCount++;
+        this.pendingWave = this.bellowCount;
         this.nextBellowAt =
           now + (this.enraged ? BELLOW_ENRAGED_INTERVAL_MS : BELLOW_INTERVAL_MS);
         this.nextAttackReadyAt = Math.max(this.nextAttackReadyAt, now + ATTACK_COOLDOWN_MS);
