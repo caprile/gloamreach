@@ -43,7 +43,7 @@ const STAT_DESCRIPTIONS: Record<StatType, string> = {
   strength: "+0.04x crit damage per point (all weapons)",
   agility: "+0.5% crit chance per point (all weapons)",
   intelligence: "+1.5% skill XP gain per point",
-  wisdom: "+2% buff & food duration per point",
+  wisdom: "+2% buff/food duration & -0.5% ability cooldown per point",
 };
 export function statDescription(stat: StatType): string {
   return STAT_DESCRIPTIONS[stat];
@@ -70,7 +70,7 @@ export function statTotalEffect(stat: StatType, p: PlayerProgression): string {
     case "intelligence":
       return `+${pct(p.xpMult() - 1, 1)} skill XP`;
     case "wisdom":
-      return `+${pct(p.buffDurationMult() - 1)} buff duration`;
+      return `+${pct(p.buffDurationMult() - 1)} buff duration, ${pct(p.abilityCooldownMult() - 1)} ability cooldown`;
   }
 }
 
@@ -85,8 +85,13 @@ export function statTotalEffect(stat: StatType, p: PlayerProgression): string {
 // Playtest speed-up (S1 balance batch): lowered from 150/1.9 to reach a given
 // level ~1.5x faster overall — the user wanted player levels & stat points to
 // come noticeably quicker. Soft-cap behavior is untouched.
+// Exponent 1.8 -> 1.7 (the user, ending biome 3 at level 21: "sorta feels like we
+// don't level up fast enough if this is the 2nd to last biome"). Lowering the
+// EXPONENT rather than the base is deliberate — it barely moves the early game
+// (level 5 costs ~12% less) but takes a big bite out of the deep-run wall
+// (level 21 costs ~29% less), which is exactly where the pace was flagging.
 const XP_BASE = 110;
-const XP_EXPONENT = 1.8;
+const XP_EXPONENT = 1.7;
 export function xpToNextPlayerLevel(level: number): number {
   return Math.round(XP_BASE * Math.pow(level + 1, XP_EXPONENT));
 }
@@ -100,6 +105,15 @@ const STRENGTH_CRIT_MULT_PER_POINT = 0.04; // +0.04x crit damage multiplier
 const AGILITY_CRIT_CHANCE_PER_POINT = 0.005; // +0.5% crit chance
 const INT_XP_PCT_PER_POINT = 0.015; // +1.5% skill XP gain
 const WISDOM_BUFF_DURATION_PCT_PER_POINT = 0.02; // +2% buff/food duration
+// Wisdom's SECOND axis. Buff duration alone was invisible in play (the user, at 55
+// points: "I put wisdom to 55 this run and I'm not sure I really felt it. what
+// does it even do?") — longer food buffs are real but you never see the moment
+// they pay off, and with three buffs running you top them up before they lapse
+// anyway. Ability cooldown is an axis NOTHING else touches (Endurance=stamina,
+// Vitality=HP, Str/Agi=crit, Int=XP) and it is felt every single cast. Capped so
+// it can't collapse cooldowns entirely.
+const WISDOM_ABILITY_CDR_PER_POINT = 0.005; // -0.5% ability cooldown
+const WISDOM_ABILITY_CDR_CAP = 0.5;
 
 type LevelUpListener = (level: number, pointsAwarded: number) => void;
 
@@ -204,5 +218,15 @@ export class PlayerProgression {
   // Wisdom lengthens buff/food durations (auto-covers future buff procs).
   buffDurationMult(): number {
     return 1 + this.stats.wisdom * WISDOM_BUFF_DURATION_PCT_PER_POINT * this.potency("wisdom");
+  }
+
+  // Wisdom also shortens ability cooldowns. Multiplier applied to cooldownMs at
+  // the single cast site, alongside the equipment one.
+  abilityCooldownMult(): number {
+    const cdr = Math.min(
+      WISDOM_ABILITY_CDR_CAP,
+      this.stats.wisdom * WISDOM_ABILITY_CDR_PER_POINT * this.potency("wisdom"),
+    );
+    return 1 - cdr;
   }
 }

@@ -41,7 +41,7 @@ export interface HotbarUIDeps {
   // next-tier upgrade the player could apply right now — drives the small
   // pulsing "upgrade ready" arrow (S3). Materials only (position-independent),
   // so it doesn't flicker as the player walks near/away from a Workbench.
-  upgradeReady?: (key: string, tier: number) => boolean;
+  upgradeReady?: (key: string, tier: number, appliedIds?: string[]) => boolean;
   // Live capped crit totals for a weapon (base + Strength/Agility + relics) —
   // shown on the weapon tooltip alongside the per-weapon base.
   critTotals?: (weapon: WeaponType) => { chance: number; mult: number };
@@ -237,7 +237,7 @@ export class HotbarUI {
           icon.setDisplaySize(icon.width * s, icon.height * s);
           this.rows.push(icon);
         }
-        if (this.deps.upgradeReady?.(stack.key, stack.tier ?? 0)) this.addUpgradeArrow(x, y);
+        if (this.deps.upgradeReady?.(stack.key, stack.tier ?? 0, stack.upgrades)) this.addUpgradeArrow(x, y);
         this.addGemPips(x, y, stack.key, stack.upgrades);
         if (stack.count > 1) {
           const c = this.scene.add

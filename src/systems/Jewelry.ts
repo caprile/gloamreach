@@ -58,6 +58,23 @@ export const JEWELRY_RECIPES: JewelryRecipe[] = [
   // --- tier 1 (Duneshaper's Heart upgrade): the ability-granting specials ---
   // Each ability special (existing 2a items) needs its own gem — gem source
   // dictates which active you can make.
+  // The control/tempo pair (the user's two ability requests). Each costs a
+  // different gem so which one a run can build still depends on which crypt it
+  // cleared — the same "gem source dictates the active" rule as the trio below.
+  {
+    id: "special_mire_snare_idol",
+    name: "Snarebound Idol",
+    output: "special_mire_snare_idol",
+    inputs: { moonsilver: 3, gem_gloam: 1, mirehide: 2 },
+    requiredStationTier: 1,
+  },
+  {
+    id: "special_bloodrush_fang",
+    name: "Quickening Fang",
+    output: "special_bloodrush_fang",
+    inputs: { moonsilver: 3, gem_blood: 1, mirejaw_meat: 2 },
+    requiredStationTier: 1,
+  },
   {
     id: "special_gloamstep_band",
     name: "Gloamstep Band",

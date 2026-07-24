@@ -1,21 +1,40 @@
-// Worn-equipment slots — first real occupants are the Gremlin Armor pieces
-// (Milestone M). The layout and slot set are here so the Inventory UI can
-// render the paper-doll, and combat/stat systems can hook in later. Slots
-// hold an EquippedItem (item key + its per-instance upgrade tier, same field
-// a placed station's tier lives on — see StationUpgrades.ts) or null.
+// Worn-equipment slots. Slots hold an EquippedItem (item key + its per-instance
+// upgrade tier, same field a placed station's tier lives on — see
+// StationUpgrades.ts) or null.
+//
+// The slot set is organised into GROUPS rather than one named slot per body
+// part. It used to be helmet/chest/legs plus a pile of one-off slots —
+// necklace, ring1, ring2, cloak, back(=R cape), special1(=Q), special2(=E) —
+// which meant an item's slot decided which ABILITY KEY it drove, and where a
+// given trinket could go was memorised trivia (the user: "generalize the ability
+// slots to QER, any ability item can go in any ability slot... get rid of
+// specifics like neck/ring1/etc. It's all just confusing").
+//
+// Now there are three groups plus ammo:
+//   gear    — helmet/chest/legs. Armor, the set-bonus and armor-value carriers.
+//   special — four interchangeable slots for passive jewelry/trinkets/cloaks.
+//   ability — three interchangeable slots, which ARE Q/E/R by position.
+//
+// The payoff is that an item declares a GROUP, not a destination, and equipping
+// routes it to the first free slot in that group (see MainScene's equip path).
+// Adding a trinket or an ability item no longer means picking which named slot
+// it competes for.
 export type EquipSlot =
   | "helmet"
   | "chest"
   | "legs"
-  | "back" // the R-ability cape slot (SLOT_ABILITY_KEY back→r) — grants Q/E/R capes
-  | "cloak" // stat back-armor (Mireborn Cloak) — SEPARATE from the R-ability cape so a
-  //           utility cloak no longer competes with your R ability (the user 2026-07-23)
-  | "necklace"
-  | "ring1"
-  | "ring2"
   | "special1"
   | "special2"
+  | "special3"
+  | "special4"
+  | "ability1"
+  | "ability2"
+  | "ability3"
   | "ammo";
+
+// Which family a slot belongs to. An item can only be equipped into a slot of
+// its own group, and any slot within the group will do.
+export type EquipSlotGroup = "gear" | "special" | "ability" | "ammo";
 
 export interface EquippedItem {
   key: string;
@@ -31,32 +50,64 @@ export interface EquippedItem {
   upgrades?: string[];
 }
 
-export const EQUIP_SLOTS: { id: EquipSlot; label: string }[] = [
-  { id: "helmet", label: "Head" },
-  { id: "necklace", label: "Neck" },
-  { id: "back", label: "Cape" }, // R-ability cape (bloodpact/aegis) — relabelled so it's not confused with back-armor
-  { id: "cloak", label: "Cloak" }, // stat back-armor, distinct from the R cape
-  { id: "chest", label: "Chest" },
-  { id: "ring1", label: "Ring1" },
-  { id: "ring2", label: "Ring2" },
-  { id: "legs", label: "Legs" },
-  { id: "special1", label: "Spec1" },
-  { id: "special2", label: "Spec2" },
-  { id: "ammo", label: "Ammo" },
+// Declaration order drives the paper-doll layout (see InventoryMenu): gear
+// column, then the special column, then the QER row, then ammo.
+export const EQUIP_SLOTS: { id: EquipSlot; label: string; group: EquipSlotGroup }[] = [
+  { id: "helmet", label: "Head", group: "gear" },
+  { id: "chest", label: "Chest", group: "gear" },
+  { id: "legs", label: "Legs", group: "gear" },
+  { id: "special1", label: "Special", group: "special" },
+  { id: "special2", label: "Special", group: "special" },
+  { id: "special3", label: "Special", group: "special" },
+  // Four specials, not three: three would have been a net LOSS of one passive
+  // slot against the old neck + 2 rings + cloak (the user picked 4 for exactly
+  // that reason).
+  { id: "special4", label: "Special", group: "special" },
+  // Position IS the hotkey — ability1 is Q, ability2 is E, ability3 is R.
+  { id: "ability1", label: "Q", group: "ability" },
+  { id: "ability2", label: "E", group: "ability" },
+  { id: "ability3", label: "R", group: "ability" },
+  { id: "ammo", label: "Ammo", group: "ammo" },
 ];
+
+const SLOT_GROUP: Record<EquipSlot, EquipSlotGroup> = EQUIP_SLOTS.reduce(
+  (acc, s) => {
+    acc[s.id] = s.group;
+    return acc;
+  },
+  {} as Record<EquipSlot, EquipSlotGroup>,
+);
+
+export function slotGroup(slot: EquipSlot): EquipSlotGroup {
+  return SLOT_GROUP[slot];
+}
+
+export function slotsInGroup(group: EquipSlotGroup): EquipSlot[] {
+  return EQUIP_SLOTS.filter((s) => s.group === group).map((s) => s.id);
+}
+
+// Player-facing name for a group, used by tooltips and the inventory's category
+// headers so an item can say where it goes (the user: "the items in my inventory,
+// the specials, it doesn't tell me what slot it can go into").
+export const GROUP_LABEL: Record<EquipSlotGroup, string> = {
+  gear: "Gear",
+  special: "Special",
+  ability: "Ability",
+  ammo: "Ammo",
+};
 
 export class Equipment {
   private slots: Record<EquipSlot, EquippedItem | null> = {
     helmet: null,
     chest: null,
     legs: null,
-    back: null,
-    cloak: null,
-    necklace: null,
-    ring1: null,
-    ring2: null,
     special1: null,
     special2: null,
+    special3: null,
+    special4: null,
+    ability1: null,
+    ability2: null,
+    ability3: null,
     ammo: null,
   };
 
@@ -66,5 +117,11 @@ export class Equipment {
 
   set(slot: EquipSlot, item: EquippedItem | null): void {
     this.slots[slot] = item;
+  }
+
+  // First slot in `group` that's empty, or null if the group is full. The equip
+  // path uses this to place an item without the caller naming a slot.
+  firstFreeIn(group: EquipSlotGroup): EquipSlot | null {
+    return slotsInGroup(group).find((s) => this.slots[s] === null) ?? null;
   }
 }

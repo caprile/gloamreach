@@ -26,11 +26,22 @@ export type AbilityId =
   // B4-P2 found-only actives — epic-loot exclusive, craftable nowhere.
   | "gravebind"
   | "spirit_lance"
-  | "aegis";
+  | "aegis"
+  // Craftable control/tempo pair (Gemwright's Table).
+  | "mire_snare"
+  | "bloodrush";
 
 // Which EFFECT the dispatcher runs. Several ids can share one family at
 // different `power` — adding a variant is then pure data.
-export type AbilityFamily = "blink" | "nova" | "lifelink" | "gravebind" | "lance" | "aegis";
+export type AbilityFamily =
+  | "blink"
+  | "nova"
+  | "lifelink"
+  | "gravebind"
+  | "lance"
+  | "aegis"
+  | "snare" // AOE root — pins what's on you (vs gravebind, which PULLS then slows)
+  | "haste"; // timed attack-speed window
 
 // The three live ability keys. T is reserved for a 4th slot later (not rendered
 // yet) — keep this list and the SLOT_ABILITY_KEY map the single source of truth.
@@ -56,13 +67,17 @@ export interface AbilityDef {
   icon: string; // BootScene-baked texture, shared with the granting item's icon
 }
 
-// Which ability key each ability-granting equip slot drives. special1 → Q,
-// special2 → E, back (cape) → R (locked mapping). Only these three slots grant
-// actives in 2a; rings/necklace stay passive-only until 2b.
+// Which ability key each ability slot drives — POSITION is the hotkey.
+//
+// The three slots are otherwise interchangeable: any ability item fits any of
+// them, so which key an ability sits on is the player's arrangement rather than
+// a property baked into the item (it used to be — a bloodpact shroud was an "R
+// item" because its slot was the cape slot, which is why moving an ability
+// between keys was impossible). See EquipSlot's group model.
 export const SLOT_ABILITY_KEY: Partial<Record<EquipSlot, AbilityKey>> = {
-  special1: "q",
-  special2: "e",
-  back: "r",
+  ability1: "q",
+  ability2: "e",
+  ability3: "r",
 };
 
 export const ABILITY_DEFS: Record<AbilityId, AbilityDef> = {
@@ -148,12 +163,44 @@ export const ABILITY_DEFS: Record<AbilityId, AbilityDef> = {
     cooldownMs: 12000,
     icon: "ability_lance",
   },
+  // === craftable control/tempo pair (Gemwright's Table, tier 1) ===
+  // Deliberately CRAFTABLE rather than found-only epics: both were explicit
+  // requests ("needs to be some kind of AOE root ability", "needs to be some
+  // kind of attack speed ability"), and burying a requested ability behind an
+  // epic-drop roll reproduces the "I never found one" problem the Gravemark
+  // Rubbing exists to solve. The Gemwright tier is already gated behind the
+  // Duneshaper's Heart, which is reachable now that biome 3 demoted it.
+  mire_snare: {
+    id: "mire_snare",
+    family: "snare",
+    power: 1,
+    name: "Mire Snare",
+    description:
+      "Roots every enemy within 240px for 2.6s. They can still swing — so root, then leave; this is a control tool, not a stun.",
+    cooldownMs: 16000,
+    icon: "ability_snare",
+  },
+  bloodrush: {
+    id: "bloodrush",
+    family: "haste",
+    power: 1,
+    name: "Bloodrush",
+    description: "For 6s your weapon cooldown drops 40% (~1.7x attack speed). Works with every weapon, melee or ranged.",
+    cooldownMs: 22000,
+    activeMs: 6000,
+    icon: "ability_haste",
+  },
   aegis: {
     id: "aegis",
     family: "aegis",
     power: 1,
     name: "Drowned Aegis",
-    description: "For a few seconds, the water takes most of what's aimed at you.",
+    // Says the NUMBER. The flavour-only line ("the water takes most of what's
+    // aimed at you") left the user unable to tell whether it did anything at all
+    // — a 60% cut for 4s is a big, very usable window, and nothing on screen
+    // said so. Every other ability's description states its effect; this one
+    // just described the mood.
+    description: "Cuts incoming damage by 60% for 4s. Stacks into the same reduction cap as relics and armor set bonuses.",
     cooldownMs: 26000,
     activeMs: 4000,
     icon: "ability_aegis",

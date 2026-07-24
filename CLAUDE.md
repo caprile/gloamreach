@@ -1550,7 +1550,8 @@ below.**
      `environmentEffectAt(x,y) → {moveMult, regenMult}` env hook. **This is the template for
      structuring any biome.**
    - **Phase 2a (B3-P2a)** — the **activated-ability framework**: cooldown-only, **equipment-granted**
-     actives (`special1→Q`, `special2→E`, `back→R`) with a Dota-style QER HUD bar
+     actives (originally `special1→Q`, `special2→E`, `back→R`; **superseded in 5ar** — the three
+     ability slots are now interchangeable and position alone is the hotkey) with a Dota-style QER HUD bar
      (`src/systems/Abilities.ts` + `src/ui/AbilityBarUI.ts`). Three starters: Gloamstep Blink,
      Gloam Nova, Bloodpact (a timed **lifelink**, not a heal-over-time). Effect logic lives in
      MainScene's `castAbility` dispatcher; `AbilityDef` is pure data.
@@ -1803,6 +1804,64 @@ below.**
    common material can unlock a whole column on the same frame: a saturated inventory went from
    **88 toasts to 14**. Apply the same test to any future unlock announcement.
    All numbers first-pass/tunable. See `STATUS.md`.
+
+5ar. **Vagabond-run playtest dump — 4 batches, ~35 items** (2026-07-23, Opus, no plan file — a
+   fix/rework batch). Triaged the user's dump into four batches, confirmed the order via
+   `AskUserQuestion`, shipped all four plus three follow-ups. Full detail in `STATUS.md`; the
+   load-bearing changes and the rules they establish:
+   - **A ranged enemy that calls `markAttackLanded()` at FIRE time can never deaggro.** That reset
+     the pursuit clock AND extended aggro-persistence, and every cast cooldown is under
+     `AGGRO_PERSIST_MS` (4s), so both refreshed forever whether or not a shot connected — the
+     "nothing in the bayou deaggros" report. Base `Enemy` now separates
+     **`markAttackAttempted()`** (extends persistence only) from `markAttackLanded()`, and a landed
+     shot routes back via **`Projectile.sourceEnemy` → `onProjectileHitPlayer()`**. **Any future
+     ranged enemy must use `markAttackAttempted` at fire time and pass `sourceEnemy`.**
+   - **Every ranged attacker needs a cast-RANGE gate, not just a deaggro radius.** The Corpselight
+     had none (it fired anywhere inside 700px) and no telegraph — the one ranged creature ignoring
+     the souls-like windup contract. Now 380px, a 520ms *planted* wind-up with locked aim, and a
+     randomised initial cast clock so a multi-caster POI stops firing as one volley.
+   - **`EquipSlot` is now three GROUPS plus ammo** — gear ×3 / **special ×4** / **ability ×3** —
+     replacing helmet/chest/legs + necklace/ring1/ring2/cloak/back/special1/special2. An item
+     declares a *group*, not a destination; equipping routes to `Equipment.firstFreeIn(group)` and
+     only swaps when the group is full. **Position is the hotkey** (ability1/2/3 → Q/E/R), so any
+     ability item fits any ability slot. `InventoryMenu`'s `ARMOR_LAYOUT` table drives BOTH drawing
+     and hit-testing — **keep them derived from that one table.** `ItemCategory` gained
+     `special`/`ability` so the backpack sections answer "where does this go?".
+   - **A blanket map reveal is not a discovery mechanic.** A first pass revealed all 18 crypts on
+     bayou entry; the user rejected it ("I don't want it to reveal the whole biome"). Replaced with
+     the **Gravemark Rubbing** — a 6% drop from the common bayou roster, **consumed on contact** in
+     `collectNode` (never enters the backpack, so it can't be hoarded into a de-facto reveal-all),
+     mapping the single nearest unknown crypt. Plus grave-marker breadcrumb bands out to 760px, so
+     the ground reads as graver before the door is in view. `LootEntry` gained an optional
+     `chance` (absent = always drops).
+   - **Item stat lines are DISPLAY TEXT, not the mechanic.** The armor retune first edited
+     `{ label: "Armor", value }` and the in-game total never moved — real defense is
+     `ItemDef.armorDefense`. Both are now written from one table. Caught only by measuring live
+     state; **verify balance changes against real in-game values, never against the edit.**
+   - Crypts 12→18 across **two** interior realms (the bottom-left dead corner was free) —
+     subdividing one realm would have shrunk cells and silently cut rooms per crypt. Fixed a
+     pre-existing `generateCrypt` bug on the way: rejection sampling left 13 of 18 crypts under the
+     5-room target and 5 at the bare 2-room floor, so most "dungeons" were an entry and a boss.
+   - **`Enemy.destroy()` now cleans up its own HP bars.** They're two *sibling* GameObjects that
+     were only destroyed in `playDeathFeedback`, so every DESPAWN path (lapsed shrine rite, dawn
+     cull, den reset) stranded one forever.
+   - Two new **craftable** abilities (Gemwright's Table): **Mire Snare** (AOE root — `applySlow(0)`,
+     moves nothing and deliberately does NOT cancel a committed swing, so it's root-then-leave) and
+     **Bloodrush** (attack speed), which added the game's first attack-speed hook —
+     `MainScene.attackCooldownMult()` multiplied into `weaponCooldownMs` at **all three** attack
+     sites, so a future attack path inherits it. Requested abilities are craftable, not epic-drop
+     gated — an epic roll reproduces the "I never found one" problem.
+   - **Per-warden crypt interiors**: `CryptThemeDef.shell` + an optional palette on
+     `renderDungeonShell` (the Miretyrant's lair passes none and keeps base stone), with BootScene's
+     palette-driven `cryptShell()`. The dweller mix is themed as a *weighting* over the same three
+     species, not a new roster. Gotcha for anyone verifying tiled art: a Phaser **TileSprite** swaps
+     in its own UUID fill texture and reads back blank under WebGL — the source key survives on
+     **`displayTexture.key`**.
+   - Balance (all first-pass): weapon stamina ×0.7 + base pool 100→130; armor heavy/light gaps
+     widened **without** raising the ceiling (raising it would undo the Miretyrant damage fix);
+     forged-armor upgrades per-set (~25% of the piece) instead of a flat +1; Miretyrant re-bumped;
+     Sanguinarch 420→620 HP; Gloamdrinker lifelink 12%→8%; Wisdom gained **−0.5% ability
+     cooldown/point**; XP exponent 1.8→1.7.
 
 **Not yet built — next up in rough order:**
 6. **World & discovery** — much bigger generated world, biomes, map, a single giant

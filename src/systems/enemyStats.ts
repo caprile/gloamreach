@@ -253,11 +253,15 @@ const BAYOU: EnemyStat[] = [
     poise: null, resistances: { blunt: 0.75, pierce: 1.25, fire: 0.4 }, elite: null,
   },
   {
-    id: "sanguinarch", name: "Sanguinarch", biome: "bayou", role: "miniboss", hp: 420, scale: 1.5,
+    // Was HP 420 / Slash 15 / Slam 50 — LESS damage and barely more HP than the
+    // common Mirejaw next to it (320 HP, 52/80), so the crypt warden read as
+    // weaker than the trash guarding the way in (the user: "sanguinarch does less
+    // dmg and has less hp than the alligators. can't even tell what it's doing").
+    id: "sanguinarch", name: "Sanguinarch", biome: "bayou", role: "miniboss", hp: 620, scale: 1.5,
     moveSpeed: 88, // HP 280→420 for parity with the other crypt wardens (2026-07-23)
     attacks: [
-      { name: "Slash", damage: 15, cls: "physical", kind: "melee", intervalMs: 900 },
-      { name: "Slam", damage: 50, cls: "physical", kind: "aoe", intervalMs: 1600 },
+      { name: "Slash", damage: 34, cls: "physical", kind: "melee", intervalMs: 900 },
+      { name: "Slam", damage: 72, cls: "physical", kind: "aoe", intervalMs: 1600 },
     ],
     poise: null, resistances: { slash: 1.3, blunt: 0.75 }, elite: null,
   },
@@ -270,10 +274,15 @@ const BAYOU: EnemyStat[] = [
     // 15→28 stops the sword perma-stagger (stagger stays earnable, not a lock).
     // HP 4600→3600 so a fair fight isn't a 110s marathon (2026-07-23 rebalance).
     attacks: [
-      { name: "Chomp", damage: 82, cls: "physical", kind: "melee", intervalMs: 1100 },
-      { name: "Tail sweep", damage: 72, cls: "physical", kind: "aoe", intervalMs: 1100 },
-      { name: "Slam", damage: 95, cls: "physical", kind: "aoe", intervalMs: 1100 },
-      { name: "Death roll", damage: 68, cls: "physical", kind: "aoe", intervalMs: 1100 },
+      // Re-bumped: the previous pass tuned these against 32 armor, but a geared
+      // player now carries 50-74 flat armor (full Gloamsteel plus its reforge
+      // levels), which ate almost all of it again — the user reported the same
+      // "minimal damage" a second run running. Sized so the win-con boss lands
+      // 35-55 net through 74 armor and stays lethal, not survivable-by-stat.
+      { name: "Chomp", damage: 110, cls: "physical", kind: "melee", intervalMs: 1100 },
+      { name: "Tail sweep", damage: 98, cls: "physical", kind: "aoe", intervalMs: 1100 },
+      { name: "Slam", damage: 124, cls: "physical", kind: "aoe", intervalMs: 1100 },
+      { name: "Death roll", damage: 92, cls: "physical", kind: "aoe", intervalMs: 1100 },
     ],
     poise: 800, poiseRegenPerSec: 28, resistances: { slash: 0.8, blunt: 1.2, poison: 0.25 }, elite: null,
   },

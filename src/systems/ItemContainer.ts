@@ -2,15 +2,19 @@ import { itemDef, itemBiome, itemCategory, type ItemCategory } from "./Items";
 
 // Biome then category ordering used by sortAndStack so a re-flowed backpack
 // physically clusters the way the tabbed inventory view groups it (forest
-// first, then badlands; within a biome, materials -> gear -> stations -> food
-// -> curios). Kept here (not in the UI) so a plain sort matches the view.
+// first, then badlands; within a biome, materials -> gear -> specials ->
+// abilities -> stations -> food -> curios). Kept here (not in the UI) so a plain
+// sort matches the view — this order must stay in step with InventoryMenu's
+// CATEGORY_SECTIONS.
 const BIOME_ORDER: Record<string, number> = { forest: 0, badlands: 1, bayou: 2 };
 const CATEGORY_ORDER: Record<ItemCategory, number> = {
   material: 0,
   gear: 1,
-  station: 2,
-  food: 3,
-  curio: 4,
+  special: 2,
+  ability: 3,
+  station: 4,
+  food: 5,
+  curio: 6,
 };
 
 // A single stack of one item type. `count` is always >= 1 while the stack

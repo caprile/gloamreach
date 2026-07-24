@@ -114,6 +114,7 @@ export class Mirejaw extends Enemy {
             { resource: "mirejaw_meat", min: 2, max: 3 },
           ]
         : [
+            { resource: "gravemark_rubbing", min: 1, max: 1, chance: 0.06 },
             { resource: "mirehide", min: 1, max: 2 },
             { resource: "mirejaw_meat", min: 1, max: 2 },
           ],

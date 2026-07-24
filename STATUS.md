@@ -2,7 +2,75 @@
 
 ## Current State
 
-_Living snapshot — edit in place, never append. Last shipped: **Batch C — data-driven bayou
+_Living snapshot — edit in place, never append. Last shipped: **Vagabond-run playtest dump — 4
+batches, ~35 items** (2026-07-23, Opus, no plan file). the user's Vagabond run produced a fresh
+~35-item dump; triaged into four batches and shipped all four in order.
+**Batch 1 — biome-3 blockers.** Two root causes, both structural. (a) Ranged casters could never
+deaggro: `Corpselight`/`Hexling`/`RangedGremlin` called `markAttackLanded()` at FIRE time, and since
+a cast cooldown is shorter than `AGGRO_PERSIST_MS` the persistence window and the 30s give-up clock
+were both refreshed forever whether or not a shot connected. Split into `markAttackAttempted()`
+(keeps you remembered, does NOT reset the give-up clock) + a new `Projectile.sourceEnemy` that
+routes a LANDED hit back via `onProjectileHitPlayer()`. The Corpselight additionally had no
+cast-range gate at all (it fired anywhere inside its 700px deaggro radius) and no telegraph — now
+`CAST_RANGE` 380, deaggro 520, orb lifetime 4200→3000, and it PLANTS for a 520ms tinted wind-up
+before releasing (it was the one ranged creature ignoring the souls-like windup contract), with a
+randomised initial cast clock so a Drowned Lodge's 2-3 haunts stop firing as one volley. Verified:
+it now gives up at exactly 30000ms of non-connecting fire, and a landed orb resets that.
+(b) Bayou economy: crypts went 12→18 (a second interior realm in the free bottom-left dead corner,
+so cell size — and therefore room count — didn't shrink), Moonsilver seams 2-3→3-5, 16 scattered
+surface Gloam Outcrops added, and **crypt wardens now drop Mire Shards directly** (the only route
+was a 9-gloam-per-shard two-upgrade conversion ladder nothing surfaces). Crypt FINDABILITY is the
+new **Gravemark Rubbing**: a 6%-chance drop from the common bayou roster, **consumed the instant
+it's picked up**, which maps the single NEAREST unknown crypt with a compass line. (An earlier pass
+in this session revealed all 18 on first bayou entry; the user rejected it — "I don't want it to
+reveal the whole biome" — so the same help is now paid out in earned increments.) Alongside it,
+each crypt scatters three thinning **grave-marker breadcrumb bands** out to 760px, so the swamp
+visibly gets graver before the doorway is in view. Also fixed a **pre-existing
+crypt generator bug** found while verifying: rejection sampling left 13 of 18 crypts under the 5-room
+target and 5 at the bare 2-room minimum — i.e. most "dungeons" really were just an entry and a boss.
+A shrink-under-pressure size schedule + a deterministic sweep fallback now puts every crypt at 5-7
+rooms with a properly-sized vault.
+**Batch 2 — 10 bug/stale-UI fixes**, including: the run timer stayed frozen after "Continue"
+(`Run.tick` only accumulates while `state === "active"`, which nothing reset → new `Run.resume()`);
+enemy HP bars are two SIBLING GameObjects destroyed only in `playDeathFeedback`, so every DESPAWN
+path (lapsed shrine rite, dawn cull, den reset) stranded one forever → cleaned up in a base
+`Enemy.destroy()` override that covers every path; duplicate epics in chests (dedupe only checked
+PLAYER ownership, but every container is pre-rolled during `create()` when the player owns nothing —
+now a run-scoped reserved set); the Miretyrant dropped the Duneshaper's **Tier-2** trophy (new
+`boss_refined_trophy_t3`); the phantom "upgrade ready" arrow (never excluded already-APPLIED station
+upgrades, and a pristine spare always has all of them pending); Gravebind never interrupted a
+committed attack so a yanked enemy finished its swing anyway (now `resetAttackState` + velocity zero,
+slow 0.45/900ms → 0.30/2200ms); and the Sunken Gorge discovery bug — **both** discovery routes keyed
+off `lair.x/y`, which is maw #1, so walking up to any other door revealed nothing AND the effigy's
+reveal-everything step was swallowed by its own guard (same class as B4-P6's second-maw fix; now
+per-maw through one shared helper).
+**Batch 3 — equipment/inventory slot overhaul.** `EquipSlot` is now three GROUPS plus ammo
+(gear ×3 / **special ×4** / **ability ×3**) instead of helmet/chest/legs + necklace/ring1/ring2/
+cloak/back/special1/special2. An item declares a group, not a destination, and equipping routes to
+the first free slot in it — generalised from what was a ring1/ring2 special case. Position IS the
+hotkey, so **any ability item goes in any Q/E/R slot** (a Bloodpact Shroud on Q was impossible
+before). Explicit paper-doll layout table drives BOTH drawing and hit-testing; every slot now
+carries a caption so its name survives having an item in it; tooltips state "Equips to: any Special
+slot"; and the backpack gained separate **Specials** and **Abilities (Q/E/R)** sections.
+**Batch 4 — balance.** Weapon stamina ~0.7× across the board with the tier ladder intact + base
+pool 100→130 (a 16-cost spear against 100 stamina is SIX swings, and the post-spend regen delay
+re-arms every swing so sustained attacking regenerates nothing — "5 attacks per bar" was literal);
+armor heavy/light gaps widened 5/9/12/10 → 12/17/26/23 **without raising the ceiling**, since last
+session had just bumped the Miretyrant specifically so armor stopped nullifying it; forged-armor
+upgrade bonuses are now per-set (~25% of the piece) instead of a flat +1 on a 14-armor cuirass;
+Miretyrant attacks re-bumped (they were tuned against 32 armor, but geared play is 50-74);
+Sanguinarch 420→620 HP and 15/50→34/72 damage (a mini-boss weaker than the common Mirejaw guarding
+its own door); Gloam Brand 23→29 dmg + bigger burst while the Gloamdrinker's always-on lifelink
+12%→8%; Wisdom gained a second, felt axis — **−0.5% ability cooldown/point (cap −50%)**, since
+buff duration alone was invisible at 55 points; and the XP EXPONENT 1.8→1.7 (barely moves level 5,
+takes ~29% off level 21, which is where pace was flagging).
+**A display/real drift bug was caught only by live verification:** the armor retune first edited the
+`{ label: "Armor" }` tooltip text, but real defense lives in `ItemDef.armorDefense` — the in-game
+total didn't move. Both fields are now written from one table and asserted equal.
+Verified live throughout via `preview_eval`; `tsc` + `npm run build` clean; zero console errors;
+display list still ~1550 with 18 crypts. `RECIPES.md` armor tables and the dashboard's hand-mirrored
+Enemies tab both updated. **Next: a playtest** — every number here is first-pass.
+Prior: **Batch C — data-driven bayou
 rebalance** (2026-07-23, Opus, no plan file), guided by the Balance Audit built just before it.
 Headline structural fix: **enemies now inherit the terrain move-slow the player suffers** — in deep
 bayou water the player wades at 50% but enemies used to ignore it entirely (verified live: an enemy
@@ -239,243 +307,151 @@ below + [[survivor-rpg-dev-console]].
 
 > Older entries in STATUS-archive.md.
 
-### playtest-batch-2026-07-23 — continue-on-death + the triaged remaining work (Opus)
+### Vagabond-run playtest dump — 4 batches, ~35 items (2026-07-23, Opus)
 
-A ~45-item bayou-heavy playtest dump. Triaged with the user; **continue-on-death shipped first**
-(above / Current State). Locked directions: **systematic** bayou rebalance (not targeted nerfs) —
-measure enemy speed/HP/damage against the player's real envelope per
-[[feedback_size_enemies_against_player]]; **remove the Fenlurker** (burrower) entirely. The rest is
-Sonnet-class fixes/tuning. The full remaining list, grouped:
+the user's Vagabond run ("overall things felt much better") produced a fresh ~35-item dump. Triaged
+into four batches and confirmed the order with `AskUserQuestion` (he picked all four, plus "4
+specials + Ammo tucked below" for the slot rework and "findable + more crypts" for scarcity).
 
-**Batch A — quick bugs/UI — SHIPPED (2026-07-23), except two deferred (cloak→R-slot design call;
-mini-boss big HP bars → boss-feel pass). See Current State for the per-item detail.** enemy HP bars render dark-red for some enemies; campfire recipe text
-cut off past the box; relic "replace"/dominance modal text overlaps (needs wrap + auto-sized boxes);
-dungeon chests not glowing; a cloak going into the R (ability) slot wrongly; Smelter should return
-loaded items to inventory on close (like the ask that drove the Smelter-fix entry — verify it does);
-bayou miniboss (Cinderwrought / "fire guy") big HP bar missing; workstations should show the yellow
-upgrade-triangle while in the hotbar; "Set Gems" tab hard to see + **weapons not appearing in Set
-Gems**; poison damage bypasses the overshield (should chip it, like other damage); never grant a
-**duplicate special item from a box**; rename Sunken Gorge **or** Sunken Forge (too similar);
-smelting simplify to **1 Wood per ore** (the user — supersedes the 2/3/3/3 just shipped).
+**Batch 1 — biome-3 blockers.**
+- *Ranged enemies never deaggro'd.* Root cause: `Corpselight`/`Hexling`/`RangedGremlin` all called
+  `markAttackLanded(now)` at FIRE time. That resets `pursuitClockStart` AND extends
+  `aggroPersistUntil` by 4000ms — and every cast cooldown is under 4000ms, so both the persistence
+  window and the 30s give-up clock were refreshed forever regardless of whether a single shot
+  connected. New `Enemy.markAttackAttempted()` extends persistence only; a LANDED projectile routes
+  back through a new `Projectile.sourceEnemy` → `Enemy.onProjectileHitPlayer()` at the scene's
+  overlap handler. Verified: a Corpselight now goes idle at exactly 30000ms of non-connecting fire,
+  and `onProjectileHitPlayer` resets that so a real fight never times out.
+- *"Infinite range" / "they don't stop when they shoot."* The Corpselight had **no cast-range gate
+  at all** — it fired anywhere inside its 700px deaggro radius, drifting, with no telegraph, making
+  it the one ranged creature in the game ignoring the souls-like windup contract. Added `CAST_RANGE`
+  380 (beyond it, it closes instead of firing), a 520ms PLANTED tinted wind-up with a locked aim
+  point, deaggro 700→520, orb lifetime 4200→3000 so caster reach and orb reach agree, and a
+  randomised initial cast clock so a Drowned Lodge's 2-3 haunts stop arriving as one synchronised
+  volley (that stacking was most of why the Lodge read as "legitimately impossible").
+- *Bayou economy / "an hour and I can't craft anything".* Crypts 12→18, placed in **two** interior
+  realms (the bottom-left dead corner outside the world circle was free) rather than subdividing one
+  — shrinking cells would have silently reduced rooms per crypt, so "more dungeons" would have meant
+  "worse dungeons". Moonsilver seams 2-3→3-5; 16 scattered surface Gloam Outcrops; Gloaming Vein
+  nodes 1-2→2-4; **crypt wardens now drop 2-3 Mire Shard** (the only prior route was Relic-Forge
+  Lvl3→Lvl4 conversions at 3:1 twice = 9 Gloam per Mire, behind two upgrades nothing surfaces).
+- *Crypt findability — the **Gravemark Rubbing**.* First attempt revealed all 18 entrances the
+  moment you entered the bayou. That did fix the problem, by deleting exploration; the user pushed
+  back ("I don't want it to reveal the whole biome — surely there is something we can add that helps
+  with discovery that isn't a reveal-all"), and he's right. Replaced with a clue item: a **6% drop
+  from the common bayou roster** (Mirejaw/Murkling/Blighttoad/Mosswretch/Corpselight — NOT elites,
+  whose slot is trophies), **consumed on contact** in `collectNode` before any other branch, which
+  maps the single NEAREST unknown crypt and says which way it lies via the existing `compassDir`.
+  Consume-on-pickup is what stops it becoming a reveal-all by another route: there's no stack to
+  hoard and nothing to manage. The same help, paid out in increments, and earned by the thing you
+  were already doing down there. `LootEntry` gained an optional `chance` (absent = always drops, as
+  every entry was until now) — verified at 6.11% over 20k rolls with existing guaranteed loot
+  unaffected. Second, organic half: each crypt now scatters **three thinning grave-marker
+  breadcrumb bands** out to 760px (jittered, per the standing "uniform reads as programmatic"
+  preference), so the ground visibly gets graver before the door is in view — the war camp's trail
+  idea applied to a doorway.
+- *Pre-existing generator bug, found while verifying the above:* rejection sampling in
+  `CryptLayout.generateCrypt` left **13 of 18 crypts under the 5-room target and 5 at the bare 2-room
+  floor** — most "dungeons" literally were an entry room and a boss, which is exactly the user's
+  separate "dungeons need to be more than just the boss and the drop". Fixed with a
+  shrink-under-pressure size schedule (later attempts ask for smaller rooms, so a crypt degrades into
+  SMALLER rooms rather than FEWER), a filler minimum below the vault minimum, attempts 400→1500, and
+  a deterministic grid sweep as a floor. Result: every crypt 5-7 rooms, smallest vault 63 cells.
 
-**Batch B — world/POI overlap:** Cinderwrought (Sunken Forge) overlaps a Warren; Duneshaper altar
-spawning in the bayou next to another POI / next to the Sunken Gorge (flagged twice); badlands↔bayou
-**border bleed** — POIs too close, enemies crossing biomes. (Root cause is almost always a missing
-spawn-exclusion zone — [[feedback_poi_busy_not_placeholder]] — and POI-position pickers not honoring
-each other's clear radii + biome coverage.)
+**Batch 2 — 10 bug/stale-UI fixes.** Run timer stayed frozen after "Continue" (`Run.tick` only
+accumulates while `state === "active"`; both continue paths cleared `runOver` but never the run
+state → new `Run.resume()`). Enemy HP bars are two *sibling* GameObjects destroyed only inside
+`playDeathFeedback`, so every DESPAWN path (lapsed shrine rite, dawn cull of night spawns, den
+reset) stranded a floating bar forever → cleaned up in a base `Enemy.destroy()` override so every
+path present and future is covered. Duplicate epics in chests: dedupe checked only PLAYER ownership,
+but every world container is pre-rolled during `create()` when the player owns nothing, so two
+chests happily rolled the same unique → run-scoped `epicsGranted` reservation. Miretyrant dropped
+the Duneshaper's **Tier-2** trophy → new `boss_refined_trophy_t3` (`POWER_TIER_MULT[3]` already
+existed; the boss ladder just never got its rung). Phantom "upgrade ready" arrow: the station branch
+never excluded already-APPLIED upgrades (so a long-since-applied Tool Sharpener kept it lit) and a
+pristine spare always has every upgrade pending → now filters by the instance's applied-id set and
+only reminds on an instance you've already invested in. Gravebind "kinda doesn't work": it yanked
+and slowed but never INTERRUPTED, so an enemy mid-wind-up finished its swing from the new spot →
+`resetAttackState` + velocity zero (Arcade has no drag), slow 0.45/900ms → 0.30/2200ms. Poison's
+"healing 50%" was terrain, not poison — the miasma regen multiplier 0.5→0.75 (it was double-taxing
+the same fantasy: poison ticks damage AND halved the healing answering it, over a large share of the
+bayou) and the status line now names the ground explicitly. Gemwright's Table hides recipes whose
+output you already own. Drowned Aegis's description states its actual 60%/4s. And the **Sunken Gorge
+discovery bug**: both routes keyed off `lair.x/y` — which is maw #1 — so walking up to any other
+door revealed nothing, and once maw #1 was known the effigy's reveal-everything step was swallowed
+by its own `if (!discoveredOnMap)` guard. Now per-maw (`maws[].discovered`) through one shared
+`markMawDiscovered()`. Same class as B4-P6's second-maw fix: several doors, one door's coordinates.
 
-**Batch C — bayou combat rebalance (the big one):** enemies far too fast (can't kite/dodge/run from
-anything — even god-mode-only survivable); wild power disparity (some ~no HP, some 1-shot); Corpselight /
-ranged haunts do insane damage AND **don't stop to shoot** (AI bug — they should plant like a Hexling);
-ranged gap-close makes player ranged unplayable; elite Mosswretch nearly 1-shots; heavy armor doesn't
-feel tanky + poison stacks (~6) melt you + even max Embersteel gets owned; **Miretyrant does ~nothing
-(−1/−2 dmg) and perma-staggers to a sword**; Palewake dies in ~4 hits (trivial) — bosses feel weak
-while trash 1-shots; Reaver takes too much damage / lesser Bloodpact too weak (consider passive
-lifesteal or a buffed innate); **new weapons' stamina cost too high** (attacks-per-weapon feels flat
-despite stat investment); trophies/elites feel rare in bayou; "where are the guaranteed Uncommon T3
-miniboss trophies?"; "where do I get Mire Shards?" (surface the source or add one). Also: themed bayou
-spawns (toads at the lilypad POI, ranged at the docks); make the Gremlin chest piece heavy armor.
+**Batch 3 — equipment/inventory slot overhaul.** `EquipSlot` became three GROUPS plus ammo — gear
+×3 (helmet/chest/legs), **special ×4**, **ability ×3** — replacing helmet/chest/legs + necklace/
+ring1/ring2/cloak/back/special1/special2. An item now declares a *group*, not a destination;
+equipping routes to `Equipment.firstFreeIn(group)` and only swaps once the group is full,
+generalising what had been a ring1/ring2 special case. **Position is the hotkey** (ability1/2/3 →
+Q/E/R), so any ability item fits any ability slot — a Bloodpact Shroud on Q was impossible before,
+since its slot *was* the R cape slot. 9 ability items and 14 passives remapped; a load-time assert
+confirmed every `ability`-slot item has `grantsAbility` and vice versa. New explicit `ARMOR_LAYOUT`
+table drives BOTH `renderArmor` and `armorSlotAt` so drawing and hit-testing can't desync (verified
+by round-tripping all 11 slots plus the dead caption strip and empty cells). Every slot carries a
+caption so its name is readable with an item in it; tooltips add "Equips to: any Special slot";
+`ItemCategory` gained `special`/`ability` so the backpack has its own **Specials** and **Abilities
+(Q/E/R)** sections. Layout verified numerically (screenshots unavailable in this pane): zero text
+overlaps, nothing overflowing into the Combat column.
 
-**Batch D — design tweaks:** remove poison's regen-reduction, make a regen-cut an enemy-kit thing
-instead; resting regen buff scales with campfire level; Palewake fight-clarity pass (reads as unclear /
-not epic).
+**Batch 4 — balance.** Weapon stamina ×~0.7 with the tier ladder preserved, plus base pool 100→130:
+a 16-cost Primal Spear against 100 stamina is six swings, and because the post-spend regen delay
+re-arms on every swing, sustained attacking regenerates *nothing* — "5 attacks + a couple of dodges
+per bar" was literal, and Endurance was a tax for showing up. Armor heavy/light gaps widened
+5/9/12/10 → 12/17/26/23 by pulling light down and pushing heavy up, deliberately **not** raising the
+ceiling, because the previous session had just bumped the Miretyrant so armor stopped nullifying it.
+Forged-armor upgrades became per-set (~25% of the piece: Gloamsteel +4/+8, Duskhide +1/+2) instead
+of a flat +1 on a 14-armor Embersteel Cuirass. Miretyrant attacks 82/72/95/68 → 110/98/124/92 (they
+were tuned against 32 armor; geared play is 50-74 — measured: a Slam lands 74 net through 50).
+Sanguinarch 420→620 HP, 15/50→34/72 damage (a crypt warden with less damage and barely more HP than
+the common Mirejaw guarding the way in). Gloam Brand 23→29 + bigger burst, and the Gloamdrinker's
+always-on, no-slot-cost lifelink 12%→8% — that, not the numbers, was what made it "bonkers busted".
+Wisdom gained a second axis, **−0.5% ability cooldown per point (cap −50%)**, because buff duration
+alone was invisible at 55 points and cooldown is an axis no other stat touches. XP exponent 1.8→1.7
+(level 5 ~12% cheaper, level 21 ~29% — the deep-run wall was the complaint).
 
-### Smelter fix — unloadable alloy recipes, reagent/fuel split (2026-07-23, Opus)
+**A drift bug caught only by live verification:** the armor retune first edited the
+`{ label: "Armor", value }` display stat, but real defense lives in `ItemDef.armorDefense` — the
+in-game total didn't budge while the tooltip claimed it had. Both are now written from one table and
+asserted equal across all 24 pieces. Worth remembering: **item stat lines are display text, not the
+mechanic.**
 
-Off a playtest report: "why can I put Bog Ore and Hex Essence into the Smelter but it doesn't
-do anything?" Two problems, one visible and one behind it.
+Verified live throughout via `preview_eval` (18 crypts / 5-7 rooms each / 295 Moonsilver / 16
+outcrops / all 18 wardens dropping Mire Shard; Corpselight plant-telegraph-fire and 30s give-up;
+per-maw discovery on both routes; all-4-special and Q/E/R routing with swap-on-full; armor totals
+50 vs 24; Wisdom cooldown 0.725 at 55 and capped 0.5). `tsc` + `npm run build` clean, zero console
+errors, display list still ~1550. `RECIPES.md` armor tables and the dashboard's hand-mirrored
+Enemies tab both updated (the mirror was doubly stale — it still had the Miretyrant at 4600 HP).
 
-**The bug.** Fuel became per-recipe in B4-P5 (Gloamsteel takes Moonsilver, Mirebronze takes Bog
-Ore), but `ProcessingStation` still assumed one shared fuel key — `fuelKey()` returned the *first*
-fuelled recipe's key (`hex_essence`) and `canAcceptFuel()` compared against only that. So the fuel
-slot **refused Moonsilver and Bog Ore outright**, making Gloamsteel and Mirebronze impossible to
-smelt at all, with the failure showing up as a silently-zero slider and no explanation. This is the
-classic shape of a bug that near-identical duplicated code produces, which is why the rewrite below
-routes both secondaries through one parameter instead.
-
-**The design problem behind it.** Fixing the lookup surfaced that "Fuel: Moonsilver" reads as nonsense —
-the slot was never really fuel, it was a generic "A + B → output" ingredient slot, named for its
-first case. Worse, once Hex Essence stopped being universal, the two B4-P5 alloy recipes were
-smelting metal **with no heat source at all**. the user proposed a third slot; locked via
-`AskUserQuestion` on the variant where **all three slots are always required**, which is *less*
-complexity than an optional one (nothing to special-case in the slider/process math):
-
-- `ProcessRecipe.reagent` — the second ingredient that ends up *in* the ingot, per-recipe.
-- `ProcessRecipe.fuel` — burned off, never part of the output, **always Wood** on every recipe.
-  Gives Wood a sink that outlasts the early game.
-
-| Input | Reagent | Fuel | Output |
-|---|---|---|---|
-| Sunscorch Ore | 1 Hex Essence | 2 Wood | Sunsteel Ingot |
-| Cinderforged Ore | 1 Hex Essence | 3 Wood | Embersteel Ingot |
-| Bog Ore | 1 Moonsilver | 3 Wood | Gloamsteel Ingot |
-| Sunsteel Ingot | 2 Bog Ore | 3 Wood | Mirebronze Ingot |
-
-**Implementation.** The two secondaries behave identically apart from which recipe field and slot
-they touch, so `usesSlot`/`slotKeys`/`slotKey`/`canAcceptInto`/`addInto`/`takeFrom` all take a
-`side: SecondarySide` rather than existing as two copies. `maxPossibleOutput` caps by the min of
-all three slots. **`process()` checks both secondaries before spending either** — consuming them
-in one pass would let a fuel-short run eat the Moonsilver on the way to returning null.
-
-**Layout** (`DryingRackMenu`, which serves both stations): row 1 is Ore + Reagent side by side —
-the two that end up in the ingot — with Fuel on row 2 below, so the grouping says which is which
-before you read a caption. Panel 400 → 448. Captions still come from the recipe
-(`Ore`/`Metal`, `Reagent`/`Alloy`); Fuel is always "Fuel", being the one ingredient that never
-changes role. Two new amber hints explain a zero slider: `Needs Moonsilver` (wrong item) and
-`Needs 3 each` (right item, too few).
-
-Also fixed in passing: destroying a placed Smelter refunds all three slots (it dropped input +
-fuel, so the new reagent would have been swallowed), and drag / right-click / Ctrl-click quick-load
-route a stack to whichever secondary slot accepts it.
-
-**Verified live** (`preview_eval` against the running dev server): full Gloamsteel run with correct
-remainders (2 ore / 2 Moonsilver / 6 Wood), Mirebronze's 2-per and 3-per costs, cap = min of all
-three, fuel-starved run leaves input and reagent intact, both hint cases, slot type gating (Wood
-can't go in reagent, Moonsilver can't go in fuel), Drying Rack unchanged (one slot, 4 Cattail → 2
-Twine), and panel content measured to fit — which caught the lengthened Smelter description
-wrapping to a third line and colliding with the slot captions. `tsc` clean, zero console errors.
-`RECIPES.md` smelting table updated (it was doubly stale — it listed Bog Ore as taking Hex Essence
-and omitted Mirebronze entirely).
-
-### B4-P6 — Perf regression (display-list streaming), culled-enemy drift, 5 playtest fixes (2026-07-22, Opus)
-
-Off a the user playtest: seven complaints, of which two shared one root cause and the biggest was
-structural. No plan file — a fix batch, not a milestone.
-
-**1. The hitching (the headline).** "Very common hitching while sprinting/walking feels bad." Not
-gameplay code — the **display list had reached 17,041 objects** (5,293 miasma fumes, 2,355
-dungeon-wall rects, 2,233 resource nodes, 1,138 enemies, and every decorative prop in three
-biomes). Phaser walks that whole list every frame to cull and render, again in `syncCameras`, and
-**re-sorts all 17,041 whenever any depth changes** — which is every frame the player moves, and
-never while standing still. That is exactly the reported symptom. Measured in the live game:
-**22.3ms/frame with the sim PAUSED**; a full `depthSort` alone was 2.35ms; hiding 5,293 sprites
-saved only 3ms (invisible children are still iterated) while *removing* distant ones from the list
-dropped the frame to 4.1ms. So the fix is removal, not visibility:
-**`MainScene.updateSceneStreaming()`** parks every world object that cannot possibly be on screen
-out of `scene.children` and into a `streamedOut` array, re-adding it when the player comes back.
-Nothing else changes — Arcade bodies live in the physics world and `Sprite.preUpdate` runs off the
-scene's update list, so **collision, AI and animation are untouched**; this is purely "don't ask
-the renderer about things it can't draw". Runs every 250ms with a 900px margin past the viewport
-(derived from `cameras.main.worldView`, so it tracks any zoom change automatically). The
-`isStreamable` predicate deliberately excludes HUD (`scrollFactor 0`), ground bakes/decals
-(`depth < 0` or >900px), and **every `Graphics` object** — those draw in absolute world coordinates
-from a transform parked at (0,0), so their x/y says nothing about where they appear (verified: all
-216 streamable Graphics sat at 0,0). Result: **17,041 → ~1,550 in the list, 22.3ms → 9.3ms median
-while sprinting**, with `update()` itself at 0.6ms and the streaming pass 0.85ms per *250ms*. A
-12,000px round trip over 80 passes restored exactly the same 115 nearby objects, so nothing leaks
-or vanishes; parked objects that die meanwhile are dropped via the `scene === undefined` that
-`destroy()` leaves behind.
-
-**2 & 3. Duskrunners in the forest / dens stuck on wave 1 (one bug).** "I can't kill duskrunners so
-the elite wave isn't spawning so I can't break the thing", plus "stuff is wandering way too far"
-and "missing spawns on some gremlin camps" — all the same defect. B4-P4's AI distance cull
-`continue`s past 2000px **without stopping the enemy**, and Arcade velocity persists with no drag,
-so an enemy culled mid-chase (or mid-pounce, at 330px/s) **coasted in a straight line for as long
-as the player stayed away**. Warren guards and shack guards flew off their POI permanently — a den
-whose guards are alive but 5,000px away can never clear wave 1, which is precisely the blocker
-reported. Fixed at the cull site (zero the body on the way out), plus a backstop: base `Enemy` now
-records `homeX/homeY`, and `MainScene.steerEnemyHome()` walks a **non-aggro'd, non-attacking**
-enemy back at 34px/s once it strays past 800px. It's a post-`update()` steer exactly like
-`steerCryptEnemy`, so **no subclass wander code changed**, and gating on `isAggro()` means it can
-never bend a live chase or a committed lunge. Verified live: a culled enemy's velocity goes to
-(0,0); a strayed idle one steers home; an aggro'd one at the same distance still chases at full
-speed; all 30 dens hold 90 guards and all 14 shacks hold both, none more than 70px out.
-
-**4. Light-bearing jewelry did nothing.** `lightRadiusPct` only ever *multiplied* the held-light
-radius, which is 0 with an axe in hand — so the Amulet of Farsight's "pale lantern-stone" lit
-nothing at all unless you were already holding a torch. New `EquipmentEffects.innateLightRadius()`
-derives its own glow from the same percentage (so one number still describes the piece) against a
-200px base, deliberately under a torch's 180px so a torch stays the brighter option; `collectLights`
-takes the **max**, not the sum. Verified: 0 → 80px world radius with no torch held.
-
-**5. Toasts drifting off-screen when crafting fast.** The left-hand recipe/material stack used a
-monotonic upward cursor **with no cap**, so a burst of crafts (each toast holds ~7s) marched
-straight off the top of the screen and left holes at the bottom as older ones faded from under it.
-Rewritten to match the center stack it sits beside: keep each container, cap at 6, evict the
-oldest, and `relayoutRecipeToasts()` repacks from the baseline on every add/evict/fade.
-
-**6. Zoom + text size.** "My guy looks so tiny — did the camera zoom out?" `WORLD_ZOOM` 1.25 → 1.5
-(visible world 1280x720). "Text is too small in menus" — the 1920x1080 canvas is FIT-scaled *down*
-into a browser window, so a 12px font lands near 10px. Bumped every `fontSize` in `src/ui` by 2px
-(74 sites) and the layout constants coupled to those metrics (`EventLogUI`/`KeybindsUI` line +
-header heights and its 34→29-char truncation, `CraftingMenu` row height, `InventoryMenu` section +
-relic-effect row heights). MainScene's own world-space text (damage numbers, boss name cards) was
-left alone — the zoom already enlarges it. **Verified by measuring real `getBounds()`** against
-each panel rect rather than by eye: crafting, inventory (74 texts, stocked), character (both tabs),
-pause, tips, welcome, world map, character-select cards, and the campfire/relic-forge/gemwright
-station menus all render with **zero text past any panel edge and nothing off-screen**.
-
-`tsc` + `npm run build` clean; zero console errors. **Every number here is first-pass** — the zoom,
-the 800px home leash, the 250ms/900px streaming window and the +2px type all want real play.
-
-**Second batch (same session)** — four more items the user flagged as predating the above.
-
-**7. The Sunken Gorge's SECOND maw was dead** ("I built an effigy and couldn't interact with the
-boss dungeon opening"). Nothing to do with guards: `promptForGorge()` measured reach against
-`lair.x/lair.y`, which is only ever **maw #1**, so standing at the other door gave no prompt and
-the click fell straight through. The lair deliberately has two doors into one interior (B4-P4), and
-they were ~9,200px apart in the test seed. `hoveredGorge` now carries `{ lair, maw }` so reach —
-and the hover highlight, which had the same bug — measure against the door actually under the
-cursor. Verified end to end from maw #2: prompt → break seal → descend.
-
-**8. Enemies in the dungeons.** The `CRYPT_REALM` pocket sits in the dead corner of the world
-**square**, which is inside `collideWorldBounds` even though it's outside the world **circle** the
-player is clamped to — so anything that travelled far enough simply arrived there, and the
-now-fixed coasting bug (#2 above) supplied the ~14,000px. Since the geometry that permits it is
-permanent, this is now a **hard invariant** in `updateEnemies` rather than a consequence of
-movement behaving: anything not in `cryptEnemies` found inside either underground rect
-(`insideUndergroundRealm`, covering CRYPT_REALM and LAIR_REALM with a 600px margin) is snapped back
-to its spawn. Verified by dropping a surface Boar into the crypt pocket — one tick and it's home.
-
-**9. The dungeon transition.** "You can clearly see the camera moving to the other area." The
-camera follows with **lerp 0.1**, so teleporting the player ~14,000px underground made it *ease*
-the whole way — and the existing 260ms `flash` couldn't hide a pan that long. New
-`transitionCameraTo()` does both halves: `centerOn()` kills the in-flight travel outright, then a
-**420ms fade up from black on BOTH cameras** (world-only would leave the HUD floating over black)
-reads as a scene change instead of a jump cut. Verified: on entry and exit the camera is already
-within 1px of the player, and both fade effects run.
-
-**10. Ironshod Pickaxe art.** The tier-art mechanism was already generic (`tieredStationTexture`
-looks for `<icon>_t{n}`) — the pickaxe simply never had one drawn, so it kept its base icon while
-the axe changed. Added `icon_stone_pickaxe_t1`, drawn to match the Ironshod Axe (sunsteel head,
-bright bevel, gold haft bands) so the pair reads as one upgrade family. Verified the resolver
-returns the tiered key for both tools and still falls back to base for an item with no tier art.
-
-**11. No character starts with gear.** Three of the five handed out an axe (the Warden a pickaxe
-too), which quietly made the class pick partly a decision about how fast you got through the
-opening minutes — and it made the Ascetic's empty hands, its entire stated identity, not actually
-special. Every `startingItems` is now `[]`. **`startingEquip` is untouched**: that is the
-ability-granting special item, which by B4-P1's locked decision 4 *is* the class's ability rather
-than gear in any ordinary sense — stripping it would delete Q/E/R from every card. Knock-on edits,
-all of which follow from the roster being uniform: the Ascetic's blurb no longer says "starts with
-nothing but nerve" (it leans on Hunted instead), the card's KIT section is **skipped when empty**
-rather than printing "Nothing but nerve" on all five, and the picker subtitle no longer promises "a
-different kit". The field itself stays — it's the obvious lever for a future unlock or difficulty
-option, and `applyCharacter`'s routing already handles both cases. **Checked the opening isn't a
-dead end**: bare-handed, ground branches + rocks unlock the Woodcutter's Axe immediately (along
-with Torch/Wood Club/Campfire/Workbench), so every run bootstraps the same way it always did before
-a starting axe existed. Verified all five spawn with an empty hotbar and backpack.
-
-**12. Upgrade-unlock toast flood.** Weapon/armor upgrades are ladders — dozens of rungs across the
-gear tiers — and learning one common material unlocks a whole column of them on the same frame.
-Measured on a saturated inventory: **88 "New Upgrade Unlocked!" toasts**, which is the unruliness
-the user hit. Split by what the unlock actually buys, per his call: a **station** upgrade or a
-**tool** upgrade grants a capability you did not have (a new recipe tier, a node you couldn't fell)
-and keeps its toast; a **gear** rung is only a bigger number on something you already own, so it is
-now logged with `EventLog`'s existing `silent` flag. The entry still lands in the scrollable Log
-and the rung still appears in the Upgrade menu — only the popup is gone. Same flood now yields
-**14 toasts** (12 stations + the 2 Ironshod tools) and **74 silent**, with all 74 still in
-`discoveredGearUpgradeIds`. Applying an upgrade still announces normally; that's one deliberate
-click, never a burst.
-
-**13. Character picker type.** The project-wide +2px font bump (#6) missed this menu almost
-entirely — `CharacterSelectUI` sizes its type by passing **numbers** to its own `text()`/`block()`
-helpers rather than writing `fontSize: "Npx"` literals, so the sweep found exactly one site in the
-file. Worth remembering for any other UI built that way. Bumped ~25% across the card (labels 10→13,
-body 12→15, ability 13→16, name 18→22, title 26→32, button 20→24) — but type alone would have made
-it *worse*: bigger text in a 272px card just wraps into more lines, so the card gets taller and
-narrower rather than more readable. Card width 272→330 and the panel 1500→1780 moved with it (still
-a 70px gutter each side of the 1920 canvas), plus every paired line-step. Panel height then
-re-measured against real bounds rather than guessed: cards run 519px, leaving the Begin Run button
-55px clear. Verified all five cards at 330×519 with zero text past any card edge and nothing
-off-screen.
+**The three deferred items then shipped too** (the user: "do the rest of the open items"):
+- **Mire Snare** (AOE root) and **Bloodrush** (attack speed), both **craftable** at the Gemwright's
+  Table rather than found-only epics — burying a requested ability behind an epic roll reproduces
+  the "I never found one" problem the Gravemark Rubbing exists to solve. Each costs a different gem,
+  so which one a run can build still depends on which crypt it cleared. Snare is deliberately NOT
+  Gravebind: it moves nothing (`applySlow(0, …)` — a hard root, and `applySlow` already keeps the
+  stronger slow so an overlapping Gravebind can't weaken it) and deliberately does NOT cancel a
+  committed swing, so the counterplay is root-then-leave rather than root-and-facetank. Bloodrush
+  needed the game's first attack-speed hook: a new `attackCooldownMult()` multiplied into
+  `weaponCooldownMs` at **all three** attack sites (melee / ranged / den-smash), so any future
+  attack path inherits it. Verified live: root mult 0 with 0px displacement in radius and untouched
+  outside it; cooldown 1.0 → 0.6 for a 6s window.
+- **Per-warden crypt interiors.** All three crypts were the same grey stone box with a different
+  boss dropped in. `CryptThemeDef` gained a `shell` palette and `renderDungeonShell` an optional
+  texture set (the Miretyrant's lair passes none and keeps the base stone — verified). BootScene
+  grew a palette-driven `cryptShell()` generating floor/wall/pillar/rubble/brazier per theme:
+  Palewake a cold violet drowned barrow, Kilnborn a scorched firing chamber, Sanguinarch a
+  meat-red charnel house. The **dweller mix is themed too**, as a weighting over the same three
+  species rather than a new roster — gloam leans swarms (they deny you the room to break the
+  Palewake's tether), ember leans bruisers (its burning floor already shrinks the arena), blood
+  leans Blighttoads (poison/bleed feed the Sanguinarch's Feed channel), so the crypts play
+  differently as well as look different. Audited across all 18 crypts: correct shell on every
+  floor/wall/pillar/rubble/brazier, **zero cross-theme contamination**.
+  (Verifying this needed a detour — a Phaser TileSprite swaps in its own UUID fill texture, and
+  under WebGL its canvas reads back blank, so neither `texture.key` nor pixel-sampling works; the
+  source key survives on `displayTexture.key`.)
+Also swept up while in there: the 9 existing ability items still advertised fixed keys ("Special
+(Spec1 · Q)", "Grants Bloodpact (R)") — stale since the slot overhaul made ability slots
+interchangeable.

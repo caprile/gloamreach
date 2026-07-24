@@ -68,7 +68,10 @@ export class Murkling extends Enemy {
       displayName: elite ? "Elite Murkling" : "Murkling",
       loot: elite
         ? [{ resource: "gloam_dust", min: 2, max: 3 }]
-        : [{ resource: "gloam_dust", min: 1, max: 2 }],
+        : [
+            { resource: "gravemark_rubbing", min: 1, max: 1, chance: 0.06 },
+            { resource: "gloam_dust", min: 1, max: 2 },
+          ],
       maxHealth: elite ? Math.round(MAX_HEALTH * ELITE.hp) : MAX_HEALTH,
       biteDamage: elite ? Math.round(CLAW_DAMAGE * ELITE.damage) : CLAW_DAMAGE,
       elite,

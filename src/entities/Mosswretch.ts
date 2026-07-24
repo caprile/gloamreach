@@ -73,6 +73,7 @@ export class Mosswretch extends Enemy {
             { resource: "wood", min: 3, max: 4 },
           ]
         : [
+            { resource: "gravemark_rubbing", min: 1, max: 1, chance: 0.06 },
             { resource: "swamp_moss", min: 2, max: 3 },
             { resource: "wood", min: 1, max: 2 },
           ],

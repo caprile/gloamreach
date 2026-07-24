@@ -47,7 +47,14 @@ export class MiretyrantLair implements DungeonInterior {
   // means you don't have to cross a 28000px world to reach the finale. The
   // player always returns to the door they came in by, since the exit restores
   // their pre-descent position rather than the lair's own.
-  readonly maws: { x: number; y: number; image: Phaser.GameObjects.Image }[] = [];
+  // `discovered` is PER MAW, not one flag for the lair: discovery used to be a
+  // single `discoveredOnMap` boolean tested against `x`/`y` — which are maw #1 —
+  // so walking past any OTHER door revealed nothing, and once maw #1 was found
+  // the effigy's reveal-everything step was skipped by its own guard. the user hit
+  // both halves in one run ("never got the map markers" / "walked past the
+  // dungeon and it didn't discover it"). Same class of bug as the second maw
+  // giving no interact prompt (B4-P6): several doors, one door's coordinates.
+  readonly maws: { x: number; y: number; image: Phaser.GameObjects.Image; discovered: boolean }[] = [];
 
   constructor(scene: Phaser.Scene, cfg: { x: number; y: number }) {
     this.x = cfg.x;
@@ -78,7 +85,7 @@ export class MiretyrantLair implements DungeonInterior {
       ease: "Sine.easeInOut",
     });
     this.glows.push(glow);
-    this.maws.push({ x, y, image: img });
+    this.maws.push({ x, y, image: img, discovered: false });
     return img;
   }
 

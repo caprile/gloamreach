@@ -96,6 +96,15 @@ export class Sanguinarch extends Enemy {
         { resource: "refined_trophy_uncommon_t3", min: 1, max: 1 },
         { resource: "moonsilver", min: 2, max: 3 },
         { resource: "gloam_shard", min: 2, max: 4 },
+        // The bayou's DIRECT Mire Shard source (the user: "where tf do I get mire
+        // shards? Why does nothing give me them in biome 3?"). Until now the only
+        // route was the Relic Forge conversion ladder — Lvl 3 Ember Kiln then Lvl 4
+        // Mire Crucible, 3:1 each way, i.e. NINE Gloam Shards per Mire Shard, via
+        // two station upgrades nothing surfaces. A tier-3 currency should drop from
+        // the tier-3 content: the crypt wardens, exactly as the Gloamwarden's vein
+        // is the direct source of tier-1 Gloam. The conversion chain stays as the
+        // fallback for anyone who never finds a crypt.
+        { resource: "mire_shard", min: 2, max: 3 },
       ],
       maxHealth: MAX_HEALTH,
       biteDamage: SLASH_DAMAGE, // the flurry uses the base bite path (update() -> true)

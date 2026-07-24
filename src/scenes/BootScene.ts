@@ -1879,6 +1879,23 @@ export class BootScene extends Phaser.Scene {
     // Trophy (Duneshaper, Tier 2) gets a hotter ember-orange ring.
     refinedTrophy("icon_boss_refined_trophy", 0xe8a83c);
     refinedTrophy("icon_boss_refined_trophy_t2", 0xff6a2a);
+    refinedTrophy("icon_boss_refined_trophy_t3", 0x5fd6a0);
+
+    // Gravemark Rubbing — a charcoal tracing on pale parchment: a torn sheet
+    // with a rubbed grave-slab sigil and a smudge of charcoal along one edge.
+    g.clear();
+    g.fillStyle(0xd8cfb4, 1);
+    g.fillRect(4, 3, 16, 18); // parchment
+    g.fillStyle(0xbdb190, 1);
+    g.fillRect(4, 3, 16, 2); // shaded top edge
+    g.fillRect(4, 19, 16, 2); // shaded bottom edge
+    g.fillStyle(0x2a2620, 1);
+    g.fillRect(11, 6, 2, 12); // rubbed sigil: vertical stroke
+    g.fillRect(7, 9, 10, 2); // crossbar
+    g.fillRect(9, 15, 6, 2); // base
+    g.fillStyle(0x4a4438, 0.8);
+    g.fillRect(5, 4, 3, 16); // charcoal smudge down the left margin
+    g.generateTexture("icon_gravemark_rubbing", ICON, ICON);
 
     // Ember Shard (Phase 5): a Gloam Shard rendered down at the Relic Forge's
     // Ember Kiln — same jagged-shard silhouette, recolored amber instead of
@@ -3943,6 +3960,33 @@ export class BootScene extends Phaser.Scene {
     g.fillRect(18, 11, 4, 2);
     g.generateTexture("ability_gravebind", ICON, ICON);
 
+    g.clear(); // Mire Snare — roots clamping shut around a pinned centre
+    g.fillStyle(0x2c3a24, 1);
+    g.fillCircle(12, 12, 10);
+    g.fillStyle(0x4f7a4a, 1);
+    g.fillRect(11, 3, 2, 7); // roots reaching in from four sides
+    g.fillRect(11, 14, 2, 7);
+    g.fillRect(3, 11, 7, 2);
+    g.fillRect(14, 11, 7, 2);
+    g.fillRect(6, 6, 3, 3); // diagonal barbs
+    g.fillRect(15, 6, 3, 3);
+    g.fillRect(6, 15, 3, 3);
+    g.fillRect(15, 15, 3, 3);
+    g.fillStyle(0x101408, 1);
+    g.fillCircle(12, 12, 3); // the pinned thing
+    g.generateTexture("ability_snare", ICON, ICON);
+
+    g.clear(); // Bloodrush — a fang with speed lines trailing it
+    g.fillStyle(0x6a1a1a, 0.5);
+    g.fillRect(2, 8, 8, 2); // motion trails
+    g.fillRect(2, 13, 6, 2);
+    g.fillStyle(0xf0e4d8, 1);
+    g.fillTriangle(11, 3, 18, 3, 14, 21); // the fang
+    g.fillStyle(0xc83a3a, 1);
+    g.fillRect(12, 4, 5, 2); // blood at the root
+    g.fillRect(13, 8, 2, 6); // channel down the middle
+    g.generateTexture("ability_haste", ICON, ICON);
+
     g.clear(); // Spirit Lance — a pale beam driven point-first
     g.fillStyle(0x8c7fc0, 0.55);
     g.fillRect(2, 10, 20, 4); // beam haze
@@ -4230,6 +4274,128 @@ export class BootScene extends Phaser.Scene {
     g.fillStyle(0xffd070, 1);
     g.fillTriangle(6, 11, 12, 11, 9, 5);
     g.generateTexture("crypt_brazier", 18, 28);
+
+    // --- THEMED crypt shells (one per warden) ---
+    //
+    // All three crypts used to be the same grey stone box with a different boss
+    // dropped in it (the user: "dungeons need to be more thematic depending on
+    // which miniboss it is — not just the boss and drop, but the whole thing").
+    // Same silhouettes, wholly different palettes, so a Kilnborn vault reads as
+    // a kiln and a Sanguinarch vault reads as a charnel house the moment you
+    // step in — consistent with the generate-in-code placeholder-art approach.
+    // The unsuffixed base set above stays as-is: the Miretyrant's lair uses it.
+    const cryptShell = (
+      suffix: string,
+      pal: {
+        wallDark: number;
+        wallMid: number;
+        wallLit: number;
+        floorDark: number;
+        floorMid: number;
+        crack: number;
+        flame: number;
+        flameCore: number;
+      },
+    ) => {
+      g.clear(); // wall
+      g.fillStyle(pal.wallDark, 1);
+      g.fillRect(0, 0, 32, 32);
+      g.fillStyle(pal.wallMid, 1);
+      g.fillRect(1, 1, 14, 14);
+      g.fillRect(17, 1, 14, 14);
+      g.fillRect(1, 17, 30, 14);
+      g.fillStyle(pal.floorDark, 1); // mortar shadow
+      g.fillRect(0, 15, 32, 2);
+      g.fillRect(15, 0, 2, 15);
+      g.fillStyle(pal.wallLit, 1);
+      g.fillRect(3, 3, 5, 2);
+      g.fillRect(20, 19, 6, 2);
+      g.generateTexture(`crypt_wall_${suffix}`, 32, 32);
+
+      g.clear(); // floor
+      g.fillStyle(pal.floorDark, 1);
+      g.fillRect(0, 0, 32, 32);
+      g.fillStyle(pal.floorMid, 1);
+      g.fillRect(1, 1, 30, 30);
+      g.fillStyle(pal.floorDark, 1);
+      g.fillRect(0, 15, 32, 1);
+      g.fillRect(15, 0, 1, 32);
+      g.fillStyle(pal.crack, 1);
+      g.fillRect(4, 5, 7, 1);
+      g.fillRect(21, 22, 6, 1);
+      g.fillRect(8, 26, 5, 1);
+      g.generateTexture(`crypt_floor_${suffix}`, 32, 32);
+
+      g.clear(); // pillar
+      g.fillStyle(pal.wallDark, 1);
+      g.fillRect(2, 28, 16, 6);
+      g.fillStyle(pal.wallMid, 1);
+      g.fillRect(4, 4, 12, 26);
+      g.fillStyle(pal.wallLit, 1);
+      g.fillRect(5, 5, 5, 24);
+      g.fillStyle(pal.wallDark, 1);
+      g.fillRect(1, 0, 18, 5);
+      g.fillStyle(pal.crack, 1);
+      g.fillRect(9, 12, 2, 9);
+      g.generateTexture(`crypt_pillar_${suffix}`, 20, 34);
+
+      g.clear(); // rubble
+      g.fillStyle(pal.wallDark, 1);
+      g.fillRect(1, 5, 10, 7);
+      g.fillRect(9, 3, 8, 9);
+      g.fillStyle(pal.wallMid, 1);
+      g.fillRect(2, 6, 6, 3);
+      g.fillRect(11, 5, 4, 3);
+      g.fillStyle(pal.crack, 1);
+      g.fillRect(4, 9, 3, 1);
+      g.generateTexture(`crypt_rubble_${suffix}`, 18, 12);
+
+      g.clear(); // brazier — the flame carries the theme's colour
+      g.fillStyle(pal.wallDark, 1);
+      g.fillRect(7, 14, 4, 14);
+      g.fillRect(4, 26, 10, 2);
+      g.fillStyle(pal.wallMid, 1);
+      g.fillRect(3, 10, 12, 6);
+      g.fillStyle(pal.flame, 0.95);
+      g.fillTriangle(4, 11, 14, 11, 9, 2);
+      g.fillStyle(pal.flameCore, 1);
+      g.fillTriangle(6, 11, 12, 11, 9, 5);
+      g.generateTexture(`crypt_brazier_${suffix}`, 18, 28);
+    };
+
+    // Palewake — a drowned barrow. Cold violet stone, pale bone-light, wet.
+    cryptShell("gloam", {
+      wallDark: 0x232032,
+      wallMid: 0x2f2b42,
+      wallLit: 0x453e5e,
+      floorDark: 0x14121f,
+      floorMid: 0x1c1a2b,
+      crack: 0x6f5ca0,
+      flame: 0x9a5cff,
+      flameCore: 0xd8c0ff,
+    });
+    // Kilnborn — a firing chamber. Scorched brick, ash-grey mortar, ember glow.
+    cryptShell("ember", {
+      wallDark: 0x2b1a12,
+      wallMid: 0x3d2418,
+      wallLit: 0x5e3620,
+      floorDark: 0x1a1009,
+      floorMid: 0x261810,
+      crack: 0xc25a1e,
+      flame: 0xff6a1a,
+      flameCore: 0xffd070,
+    });
+    // Sanguinarch — a charnel house. Dark meat-red, wet mortar, low red light.
+    cryptShell("blood", {
+      wallDark: 0x2a1418,
+      wallMid: 0x3a1c22,
+      wallLit: 0x552a32,
+      floorDark: 0x190a0e,
+      floorMid: 0x241014,
+      crack: 0x9e2a38,
+      flame: 0xd42a3a,
+      flameCore: 0xff8a90,
+    });
 
     // Exit stairs (30x26) — the way back up to the swamp. Deliberately bright at
     // the top step so it's findable in the dark.

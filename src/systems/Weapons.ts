@@ -145,7 +145,7 @@ const WEAPON_DAMAGE: Record<WeaponType, number> = {
   gloamsteel_sword: 25,
   gloamsteel_pike: 32,
   gloamsteel_warbow: 20,
-  gloam_brand: 23,
+  gloam_brand: 29,
   // Deliberately BELOW the Gloam Brand: its per-hit lifelink is the payoff,
   // so it trades raw numbers for sustain rather than adding both.
   gloamdrinker: 19,
@@ -190,35 +190,45 @@ export function weaponCooldownMs(weapon: WeaponType): number {
   return WEAPON_COOLDOWN_MS[weapon];
 }
 
+// Costs scaled to ~0.7x across the board (the user: "weapon stam usage is way
+// too high even for spears... I shouldn't have to put a million points into stam
+// just to have basic combat"). The RELATIVE ladder is untouched — each tier is
+// still a clear step up, which was his own earlier ask — this only lowers the
+// baseline. The arithmetic that made it bite: a 16-cost Primal Spear against the
+// old 100 base pool is SIX swings, and because the post-spend regen delay
+// re-arms on every swing, sustained attacking regenerates nothing at all. Six
+// swings then a wait is not "basic combat", and Endurance was effectively a tax
+// for showing up rather than a build choice. Paired with the base pool going
+// 100 -> 130 (Stamina.ts).
 const WEAPON_STAMINA_COST: Record<WeaponType, number> = {
-  wood_club: 10,
-  stone_club: 14,
-  bone_knife: 8,
-  primal_spear: 16,
-  slingshot: 6,
-  javelin: 16,
+  wood_club: 7,
+  stone_club: 10,
+  bone_knife: 6,
+  primal_spear: 11,
+  slingshot: 4,
+  javelin: 11,
   // Higher-tier weapons cost more stamina (the user) — the ember tier was barely
   // above steel (13 vs 12). Now each tier is a clear step up, so the bigger
   // weapon is a real commitment, not a free upgrade: starter < Sunsteel < Ember.
-  sunsteel_warhammer: 22,
-  sunsteel_sword: 15,
-  sunsteel_pike: 18,
-  sunsteel_warbow: 12,
-  embersteel_warhammer: 27,
-  embersteel_sword: 18,
-  embersteel_pike: 22,
-  embersteel_warbow: 15,
-  ember_brand: 19,
+  sunsteel_warhammer: 15,
+  sunsteel_sword: 11,
+  sunsteel_pike: 13,
+  sunsteel_warbow: 8,
+  embersteel_warhammer: 19,
+  embersteel_sword: 13,
+  embersteel_pike: 15,
+  embersteel_warbow: 11,
+  ember_brand: 14,
   // Each tier is a real commitment, not a free upgrade: Sunsteel < Ember < Gloam.
-  gloamsteel_warhammer: 31,
-  gloamsteel_sword: 21,
-  gloamsteel_pike: 25,
-  gloamsteel_warbow: 17,
-  gloam_brand: 22,
-  gloamdrinker: 20,
-  mirebronze_warhammer: 28,
-  mirebronze_sword: 24,
-  mirebronze_pike: 26,
+  gloamsteel_warhammer: 22,
+  gloamsteel_sword: 15,
+  gloamsteel_pike: 18,
+  gloamsteel_warbow: 12,
+  gloam_brand: 16,
+  gloamdrinker: 14,
+  mirebronze_warhammer: 20,
+  mirebronze_sword: 17,
+  mirebronze_pike: 18,
 };
 export function weaponStaminaCost(weapon: WeaponType): number {
   return WEAPON_STAMINA_COST[weapon];
@@ -433,7 +443,7 @@ const WEAPON_ON_HIT_BURST: Partial<Record<WeaponType, WeaponBurst>> = {
   // sweeps, so the burst is what makes it hit things the arc missed.
   ember_brand: { radius: 88, damageFrac: 0.55, tint: 0xff7a1e },
   // The bayou brand: bigger and harder, matching its tier.
-  gloam_brand: { radius: 104, damageFrac: 0.6, tint: 0x9a5ce0 },
+  gloam_brand: { radius: 118, damageFrac: 0.8, tint: 0x9a5ce0 },
   // The drinker keeps the tightest burst — every swept target already lifelinks,
   // so a wide detonation would make it the sustain AND the crowd answer.
   gloamdrinker: { radius: 72, damageFrac: 0.4, tint: 0x6fbf4a },
@@ -450,7 +460,13 @@ export function weaponOnHitBurst(weapon: WeaponType): WeaponBurst | undefined {
 // ability, but unlike either it is ALWAYS on and costs no relic family slot.
 // Absent = no lifelink (every other weapon).
 const WEAPON_LIFELINK_PCT: Partial<Record<WeaponType, number>> = {
-  gloamdrinker: 0.12,
+  // 0.12 -> 0.08 (the user: "gloam brand needs a buff because the other magic
+  // weapon is bonker busted"). Always-on lifelink with no cost and no relic
+  // family slot was strong enough that the Gloamdrinker's tight 34-degree arc
+  // stopped mattering — it beat the wide-arc Brand at the Brand's own job because
+  // sustain outweighed everything. Still the sustain weapon, no longer the
+  // automatic answer; the Brand's crowd numbers went up to meet it.
+  gloamdrinker: 0.08,
 };
 export function weaponLifelinkPct(weapon: WeaponType): number {
   return WEAPON_LIFELINK_PCT[weapon] ?? 0;

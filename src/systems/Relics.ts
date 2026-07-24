@@ -363,6 +363,17 @@ export const TROPHY_ROLL: Record<string, TrophyRoll> = {
     outcomeOdds: [{ rarity: "mythic", chance: 1.0 }],
     choiceCount: 3,
   },
+  // Miretyrant (biome-3 finale, and the current win-con). It used to drop the
+  // Duneshaper's TIER-2 trophy (the user: "looks like myretyrant dropped a t2
+  // relic?") — so the deepest boss in the game paid out at the previous biome's
+  // magnitude. Tier 3 (x2.25) already existed for the bayou refined trophies;
+  // the boss ladder just never got its rung.
+  boss_refined_trophy_t3: {
+    rarity: "mythic",
+    powerTier: 3,
+    outcomeOdds: [{ rarity: "mythic", chance: 1.0 }],
+    choiceCount: 3,
+  },
   // Refined trophies (Gloaming Vein loop, biome 1). Roll-only keys (produced
   // ONLY by refinement) so they climb trophies one rarity up into a
   // guaranteed-success roll. A Refined (Uncommon) trophy rolls the Uncommon

@@ -38,6 +38,10 @@ export interface JewelryMenuDeps {
   // apply call. All addressed by id so the menu never holds a live item ref.
   augmentTargets: () => { id: string; label: string; key: string; texture: string; applied: string[] }[];
   availableAugments: () => GearAugmentDef[];
+  // Does the player already hold this item key anywhere (worn/backpack/hotbar)?
+  // Jewelry and ability specials are maxStack-1 uniques, so a second copy is
+  // pure waste — an owned recipe is hidden rather than greyed.
+  ownsOutput: (itemKey: string) => boolean;
   canAffordAugment: (aug: GearAugmentDef) => boolean;
   applyAugment: (targetId: string, augId: string) => boolean;
 }
@@ -212,6 +216,12 @@ export class JewelryMenu {
       (r) =>
         r.requiredStationTier <= tier &&
         Object.keys(r.inputs).every((key) => discovered.has(key)) &&
+        // Already own it? Don't offer it (the user: "it should remove jewelry and
+        // abilities and stuff from the gemwright table if I already have it").
+        // These are unique maxStack-1 items, so a duplicate does nothing but eat
+        // Moonsilver — and the list is long enough that the ones you can still
+        // USE were getting lost among the ones you can't.
+        !this.deps.ownsOutput(r.output) &&
         (!this.onlyCraftable || this.isCraftable(r)),
     );
     const byTier = new Map<number, JewelryRecipe[]>();
@@ -229,6 +239,7 @@ export class JewelryMenu {
       (r) =>
         r.requiredStationTier === tier &&
         Object.keys(r.inputs).every((key) => discovered.has(key)) &&
+        !this.deps.ownsOutput(r.output) &&
         this.isCraftable(r),
     ).length;
   }

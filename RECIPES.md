@@ -176,28 +176,51 @@ armor**. Applied as a flat deduction from incoming physical damage, floored at
 
 Two progression axes: (1) the base sets **reforge** into the T2 sets via
 standalone recipes (the enhanced set consumes the base piece — see the crafting
-table), and (2) **every** forged piece — base AND T2 — now gets **two right-click
-armor levels** (`+1` then `+1`, = **+2 over base at Lvl 3**), sunk in ingots
-(the user: a use for the ingot stockpile). Tuned so a base (Lvl 1) ember piece
-always out-armors a fully-upgraded (Lvl 3) steel piece. **Heavy armor** has a real
-effect: the `heavy_armor` skill gives partial **magic/fire mitigation** (−0.4%/
-level, cap −30%) while wearing ≥1 heavy piece — its identity vs light armor's dash
-i-frames. `heavy_armor` XP accrues per worn piece on a kill.
+table), and (2) **every** forged piece — base AND T2 — gets **two right-click
+armor levels**, sunk in ingots (the user: a use for the ingot stockpile).
+**Heavy armor** has a real effect: the `heavy_armor` skill gives partial
+**magic/fire mitigation** (−0.4%/level, cap −30%) while wearing ≥1 heavy piece —
+its identity vs light armor's dash i-frames. `heavy_armor` XP accrues per worn
+piece on a kill.
+
+**Retuned 2026-07-23** (the user: "the armor differences between the armor types
+is just weird… enemies are doing like 50-100 damage and I'm seeing like 1-3 armor
+point difference between sets"). Heavy went up and light came down so the CHOICE
+is legible, while the per-tier total stayed close to where it was — deliberately
+NOT inflating the ceiling, because the previous session had just bumped the
+Miretyrant's damage specifically so armor stopped nullifying it. Heavy/light gaps
+are now 12 / 17 / 26 / 23 by tier instead of 5 / 9 / 12 / 10.
 
 | Set | Type | Helm | Chest | Legs | Full-set (Lvl 1 → Lvl 3) |
 |---|---|---|---|---|---|
-| Sunsteel (base) | Heavy | 6 | 8 | 6 | 20 → 26 |
-| Embersteel (T2) | Heavy | 10 | 12 | 10 | 32 → 38 |
-| Duskhide (base) | Light | 4 | 6 | 5 | 15 → 21 |
-| Emberhide (T2) | Light | 7 | 9 | 8 | 24 → 30 |
-| Gloamsteel (bayou) | Heavy | 13 | 16 | 13 | 42 → 48 |
-| Mirehide (bayou) | Light | 9 | 12 | 9 | 30 → 36 |
+| Sunsteel (base) | Heavy | 8 | 8 | 8 | 24 → 36 |
+| Embersteel (T2) | Heavy | 12 | 14 | 12 | 38 → 56 |
+| Duskhide (base) | Light | 4 | 4 | 4 | 12 → 18 |
+| Emberhide (T2) | Light | 7 | 7 | 7 | 21 → 30 |
+| Gloamsteel (bayou) | Heavy | 16 | 18 | 16 | 50 → 74 |
+| Mirehide (bayou) | Light | 8 | 8 | 8 | 24 → 36 |
 
 Forged-piece upgrade costs: base (Sunsteel/Duskhide) Lvl 2 = **2 Sunsteel Ingot**,
 Lvl 3 = **3 Sunsteel Ingot** (needs Workbench Lvl 3). T2 (Embersteel/Emberhide)
 Lvl 2 = **2 Embersteel Ingot**, Lvl 3 = **3 Embersteel Ingot** (needs Workbench
-Lvl 4). Each level `+1 armor`. (Emberhide Leggings base bumped 7→8 so base still
-beats a Lvl-3 Duskhide legging.)
+Lvl 4). Bayou (Gloamsteel/Mirehide) uses Gloamsteel Ingot at Workbench Lvl 5.
+
+The per-level bonus is **per set** (~25% of the piece), not a flat +1 — a flat +1
+on a 14-armor Embersteel Cuirass was a rounding error for 2-3 rare ingots
+(the user: "+1 armor for upgrade for embersteel feels really bad"):
+
+| Set | Lvl 2 | Lvl 3 (cumulative over base) |
+|---|---|---|
+| Sunsteel | +2 | +4 |
+| Duskhide | +1 | +2 |
+| Embersteel | +3 | +6 |
+| Emberhide | +2 | +3 |
+| Gloamsteel | +4 | +8 |
+| Mirehide | +2 | +4 |
+
+Note a fully-upgraded lower-tier piece can now match or slightly exceed a *bare*
+next-tier base — that's intended laddering (the next tier's ceiling is always
+higher), and replaces the old "base ember always beats a Lvl-3 steel" rule.
 
 ## Weapon Upgrades (`src/systems/WeaponUpgrades.ts`)
 
@@ -374,7 +397,12 @@ upgrade, gated on the Duneshaper's Heart) = the ability-granting specials.
 
 Passive jewelry effects are the **ability-augment + utility/explorer** layer
 (`ItemDef.passive`, summed by `EquipmentEffects.ts`) — deliberately NOT raw-%
-combat stats (that's relics' layer). Rings fill either ring slot (wear two).
+combat stats (that's relics' layer).
+
+**Slots (2026-07-23):** passive jewelry goes in any of the **4 interchangeable
+Special slots**, and ability items in any of the **3 interchangeable Ability
+slots** — position is the hotkey (slot 1 = Q, 2 = E, 3 = R), so which key an
+ability sits on is your arrangement, not a property of the item.
 
 | Item | Table | Inputs | Slot | Effect |
 |---|---|---|---|---|
@@ -382,14 +410,22 @@ combat stats (that's relics' layer). Rings fill either ring slot (wear two).
 | Amulet of Channeling | Lvl 1 | 3 Moonsilver, 3 Gloam Shard | Neck | +20% ability power (nova dmg/radius, blink distance) |
 | Ring of the Forager | Lvl 1 | 2 Moonsilver, 2 Twine | Ring | +15% bonus-gather chance, +30% pickup radius |
 | Amulet of Farsight | Lvl 1 | 3 Moonsilver, 2 Gloam Shard | Neck | +40% light radius, +20% pickup radius |
-| Gloamstep Band | Lvl 2 | 2 Moonsilver, 1 Gloam Gem | Spec1 (Q) | Grants Gloamstep Blink |
-| Gloam Focus | Lvl 2 | 2 Moonsilver, 1 Ember Gem | Spec2 (E) | Grants Gloam Nova |
-| Bloodpact Shroud | Lvl 2 | 3 Moonsilver, 1 Blood Gem | Back (R) | Grants Bloodpact |
+| Gloamstep Band | Lvl 2 | 2 Moonsilver, 1 Gloam Gem | Ability | Grants Gloamstep Blink |
+| Gloam Focus | Lvl 2 | 2 Moonsilver, 1 Ember Gem | Ability | Grants Gloam Nova |
+| Bloodpact Shroud | Lvl 2 | 3 Moonsilver, 1 Blood Gem | Ability | Grants Bloodpact |
+| Snarebound Idol | Lvl 2 | 3 Moonsilver, 1 Gloam Gem, 2 Mirehide | Ability | Grants **Mire Snare** — roots everything within 240px for 2.6s |
+| Quickening Fang | Lvl 2 | 3 Moonsilver, 1 Blood Gem, 2 Mirejaw Meat | Ability | Grants **Bloodrush** — −40% weapon cooldown for 6s |
+
+The last two are the AOE-root and attack-speed abilities the user asked for. They're
+**craftable rather than found-only epics** on purpose: burying a requested ability
+behind an epic-drop roll reproduces the "I never found one" problem. Each costs a
+different gem, so which one a run can build still depends on which crypt it cleared.
 
 The **Gloamdrinker** is the bayou's bespoke magic weapon — the only one that is NOT a
 reforge of an earlier piece, and the only weapon in the game with **lifelink**
 (`Weapons.ts` `WEAPON_LIFELINK_PCT`): every hit, including each target its arc sweeps,
-heals **12% of the damage dealt**. It's always on, costs no relic family slot, and stacks
+heals **8% of the damage dealt** (12% → 8%, 2026-07-23 — it beat the wide-arc
+Gloam Brand at the Brand's own job because sustain outweighed everything). It's always on, costs no relic family slot, and stacks
 with the Leech relic + the Bloodpact ability — paid for with a raw damage number below the
 Gloam Brand's and a deliberately tighter arc.
 

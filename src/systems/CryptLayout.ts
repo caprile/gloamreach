@@ -240,6 +240,20 @@ const ROOM_MIN_W = 8;
 const ROOM_MAX_W = 12;
 const ROOM_MIN_H = 7;
 const ROOM_MAX_H = 10;
+// Filler rooms may go smaller than the mins above. Rejection sampling with only
+// big rooms plateaued badly: a live 18-crypt world had THIRTEEN crypts under the
+// 5-room target and five at the bare 2-room floor — i.e. most "dungeons" were an
+// entry room, the vault, and nothing else, which is exactly the user's "dungeons
+// need to be more than just the boss and the drop". A late attempt is competing
+// for whatever fragmented space is left, so it gets to ask for less.
+// The mins above are still enforced for the first FULL_SIZE_ROOMS rooms, which
+// is what keeps the VAULT big enough for a 1.5-1.8x warden plus two rings of
+// material nodes (it's chosen as the largest of the far half — so at least one
+// large room has to exist for it to find).
+const FILLER_MIN_W = 6;
+const FILLER_MIN_H = 5;
+const FULL_SIZE_ROOMS = 3;
+const PLACE_ATTEMPTS = 1500; // was 400 — the shrink schedule needs room to walk down
 const ROOM_GAP = 2; // cells of solid rock kept between rooms
 const CORRIDOR_W = 2; // cells
 
@@ -294,9 +308,19 @@ export function generateCrypt(
       ch,
     });
   }
-  for (let attempt = 0; attempt < 400 && cellRooms.length < roomCount; attempt++) {
-    const cw = rng.between(ROOM_MIN_W, ROOM_MAX_W);
-    const ch = rng.between(ROOM_MIN_H, ROOM_MAX_H);
+  for (let attempt = 0; attempt < PLACE_ATTEMPTS && cellRooms.length < roomCount; attempt++) {
+    // Ask for less the longer this room has been failing to fit. `pressure`
+    // walks 0 -> 1 across the attempt budget and drags the requested size from
+    // the full range down to the floor, so a crypt degrades into SMALLER rooms
+    // rather than FEWER of them.
+    const pressure = attempt / PLACE_ATTEMPTS;
+    const big = cellRooms.length < FULL_SIZE_ROOMS;
+    const floorW = big ? ROOM_MIN_W : FILLER_MIN_W;
+    const floorH = big ? ROOM_MIN_H : FILLER_MIN_H;
+    const capW = Math.max(floorW, Math.round(ROOM_MAX_W - (ROOM_MAX_W - floorW) * pressure));
+    const capH = Math.max(floorH, Math.round(ROOM_MAX_H - (ROOM_MAX_H - floorH) * pressure));
+    const cw = rng.between(floorW, capW);
+    const ch = rng.between(floorH, capH);
     const cand: CellRoom = {
       cx0: rng.between(minC, Math.max(minC, cols - cw - minC)),
       cy0: rng.between(minR, Math.max(minR, rows - ch - minR)),
@@ -306,6 +330,23 @@ export function generateCrypt(
     if (cand.cx0 + cw + minC > cols || cand.cy0 + ch + minR > rows) continue;
     if (cellRooms.some((r) => roomsOverlap(cand, r))) continue;
     cellRooms.push(cand);
+  }
+
+  // Deterministic sweep for whatever the random pass couldn't seat. Rejection
+  // sampling has a long tail — over 400 seeds it still produced a 2-room crypt
+  // ~1.5% of the time, and a 2-room crypt is just an entry and a boss. Walking
+  // the grid finds a gap if one exists at all, so this turns "unlucky" into
+  // "packed" instead of leaving a stub dungeon in the world.
+  if (cellRooms.length < roomCount) {
+    const step = 2;
+    outer: for (let r0 = minR; r0 + FILLER_MIN_H + minR <= rows; r0 += step) {
+      for (let c0 = minC; c0 + FILLER_MIN_W + minC <= cols; c0 += step) {
+        const cand: CellRoom = { cx0: c0, cy0: r0, cw: FILLER_MIN_W, ch: FILLER_MIN_H };
+        if (cellRooms.some((r) => roomsOverlap(cand, r))) continue;
+        cellRooms.push(cand);
+        if (cellRooms.length >= roomCount) break outer;
+      }
+    }
   }
 
   // Floor mask. Rooms first, then the corridors that connect them.

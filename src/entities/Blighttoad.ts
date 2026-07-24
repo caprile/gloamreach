@@ -67,7 +67,10 @@ export class Blighttoad extends Enemy {
       displayName: elite ? "Elite Blighttoad" : "Blighttoad",
       loot: elite
         ? [{ resource: "blight_gland", min: 2, max: 3 }]
-        : [{ resource: "blight_gland", min: 1, max: 1 }],
+        : [
+            { resource: "gravemark_rubbing", min: 1, max: 1, chance: 0.06 },
+            { resource: "blight_gland", min: 1, max: 1 },
+          ],
       maxHealth: elite ? Math.round(MAX_HEALTH * ELITE.hp) : MAX_HEALTH,
       biteDamage: elite ? Math.round(BITE_DAMAGE * ELITE.damage) : BITE_DAMAGE,
       elite,

@@ -178,7 +178,7 @@ export class Miretyrant extends Enemy {
       // continue-mode rather than something a player banks.
       loot: [
         { resource: "gloam_shard", min: 8, max: 12 },
-        { resource: "boss_refined_trophy_t2", min: 1, max: 1 },
+        { resource: "boss_refined_trophy_t3", min: 1, max: 1 },
       ],
       maxHealth: MAX_HEALTH,
       biteDamage: 0, // everything flows through checkPlayerHit()

@@ -60,10 +60,12 @@ export type ResourceType =
   | "refined_trophy_rare" // scaffold for deeper biomes — rolls Rare
   | "ember_shard" // Phase 5: Gloam Shards rendered down at the Relic Forge's Ember Kiln (Lvl 3) — the tier-2 refinement currency
   | "mire_shard" // biome 3: Ember Shards steeped at the Mire Crucible (Lvl 4) — the tier-3 refinement currency
+  | "gravemark_rubbing" // biome 3: a bayou-creature drop, consumed on pickup — maps the nearest unknown Sunken Crypt
   | "refined_trophy_uncommon_t2" // Phase 5: badlands (Tier 2) Common trophies refined via Ember Shards — rolls Uncommon
   | "refined_trophy_uncommon_t3" // biome 3 (Tier 3): refined via Mire Shards, AND the guaranteed drop from the bayou crypt wardens (2026-07-23) — rolls Uncommon at power tier 3
   | "boss_refined_trophy" // Gremlin King drop (S4) — guaranteed Mythic (Tier 1) at the Relic Forge
   | "boss_refined_trophy_t2" // Duneshaper drop (S4) — guaranteed Mythic (Tier 2) at the Relic Forge
+  | "boss_refined_trophy_t3" // Miretyrant drop — guaranteed Mythic (Tier 3) at the Relic Forge
   // --- biome-3 (Phase 2b) jewelry economy — DORMANT: authored now, real sources land in biome 3 ---
   | "moonsilver" // the universal jewelry metal — mined in biome 3 (no node yet)
   | "gem_gloam" // ability gem → Gloamstep Band (Q); "gem source dictates build"

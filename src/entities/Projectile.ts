@@ -37,6 +37,11 @@ export interface ProjectileConfig {
   // exceed (it would orbit forever). Straight shots leave this unset and keep
   // the distance rule, which is what makes per-weapon range honest.
   maxLifetimeMs?: number;
+  // The enemy that fired this, notified when it actually connects. Structural
+  // rather than an `Enemy` import (Enemy imports this module — a named type
+  // would be a cycle). Only a LANDED shot resets a ranged enemy's give-up clock;
+  // see Enemy.markAttackAttempted for why firing alone must not.
+  sourceEnemy?: { onProjectileHitPlayer(now: number): void };
 }
 
 // Miss rule for homing projectiles (see preUpdate). "Came close" is generous
@@ -59,6 +64,7 @@ export class Projectile extends Phaser.Physics.Arcade.Sprite {
   readonly sourceIsPlayer: boolean;
   readonly isCrit: boolean;
   readonly damageType?: IncomingDamageType;
+  readonly sourceEnemy?: { onProjectileHitPlayer(now: number): void };
   private readonly spawnX: number;
   private readonly spawnY: number;
   private readonly maxRangePx: number;
@@ -80,6 +86,7 @@ export class Projectile extends Phaser.Physics.Arcade.Sprite {
     this.sourceIsPlayer = cfg.sourceIsPlayer;
     this.isCrit = cfg.isCrit ?? false;
     this.damageType = cfg.damageType;
+    this.sourceEnemy = cfg.sourceEnemy;
     this.spawnX = cfg.x;
     this.spawnY = cfg.y;
     this.maxRangePx = cfg.maxRangePx;

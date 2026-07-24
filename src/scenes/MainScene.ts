@@ -124,7 +124,7 @@ import {
 import { toolUpgradesForItem, TOOL_UPGRADES } from "../systems/ToolUpgrades";
 import { EventLog } from "../systems/EventLog";
 import { Biome, type ZoneType } from "../systems/Biome";
-import { Equipment, EQUIP_SLOTS, type EquipSlot, type EquippedItem } from "../systems/Equipment";
+import { Equipment, EQUIP_SLOTS, slotGroup, type EquipSlot, type EquippedItem } from "../systems/Equipment";
 import { activeSets, setById, type SetId } from "../systems/SetBonuses";
 import {
   augmentEffect,
@@ -376,12 +376,33 @@ const ABILITY_BLOODPACT_LIFELINK_PCT = 0.35; // fraction of damage healed while 
 const ABILITY_GRAVEBIND_RADIUS = 260; // who gets yanked
 const ABILITY_GRAVEBIND_PULL = 170; // px dragged inward
 const ABILITY_GRAVEBIND_HOLD_RADIUS = 90; // never pulled closer than this
-const ABILITY_GRAVEBIND_SLOW = 0.45; // movement multiplier while staggering
-const ABILITY_GRAVEBIND_SLOW_MS = 900;
+// Deepened + lengthened (the user: "stun should be way longer"). At 0.45 for
+// 900ms a yanked pack was walking again before you'd finished one swing, which
+// is not a window — it's a hiccup. 0.30 for 2.2s, on top of the attack-state
+// reset in castGravebind, is long enough to actually be the setup the ability
+// advertises (wide-arc swing / follow-up nova).
+const ABILITY_GRAVEBIND_SLOW = 0.3; // movement multiplier while staggering
+const ABILITY_GRAVEBIND_SLOW_MS = 2200;
 const ABILITY_LANCE_RANGE = 420; // length of the beam
 const ABILITY_LANCE_HALF_W = 34; // how far off-axis still counts as hit
 const ABILITY_LANCE_DAMAGE = 55; // magic damage per enemy on the line
 const ABILITY_AEGIS_REDUCTION = 0.6; // damage cut while the window is open
+// Mire Snare (AOE root) — the user: "needs to be some kind of AOE root ability".
+// Distinct from Gravebind, which is a PULL that happens to slow: this doesn't
+// move anything, it pins what's already on you. A root is a hard 0 move
+// multiplier, not a steep slow, so `applySlow(0, …)` — which `slowMult` already
+// supports, since it just multiplies velocity.
+//
+// Deliberately does NOT stop enemies attacking: a rooted enemy you're standing
+// next to still swings, so the counterplay is to root and then LEAVE, not root
+// and facetank. That's what keeps it a control tool rather than a stun.
+const ABILITY_SNARE_RADIUS = 240;
+const ABILITY_SNARE_MS = 2600;
+// Bloodrush (attack speed) — the user: "needs to be some kind of attack speed
+// ability". A timed multiplier on weapon cooldown, applied at the single
+// attackCooldownMult() choke point every attack path already reads.
+const ABILITY_HASTE_MULT = 0.6; // 0.6x cooldown = ~1.67x attacks/sec
+const ABILITY_HASTE_MS = 6000;
 // Crit (M-SS) soft caps on the COMBINED total (weapon base + Strength/Agility
 // stats + relic crit channels). Applied in critChanceTotal()/critMultTotal().
 const CRIT_CHANCE_CAP = 0.6;
@@ -603,10 +624,20 @@ const BAYOU_SHALLOW_SLOW_MULT = 0.78;
 const BAYOU_DEEP_SLOW_MULT = 0.5;
 // Miasma: no HP regen inside, plus a slow poison tick (see Poison.ts).
 const MIASMA_POISON_DPS = 3;
-// How much healing survives while poisoned (the user: poison should make regen
-// "significantly worse", NOT negate it — a hard shutoff is a switch, a penalty
-// is pressure you can still play against).
-const POISON_REGEN_MULT = 0.5;
+// How much healing survives inside a MIASMA/mire-pool zone. Named for the
+// hazard, not for the poison status — a creature's poison dose stopped touching
+// regen in the 2026-07-23 batch; only standing in the fog does.
+//
+// 0.5 -> 0.75 (the user: "1 poison, 3 food buffs, 32 vitality and my hp is barely
+// going up"). At 0.5 the miasma was double-taxing the same fantasy: it ticks
+// poison damage AND halves the healing you'd use to answer it, and miasma covers
+// a large share of the bayou, so the tax was closer to permanent than
+// situational. Doing the arithmetic on his run — ~7 HP/s of food, +93% from
+// Vitality, ~13.5 HP/s gross — the old multiplier took it to ~6.8 against up to
+// 12 dps of poison, i.e. net NEGATIVE while actively drinking three buffs. At
+// 0.75 the zone is still clearly worse to fight in without making healing feel
+// broken.
+const POISON_REGEN_MULT = 0.75;
 // Bonemire: waterlogged boneyard muck. Harsher than shallow water, gentler than
 // a deep channel — crossing one is a real commitment.
 const BONEMIRE_SLOW_MULT = 0.62;
@@ -676,10 +707,19 @@ const TYRANT_ALTAR_GUARD_COUNT = 4; // elite Hexlings guarding each altar
 // to be a loading screen.
 const TRANSITION_FADE_MS = 420;
 const CRYPT_REALM = { x: 200, y: 200, w: 3700, h: 3700 };
-// Both underground pockets (this and LAIR_REALM, declared below) with a generous
-// margin, so "nearly in there" counts too — see the invariant in updateEnemies.
-// Both rects sit outside the world circle by construction, so no surface content
-// can legitimately be here and the margin can't catch anything real.
+// A SECOND crypt pocket, in the BOTTOM-LEFT dead corner — the mirror of the
+// top-left one, and free (LAIR_REALM took the top-right). Added when the crypt
+// count went past what one 4x3 realm holds: the alternative was shrinking every
+// cell, and a smaller cell means generateCrypt silently places fewer rooms, so
+// "more dungeons" would have quietly meant "worse dungeons". Same geometry
+// check as the others — its inner corner (3900, 24100) is hypot(10100, 10100) =
+// 14283 from world center, outside WORLD_RADIUS (14000).
+const CRYPT_REALM_2 = { x: 200, y: 24100, w: 3700, h: 3700 };
+const CRYPT_REALMS = [CRYPT_REALM, CRYPT_REALM_2];
+// Every underground pocket with a generous margin, so "nearly in there" counts
+// too — see the invariant in updateEnemies. All of these rects sit outside the
+// world circle by construction, so no surface content can legitimately be here
+// and the margin can't catch anything real.
 const UNDERGROUND_GUARD = 600;
 function insideUndergroundRealm(x: number, y: number): boolean {
   const inRect = (r: { x: number; y: number; w: number; h: number }) =>
@@ -687,11 +727,28 @@ function insideUndergroundRealm(x: number, y: number): boolean {
     x <= r.x + r.w + UNDERGROUND_GUARD &&
     y >= r.y - UNDERGROUND_GUARD &&
     y <= r.y + r.h + UNDERGROUND_GUARD;
-  return inRect(CRYPT_REALM) || inRect(LAIR_REALM);
+  return CRYPT_REALMS.some(inRect) || inRect(LAIR_REALM);
 }
 const CRYPT_GRID_COLS = 4;
 const CRYPT_GRID_ROWS = 3;
-const CRYPT_COUNT = CRYPT_GRID_COLS * CRYPT_GRID_ROWS; // 12 — four per gem theme
+const CRYPT_CELLS_PER_REALM = CRYPT_GRID_COLS * CRYPT_GRID_ROWS; // 12
+// 12 -> 18 (the user playtest: "explored like a 3rd of the ring and didn't find
+// any dungeons"). Six per gem theme, so a run always has several shots at each
+// ability. The bigger half of that complaint was findability, not count — the
+// answers to that are the Gravemark Rubbing (a bayou drop that maps the nearest
+// unknown crypt — see revealNearestCrypt) and the grave-marker breadcrumb bands
+// each entrance scatters around itself (see spawnSunkenCrypts).
+const CRYPT_COUNT = 18;
+// Grave markers strewn around a crypt mouth, thinning outward — the war camp's
+// breadcrumb-trail idea applied to a doorway. A crypt used to be a single small
+// structure in an enormous swamp with nothing announcing it; the bands mean you
+// notice the ground getting graver before you can see the door itself, which is
+// discovery through exploration rather than a map handout.
+const CRYPT_TRAIL_BANDS = [
+  { radius: 300, count: 10 },
+  { radius: 520, count: 8 },
+  { radius: 760, count: 5 },
+];
 const CRYPT_CELL_PAD = 40; // gap between adjacent interiors inside the realm
 const CRYPT_ROOMS_MIN = 5;
 const CRYPT_ROOMS_MAX = 7;
@@ -883,6 +940,10 @@ export class MainScene extends Phaser.Scene {
   // Run-scoped epic-loot pity. A scene field rather than module state so
   // scene.restart() can't carry a half-full counter into the next run.
   private epicPity = new EpicPity();
+  // Every epic key already placed into SOME world container this run. One copy
+  // of each unique per run — see rollContainerLoot for why player-ownership
+  // alone can't enforce that.
+  private epicsGranted = new Set<string>();
   // Bosses that have already played their intro card this run.
   private announcedBosses = new Set<Enemy>();
   // Phase-3 Miretyrant arena hazard (see updateMiretyrantBellow). Permanent for
@@ -1224,6 +1285,8 @@ export class MainScene extends Phaser.Scene {
   // on every hit mid-window.
   private bloodpactLifelink = ABILITY_BLOODPACT_LIFELINK_PCT;
   private aegisUntil = 0; // Drowned Aegis (found-only) damage-reduction window
+  private hasteUntil = 0; // Bloodrush attack-speed window
+  private hasteMult = 1; // cooldown multiplier while that window is open
   private aegisReduction = 0; // fraction cut while that window is open
 
   // Active full armor-set bonuses (biome 2 Phase 4 forged gear). Recomputed on
@@ -1386,6 +1449,7 @@ export class MainScene extends Phaser.Scene {
     this.discoveredToolUpgradeIds = new Set<string>();
     this.discoveredGearUpgradeIds = new Set<string>();
     this.epicPity = new EpicPity();
+    this.epicsGranted = new Set<string>();
     this.announcedBosses = new Set();
     this.mirePools = [];
     this.discoveredCookRecipeIds = new Set<string>();
@@ -1517,6 +1581,8 @@ export class MainScene extends Phaser.Scene {
     this.bloodpactUntil = 0;
     this.bloodpactLifelink = ABILITY_BLOODPACT_LIFELINK_PCT;
     this.aegisUntil = 0;
+    this.hasteUntil = 0;
+    this.hasteMult = 1;
     this.aegisReduction = 0;
     this.placementMode = null;
     this.placementGhost = null;
@@ -1766,6 +1832,11 @@ export class MainScene extends Phaser.Scene {
       // the player's flat armor (Phase 1 hook); a physical Gremlin rock leaves
       // damageType undefined and subtracts armor as usual.
       this.applyDamageToPlayer(projectile.damage, undefined, projectile.damageType);
+      // A CONNECTING shot is what resets its caster's give-up clock — firing
+      // alone no longer does (see Enemy.markAttackAttempted). Without this a
+      // ranged enemy could never time out of a pursuit, which is why nothing
+      // in the bayou ever deaggro'd.
+      projectile.sourceEnemy?.onProjectileHitPlayer(this.time.now);
       projectile.destroy();
     });
 
@@ -1847,7 +1918,7 @@ export class MainScene extends Phaser.Scene {
       eatItem: (c, i) => this.eatItem(c, i),
       isDragging: () => this.dragSource !== null,
       stationTexture: (key, tier) => this.tieredStationTexture(key, tier),
-      upgradeReady: (key, tier) => this.hasReadyUpgrade(key, tier),
+      upgradeReady: (key, tier, appliedIds) => this.hasReadyUpgrade(key, tier, appliedIds),
       critTotals: (w) => ({ chance: this.critChanceTotal(w), mult: this.critMultTotal(w) }),
     });
     this.createStaminaBar();
@@ -3435,6 +3506,7 @@ export class MainScene extends Phaser.Scene {
       noBuildCost: () => this.devNoBuildCost,
       augmentTargets: () => this.augmentTargets(),
       availableAugments: () => this.availableAugments(),
+      ownsOutput: (itemKey) => this.ownsItemAnywhere(itemKey),
       canAffordAugment: (aug) => this.canAffordAugment(aug),
       applyAugment: (targetId, augId) => this.applyAugmentToTarget(targetId, augId),
     });
@@ -5354,7 +5426,7 @@ export class MainScene extends Phaser.Scene {
       Phaser.Math.Distance.Between(this.player.x, this.player.y, den.x, den.y) <= this.denReach(den);
     if (!inReach) return;
 
-    const cooldownMs = weaponCooldownMs(this.equippedWeapon);
+    const cooldownMs = weaponCooldownMs(this.equippedWeapon) * this.attackCooldownMult();
     if (this.time.now - this.lastWeaponHitAt < cooldownMs) return;
     const staminaCost = Math.round(weaponStaminaCost(this.equippedWeapon) * this.effectiveStaminaCostMult());
     if (!this.stamina.canAfford(staminaCost)) return;
@@ -6166,6 +6238,16 @@ export class MainScene extends Phaser.Scene {
     scatterOre("clay_deposit", "clay", "Clay Deposit", 44, 2, 2, 3);
     scatterOre("sunscorch_ore_node", "sunscorch_ore", "Sunscorch Ore", 60, 3, 3, 5);
     scatterOre("ember_ore_node", "ember_ore", "Cinderforged Vein", 14, 3, 2, 4);
+    // Scattered gloam outcrops (the user: "there is simply not enough gloam ore
+    // on the surface"). Until now the ONE Gloaming Vein POI was the entire
+    // surface supply of the shard that the whole refinement economy sits on —
+    // and everything downstream converts at brutal ratios (3 gloam per ember, 3
+    // ember per mire, so 9 gloam for one tier-3 shard). Kept scarce and
+    // low-yield: these are a trickle that makes the ratios survivable, not a
+    // replacement for the POI, which is still the only place you get a pile at
+    // once. Exactly the treatment Cinderforged veins already get next to the
+    // Sunken Forge.
+    scatterOre("gloaming_vein", "gloam_shard", "Gloam Outcrop", 16, 3, 1, 2);
   }
 
   // Every biome needs a supply of the basics — wood and stone. The forest disc
@@ -6626,7 +6708,9 @@ export class MainScene extends Phaser.Scene {
         y,
         texture: "gloaming_vein_shielded",
         resource: "gloam_shard",
-        amount: rng.between(1, 2),
+        // 1-2 -> 2-4. Clearing the Gloamwarden for ~7 shards never matched the
+        // fight, let alone what the conversion ladder eats downstream.
+        amount: rng.between(2, 4),
         action: "mine",
         displayName: "Gloaming Vein",
         loose: false,
@@ -6814,7 +6898,12 @@ export class MainScene extends Phaser.Scene {
   private pickCryptPositions(
     rng: Phaser.Math.RandomDataGenerator,
   ): { x: number; y: number; theme: CryptTheme }[] {
-    const themes: CryptTheme[] = ["gloam", "ember", "blood", "gloam", "ember", "blood"];
+    // Deal an even split across the FULL count, then shuffle — building a short
+    // repeating array and indexing it with `% length` would make the theme
+    // sequence cycle every 3, so which door you found decided nothing.
+    const themes: CryptTheme[] = [];
+    const kinds: CryptTheme[] = ["gloam", "ember", "blood"];
+    for (let i = 0; i < CRYPT_COUNT; i++) themes.push(kinds[i % kinds.length]);
     for (let i = themes.length - 1; i > 0; i--) {
       const j = rng.between(0, i);
       [themes[i], themes[j]] = [themes[j], themes[i]];
@@ -6857,6 +6946,19 @@ export class MainScene extends Phaser.Scene {
         ringCount: 9,
         ringRadius: 128,
       });
+      // Breadcrumb bands: grave markers thinning outward, so the swamp gets
+      // visibly graver before the doorway itself is in view. Jittered rather
+      // than evenly spaced, per the standing "uniform reads as programmatic"
+      // preference. Purely decorative, non-solid, Y-sorted via ysortDepth.
+      for (const band of CRYPT_TRAIL_BANDS) {
+        for (let m = 0; m < band.count; m++) {
+          const a = rng.frac() * Math.PI * 2;
+          const r = band.radius * rng.realInRange(0.72, 1.28);
+          const mx = pos.x + Math.cos(a) * r;
+          const my = pos.y + Math.sin(a) * r;
+          this.add.image(mx, my, "poi_ring_crypt").setDepth(ysortDepth(my)).setAlpha(0.9);
+        }
+      }
       this.buildCryptInterior(crypt, i, rng, solids);
       // Pre-roll the loot chest now (like shacks/dens/lodges do) so its glow
       // reflects its contents from the start. Rolling only on open — as it did
@@ -6881,7 +6983,17 @@ export class MainScene extends Phaser.Scene {
     rng: Phaser.Math.RandomDataGenerator,
     solids: Phaser.Physics.Arcade.StaticGroup,
     vaultPillars: number,
+    // Themed shell textures (per crypt warden). Omitted by the Miretyrant's
+    // lair, which keeps the base grey stone.
+    shell?: { floor: string; wall: string; pillar: string; rubble: string; brazier: string },
   ): { x: number; y: number; w: number; h: number }[] {
+    const tex = shell ?? {
+      floor: "crypt_floor",
+      wall: "crypt_wall",
+      pillar: "crypt_pillar",
+      rubble: "crypt_rubble",
+      brazier: "crypt_brazier",
+    };
     const layout = dungeon.layout;
     // Everything built here is registered on the interior so it can be hidden
     // while you're not inside it (see DungeonInterior.objects).
@@ -6892,14 +7004,14 @@ export class MainScene extends Phaser.Scene {
     // Floors: one TileSprite per room/corridor rect. Tiled (not a stretched
     // image) so the flagstones keep their grain at room scale.
     for (const r of [...layout.rooms, ...layout.corridors]) {
-      reg(this.add.tileSprite(r.x, r.y, r.w, r.h, "crypt_floor").setOrigin(0, 0).setDepth(-7));
+      reg(this.add.tileSprite(r.x, r.y, r.w, r.h, tex.floor).setOrigin(0, 0).setDepth(-7));
     }
 
     // Walls: merged runs from the layout, each one solid. The player collides
     // via the existing player↔solids collider; enemies only if they opt in
     // (collidesWithTerrain), exactly like boulderfield rock.
     for (const w of layout.walls) {
-      const ts = reg(this.add.tileSprite(w.x, w.y, w.w, w.h, "crypt_wall").setOrigin(0, 0));
+      const ts = reg(this.add.tileSprite(w.x, w.y, w.w, w.h, tex.wall).setOrigin(0, 0));
       ts.setDepth(ysortDepth(w.y + w.h));
       solids.add(ts);
     }
@@ -6910,19 +7022,19 @@ export class MainScene extends Phaser.Scene {
       for (let i = 0; i < pillars; i++) {
         const px = room.x + rng.between(40, Math.max(41, room.w - 40));
         const py = room.y + rng.between(40, Math.max(41, room.h - 40));
-        const img = reg(this.add.image(px, py, "crypt_pillar").setDepth(ysortDepth(py)));
+        const img = reg(this.add.image(px, py, tex.pillar).setDepth(ysortDepth(py)));
         solids.add(img);
         occluders.push({ x: px - 10, y: py - 10, w: 20, h: 20 });
       }
       for (let i = 0; i < rng.between(1, 3); i++) {
         const px = room.x + rng.between(20, Math.max(21, room.w - 20));
         const py = room.y + rng.between(20, Math.max(21, room.h - 20));
-        reg(this.add.image(px, py, "crypt_rubble").setDepth(ysortDepth(py)));
+        reg(this.add.image(px, py, tex.rubble).setDepth(ysortDepth(py)));
       }
       // One brazier per room: the only ambient light down here besides a torch.
       const bx = room.cx + rng.between(-30, 30);
       const by = room.y + 26;
-      reg(this.add.image(bx, by, "crypt_brazier").setDepth(ysortDepth(by)));
+      reg(this.add.image(bx, by, tex.brazier).setDepth(ysortDepth(by)));
       dungeon.braziers.push({ x: bx, y: by }); // per-interior, see SunkenCrypt.braziers
     }
 
@@ -6940,13 +7052,18 @@ export class MainScene extends Phaser.Scene {
     rng: Phaser.Math.RandomDataGenerator,
     solids: Phaser.Physics.Arcade.StaticGroup,
   ): void {
-    const col = index % CRYPT_GRID_COLS;
-    const row = Math.floor(index / CRYPT_GRID_COLS) % CRYPT_GRID_ROWS;
-    const cellW = CRYPT_REALM.w / CRYPT_GRID_COLS;
-    const cellH = CRYPT_REALM.h / CRYPT_GRID_ROWS;
+    // Interiors fill one realm's 4x3 grid before spilling into the next, so cell
+    // size (and therefore room count) is identical no matter how many crypts a
+    // run has.
+    const realm = CRYPT_REALMS[Math.floor(index / CRYPT_CELLS_PER_REALM) % CRYPT_REALMS.length];
+    const cell = index % CRYPT_CELLS_PER_REALM;
+    const col = cell % CRYPT_GRID_COLS;
+    const row = Math.floor(cell / CRYPT_GRID_COLS) % CRYPT_GRID_ROWS;
+    const cellW = realm.w / CRYPT_GRID_COLS;
+    const cellH = realm.h / CRYPT_GRID_ROWS;
     const rect = {
-      x: CRYPT_REALM.x + col * cellW + CRYPT_CELL_PAD,
-      y: CRYPT_REALM.y + row * cellH + CRYPT_CELL_PAD,
+      x: realm.x + col * cellW + CRYPT_CELL_PAD,
+      y: realm.y + row * cellH + CRYPT_CELL_PAD,
       w: cellW - CRYPT_CELL_PAD * 2,
       h: cellH - CRYPT_CELL_PAD * 2,
     };
@@ -6954,7 +7071,7 @@ export class MainScene extends Phaser.Scene {
     crypt.layout = layout;
     // Pillars double as the Palewake's tether-breakers, so the gloam vault gets
     // a few extra — a fight with nothing to hide behind isn't a fight.
-    const occluders = this.renderDungeonShell(crypt, rng, solids, crypt.theme === "gloam" ? 4 : 0);
+    const occluders = this.renderDungeonShell(crypt, rng, solids, crypt.theme === "gloam" ? 4 : 0, crypt.def.shell);
 
     // Side-room chest (reuses LootContainer + ChestMenu verbatim). The texture
     // key was "shack_chest", which BootScene never generates — the chest was
@@ -7003,20 +7120,39 @@ export class MainScene extends Phaser.Scene {
       });
       // Deliberately uneven per room (the standing organic-density preference):
       // some rooms are a swarm, some hold one bruiser, some are nearly empty.
+      //
+      // The MIX is themed per warden, so a crypt's population belongs to it the
+      // way its walls now do (the user: the whole dungeon should be thematic, not
+      // just the boss and the drop). Same three species everywhere — this is a
+      // weighting, not a new roster — but each crypt leans on the one that
+      // matches its warden's fight, so they play differently as well as look
+      // different:
+      //   gloam  (Palewake)     — swarms. You need room to break its tether, and
+      //                           Murklings are what deny you that room.
+      //   ember  (Kilnborn)     — bruisers. Its burning floor already shrinks the
+      //                           arena; slow heavies punish you for not moving.
+      //   blood  (Sanguinarch)  — Blighttoads. Poison and bleed feed the exact
+      //                           state its Feed channel wants you in.
+      const weights =
+        crypt.theme === "gloam"
+          ? { swarm: 6, poison: 8 } // rest bruiser
+          : crypt.theme === "ember"
+            ? { swarm: 3, poison: 5 }
+            : { swarm: 2, poison: 8 };
       const roll = rng.between(1, 10);
-      if (roll <= 4) {
+      if (roll <= weights.swarm) {
         for (let i = 0; i < rng.between(3, 5); i++) {
           const p = spot();
           addEnemy(new Murkling(this, { x: p.x, y: p.y, elite: this.rollElite(rng) }));
         }
-      } else if (roll <= 7) {
+      } else if (roll <= weights.poison) {
         for (let i = 0; i < rng.between(1, 2); i++) {
           const p = spot();
           addEnemy(new Blighttoad(this, { x: p.x, y: p.y, elite: this.rollElite(rng) }));
         }
       } else {
-        // roll 8-10: a bruiser room. (Fenlurker cut 2026-07-23 — its share folded
-        // into the Mosswretch, keeping the crypt's "one big thing" rooms.)
+        // A bruiser room. (Fenlurker cut 2026-07-23 — its share folded into the
+        // Mosswretch, keeping the crypt's "one big thing" rooms.)
         const p = spot();
         addEnemy(new Mosswretch(this, { x: p.x, y: p.y, elite: this.rollElite(rng, 2) }));
       }
@@ -7090,7 +7226,11 @@ export class MainScene extends Phaser.Scene {
         y,
         texture: "crypt_node_sealed",
         resource: "moonsilver",
-        amount: rng.between(2, 3),
+        // 2-3 -> 3-5 (the user: "moonsilver is insanely scarce"). Demand is much
+        // larger than supply was: the Gemwright's Table alone costs 4, then
+        // every jewelry recipe wants 2-4, every augment 2, and Gloamsteel gear
+        // 2 per piece. Clearing a crypt should visibly move that needle.
+        amount: rng.between(3, 5),
         action: "mine",
         displayName: "Moonsilver Seam",
         loose: false,
@@ -7296,6 +7436,22 @@ export class MainScene extends Phaser.Scene {
     this.sfx.levelUp();
   }
 
+  // One maw onto the map. Both discovery routes (walking up to a door, and
+  // crafting the effigy) funnel through here so they can never disagree about
+  // what "discovered" means again.
+  private markMawDiscovered(maw: { x: number; y: number; discovered: boolean }): void {
+    if (maw.discovered) return;
+    maw.discovered = true;
+    if (this.lair) this.lair.discoveredOnMap = true; // "at least one door is known"
+    this.exploredMap.addLandmark({
+      worldX: maw.x,
+      worldY: maw.y,
+      iconKey: "map_gorge",
+      label: "The Sunken Gorge",
+      tint: 0x4fbf86,
+    });
+  }
+
   // Crafting the effigy puts EVERY maw on the map. A door in a 28000px world is
   // not findable by exploration, so this mirrors the Duneshaper altars' clue
   // system rather than hoping the player wanders past — and with several doors
@@ -7305,18 +7461,10 @@ export class MainScene extends Phaser.Scene {
     const lair = this.lair;
     if (!lair || this.lairRevealed) return;
     this.lairRevealed = true;
-    if (!lair.discoveredOnMap) {
-      lair.discoveredOnMap = true;
-      for (const maw of lair.maws) {
-        this.exploredMap.addLandmark({
-          worldX: maw.x,
-          worldY: maw.y,
-          iconKey: "map_gorge",
-          label: "The Sunken Gorge",
-          tint: 0x4fbf86,
-        });
-      }
-    }
+    // Per maw, and NOT gated on "has any maw been discovered" — that outer guard
+    // is what silently swallowed this whole reveal once the player had already
+    // stumbled onto one door.
+    for (const maw of lair.maws) this.markMawDiscovered(maw);
     const nearest = lair.maws.reduce((best, m) =>
       Phaser.Math.Distance.Between(this.player.x, this.player.y, m.x, m.y) <
       Phaser.Math.Distance.Between(this.player.x, this.player.y, best.x, best.y)
@@ -8055,16 +8203,14 @@ export class MainScene extends Phaser.Scene {
     // The Sunken Gorge (Phase 4d s2) — the bayou finale. Crafting the effigy
     // reveals it outright (onMiretyrantEffigyCrafted); this covers walking into
     // it first, which is the better story when it happens.
-    if (this.lair && !this.lair.discoveredOnMap && inPoiReveal(this.lair.x, this.lair.y)) {
-      this.lair.discoveredOnMap = true;
-      this.exploredMap.addLandmark({
-        worldX: this.lair.x,
-        worldY: this.lair.y,
-        iconKey: "map_gorge",
-        label: "The Sunken Gorge",
-        tint: 0x4fbf86,
-      });
-      this.eventLog.add("poi", "Discovered: The Sunken Gorge");
+    // Tested PER MAW: `lair.x/y` is only the first door, so the old check meant
+    // walking right up to any other one discovered nothing at all.
+    if (this.lair) {
+      for (const maw of this.lair.maws) {
+        if (maw.discovered || !inPoiReveal(maw.x, maw.y)) continue;
+        this.markMawDiscovered(maw);
+        this.eventLog.add("poi", "Discovered: The Sunken Gorge");
+      }
     }
     // Sunken Forges (Phase 3 POI 2) — discovered fixed landmarks, fiery
     // orange-red markers, same one-shot treatment as the other POIs.
@@ -8990,6 +9136,13 @@ export class MainScene extends Phaser.Scene {
   // require detouring through the inventory each time.
   private collectNode(node: ResourceNode): void {
     this.sfx.pickup();
+    // Consumed on contact — never enters the backpack (see
+    // collectGravemarkRubbing). Handled here, before every other branch, so it
+    // can't be routed to a hotbar slot or bounce off a full backpack.
+    if (node.resource === "gravemark_rubbing") {
+      this.collectGravemarkRubbing();
+      return;
+    }
     if (itemDef(node.resource)?.placeable) {
       const row2Slot = this.hotbarRow2Assignable(node.resource);
       if (row2Slot !== null) {
@@ -9030,7 +9183,7 @@ export class MainScene extends Phaser.Scene {
       Phaser.Math.Distance.Between(this.player.x, this.player.y, enemy.x, enemy.y) <= this.enemyReach(enemy);
     if (!inReach) return;
 
-    const cooldownMs = weaponCooldownMs(this.equippedWeapon);
+    const cooldownMs = weaponCooldownMs(this.equippedWeapon) * this.attackCooldownMult();
     if (this.time.now - this.lastWeaponHitAt < cooldownMs) return;
 
     // Damage type routes the on-hit skill XP. Weapon damage itself scales with
@@ -9254,7 +9407,7 @@ export class MainScene extends Phaser.Scene {
     const inReach = Phaser.Math.Distance.Between(this.player.x, this.player.y, enemy.x, enemy.y) <= cfg.maxRangePx;
     if (!inReach) return;
 
-    const cooldownMs = weaponCooldownMs(this.equippedWeapon);
+    const cooldownMs = weaponCooldownMs(this.equippedWeapon) * this.attackCooldownMult();
     if (this.time.now - this.lastWeaponHitAt < cooldownMs) return;
 
     const dmgType = weaponPrimaryDamageType(this.equippedWeapon);
@@ -9578,7 +9731,9 @@ export class MainScene extends Phaser.Scene {
     this.castAbility(id);
     // Ring of Quickening (B3-P2b) shortens the cooldown; the HUD sweep reads the
     // same reduced value in abilityEntries().
-    this.abilityReadyAt[key] = this.time.now + def.cooldownMs * this.equipEffects.abilityCooldownMult();
+    this.abilityReadyAt[key] =
+      this.time.now +
+      def.cooldownMs * this.equipEffects.abilityCooldownMult() * this.progression.abilityCooldownMult();
   }
 
   // Dispatch on the FAMILY, never the id — that's what lets a lesser and a
@@ -9607,6 +9762,12 @@ export class MainScene extends Phaser.Scene {
       case "aegis":
         this.castAegis(power, def.activeMs ?? 0);
         break;
+      case "snare":
+        this.castMireSnare(power);
+        break;
+      case "haste":
+        this.castBloodrush(power, def.activeMs ?? 0);
+        break;
     }
   }
 
@@ -9618,6 +9779,8 @@ export class MainScene extends Phaser.Scene {
         return this.bloodpactUntil;
       case "aegis":
         return this.aegisUntil;
+      case "haste":
+        return this.hasteUntil;
       default:
         return 0;
     }
@@ -9738,7 +9901,7 @@ export class MainScene extends Phaser.Scene {
     const cy = this.player.y;
     const r = ABILITY_GRAVEBIND_RADIUS * power;
     for (const enemy of [...this.enemies]) {
-      if (!enemy.active) continue;
+      if (!enemy.active || enemy.depleted) continue;
       const d = Phaser.Math.Distance.Between(cx, cy, enemy.x, enemy.y);
       if (d > r) continue;
       // Pull inward to the hold ring, never past the player (a yank that
@@ -9746,6 +9909,17 @@ export class MainScene extends Phaser.Scene {
       const pulled = Math.max(ABILITY_GRAVEBIND_HOLD_RADIUS, d - ABILITY_GRAVEBIND_PULL * power);
       const ang = Phaser.Math.Angle.Between(cx, cy, enemy.x, enemy.y);
       enemy.setPosition(cx + Math.cos(ang) * pulled, cy + Math.sin(ang) * pulled);
+      // Break whatever it was in the middle of. Without this the yank moved a
+      // charging/winding-up enemy but left its attack committed, so it simply
+      // finished the swing from its new spot and connected anyway — the ability
+      // looked like it had done nothing (the user: "gravebind seems to kinda not
+      // work sometimes"). Its next attack now starts from the top, telegraph and
+      // all, which is the whole souls-like contract and what "staggering"
+      // promised. Velocity has to be zeroed alongside it: Arcade bodies have no
+      // drag, so a mid-pounce enemy would otherwise keep coasting straight back
+      // out of the pull (the same defect B4-P6 fixed at the AI cull).
+      enemy.resetAttackState(this.time.now);
+      (enemy.body as Phaser.Physics.Arcade.Body | undefined)?.setVelocity(0, 0);
       enemy.applySlow(ABILITY_GRAVEBIND_SLOW, ABILITY_GRAVEBIND_SLOW_MS, this.time.now);
     }
     const fx = this.add
@@ -9815,6 +9989,72 @@ export class MainScene extends Phaser.Scene {
       .setAlpha(0.85);
     this.tweens.add({ targets: fx, scale: 0.42, alpha: 0, duration: 380, ease: "Cubic.easeOut", onComplete: () => fx.destroy() });
     this.sfx.upgrade();
+  }
+
+  // Q/E/R — Mire Snare: root everything nearby in place. Structurally
+  // castGravebind's loop with the PULL removed: nothing is repositioned, so it
+  // reads as the ground grabbing them rather than you dragging them.
+  //
+  // Deliberately does NOT reset attack state (Gravebind does): a rooted enemy
+  // finishing its swing is the counterplay — root, then step out of reach.
+  private castMireSnare(power: number): void {
+    const cx = this.player.x;
+    const cy = this.player.y;
+    const r = ABILITY_SNARE_RADIUS * power;
+    let caught = 0;
+    for (const enemy of [...this.enemies]) {
+      if (!enemy.active || enemy.depleted) continue;
+      if (Phaser.Math.Distance.Between(cx, cy, enemy.x, enemy.y) > r) continue;
+      // A hard 0 move multiplier — applySlow already keeps the STRONGER slow,
+      // so this can't be weakened by an overlapping Gravebind.
+      enemy.applySlow(0, ABILITY_SNARE_MS * power, this.time.now);
+      (enemy.body as Phaser.Physics.Arcade.Body | undefined)?.setVelocity(0, 0);
+      caught++;
+    }
+    const fx = this.add
+      .image(cx, cy, "light_soft")
+      .setTint(0x4f7a4a)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setDepth(ysortDepth(cy) + 1)
+      .setScale(0.1)
+      .setAlpha(0.8);
+    // Blooms outward and holds briefly — the inverse of Gravebind's collapse.
+    this.tweens.add({
+      targets: fx,
+      scale: (r * 2) / 256,
+      alpha: 0,
+      duration: 460,
+      ease: "Cubic.easeOut",
+      onComplete: () => fx.destroy(),
+    });
+    this.sfx.hit();
+    if (caught > 0) this.eventLog.add("combat", `Mire Snare roots ${caught}`);
+  }
+
+  // Q/E/R — Bloodrush: a timed attack-speed window. The multiplier is read at
+  // the single attackCooldownMult() choke point, so it covers melee, ranged and
+  // the den-smash path with no per-path wiring.
+  private castBloodrush(power: number, activeMs: number): void {
+    this.hasteUntil = this.time.now + activeMs * power;
+    // Stronger power shortens the cooldown further, floored so it can never
+    // reach zero (an instant-attack loop).
+    this.hasteMult = Math.max(0.35, 1 - (1 - ABILITY_HASTE_MULT) * power);
+    const fx = this.add
+      .image(this.player.x, this.player.y, "light_soft")
+      .setTint(0xff5a4a)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setDepth(ysortDepth(this.player.y) + 1)
+      .setScale(0.08)
+      .setAlpha(0.85);
+    this.tweens.add({ targets: fx, scale: 0.36, alpha: 0, duration: 340, ease: "Cubic.easeOut", onComplete: () => fx.destroy() });
+    this.sfx.upgrade();
+  }
+
+  // Weapon-cooldown multiplier. 1 normally; Bloodrush's window scales it down.
+  // Every attack path (melee, ranged, den smash) multiplies its weapon cooldown
+  // by this, so a new attack path gets the haste for free.
+  private attackCooldownMult(): number {
+    return this.time.now < this.hasteUntil ? this.hasteMult : 1;
   }
 
   // Aim fallback when the pointer is basically on the player: the facing dir.
@@ -10804,6 +11044,7 @@ export class MainScene extends Phaser.Scene {
   private resumeAfterWin(): void {
     this.runEndUI.hide();
     this.runOver = false;
+    this.run.resume(); // see Run.resume() — the win's score is already banked
     this.inProgressMode = true;
     if (!this.inProgressBanner) {
       this.inProgressBanner = this.add
@@ -10835,6 +11076,7 @@ export class MainScene extends Phaser.Scene {
     this.runEndUI.hide();
     this.runOver = false;
     this.isDead = false;
+    this.run.resume(); // the clock keeps running — you're still playing
     // Full pools + a clean slate (onPlayerDeath already cleared buffs/bleed/
     // poison, but re-clear defensively in case anything re-applied since).
     this.health.reset();
@@ -11678,8 +11920,18 @@ export class MainScene extends Phaser.Scene {
     // waste. Filter the pool against current ownership before rolling; if that
     // empties it, rollIfEmpty simply skips the epic (and doesn't burn pity).
     const pool = epicPoolFor(table);
-    const keys = pool.keys.filter((k) => !this.ownsItemAnywhere(k));
+    const keys = pool.keys.filter((k) => !this.ownsItemAnywhere(k) && !this.epicsGranted.has(k));
+    const before = keys.map((k) => loot.items.count(k));
     loot.rollIfEmpty(table, { epics: { chance: pool.chance, keys }, pity: this.epicPity });
+    // Reserve whatever this container actually got, so no OTHER container can
+    // roll the same unique. The ownership filter above can't do this on its own:
+    // every world container is pre-rolled during create() (so its glow reflects
+    // its contents from the start), at which point the player owns nothing at
+    // all — so two chests happily rolled the same epic (the user: "duplicate epic
+    // items should never be present in chests"). One copy per run, per key.
+    keys.forEach((k, i) => {
+      if (loot.items.count(k) > before[i]) this.epicsGranted.add(k);
+    });
   }
 
   // True if the player holds `key` anywhere it can live: backpack, hotbar, or
@@ -12379,7 +12631,7 @@ export class MainScene extends Phaser.Scene {
         sortAndStack(this.backpack);
         this.inventoryMenu.refresh();
       },
-      upgradeReady: (key, tier) => this.hasReadyUpgrade(key, tier),
+      upgradeReady: (key, tier, appliedIds) => this.hasReadyUpgrade(key, tier, appliedIds),
     });
   }
 
@@ -12391,7 +12643,7 @@ export class MainScene extends Phaser.Scene {
   // upgradeBlockReason (Workbench-proximity), so the arrow is a stable "you have
   // the mats" nudge that doesn't flicker as the player moves — clicking Upgrade
   // still surfaces any proximity gate, exactly like the crafting menu does.
-  private hasReadyUpgrade(itemKey: string, tier: number): boolean {
+  private hasReadyUpgrade(itemKey: string, tier: number, appliedIds?: string[]): boolean {
     const next = [
       ...weaponUpgradesForItem(itemKey),
       ...armorUpgradesForItem(itemKey),
@@ -12400,16 +12652,32 @@ export class MainScene extends Phaser.Scene {
     if (next && this.upgradeIngredientsKnown(next) && this.canAffordUpgrade(next)) return true;
     // Stations (no-ladder model) can be upgraded too, so a station sitting in the
     // hotbar should show the arrow like a placed one does (the user: "workstations
-    // should show the upgrade yellow triangle while in the hotbar"). Approximate
-    // the applied count by tier (level == #applied): ready if this instance still
-    // has an un-applied, discovered, affordable station upgrade.
+    // should show the upgrade yellow triangle while in the hotbar").
+    //
+    // The set of upgrades this instance has ALREADY APPLIED has to come out of
+    // the candidate list first. It didn't, so `some(affordable)` kept matching an
+    // early, cheap, long-since-applied upgrade — a Workbench that had Tool
+    // Sharpener (twine/wood/stone: trivially affordable by the late game) showed
+    // a permanent "upgrade ready" arrow no matter how upgraded it actually was
+    // (the user: "telling me I have an upgrade available for workbench/fire in my
+    // hotbar when they are fully upgraded"). The PLACED-station check has always
+    // filtered by applied id; only this item-stack path didn't.
+    const applied = new Set(appliedIds ?? []);
     const stationUps = upgradesForItem(itemKey);
-    if (
-      stationUps.length > tier &&
-      stationUps.some((u) => this.upgradeIngredientsKnown(u) && this.canAffordUpgrade(u))
-    )
-      return true;
-    return false;
+    if (stationUps.length === 0) return false;
+    // Only an instance that has ALREADY been upgraded gets the carried-item
+    // reminder. A pristine spare always has every upgrade pending, so it wore a
+    // permanent arrow that could never be cleared — and you can't apply an
+    // upgrade to something in your hotbar anyway, you have to place it first. The
+    // PLACED station keeps its own glyph (stationHasReadyUpgrade), which is where
+    // the prompt actually belongs; this one exists so a partly-upgraded station
+    // you're carrying still reminds you it has room left.
+    if (tier <= 0 && applied.size === 0) return false;
+    // Prefer the exact applied-id set the instance carries; fall back to the
+    // count approximation (level == #applied, and the list is tier-sorted) for an
+    // instance that has a tier but no recorded ids.
+    const remaining = applied.size > 0 ? stationUps.filter((u) => !applied.has(u.id)) : stationUps.slice(tier);
+    return remaining.some((u) => this.upgradeIngredientsKnown(u) && this.canAffordUpgrade(u));
   }
 
   // Station equivalent: a placed station has an affordable upgrade ready if any
@@ -12583,17 +12851,14 @@ export class MainScene extends Phaser.Scene {
       return;
     }
 
-    // Rings can occupy EITHER ring slot (B3-P2b): a ring item always declares
-    // armorSlot "ring1", so route it into the first empty of ring1/ring2 (falling
-    // back to swapping ring1 if both are full) — letting the player wear two rings.
-    const targetSlot: EquipSlot =
-      slot === "ring1" || slot === "ring2"
-        ? this.equipment.get("ring1") === null
-          ? "ring1"
-          : this.equipment.get("ring2") === null
-            ? "ring2"
-            : "ring1"
-        : slot;
+    // An item declares a GROUP, not a destination: any special fits any of the
+    // four special slots and any ability item fits any of the three Q/E/R slots
+    // (see EquipSlot). So route to the first FREE slot in the item's group, and
+    // only swap — into the slot the item nominally declares — once the group is
+    // full. Generalised from what used to be a ring1/ring2 special case, which
+    // was the only pair that could do this.
+    const group = slotGroup(slot);
+    const targetSlot: EquipSlot = this.equipment.firstFreeIn(group) ?? slot;
     const previous = this.equipment.get(targetSlot);
     this.equipment.set(targetSlot, { key: stack.key, tier: stack.tier ?? 0, upgrades: stack.upgrades });
     container.set(index, null);
@@ -12939,7 +13204,14 @@ export class MainScene extends Phaser.Scene {
         id: "noregen",
         name: this.currentRegenMult <= 0 ? "No Regen" : "Weakened Healing",
         icon: "icon_status_noregen",
-        detail: this.currentRegenMult <= 0 ? "Healing is suppressed here" : `Healing ${pct}% weaker here`,
+        // Names the TERRAIN explicitly. Sitting next to the Poisoned icon with
+        // only "here" to go on, this read as poison's doing (the user: "still
+        // saying healing is 50% while in poison?") — poison hasn't touched regen
+        // since the 2026-07-23 batch; the ground you're standing on has.
+        detail:
+          this.currentRegenMult <= 0
+            ? "This ground suppresses healing — move to clear ground"
+            : `This ground weakens healing ${pct}% — move to clear ground`,
         color: 0x9a3a46,
       });
     }
@@ -13145,6 +13417,58 @@ export class MainScene extends Phaser.Scene {
       this.discoveredBiomes.add(b);
       this.eventLog.add("biome", `Discovered: ${BIOME_NAMES[b]}`);
     }
+  }
+
+  // Put the NEAREST still-unknown Sunken Crypt on the map, and say which way it
+  // lies. Returns false if every crypt is already known.
+  //
+  // This is the payload of a Gravemark Rubbing (see collectGravemarkRubbing).
+  // An earlier pass revealed ALL eighteen crypts the moment you set foot in the
+  // bayou — which fixed "an hour in and I can't craft anything" by deleting
+  // exploration outright (the user, rightly: "I don't want it to reveal the whole
+  // biome"). One at a time, earned, is the same help paid out in increments: the
+  // map fills in as you fight through the swamp instead of arriving pre-solved.
+  //
+  // Each marker names its crypt's theme, so it also tells you which ability is
+  // buried there and a run can be steered toward the build you want.
+  private revealNearestCrypt(): boolean {
+    let best: SunkenCrypt | null = null;
+    let bestD = Infinity;
+    for (const crypt of this.crypts) {
+      if (crypt.discoveredOnMap) continue;
+      const d = Phaser.Math.Distance.Between(this.player.x, this.player.y, crypt.x, crypt.y);
+      if (d < bestD) {
+        bestD = d;
+        best = crypt;
+      }
+    }
+    if (!best) return false;
+    best.discoveredOnMap = true;
+    this.exploredMap.addLandmark({
+      worldX: best.x,
+      worldY: best.y,
+      iconKey: best.def.mapMarker,
+      label: best.def.name,
+      tint: best.def.lightTint,
+    });
+    this.worldMapUI.markDirty();
+    const dir = this.compassDir(this.player.x, this.player.y, best.x, best.y);
+    this.eventLog.add("poi", `The rubbing pulls ${dir} — ${best.def.name} is marked on your map.`);
+    this.hints.trigger("crypt_found");
+    return true;
+  }
+
+  // A Gravemark Rubbing is consumed the instant it's picked up: it's a clue, not
+  // an inventory item, so there's nothing to manage and no way to hoard a stack
+  // of them into a de-facto reveal-all. Dropped by bayou creatures, so the thing
+  // that finds you dungeons is the thing you were already doing down there.
+  private collectGravemarkRubbing(): void {
+    if (this.revealNearestCrypt()) {
+      this.sfx.upgrade();
+      return;
+    }
+    // Every crypt already known — say so rather than silently eating it.
+    this.eventLog.add("info", "The rubbing shows nothing new — every crypt is already marked.");
   }
 
   // DEV: reveal the entire explored map (all fog cleared) + open the full map, for

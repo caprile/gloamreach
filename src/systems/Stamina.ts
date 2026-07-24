@@ -2,7 +2,12 @@
 // food, a much smaller max so a full sprint burns out in ~3s just like a
 // full pool does today) — not implemented yet, but keep MAX_STAMINA easy to
 // turn into a dynamic value fed by food level later.
-const MAX_STAMINA = 100;
+// 100 -> 130. A flat baseline lift so ordinary swinging and dodging fits inside
+// the starting pool, making Endurance a build choice rather than the price of
+// participating (the user: "I shouldn't have to put a million points into stam
+// just to have basic combat"). Paired with the ~0.7x weapon-cost rescale in
+// Weapons.ts; together a starting Primal Spear goes from 6 swings a bar to ~11.
+const MAX_STAMINA = 130;
 const REGEN_PER_SEC = 20; // full refill from empty in ~5s
 const REGEN_DELAY_MS = 800; // pause after any spend before regen resumes
 

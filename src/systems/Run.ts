@@ -96,6 +96,17 @@ export class Run {
     this.state = "ended";
   }
 
+  // Put an ended run back on the clock. Both "Continue" paths (past a win, and
+  // the test-mode respawn after a death) un-freeze the world but used to leave
+  // this at "ended", so tick() silently stopped accumulating and the run timer
+  // sat frozen for the rest of the session (the user: "timer should keep going
+  // when you hit continue"). `outcome` is deliberately left alone — a score for
+  // the finished run is already recorded, and if the continued run later ends
+  // for real, endRun() forces the true outcome via setOutcome().
+  resume(): void {
+    this.state = "active";
+  }
+
   // Force the recorded outcome even if the run already ended. Used only for the
   // playtest "Continue past the win" path: a won run that's later ended by death
   // must read as a death on the end screen (end() no-ops once ended).

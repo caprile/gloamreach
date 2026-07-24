@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import { itemDef, type ItemDef, type ItemStat } from "../systems/Items";
+import { EQUIP_SLOTS, slotGroup } from "../systems/Equipment";
 import { stationDisplayName } from "../systems/StationUpgrades";
 import { augmentDef, isAugmentableItem, MAX_AUGMENTS_PER_ITEM } from "../systems/GearAugments";
 import {
@@ -69,6 +70,22 @@ export class Tooltip {
 
     const name = tier !== undefined ? stationDisplayName(key, tier) : def.name;
     const lines = [name, "", def.description];
+    // Where this thing goes, stated up front. An item's slot used to be
+    // guessable only by dragging it around the paper doll (the user: "the items
+    // in my inventory, the specials, it doesn't tell me what slot it can go
+    // into"). Ammo is excluded — it reads as a material, and the Ammo slot is
+    // labelled on the doll anyway.
+    if (def.armorSlot && def.armorSlot !== "ammo") {
+      const group = slotGroup(def.armorSlot);
+      lines.push("");
+      lines.push(
+        group === "ability"
+          ? "Equips to: any Ability slot (Q / E / R)"
+          : group === "special"
+            ? "Equips to: any Special slot"
+            : `Equips to: ${EQUIP_SLOTS.find((s) => s.id === def.armorSlot)?.label ?? def.armorSlot}`,
+      );
+    }
     if (def.stats?.length) {
       lines.push("");
       for (const s of def.stats) lines.push(`${s.label}: ${this.statValue(def, s, tier ?? 0)}`);

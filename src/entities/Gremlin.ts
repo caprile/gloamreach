@@ -276,7 +276,7 @@ export class RangedGremlin extends Enemy {
   }
 
   private fireShot(playerX: number, playerY: number, now: number): void {
-    this.markAttackLanded(now);
+    this.markAttackAttempted(now); // a thrown rock is an ATTEMPT — only a landed one resets the give-up clock
     const angle = Phaser.Math.Angle.Between(this.x, this.y, playerX, playerY);
     const cfg: ProjectileConfig = {
       x: this.x,
@@ -287,6 +287,7 @@ export class RangedGremlin extends Enemy {
       texture: "gremlin_rock",
       maxRangePx: PROJECTILE_MAX_RANGE,
       sourceIsPlayer: false,
+      sourceEnemy: this,
     };
     (this.scene as unknown as ProjectileHost).spawnProjectile(cfg);
   }

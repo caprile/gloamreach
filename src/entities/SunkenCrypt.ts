@@ -28,6 +28,27 @@ export interface CryptThemeDef {
   wardenName: string;
   lightTint: number;
   name: string;
+  // Interior shell textures. Each warden's crypt is a different PLACE, not the
+  // same grey box with a different boss in it — see BootScene's cryptShell().
+  shell: {
+    floor: string;
+    wall: string;
+    pillar: string;
+    rubble: string;
+    brazier: string;
+  };
+}
+
+// Shell texture set for a theme suffix — the naming contract BootScene's
+// cryptShell() generates against.
+function shellFor(suffix: string): CryptThemeDef["shell"] {
+  return {
+    floor: `crypt_floor_${suffix}`,
+    wall: `crypt_wall_${suffix}`,
+    pillar: `crypt_pillar_${suffix}`,
+    rubble: `crypt_rubble_${suffix}`,
+    brazier: `crypt_brazier_${suffix}`,
+  };
 }
 
 export const CRYPT_THEMES: Record<CryptTheme, CryptThemeDef> = {
@@ -40,6 +61,7 @@ export const CRYPT_THEMES: Record<CryptTheme, CryptThemeDef> = {
     wardenName: "The Palewake",
     lightTint: 0x9a5cff,
     name: "Palewake Crypt",
+    shell: shellFor("gloam"),
   },
   ember: {
     entranceTexture: "crypt_entrance_ember",
@@ -50,6 +72,7 @@ export const CRYPT_THEMES: Record<CryptTheme, CryptThemeDef> = {
     wardenName: "The Kilnborn",
     lightTint: 0xff6a1a,
     name: "Kilnborn Crypt",
+    shell: shellFor("ember"),
   },
   blood: {
     entranceTexture: "crypt_entrance_blood",
@@ -60,6 +83,7 @@ export const CRYPT_THEMES: Record<CryptTheme, CryptThemeDef> = {
     wardenName: "The Sanguinarch",
     lightTint: 0xc02a44,
     name: "Sanguinarch Crypt",
+    shell: shellFor("blood"),
   },
 };
 

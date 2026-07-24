@@ -342,7 +342,7 @@ export class Hexling extends Enemy {
   // them), so armor is worth wearing against a Hexling instead of being fully
   // negated by an all-magic volley.
   private castBolt(playerX: number, playerY: number, now: number): void {
-    this.markAttackLanded(now);
+    this.markAttackAttempted(now); // firing is an ATTEMPT — a landed bolt resets the give-up clock instead
     const baseAngle = Phaser.Math.Angle.Between(this.x, this.y, playerX, playerY);
     const middle = (BOLT_COUNT - 1) / 2; // index 1 for BOLT_COUNT=3
     for (let i = 0; i < BOLT_COUNT; i++) {
@@ -359,6 +359,7 @@ export class Hexling extends Enemy {
         sourceIsPlayer: false,
         // Center = fire (armor-bypassing); outer = physical (undefined → armor applies).
         damageType: isCenter ? "fire" : undefined,
+        sourceEnemy: this,
       };
       (this.scene as unknown as ProjectileHost).spawnProjectile(cfg);
     }

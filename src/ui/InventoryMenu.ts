@@ -105,7 +105,7 @@ export interface InventoryMenuDeps {
   // upgrade the player could apply right now — drives the small pulsing
   // "upgrade ready" arrow on backpack weapons/tools and worn armor (S3).
   // Materials-only (position-independent) so it doesn't flicker with movement.
-  upgradeReady: (key: string, tier: number) => boolean;
+  upgradeReady: (key: string, tier: number, appliedIds?: string[]) => boolean;
 }
 
 export const PANEL_X = 16;
@@ -155,6 +155,8 @@ const BP_SECTION_H = 21; // height of a "Materials"/"Gear"/... section header ro
 const CATEGORY_SECTIONS: { cat: ItemCategory; label: string }[] = [
   { cat: "material", label: "Materials" },
   { cat: "gear", label: "Gear" },
+  { cat: "special", label: "Specials" },
+  { cat: "ability", label: "Abilities (Q/E/R)" },
   { cat: "station", label: "Stations" },
   { cat: "food", label: "Food" },
   { cat: "curio", label: "Trophies & Relics" },
@@ -164,10 +166,33 @@ const GRID_GAP = 24;
 const ARMOR_X = BACKPACK_X + BACKPACK_W + GRID_GAP; // 358
 const ARMOR_Y = GRID_Y;
 const ARMOR_W = ARMOR_COLS * SLOT + (ARMOR_COLS - 1) * GAP; // 150
-// Computed (not a literal) so the grid grows a row automatically if
-// EQUIP_SLOTS ever gains another entry (e.g. the "ammo" slot did).
-const ARMOR_ROWS_MAX = Math.ceil(EQUIP_SLOTS.length / ARMOR_COLS);
-const ARMOR_H = ARMOR_ROWS_MAX * SLOT + (ARMOR_ROWS_MAX - 1) * GAP;
+// Every slot carries a caption under it, so a slot's name is readable even when
+// it's full (the user: "when an equipment slot is full I can't see what the name
+// of the slot is" — the name used to be placeholder text INSIDE the box, which
+// the item icon then covered).
+const ARMOR_LABEL_H = 13;
+const ARMOR_ROW_PITCH = SLOT + GAP + ARMOR_LABEL_H;
+
+// Explicit paper-doll placement rather than flowing EQUIP_SLOTS into a grid, so
+// the three groups read as three groups (the user's layout): gear down column 1,
+// the interchangeable specials down column 2, the Q/E/R row underneath, ammo
+// last. renderArmor() and armorSlotAt() both derive from this one table, which
+// is what keeps drawing and hit-testing in lockstep.
+const ARMOR_LAYOUT: Record<EquipSlot, { col: number; row: number }> = {
+  helmet: { col: 0, row: 0 },
+  chest: { col: 0, row: 1 },
+  legs: { col: 0, row: 2 },
+  special1: { col: 1, row: 0 },
+  special2: { col: 1, row: 1 },
+  special3: { col: 1, row: 2 },
+  special4: { col: 1, row: 3 },
+  ability1: { col: 0, row: 4 },
+  ability2: { col: 1, row: 4 },
+  ability3: { col: 2, row: 4 },
+  ammo: { col: 0, row: 5 },
+};
+const ARMOR_ROWS_MAX = Math.max(...Object.values(ARMOR_LAYOUT).map((p) => p.row)) + 1;
+const ARMOR_H = ARMOR_ROWS_MAX * ARMOR_ROW_PITCH - GAP;
 
 // Combat-stats column: a 3rd side-by-side section, right of Equipment —
 // live "what am I currently equipped with" summary (damage/attack speed/
@@ -393,12 +418,17 @@ export class InventoryMenu {
     const dy = screenY - ARMOR_Y;
     if (dx < 0 || dy < 0) return null;
     const col = Math.floor(dx / (SLOT + GAP));
-    const row = Math.floor(dy / (SLOT + GAP));
+    const row = Math.floor(dy / ARMOR_ROW_PITCH);
     if (col >= ARMOR_COLS || row >= ARMOR_ROWS_MAX) return null;
-    if (dx - col * (SLOT + GAP) > SLOT || dy - row * (SLOT + GAP) > SLOT) return null;
-    const index = row * ARMOR_COLS + col;
-    const slots = this.deps.armorSlots();
-    return index < slots.length ? slots[index].id : null;
+    // Reject the caption strip and the inter-column gutter — a drop there isn't
+    // on a slot.
+    if (dx - col * (SLOT + GAP) > SLOT || dy - row * ARMOR_ROW_PITCH > SLOT) return null;
+    // Inverse of ARMOR_LAYOUT. Derived from the same table renderArmor draws
+    // from, so a layout change can't desync drawing from hit-testing.
+    const hit = (Object.keys(ARMOR_LAYOUT) as EquipSlot[]).find(
+      (id) => ARMOR_LAYOUT[id].col === col && ARMOR_LAYOUT[id].row === row,
+    );
+    return hit ?? null;
   }
 
   // Real backpack container index of the item cell under a screen point, or
@@ -731,11 +761,10 @@ export class InventoryMenu {
 
   private renderArmor(x0: number, y0: number): void {
     const slots = this.deps.armorSlots();
-    slots.forEach((slot, i) => {
-      const col = i % ARMOR_COLS;
-      const row = Math.floor(i / ARMOR_COLS);
-      const x = x0 + col * (SLOT + GAP);
-      const y = y0 + row * (SLOT + GAP);
+    slots.forEach((slot) => {
+      const pos = ARMOR_LAYOUT[slot.id];
+      const x = x0 + pos.col * (SLOT + GAP);
+      const y = y0 + pos.row * ARMOR_ROW_PITCH;
 
       const box = this.scene.add
         .rectangle(x, y, SLOT, SLOT, 0x14181f, 0.9)
@@ -776,15 +805,25 @@ export class InventoryMenu {
         if (slot.count && slot.count > 1) {
           this.addText(x + SLOT - 4, y + SLOT - 3, `${slot.count}`, 11, "#ffffff", 1, 1);
         }
-        if (this.deps.upgradeReady(slot.itemKey, slot.tier ?? 0)) this.addUpgradeArrow(x, y);
+        if (this.deps.upgradeReady(slot.itemKey, slot.tier ?? 0, slot.upgrades)) this.addUpgradeArrow(x, y);
         this.addGemPips(x, y, slot.itemKey, slot.upgrades);
-      } else {
-        this.addText(x + SLOT / 2, y + SLOT / 2, slot.label, 10, "#5b6472", 0.5, 0.5);
       }
 
-      // Q/E/R key badge on the ability-granting special slots (special1/special2/
-      // back) so it's clear which slot maps to which ability when choosing a
-      // special to equip (the user). Shown whether the slot is occupied or empty.
+      // Caption under every slot, occupied or not — this is the slot's name, and
+      // it stays legible with an item icon in the box. Brighter when empty so an
+      // open slot still advertises what it takes.
+      this.addText(
+        x + SLOT / 2,
+        y + SLOT + 2,
+        slot.label,
+        10,
+        slot.itemKey ? "#6b7484" : "#8a93a3",
+        0.5,
+        0,
+      );
+
+      // Q/E/R key badge on the ability slots so it's clear which slot maps to
+      // which ability. Shown whether the slot is occupied or empty.
       const abilityKey = SLOT_ABILITY_KEY[slot.id];
       if (abilityKey) {
         const chip = this.scene.add
@@ -1049,7 +1088,7 @@ export class InventoryMenu {
     if (stack.count > 1) {
       this.addText(x + SLOT - 4, y + SLOT - 3, `${stack.count}`, 11, "#ffffff", 1, 1);
     }
-    if (this.deps.upgradeReady(stack.key, stack.tier ?? 0)) this.addUpgradeArrow(x, y);
+    if (this.deps.upgradeReady(stack.key, stack.tier ?? 0, stack.upgrades)) this.addUpgradeArrow(x, y);
     this.addGemPips(x, y, stack.key, stack.upgrades);
   }
 

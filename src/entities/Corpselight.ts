@@ -30,11 +30,26 @@ const ELITE = S.elite!;
 type HauntMode = "idle" | "engaged";
 
 const AGGRO_RADIUS = 340;
-const DEAGGRO_RADIUS = 700;
+// Trimmed 700→520 (the user playtest: "ranged dudes do not deaggro and they shoot
+// at me with seemingly infinite range"). 700 was the Mirejaw's apex-predator
+// commitment on a creature that never closes — it meant a haunt you'd walked
+// well past was still lobbing orbs at you. A drifting wisp should lose interest.
+const DEAGGRO_RADIUS = 520;
+// The anti-kite governor every OTHER ranged attacker already respects (Hexling
+// 250, Gremlin's projectile max) and this one was missing entirely: it would cast
+// at any distance inside its deaggro radius. Past this it drifts in to get in
+// range instead — which is what makes closing/retreating a real decision.
+const CAST_RANGE = 380;
 const PREFERRED_RANGE = 240; // hovers around this — drifts out if crowded, in if too far
 const DRIFT_SPEED = 85; // a weightless float — still far under a sprint, it never runs you down
 const WANDER_SPEED = 18;
 const WANDER_RADIUS = 90;
+// Stop-and-telegraph before each orb (the user: "dudes still don't stop when they
+// shoot you"). It used to fire mid-drift with no tell at all — the one ranged
+// creature in the game that ignored the souls-like windup contract. Now it plants
+// (velocity 0), pulses, and only then releases: the plant IS the tell, and the
+// window is what you dash out of.
+const CAST_WINDUP_MS = 520;
 
 const MAX_HEALTH = S.hp;
 const ORB_DAMAGE = S.attacks[0].damage; // magic — bypasses armor entirely, so this IS very close to the net number
@@ -51,7 +66,10 @@ const ORB_TURN_RATE = 1.2; // rad/s — loosened 1.9→1.2 (2026-07-23): the orb
 // ~1.5km of chase — the orb outlived the whole engagement. The Projectile miss
 // rule ends most orbs well before this; this is just the backstop for one that
 // never gets near enough to count as dodged.
-const ORB_LIFETIME_MS = 4200;
+// Trimmed 4200→3000 (≈510px of pursuit) alongside CAST_RANGE: the orb's reach and
+// the caster's reach should agree, or the creature's effective range is really
+// CAST_RANGE + orb travel and outrunning it never ends the threat.
+const ORB_LIFETIME_MS = 3000;
 const ORB_MAX_RANGE = 2200; // unused by the homing path, kept honest for the despawn contract
 const CAST_COOLDOWN_MS = 1900;
 
@@ -64,6 +82,9 @@ export class Corpselight extends Enemy {
   private nextRoamAt = 0;
   private readonly orbDamage: number;
   private bobPhase = 0;
+  private castingUntil = 0; // >0 while planted mid-wind-up
+  private castAimX = 0; // locked at wind-up start — the orb does NOT re-aim during the tell
+  private castAimY = 0;
 
   constructor(scene: Phaser.Scene, cfg: { x: number; y: number; elite?: boolean }) {
     const elite = cfg.elite ?? false;
@@ -74,7 +95,10 @@ export class Corpselight extends Enemy {
       displayName: elite ? "Elite Corpselight" : "Corpselight",
       loot: elite
         ? [{ resource: "hex_essence", min: 6, max: 8 }]
-        : [{ resource: "hex_essence", min: 3, max: 5 }],
+        : [
+            { resource: "gravemark_rubbing", min: 1, max: 1, chance: 0.06 },
+            { resource: "hex_essence", min: 3, max: 5 },
+          ],
       maxHealth: elite ? Math.round(MAX_HEALTH * ELITE.hp) : MAX_HEALTH,
       biteDamage: 0, // never melees — every point of its damage is an orb
       elite,
@@ -90,6 +114,11 @@ export class Corpselight extends Enemy {
     this.orbDamage = elite ? Math.round(ORB_DAMAGE * ELITE.damage) : ORB_DAMAGE;
     this.spawnX = cfg.x;
     this.spawnY = cfg.y;
+    // Desynchronise the cast clock. A Drowned Lodge fields 2-3 haunts and they
+    // all started at nextCastAt 0, so engaging one engaged a VOLLEY — every orb
+    // arriving on the same beat forever after. Staggered, the same creatures
+    // read as a rhythm you can weave through rather than a wall.
+    this.nextCastAt = scene.time.now + Phaser.Math.Between(0, CAST_COOLDOWN_MS);
     if (elite) {
       this.speedMult = ELITE.speed;
       this.setScale(ELITE.scale);
@@ -119,13 +148,30 @@ export class Corpselight extends Enemy {
 
     if (dist > DEAGGRO_RADIUS && !this.withinAggroPersist(now)) {
       this.mode = "idle";
+      this.abortCast();
       body.setVelocity(0, 0);
       return false;
     }
     if (this.hasGivenUpPursuit(now)) {
       this.mode = "idle";
       this.enterGivenUpState(now);
+      this.abortCast();
       body.setVelocity(0, 0);
+      return false;
+    }
+
+    if (Math.abs(playerX - this.x) > 3) this.setFlipX(playerX < this.x); // face the player without the tilt
+
+    // Mid-cast: PLANTED. It has committed to this orb — it neither drifts nor
+    // re-aims, so the wind-up is a real window (sidestep the line, or dash).
+    if (this.castingUntil > 0) {
+      body.setVelocity(0, 0);
+      if (now >= this.castingUntil) {
+        this.castingUntil = 0;
+        this.endWindupTell();
+        this.castOrb(this.castAimX, this.castAimY, now);
+        this.nextCastAt = now + CAST_COOLDOWN_MS;
+      }
       return false;
     }
 
@@ -142,13 +188,24 @@ export class Corpselight extends Enemy {
     } else {
       body.setVelocity(0, 0);
     }
-    if (Math.abs(playerX - this.x) > 3) this.setFlipX(playerX < this.x); // face the player without the tilt
 
-    if (now >= this.nextCastAt) {
-      this.castOrb(playerX, playerY, now);
-      this.nextCastAt = now + CAST_COOLDOWN_MS;
+    // Only ever casts from inside CAST_RANGE — outside it, the drift above is
+    // closing the gap and no orb is coming.
+    if (now >= this.nextCastAt && dist <= CAST_RANGE) {
+      this.castingUntil = now + CAST_WINDUP_MS;
+      this.castAimX = playerX;
+      this.castAimY = playerY;
+      this.playWindupTell(CAST_WINDUP_MS, 0xa98bff, 1.14);
     }
     return false;
+  }
+
+  // Drop a wind-up that will never resolve (deaggro/give-up mid-cast), so the
+  // tell's tint and scale punch don't stick on an idle wisp.
+  private abortCast(): void {
+    if (this.castingUntil === 0) return;
+    this.castingUntil = 0;
+    this.endWindupTell();
   }
 
   private updateWander(body: Phaser.Physics.Arcade.Body, now: number): void {
@@ -173,7 +230,7 @@ export class Corpselight extends Enemy {
   // keeps re-aiming as you move — bounded by ORB_TURN_RATE, which is what makes
   // circle-strafing beat it.
   private castOrb(playerX: number, playerY: number, now: number): void {
-    this.markAttackLanded(now);
+    this.markAttackAttempted(now);
     const scene = this.scene as unknown as ProjectileHost & { player: { x: number; y: number } };
     const cfg: ProjectileConfig = {
       x: this.x,
@@ -187,6 +244,7 @@ export class Corpselight extends Enemy {
       damageType: "magic", // bypasses flat armor (Phase-1 hook)
       homing: { turnRateRadPerSec: ORB_TURN_RATE, target: scene.player },
       maxLifetimeMs: ORB_LIFETIME_MS,
+      sourceEnemy: this,
     };
     scene.spawnProjectile(cfg);
   }

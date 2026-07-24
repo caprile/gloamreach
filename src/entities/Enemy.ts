@@ -92,6 +92,10 @@ export interface LootEntry {
   resource: ResourceType;
   min: number;
   max: number;
+  // Drop probability 0..1. Absent = always drops, which every entry was until
+  // the Gravemark Rubbing needed to be an occasional find rather than a
+  // guaranteed one from a common creature.
+  chance?: number;
 }
 
 // Every elite drops exactly one trophy (M-RL prerequisite — reverses the
@@ -394,10 +398,12 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   // Snake -> leather, ranged Gremlin -> skin + blood, etc.). Each entry is
   // rolled independently.
   rollLoot(): { resource: ResourceType; amount: number }[] {
-    return this.loot.map((entry) => ({
-      resource: entry.resource,
-      amount: Phaser.Math.Between(entry.min, entry.max),
-    }));
+    return this.loot
+      .filter((entry) => entry.chance === undefined || Math.random() < entry.chance)
+      .map((entry) => ({
+        resource: entry.resource,
+        amount: Phaser.Math.Between(entry.min, entry.max),
+      }));
   }
 
   // --- give-up / re-aggro-immunity helpers (see constants above) ---
@@ -413,6 +419,29 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   protected markAttackLanded(now: number): void {
     this.pursuitClockStart = now;
     this.extendAggroPersist(now);
+  }
+
+  // Call when an attack is merely ATTEMPTED (a shot fired, which may well miss)
+  // as opposed to landed. Keeps the target remembered — an enemy mid-fight
+  // shouldn't lose you between shots — but deliberately does NOT reset the
+  // give-up clock.
+  //
+  // Ranged casters used to call markAttackLanded() at FIRE time, which made them
+  // literally incapable of ever giving up: a cast cooldown shorter than
+  // AGGRO_PERSIST_MS meant the persistence window was refreshed forever and the
+  // 30s pursuit clock was reset forever, whether or not a single orb connected.
+  // That is the "ranged dudes never deaggro" playtest report. A landed projectile
+  // now routes back through onProjectileHitPlayer() below, so the give-up rule
+  // means what it says: 30s of pursuit without CONNECTING backs off.
+  protected markAttackAttempted(now: number): void {
+    this.extendAggroPersist(now);
+  }
+
+  // A projectile this enemy fired actually hit the player — the ranged
+  // counterpart of a melee swing connecting (see markAttackAttempted above).
+  // Public because the hit is resolved by the scene's overlap handler, not here.
+  onProjectileHitPlayer(now: number): void {
+    this.markAttackLanded(now);
   }
 
   private aggroPersistUntil = -Infinity;
@@ -757,6 +786,23 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     this.lastAttackEndAt = now;
     this.pendingAttackKnockback = 0;
     this.endWindupTell();
+  }
+
+  // The HP bar is two sibling GameObjects, NOT children of this sprite, so
+  // Phaser's own destroy() leaves them behind. Every death goes through
+  // playDeathFeedback (which destroys them), but a DESPAWN doesn't: a lapsed
+  // Sunken Shrine rite, the dawn cull of night spawns and a den reset all call
+  // destroy() on a live enemy, and each one used to strand a floating health bar
+  // in the world forever (the user: "after the shrine lapses the HP bars of the
+  // enemies are still there"). Cleaning up here covers every path, present and
+  // future, instead of patching each despawn site.
+  //
+  // A subclass with an extra meter (poise) overrides this and calls super.
+  destroy(fromScene?: boolean): void {
+    this.windupTween?.stop();
+    this.healthBarBg.destroy();
+    this.healthBarFill.destroy();
+    super.destroy(fromScene);
   }
 
   // Death feedback (fade), then the caller destroys/removes from tracking

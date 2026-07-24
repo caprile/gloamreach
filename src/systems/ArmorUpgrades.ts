@@ -113,7 +113,21 @@ export const ARMOR_UPGRADES: ArmorUpgradeDef[] = [
 // Gated on the same Workbench tier the piece is forged at (Sunsteel Lvl 3 = tier
 // 2, Embersteel Lvl 4 = tier 3), so you already have the bench when you can wear
 // the gear.
-function forgedArmorUpgrades(key: string, name: string, ingot: ResourceType, benchTier: number): ArmorUpgradeDef[] {
+// `bonus` is [lvl2, lvl3] armor over base. It's a per-set parameter rather than
+// a flat +1/+2 because a flat bonus is meaningless once pieces are big: an
+// Embersteel Cuirass is 14 armor, so paying 2-3 rare ingots for +1 was a rounding
+// error (the user: "+1 armor for upgrade for embersteel feels really bad"). Each
+// set's bonus is now ~25% of the piece it improves, so the two right-click levels
+// are worth the ingots at every tier. Light sets take smaller absolute steps
+// because their totals are smaller by design — their payoff is dash i-frames, not
+// flat armor.
+function forgedArmorUpgrades(
+  key: string,
+  name: string,
+  ingot: ResourceType,
+  benchTier: number,
+  bonus: [number, number],
+): ArmorUpgradeDef[] {
   return [
     {
       id: `${key}_lvl2`,
@@ -123,8 +137,8 @@ function forgedArmorUpgrades(key: string, name: string, ingot: ResourceType, ben
       resultTier: 1,
       costs: { [ingot]: 2 },
       requiresWorkbenchTier: benchTier,
-      defenseBonus: 1,
-      deltaLabel: "+1 Armor",
+      defenseBonus: bonus[0],
+      deltaLabel: `+${bonus[0]} Armor`,
     },
     {
       id: `${key}_lvl3`,
@@ -134,35 +148,35 @@ function forgedArmorUpgrades(key: string, name: string, ingot: ResourceType, ben
       resultTier: 2,
       costs: { [ingot]: 3 },
       requiresWorkbenchTier: benchTier,
-      defenseBonus: 2,
-      deltaLabel: "+1 Armor",
+      defenseBonus: bonus[1],
+      deltaLabel: `+${bonus[1] - bonus[0]} Armor`,
     },
   ];
 }
 
 ARMOR_UPGRADES.push(
-  ...forgedArmorUpgrades("sunsteel_helm", "Sunsteel Helm", "sunsteel_ingot", 2),
-  ...forgedArmorUpgrades("sunsteel_cuirass", "Sunsteel Cuirass", "sunsteel_ingot", 2),
-  ...forgedArmorUpgrades("sunsteel_greaves", "Sunsteel Greaves", "sunsteel_ingot", 2),
-  ...forgedArmorUpgrades("duskhide_hood", "Duskhide Hood", "sunsteel_ingot", 2),
-  ...forgedArmorUpgrades("duskhide_vest", "Duskhide Vest", "sunsteel_ingot", 2),
-  ...forgedArmorUpgrades("duskhide_leggings", "Duskhide Leggings", "sunsteel_ingot", 2),
-  ...forgedArmorUpgrades("embersteel_helm", "Embersteel Helm", "embersteel_ingot", 3),
-  ...forgedArmorUpgrades("embersteel_cuirass", "Embersteel Cuirass", "embersteel_ingot", 3),
-  ...forgedArmorUpgrades("embersteel_greaves", "Embersteel Greaves", "embersteel_ingot", 3),
-  ...forgedArmorUpgrades("emberhide_hood", "Emberhide Hood", "embersteel_ingot", 3),
-  ...forgedArmorUpgrades("emberhide_vest", "Emberhide Vest", "embersteel_ingot", 3),
-  ...forgedArmorUpgrades("emberhide_leggings", "Emberhide Leggings", "embersteel_ingot", 3),
+  ...forgedArmorUpgrades("sunsteel_helm", "Sunsteel Helm", "sunsteel_ingot", 2, [2, 4]),
+  ...forgedArmorUpgrades("sunsteel_cuirass", "Sunsteel Cuirass", "sunsteel_ingot", 2, [2, 4]),
+  ...forgedArmorUpgrades("sunsteel_greaves", "Sunsteel Greaves", "sunsteel_ingot", 2, [2, 4]),
+  ...forgedArmorUpgrades("duskhide_hood", "Duskhide Hood", "sunsteel_ingot", 2, [1, 2]),
+  ...forgedArmorUpgrades("duskhide_vest", "Duskhide Vest", "sunsteel_ingot", 2, [1, 2]),
+  ...forgedArmorUpgrades("duskhide_leggings", "Duskhide Leggings", "sunsteel_ingot", 2, [1, 2]),
+  ...forgedArmorUpgrades("embersteel_helm", "Embersteel Helm", "embersteel_ingot", 3, [3, 6]),
+  ...forgedArmorUpgrades("embersteel_cuirass", "Embersteel Cuirass", "embersteel_ingot", 3, [3, 6]),
+  ...forgedArmorUpgrades("embersteel_greaves", "Embersteel Greaves", "embersteel_ingot", 3, [3, 6]),
+  ...forgedArmorUpgrades("emberhide_hood", "Emberhide Hood", "embersteel_ingot", 3, [2, 3]),
+  ...forgedArmorUpgrades("emberhide_vest", "Emberhide Vest", "embersteel_ingot", 3, [2, 3]),
+  ...forgedArmorUpgrades("emberhide_leggings", "Emberhide Leggings", "embersteel_ingot", 3, [2, 3]),
   // Bayou tier (biome 3 Phase 3) — same two right-click levels, sunk in
   // Gloamsteel and gated on the Gloamforge-Anvil bench (tier 4) the pieces are
   // reforged at. These stack WITH gem augments (GearAugments.ts): tiers live on
   // the instance's `tier`, augments on its `upgrades` set.
-  ...forgedArmorUpgrades("gloamsteel_helm", "Gloamsteel Helm", "gloamsteel_ingot", 4),
-  ...forgedArmorUpgrades("gloamsteel_cuirass", "Gloamsteel Cuirass", "gloamsteel_ingot", 4),
-  ...forgedArmorUpgrades("gloamsteel_greaves", "Gloamsteel Greaves", "gloamsteel_ingot", 4),
-  ...forgedArmorUpgrades("mirehide_hood", "Mirehide Hood", "gloamsteel_ingot", 4),
-  ...forgedArmorUpgrades("mirehide_vest", "Mirehide Vest", "gloamsteel_ingot", 4),
-  ...forgedArmorUpgrades("mirehide_leggings", "Mirehide Leggings", "gloamsteel_ingot", 4),
+  ...forgedArmorUpgrades("gloamsteel_helm", "Gloamsteel Helm", "gloamsteel_ingot", 4, [4, 8]),
+  ...forgedArmorUpgrades("gloamsteel_cuirass", "Gloamsteel Cuirass", "gloamsteel_ingot", 4, [4, 8]),
+  ...forgedArmorUpgrades("gloamsteel_greaves", "Gloamsteel Greaves", "gloamsteel_ingot", 4, [4, 8]),
+  ...forgedArmorUpgrades("mirehide_hood", "Mirehide Hood", "gloamsteel_ingot", 4, [2, 4]),
+  ...forgedArmorUpgrades("mirehide_vest", "Mirehide Vest", "gloamsteel_ingot", 4, [2, 4]),
+  ...forgedArmorUpgrades("mirehide_leggings", "Mirehide Leggings", "gloamsteel_ingot", 4, [2, 4]),
 );
 
 // The upgrades that could apply to a given equipped armor item, ordered by

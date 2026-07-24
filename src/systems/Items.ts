@@ -1,6 +1,6 @@
 import type { ToolType } from "../entities/ResourceNode";
 import type { WeaponType } from "./Weapons";
-import type { EquipSlot, EquippedItem } from "./Equipment";
+import { slotGroup, type EquipSlot, type EquippedItem } from "./Equipment";
 import type { AbilityId } from "./Abilities";
 import type { EquipPassive } from "./EquipmentEffects";
 
@@ -880,11 +880,11 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     hotbarable: false,
     armorSlot: "helmet",
     armorType: "heavy_armor",
-    armorDefense: 6,
+    armorDefense: 8,
     stats: [
       { label: "Type", value: "Armor (Head)" },
       { label: "Armor Type", value: "Heavy" },
-      { label: "Armor", value: "6" },
+      { label: "Armor", value: "8" },
     ],
   },
   sunsteel_cuirass: {
@@ -912,11 +912,11 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     hotbarable: false,
     armorSlot: "legs",
     armorType: "heavy_armor",
-    armorDefense: 6,
+    armorDefense: 8,
     stats: [
       { label: "Type", value: "Armor (Legs)" },
       { label: "Armor Type", value: "Heavy" },
-      { label: "Armor", value: "6" },
+      { label: "Armor", value: "8" },
     ],
   },
 
@@ -946,11 +946,11 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     hotbarable: false,
     armorSlot: "chest",
     armorType: "light_armor",
-    armorDefense: 6,
+    armorDefense: 4,
     stats: [
       { label: "Type", value: "Armor (Chest)" },
       { label: "Armor Type", value: "Light" },
-      { label: "Armor", value: "6" },
+      { label: "Armor", value: "4" },
     ],
   },
   duskhide_leggings: {
@@ -962,11 +962,11 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     hotbarable: false,
     armorSlot: "legs",
     armorType: "light_armor",
-    armorDefense: 5,
+    armorDefense: 4,
     stats: [
       { label: "Type", value: "Armor (Legs)" },
       { label: "Armor Type", value: "Light" },
-      { label: "Armor", value: "5" },
+      { label: "Armor", value: "4" },
     ],
   },
 
@@ -980,11 +980,11 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     hotbarable: false,
     armorSlot: "helmet",
     armorType: "heavy_armor",
-    armorDefense: 10,
+    armorDefense: 12,
     stats: [
       { label: "Type", value: "Armor (Head)" },
       { label: "Armor Type", value: "Heavy" },
-      { label: "Armor", value: "10" },
+      { label: "Armor", value: "12" },
     ],
   },
   embersteel_cuirass: {
@@ -996,11 +996,11 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     hotbarable: false,
     armorSlot: "chest",
     armorType: "heavy_armor",
-    armorDefense: 12,
+    armorDefense: 14,
     stats: [
       { label: "Type", value: "Armor (Chest)" },
       { label: "Armor Type", value: "Heavy" },
-      { label: "Armor", value: "12" },
+      { label: "Armor", value: "14" },
     ],
   },
   embersteel_greaves: {
@@ -1012,11 +1012,11 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     hotbarable: false,
     armorSlot: "legs",
     armorType: "heavy_armor",
-    armorDefense: 10,
+    armorDefense: 12,
     stats: [
       { label: "Type", value: "Armor (Legs)" },
       { label: "Armor Type", value: "Heavy" },
-      { label: "Armor", value: "10" },
+      { label: "Armor", value: "12" },
     ],
   },
 
@@ -1046,11 +1046,11 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     hotbarable: false,
     armorSlot: "chest",
     armorType: "light_armor",
-    armorDefense: 9,
+    armorDefense: 7,
     stats: [
       { label: "Type", value: "Armor (Chest)" },
       { label: "Armor Type", value: "Light" },
-      { label: "Armor", value: "9" },
+      { label: "Armor", value: "7" },
     ],
   },
   emberhide_leggings: {
@@ -1062,7 +1062,7 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     hotbarable: false,
     armorSlot: "legs",
     armorType: "light_armor",
-    armorDefense: 8, // 7→8: keeps base Emberhide > a fully-upgraded (Lvl 3) Duskhide (7)
+    armorDefense: 7, // 7→8: keeps base Emberhide > a fully-upgraded (Lvl 3) Duskhide (7)
     stats: [
       { label: "Type", value: "Armor (Legs)" },
       { label: "Armor Type", value: "Light" },
@@ -1175,6 +1175,15 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     maxStack: 99,
     hotbarable: false,
   },
+  boss_refined_trophy_t3: {
+    key: "boss_refined_trophy_t3",
+    name: "Mire Tyrant Trophy",
+    description: "A relic-grade trophy cut from the thing at the bottom of the bayou. Bound at a Relic Forge it never crumbles — it always yields a Tier-3 Mythic relic.",
+    texture: "icon_boss_refined_trophy_t3",
+    maxStack: 99,
+    hotbarable: false,
+  },
+
   boss_refined_trophy_t2: {
     key: "boss_refined_trophy_t2",
     name: "Tyrant Trophy",
@@ -1240,6 +1249,16 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
   },
   // --- biome 3: Mire Crucible (Ember -> Mire conversion) + tier-3 refinement.
   // The bayou's trophies are Tier 3 and had no refine path at all until this. ---
+  gravemark_rubbing: {
+    key: "gravemark_rubbing",
+    name: "Gravemark Rubbing",
+    description:
+      "A charcoal tracing lifted from a sunken grave-slab. The lines rearrange themselves when you are not looking, and they always settle pointing somewhere. Reads itself the moment you pick it up.",
+    texture: "icon_gravemark_rubbing",
+    maxStack: 1,
+    hotbarable: false,
+  },
+
   mire_shard: {
     key: "mire_shard",
     name: "Mire Shard",
@@ -1269,45 +1288,74 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
   // — epic loot, biome-3 craftables, the post-boss reward picker — come later).
   // Each equips to its slot via the generic armor-equip path and lights up its
   // Q/E/R bar slot. ---
+  special_mire_snare_idol: {
+    key: "special_mire_snare_idol",
+    name: "Snarebound Idol",
+    description: "A fist of knotted root and bog-iron. Whatever it is pointed at forgets how to walk. Grants Mire Snare.",
+    texture: "ability_snare",
+    maxStack: 1,
+    hotbarable: false,
+    armorSlot: "ability1",
+    grantsAbility: "mire_snare",
+    stats: [
+      { label: "Type", value: "Ability (any Q/E/R slot)" },
+      { label: "Grants", value: "Mire Snare" },
+    ],
+  },
+  special_bloodrush_fang: {
+    key: "special_bloodrush_fang",
+    name: "Quickening Fang",
+    description: "A tyrant's tooth still humming with the speed of the thing that grew it. Grants Bloodrush.",
+    texture: "ability_haste",
+    maxStack: 1,
+    hotbarable: false,
+    armorSlot: "ability1",
+    grantsAbility: "bloodrush",
+    stats: [
+      { label: "Type", value: "Ability (any Q/E/R slot)" },
+      { label: "Grants", value: "Bloodrush" },
+    ],
+  },
+
   special_gloamstep_band: {
     key: "special_gloamstep_band",
     name: "Gloamstep Band",
-    description: "A gloam-charged band that folds space around its wearer. Grants Gloamstep Blink (Q).",
+    description: "A gloam-charged band that folds space around its wearer. Grants Gloamstep Blink.",
     texture: "ability_blink",
     maxStack: 1,
     hotbarable: false,
-    armorSlot: "special1",
+    armorSlot: "ability1",
     grantsAbility: "gloamstep_blink",
     stats: [
-      { label: "Type", value: "Special (Spec1 · Q)" },
+      { label: "Type", value: "Ability (any Q/E/R slot)" },
       { label: "Grants", value: "Gloamstep Blink" },
     ],
   },
   special_gloam_focus: {
     key: "special_gloam_focus",
     name: "Gloam Focus",
-    description: "A knot of unstable gloam that erupts on command. Grants Gloam Nova (E).",
+    description: "A knot of unstable gloam that erupts on command. Grants Gloam Nova.",
     texture: "ability_nova",
     maxStack: 1,
     hotbarable: false,
-    armorSlot: "special2",
+    armorSlot: "ability1",
     grantsAbility: "gloam_nova",
     stats: [
-      { label: "Type", value: "Special (Spec2 · E)" },
+      { label: "Type", value: "Ability (any Q/E/R slot)" },
       { label: "Grants", value: "Gloam Nova" },
     ],
   },
   back_bloodpact_shroud: {
     key: "back_bloodpact_shroud",
     name: "Bloodpact Shroud",
-    description: "A shroud steeped in a life-siphoning pact. Grants Bloodpact (R).",
+    description: "A shroud steeped in a life-siphoning pact. Grants Bloodpact.",
     texture: "ability_bloodpact",
     maxStack: 1,
     hotbarable: false,
-    armorSlot: "back",
+    armorSlot: "ability1",
     grantsAbility: "bloodpact",
     stats: [
-      { label: "Type", value: "Special (Back · R)" },
+      { label: "Type", value: "Ability (any Q/E/R slot)" },
       { label: "Grants", value: "Bloodpact" },
     ],
   },
@@ -1321,42 +1369,42 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
   special_gloamstep_band_lesser: {
     key: "special_gloamstep_band_lesser",
     name: "Worn Gloamstep Band",
-    description: "A band whose gloam has mostly leaked out. The step still works — just barely. Grants Lesser Gloamstep (Q).",
+    description: "A band whose gloam has mostly leaked out. The step still works — just barely. Grants Lesser Gloamstep.",
     texture: "ability_blink_lesser",
     maxStack: 1,
     hotbarable: false,
-    armorSlot: "special1",
+    armorSlot: "ability1",
     grantsAbility: "gloamstep_blink_lesser",
     stats: [
-      { label: "Type", value: "Special (Spec1 · Q)" },
+      { label: "Type", value: "Ability (any Q/E/R slot)" },
       { label: "Grants", value: "Lesser Gloamstep" },
     ],
   },
   special_gloam_focus_lesser: {
     key: "special_gloam_focus_lesser",
     name: "Cracked Gloam Focus",
-    description: "A fractured knot of gloam. What's left of it still pops. Grants Lesser Gloamburst (E).",
+    description: "A fractured knot of gloam. What's left of it still pops. Grants Lesser Gloamburst.",
     texture: "ability_nova_lesser",
     maxStack: 1,
     hotbarable: false,
-    armorSlot: "special2",
+    armorSlot: "ability1",
     grantsAbility: "gloam_nova_lesser",
     stats: [
-      { label: "Type", value: "Special (Spec2 · E)" },
+      { label: "Type", value: "Ability (any Q/E/R slot)" },
       { label: "Grants", value: "Lesser Gloamburst" },
     ],
   },
   back_bloodpact_shroud_lesser: {
     key: "back_bloodpact_shroud_lesser",
     name: "Frayed Bloodpact Shroud",
-    description: "The pact sewn into it has come half undone. Grants Lesser Bloodpact (R).",
+    description: "The pact sewn into it has come half undone. Grants Lesser Bloodpact.",
     texture: "ability_bloodpact_lesser",
     maxStack: 1,
     hotbarable: false,
-    armorSlot: "back",
+    armorSlot: "ability1",
     grantsAbility: "bloodpact_lesser",
     stats: [
-      { label: "Type", value: "Special (Back · R)" },
+      { label: "Type", value: "Ability (any Q/E/R slot)" },
       { label: "Grants", value: "Lesser Bloodpact" },
     ],
   },
@@ -1373,42 +1421,42 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
   special_gravebind_coil: {
     key: "special_gravebind_coil",
     name: "Gravebind Coil",
-    description: "A coil of grave-iron that drags the dead toward whoever holds it. Grants Gravebind (Q).",
+    description: "A coil of grave-iron that drags the dead toward whoever holds it. Grants Gravebind.",
     texture: "ability_gravebind",
     maxStack: 1,
     hotbarable: false,
-    armorSlot: "special1",
+    armorSlot: "ability1",
     grantsAbility: "gravebind",
     stats: [
-      { label: "Type", value: "Special (Spec1 · Q)" },
+      { label: "Type", value: "Ability (any Q/E/R slot)" },
       { label: "Grants", value: "Gravebind" },
     ],
   },
   special_pale_choir_lance: {
     key: "special_pale_choir_lance",
     name: "Lance of the Pale Choir",
-    description: "A reliquary shard that sings when pointed. Grants Spirit Lance (E).",
+    description: "A reliquary shard that sings when pointed. Grants Spirit Lance.",
     texture: "ability_lance",
     maxStack: 1,
     hotbarable: false,
-    armorSlot: "special2",
+    armorSlot: "ability1",
     grantsAbility: "spirit_lance",
     stats: [
-      { label: "Type", value: "Special (Spec2 · E)" },
+      { label: "Type", value: "Ability (any Q/E/R slot)" },
       { label: "Grants", value: "Spirit Lance" },
     ],
   },
   back_drowned_king_shroud: {
     key: "back_drowned_king_shroud",
     name: "Shroud of the Drowned King",
-    description: "Still wet, and it never dries. Grants Drowned Aegis (R).",
+    description: "Still wet, and it never dries. Grants Drowned Aegis.",
     texture: "ability_aegis",
     maxStack: 1,
     hotbarable: false,
-    armorSlot: "back",
+    armorSlot: "ability1",
     grantsAbility: "aegis",
     stats: [
-      { label: "Type", value: "Special (Back · R)" },
+      { label: "Type", value: "Ability (any Q/E/R slot)" },
       { label: "Grants", value: "Drowned Aegis" },
     ],
   },
@@ -1421,7 +1469,7 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     texture: "icon_ring_sparkbound",
     maxStack: 1,
     hotbarable: false,
-    armorSlot: "ring1",
+    armorSlot: "special1",
     passive: { abilityPowerPct: 18, abilityCooldownPct: 12 },
   },
   amulet_long_dark: {
@@ -1431,7 +1479,7 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     texture: "icon_amulet_long_dark",
     maxStack: 1,
     hotbarable: false,
-    armorSlot: "necklace",
+    armorSlot: "special1",
     passive: { lightRadiusPct: 60, magnetRadiusPct: 40 },
   },
   ring_gloamwrought_signet: {
@@ -1441,7 +1489,7 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     texture: "icon_ring_signet",
     maxStack: 1,
     hotbarable: false,
-    armorSlot: "ring1",
+    armorSlot: "special1",
     passive: { abilityCooldownPct: 25 },
   },
   ring_deep_vein: {
@@ -1451,7 +1499,7 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     texture: "icon_ring_deep_vein",
     maxStack: 1,
     hotbarable: false,
-    armorSlot: "ring1",
+    armorSlot: "special1",
     passive: { gatherBonusPct: 20 },
   },
   amulet_choirbone: {
@@ -1461,7 +1509,7 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     texture: "icon_amulet_choirbone",
     maxStack: 1,
     hotbarable: false,
-    armorSlot: "necklace",
+    armorSlot: "special1",
     passive: { abilityPowerPct: 35 },
   },
   back_mireborn_cloak: {
@@ -1473,7 +1521,7 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     hotbarable: false,
     // The stat "Cloak" slot, NOT "back" — that's the R-ability cape slot, and a
     // utility cloak shouldn't evict your R ability (the user 2026-07-23).
-    armorSlot: "cloak",
+    armorSlot: "special1",
     passive: { statusResistPct: 30 },
   },
 
@@ -1545,7 +1593,7 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     texture: "icon_amulet_molten_bulwark",
     maxStack: 1,
     hotbarable: false,
-    armorSlot: "necklace",
+    armorSlot: "special1",
     stats: [
       { label: "Type", value: "Amulet" },
       { label: "Effect", value: "Molten Bulwark" },
@@ -1558,7 +1606,7 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     texture: "icon_ring_emberblink",
     maxStack: 1,
     hotbarable: false,
-    armorSlot: "ring1",
+    armorSlot: "special1",
     stats: [
       { label: "Type", value: "Ring" },
       { label: "Effect", value: "Emberblink" },
@@ -1571,7 +1619,7 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     texture: "icon_amulet_gloam_bulwark",
     maxStack: 1,
     hotbarable: false,
-    armorSlot: "necklace",
+    armorSlot: "special1",
     stats: [
       { label: "Type", value: "Amulet" },
       { label: "Effect", value: "Gloam Bulwark" },
@@ -1584,7 +1632,7 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     texture: "icon_ring_mireblink",
     maxStack: 1,
     hotbarable: false,
-    armorSlot: "ring1",
+    armorSlot: "special1",
     stats: [
       { label: "Type", value: "Ring" },
       { label: "Effect", value: "Mireblink" },
@@ -1597,7 +1645,7 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     texture: "icon_ring_quickening",
     maxStack: 1,
     hotbarable: false,
-    armorSlot: "ring1",
+    armorSlot: "special1",
     passive: { abilityCooldownPct: 15 },
     stats: [{ label: "Type", value: "Ring" }],
   },
@@ -1608,7 +1656,7 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     texture: "icon_amulet_channeling",
     maxStack: 1,
     hotbarable: false,
-    armorSlot: "necklace",
+    armorSlot: "special1",
     passive: { abilityPowerPct: 20 },
     stats: [{ label: "Type", value: "Amulet" }],
   },
@@ -1619,7 +1667,7 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     texture: "icon_ring_forager",
     maxStack: 1,
     hotbarable: false,
-    armorSlot: "ring1",
+    armorSlot: "special1",
     passive: { gatherBonusPct: 15, magnetRadiusPct: 30 },
     stats: [{ label: "Type", value: "Ring" }],
   },
@@ -1630,7 +1678,7 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     texture: "icon_amulet_farsight",
     maxStack: 1,
     hotbarable: false,
-    armorSlot: "necklace",
+    armorSlot: "special1",
     passive: { lightRadiusPct: 40, magnetRadiusPct: 20 },
     stats: [{ label: "Type", value: "Amulet" }],
   },
@@ -1784,11 +1832,11 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     hotbarable: false,
     armorSlot: "helmet",
     armorType: "heavy_armor",
-    armorDefense: 13,
+    armorDefense: 16,
     stats: [
       { label: "Type", value: "Armor (Head)" },
       { label: "Armor Type", value: "Heavy" },
-      { label: "Armor", value: "13" },
+      { label: "Armor", value: "16" },
     ],
   },
   gloamsteel_cuirass: {
@@ -1800,11 +1848,11 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     hotbarable: false,
     armorSlot: "chest",
     armorType: "heavy_armor",
-    armorDefense: 16,
+    armorDefense: 18,
     stats: [
       { label: "Type", value: "Armor (Chest)" },
       { label: "Armor Type", value: "Heavy" },
-      { label: "Armor", value: "16" },
+      { label: "Armor", value: "18" },
     ],
   },
   gloamsteel_greaves: {
@@ -1816,11 +1864,11 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     hotbarable: false,
     armorSlot: "legs",
     armorType: "heavy_armor",
-    armorDefense: 13,
+    armorDefense: 16,
     stats: [
       { label: "Type", value: "Armor (Legs)" },
       { label: "Armor Type", value: "Heavy" },
-      { label: "Armor", value: "13" },
+      { label: "Armor", value: "16" },
     ],
   },
 
@@ -1834,11 +1882,11 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     hotbarable: false,
     armorSlot: "helmet",
     armorType: "light_armor",
-    armorDefense: 9,
+    armorDefense: 8,
     stats: [
       { label: "Type", value: "Armor (Head)" },
       { label: "Armor Type", value: "Light" },
-      { label: "Armor", value: "9" },
+      { label: "Armor", value: "8" },
     ],
   },
   mirehide_vest: {
@@ -1850,11 +1898,11 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     hotbarable: false,
     armorSlot: "chest",
     armorType: "light_armor",
-    armorDefense: 12,
+    armorDefense: 8,
     stats: [
       { label: "Type", value: "Armor (Chest)" },
       { label: "Armor Type", value: "Light" },
-      { label: "Armor", value: "12" },
+      { label: "Armor", value: "8" },
     ],
   },
   mirehide_leggings: {
@@ -1866,11 +1914,11 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     hotbarable: false,
     armorSlot: "legs",
     armorType: "light_armor",
-    armorDefense: 9,
+    armorDefense: 8,
     stats: [
       { label: "Type", value: "Armor (Legs)" },
       { label: "Armor Type", value: "Light" },
-      { label: "Armor", value: "9" },
+      { label: "Armor", value: "8" },
     ],
   },
 
@@ -1899,11 +1947,11 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     hotbarable: false,
     armorSlot: "helmet",
     armorType: "heavy_armor",
-    armorDefense: 11,
+    armorDefense: 14,
     stats: [
       { label: "Type", value: "Armor (Head)" },
       { label: "Armor Type", value: "Heavy" },
-      { label: "Armor", value: "11" },
+      { label: "Armor", value: "14" },
     ],
   },
   mirebronze_cuirass: {
@@ -1915,11 +1963,11 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     hotbarable: false,
     armorSlot: "chest",
     armorType: "heavy_armor",
-    armorDefense: 14,
+    armorDefense: 16,
     stats: [
       { label: "Type", value: "Armor (Chest)" },
       { label: "Armor Type", value: "Heavy" },
-      { label: "Armor", value: "14" },
+      { label: "Armor", value: "16" },
     ],
   },
   mirebronze_greaves: {
@@ -1931,11 +1979,11 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     hotbarable: false,
     armorSlot: "legs",
     armorType: "heavy_armor",
-    armorDefense: 11,
+    armorDefense: 14,
     stats: [
       { label: "Type", value: "Armor (Legs)" },
       { label: "Armor Type", value: "Heavy" },
-      { label: "Armor", value: "11" },
+      { label: "Armor", value: "14" },
     ],
   },
   bogweave_hood: {
@@ -1947,11 +1995,11 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     hotbarable: false,
     armorSlot: "helmet",
     armorType: "light_armor",
-    armorDefense: 8,
+    armorDefense: 7,
     stats: [
       { label: "Type", value: "Armor (Head)" },
       { label: "Armor Type", value: "Light" },
-      { label: "Armor", value: "8" },
+      { label: "Armor", value: "7" },
     ],
   },
   bogweave_vest: {
@@ -1963,11 +2011,11 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     hotbarable: false,
     armorSlot: "chest",
     armorType: "light_armor",
-    armorDefense: 10,
+    armorDefense: 7,
     stats: [
       { label: "Type", value: "Armor (Chest)" },
       { label: "Armor Type", value: "Light" },
-      { label: "Armor", value: "10" },
+      { label: "Armor", value: "7" },
     ],
   },
   bogweave_leggings: {
@@ -1979,11 +2027,11 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     hotbarable: false,
     armorSlot: "legs",
     armorType: "light_armor",
-    armorDefense: 8,
+    armorDefense: 7,
     stats: [
       { label: "Type", value: "Armor (Legs)" },
       { label: "Armor Type", value: "Light" },
-      { label: "Armor", value: "8" },
+      { label: "Armor", value: "7" },
     ],
   },
   mirebronze_warhammer: {
@@ -2212,7 +2260,7 @@ export function itemBiome(key: string): ItemBiome {
 // A coarse category axis, orthogonal to biome, used to break each biome tab
 // into labelled sections. Derived from existing def flags (no new per-item
 // data) plus a small trophy/ritual key set.
-export type ItemCategory = "material" | "gear" | "station" | "food" | "curio";
+export type ItemCategory = "material" | "gear" | "special" | "ability" | "station" | "food" | "curio";
 
 const CURIO_ITEM_KEYS = new Set<string>([
   "gloam_shard", "ember_shard", "mire_shard", "gremlin_king_fang",
@@ -2225,6 +2273,11 @@ export function itemCategory(key: string): ItemCategory {
   if (!def) return "material";
   if (def.placeable) return "station";
   if (def.edible) return "food";
+  // Ability items and passive specials each get their OWN section rather than
+  // being lumped in with armor and weapons under "gear" — the backpack section
+  // an item lands in is now the fastest answer to "where can this go?".
+  if (def.armorSlot && slotGroup(def.armorSlot) === "ability") return "ability";
+  if (def.armorSlot && slotGroup(def.armorSlot) === "special") return "special";
   // Real gear only — the ammo "slot" (slingshot pellets) is a material, not
   // a wearable, so it groups with other stackable materials.
   if (def.weapon || def.tool || (def.armorSlot && def.armorSlot !== "ammo")) return "gear";
