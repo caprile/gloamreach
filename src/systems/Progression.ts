@@ -90,7 +90,20 @@ export function statTotalEffect(stat: StatType, p: PlayerProgression): string {
 // EXPONENT rather than the base is deliberate — it barely moves the early game
 // (level 5 costs ~12% less) but takes a big bite out of the deep-run wall
 // (level 21 costs ~29% less), which is exactly where the pace was flagging.
-const XP_BASE = 110;
+// D4 (2026-07-23): 110->85 (~1.29x faster). THIS is the lever that actually
+// delivers "raise baseline XP for everyone" (Skills.ts's skillXpToNext
+// coefficient, despite looking related, only affects skill-level pace — see
+// its comment; player levels are governed by this curve alone). Sized to
+// roughly replicate what the user's Ashcaller run ("this XP kinda feels like
+// how the base character should be") got for free from its OWN
+// `character.xpMult` (1.3, applying to every skill's raw XP INCOME before it
+// ever reaches this curve) — a neutral class now gets close to that same felt
+// pace without needing the class pick, and the Ashcaller's own multiplier is
+// trimmed in Characters.ts so it's a lean bonus on top of this, not a second
+// full stack. The EXPONENT is left alone; it's already been tuned twice
+// specifically for late-run pace, and this pass is about the baseline everyone
+// gets, not reshaping the curve again.
+const XP_BASE = 85;
 const XP_EXPONENT = 1.7;
 export function xpToNextPlayerLevel(level: number): number {
   return Math.round(XP_BASE * Math.pow(level + 1, XP_EXPONENT));

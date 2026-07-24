@@ -52,11 +52,22 @@ export function skillDisplayName(skill: SkillType): string {
 }
 
 // XP to advance from `level` to `level + 1`. A refill-style bar (each level's
-// bar empties/refills), not a cumulative total: 0->1 is 70, 1->2 is 140, etc.
+// bar empties/refills), not a cumulative total: 0->1 is 54, 1->2 is 108, etc.
 // Playtest speed-up (S1 balance batch): coefficient lowered 100->70 so skills
-// (and, via skill-ups feeding Player XP, player levels) climb ~1.4x faster.
+// climb ~1.4x faster.
+//
+// D4 (2026-07-23): 70->54, another ~1.3x — but note this ONLY speeds up
+// SKILL levels (and their recipe-unlock gates), not player levels. Verified
+// by simulation: a fixed raw-XP budget run through the real skill->player
+// feed produces MORE skill level-ups at a lower coefficient, but the SAME
+// player level, because a skill level's cost IS the player-XP it feeds —
+// lowering the coefficient just re-chunks that total into more, smaller
+// deposits rather than changing the total. Player-level pace is xpToNextPlayerLevel's
+// job alone (see Progression.ts's XP_BASE, which is where the Ashcaller-parity
+// change actually lives). Kept anyway: faster skill levels are a real,
+// independent win for recipe-unlock pace.
 export function skillXpToNext(level: number): number {
-  return 70 * (level + 1);
+  return 54 * (level + 1);
 }
 
 const WEAPON_SKILL_DAMAGE_PCT_PER_LEVEL = 0.005; // +0.5% weapon damage per level

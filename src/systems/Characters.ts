@@ -136,16 +136,28 @@ export const CHARACTER_DEFS: CharacterDef[] = [
     startingStats: { intelligence: 3, wisdom: 2 },
     startingEquip: [{ slot: "ability1", key: "special_gloam_focus_lesser" }],
     startingItems: [],
+    // D4 (2026-07-23): trimmed from xpMult 1.3 / skillXpMult magic 1.6+ranged
+    // 1.4 / statPotency.intelligence 1.5 — the god-run finding was that these
+    // three stack MULTIPLICATIVELY (skillXpMult applies outside the additive
+    // bonus bucket that xpMult and Intelligence's own stat effect both feed
+    // into — see MainScene.awardSkillXp), so a magic-heavy Ashcaller run
+    // could be earning 2x+ XP on its main skill from its own kit alone,
+    // before a single relic or stat point. With the baseline XP curves also
+    // lifted this session (Skills.ts/Progression.ts), the class is now a
+    // lean bonus on top of a faster baseline rather than a second full
+    // stack — still clearly the "grows quickly" identity, not a runaway.
+    // The bane (max HP) and the heavy_armor penalty are untouched; this only
+    // trims the winning side of the double-edge.
     modifier: {
       name: "Gloam-Touched",
-      boon: "+30% skill XP",
+      boon: "+15% skill XP",
       bane: "-15% max HP",
-      xpMult: 1.3,
+      xpMult: 1.15,
       maxHpPct: -15,
     },
     affinity: {
-      skillXpMult: { magic: 1.6, ranged: 1.4, heavy_armor: 0.8 },
-      statPotency: { intelligence: 1.5, wisdom: 1.25, vitality: 0.85 },
+      skillXpMult: { magic: 1.35, ranged: 1.2, heavy_armor: 0.8 },
+      statPotency: { intelligence: 1.25, wisdom: 1.25, vitality: 0.85 },
     },
   },
   {

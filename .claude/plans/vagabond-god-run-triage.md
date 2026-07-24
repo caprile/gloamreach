@@ -80,11 +80,26 @@ Keep the tier ladder. Damage ~+40%: Sunsteel 11→15, Embersteel 15→21, Gloams
 Cooldowns ~−25%: 750/730/720 → ~560/545/535. Lands bow DPS near forged melee, paying for
 safe range with no arc, no burst, no lifelink.
 
-### D4 — Raise baseline XP for everyone
+### D4 — Raise baseline XP for everyone (SHIPPED 2026-07-23)
 Lift the global rate so a neutral class levels roughly like this Ashcaller run did, and trim
-the Ashcaller's own stacked multipliers so it is a lean, not a runaway. Levels are the fun;
-the class should not be the only route to them. (the user: *"this Ashcaller XP kinda feels
-like how the base character should be."*)
+the Ashcaller's own stacked multipliers so it is a lean, not a runaway.
+
+**Important correctness finding during implementation:** the two XP curves are NOT
+interchangeable levers. `Progression.ts`'s `XP_BASE` (player-level cost) is the ONLY thing
+that governs player-level pace. `Skills.ts`'s `skillXpToNext` coefficient looks related but
+is a no-op for player levels — proven by simulation (a fixed raw-XP budget run through the
+real skill->player feed produced more skill level-ups at a lower coefficient but the SAME
+player level), because a skill level's cost literally IS the player-XP it feeds; lowering the
+coefficient just re-chunks that total into more, smaller deposits. Shipped both anyway:
+`XP_BASE` 110->85 (~1.29x, sized to match what the Ashcaller's OWN `character.xpMult` (1.3)
+gave a neutral class for free) is the actual pace fix; `skillXpToNext` 70->54 is kept as a
+genuine, independent win for skill-level (recipe-unlock) pace.
+
+Ashcaller trimmed: `xpMult` 1.3->1.15, `skillXpMult` magic 1.6->1.35 / ranged 1.4->1.2,
+`statPotency.intelligence` 1.5->1.25. Bane (-15% max HP) and the heavy_armor penalty
+untouched — only the winning side of the double-edge. Verified live: the trimmed Ashcaller
+now gives ~1.63x XP on its favored skill vs a neutral class (was 2.08x+ before any stat
+investment, pre-trim).
 
 ### D5 — `magnetRadiusPct` → bonus gather yield
 Fold the three jewelry items' pickup-radius passive into the existing `gatherBonusPct`
