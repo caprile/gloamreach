@@ -267,7 +267,7 @@ export const RELIC_DEFS: Record<string, RelicDef> = {
   relic_phantom_totem: { id: "relic_phantom_totem", name: "Fleetfoot Totem", rarity: "rare", family: "move", effect: { moveSpeedPct: 7 }, unique: { kind: "killrush", params: { movePct: 25, ms: 2500, dashRefund: 0 } } },
   relic_aegis_totem: { id: "relic_aegis_totem", name: "Aegis Totem", rarity: "rare", family: "defense", effect: { damageTakenPct: -7 }, unique: { kind: "guardian", params: { cooldownMs: 8000, capPct: 0 } } },
   relic_endless_totem: { id: "relic_endless_totem", name: "Second Wind Totem", rarity: "rare", family: "stamina", effect: { staminaCostPct: -10 }, unique: { kind: "secondwind", params: { restorePct: 25, freeMs: 0 } } },
-  relic_reaper_totem: { id: "relic_reaper_totem", name: "Reaper Totem", rarity: "rare", family: "lifesteal", effect: { killHeal: 2 }, unique: { kind: "leech", params: { healPct: 3, shieldPct: 0 } } },
+  relic_reaper_totem: { id: "relic_reaper_totem", name: "Reaper Totem", rarity: "rare", family: "lifesteal", effect: { killHeal: 2 }, unique: { kind: "leech", params: { healPct: 2, shieldPct: 0 } } },
   relic_titan_totem: { id: "relic_titan_totem", name: "Titan Totem", rarity: "rare", family: "vitality", effect: { maxHpPct: 12 }, unique: { kind: "undying", params: { lowHpHealPct: 25, thresholdPct: 25, cooldownMs: 60000 } } },
   relic_deadeye_totem: { id: "relic_deadeye_totem", name: "Deadeye Totem", rarity: "rare", family: "crit", effect: { critChancePct: 5 }, unique: { kind: "critsplash", params: { splashPct: 35, radius: 70, slowPct: 0, slowMs: 0 } } },
   relic_sage_totem: { id: "relic_sage_totem", name: "Sage Totem", rarity: "rare", family: "xp", effect: { xpPct: 14 }, unique: { kind: "xpstreak", params: { perKillPct: 8, maxPct: 50, windowMs: 4000 } } },
@@ -277,7 +277,7 @@ export const RELIC_DEFS: Record<string, RelicDef> = {
   relic_windwalkers_mantle: { id: "relic_windwalkers_mantle", name: "Windwalker's Mantle", rarity: "mythic", family: "move", effect: { moveSpeedPct: 7 }, unique: { kind: "killrush", params: { movePct: 35, ms: 3500, dashRefund: 1 } } },
   relic_undying_heart: { id: "relic_undying_heart", name: "Bulwark Mantle", rarity: "mythic", family: "defense", effect: { damageTakenPct: -7 }, unique: { kind: "guardian", params: { cooldownMs: 6000, capPct: 30 } } },
   relic_perpetual_mantle: { id: "relic_perpetual_mantle", name: "Perpetual Mantle", rarity: "mythic", family: "stamina", effect: { staminaCostPct: -10 }, unique: { kind: "secondwind", params: { restorePct: 40, freeMs: 2000 } } },
-  relic_bloodlords_mantle: { id: "relic_bloodlords_mantle", name: "Bloodlord's Mantle", rarity: "mythic", family: "lifesteal", effect: { killHeal: 2 }, unique: { kind: "leech", params: { healPct: 5, shieldPct: 15 } } },
+  relic_bloodlords_mantle: { id: "relic_bloodlords_mantle", name: "Bloodlord's Mantle", rarity: "mythic", family: "lifesteal", effect: { killHeal: 2 }, unique: { kind: "leech", params: { healPct: 4, shieldPct: 15 } } },
   relic_colossus_mantle: { id: "relic_colossus_mantle", name: "Colossus Mantle", rarity: "mythic", family: "vitality", effect: { maxHpPct: 12 }, unique: { kind: "undying", params: { revivePct: 40 } } },
   relic_assassins_mantle: { id: "relic_assassins_mantle", name: "Assassin's Mantle", rarity: "mythic", family: "crit", effect: { critChancePct: 5 }, unique: { kind: "critsplash", params: { splashPct: 50, radius: 90, slowPct: 30, slowMs: 1500 } } },
   relic_enlightened_mantle: { id: "relic_enlightened_mantle", name: "Enlightened Mantle", rarity: "mythic", family: "xp", effect: { xpPct: 14 }, unique: { kind: "xpstreak", params: { perKillPct: 10, maxPct: 90, windowMs: 5000 } } },
@@ -655,7 +655,7 @@ export function uniqueText(def: RelicDef, powerTier = 1): string {
         ? `survive one fatal hit per run (heal to ${pct(p.revivePct)}% HP)`
         : `heal ${pct(p.lowHpHealPct)}% max HP when below ${p.thresholdPct}% HP (every ${sec(p.cooldownMs)}s)`;
     case "critsplash":
-      return `crits splash ${pct(p.splashPct)}% within ${p.radius}px${p.slowPct ? ` + ${pct(p.slowPct)}% slow ${sec(p.slowMs)}s` : ""}`;
+      return `melee crits splash ${pct(p.splashPct)}% within ${p.radius}px${p.slowPct ? ` + ${pct(p.slowPct)}% slow ${sec(p.slowMs)}s` : ""}`;
     case "xpstreak":
       return `chained kills ramp +${pct(p.perKillPct)}%/kill up to +${pct(p.maxPct)}% XP`;
   }

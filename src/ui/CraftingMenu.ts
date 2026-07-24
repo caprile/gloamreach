@@ -4,7 +4,7 @@ import type { Crafting } from "../systems/Crafting";
 import type { ResourceType } from "../systems/Inventory";
 import type { ItemContainer } from "../systems/ItemContainer";
 import { itemDef, type ItemStat } from "../systems/Items";
-import { weaponAttacksPerSecond, weaponDamage, weaponPrimaryDamageType } from "../systems/Weapons";
+import { weaponAttacksPerSecond, weaponDamage, weaponPrimaryDamageType, weaponStaminaCost } from "../systems/Weapons";
 import { ARMOR_SETS } from "../systems/SetBonuses";
 import { weaponSkillDamageMultiplier, type Skills } from "../systems/Skills";
 import type { PlayerProgression } from "../systems/Progression";
@@ -126,6 +126,15 @@ export class CraftingMenu {
   private maxListScroll = 0;
   private listTop = 0;
   private listViewH = 0;
+  // Coalesces refresh() into one repaint per frame — mirrors InventoryMenu's
+  // fix for the same flicker (the user: "flickery when I open inventory while
+  // things are autopicking up"). refreshDiscovery() calls craftingMenu.refresh()
+  // once per collected node (via collectNode -> discoverMaterial/addToBackpack),
+  // so a multi-item magnet pull was tearing down and rebuilding every row
+  // several times in a single frame — this panel sits right beside Inventory
+  // under Tab, so that read as the same flicker even after InventoryMenu's own
+  // refresh() was fixed.
+  private refreshQueued = false;
 
   constructor(scene: Phaser.Scene, deps: CraftingMenuDeps) {
     this.scene = scene;
@@ -191,9 +200,16 @@ export class CraftingMenu {
   }
 
   // Call after any inventory/skill/craft state change so affordability and
-  // owned state stay in sync while the menu is open.
+  // owned state stay in sync while the menu is open. Coalesced to one repaint
+  // per frame (see refreshQueued) — refreshDiscovery() calls this once per
+  // collected node, and a magnet pull can collect several in one frame.
   refresh(): void {
-    if (this.open) this.render();
+    if (!this.open || this.refreshQueued) return;
+    this.refreshQueued = true;
+    this.scene.events.once(Phaser.Scenes.Events.POST_UPDATE, () => {
+      this.refreshQueued = false;
+      if (this.open) this.render();
+    });
   }
 
   // --- batch slider drag (driven by MainScene's shared global pointermove/up,
@@ -387,10 +403,17 @@ export class CraftingMenu {
     if (stat.label === "Armor" && def.armorSlot) {
       return `${def.armorDefense ?? 0}`;
     }
-    // (Stamina cost shown as-authored — Strength/Agility no longer discount it
-    // after M-SS; only relics do, which this menu doesn't factor.)
     if (stat.label === "Attack Speed" && def.weapon) {
       return `${weaponAttacksPerSecond(def.weapon).toFixed(1)}/s`;
+    }
+    // Read live from Weapons.ts (see Tooltip.statValue's identical fix) rather
+    // than the hand-authored Items.ts string, which drifts the moment a
+    // balance pass touches WEAPON_STAMINA_COST but not every item's display
+    // text. Strength/Agility no longer discount stamina after M-SS — only
+    // relics do, which this menu doesn't factor — so this is still just the
+    // flat base cost, just the CURRENT one.
+    if (stat.label === "Stamina" && def.weapon) {
+      return `${weaponStaminaCost(def.weapon)}`;
     }
     return stat.value;
   }

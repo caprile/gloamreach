@@ -779,9 +779,23 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     const dist = Phaser.Math.Distance.Between(this.x, this.y, playerX, playerY);
 
     switch (this.attackPhase) {
-      case "windup":
-        // A heavy attacker rears back as it loads the swing (see SwingConfig.tell).
-        if (cfg.tell?.rearBackSpeed && dist > 1) {
+      case "windup": {
+        // A heavy attacker rears back as it loads the swing (see SwingConfig.tell)
+        // — but never further than its own reach. Without this cap, a swing that
+        // STARTS near the edge of reach can retreat far enough over the whole
+        // windup to carry itself out of its own strike range, whiffing a player
+        // who never moved at all (playtest: "mosswretch/little tree dudes don't
+        // hit me even standing still" — SMASH_SWING's rearBackSpeed 46 over a
+        // 780ms windup drifts ~36px, more than enough to clear its 88px reach).
+        // The rear-back is meant to be a readable TELL, not a second dodge
+        // window on top of the strike-time recheck below.
+        const effReach = cfg.reach + this.reachBonus();
+        // A few px of buffer absorbs the one-frame lag between "dist just
+        // crossed effReach" and the next tick actually seeing it — without it,
+        // the last rear-back step of any given frame rate can still overshoot
+        // the line by a hair and whiff a strike that should have connected.
+        const REAR_BACK_BUFFER = 4;
+        if (cfg.tell?.rearBackSpeed && dist > 1 && dist < effReach - REAR_BACK_BUFFER) {
           const ang = Phaser.Math.Angle.Between(playerX, playerY, this.x, this.y);
           body.setVelocity(Math.cos(ang) * cfg.tell.rearBackSpeed, Math.sin(ang) * cfg.tell.rearBackSpeed);
         }
@@ -789,11 +803,12 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
           this.attackPhase = "strike";
           this.attackStartedAt = now;
           this.endWindupTell();
-          const hit = dist <= cfg.reach + this.reachBonus(); // hit-check against CURRENT position
+          const hit = dist <= effReach; // hit-check against CURRENT position
           this.pendingAttackKnockback = hit ? cfg.knockback ?? 0 : 0;
           return hit;
         }
         return false;
+      }
       case "strike":
         if (this.attackElapsed(now) >= cfg.strikeMs) {
           this.attackPhase = "recover";

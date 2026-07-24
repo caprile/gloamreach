@@ -345,6 +345,13 @@ const SPRINT_DRAIN_PER_SEC = 33; // stamina/sec while sprinting — full bar in 
 const RUNNING_XP_PER_SEC = 20;
 const DASH_STAMINA_COST = 25; // flat cost per dash — 4 dashes per full bar
 const DASH_IFRAME_MS = 150; // outlasts the dash burst itself (Milestone E)
+// Anti-kite governor for ranged weapons (playtest: "ranged feels really safe,
+// bows can just kite"). Firing briefly slows the player so a shot-and-sprint
+// loop can't outrun everything indefinitely — a mild per-shot cost, not a
+// lockout. 350ms is shorter than every bow's own cooldown (540ms+), so a
+// single, unhurried shot still recovers to full speed before the next one.
+const RANGED_FIRE_SLOW_MULT = 0.72; // ~28% slower, per locked playtest decision
+const RANGED_FIRE_SLOW_MS = 350;
 // --- Armor set-bonus magnitudes (biome 2 Phase 4 forged gear; see SetBonuses.ts) ---
 // Molten Bulwark (Embersteel heavy): a melee attacker that lands a hit is seared
 // for this much fire damage (thorns), and ALL incoming damage is cut by a flat
@@ -1274,6 +1281,7 @@ export class MainScene extends Phaser.Scene {
   private xpBarText!: Phaser.GameObjects.Text; // "Lvl N" label inside the XP bar
   private isDead = false;
   private invulnerableUntil = 0; // this.time.now threshold; incoming damage skipped before this
+  private rangedFireSlowUntil = 0; // anti-kite: briefly slowed after firing a ranged weapon
   private readonly RESPAWN_DELAY_MS = 2000;
   private readonly POST_RESPAWN_INVULN_MS = 1500;
 
@@ -1589,6 +1597,7 @@ export class MainScene extends Phaser.Scene {
     // simultaneous food buffs for one of only 2 slots.
     this.buffs.setMaxBuffs(3);
     this.invulnerableUntil = 0;
+    this.rangedFireSlowUntil = 0;
     // Relic unique-proc state (2026-07-15) — reset per run (scene.restart gotcha).
     this.onslaughtHits = 0;
     this.killMoveBurstUntil = 0;
@@ -2257,7 +2266,21 @@ export class MainScene extends Phaser.Scene {
       this.poison.sustain(env.poisonDps * this.equipEffects.statusResistMult(), 900);
       this.hints.trigger("poisoned");
     }
-    const frame = this.player.update(delta, canSprint, canDash, sprintMultiplier, moveMult, dashDistMult, inputEnabled, env.moveMult);
+    // Anti-kite: briefly slower right after firing a ranged weapon. A separate
+    // multiplicative factor from env.moveMult (terrain) — folded in only for the
+    // actual speed calc so the terrain tooltip (currentEnvMoveMult) isn't misled
+    // into blaming the ground for it.
+    const rangedFireSlow = this.time.now < this.rangedFireSlowUntil ? RANGED_FIRE_SLOW_MULT : 1;
+    const frame = this.player.update(
+      delta,
+      canSprint,
+      canDash,
+      sprintMultiplier,
+      moveMult,
+      dashDistMult,
+      inputEnabled,
+      env.moveMult * rangedFireSlow,
+    );
     this.clampPlayerToWorld();
 
     if (frame.sprinting) {
@@ -6148,13 +6171,20 @@ export class MainScene extends Phaser.Scene {
     // return neutral anyway — but say it explicitly: dungeon floors are plain
     // stone, never swamp water or a miasma.
     if (this.activeDungeon) {
-      // The only underground environment: the Miretyrant's mire pools.
+      // The only underground TERRAIN environment: the Miretyrant's mire pools.
+      // But Mosswretch is themed crypt/lair-approach dweller content (see
+      // populateCrypt's "bruiser room" + the Miretyrant approach), so its spore
+      // cloud needs to fold on top here too — this used to short-circuit before
+      // ever reaching foldSporeCloud, so a cloud dropped underground silently did
+      // nothing (playtest: "poison cloud doesn't do anything inside dungeons").
+      let base: { moveMult: number; regenMult: number; poisonDps?: number } = { moveMult: 1, regenMult: 1 };
       for (const pool of this.mirePools) {
         if (Phaser.Math.Distance.Between(x, y, pool.x, pool.y) <= MIRE_POOL_RADIUS) {
-          return { moveMult: MIRE_POOL_SLOW_MULT, regenMult: POISON_REGEN_MULT, poisonDps: MIRE_POOL_POISON_DPS };
+          base = { moveMult: MIRE_POOL_SLOW_MULT, regenMult: POISON_REGEN_MULT, poisonDps: MIRE_POOL_POISON_DPS };
+          break;
         }
       }
-      return { moveMult: 1, regenMult: 1 };
+      return this.foldSporeCloud(x, y, base);
     }
     // Compute the terrain-only effect, then fold in any C2 spore cloud on top —
     // this way a cloud stacks correctly with a thornfield, water, or a miasma
@@ -6166,6 +6196,15 @@ export class MainScene extends Phaser.Scene {
   // The terrain-only surface effect (no spore clouds, no crypt) — factored out
   // of environmentEffectAt so the C2 spore-cloud fold can wrap it.
   private baseSurfaceEnvironmentAt(x: number, y: number): { moveMult: number; regenMult: number; poisonDps?: number } {
+    // A tyrant altar's arena is meant to be a clean telegraph-dodge boss fight —
+    // but a bayou miasma zone's own radius (up to 780px) can reach well past the
+    // TYRANT_ALTAR_CLEAR_RADIUS (360px) exclusion that only gates where a zone's
+    // CENTER is picked, not how far its edge can bleed. Playtest: "duneshaper
+    // arena doesn't normally have poison — it was from the overlap of the bayou
+    // area." Suppress every bayou/badlands zone effect inside the arena outright.
+    if (this.tyrantAltarPositions.some((a) => Phaser.Math.Distance.Between(x, y, a.x, a.y) < TYRANT_ALTAR_CLEAR_RADIUS)) {
+      return { moveMult: 1, regenMult: 1 };
+    }
     const z = this.subZoneAt(x, y);
     if (z && z.type === "thornfield") return { moveMult: BRAMBLE_SLOW_MULT, regenMult: 1 };
     // Biome 3 zones are resolved BEFORE the early return so a zone sitting over a
@@ -9471,6 +9510,7 @@ export class MainScene extends Phaser.Scene {
     }
 
     this.lastWeaponHitAt = this.time.now;
+    this.rangedFireSlowUntil = this.time.now + RANGED_FIRE_SLOW_MS; // anti-kite: brief post-shot slow
     this.stamina.spend(staminaCost);
     this.player.playSwing();
     this.player.playEquippedSwing();
@@ -9603,7 +9643,10 @@ export class MainScene extends Phaser.Scene {
       this.swingHealBudget = this.swingHealApplied * 1.5;
       this.swingHealCapArmed = true;
     }
-    if (isCrit) this.applyCritSplash(enemy, finalDmg, dmgType);
+    // Crit splash is melee-only: at range it turned a single-target bow into
+    // free horde clear (60%-capped crit chance × 3x-capped crit mult already
+    // deletes single targets; splash on top of that trivialized kiting).
+    if (isCrit && source !== "Ranged") this.applyCritSplash(enemy, finalDmg, dmgType);
     // Magic's crowd answer (see WEAPON_ON_HIT_BURST). Fires from the PRIMARY hit
     // only — `isBurstSource` is false for the arc sweep, the burst's own victims
     // and the crit splash, so a detonation can never chain into another one.

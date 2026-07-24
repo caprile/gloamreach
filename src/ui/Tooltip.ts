@@ -10,6 +10,7 @@ import {
   weaponDamage,
   weaponIdentityLine,
   weaponPrimaryDamageType,
+  weaponStaminaCost,
   type WeaponType,
 } from "../systems/Weapons";
 import { weaponSkillDamageMultiplier, type Skills } from "../systems/Skills";
@@ -179,10 +180,18 @@ export class Tooltip {
       const adjusted = armorDefenseForTier(def.key, tier);
       return adjusted === base ? `${base}` : `${adjusted} (base ${base})`;
     }
-    // (Stamina cost is shown as-authored — Strength/Agility no longer discount
-    // it after M-SS; only relics do, and the tooltip is relic-agnostic.)
     if (stat.label === "Attack Speed" && def.weapon) {
       return `${weaponAttacksPerSecond(def.weapon).toFixed(1)}/s`;
+    }
+    // Read live from Weapons.ts rather than the hand-authored Items.ts string,
+    // which drifts the moment a balance pass touches WEAPON_STAMINA_COST but
+    // not every item's display text (caught live: Embersteel Warbow showed 15
+    // after a rebalance dropped the real cost to 11). Strength/Agility no
+    // longer discount stamina after M-SS — only relics do, and the tooltip is
+    // relic-agnostic — so this is still just the flat base cost, just the
+    // CURRENT one.
+    if (stat.label === "Stamina" && def.weapon) {
+      return `${weaponStaminaCost(def.weapon)}`;
     }
     return stat.value;
   }

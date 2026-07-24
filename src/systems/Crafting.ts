@@ -1,4 +1,4 @@
-import { RECIPES, type Recipe } from "./Recipes";
+import { RECIPES, outputKey, type Recipe } from "./Recipes";
 import type { ResourceType } from "./Inventory";
 import type { ItemContainer } from "./ItemContainer";
 import type { Skills } from "./Skills";
@@ -140,7 +140,22 @@ export class Crafting {
   }
 
   private ingredientsKnown(recipe: Recipe, discovered: ReadonlySet<string>): boolean {
-    return (Object.keys(recipe.costs) as ResourceType[]).every((r) => discovered.has(r));
+    return (Object.keys(recipe.costs) as ResourceType[]).every((r) => this.isKnownIngredient(r, discovered));
+  }
+
+  // An ingredient counts as known if it's been physically obtained, OR a
+  // recipe that PRODUCES it is already discovered — even if that recipe has
+  // never actually been crafted. Playtest (the user): having the Duskhide
+  // recipe plus Embersteel unlocked should surface Emberhide too, without
+  // ever having made a Duskhide piece. This resolves transitively across
+  // repeated refresh() calls without needing explicit recursion here: once a
+  // recipe is added to discoveredIds in one pass, any recipe consuming its
+  // output sees it as known on this pass (if it's processed later in RECIPES
+  // order) or the next one (refresh() runs on essentially every state
+  // change, so a one-pass lag up a deep chain is imperceptible).
+  private isKnownIngredient(key: string, discovered: ReadonlySet<string>): boolean {
+    if (discovered.has(key)) return true;
+    return RECIPES.some((r) => this.discoveredIds.has(r.id) && outputKey(r) === key);
   }
 
   private skillsMet(recipe: Recipe, skills: Skills): boolean {

@@ -652,9 +652,9 @@ Common/Uncommon = flat stat; Rare/Mythic = **Uncommon's stat (plateau) + a proc*
 | **Move** | Swift Charm +4% | Swift Idol +7% | Fleetfoot Totem +7% · on kill +25% move 2.5s | Windwalker's Mantle +7% · +35% move 3.5s + refunds dash |
 | **Defense** | Stoneskin Charm −4% taken | Ironhide Idol −7% | Aegis Totem −7% · negate next hit /8s | Bulwark Mantle −7% · negate /6s + cap any hit at 30% max HP |
 | **Stamina** | Tireless Charm −6% cost | Tireless Idol −10% | Second Wind Totem −10% · on kill restore 25% max stam | Perpetual Mantle −10% · restore 40% + 2s free attacks |
-| **Lifesteal** | Bloodroot Charm +1 HP/kill | Sanguine Idol +2 HP/kill | Reaper Totem +2 · leech 3% of dmg dealt | Bloodlord's Mantle +2 · leech 5% + overheal → shield (≤15% max HP) |
+| **Lifesteal** | Bloodroot Charm +1 HP/kill | Sanguine Idol +2 HP/kill | Reaper Totem +2 · leech 2% of dmg dealt | Bloodlord's Mantle +2 · leech 4% + overheal → shield (≤15% max HP) |
 | **Vitality** | Stout Charm +8% max HP | Vigor Idol +12% | Titan Totem +12% · heal 25% max HP below 25% HP (60s cd) | Colossus Mantle +12% · survive one fatal hit/run → 40% HP |
-| **Crit** | Keen Charm +3% chance | Savage Idol +5% chance | Deadeye Totem +5% · crits splash 35% within 70px | Assassin's Mantle +5% · splash 50% within 90px + 30% slow 1.5s |
+| **Crit** | Keen Charm +3% chance | Savage Idol +5% chance | Deadeye Totem +5% · melee crits splash 35% within 70px (ranged excluded) | Assassin's Mantle +5% · melee splash 50% within 90px + 30% slow 1.5s (ranged excluded) |
 | **XP** | Scholar's Charm +8% | Scholar's Idol +14% | Sage Totem +14% · streak +8%/kill up to +50% (4s) | Enlightened Mantle +14% · +10%/kill up to +90% (5s) |
 
 A dual-stat relic (e.g. War Totem) claims one **primary** family; its secondary
