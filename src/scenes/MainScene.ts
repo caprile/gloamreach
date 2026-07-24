@@ -1285,6 +1285,13 @@ export class MainScene extends Phaser.Scene {
   // actually running, rather than re-read (and possibly re-scaled by a gear swap)
   // on every hit mid-window.
   private bloodpactLifelink = ABILITY_BLOODPACT_LIFELINK_PCT;
+  // Per-swing lifesteal cap (D2, the 2026-07-23 "god run" fix — see
+  // budgetedSwingHeal below for the full explanation). Reset/armed inside
+  // resolveWeaponHit; no scene.restart() reset needed since a fresh swing
+  // re-arms them regardless of leftover state from the previous run.
+  private swingHealBudget = 0;
+  private swingHealCapArmed = false;
+  private swingHealApplied = 0;
   private aegisUntil = 0; // Drowned Aegis (found-only) damage-reduction window
   private hasteUntil = 0; // Bloodrush attack-speed window
   private hasteMult = 1; // cooldown multiplier while that window is open
@@ -9477,6 +9484,17 @@ export class MainScene extends Phaser.Scene {
     // MeleeGremling/Hexling each mirror that in their own takeHit() override
     // for their private `mode` field (a ranged weapon out-ranging an enemy's
     // own aggro radius was leaving it un-aggro'd despite being hit — playtest).
+    // Per-swing lifesteal cap (D2): a fresh swing starts here. isBurstSource is
+    // true exactly once per swing — the primary melee hit, or a ranged shot
+    // (which never has secondaries, since every RANGED_WEAPONS arc is 0) — so
+    // this resets the budget before that hit's own heals fire below, and the
+    // arm step after them (see the end of this method) locks in what the
+    // primary alone generated as the ceiling for any arc-sweep secondaries that
+    // follow in the same swing.
+    if (isBurstSource) {
+      this.swingHealApplied = 0;
+      this.swingHealCapArmed = false;
+    }
     if (isCrit) this.sfx.crit();
     else this.sfx.hit();
     // Resist/weakness layer (Biome 2 Phase 1) — applied at the single choke point
@@ -9508,10 +9526,12 @@ export class MainScene extends Phaser.Scene {
     // dealt while its active window lasts. Parallel to the Leech relic, its own
     // source; overheal at full HP is simply wasted (no shield bank).
     if (this.time.now < this.bloodpactUntil) {
-      const amt = Math.max(1, Math.round(finalDmg * this.bloodpactLifelink));
-      this.health.heal(amt);
-      this.runLog.recordHealing("Bloodpact", amt);
-      this.refreshHealthBar();
+      const amt = this.budgetedSwingHeal(Math.max(1, Math.round(finalDmg * this.bloodpactLifelink)));
+      if (amt > 0) {
+        this.health.heal(amt);
+        this.runLog.recordHealing("Bloodpact", amt);
+        this.refreshHealthBar();
+      }
     }
     // Weapon lifelink (the Gloamdrinker): an ALWAYS-on drain that costs no relic
     // family slot and needs no ability window. Data-driven per weapon, and read
@@ -9519,10 +9539,21 @@ export class MainScene extends Phaser.Scene {
     // ranged weapons have no lifelink row today.
     const lifelink = this.equippedWeapon ? weaponLifelinkPct(this.equippedWeapon) : 0;
     if (lifelink > 0) {
-      const amt = Math.max(1, Math.round(finalDmg * lifelink));
-      this.health.heal(amt);
-      this.runLog.recordHealing("Weapon lifelink", amt);
-      this.refreshHealthBar();
+      const amt = this.budgetedSwingHeal(Math.max(1, Math.round(finalDmg * lifelink)));
+      if (amt > 0) {
+        this.health.heal(amt);
+        this.runLog.recordHealing("Weapon lifelink", amt);
+        this.refreshHealthBar();
+      }
+    }
+    // Arm the cap AFTER every lifesteal source has had its chance to fire on
+    // the primary hit — swingHealApplied at this point is the primary's TOTAL
+    // across Leech + Bloodpact + weapon lifelink combined (whichever are
+    // active), which is what "the primary target's contribution" means when
+    // more than one source is live at once.
+    if (isBurstSource) {
+      this.swingHealBudget = this.swingHealApplied * 1.5;
+      this.swingHealCapArmed = true;
     }
     if (isCrit) this.applyCritSplash(enemy, finalDmg, dmgType);
     // Magic's crowd answer (see WEAPON_ON_HIT_BURST). Fires from the PRIMARY hit
@@ -10259,7 +10290,13 @@ export class MainScene extends Phaser.Scene {
   private applyLeech(finalDmg: number): void {
     const u = this.relics.unique("leech");
     if (!u || finalDmg <= 0) return;
-    const heal = finalDmg * (u.params.healPct / 100) * powerTierMult(u.powerTier);
+    const rawHeal = finalDmg * (u.params.healPct / 100) * powerTierMult(u.powerTier);
+    // Budgeted BEFORE the shield-banking step below, not just before
+    // health.heal() — capping only the HP portion and letting Mythic's
+    // overheal-to-shield run on the uncapped amount would just move the same
+    // AOE-scaling bug from HP into the shield instead of fixing it.
+    const heal = this.budgetedSwingHeal(rawHeal);
+    if (heal <= 0) return;
     const before = this.health.value();
     this.health.heal(heal);
     const applied = this.health.value() - before;
@@ -10273,6 +10310,28 @@ export class MainScene extends Phaser.Scene {
         this.refreshHealthBar();
       }
     }
+  }
+
+  // Every per-hit lifesteal source (Leech relic, Bloodpact, weapon lifelink)
+  // routes its desired heal through here instead of calling this.health.heal()
+  // directly, so the D2 per-swing cap applies uniformly no matter which
+  // source — or how many at once — is healing. See swingHealBudget's field
+  // comment and resolveWeaponHit's reset/arm points for the full mechanism.
+  //
+  // The primary hit (before the cap is armed) always heals in full: its total
+  // across every active source IS what defines the cap, so clamping it against
+  // itself would be circular. Everything after arming is clamped to whatever
+  // room remains under swingHealBudget.
+  private budgetedSwingHeal(desired: number): number {
+    if (desired <= 0) return 0;
+    if (!this.swingHealCapArmed) {
+      this.swingHealApplied += desired;
+      return desired;
+    }
+    const room = Math.max(0, this.swingHealBudget - this.swingHealApplied);
+    const allowed = Math.min(desired, room);
+    this.swingHealApplied += allowed;
+    return allowed;
   }
 
   // Executioner (crit relic): a crit splashes a % of its damage to nearby enemies
