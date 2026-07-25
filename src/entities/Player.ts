@@ -41,7 +41,14 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   private facing: Facing = "down";
   private equippedIcon: Phaser.GameObjects.Image | null = null;
   private equippedIconTexture: string | null = null;
+  private equippedIconScale = 1;
   private static readonly ICON_OFFSET = 16; // px from player center, in facing direction
+  // The held item renders at a fixed world size regardless of its source
+  // texture's resolution. Item icons are UI art first, and the real-art
+  // migration authors them at 32x32 (PixelLab's minimum canvas) rather than the
+  // placeholders' 24x24 — without this, swapping in real art would silently
+  // scale every held weapon up by a third.
+  private static readonly ICON_WORLD_SIZE = 24;
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
     super(scene, x, y, "player");
@@ -224,6 +231,9 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     } else {
       this.equippedIcon.setTexture(texture);
     }
+    const longest = Math.max(this.equippedIcon.width, this.equippedIcon.height) || 1;
+    this.equippedIconScale = Player.ICON_WORLD_SIZE / longest;
+    this.equippedIcon.setScale(this.equippedIconScale);
     this.equippedIcon.setVisible(true);
   }
 
@@ -257,10 +267,10 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   playEquippedSwing(): void {
     if (!this.equippedIcon) return;
     this.scene.tweens.killTweensOf(this.equippedIcon);
-    this.equippedIcon.setScale(1);
+    this.equippedIcon.setScale(this.equippedIconScale);
     this.scene.tweens.add({
       targets: this.equippedIcon,
-      scale: 1.3,
+      scale: this.equippedIconScale * 1.3,
       duration: 70,
       yoyo: true,
       ease: "Sine.easeOut",

@@ -532,6 +532,25 @@ const LIGHT_RADIUS_BY_ITEM: Record<string, number> = {
 };
 // Fixed light radius for a lit POI (Gremlin Shack, Boss Altar) at night.
 const POI_LIGHT_RADIUS = 150;
+// Additive light colours (see NightOverlayUI.ScreenLight.color). The darkness
+// mask only ever *reveals* what's beneath it, so before this every light source
+// looked identical no matter what its comment claimed — a "purple beacon" and a
+// "warm ember smithy" were the same grey hole. These are what actually makes a
+// gloam vein read violet and a forge read molten from across a dark map.
+//
+// A source with no entry here casts no colour and behaves exactly as before.
+const LIGHT_COLOR = {
+  torch: 0xffb45a, // carried flame — warm amber
+  poiFire: 0xff9440, // shack hearths, war-camp braziers, boss altars, lodge lamps
+  forge: 0xff6a2a, // molten crucible — hottest, most orange
+  den: 0xc97a3d, // "faint gloam-ember" — dimmer and browner than a real fire
+  vein: 0xa855f7, // Gloaming Vein amethyst
+  tyrant: 0x8b5cf6, // Duneshaper altar gloam crystals — violet
+  crypt: 0x9a6ae0, // crypt doorways. Generic gloam for now: per-gem colour needs
+  // the theme threaded into cryptLightPoints, which is currently just {x,y}.
+  gorge: 0x7fd84a, // the Sunken Gorge's maw — "a bile-green hole breathing light"
+  shrine: 0x9fd45a, // Sunken Shrine bowl-fire — sickly swamp green-gold
+} as const;
 // Nightfall surge (M-DN): how many extra enemies spawn in unexplored cells
 // around the player at each dusk, and the ring (world px) they appear in —
 // beyond the ~half-screen view so they arrive out in the dark, not on top of
@@ -2481,7 +2500,7 @@ export class MainScene extends Phaser.Scene {
     const ownLight = this.activeDungeon ? Math.max(CRYPT_AMBIENT_LIGHT, carried) : carried;
     if (ownLight > 0) {
       const p = toScreen(this.player.x, this.player.y);
-      lights.push({ x: p.x, y: p.y, radius: ownLight * z });
+      lights.push({ x: p.x, y: p.y, radius: ownLight * z, color: LIGHT_COLOR.torch });
     }
     // Cull against the zoomed visible world rect (worldView) plus a world-space
     // margin, so the erase list only holds POIs actually near the viewport.
@@ -2495,31 +2514,31 @@ export class MainScene extends Phaser.Scene {
     for (const shack of this.gremlinShacks) {
       if (!onScreen(shack.x, shack.y)) continue;
       const s = toScreen(shack.x, shack.y);
-      lights.push({ x: s.x, y: s.y, radius: POI_LIGHT_RADIUS * z });
+      lights.push({ x: s.x, y: s.y, radius: POI_LIGHT_RADIUS * z, color: LIGHT_COLOR.poiFire });
     }
     // Bayou surface POIs (Phase 4d) — a shrine's bowl-fire and a lodge's lamps
     // are how both read as inhabited places across a dark swamp.
     for (const p of this.shrineLightPoints) {
       if (!onScreen(p.x, p.y)) continue;
       const s = toScreen(p.x, p.y);
-      lights.push({ x: s.x, y: s.y, radius: POI_LIGHT_RADIUS * z });
+      lights.push({ x: s.x, y: s.y, radius: POI_LIGHT_RADIUS * z, color: LIGHT_COLOR.shrine });
     }
     for (const p of this.lodgeLightPoints) {
       if (!onScreen(p.x, p.y)) continue;
       const s = toScreen(p.x, p.y);
-      lights.push({ x: s.x, y: s.y, radius: POI_LIGHT_RADIUS * 1.3 * z });
+      lights.push({ x: s.x, y: s.y, radius: POI_LIGHT_RADIUS * 1.3 * z, color: LIGHT_COLOR.poiFire });
     }
     // Sunken Crypts — surface doorways glow with their gem's color at night.
     for (const p of this.cryptLightPoints) {
       if (!onScreen(p.x, p.y)) continue;
       const s = toScreen(p.x, p.y);
-      lights.push({ x: s.x, y: s.y, radius: CRYPT_LIGHT_RADIUS * z });
+      lights.push({ x: s.x, y: s.y, radius: CRYPT_LIGHT_RADIUS * z, color: LIGHT_COLOR.crypt });
     }
     // The Sunken Gorge's maw — a bile-green hole breathing light at night.
     for (const p of this.gorgeLightPoints) {
       if (!onScreen(p.x, p.y)) continue;
       const s = toScreen(p.x, p.y);
-      lights.push({ x: s.x, y: s.y, radius: GORGE_LIGHT_RADIUS * z });
+      lights.push({ x: s.x, y: s.y, radius: GORGE_LIGHT_RADIUS * z, color: LIGHT_COLOR.gorge });
     }
     // Interior braziers, but ONLY for the crypt you're standing in. The six
     // interiors share one grid in CRYPT_REALM and a neighbour is within camera
@@ -2530,7 +2549,7 @@ export class MainScene extends Phaser.Scene {
       for (const p of this.activeDungeon.braziers) {
         if (!onScreen(p.x, p.y)) continue;
         const s = toScreen(p.x, p.y);
-        lights.push({ x: s.x, y: s.y, radius: CRYPT_LIGHT_RADIUS * z });
+        lights.push({ x: s.x, y: s.y, radius: CRYPT_LIGHT_RADIUS * z, color: LIGHT_COLOR.poiFire });
       }
       // Discovered rooms/corridors stay lit — a stretched soft brush per space,
       // so a whole room lights at once instead of a circle following the player.
@@ -2551,13 +2570,13 @@ export class MainScene extends Phaser.Scene {
     for (const altar of this.bossAltars) {
       if (!onScreen(altar.x, altar.y)) continue;
       const s = toScreen(altar.x, altar.y);
-      lights.push({ x: s.x, y: s.y, radius: POI_LIGHT_RADIUS * z });
+      lights.push({ x: s.x, y: s.y, radius: POI_LIGHT_RADIUS * z, color: LIGHT_COLOR.poiFire });
     }
     // War Camp braziers (M-WC) glow like any other POI light.
     for (const b of this.campLightPoints) {
       if (!onScreen(b.x, b.y)) continue;
       const s = toScreen(b.x, b.y);
-      lights.push({ x: s.x, y: s.y, radius: POI_LIGHT_RADIUS * z });
+      lights.push({ x: s.x, y: s.y, radius: POI_LIGHT_RADIUS * z, color: LIGHT_COLOR.poiFire });
     }
     // Gloaming Vein crystals glow at night (a purple beacon that doubles as a
     // navigation hint — the vein's own amethyst color shows through the erased
@@ -2565,28 +2584,28 @@ export class MainScene extends Phaser.Scene {
     for (const v of this.veinLightPoints) {
       if (!onScreen(v.x, v.y)) continue;
       const s = toScreen(v.x, v.y);
-      lights.push({ x: s.x, y: s.y, radius: 110 * z });
+      lights.push({ x: s.x, y: s.y, radius: 110 * z, color: LIGHT_COLOR.vein });
     }
     // Duskrunner Warren dens glow a faint gloam-ember at night — a subtler
     // beacon than the full POIs, marking a den's location from a distance.
     for (const d of this.denLightPoints) {
       if (!onScreen(d.x, d.y)) continue;
       const s = toScreen(d.x, d.y);
-      lights.push({ x: s.x, y: s.y, radius: 90 * z });
+      lights.push({ x: s.x, y: s.y, radius: 90 * z, color: LIGHT_COLOR.den });
     }
     // Sunken Forge (Phase 3 POI 2): a warm ember glow — the molten crucible +
     // slag read as a lit smithy from a distance, a navigation beacon in the dark.
     for (const f of this.forgeLightPoints) {
       if (!onScreen(f.x, f.y)) continue;
       const s = toScreen(f.x, f.y);
-      lights.push({ x: s.x, y: s.y, radius: 130 * z });
+      lights.push({ x: s.x, y: s.y, radius: 130 * z, color: LIGHT_COLOR.forge });
     }
     // Duneshaper altar arenas: gloam crystals glow violet at night, so the
     // (now much larger) boss-altar clearing reads as a major beacon in the dark.
     for (const t of this.tyrantAltarLightPoints) {
       if (!onScreen(t.x, t.y)) continue;
       const s = toScreen(t.x, t.y);
-      lights.push({ x: s.x, y: s.y, radius: 120 * z });
+      lights.push({ x: s.x, y: s.y, radius: 120 * z, color: LIGHT_COLOR.tyrant });
     }
     return lights;
   }

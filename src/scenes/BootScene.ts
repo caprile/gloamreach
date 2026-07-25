@@ -1,16 +1,28 @@
 import Phaser from "phaser";
+import { applyTextureOverrides, queueTextureOverrides } from "../art/overrides";
 
-// The BootScene runs first. Its only job right now is to generate simple
-// placeholder textures in code (so we need zero image files to start), then
-// hand off to MainScene. Later we'll swap these for real pixel-art tilesets by
-// loading images here instead.
+// The BootScene runs first. It generates placeholder textures in code (so the
+// game needs zero image files to run), then hands off to MainScene.
+//
+// Real pixel art arrives *on top of* that rather than replacing it: any
+// `art/sprites/<textureKey>.png` is loaded here and swapped in over the
+// generated texture of the same name (see art/overrides.ts). Generation stays
+// the fallback for every key that has no PNG yet, so the game is fully playable
+// at every point during the art migration.
 export class BootScene extends Phaser.Scene {
   constructor() {
     super("BootScene");
   }
 
+  preload(): void {
+    queueTextureOverrides(this);
+  }
+
   create(): void {
     this.makeTextures();
+    // Order matters: overrides replace generated textures, so they must land
+    // after generation and before any scene consumes them.
+    applyTextureOverrides(this);
     this.scene.start("MainScene");
   }
 

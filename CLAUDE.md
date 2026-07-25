@@ -1945,7 +1945,30 @@ below.**
 7. **ARPG loot** — rarity, randomized drops/recipes, replayability. **Substantially shipped via the
    relic system** (probabilistic rarity-tiered passives, M-RL 5m + Phase 5 5am's family-loadout
    rework) — randomized recipe variants/item-affixes are still open.
-8. **Cross-cutting:** save/load (localStorage), real pixel-art tilesets.
+8. **Cross-cutting:** save/load (localStorage), real pixel-art tilesets. **The art arc is
+   underway** — plan: `.claude/plans/art-textures-lighting-3-biomes.md`, tooling is the **PixelLab
+   MCP** (project scope; its tools need a session restart to appear; the API key was pasted in
+   plaintext and should be rotated). **Phase 1 shipped** (2026-07-25): `src/art/overrides.ts` means
+   dropping `art/sprites/<textureKey>.png` replaces that generated placeholder with **zero
+   call-site changes** (per-asset and reversible — generation stays the fallback forever, so the
+   game is playable at every point in the migration), and `NightOverlayUI` gained a second
+   **additive** RenderTexture so lights cast real colour instead of only erasing darkness.
+   **Phase 2 shipped** (2026-07-25, same day): all **181 icons** are real pixel art, authored at
+   **32×32** (not the placeholders' 24×24 — PixelLab's minimum canvas, and the size the UI is now
+   built around: inventory/hotbar slots grew 46→70px so art renders at a clean integer ×2, the
+   crafting list draws icons at 1:1). `Player.equippedIcon` normalises to a fixed 24px world size so
+   icon resolution can't resize held weapons. **The four-metal weapon ladder deliberately reads as
+   four different weapons, not recolours of one** — the user's call after seeing the real result;
+   this reverses Phase 4's original "tiers are the same object in different metals" assumption,
+   which needs re-deciding when Phase 4 starts. A searchable reference gallery of all 181 (grouped
+   by category, light/dark theme) was published as an artifact and sent to the user; it isn't part
+   of this repo. Full detail + operational lessons (PixelLab's queue can stall 20+ minutes even on
+   a paid plan, ~85% prompt hit rate, known-hard prompts) in `art/README.md` and `STATUS.md`.
+   Measured scope: **377 authored textures total** (~327 never animate, so static art is the
+   finished product for those — only ~24 creatures + the player need frames). **Sprite dimensions
+   are load-bearing on world sprites** — reach/hitbox math reads them, so an override that changes
+   size is warned about, not silently accepted (icons are UI-only and exempted from that warning).
+   **Next: Phase 3 (~134 world props — flora, structures, crypt tiles), then Phase 4 (player rig).**
 
 **Bosses (was item 7)** — shipped, see 5c above (Boss Altar + Gremlin King). Future
 bosses should each get their own bespoke AI (per the locked "no shared boss

@@ -9268,3 +9268,272 @@ own test harness were caught and fixed rather than reported as results — a wro
 **Housekeeping:** a stray duplicate `## Recent Entries` heading left mid-file by an earlier prune
 was removed, and the oldest entry moved to `STATUS-archive.md`.
 
+### Survivor roster rework — distinctive, non-decaying, double-edged (2026-07-24, Opus)
+
+No plan file; a follow-on to the same session's damage batch, prompted by the `maxHpPct` decay
+finding. the user: "consider a rework of the starting survivors... I want them to feel distinctive
+and double edged sworded." Three forks locked via `AskUserQuestion`.
+
+**Three problems found:**
+1. **Two of the five cards had no bane left.** `maxHpPct`/`maxStaminaPct` were a % of the **100
+   base**, so they decayed as pools grew: the Vagabond's "−10% max Stamina" was −10 off a ~310
+   pool (**3%**) and the Ashcaller's "−15% max HP" was −15 off ~340 (**4%**). Both were, in
+   practice, free-upside cards — the same decay that made the Warden's "+20% max HP" boon
+   worthless, pointing the other way.
+2. **Every modifier was the same shape** — one global scalar up, one global scalar down. The
+   affinities carried all the class identity; the modifier layer read as a stat line.
+3. **Two cards shared `damageTakenMult` as their boon** (Warden + Ascetic), an overlap introduced
+   earlier the same session.
+
+**Locked decisions:** behavioural edges (not just numbers); `maxHpPct` becomes a **true
+multiplier**; and — the user's own framing — **no double-stacking an axis**: "I dont want them to
+double stack i.e. -20% max hp AND vit is hit. doesnt make sense". **No hard limits** (a modifier
+never locks out content, so a bad pick can't dead-end a 70-minute run).
+
+**ONE AXIS, ONE LEVER is now a structural rule**, not a convention. Several `RunModifier` fields
+govern exactly what a stat potency governs (`maxHpMult`↔vitality, `staminaRegenMult`↔endurance,
+`xpMult`↔intelligence, `buffDurationMult`↔wisdom), so a card carrying both silently applied two
+multipliers to one axis. A `MODIFIER_STAT_AXIS` map plus a module-load `console.warn` guard now
+enforces it, alongside the existing never-reduce-drops guard. The Ashcaller was the user's own
+worked example and had **three** such clashes (vitality, intelligence *and* wisdom) — resolving
+them also finishes the job D4 started, since the multiplicative xp stack is now two terms, not
+three.
+
+**Seven new `RunModifier` fields, each one line at a choke point that already existed** —
+`maxHpMult` (syncStatBonuses), `killHealBonus` (the on-kill heal site), `staminaRegenMult`
+(`Stamina.setRegenMult`), `buffDurationMult` (`Buffs.setDurationMult`), `maxBuffs`
+(`Buffs.setMaxBuffs`, previously a hardcoded 3, now `DEFAULT_MAX_BUFFS` + a per-card override),
+`attackSpeedMult` (`attackCooldownMult()`, so all three attack paths inherit it), `eliteLootMult`
+(the loot spawn loop, elites only). `maxStaminaPct` was **retired rather than kept as a future
+lever**, per the file's own "a new field is a deliberate decision, not a freebie" rule.
+`boon`/`bane` became `boons[]`/`banes[]` since most cards now carry a scalar pair *and* a
+behavioural edge; all three display sites (CharacterSelectUI, CharacterMenu, dashboard) render
+them like the existing affinity lines.
+
+**The roster:**
+| Card | Boons | Banes | Identity |
+|---|---|---|---|
+| **Vagabond** | +15% move speed, +50% stamina regen | −25% damage dealt | Outruns anything, never runs dry, kills slowly |
+| **Reaver** | +30% damage dealt, +6 HP per kill | +25% damage taken, −20% max HP | Sustains by killing — backing off is what kills you |
+| **Ashcaller** | +15% skill XP, buffs last 60% longer | −25% max HP, **only ONE buff at a time** | Fragile scholar living on one long, well-chosen buff |
+| **Warden** | −15% damage taken | +20% stamina cost, −13% attack speed | Slow, deliberate, unkillable; the gatherer |
+| **Ascetic** | Elites drop **double loot** | Elites are **twice as common** | The greed card — the only one that changes the world, not the player |
+
+**One pre-existing inconsistency fixed in passing:** `syncStatBonuses` assembled stamina off a
+literal `100` while `Stamina.MAX_STAMINA` is **130**. It happened to cancel out (`setBonusMax`
+subtracted the same 100), but it would have silently mis-scaled the moment a multiplier was
+applied to that pool. Now uses the real base; verified a no-op for the existing case (130 at 0
+Endurance on every card).
+
+**Verification.** `tsc` + `npm run build` clean, zero console errors/warnings (the new axis guard
+stays quiet). Live: the roster loads with **zero axis clashes** under an independent re-check of
+the rule (not just trusting the guard). The load-bearing test — `maxHpMult` holds at exactly
+**75% / 80% of baseline at BOTH 0 and 60 Vitality points** (255/340 and 272/340), i.e. the decay
+is gone; under the old system the Ashcaller's bane went from 15% to 4.4% over that same range.
+Every hook read back correctly per card (Warden `attackCooldownMult` 1.15, Ashcaller `maxBuffs`
+**1** and buff duration ×1.66, Vagabond stamina regen ×1.56 and damage ×0.75, Reaver kill-heal 6,
+Ascetic elite chance/loot ×2). Elite loot doubling is correctly **scoped**: baseline normal 2,
+baseline elite 2, Ascetic normal 2, Ascetic **elite 4**. Character-select screenshotted — all five
+cards render the longer trait blocks with no overflow (bottom-most object exactly at the 1080
+screen edge).
+
+**Promo poster re-rendered** (`promo/gloamreach-playtest-invite.html` → `.png`): its five survivor
+cards carried the old modifier lines verbatim. Blurbs and boon/bane lines updated to match, then
+re-rendered via the documented headless-Chrome recipe. Body height is unchanged at 1710 (2400×3420
+at scale 2) because `.blurb { flex: 1 }` absorbs the extra mod lines inside each card, so all five
+cards stay the same height and the `starts with …` footers stay aligned — verified by measuring
+every card's height and footer position before rendering. The Reaver's kill-heal is written as
+"Restore HP on every kill" rather than the literal 6, since a raw HP number is meaningless on a
+poster without knowing pool sizes and would drift on every tuning pass.
+
+**All numbers first-pass/tunable.** The Reaver is the card most likely to need it: +25% damage
+taken *and* −20% max HP against the newly-lethal bayou is the sharpest edge on the roster, and
+the 6 HP/kill that pays for it does nothing during a boss fight, where there is nothing to kill.
+
+
+### Full-screen flicker on equip/place — the real root cause (2026-07-24, Opus)
+
+No plan file; a one-line fix off the user's report that the flicker "continues to be a thing —
+every time I equip an item or place a thing the whole screen flickers and I see a flash of another
+view for a split second."
+
+**The previous fix treated a symptom.** Coalescing the `HotbarUI`/`UpgradeMenu`/`EventLogUI`
+repaints (12 rebuilds/frame → 1) cut the flicker from a continuous strobe to a single flash per
+action, but the flash itself was a different bug — and the coalescing actually *created* the window
+it fires in.
+
+**Root cause: unclassified objects render on EVERY camera.** The scene runs a two-camera split
+(zoomed world cam + zoom-1 HUD cam); `syncCameras()` routes each object to exactly one via its
+`cameraFilter` bitmask. A brand-new object has `cameraFilter === 0`, which Phaser reads as "draw on
+all cameras" — so an unclassified HUD panel is drawn a second time on the **world** camera, at 1.5×
+and in the wrong place. One frame of that is a full-screen flash.
+
+`syncCameras()` was called from `update()`. Phaser's step order is
+`scene.update` → `POST_UPDATE` → `PRE_RENDER` (**input handlers run here** —
+`InputManager.preRender` is bound to the game's PRE_RENDER) → `render`. So syncing from `update()`
+misses *both* things that create objects in response to a click: the pointer handler itself (e.g.
+the placement ghost), and the coalesced UI repaints — which defer their teardown-and-rebuild to
+`POST_UPDATE`, i.e. one hook *after* the sync.
+
+**Measured live** (`javascript_tool`, probe registered on PRE_RENDER after the scene's own, so it
+sees what the renderer is about to see): settled frame `0` unclassified → click frame `0` (the
+refresh only queues) → **next frame `36`** — the entire 18-slot hotbar (18 rects 46×46 @depth 2900
++ 18 texts @2901) rebuilt and drawn on both cameras → frame after `0`. Exactly one flash per equip
+or placement, which is what the user sees.
+
+**Fix:** `syncCameras()` now runs on the game's `PRE_RENDER` (registered in `create()`, off-then-on
+so `scene.restart()` can't stack a listener per run) instead of in `update()`. That is the last hook
+before the renderer walks the display list, so it catches the input phase and the POST_UPDATE
+rebuilds alike. It also still covers the frozen-menu case the old `update()` call was placed early
+for, since PRE_RENDER fires whether or not `update()` returns early.
+
+**Verified live:** equip frames `[0,0,0,0,0]` (was `[…,36,…]`); an object created mid-input-phase
+`[0,0,0]`; across a `scene.restart()` the PRE_RENDER listener count is unchanged (4 → 4, no leak);
+and the split itself is still correct — 129/129 HUD objects UI-cam-only, 1344/1344 world objects
+world-cam-only, the `speckleLayer` exception still on the world cam. `tsc` + `npm run build` clean,
+zero console errors.
+
+**Rule this establishes:** any per-frame pass whose output the *renderer* consumes belongs on
+PRE_RENDER, not in `update()` — anything created by an input handler or a POST_UPDATE-coalesced
+repaint lands after `update()` has already run.
+
+
+
+### Vagabond-run playtest batch — bayou over-correction + damage-type retirement (2026-07-24, Opus)
+
+No plan file — a fix/tuning batch off the user's "not even finishing this — it's unplayable" bayou
+run. Root cause of most of it: the 2026-07-24 pt1 damage pass sized bayou commons against
+end-of-bayou Gloamsteel (74 armor), but a player entering the bayou wears badlands gear (~16-36), so
+those raws landed near full and 2-shot. the user's own diagnosis in the dump: **Sanguinarch (118/205)
+feels right as a miniboss, and commons were doing 2-3× that** — the ordering was inverted. Every
+decision below was locked with him via `AskUserQuestion` before any code changed (he asked to review
+the exact damage numbers first, too).
+
+- **Damage-type layer RETIRED (the user: "remove resistances and weakness from enemies in general.
+  Doesn't make sense").** Deleted every `resistances` block from all 11 entity constructors
+  (Cragscale/Sandmaw/Hexling/Duneshaper/Mirejaw/Blighttoad/Mosswretch/Corpselight/Kilnborn/
+  Sanguinarch/Miretyrant — Cinderwrought's was already `{}`) and the mirrors in `enemyStats.ts`.
+  Every weapon now does full damage to every enemy; **flat armor is the only mitigation axis in the
+  game.** `Enemy.resistMultiplier()` still exists and returns 1 (no code paths broke). This is the
+  Phase-1 "bring the right weapon" system being deliberately retired — flagged to the user as such.
+  NOTE: this only affects damage the player DEALS; enemy attack CLASS (magic/fire/poison bypassing
+  the player's flat armor) is a separate axis and is unchanged.
+- **Bayou commons → ~half of Sanguinarch** (anchor 118/205, unchanged). Raws: Mirejaw chomp 135→68 /
+  lunge 170→100 / death-roll-tick 105→42; Blighttoad bite 125→48 (poison 4/s untouched — armor-
+  bypassing payload); Mosswretch smash 165→98 (elite ×1.5 = 147, fixes "192 from elite tree guy");
+  Murkling claw 108→38 (swarm = count, not per-hit); Corpselight husk maul 118→55 (its magic orb 22
+  + slams untouched — they bypass armor and were fine). Biggest normal common ≈ half of Sanguinarch;
+  no 2-shots; ~5-6 hits to kill at 16 armor. Minibosses/boss unchanged (not reached this run).
+- **Healing reduction removed entirely** (`POISON_REGEN_MULT` 0.75→1.0, the user: "get rid of the
+  healing reduction entirely"). Miasma/mire/spore zones deal only their poison DAMAGE now; the "This
+  ground weakens healing" status never fires. Constant kept as a future deliberate-debuff hook.
+- **Bow ministagger removed — RANGED ONLY** (the user chose ranged-only; melee keeps the shake for
+  feel). The prior 2026-07-24 fix only suppressed the `playHitFeedback` position-shake while the
+  enemy `isAttacking()`, so a *chasing* enemy still got knocked by every bow hit — the "forcing me to
+  fight every enemy with my bow" complaint. Fixed with a one-shot `Enemy.suppressHitShake` flag set
+  by `resolveWeaponHit` when `source === "Ranged"`, consumed+reset inside `playHitFeedback`, so no
+  subclass `takeHit()` override has to thread a parameter through.
+- **Duskrunner payoff windows** (the user: "too fast — why can they dash instantly melee attack? no
+  payoff window"). Bite windup/recover/cooldown 180/200/140 → 300/360/420; pounce windup 260→340,
+  recover 300→460, cooldown 560→900. Real telegraph + punish window between commitments.
+- **Cragscale roll telegraph** (the user: "anything with an invisible radius like the spinny guys …
+  needs to show the radius"). New `Cragscale.telegraphGfx` draws the roll's hit-lane on the ground —
+  a translucent quad along the locked roll direction (ROLL_MAX_DIST long, 2×ROLL_HIT_RADIUS wide) +
+  a rounded far cap — ramping in during windup, solid during the strike, cleared on recover;
+  destroyed in a new `playDeathFeedback` override. Same pattern as the Sandmaw's existing ring.
+- **Kilnborn whole-dungeon lava** (the user: "should make whole dungeon lava not just his room"). New
+  `Kilnborn.floorRects` (assigned `[...layout.rooms, ...layout.corridors]` in MainScene); `ensureTiles`
+  builds the fire grid across all of them, deduping doorway-overlap cells. At full heat
+  MAX_BURN_FRACTION of the ENTIRE crypt is alight — no cold room to retreat to. Falls back to the
+  single `arena` rect if `floorRects` is ever empty.
+
+**Verified live** (`javascript_tool`, zero console errors): damage numbers read
+[68,100,42]/[48]/[98,0]/[38]/[22,55,26]/[118,205]; `resistances` absent from the table + every
+`resistMultiplier('pierce'|'slash'|'fire')===1`; `suppressHitShake` consumed by `takeHit`; a Kilnborn
+built 92 tiles across two floor rects (multi-rect + dedup works, no throw); a Cragscale drove through
+a full roll (trigger→windup→strike, 80 frames) drawing the telegraph without error. `tsc` clean.
+Dashboard Enemies tab (the hand-mirror) updated: changed damage numbers + stripped the now-false
+resist/heal prose. No `RECIPES.md` change.
+
+
+### Ascetic-run playtest batch — Miretyrant waves, Bog Ore clustering, Ashcaller rework, Max buttons (2026-07-24, Sonnet)
+
+No plan file — a fix/tuning/content batch off the user's Ascetic win (77:59, 510 kills, level 25,
+Kill Points 9710, Speed Multiplier x1.00 — a full clear, not a speedrun). Used Primal Spear until
+Ember Brand dropped, then mixed both. Every design fork was locked via `AskUserQuestion` before any
+code changed; the numbers themselves (Int 100 dump, Strength-capped crit mult, Agility crit chance)
+were reviewed and judged healthy — no stat rebalance shipped, since the "too easy" complaint scoped
+entirely to the Miretyrant encounter, not the character sheet.
+
+- **Miretyrant bellow waves now escalate on a SCRIPT** (`src/entities/Miretyrant.ts` +
+  `MainScene.updateMiretyrantBellow`/`miretyrantWaveComposition`). the user: "Honestly just spawn
+  alligators instead of the frog dudes ... fighting strong adds the whole time ... hella frogs into
+  some big scary alligators." The boss itself only hands MainScene a 1-based wave INDEX
+  (`consumeBellow()`, renamed from a bare add-count — `pendingWave`/`bellowCount` replace the old
+  `pendingAdds`/`MIRETYRANT_ADDS_PER_BELLOW`/`_ENRAGED` constants), and MainScene's
+  `miretyrantWaveComposition(wave, enraged)` owns the script since it's the one that knows the
+  entity classes: waves 1-2 are pure frog swarms (4-5 elite Murkling/Blighttoad, the existing
+  45/55-favoured mix), wave 3 is the first elite-Mirejaw arrival (2 gators + 1 frog), wave 4+ keeps
+  gators in the mix permanently (2 gators + 2 frogs, +1 extra frog while enraged). Base interval
+  tightened `BELLOW_INTERVAL_MS` 15000→11000 and `BELLOW_ENRAGED_INTERVAL_MS` 8500→6500 for
+  near-constant pressure late in the fight. Boss damage numbers and its own chase/attack behavior are
+  explicitly UNCHANGED per the user's note ("damage was good, encounter was still too easy" — this is
+  purely an add-pressure fix). Verified live: `miretyrantWaveComposition(1..6, false|true)` returns
+  the exact scripted composition at every wave index and both enrage states.
+- **Bog Ore now clusters in the bayou's dangerous zones**
+  (`MainScene.spawnBayouNodes`). the user's actual ask, after a mid-session correction — he'd said
+  "gloam ore" but meant **Bog Ore** (the bayou's sole surface metal, gating the whole
+  Sunsteel→Mirebronze reforge flow he ran this session); gloam shards are a leftover-from-biome-2
+  material that were never touched. The flat 46-node scatter is now a 24-node baseline (general
+  presence) plus 10 clusters of 3-4 nodes biased into the **miasma** (poison fog) and **bonemire**
+  (haunted boneyard) zones — the bayou's two actual hazard zones — via the existing
+  `pickBayouPoint(..., { preferZone })` themed-spawn mechanism the enemy-pack spawner already uses,
+  with the same jitter/fallback-to-anchor pattern (a cluster member that jitters off-bayou or into
+  deep water snaps back to the verified anchor rather than being dropped). Net count ~24 + ~35
+  clustered ≈ 59-64, up from 46.
+- **Food-buff cap 3→2, Comfort/Bedroll fully exempt** (`src/systems/Buffs.ts`, `MainScene`
+  `DEFAULT_MAX_BUFFS`). Locked via `AskUserQuestion`: "2 food, Comfort exempt" — a Bedroll should
+  never compete with two cooked-food buffs for a slot. `BuffManager.apply()` now special-cases a new
+  `COMFORT_BUFF_ID` ("comfort_rest"): it's pushed without ever being counted against the cap or
+  considered for eviction, and the cap-eviction scan for a new FOOD buff explicitly skips the comfort
+  entry when picking what to evict. Verified live: 2 foods + Comfort coexist (3 buffs active,
+  Comfort untouched); adding a 3rd food correctly evicts the older food buff, never Comfort.
+- **The Ashcaller reworked from "one buff at a time" to "buff master"** (`src/systems/
+  Characters.ts`). The card's entire identity was built on `maxBuffs: 1` against a baseline of 3 —
+  dropping the baseline to 2 would have collapsed a distinctive downside into plain worse-than-
+  everyone-else. Locked via `AskUserQuestion` ("invert it"): `maxBuffs: 1` → `3`, so the Ashcaller
+  alone runs 3 concurrent buffs while the new baseline is 2 for the rest of the roster. Boons: +15%
+  skill XP, +60% buff/food duration, "Runs 3 buffs at once (everyone else: 2)"; bane stays -25% max
+  HP only (a `+damage taken` second bane was considered and dropped — Reaver already owns that axis
+  as its identity, and doubling it up would blur the two frail-glass-cannon cards together). Blurb
+  updated to match. Verified live: `characterById('ashcaller').modifier.maxBuffs === 3`.
+- **A "Max" button on every crafting-menu quantity slider** (`CraftingMenu`/`CookingMenu`/
+  `DryingRackMenu`/`JewelryMenu`) — snaps the batch/amount straight to the max currently affordable,
+  positioned to the right of each slider's knob within the existing panel width (no layout changes
+  needed — all four panels had 60-380px of unused width past the slider). Verified live: clicking
+  the CraftingMenu's Max button on a stackable recipe (Shishkabob, maxBatch 11286) snapped
+  `batchAmount` from 1 straight to 11286 in one call.
+- **Workbench Lvl 4→5 "upgrade ready" triangle — investigated, NOT a bug.** the user: "didn't show
+  right, maybe because it was already placed? not sure." Reproduced live via a placed test Workbench
+  stepped through all four upgrade tiers (`applyStationUpgrade` called directly for
+  tool_sharpener/forge_anvil/emberforge_anvil): the ▲ glyph (`refreshStationUpgradeIndicators`/
+  `stationHasReadyUpgrade`) correctly appeared and updated at every tier once ingredients were both
+  *discovered* and *affordable*. Isolated the real cause: `gloamforge_anvil` (Lvl4→5) requires
+  Gloamsteel Ingot specifically in its costs, and `upgradeIngredientsKnown` gates on the material
+  having been actually **discovered** (smelted/held at least once) — the exact same "you had to
+  actually smelt this" gate `emberforge_anvil` already uses for Embersteel. the user's run took the
+  **Sunsteel→Mirebronze** branch this session (his own words), which never touches Gloamsteel Ingot
+  at all, so the upgrade correctly stayed hidden — confirmed by forcing `discovered.delete
+  ('gloamsteel_ingot')` (glyph vanishes, matching the report) then `discoverMaterial('gloamsteel_
+  ingot')` (glyph reappears immediately). No code change; flagged to the user as working-as-designed
+  rather than silently "fixed."
+- **Numbers review (no changes shipped).** Reviewed the run's Skills/Stats screenshots (Pierce 51,
+  Magic 23, Heavy Armor 49, Intelligence 100/329 points, Strength crit-mult capped at 3.0x, Agility
+  20% crit chance). Judged healthy — Intelligence's uncapped skill-XP snowball is the same loop
+  confirmed intentional in the earlier god-run triage (the fun-from-leveling was the explicit point),
+  and the rest of the spread reads as a legitimate crit-focused pierce/magic build, not an imbalance.
+  No stat/skill numbers were touched this batch.
+
+`tsc` clean throughout. No `RECIPES.md` change (no recipe/cost changes — Bog Ore's yield/tool-tier
+gate is unchanged, only its spawn distribution moved).
+

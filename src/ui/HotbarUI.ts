@@ -9,14 +9,20 @@ import { appliedAugmentIds, isAugmentableItem, MAX_AUGMENTS_PER_ITEM } from "../
 import { Tooltip } from "./Tooltip";
 
 // Bumped 40->46 to match the InventoryMenu slot size (S3) — icons render the
-// same size whether they sit in the backpack or the hotbar.
-const SLOT_SIZE = 46;
+// same size whether they sit in the backpack or the hotbar. Bumped again
+// 46->70 for the real-art migration: icons are authored at 32x32, and a 34px
+// box rendered them at x1.06 — the worst possible scale for pixel art, since
+// nearest-neighbour leaves most rows 1:1 and doubles the occasional one, which
+// reads as distortion rather than magnification. KEEP THIS IN LOCKSTEP WITH
+// InventoryMenu's SLOT.
+const SLOT_SIZE = 70;
 const SLOT_GAP = 6;
 const ROW_GAP = 6;
 const BOTTOM_MARGIN = 34;
-// Icons are generated tiny (native ~14-30px) and were drawn at native size, so
-// they looked lost in the slot. Fit each within this box (aspect preserved).
-const ICON_BOX = SLOT_SIZE - 12;
+// 64 = exactly 2x the 32x32 authored icon, so every source pixel becomes a
+// clean 2x2 block. Padding is only 6px per side because the art filling the
+// slot is the point.
+const ICON_BOX = 64;
 const TOTAL_SLOTS = ROW1_COUNT + ROW2_COUNT;
 
 export interface HotbarUIDeps {

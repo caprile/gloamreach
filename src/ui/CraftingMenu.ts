@@ -42,9 +42,16 @@ const PANEL_H_MIN = 360;
 // Clearance kept below the panel for the HP/stamina bars + hotbar + XP bar.
 const BOTTOM_CLEARANCE = 190;
 // Row pitch of the recipe list, and the wheel step for scrolling it.
-const ROW_H = 25;
+// Row pitch is driven by the recipe icon (see LIST_ICON below), not the text —
+// the icon is the taller element now.
+const ROW_H = 36;
 const SCROLL_STEP = ROW_H * 3;
-const LIST_COL_W = 190;
+// Recipe rows have always carried an output icon, but at 18px against the old
+// placeholder art it read as a coloured smudge rather than a picture of the
+// thing. 32 is the authored icon size — 1:1, no resampling at all.
+const LIST_ICON = 32;
+// Widened to keep the same room for names now that the icon is 14px bigger.
+const LIST_COL_W = 204;
 const DETAIL_GAP = 20;
 const MARGIN_RIGHT = 16;
 // Stacks below the top-right MinimapUI panel (+ the stat-points badge that
@@ -317,7 +324,7 @@ export class CraftingMenu {
       this.rows.push(t);
     }
 
-    const iconSize = 18;
+    const iconSize = LIST_ICON;
     for (let i = firstRow; i <= lastRow && i < recipes.length; i++) {
       const recipe = recipes[i];
       const y = listTop + i * ROW_H - this.listScroll;
@@ -330,10 +337,14 @@ export class CraftingMenu {
         this.render();
       };
 
+      // Icon and name are both centred on the row now that the icon (32px) is
+      // taller than the text — anchoring either to the row's top edge would
+      // leave them visibly out of line.
+      const rowMid = y + ROW_H / 2;
       const texture = itemDef(outputKey(recipe))?.texture;
       if (texture) {
         const icon = this.scene.add
-          .image(x0 + iconSize / 2, y + iconSize / 2 + 1, texture)
+          .image(x0 + iconSize / 2, rowMid, texture)
           .setDisplaySize(iconSize, iconSize)
           .setScrollFactor(0)
           .setDepth(3001)
@@ -344,13 +355,14 @@ export class CraftingMenu {
 
       const nameX = x0 + iconSize + 6;
       const t = this.scene.add
-        .text(nameX, y, label, {
+        .text(nameX, rowMid, label, {
           fontFamily: "monospace",
           fontSize: "16px",
           color: isSelected ? "#ffe08a" : affordable ? "#ffffff" : "#5b6472",
           backgroundColor: isSelected ? "#20242e" : undefined,
           padding: { x: 4, y: 2 },
         })
+        .setOrigin(0, 0.5)
         .setScrollFactor(0)
         .setDepth(3001)
         .setInteractive({ useHandCursor: true })

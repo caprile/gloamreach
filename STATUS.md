@@ -2,8 +2,46 @@
 
 ## Current State
 
-_Living snapshot — edit in place, never append._ Last shipped: **Reaver-run playtest batch, part 1
-— stat caps, shrine budget, boss pacing** (2026-07-24, Opus; full writeup under Recent Entries).
+_Living snapshot — edit in place, never append._ Last shipped: **Phase 2 of the art arc COMPLETE —
+all 181 icons + the UI resized around them + a reference gallery** (2026-07-25, Sonnet, continuing
+Opus's same-day Phase 1/2 start) (`.claude/plans/art-textures-lighting-3-biomes.md`). Every one of
+the 181 icon textures is now real pixel art in `art/sprites/`, verified live in-game (181/181
+overrides applied at 32×32, zero console errors). **Phase 2 is done — next is Phase 3 (~134 world
+props: flora, structures, crypt tiles), then Phase 4 (player rig).**
+
+Icons are authored at **32×32**, and every UI surface renders them at an **integer** scale —
+inventory and hotbar slots went 46→**70** (`ICON_BOX` 64, ×2) and the crafting list draws its icon
+at 32 (×1). The old 34px box showed them at ×1.06, which reads as distortion rather than
+magnification. The inventory grid went 6→7 cols / 15→10 rows to fit. `Player.equippedIcon` now
+normalises to a fixed 24px **world** size, so icon resolution can never change how big a held weapon
+looks.
+
+**A searchable reference gallery exists** — published as a Claude artifact and sent to the user as a
+standalone HTML file (not part of the repo; it's a one-off review tool, generated then discarded
+along with the scripts that built it). Groups all 181 by category (materials/ores/weapons/armor/
+food/relics/jewelry/quest items/stations/status), filterable by name or key, with a light/dark
+theme. Regenerate by re-running the same category-map + assembler approach if a full re-review is
+ever needed again (scripts were `gen_gallery*.cjs` + `gen_gallery_categories.cjs`, deleted after
+publishing — recreate from scratch rather than hunting for them).
+
+**Operational lessons from finishing the batch** (full detail in `art/README.md`): PixelLab's queue
+occasionally stalls hard — jobs pinned at `95%` or cycling with a growing ETA for **20+ minutes**,
+not the usual 60-90s, observed even on the paid Tier 1 plan (reported upstream twice via
+`agent_feedback`). **A `download` call at true 95% genuinely 400s** (`"still being generated"`) —
+the earlier assumption that 95%-and-stuck might mean silently-complete was wrong; it isn't done
+until `list_objects` drops the progress column entirely. **A queued-but-undownloaded job doesn't
+disappear** — three icons (`mirebronze_ingot`, `mirebronze_helm`, `cattail`) were generated
+successfully but the download step was skipped or mislabeled onto the wrong filename earlier in the
+session; caught only by diffing the expected 181-key manifest against what's actually on disk and
+re-fetching each pending job ID directly rather than assuming "not on disk" means "never
+generated." **Always verify a batch against the authoritative key list before calling it done** —
+this is why the last ~15 icons took longer than the throughput math predicted.
+
+the user is on PixelLab **Tier 1 (2,000 generations/mo)**; the whole 181-icon pass used under 200 of
+those. **The API key was pasted in plaintext and should still be rotated.**
+
+**Gameplay state is unchanged from the previous batch:** **Reaver-run playtest batch, part 1 —
+stat caps, shrine budget, boss pacing** (2026-07-24, Opus; full writeup under Recent Entries).
 Off the user's Reaver win (69:56, 936 kills, level 31). **All 15 items are done.** Headlines: a **hard 100-point cap on every stat** plus a
 per-point retune so every stat is still growing at point 99 (Strength used to die at **24** points
 for a Reaver — 76 of his points did nothing); **dead-point allocation is now blocked, not just
@@ -143,12 +181,178 @@ reordered between slots.
 - **Corpselight friendly fire was investigated and is not a bug** — no enemy-vs-enemy damage path
   exists; the player's own AOE/crit-splash kills the Mosslings.
 
-**Next: a playtest at these numbers**, specifically the Miretyrant fight and whether the bayou now
-out-threatens the badlands.
+**Still open from that batch: a playtest at these numbers**, specifically the Miretyrant fight and
+whether the bayou now out-threatens the badlands. That is independent of the art arc — the art work
+touches no combat numbers.
 
 ## Recent Entries
 
 > Older entries in STATUS-archive.md.
+
+### Phase 2 of the art arc — ALL 181 icons + UI resized + reference gallery (2026-07-25, Opus start / Sonnet finish)
+
+Plan: `.claude/plans/art-textures-lighting-3-biomes.md` (Phase 2 — **now complete**). Operational
+detail — the generation recipe, rate limits, hit rate, known-hard prompts — lives in
+`art/README.md`, which is the file to read before starting Phase 3.
+
+**All 181 icons shipped**, verified live in one final pass (181/181 overrides applied at 32×32,
+zero console errors): raw materials, ores + ingots, the full four-metal weapon ladder (sword/pike/
+warhammer/warbow across sunsteel/embersteel/gloamsteel/mirebronze), every tool tier, the full armor
+progression (Gremlin set + duskhide/emberhide/bogweave/mirehide + sunsteel/embersteel/gloamsteel/
+mirebronze helm/cuirass/greaves), all food/cooked dishes, all four relic rarities + every trophy +
+refined-trophy tier, all jewelry (6 amulets, 7 rings, cloak, gloamdrinker, 3 ability gems), every
+quest/ritual item (totems, effigies, sigils, the Gremlin King's heart), every station + all 4
+Workbench tiers + the Smelter's tier, and all 4 status-effect icons.
+
+**A second pass caught 3 icons that were generated but never landed on disk** — `mirebronze_ingot`
+was downloaded onto `icon_mirebronze_helm.png` by a stale job-ID mixup (the real helm sat completed
+and undownloaded the whole time), and `icon_cattail`/`icon_ring_sparkbound` were simply never
+fetched despite their jobs finishing minutes earlier. All three were only found by diffing the
+completed-file list against the authoritative 181-key manifest pulled from `BootScene.ts` — **don't
+trust "not on disk yet" as "never generated" once a session has queued 50+ jobs**; always audit
+against the full key list before calling a batch done.
+
+**PixelLab's queue stalled hard partway through** — multiple jobs pinned at `creating 95% eta ~0s`
+or cycling with a *growing* ETA for 20+ minutes at a stretch, well past the normal 60-90s, and this
+happened on the paid Tier 1 plan, not just the earlier free trial. Reported upstream twice via
+`agent_feedback`. Confirmed the `download` endpoint genuinely 400s at true 95% (`"still being
+generated"`) — it is not silently complete, contrary to an earlier assumption. During one such
+stall, built the reference gallery instead of idling (see below) — worth remembering as a pattern:
+API stalls are a good moment to do the next deliverable's prep work, not just poll harder.
+
+**Reference gallery**: a single self-contained HTML page — all 181 icons, grouped into 10
+categories (materials/ores/weapons/armor/food/relics/jewelry/quest-items/stations/status), each a
+magnified (2×) slot with a search box (matches name or key) and a "show not-yet-generated" toggle
+that would surface gaps on a future partial run. Published as a Claude artifact and sent to the user
+as a standalone file; **not part of the game repo** — it and the 3 generator scripts that built it
+(`gen_gallery*.cjs`) were written to reference the live `art/sprites/` + `Items.ts` + `BootScene.ts`
+data so the categorisation can't drift, then deleted once published (a one-off review tool, not a
+shippable asset). Regenerate from scratch if a full visual audit is needed again — don't hunt for
+the deleted scripts.
+
+Below is the original 32-icon partial-batch writeup from earlier in the session, superseded by the
+above but kept for the design decisions it documents:
+
+**Icons are authored at 32×32, not the placeholders' 24×24.** 32 is PixelLab's minimum object
+canvas and the better target anyway. That forced two code changes:
+
+- **`Player.equippedIcon` normalises to a fixed world size** (`Player.ICON_WORLD_SIZE` = 24).
+  It rendered item icons in the WORLD at native size, so 32px art would have silently scaled every
+  held weapon up by a third. Verified: 24px placeholder → scale 1.0, 32px art → scale 0.75, both
+  render 24×24. The swing tween had to change too — it reset to `setScale(1)`, which would have
+  snapped a held weapon to full size mid-animation.
+- **`applyTextureOverrides` splits icon resizes from sprite resizes.** Phase 1's warning says
+  "reach/hitbox math reads sprite size", which is a false positive for UI icons — and at 181 of
+  them it would bury a genuine warning on a world sprite in Phase 3. `icon_*` now reports as one
+  info line.
+
+**UI resized so the art is actually visible** (the user: "in game the icons are a bit small… let's be
+proud of the arts"). The old 34px box showed 32px art at **×1.06** — the worst case for pixel art,
+since nearest-neighbour keeps most rows 1:1 and doubles the occasional one, reading as distortion
+rather than magnification. **Every surface is now an integer scale:** `InventoryMenu.SLOT` and
+`HotbarUI.SLOT_SIZE` both 46→**70** with `ICON_BOX` **64** (**×2**, clean pixel doubling — these two
+must stay equal so an item looks the same in the backpack and on the hotbar), and `CraftingMenu`'s
+`LIST_ICON` **32** at **×1** (no resampling at all). The inventory grid went **6→7 cols, 15→10
+rows**: the vertical budget is fixed (the panel must clear the hotbar at y=900), so bigger slots buy
+fewer rows and the extra column claws the capacity back. Measured after: panel x 16..1182 / y
+48..878, columns at 28-554 / 578-800 / 824-1000 / 1024-1170, clear of both the hotbar and the
+crafting panel at x=1284. The ability bar needed no change — it derives from
+`hotbarUI.left + width`.
+
+**The crafting list already had icons** — at `iconSize` 18 against placeholder art they just read as
+coloured smudges. Now 32px at 1:1, with icon and name both centred on the row (`ROW_H` 25→36), since
+anchoring either to the row top left them visibly out of line once the icon was taller than the text.
+
+**Locked decision — tier ladders now DIFFER on purpose.** The plan required a ladder to read as one
+object in different metals. The real four-metal sword ladder came out as four distinct silhouettes,
+and the user reversed the rule: *"I like the swords like that."* A higher tier reading as a visibly
+different weapon is the stronger progression signal. Load-bearing — it means every icon is an
+independent generation, with no `create_object_state` chaining and no shared-silhouette constraint.
+It also invalidates Phase 4's inherited "metal tiers are recolours" note, flagged in the plan for
+re-deciding on its own merits.
+
+**Corrected two of my own critiques mid-session.** I called out a green matte fringe on `icon_stone`
+and anti-aliasing on `icon_relic_common`; the pixel data disproved both (zero opaque green pixels —
+the outline is `#202A1B`, a dark olive-black; zero semi-transparent pixels anywhere; 15-48 colour
+palettes). Output is genuinely clean pixel art and **needs no post-processing step**.
+
+**Throughput reality for the remaining ~150:** PixelLab caps at **4 concurrent jobs** (a 5th is
+rejected outright), so it's ~45 rounds of 4. Progress % is unreliable — jobs pin at `95% eta ~0s` or
+reset to 0% with a *growing* ETA, then finish fine; don't re-fire on a stall (reported upstream via
+`agent_feedback`). Hit rate ~85%; misses are the model over-decorating, steered with
+*plain/undecorated/torn*. **Single-bit axes are a known-hard prompt** — three attempts all gave a
+symmetric double-head or a curved pick; `icon_stone_axe` ships as the best of three.
+
+the user moved off the 40-generation trial to **Tier 1 (2,000/mo, $12)**, so cost is no longer a
+constraint on the arc — 181 icons + Phase 3's ~134 props is ~16% of one month.
+
+### Art pipeline + additive coloured lighting (Phase 1 of the 3-biome art arc) (2026-07-25, Opus)
+
+Plan: `.claude/plans/art-textures-lighting-3-biomes.md`. First session of the real-pixel-art arc
+(roadmap 8). the user registered the **PixelLab MCP** at project scope; its tools need a session
+restart, so this session built the foundation everything else gets authored against. Two forks
+locked via `AskUserQuestion`: **additive coloured lights** (not Lights2D + normal maps, which would
+need a normal map for all 377 textures that PixelLab can't generate) and **icons first**.
+
+**Measured the real scope** from the live `TextureManager` rather than parsing BootScene — many
+keys are drawn by shared helpers, so static parsing only resolved 107 of 314 calls. **377 authored
+textures**: 181 icons (177 @ 24×24, 4 status icons @ 22×22), ~134 static world props/flora/nodes/
+structures/crypt tiles, ~24 creatures + player, 14 derived `*_elite` recolours, 12 map markers @
+18×18, 3 FX gradients. The other **2,197** keys are runtime RenderTextures (ground bakes, minimap,
+tile fills) and stay procedural. **~327 of 377 never animate**, so static art is the finished
+product for them, not a stopgap — this corrected an earlier assumption that animation gated
+everything.
+
+**`src/art/overrides.ts`** — drop `art/sprites/<textureKey>.png` and it replaces the generated
+texture of that name with **zero call-site changes** (Phaser keys are plain strings). Discovered via
+Vite `import.meta.glob` at build time, so there is no index file to drift the way `RECIPES.md` does;
+adding a PNG is the entire workflow, and deleting it restores the placeholder. `BootScene` gained
+its first-ever `preload()`; overrides apply after `makeTextures()` and before MainScene starts.
+It **reports size changes** (attack reach and hitboxes read sprite size — `MainScene.enemyReach`,
+`Enemy.reachBonus`) and **unmatched keys** (a misspelled filename would otherwise fail completely
+silently). `pixelArt: true` was already set, so loaded PNGs are crisp with no extra work.
+
+**Additive coloured lighting.** `NightOverlayUI` was subtractive *only* — it filled the screen dark
+and erased soft holes, so every light source looked identical no matter what its comment claimed. The
+existing code promised "doorways glow with their gem's color" and "a bile-green hole breathing
+light"; `ScreenLight` carried no colour at all, so that intent was never deliverable. Added a second
+RenderTexture rendered with `BlendModes.ADD` — it **can't** fold into the darkness mask, because
+drawing colour into a layer that renders normally would occlude the world instead of lighting it.
+`ScreenLight.color` is **optional**: omit it and behaviour is byte-for-byte the old pure reveal,
+which is what a discovered crypt ROOM wants (plainly lit, not bathed in colour). New `LIGHT_COLOR`
+in MainScene assigns per-source hues across all 14 light sources.
+
+**`ADDITIVE_STRENGTH` is 0.15, and the number matters:** additive blending *sums* overlaps and light
+sources cluster hard — a Gloaming Vein is 9 crystals inside one radius. At 0.4 the cluster saturated
+straight to white and lost the violet, i.e. the exact colour the pass exists to add. Also note the
+brush is shared between the erase and additive passes, and **erase strength reads the brush's
+alpha** — so the erase loop resets `clearTint().setAlpha(1)` explicitly. Verified the brush is left
+tinted at 0.15 after render, which is what makes that reset load-bearing rather than defensive.
+
+**Verified live** (not just typechecked): built three throwaway PNGs to exercise the override path
+end-to-end — a correct-size one applied and changed real pixels (`icon_wood` → magenta), a
+wrong-size one fired the resize warning, a bogus key fired the unmatched warning, and a
+non-overridden key was untouched; fixtures then deleted. Lighting confirmed by screenshot at deep
+night: the vein reads amethyst with crystals and ground visible through it while POI fires read warm
+amber in the same frame. Day hides **both** layers (zero cost). `tsc` clean, zero console errors.
+
+**Scope locked same-day (the user), and it deleted the hardest problem:** **armor does NOT render on
+the model** — only its inventory icon and stat lines. So there is no armor layer, the
+`inpaint`-separable-layer question is moot, and no metered API calls are needed to settle it. **The
+weapon DOES render**, and **each of the 5 survivors gets unique art + animations**. Rig volume drops
+~6× to **~300 frames**: 5 survivors × 4 dirs × ~13 frames (~260) plus weapon-in-hand at **10
+ARCHETYPES** × 4 dirs (~40) — the roster is ~25 weapons but only ~10 shapes, since the
+sword/pike/warhammer/warbow ladders are the same object in four metals (recolours, same principle as
+the 14 `*_elite` textures). Because armor is invisible, **the weapon is now the only visible signal
+of gear progression**, so the metal recolours need to read clearly distinct. Note the display
+mechanism already exists — `Player.ts`'s `equippedIcon` offsets by facing every frame and has a
+swing lunge tween; Phase 4 replaces its art and anchors it to a per-frame hand joint (which
+`animate-with-skeleton`'s `skeleton_keypoints` hands over directly). Added **Phase 5 — ability cast
+FX**: all 8 families (`blink`/`nova`/`lifelink`/`aegis`/`gravebind`/`haste`/`lance`/`snare`)
+currently reuse the `light_soft` gradient as one generic glow, so they're visually
+interchangeable; the new additive light layer is directly reusable there.
+
+**Next:** Phase 2 — the 181 icons, starting with normalising the four 22×22 status icons.
 
 ### Reaver-run playtest batch — stat caps, shrine budget, boss pacing, telegraphs, UI fixes (2026-07-24, Opus)
 
@@ -255,269 +459,3 @@ sustained close approach) — both call the same helper proven on the other thre
 time: the preview loop needed the documented `loop.step` trick to advance game time, and enemy AI
 does not tick until a character is actually picked (`runOver` stays true), which silently made a
 first round of telegraph probes report nothing.
-
-### Ascetic-run playtest batch — Miretyrant waves, Bog Ore clustering, Ashcaller rework, Max buttons (2026-07-24, Sonnet)
-
-No plan file — a fix/tuning/content batch off the user's Ascetic win (77:59, 510 kills, level 25,
-Kill Points 9710, Speed Multiplier x1.00 — a full clear, not a speedrun). Used Primal Spear until
-Ember Brand dropped, then mixed both. Every design fork was locked via `AskUserQuestion` before any
-code changed; the numbers themselves (Int 100 dump, Strength-capped crit mult, Agility crit chance)
-were reviewed and judged healthy — no stat rebalance shipped, since the "too easy" complaint scoped
-entirely to the Miretyrant encounter, not the character sheet.
-
-- **Miretyrant bellow waves now escalate on a SCRIPT** (`src/entities/Miretyrant.ts` +
-  `MainScene.updateMiretyrantBellow`/`miretyrantWaveComposition`). the user: "Honestly just spawn
-  alligators instead of the frog dudes ... fighting strong adds the whole time ... hella frogs into
-  some big scary alligators." The boss itself only hands MainScene a 1-based wave INDEX
-  (`consumeBellow()`, renamed from a bare add-count — `pendingWave`/`bellowCount` replace the old
-  `pendingAdds`/`MIRETYRANT_ADDS_PER_BELLOW`/`_ENRAGED` constants), and MainScene's
-  `miretyrantWaveComposition(wave, enraged)` owns the script since it's the one that knows the
-  entity classes: waves 1-2 are pure frog swarms (4-5 elite Murkling/Blighttoad, the existing
-  45/55-favoured mix), wave 3 is the first elite-Mirejaw arrival (2 gators + 1 frog), wave 4+ keeps
-  gators in the mix permanently (2 gators + 2 frogs, +1 extra frog while enraged). Base interval
-  tightened `BELLOW_INTERVAL_MS` 15000→11000 and `BELLOW_ENRAGED_INTERVAL_MS` 8500→6500 for
-  near-constant pressure late in the fight. Boss damage numbers and its own chase/attack behavior are
-  explicitly UNCHANGED per the user's note ("damage was good, encounter was still too easy" — this is
-  purely an add-pressure fix). Verified live: `miretyrantWaveComposition(1..6, false|true)` returns
-  the exact scripted composition at every wave index and both enrage states.
-- **Bog Ore now clusters in the bayou's dangerous zones**
-  (`MainScene.spawnBayouNodes`). the user's actual ask, after a mid-session correction — he'd said
-  "gloam ore" but meant **Bog Ore** (the bayou's sole surface metal, gating the whole
-  Sunsteel→Mirebronze reforge flow he ran this session); gloam shards are a leftover-from-biome-2
-  material that were never touched. The flat 46-node scatter is now a 24-node baseline (general
-  presence) plus 10 clusters of 3-4 nodes biased into the **miasma** (poison fog) and **bonemire**
-  (haunted boneyard) zones — the bayou's two actual hazard zones — via the existing
-  `pickBayouPoint(..., { preferZone })` themed-spawn mechanism the enemy-pack spawner already uses,
-  with the same jitter/fallback-to-anchor pattern (a cluster member that jitters off-bayou or into
-  deep water snaps back to the verified anchor rather than being dropped). Net count ~24 + ~35
-  clustered ≈ 59-64, up from 46.
-- **Food-buff cap 3→2, Comfort/Bedroll fully exempt** (`src/systems/Buffs.ts`, `MainScene`
-  `DEFAULT_MAX_BUFFS`). Locked via `AskUserQuestion`: "2 food, Comfort exempt" — a Bedroll should
-  never compete with two cooked-food buffs for a slot. `BuffManager.apply()` now special-cases a new
-  `COMFORT_BUFF_ID` ("comfort_rest"): it's pushed without ever being counted against the cap or
-  considered for eviction, and the cap-eviction scan for a new FOOD buff explicitly skips the comfort
-  entry when picking what to evict. Verified live: 2 foods + Comfort coexist (3 buffs active,
-  Comfort untouched); adding a 3rd food correctly evicts the older food buff, never Comfort.
-- **The Ashcaller reworked from "one buff at a time" to "buff master"** (`src/systems/
-  Characters.ts`). The card's entire identity was built on `maxBuffs: 1` against a baseline of 3 —
-  dropping the baseline to 2 would have collapsed a distinctive downside into plain worse-than-
-  everyone-else. Locked via `AskUserQuestion` ("invert it"): `maxBuffs: 1` → `3`, so the Ashcaller
-  alone runs 3 concurrent buffs while the new baseline is 2 for the rest of the roster. Boons: +15%
-  skill XP, +60% buff/food duration, "Runs 3 buffs at once (everyone else: 2)"; bane stays -25% max
-  HP only (a `+damage taken` second bane was considered and dropped — Reaver already owns that axis
-  as its identity, and doubling it up would blur the two frail-glass-cannon cards together). Blurb
-  updated to match. Verified live: `characterById('ashcaller').modifier.maxBuffs === 3`.
-- **A "Max" button on every crafting-menu quantity slider** (`CraftingMenu`/`CookingMenu`/
-  `DryingRackMenu`/`JewelryMenu`) — snaps the batch/amount straight to the max currently affordable,
-  positioned to the right of each slider's knob within the existing panel width (no layout changes
-  needed — all four panels had 60-380px of unused width past the slider). Verified live: clicking
-  the CraftingMenu's Max button on a stackable recipe (Shishkabob, maxBatch 11286) snapped
-  `batchAmount` from 1 straight to 11286 in one call.
-- **Workbench Lvl 4→5 "upgrade ready" triangle — investigated, NOT a bug.** the user: "didn't show
-  right, maybe because it was already placed? not sure." Reproduced live via a placed test Workbench
-  stepped through all four upgrade tiers (`applyStationUpgrade` called directly for
-  tool_sharpener/forge_anvil/emberforge_anvil): the ▲ glyph (`refreshStationUpgradeIndicators`/
-  `stationHasReadyUpgrade`) correctly appeared and updated at every tier once ingredients were both
-  *discovered* and *affordable*. Isolated the real cause: `gloamforge_anvil` (Lvl4→5) requires
-  Gloamsteel Ingot specifically in its costs, and `upgradeIngredientsKnown` gates on the material
-  having been actually **discovered** (smelted/held at least once) — the exact same "you had to
-  actually smelt this" gate `emberforge_anvil` already uses for Embersteel. the user's run took the
-  **Sunsteel→Mirebronze** branch this session (his own words), which never touches Gloamsteel Ingot
-  at all, so the upgrade correctly stayed hidden — confirmed by forcing `discovered.delete
-  ('gloamsteel_ingot')` (glyph vanishes, matching the report) then `discoverMaterial('gloamsteel_
-  ingot')` (glyph reappears immediately). No code change; flagged to the user as working-as-designed
-  rather than silently "fixed."
-- **Numbers review (no changes shipped).** Reviewed the run's Skills/Stats screenshots (Pierce 51,
-  Magic 23, Heavy Armor 49, Intelligence 100/329 points, Strength crit-mult capped at 3.0x, Agility
-  20% crit chance). Judged healthy — Intelligence's uncapped skill-XP snowball is the same loop
-  confirmed intentional in the earlier god-run triage (the fun-from-leveling was the explicit point),
-  and the rest of the spread reads as a legitimate crit-focused pierce/magic build, not an imbalance.
-  No stat/skill numbers were touched this batch.
-
-`tsc` clean throughout. No `RECIPES.md` change (no recipe/cost changes — Bog Ore's yield/tool-tier
-gate is unchanged, only its spawn distribution moved).
-
-### Vagabond-run playtest batch — bayou over-correction + damage-type retirement (2026-07-24, Opus)
-
-No plan file — a fix/tuning batch off the user's "not even finishing this — it's unplayable" bayou
-run. Root cause of most of it: the 2026-07-24 pt1 damage pass sized bayou commons against
-end-of-bayou Gloamsteel (74 armor), but a player entering the bayou wears badlands gear (~16-36), so
-those raws landed near full and 2-shot. the user's own diagnosis in the dump: **Sanguinarch (118/205)
-feels right as a miniboss, and commons were doing 2-3× that** — the ordering was inverted. Every
-decision below was locked with him via `AskUserQuestion` before any code changed (he asked to review
-the exact damage numbers first, too).
-
-- **Damage-type layer RETIRED (the user: "remove resistances and weakness from enemies in general.
-  Doesn't make sense").** Deleted every `resistances` block from all 11 entity constructors
-  (Cragscale/Sandmaw/Hexling/Duneshaper/Mirejaw/Blighttoad/Mosswretch/Corpselight/Kilnborn/
-  Sanguinarch/Miretyrant — Cinderwrought's was already `{}`) and the mirrors in `enemyStats.ts`.
-  Every weapon now does full damage to every enemy; **flat armor is the only mitigation axis in the
-  game.** `Enemy.resistMultiplier()` still exists and returns 1 (no code paths broke). This is the
-  Phase-1 "bring the right weapon" system being deliberately retired — flagged to the user as such.
-  NOTE: this only affects damage the player DEALS; enemy attack CLASS (magic/fire/poison bypassing
-  the player's flat armor) is a separate axis and is unchanged.
-- **Bayou commons → ~half of Sanguinarch** (anchor 118/205, unchanged). Raws: Mirejaw chomp 135→68 /
-  lunge 170→100 / death-roll-tick 105→42; Blighttoad bite 125→48 (poison 4/s untouched — armor-
-  bypassing payload); Mosswretch smash 165→98 (elite ×1.5 = 147, fixes "192 from elite tree guy");
-  Murkling claw 108→38 (swarm = count, not per-hit); Corpselight husk maul 118→55 (its magic orb 22
-  + slams untouched — they bypass armor and were fine). Biggest normal common ≈ half of Sanguinarch;
-  no 2-shots; ~5-6 hits to kill at 16 armor. Minibosses/boss unchanged (not reached this run).
-- **Healing reduction removed entirely** (`POISON_REGEN_MULT` 0.75→1.0, the user: "get rid of the
-  healing reduction entirely"). Miasma/mire/spore zones deal only their poison DAMAGE now; the "This
-  ground weakens healing" status never fires. Constant kept as a future deliberate-debuff hook.
-- **Bow ministagger removed — RANGED ONLY** (the user chose ranged-only; melee keeps the shake for
-  feel). The prior 2026-07-24 fix only suppressed the `playHitFeedback` position-shake while the
-  enemy `isAttacking()`, so a *chasing* enemy still got knocked by every bow hit — the "forcing me to
-  fight every enemy with my bow" complaint. Fixed with a one-shot `Enemy.suppressHitShake` flag set
-  by `resolveWeaponHit` when `source === "Ranged"`, consumed+reset inside `playHitFeedback`, so no
-  subclass `takeHit()` override has to thread a parameter through.
-- **Duskrunner payoff windows** (the user: "too fast — why can they dash instantly melee attack? no
-  payoff window"). Bite windup/recover/cooldown 180/200/140 → 300/360/420; pounce windup 260→340,
-  recover 300→460, cooldown 560→900. Real telegraph + punish window between commitments.
-- **Cragscale roll telegraph** (the user: "anything with an invisible radius like the spinny guys …
-  needs to show the radius"). New `Cragscale.telegraphGfx` draws the roll's hit-lane on the ground —
-  a translucent quad along the locked roll direction (ROLL_MAX_DIST long, 2×ROLL_HIT_RADIUS wide) +
-  a rounded far cap — ramping in during windup, solid during the strike, cleared on recover;
-  destroyed in a new `playDeathFeedback` override. Same pattern as the Sandmaw's existing ring.
-- **Kilnborn whole-dungeon lava** (the user: "should make whole dungeon lava not just his room"). New
-  `Kilnborn.floorRects` (assigned `[...layout.rooms, ...layout.corridors]` in MainScene); `ensureTiles`
-  builds the fire grid across all of them, deduping doorway-overlap cells. At full heat
-  MAX_BURN_FRACTION of the ENTIRE crypt is alight — no cold room to retreat to. Falls back to the
-  single `arena` rect if `floorRects` is ever empty.
-
-**Verified live** (`javascript_tool`, zero console errors): damage numbers read
-[68,100,42]/[48]/[98,0]/[38]/[22,55,26]/[118,205]; `resistances` absent from the table + every
-`resistMultiplier('pierce'|'slash'|'fire')===1`; `suppressHitShake` consumed by `takeHit`; a Kilnborn
-built 92 tiles across two floor rects (multi-rect + dedup works, no throw); a Cragscale drove through
-a full roll (trigger→windup→strike, 80 frames) drawing the telegraph without error. `tsc` clean.
-Dashboard Enemies tab (the hand-mirror) updated: changed damage numbers + stripped the now-false
-resist/heal prose. No `RECIPES.md` change.
-
-### Full-screen flicker on equip/place — the real root cause (2026-07-24, Opus)
-
-No plan file; a one-line fix off the user's report that the flicker "continues to be a thing —
-every time I equip an item or place a thing the whole screen flickers and I see a flash of another
-view for a split second."
-
-**The previous fix treated a symptom.** Coalescing the `HotbarUI`/`UpgradeMenu`/`EventLogUI`
-repaints (12 rebuilds/frame → 1) cut the flicker from a continuous strobe to a single flash per
-action, but the flash itself was a different bug — and the coalescing actually *created* the window
-it fires in.
-
-**Root cause: unclassified objects render on EVERY camera.** The scene runs a two-camera split
-(zoomed world cam + zoom-1 HUD cam); `syncCameras()` routes each object to exactly one via its
-`cameraFilter` bitmask. A brand-new object has `cameraFilter === 0`, which Phaser reads as "draw on
-all cameras" — so an unclassified HUD panel is drawn a second time on the **world** camera, at 1.5×
-and in the wrong place. One frame of that is a full-screen flash.
-
-`syncCameras()` was called from `update()`. Phaser's step order is
-`scene.update` → `POST_UPDATE` → `PRE_RENDER` (**input handlers run here** —
-`InputManager.preRender` is bound to the game's PRE_RENDER) → `render`. So syncing from `update()`
-misses *both* things that create objects in response to a click: the pointer handler itself (e.g.
-the placement ghost), and the coalesced UI repaints — which defer their teardown-and-rebuild to
-`POST_UPDATE`, i.e. one hook *after* the sync.
-
-**Measured live** (`javascript_tool`, probe registered on PRE_RENDER after the scene's own, so it
-sees what the renderer is about to see): settled frame `0` unclassified → click frame `0` (the
-refresh only queues) → **next frame `36`** — the entire 18-slot hotbar (18 rects 46×46 @depth 2900
-+ 18 texts @2901) rebuilt and drawn on both cameras → frame after `0`. Exactly one flash per equip
-or placement, which is what the user sees.
-
-**Fix:** `syncCameras()` now runs on the game's `PRE_RENDER` (registered in `create()`, off-then-on
-so `scene.restart()` can't stack a listener per run) instead of in `update()`. That is the last hook
-before the renderer walks the display list, so it catches the input phase and the POST_UPDATE
-rebuilds alike. It also still covers the frozen-menu case the old `update()` call was placed early
-for, since PRE_RENDER fires whether or not `update()` returns early.
-
-**Verified live:** equip frames `[0,0,0,0,0]` (was `[…,36,…]`); an object created mid-input-phase
-`[0,0,0]`; across a `scene.restart()` the PRE_RENDER listener count is unchanged (4 → 4, no leak);
-and the split itself is still correct — 129/129 HUD objects UI-cam-only, 1344/1344 world objects
-world-cam-only, the `speckleLayer` exception still on the world cam. `tsc` + `npm run build` clean,
-zero console errors.
-
-**Rule this establishes:** any per-frame pass whose output the *renderer* consumes belongs on
-PRE_RENDER, not in `update()` — anything created by an input handler or a POST_UPDATE-coalesced
-repaint lands after `update()` has already run.
-
-### Survivor roster rework — distinctive, non-decaying, double-edged (2026-07-24, Opus)
-
-No plan file; a follow-on to the same session's damage batch, prompted by the `maxHpPct` decay
-finding. the user: "consider a rework of the starting survivors... I want them to feel distinctive
-and double edged sworded." Three forks locked via `AskUserQuestion`.
-
-**Three problems found:**
-1. **Two of the five cards had no bane left.** `maxHpPct`/`maxStaminaPct` were a % of the **100
-   base**, so they decayed as pools grew: the Vagabond's "−10% max Stamina" was −10 off a ~310
-   pool (**3%**) and the Ashcaller's "−15% max HP" was −15 off ~340 (**4%**). Both were, in
-   practice, free-upside cards — the same decay that made the Warden's "+20% max HP" boon
-   worthless, pointing the other way.
-2. **Every modifier was the same shape** — one global scalar up, one global scalar down. The
-   affinities carried all the class identity; the modifier layer read as a stat line.
-3. **Two cards shared `damageTakenMult` as their boon** (Warden + Ascetic), an overlap introduced
-   earlier the same session.
-
-**Locked decisions:** behavioural edges (not just numbers); `maxHpPct` becomes a **true
-multiplier**; and — the user's own framing — **no double-stacking an axis**: "I dont want them to
-double stack i.e. -20% max hp AND vit is hit. doesnt make sense". **No hard limits** (a modifier
-never locks out content, so a bad pick can't dead-end a 70-minute run).
-
-**ONE AXIS, ONE LEVER is now a structural rule**, not a convention. Several `RunModifier` fields
-govern exactly what a stat potency governs (`maxHpMult`↔vitality, `staminaRegenMult`↔endurance,
-`xpMult`↔intelligence, `buffDurationMult`↔wisdom), so a card carrying both silently applied two
-multipliers to one axis. A `MODIFIER_STAT_AXIS` map plus a module-load `console.warn` guard now
-enforces it, alongside the existing never-reduce-drops guard. The Ashcaller was the user's own
-worked example and had **three** such clashes (vitality, intelligence *and* wisdom) — resolving
-them also finishes the job D4 started, since the multiplicative xp stack is now two terms, not
-three.
-
-**Seven new `RunModifier` fields, each one line at a choke point that already existed** —
-`maxHpMult` (syncStatBonuses), `killHealBonus` (the on-kill heal site), `staminaRegenMult`
-(`Stamina.setRegenMult`), `buffDurationMult` (`Buffs.setDurationMult`), `maxBuffs`
-(`Buffs.setMaxBuffs`, previously a hardcoded 3, now `DEFAULT_MAX_BUFFS` + a per-card override),
-`attackSpeedMult` (`attackCooldownMult()`, so all three attack paths inherit it), `eliteLootMult`
-(the loot spawn loop, elites only). `maxStaminaPct` was **retired rather than kept as a future
-lever**, per the file's own "a new field is a deliberate decision, not a freebie" rule.
-`boon`/`bane` became `boons[]`/`banes[]` since most cards now carry a scalar pair *and* a
-behavioural edge; all three display sites (CharacterSelectUI, CharacterMenu, dashboard) render
-them like the existing affinity lines.
-
-**The roster:**
-| Card | Boons | Banes | Identity |
-|---|---|---|---|
-| **Vagabond** | +15% move speed, +50% stamina regen | −25% damage dealt | Outruns anything, never runs dry, kills slowly |
-| **Reaver** | +30% damage dealt, +6 HP per kill | +25% damage taken, −20% max HP | Sustains by killing — backing off is what kills you |
-| **Ashcaller** | +15% skill XP, buffs last 60% longer | −25% max HP, **only ONE buff at a time** | Fragile scholar living on one long, well-chosen buff |
-| **Warden** | −15% damage taken | +20% stamina cost, −13% attack speed | Slow, deliberate, unkillable; the gatherer |
-| **Ascetic** | Elites drop **double loot** | Elites are **twice as common** | The greed card — the only one that changes the world, not the player |
-
-**One pre-existing inconsistency fixed in passing:** `syncStatBonuses` assembled stamina off a
-literal `100` while `Stamina.MAX_STAMINA` is **130**. It happened to cancel out (`setBonusMax`
-subtracted the same 100), but it would have silently mis-scaled the moment a multiplier was
-applied to that pool. Now uses the real base; verified a no-op for the existing case (130 at 0
-Endurance on every card).
-
-**Verification.** `tsc` + `npm run build` clean, zero console errors/warnings (the new axis guard
-stays quiet). Live: the roster loads with **zero axis clashes** under an independent re-check of
-the rule (not just trusting the guard). The load-bearing test — `maxHpMult` holds at exactly
-**75% / 80% of baseline at BOTH 0 and 60 Vitality points** (255/340 and 272/340), i.e. the decay
-is gone; under the old system the Ashcaller's bane went from 15% to 4.4% over that same range.
-Every hook read back correctly per card (Warden `attackCooldownMult` 1.15, Ashcaller `maxBuffs`
-**1** and buff duration ×1.66, Vagabond stamina regen ×1.56 and damage ×0.75, Reaver kill-heal 6,
-Ascetic elite chance/loot ×2). Elite loot doubling is correctly **scoped**: baseline normal 2,
-baseline elite 2, Ascetic normal 2, Ascetic **elite 4**. Character-select screenshotted — all five
-cards render the longer trait blocks with no overflow (bottom-most object exactly at the 1080
-screen edge).
-
-**Promo poster re-rendered** (`promo/gloamreach-playtest-invite.html` → `.png`): its five survivor
-cards carried the old modifier lines verbatim. Blurbs and boon/bane lines updated to match, then
-re-rendered via the documented headless-Chrome recipe. Body height is unchanged at 1710 (2400×3420
-at scale 2) because `.blurb { flex: 1 }` absorbs the extra mod lines inside each card, so all five
-cards stay the same height and the `starts with …` footers stay aligned — verified by measuring
-every card's height and footer position before rendering. The Reaver's kill-heal is written as
-"Restore HP on every kill" rather than the literal 6, since a raw HP number is meaningless on a
-poster without knowing pool sizes and would drift on every tuning pass.
-
-**All numbers first-pass/tunable.** The Reaver is the card most likely to need it: +25% damage
-taken *and* −20% max HP against the newly-lethal bayou is the sharpest edge on the roster, and
-the 6 HP/kill that pays for it does nothing during a boss fight, where there is nothing to kill.
-

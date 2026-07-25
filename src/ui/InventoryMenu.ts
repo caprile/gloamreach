@@ -107,26 +107,37 @@ export interface InventoryMenuDeps {
 
 export const PANEL_X = 16;
 export const PANEL_Y = 48;
-const SLOT = 46;
+// Bumped 46->70 for the real-art migration: icons are authored at 32x32, and
+// the old 34px box rendered them at x1.06 — the worst possible scale for pixel
+// art (nearest-neighbour keeps most rows 1:1 and doubles the occasional one,
+// which reads as distortion, not magnification). KEEP THIS IN LOCKSTEP WITH
+// HotbarUI's SLOT_SIZE — an item must look the same in the backpack and on the
+// hotbar.
+const SLOT = 70;
 const GAP = 6;
 const CELL = SLOT + GAP;
-export const BACKPACK_COLS = 6;
-// Sizes the grid VIEWPORT height (not the container). Each biome tab holds
-// ~45-48 unique items => ~9-11 rows at 6 cols (~590-690px of content), so 15
-// rows (~720px viewport) lets a per-biome tab show every row with no scroll.
-// The panel bottom then lands ~y=898, still clear of the bottom hotbar (~960).
-// The "All" tab (93 items) still scrolls a little — expected for the
-// everything-view; a wider grid would be needed to make it scroll-free too.
-export const BACKPACK_ROWS = 15;
+// Widened 6->7 to claw back the grid capacity the bigger slots cost. A biome
+// tab holds ~45-48 items, which is ~7 rows at 7 cols — still inside the
+// viewport below, so per-biome tabs stay scroll-free.
+export const BACKPACK_COLS = 7;
+// Sizes the grid VIEWPORT height (not the container). Cut 15->10 alongside the
+// 46->70 slot bump: the vertical budget is fixed (the panel must stay clear of
+// the hotbar), so bigger slots buy fewer rows. 10 rows x 70px is very close to
+// the old 15 x 46 footprint, and because the grid also went 6->7 cols the
+// visible ITEM count barely moves (90 -> 70 cells, but a biome tab's ~48 items
+// now need ~7 rows instead of ~9) — per-biome tabs still fit without scrolling.
+// The "All" tab still scrolls, as before.
+export const BACKPACK_ROWS = 10;
 // The backpack container is now effectively unlimited (auto-organized tabbed
 // view, no manual arranging) — sized generously so a single hardcore run can't
 // realistically overflow it. The 6x6 grid is just the on-screen viewport into
 // this flat container; tabs/sections/scroll organize the rest.
 export const BACKPACK_CAPACITY = 240;
 const ARMOR_COLS = 3;
-// Item icons are generated tiny (native ~14-30px); fit each within this box
-// (aspect preserved) so they fill the slot instead of floating small (S3).
-const ICON_BOX = SLOT - 12;
+// 64 = exactly 2x the 32x32 authored icon size, so every source pixel becomes
+// a clean 2x2 block instead of an uneven smear. Padding is only 6px per side
+// because showing off the art is the whole point of the bump.
+const ICON_BOX = 64;
 
 // Fixed layout anchors so render() and slotIndexAt() stay in lockstep.
 // Backpack grid sits on the left, equipment grid to its right — both start
