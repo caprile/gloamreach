@@ -67,61 +67,82 @@ export function deriveEliteTextures(scene: Phaser.Scene, bases: string[]): strin
   const done: string[] = [];
   const overridden = new Set(bases);
   for (const base of bases) {
-    const eliteKey = ELITE_KEY[base] ?? `${base}_elite`;
+    const eliteKey = eliteKeyFor(base);
     if (!scene.textures.exists(eliteKey) || !scene.textures.exists(base)) continue;
     // A hand-authored elite always wins. The recolour is a stand-in for art
     // nobody has drawn — if `<name>_elite.png` exists on disk, overwriting it
     // with a tinted base would silently discard the better asset.
     if (overridden.has(eliteKey)) continue;
 
-    const src = scene.textures.get(base).getSourceImage() as HTMLImageElement | HTMLCanvasElement;
-    const w = src.width;
-    const h = src.height;
-    const canvas = scene.textures.createCanvas(`__elite__${base}`, w, h);
-    if (!canvas) continue;
-    const ctx = canvas.getContext();
-    ctx.clearRect(0, 0, w, h);
-    ctx.drawImage(src, 0, 0);
-
-    const img = ctx.getImageData(0, 0, w, h);
-    const px = img.data;
-
-    // Normalise against the sprite's OWN luminance range before ramping.
-    // Straight luma bunches most creatures into one band — a brown boar sits
-    // around 0.4 everywhere, so body and tusks both came out dark crimson and
-    // nothing reached the gold. Stretching min..max first is what reproduces
-    // the hand-drawn intent: darkest mass to deep crimson, brightest details
-    // (tusks, claws, eyes) to gold.
-    let lo = 1;
-    let hi = 0;
-    for (let i = 0; i < px.length; i += 4) {
-      if (px[i + 3] === 0) continue;
-      const l = luma(px, i);
-      if (l < lo) lo = l;
-      if (l > hi) hi = l;
-    }
-    const span = hi - lo || 1;
-
-    for (let i = 0; i < px.length; i += 4) {
-      if (px[i + 3] === 0) continue; // leave transparency exactly as-is
-      // Gamma < 1 lifts the mid-tones so the body MASS lands on crimson rather
-      // than on the dark shadow stop. Without it a creature's largest, most
-      // recognisable area comes out near-black and only a few specular pixels
-      // reach the gold — legible, but much darker than the hand-drawn elites it
-      // sits beside.
-      const l = Math.pow((luma(px, i) - lo) / span, 0.62);
-      const [r, g, b] = ramp(l);
-      px[i] = r;
-      px[i + 1] = g;
-      px[i + 2] = b;
-    }
-    ctx.putImageData(img, 0, 0);
-    canvas.refresh();
-
-    scene.textures.remove(eliteKey);
-    scene.textures.addCanvas(eliteKey, canvas.getSourceImage() as HTMLCanvasElement);
+    if (!recolourToElite(scene, base, eliteKey)) continue;
     done.push(eliteKey);
   }
   if (done.length) console.info(`[art] ${done.length} elite variant(s) derived from real art.`);
   return done;
+}
+
+/**
+ * Write `dstKey` as an elite-palette recolour of `srcKey`, replacing any
+ * existing texture under that name. Returns false if the source is missing.
+ *
+ * Works on an animation STRIP as readily as on a still, since a strip is a
+ * single image — which is how animated creatures get elite variants for free
+ * (see creatureRig.ts).
+ */
+export function recolourToElite(scene: Phaser.Scene, srcKey: string, dstKey: string): boolean {
+  if (!scene.textures.exists(srcKey)) return false;
+  const src = scene.textures.get(srcKey).getSourceImage() as HTMLImageElement | HTMLCanvasElement;
+  const w = src.width;
+  const h = src.height;
+  const canvas = scene.textures.createCanvas(`__elitesrc__${dstKey}`, w, h);
+  if (!canvas) return false;
+  const ctx = canvas.getContext();
+  ctx.clearRect(0, 0, w, h);
+  ctx.drawImage(src, 0, 0);
+
+  const img = ctx.getImageData(0, 0, w, h);
+  const px = img.data;
+
+  // Normalise against the sprite's OWN luminance range before ramping.
+  // Straight luma bunches most creatures into one band — a brown boar sits
+  // around 0.4 everywhere, so body and tusks both came out dark crimson and
+  // nothing reached the gold. Stretching min..max first is what reproduces
+  // the hand-drawn intent: darkest mass to deep crimson, brightest details
+  // (tusks, claws, eyes) to gold. Measured across the WHOLE image, so every
+  // frame of a strip is normalised together and the colour can't shift
+  // frame-to-frame.
+  let lo = 1;
+  let hi = 0;
+  for (let i = 0; i < px.length; i += 4) {
+    if (px[i + 3] === 0) continue;
+    const l = luma(px, i);
+    if (l < lo) lo = l;
+    if (l > hi) hi = l;
+  }
+  const span = hi - lo || 1;
+
+  for (let i = 0; i < px.length; i += 4) {
+    if (px[i + 3] === 0) continue; // leave transparency exactly as-is
+    // Gamma < 1 lifts the mid-tones so the body MASS lands on crimson rather
+    // than on the dark shadow stop. Without it a creature's largest, most
+    // recognisable area comes out near-black and only a few specular pixels
+    // reach the gold — legible, but much darker than the hand-drawn elites it
+    // sits beside.
+    const l = Math.pow((luma(px, i) - lo) / span, 0.62);
+    const [r, g, b] = ramp(l);
+    px[i] = r;
+    px[i + 1] = g;
+    px[i + 2] = b;
+  }
+  ctx.putImageData(img, 0, 0);
+  canvas.refresh();
+
+  scene.textures.remove(dstKey);
+  scene.textures.addCanvas(dstKey, canvas.getSourceImage() as HTMLCanvasElement);
+  return true;
+}
+
+/** The elite texture key for a base creature key (see ELITE_KEY for the odd one). */
+export function eliteKeyFor(base: string): string {
+  return ELITE_KEY[base] ?? `${base}_elite`;
 }

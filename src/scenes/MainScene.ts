@@ -9170,7 +9170,7 @@ export class MainScene extends Phaser.Scene {
   // as tuned; a creature simply looks bigger than it hits.
   private static readonly BASELINE_ENEMY_RADIUS = 13;
   private enemyReach(enemy: Enemy): number {
-    const was = placeholderDims(enemy.texture.key);
+    const was = placeholderDims(enemy.artKey);
     const radius = was
       ? (Math.max(was.w, was.h) / 2) * enemy.artFootprintScale()
       : Math.max(enemy.displayWidth, enemy.displayHeight) / 2;

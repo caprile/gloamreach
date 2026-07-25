@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import type { ResourceType } from "../systems/Inventory";
 import type { IncomingDamageType } from "../systems/Weapons";
+import { creatureAnimKey, hasCreatureRig, type CreatureAnim } from "../art/creatureRig";
 import { placeholderDims } from "../art/overrides";
 import { ysortDepth } from "../systems/depth";
 
@@ -356,8 +357,15 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   protected readonly barH: number;
   protected readonly barOffsetY: number;
 
+  // The texture this enemy was BUILT from. Held separately because playing an
+  // animation swaps `texture.key` to the strip's key, and several things key
+  // off the creature's identity rather than whatever frame is on screen —
+  // notably the placeholder-footprint lookup that pins reach and the body.
+  readonly artKey: string;
+
   constructor(scene: Phaser.Scene, cfg: EnemyConfig) {
     super(scene, cfg.x, cfg.y, cfg.texture);
+    this.artKey = cfg.texture;
     this.displayName = cfg.displayName;
     this.elite = cfg.elite ?? false;
     // Elites always drop one trophy (unique per species) on top of their own
@@ -427,7 +435,56 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     // stream-out/re-add can invert, painting the dark bg over the fill ("dark red").
     this.healthBarFill.setPosition(barX, barY).setDepth(this.depth + 2).setVisible(aggro);
     this.healthBarFill.setScale(Math.max(0, this.health / this.maxHealth), 1);
+    this.syncCreatureAnimation();
   }
+
+  /**
+   * Play the animation matching what this creature is doing, when it has
+   * animation art (see art/creatureRig.ts). Driven from preUpdate off body
+   * velocity and the shared attack phase, so every subclass gets it without
+   * touching its own AI — including the ones that fully override update().
+   *
+   * `rigged` is resolved once and cached: the lookup is per-frame per-enemy
+   * across a roster that runs to four figures.
+   */
+  private syncCreatureAnimation(): void {
+    if (this.rigged === undefined) this.rigged = hasCreatureRig(this.scene, this.artKey);
+    if (!this.rigged || this.depleted) return;
+    const body = this.body as Phaser.Physics.Arcade.Body | null;
+    const want: CreatureAnim = this.isAttacking()
+      ? "attack"
+      : body && (body.velocity.x || body.velocity.y)
+        ? "walk"
+        : "idle";
+    // Standing still with no idle art must HOLD a frame, not fall through to
+    // walk — a creature cycling its legs on the spot is worse than a static
+    // sprite, which is what it had before. Park it on the walk cycle's neutral
+    // frame so the pose still matches the art it animates into.
+    if (want === "idle" && !this.scene.anims.exists(creatureAnimKey(this.artKey, "idle"))) {
+      const walk = creatureAnimKey(this.artKey, "walk");
+      if (this.anims.currentAnim?.key === walk && this.anims.isPlaying) {
+        this.anims.stop();
+        this.setFrame(0);
+      }
+      return;
+    }
+    // Otherwise fall back down the chain: a creature may have movement art
+    // before it has an attack. Comparing against what's actually PLAYING
+    // (rather than the state last wanted) is what stops a fallback sticking.
+    for (const a of want === "idle" ? ["idle"] : [want, "walk", "idle"]) {
+      const key = creatureAnimKey(this.artKey, a as CreatureAnim);
+      if (!this.scene.anims.exists(key)) continue;
+      // Restart when the animation is merely ASSIGNED but not running, not
+      // just when the key differs — the idle branch above stops the walk cycle
+      // in place, which leaves currentAnim pointing at it. Without this a
+      // creature that stopped once never animates again.
+      if (this.anims.currentAnim?.key !== key || !this.anims.isPlaying) {
+        this.play(key, false);
+      }
+      return;
+    }
+  }
+  private rigged?: boolean;
 
   // Whether the HP bar should be shown right now — only while actively
   // aggro'd on the player, not at rest. Base default matches Boar's own

@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import { applyTextureOverrides, queueTextureOverrides } from "../art/overrides";
-import { deriveEliteTextures } from "../art/eliteVariants";
+import { buildCreatureAnimations, queueCreatureRig } from "../art/creatureRig";
+import { deriveEliteTextures, eliteKeyFor } from "../art/eliteVariants";
 import { buildPlayerAnimations, queuePlayerRig } from "../art/playerRig";
 
 // The BootScene runs first. It generates placeholder textures in code (so the
@@ -19,6 +20,7 @@ export class BootScene extends Phaser.Scene {
   preload(): void {
     queueTextureOverrides(this);
     queuePlayerRig(this);
+    queueCreatureRig(this);
   }
 
   create(): void {
@@ -35,6 +37,9 @@ export class BootScene extends Phaser.Scene {
     // don't collide with generation — but the animations still have to exist
     // before MainScene builds a Player.
     buildPlayerAnimations(this);
+    // After deriveEliteTextures, so an animated creature's elite strips are
+    // recoloured from the same base the still elite came from.
+    buildCreatureAnimations(this, eliteKeyFor);
     this.scene.start("MainScene");
   }
 
