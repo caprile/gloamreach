@@ -12,10 +12,12 @@ anchor mechanism doesn't exist). Phase 3 before it left forest, badlands and bay
 crypt tiles and objects across four themes, all 12 map markers, all 11 ability icons and the larger
 projectiles. **381 real assets** (181 icons + 160 world + 40 rig strips).
 
-**Next:** the ~24 creature sprites — and decide the `*_elite` derivation trap first (README rule
-4a: BootScene *generates* the 14 elite recolours at build time, so overriding a base never reaches
-its variant — author 14 more, or move derivation to after overrides). Ground texturing + biome
-blending stays deliberately last.
+**In progress:** the creature roster — **8 of ~24 done** (boar, snake, gremlin, gremling,
+duskrunner, cragscale, hexling, sandmaw). The `*_elite` trap is resolved: elites are now derived
+from their base's real pixels at load time, so they never need authoring. Remaining: the bayou six
+(mirejaw, blighttoad, mosswretch, murkling, fenlurker, corpselight), the crypt dwellers, and the
+8 bosses (already ≥40px, so no footprint concern). Ground texturing + biome blending stays
+deliberately last.
 
 **Still placeholder, deliberately:** the tiny 6×6 projectiles (`gremlin_rock`, `pellet_projectile`,
 `gloam_bolt` — a 32px generation downscaled to 6px is mush; the procedural dot is better), and the
@@ -284,6 +286,44 @@ touches no combat numbers.
 ## Recent Entries
 
 > Older entries in STATUS-archive.md.
+
+### Art arc — creature roster begun: elite derivation + footprint pinning (2026-07-25, Opus)
+
+Two structural pieces landed before any creature art, plus the first 8 sprites
+(boar, snake, gremlin, gremling, duskrunner, cragscale, hexling, sandmaw).
+
+**`src/art/eliteVariants.ts` closes the `*_elite` trap** README rule 4a warned
+about. BootScene *generates* each `<name>_elite` by re-running the same draw
+helper with a crimson palette — that's generation, not derivation, and it
+happens before `applyTextureOverrides`, so real art for `boar` would have left
+`boar_elite` a placeholder blob. The recolour now runs after overrides on the
+base's own pixels, which keeps what the roster convention already claims (every
+elite is its base silhouette in crimson/gold, identical across three biomes) and
+makes it free forever. Luminance is normalised per-sprite and lifted with a
+gamma before ramping: straight luma bunches a creature into one band (a brown
+boar sits near 0.4 everywhere), so the body mass came out near-black and nothing
+reached the gold. Verified against the hand-drawn elites for four creatures.
+
+**Creature footprints are pinned, decided with the user via `AskUserQuestion`.**
+The common roster is 14-32px against PixelLab's 32px canvas floor, so real art
+is bigger — and `enemyReach()` gives the player more reach against physically
+bigger enemies, so the art pass would have quietly buffed the player against
+every common enemy at once while their own flat melee constants didn't grow
+back. the user chose "grow the art, keep the reach". Implemented as **two**
+pinned values rather than the single re-baselined constant the option
+described, because growth isn't uniform (murkling +9 radius vs cragscale +2, so
+one constant can only approximate it): `Enemy`'s constructor pins the physics
+**body** from `placeholderDims`, and `enemyReach` measures the same footprint.
+Both matter — the body sets the minimum centre-to-centre distance a collider
+allows, so pinning only the reach would have made enemies *harder* to hit, not
+neutral. Both read one source, so they can't drift. Creatures now look bigger
+than they hit.
+
+Verified live: with no art on disk, byte-for-byte unchanged. With art, every
+creature's body stayed at its placeholder size and reach stayed at its exact
+pre-art value (boar 64, cragscale 65, hexling 66; elite boar 68) while frames
+grew. **The elite path is why `placeholderDims` learned to strip `_elite`** —
+a derived elite has no placeholder entry of its own, exactly like a `_v2` prop.
 
 ### Art arc Phase 4 — player rig: 5 survivors, idle + walk (2026-07-25, Opus)
 

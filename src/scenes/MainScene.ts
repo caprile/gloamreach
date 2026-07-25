@@ -9159,9 +9159,21 @@ export class MainScene extends Phaser.Scene {
   // reported as "impossible to hit despite being close." Scale reach up by
   // however much an enemy's visual radius exceeds that baseline, so bigger
   // enemies keep roughly the same "reach past the edge" feel as small ones.
+  //
+  // The radius is measured from the sprite's TUNED footprint, not its art. Real
+  // creature art is authored larger than the placeholder it replaces, and
+  // reading the live sprite would hand the player extra reach against the
+  // entire common roster at once, purely as a side effect of the art pass —
+  // while enemies' own melee ranges are flat constants that don't grow back.
+  // Enemy's constructor pins the physics body to the same footprint, so the
+  // collider gap and the reach threshold stay in step and combat feels exactly
+  // as tuned; a creature simply looks bigger than it hits.
   private static readonly BASELINE_ENEMY_RADIUS = 13;
   private enemyReach(enemy: Enemy): number {
-    const radius = Math.max(enemy.displayWidth, enemy.displayHeight) / 2;
+    const was = placeholderDims(enemy.texture.key);
+    const radius = was
+      ? (Math.max(was.w, was.h) / 2) * enemy.artFootprintScale()
+      : Math.max(enemy.displayWidth, enemy.displayHeight) / 2;
     return REACH + Math.max(0, radius - MainScene.BASELINE_ENEMY_RADIUS);
   }
 

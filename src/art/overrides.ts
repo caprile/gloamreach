@@ -71,10 +71,17 @@ const placeholderSize = new Map<string, { w: number; h: number }>();
  * gatherable crop wants a different rule from a tree, and the placeholder is
  * the only record of how big the thing was originally meant to read.
  *
- * Variants borrow their base's dimensions, since they have no placeholder.
+ * Variants borrow their base's dimensions, since they have no placeholder:
+ * a `_v2` prop variant and a `_elite` creature (which is derived from the base
+ * at load time, see eliteVariants.ts) are both the same object at the same
+ * size, so neither has a placeholder entry of its own.
  */
 export function placeholderDims(key: string): { w: number; h: number } | undefined {
-  return placeholderSize.get(key) ?? placeholderSize.get(key.replace(/_v\d+$/, ""));
+  return (
+    placeholderSize.get(key) ??
+    placeholderSize.get(key.replace(/_v\d+$/, "")) ??
+    placeholderSize.get(key.replace(/_elite$/, ""))
+  );
 }
 
 /**

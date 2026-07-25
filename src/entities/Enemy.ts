@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import type { ResourceType } from "../systems/Inventory";
 import type { IncomingDamageType } from "../systems/Weapons";
+import { placeholderDims } from "../art/overrides";
 import { ysortDepth } from "../systems/depth";
 
 export type EnemyState = "idle" | "chasing";
@@ -372,6 +373,15 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     this.homeY = cfg.y;
     scene.add.existing(this);
     scene.physics.add.existing(this);
+    // Real art is authored bigger than the placeholder it replaces (PixelLab's
+    // canvas floor is 32px against a 14-32px roster), and an Arcade body
+    // defaults to the frame size. Left alone, every creature's collider would
+    // silently grow — which holds the player further from its centre and
+    // changes how a tuned melee threshold feels. Pin the body to the footprint
+    // the combat numbers were tuned against, exactly as Player does on its own
+    // 48px rig canvas. Purely visual growth from here on.
+    const was = placeholderDims(cfg.texture);
+    if (was) (this.body as Phaser.Physics.Arcade.Body).setSize(was.w, was.h, true);
     this.setCollideWorldBounds(true); // matches Player — without this, chase/flee/kite AI can walk enemies off the map
     this.setDepth(ysortDepth(cfg.y)); // Y-sorted against the player/trees, see preUpdate
     // Non-rotating by default (2026-07 art pass): randomize only the left/right
@@ -949,6 +959,16 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   // enemy. Uses baseScale (the resting size), not the live wind-up-pulsed scale,
   // and is 0 for any unscaled enemy — mirrors MainScene.enemyReach()'s
   // size-scaling, but for the enemy's OWN attack rather than the player's.
+  /**
+   * The gameplay scale (elite bump, boss scaling) with any art-driven size
+   * change excluded — i.e. how much bigger this enemy is *meant* to be, not how
+   * much bigger its texture happens to be. Callers that measure an enemy
+   * against its tuned footprint multiply by this.
+   */
+  artFootprintScale(): number {
+    return this.baseScale;
+  }
+
   protected reachBonus(): number {
     return Math.max(0, (this.baseScale - 1) * (Math.max(this.width, this.height) / 2));
   }
