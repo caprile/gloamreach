@@ -5062,12 +5062,23 @@ export class MainScene extends Phaser.Scene {
         pickedTexture?: string;
         regrowMs?: number;
       },
+      // Optional weighted clump sizes. A flat min..max roll gives every clump
+      // roughly the same size, which reads as evenly-spaced blobs — repeating
+      // small values here makes most clumps small with the occasional dense
+      // stand, so the ground alternates between thicket and clearing.
+      sizeWeights?: number[],
     ) => {
-      const CLUSTER_JITTER = 40;
       let placed = 0;
       while (placed < totalCount) {
         const remaining = totalCount - placed;
-        const size = Math.min(remaining, rng.between(clusterMin, clusterMax));
+        const size = Math.min(
+          remaining,
+          sizeWeights ? rng.weightedPick(sizeWeights) : rng.between(clusterMin, clusterMax),
+        );
+        // Spread scales with the clump so a stand of 8 trees doesn't pile into
+        // the same 40px the original fixed jitter allowed — a big clump covers
+        // proportionally more ground rather than getting denser.
+        const CLUSTER_JITTER = Math.round(28 + size * 11);
         const center = this.pickSpawnPoint(rng, cfg.zone, 100, cfg.avoidCreek ?? false);
         for (let i = 0; i < size; i++) {
           let x = Phaser.Math.Clamp(center.x + rng.between(-CLUSTER_JITTER, CLUSTER_JITTER), 60, WORLD_W - 60);
@@ -5117,16 +5128,24 @@ export class MainScene extends Phaser.Scene {
     // (see spawnLooseDrop). Counts scaled up for the larger world. Both stay
     // off the creek, same reasoning as trees/boulders below.
     // Counts bumped again for the ~2x bigger map (was 40/30/70/14/18/16).
-    scatter(76, { texture: "branch", resource: "wood", amount: 1, action: "pickup", displayName: "Branch", loose: false, solid: false, health: 1, zone: "forest", avoidCreek: true });
-    scatter(56, { texture: "rock", resource: "stone", amount: 1, action: "pickup", displayName: "Rock", loose: false, solid: false, health: 1, zone: null, avoidCreek: true });
+    // Clumped, not spread: ground litter collects where it fell — under a
+    // stand of trees, along a rocky patch — rather than one branch every N
+    // paces. Playtest: an even spread of every prop type at the same density
+    // is the single thing that makes a generated map read as generated.
+    scatterClustered(76, 1, 3, { texture: "branch", resource: "wood", amount: 1, action: "pickup", displayName: "Branch", loose: false, solid: false, health: 1, zone: "forest", avoidCreek: true }, [1, 1, 1, 2, 2, 3, 4]);
+    scatterClustered(56, 1, 3, { texture: "rock", resource: "stone", amount: 1, action: "pickup", displayName: "Rock", loose: false, solid: false, health: 1, zone: null, avoidCreek: true }, [1, 1, 1, 2, 2, 3, 5]);
     // Tool-gated. Trees are dense in the forest and sparse in the grassy open;
     // both stay off the creek (a tree on water looks wrong). Boulders favor the
     // grassy open. Neither blocks movement (see updateTreeOcclusion for the
     // Y-sort + fade that replaces solid collision) — only the `solids` group
     // (currently empty) is reserved for future structures/walls/mountains.
-    scatter(132, { texture: "tree", resource: "wood", amount: 5, action: "chop", displayName: "Tree", loose: false, solid: false, health: 3, zone: "forest", avoidCreek: true });
-    scatter(26, { texture: "tree", resource: "wood", amount: 5, action: "chop", displayName: "Tree", loose: false, solid: false, health: 3, zone: "grassy", avoidCreek: true });
-    scatter(34, { texture: "boulder", resource: "stone", amount: 5, action: "mine", displayName: "Boulder", loose: false, solid: false, health: 3, zone: "grassy", avoidCreek: true });
+    // Trees grow in stands with clearings between them, so they clump hardest:
+    // forest gets big thickets, the grassy open only loose pairs and singles —
+    // which is what visually separates the two zones now that both use the same
+    // tree art. Boulders come in small rocky outcrops, never a lone rock grid.
+    scatterClustered(132, 2, 6, { texture: "tree", resource: "wood", amount: 5, action: "chop", displayName: "Tree", loose: false, solid: false, health: 3, zone: "forest", avoidCreek: true }, [1, 2, 2, 3, 3, 4, 5, 6, 8, 9]);
+    scatterClustered(26, 1, 3, { texture: "tree", resource: "wood", amount: 5, action: "chop", displayName: "Tree", loose: false, solid: false, health: 3, zone: "grassy", avoidCreek: true }, [1, 1, 1, 2, 2, 3]);
+    scatterClustered(34, 1, 4, { texture: "boulder", resource: "stone", amount: 5, action: "mine", displayName: "Boulder", loose: false, solid: false, health: 3, zone: "grassy", avoidCreek: true }, [1, 1, 2, 2, 3, 4]);
     // Blackberry bushes — free forest pickup (Milestone H), grouped into
     // patches of 2-4 rather than spread individually across the forest.
     // Persistent (Milestone N): harvesting yields berries but keeps the bush
@@ -6691,10 +6710,15 @@ export class MainScene extends Phaser.Scene {
       }
       const remaining = totalCount - placed;
       const size = Math.min(remaining, rng.weightedPick([1, 1, 2, 2, 3, 3, 4, 5, 6, 8]));
+      // ONE species per clump. Rolling the texture per prop instead (the
+      // original) meant every clump was an even mix of all four types, which is
+      // the actual "too evenly dispersed" tell: ferns, flowers, mushrooms and
+      // logs all appeared at the same density everywhere. Nothing grows like
+      // that — a patch of ferns is a patch of ferns.
+      const key = textures[rng.between(0, textures.length - 1)];
       for (let i = 0; i < size; i++) {
         const x = Phaser.Math.Clamp(center.x + rng.between(-JITTER, JITTER), 60, WORLD_W - 60);
         const y = Phaser.Math.Clamp(center.y + rng.between(-JITTER, JITTER), 60, WORLD_H - 60);
-        const key = textures[rng.between(0, textures.length - 1)];
         this.add.image(x, y, variantAt(this, key, x, y)).setDepth(ysortDepth(y));
       }
       placed += size;
