@@ -194,8 +194,24 @@ directly reusable here), or both.
 
 - Per-gem crypt doorway colour needs the theme threaded into `cryptLightPoints`
   (currently `{x,y}[]`); it uses a generic gloam violet for now.
-- Top-down tileset endpoints (`lower`/`upper`/`transition` descriptions) map neatly
-  onto `Biome.forestWeight`/`creekWeight`, but adopting them means moving the ground
-  from per-pixel colour blending in `buildBiomeTexture()` to discrete tile stamping.
-  Not in scope; noted as a real option.
+- **Ground texturing + biome blending is its own phase, deliberately LAST** (the user,
+  2026-07-25: *"something else I want to figure out at some point after all of the
+  models and things are done is the background texturing and blending / biome backs"*).
+  Props first, ground after — the ground is the one asset every other asset composites
+  over, so its palette should be chosen against finished art rather than placeholders.
+  It is also the only part of the migration that is **not** per-asset reversible: the
+  override layer swaps a texture key, but the ground is *generated*, not a sprite.
+  `buildBiomeTexture()` blends per-pixel colour from `Biome.forestWeight`/`creekWeight`
+  and `badlandsGroundColorAt`, and `bakeOuterOverlay` stretches one 4096² RenderTexture
+  over the whole 28000px world. Two viable routes when it starts:
+  - **Tiles** — `create_topdown_tileset`'s `lower`/`upper`/`transition` endpoints map
+    cleanly onto the existing weight functions, but adopting them means replacing
+    per-pixel blending with discrete tile stamping (a real rewrite of the bake, and
+    `feedback_phaser_world_sized_tilesprite_oom` bounds how big any of it can be).
+  - **Texture overlay** — keep the current colour blend as the base and multiply a
+    tiling detail texture over it, which preserves every existing biome boundary and
+    the war-camp/POI floor decals for far less risk.
+  Blending between biomes is the harder half: `WorldBiomes.seedCoverage` already gives
+  organic blob edges, so the seam work is about making two ground *textures* meet, not
+  about the shapes.
 - `pixelArt: true` is already set, so loaded PNGs stay crisp with no extra work.
