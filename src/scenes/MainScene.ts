@@ -189,6 +189,7 @@ const BIOME_NAMES: Record<BiomeId | "base", string> = {
 };
 import { ysortDepth } from "../systems/depth";
 import { variantAt, clearVariantCache } from "../art/variants";
+import { artScale } from "../art/overrides";
 import { Run, type RunOutcome, type KillCategory } from "../systems/Run";
 import { RunLog } from "../systems/RunLog";
 import { clearHighScores, recordHighScore } from "../systems/HighScores";
@@ -6676,52 +6677,45 @@ export class MainScene extends Phaser.Scene {
   // more immersive"). Not tracked (auto-destroyed on scene.restart), Y-sorted
   // like any world object, and routed through the existing spawn samplers so
   // they respect every POI exclusion zone. Placeholder art.
+  // Decoration hangs off things that are already there — a fern at the foot of
+  // a tree, bones against a rock, junk beside a hut — rather than being
+  // scattered across open ground on its own.
+  //
+  // The previous version sampled its own 220+260 centers, which littered every
+  // square of the map at uniform density (playtest: "way too many... think of
+  // sprinkling decorations, not littering the map"). Anchoring fixes the
+  // *reason* as well as the count: decoration now marks where something grew or
+  // died, so open ground stays open and reads as deliberate.
   private scatterDecor(): void {
     const rng = this.sessionRng();
-    // Forest floor dressing — ferns, wildflowers, mushrooms, fallen logs.
     const forestDecor = ["decor_fern", "decor_flowers", "decor_mushrooms", "decor_log"];
-    this.scatterDecorClustered(rng, forestDecor, 220, () => this.pickSpawnPoint(rng, "forest", 0, true));
-    // Badlands dressing — skulls, dead bushes, mesa boulders, bone piles.
     const badlandsDecor = ["decor_skull", "decor_deadbush", "decor_mesarock", "decor_bones"];
-    this.scatterDecorClustered(rng, badlandsDecor, 260, () => this.pickBadlandsPoint(rng));
-  }
 
-  // Places purely-decorative props in irregular clumps around sampled centers
-  // instead of spreading each one independently — a flat per-tile random
-  // scatter (the original approach) reads as uniform wallpaper rather than
-  // something that grew there. Cluster SIZE itself varies (mostly small
-  // sprigs, occasionally a denser patch, sometimes a lone prop) so some
-  // stretches of ground end up dense and others sparse, per playtest
-  // feedback that the old even spread looked unnatural.
-  private scatterDecorClustered(
-    rng: Phaser.Math.RandomDataGenerator,
-    textures: string[],
-    totalCount: number,
-    pickCenter: () => { x: number; y: number } | null,
-  ): void {
-    const JITTER = 85;
-    let placed = 0;
-    let misses = 0;
-    while (placed < totalCount && misses < 200) {
-      const center = pickCenter();
-      if (!center) {
-        misses++;
-        continue;
+    // Only a minority of features get dressed, and most of those get a single
+    // prop — two is the occasional flourish, not the norm.
+    const DRESSED_FRACTION = 0.22;
+    const anchors: { x: number; y: number }[] = this.nodes.filter((n) => n.action !== "pickup");
+    for (const shack of this.gremlinShacks) anchors.push({ x: shack.x, y: shack.y });
+
+    for (const a of anchors) {
+      if (rng.frac() > DRESSED_FRACTION) continue;
+      // Forest content lives in the central disc; everything outside it is
+      // badlands, which is the same test the spawn samplers use.
+      const inForest = Phaser.Math.Distance.Between(a.x, a.y, WORLD_CX, WORLD_CY) <= BIOME_RADIUS;
+      const palette = inForest ? forestDecor : badlandsDecor;
+      const key = palette[rng.between(0, palette.length - 1)];
+      const count = rng.weightedPick([1, 1, 1, 2]);
+      for (let i = 0; i < count; i++) {
+        // Ringed just outside the anchor so the prop reads as sitting beside it
+        // rather than clipping through it.
+        const ang = rng.frac() * Math.PI * 2;
+        const dist = rng.between(22, 46);
+        const x = a.x + Math.cos(ang) * dist;
+        const y = a.y + Math.sin(ang) * dist;
+        if (this.biome.isCreekAt(x, y)) continue;
+        const img = this.add.image(x, y, variantAt(this, key, x, y)).setDepth(ysortDepth(y));
+        img.setScale(artScale(this, img.texture.key));
       }
-      const remaining = totalCount - placed;
-      const size = Math.min(remaining, rng.weightedPick([1, 1, 2, 2, 3, 3, 4, 5, 6, 8]));
-      // ONE species per clump. Rolling the texture per prop instead (the
-      // original) meant every clump was an even mix of all four types, which is
-      // the actual "too evenly dispersed" tell: ferns, flowers, mushrooms and
-      // logs all appeared at the same density everywhere. Nothing grows like
-      // that — a patch of ferns is a patch of ferns.
-      const key = textures[rng.between(0, textures.length - 1)];
-      for (let i = 0; i < size; i++) {
-        const x = Phaser.Math.Clamp(center.x + rng.between(-JITTER, JITTER), 60, WORLD_W - 60);
-        const y = Phaser.Math.Clamp(center.y + rng.between(-JITTER, JITTER), 60, WORLD_H - 60);
-        this.add.image(x, y, variantAt(this, key, x, y)).setDepth(ysortDepth(y));
-      }
-      placed += size;
     }
   }
 

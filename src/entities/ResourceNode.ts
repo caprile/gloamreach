@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import { ysortDepth } from "../systems/depth";
 import { variantAt } from "../art/variants";
+import { artScale } from "../art/overrides";
 
 // A specific craftable tool (tiers can grow later, e.g. iron_axe).
 export type ToolType = "stone_axe" | "stone_pickaxe";
@@ -156,6 +157,7 @@ export class ResourceNode extends Phaser.GameObjects.Sprite {
         : cfg.pickedTexture;
 
     super(scene, cfg.x, cfg.y, texture);
+    this.setScale(artScale(scene, texture));
     this.resource = cfg.resource;
     this.amount = cfg.amount;
     this.action = cfg.action;
@@ -290,16 +292,24 @@ export class ResourceNode extends Phaser.GameObjects.Sprite {
   // persistent nodes (those go through takeHit/deplete instead).
   harvest(): void {
     this.harvested = true;
-    if (this.pickedTexture) this.setTexture(this.pickedTexture);
+    if (this.pickedTexture) this.swapTexture(this.pickedTexture);
     if (this.regrowMs !== undefined) {
       this.scene.time.delayedCall(this.regrowMs, () => this.regrow());
     }
   }
 
+  // Every runtime texture swap goes through here: real art and its placeholder
+  // are different sizes, so a raw setTexture() would drop back to unscaled and
+  // the node would visibly jump size mid-harvest.
+  private swapTexture(key: string): void {
+    this.setTexture(key);
+    this.setScale(artScale(this.scene, key));
+  }
+
   private regrow(): void {
     if (this.depleted) return; // node was destroyed while waiting to regrow
     this.harvested = false;
-    this.setTexture(this.freshTexture);
+    this.swapTexture(this.freshTexture);
   }
 
   // Break the seal on a shielded (Gloaming Vein) node — swaps to its mineable
@@ -309,7 +319,7 @@ export class ResourceNode extends Phaser.GameObjects.Sprite {
   crack(mineableTexture: string): void {
     if (!this.shielded) return;
     this.shielded = false;
-    this.setTexture(mineableTexture);
+    this.swapTexture(mineableTexture);
     this.startGlow(0xb266ff);
   }
 

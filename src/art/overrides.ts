@@ -45,6 +45,38 @@ export function queueTextureOverrides(scene: Phaser.Scene): void {
   }
 }
 
+// How big the placeholder was, per key that an override replaced.
+//
+// PixelLab's canvas floor is 32px while most world placeholders are 14-30px, so
+// real art arrives roughly double size — which put mushrooms at gremlin scale
+// and made them larger than the 20px player. The placeholder dimensions were
+// art-directed against that player, so they are the correct target: render the
+// new art at the old footprint and the world keeps its established scale.
+//
+// Icons are excluded — they are UI art with their own integer-scale rules, and
+// the one world consumer (Player.equippedIcon) already normalises itself.
+const placeholderSize = new Map<string, { w: number; h: number }>();
+
+// Keys where the bigger art IS the change — a deliberate resize, not drift.
+const INTENTIONAL_RESIZE = new Set(["gremlin_shack"]);
+
+/**
+ * Scale that renders `key`'s real art at the footprint its placeholder had, or
+ * 1 when there is no override, no placeholder, or the resize was deliberate.
+ */
+export function artScale(scene: Phaser.Scene, key: string): number {
+  // A variant (`tree_v2`) has no placeholder of its own, so it borrows its
+  // base's footprint — otherwise variants would tower over the thing they're
+  // meant to be interchangeable with.
+  const was = placeholderSize.get(key) ?? placeholderSize.get(key.replace(/_v\d+$/, ""));
+  if (!was) return 1;
+  const now = scene.textures.get(key).getSourceImage();
+  if (!now.width || !now.height) return 1;
+  // Uniform scale off the larger axis so nothing overflows its old footprint
+  // and the art never distorts.
+  return Math.min(was.w / now.width, was.h / now.height);
+}
+
 export interface OverrideReport {
   applied: string[];
   /** Loaded, but a different size than the placeholder it replaced. */
@@ -87,6 +119,11 @@ export function applyTextureOverrides(scene: Phaser.Scene): OverrideReport {
           from: `${old.width}x${old.height}`,
           to: `${src.width}x${src.height}`,
         });
+        // Captured here because it's the only moment both sizes exist — the
+        // placeholder is about to be removed.
+        if (!key.startsWith("icon_") && !INTENTIONAL_RESIZE.has(key)) {
+          placeholderSize.set(key, { w: old.width, h: old.height });
+        }
       }
       scene.textures.remove(key);
     } else {
