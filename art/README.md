@@ -88,6 +88,63 @@ chest, entrance) are ordinary props.
 **5. Creatures face RIGHT.** Facing is `flipX` at runtime; facing is visual only
 (attacks use distance math). See the enemy-art convention notes.
 
+## Animated player art (`art/rig/`)
+
+An animation is many frames under one logical name, which a flat
+`art/sprites/<key>.png` swap can't express — so the five survivors live in their
+own tree with their own loader (`src/art/playerRig.ts`):
+
+```
+art/rig/<characterId>/<anim>_<direction>_f<frameCount>.png
+art/rig/vagabond/walk_south_f6.png     <- 6 frames, horizontal strip
+```
+
+`<characterId>` is the game's own `CharacterDef.id` (`Characters.ts`), since
+that's what `MainScene.applyCharacter` hands to `Player.setCharacter`. Anims are
+`idle` / `walk` / `attack`; directions are the PixelLab cardinals. The frame
+count is in the filename and the frame width is derived after load, so a strip
+carries its own metadata — no manifest, same reason `overrides.ts` globs a
+directory. A character with no folder keeps its placeholder sprite, so this
+stays per-character and reversible like the static layer.
+
+`art/tools/fetch-rig.sh <pixellab-character-id> <character-id>` does the whole
+download: the character ZIP holds `rotations/` and
+`animations/<name>/<dir>/frame_NNN.png`, and each direction is stitched into a
+strip by `sheet.mjs`. A character with no `idle` animation yet gets a 1-frame
+idle from its rotation image, so a rig is playable the moment the character
+itself finishes.
+
+**Generation recipe (proven on all five):**
+
+```
+create_character  mode "standard", n_directions 4, size 32, view "low top-down",
+                  outline "single color black outline", medium shading/detail
+animate_character template "breathing-idle" -> idle (4f)
+                  template "walking-6-frames" -> walk (6f)
+                  template "cross-punch" -> attack
+```
+
+- **Standard mode beats v3 here.** v3 costs 2 generations, returns a 60px canvas
+  and 8 directions the game's 4-way facing can't use, and read as a squat blob
+  from the north. Standard is 1 generation, 48px, cleaner silhouette.
+- **`size: 32` yields a 48x48 canvas** — PixelLab pads ~40% for animation
+  headroom. That's the sprite size; the physics body stays 18px (`Player.BODY`).
+- **A v3 CUSTOM attack animation was tried and rejected.** "swinging a held
+  weapon in a fast downward arc" gave five near-identical frames and then
+  invented a white blade out of nowhere. Skeleton templates move reliably;
+  the weapon itself is drawn separately by `Player.equippedIcon` anyway, so the
+  body only has to read as striking.
+- **There are 8 job slots, and a character create needs the queue EMPTY.**
+  Animations report the cap honestly (`need 4 job slots but only 0 available
+  (8/8 used)`); a create instead fails *instantly* with "Generation failed due
+  to heavy load" whenever anything else is running — even with 2 slots free. It
+  isn't billed and it isn't queued, so it just looks like an outage. Create all
+  five characters first, one at a time against an idle queue, then batch the
+  animations (2 templates x 4 directions fills the queue exactly).
+- **Ability theming is deliberate**: each survivor wears its starting ability's
+  colour — violet gloam for Gloamstep/Gloamburst, blood-red for the Bloodpact
+  shroud — because that accent is what actually reads at 48px, not the trinket.
+
 ## Regenerating the manifest
 
 Keys and true dimensions come from the live `TextureManager`, not from parsing

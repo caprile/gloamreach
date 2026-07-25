@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import { applyTextureOverrides, queueTextureOverrides } from "../art/overrides";
+import { buildPlayerAnimations, queuePlayerRig } from "../art/playerRig";
 
 // The BootScene runs first. It generates placeholder textures in code (so the
 // game needs zero image files to run), then hands off to MainScene.
@@ -16,6 +17,7 @@ export class BootScene extends Phaser.Scene {
 
   preload(): void {
     queueTextureOverrides(this);
+    queuePlayerRig(this);
   }
 
   create(): void {
@@ -23,6 +25,10 @@ export class BootScene extends Phaser.Scene {
     // Order matters: overrides replace generated textures, so they must land
     // after generation and before any scene consumes them.
     applyTextureOverrides(this);
+    // Rig strips are their own texture keys rather than overrides, so they
+    // don't collide with generation — but the animations still have to exist
+    // before MainScene builds a Player.
+    buildPlayerAnimations(this);
     this.scene.start("MainScene");
   }
 

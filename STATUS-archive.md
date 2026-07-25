@@ -9712,3 +9712,100 @@ interchangeable; the new additive light layer is directly reusable there.
 
 **Next:** Phase 2 — the 181 icons, starting with normalising the four 22×22 status icons.
 
+
+### Phase 2 of the art arc — ALL 181 icons + UI resized + reference gallery (2026-07-25, Opus start / Sonnet finish)
+
+Plan: `.claude/plans/art-textures-lighting-3-biomes.md` (Phase 2 — **now complete**). Operational
+detail — the generation recipe, rate limits, hit rate, known-hard prompts — lives in
+`art/README.md`, which is the file to read before starting Phase 3.
+
+**All 181 icons shipped**, verified live in one final pass (181/181 overrides applied at 32×32,
+zero console errors): raw materials, ores + ingots, the full four-metal weapon ladder (sword/pike/
+warhammer/warbow across sunsteel/embersteel/gloamsteel/mirebronze), every tool tier, the full armor
+progression (Gremlin set + duskhide/emberhide/bogweave/mirehide + sunsteel/embersteel/gloamsteel/
+mirebronze helm/cuirass/greaves), all food/cooked dishes, all four relic rarities + every trophy +
+refined-trophy tier, all jewelry (6 amulets, 7 rings, cloak, gloamdrinker, 3 ability gems), every
+quest/ritual item (totems, effigies, sigils, the Gremlin King's heart), every station + all 4
+Workbench tiers + the Smelter's tier, and all 4 status-effect icons.
+
+**A second pass caught 3 icons that were generated but never landed on disk** — `mirebronze_ingot`
+was downloaded onto `icon_mirebronze_helm.png` by a stale job-ID mixup (the real helm sat completed
+and undownloaded the whole time), and `icon_cattail`/`icon_ring_sparkbound` were simply never
+fetched despite their jobs finishing minutes earlier. All three were only found by diffing the
+completed-file list against the authoritative 181-key manifest pulled from `BootScene.ts` — **don't
+trust "not on disk yet" as "never generated" once a session has queued 50+ jobs**; always audit
+against the full key list before calling a batch done.
+
+**PixelLab's queue stalled hard partway through** — multiple jobs pinned at `creating 95% eta ~0s`
+or cycling with a *growing* ETA for 20+ minutes at a stretch, well past the normal 60-90s, and this
+happened on the paid Tier 1 plan, not just the earlier free trial. Reported upstream twice via
+`agent_feedback`. Confirmed the `download` endpoint genuinely 400s at true 95% (`"still being
+generated"`) — it is not silently complete, contrary to an earlier assumption. During one such
+stall, built the reference gallery instead of idling (see below) — worth remembering as a pattern:
+API stalls are a good moment to do the next deliverable's prep work, not just poll harder.
+
+**Reference gallery**: a single self-contained HTML page — all 181 icons, grouped into 10
+categories (materials/ores/weapons/armor/food/relics/jewelry/quest-items/stations/status), each a
+magnified (2×) slot with a search box (matches name or key) and a "show not-yet-generated" toggle
+that would surface gaps on a future partial run. Published as a Claude artifact and sent to the user
+as a standalone file; **not part of the game repo** — it and the 3 generator scripts that built it
+(`gen_gallery*.cjs`) were written to reference the live `art/sprites/` + `Items.ts` + `BootScene.ts`
+data so the categorisation can't drift, then deleted once published (a one-off review tool, not a
+shippable asset). Regenerate from scratch if a full visual audit is needed again — don't hunt for
+the deleted scripts.
+
+Below is the original 32-icon partial-batch writeup from earlier in the session, superseded by the
+above but kept for the design decisions it documents:
+
+**Icons are authored at 32×32, not the placeholders' 24×24.** 32 is PixelLab's minimum object
+canvas and the better target anyway. That forced two code changes:
+
+- **`Player.equippedIcon` normalises to a fixed world size** (`Player.ICON_WORLD_SIZE` = 24).
+  It rendered item icons in the WORLD at native size, so 32px art would have silently scaled every
+  held weapon up by a third. Verified: 24px placeholder → scale 1.0, 32px art → scale 0.75, both
+  render 24×24. The swing tween had to change too — it reset to `setScale(1)`, which would have
+  snapped a held weapon to full size mid-animation.
+- **`applyTextureOverrides` splits icon resizes from sprite resizes.** Phase 1's warning says
+  "reach/hitbox math reads sprite size", which is a false positive for UI icons — and at 181 of
+  them it would bury a genuine warning on a world sprite in Phase 3. `icon_*` now reports as one
+  info line.
+
+**UI resized so the art is actually visible** (the user: "in game the icons are a bit small… let's be
+proud of the arts"). The old 34px box showed 32px art at **×1.06** — the worst case for pixel art,
+since nearest-neighbour keeps most rows 1:1 and doubles the occasional one, reading as distortion
+rather than magnification. **Every surface is now an integer scale:** `InventoryMenu.SLOT` and
+`HotbarUI.SLOT_SIZE` both 46→**70** with `ICON_BOX` **64** (**×2**, clean pixel doubling — these two
+must stay equal so an item looks the same in the backpack and on the hotbar), and `CraftingMenu`'s
+`LIST_ICON` **32** at **×1** (no resampling at all). The inventory grid went **6→7 cols, 15→10
+rows**: the vertical budget is fixed (the panel must clear the hotbar at y=900), so bigger slots buy
+fewer rows and the extra column claws the capacity back. Measured after: panel x 16..1182 / y
+48..878, columns at 28-554 / 578-800 / 824-1000 / 1024-1170, clear of both the hotbar and the
+crafting panel at x=1284. The ability bar needed no change — it derives from
+`hotbarUI.left + width`.
+
+**The crafting list already had icons** — at `iconSize` 18 against placeholder art they just read as
+coloured smudges. Now 32px at 1:1, with icon and name both centred on the row (`ROW_H` 25→36), since
+anchoring either to the row top left them visibly out of line once the icon was taller than the text.
+
+**Locked decision — tier ladders now DIFFER on purpose.** The plan required a ladder to read as one
+object in different metals. The real four-metal sword ladder came out as four distinct silhouettes,
+and the user reversed the rule: *"I like the swords like that."* A higher tier reading as a visibly
+different weapon is the stronger progression signal. Load-bearing — it means every icon is an
+independent generation, with no `create_object_state` chaining and no shared-silhouette constraint.
+It also invalidates Phase 4's inherited "metal tiers are recolours" note, flagged in the plan for
+re-deciding on its own merits.
+
+**Corrected two of my own critiques mid-session.** I called out a green matte fringe on `icon_stone`
+and anti-aliasing on `icon_relic_common`; the pixel data disproved both (zero opaque green pixels —
+the outline is `#202A1B`, a dark olive-black; zero semi-transparent pixels anywhere; 15-48 colour
+palettes). Output is genuinely clean pixel art and **needs no post-processing step**.
+
+**Throughput reality for the remaining ~150:** PixelLab caps at **4 concurrent jobs** (a 5th is
+rejected outright), so it's ~45 rounds of 4. Progress % is unreliable — jobs pin at `95% eta ~0s` or
+reset to 0% with a *growing* ETA, then finish fine; don't re-fire on a stall (reported upstream via
+`agent_feedback`). Hit rate ~85%; misses are the model over-decorating, steered with
+*plain/undecorated/torn*. **Single-bit axes are a known-hard prompt** — three attempts all gave a
+symmetric double-head or a curved pick; `icon_stone_axe` ships as the best of three.
+
+the user moved off the 40-generation trial to **Tier 1 (2,000/mo, $12)**, so cost is no longer a
+constraint on the arc — 181 icons + Phase 3's ~134 props is ~16% of one month.

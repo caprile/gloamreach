@@ -130,6 +130,38 @@ anchor and makes the hover outline trace the canvas instead of the art.
 
 ## Phase 4 — player rig: 5 unique survivors + weapon-in-hand
 
+**Shipped 2026-07-25 (idle + walk).** All five survivors have real art and
+4-direction idle/walk animations, loaded through `src/art/playerRig.ts`. See
+`art/README.md` for the layout and the generation recipe. What changed against
+the plan below:
+
+- **Ability theming (the user, mid-session): each survivor wears its starting
+  ability's colour.** Violet gloam for the Gloamstep band (Vagabond wrist,
+  Warden gauntlet) and the cracked Gloam focus (Ashcaller orb, Ascetic palms),
+  blood-red for the Reaver's Bloodpact shroud. The accent is what reads at 48px
+  — the trinket itself is 2-3 pixels.
+- **No attack animation.** Both routes were generated and rejected: the `v3`
+  custom swing gave five near-identical frames then invented a white blade, and
+  the `cross-punch` template re-poses the character into profile with a
+  different palette, so it visibly transforms mid-swing. The body now plays a
+  squash-and-stretch pulse instead of the placeholder's 25-degree rotate (which
+  read as a detailed character toppling over), and the equipped item's existing
+  lunge carries the direction. Revisit if a template that preserves the
+  rotation pose turns up.
+- **Weapon-in-hand sprites are NOT built.** Per-archetype weapon art needs a
+  per-frame hand joint to anchor to, and this MCP exposes no
+  `animate-with-skeleton`/keypoint output — so the plan's anchor mechanism
+  doesn't exist. `Player.equippedIcon` instead sits at a per-facing hand offset
+  and draws behind the body when facing away, which is the same read for none
+  of the cost.
+- **`size: 32` → a 48x48 canvas** (PixelLab pads ~40% for animation headroom),
+  against a 20x20 placeholder. Nothing reads the player's sprite size, and the
+  physics body is pinned at 18px, so this is purely how big the survivor looks.
+
+Remaining: the 14 `*_elite` creature variants and the rest of the creature
+roster still have no art, and the `*_elite` build-time derivation trap
+(README rule 4a) is still unresolved.
+
 **No longer blocked.** Locked by the user 2026-07-25:
 
 - **Armor does NOT render on the model.** This deletes the layered paper-doll

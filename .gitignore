@@ -5,3 +5,8 @@ dist/
 
 # Stray artifact from a shell redirect that resolved to /proc inside Git Bash.
 proc/
+
+# Throwaway in-game captures from the dev screenshot bridge (vite.config.ts).
+# Deliberately NOT under art/rig/ or art/sprites/ — both are globbed eagerly by
+# import.meta.glob, so a scratch PNG parked there is bundled into the build.
+art/_shots/

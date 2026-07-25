@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import { ysortDepth } from "../systems/depth";
 import { PLAYER_WALK_SPEED } from "../systems/movement";
+import { hasRig, rigAnimKey, type RigAnim } from "../art/playerRig";
 
 // Re-exported so existing importers keep their `from "../entities/Player"` path;
 // the constant itself now lives in a Phaser-free module (see movement.ts).
@@ -39,6 +40,9 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   private dashingUntil = 0;
   private sprintLocked = false; // stamina ran out mid-sprint; needs shift release+re-press
   private facing: Facing = "down";
+  // Movement keys in the order they were pressed, so the newest one drives
+  // facing and releasing it falls back to whatever is still held.
+  private heldOrder: Facing[] = [];
   private equippedIcon: Phaser.GameObjects.Image | null = null;
   private equippedIconTexture: string | null = null;
   private equippedIconScale = 1;
@@ -49,6 +53,29 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   // placeholders' 24x24 — without this, swapping in real art would silently
   // scale every held weapon up by a third.
   private static readonly ICON_WORLD_SIZE = 24;
+
+  // --- real-art rig (Phase 4) ---------------------------------------------
+  // Null until a chosen survivor turns out to have art on disk; everything
+  // below is inert in that case and the generated 20x20 placeholder is used
+  // exactly as before.
+  private rigId: string | null = null;
+  private rigAnim: RigAnim = "idle";
+  private attackUntil = 0;
+  private restartAttack = false; // a fresh swing must replay even mid-attack
+  // The physics footprint stays what the placeholder had, independent of how
+  // big the art is: the rig canvas is 48x48 (a 32px figure plus animation
+  // headroom) but collision feel — squeezing past a boulder — is tuned around
+  // the old 20x20 body, and nothing else in the game reads the player's sprite
+  // size.
+  private static readonly BODY = 18;
+  // Roughly where the survivor's hand sits, per facing, on the 48px rig canvas
+  // (the sprite's origin is the middle of that canvas, i.e. mid-torso).
+  private static readonly HAND_OFFSET: Record<Facing, [number, number]> = {
+    down: [9, 4],
+    up: [-9, 2],
+    left: [-11, 3],
+    right: [11, 3],
+  };
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
     super(scene, x, y, "player");
@@ -74,6 +101,64 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   preUpdate(time: number, delta: number): void {
     super.preUpdate(time, delta);
     this.setDepth(ysortDepth(this.y));
+    this.syncRigAnimation(time);
+  }
+
+  /**
+   * Swap in a survivor's real art, if any exists for `charId` (see
+   * art/playerRig.ts). Called once the run's character card is confirmed.
+   * A character with no rig art silently keeps the placeholder sprite, so this
+   * is safe to call for every card.
+   */
+  setCharacter(charId: string): void {
+    if (!hasRig(charId)) return;
+    this.rigId = charId;
+    this.rigAnim = "idle";
+    this.play(rigAnimKey(charId, "idle", this.facing), true);
+    // setSize recentres the body on the frame by default, which is what we
+    // want: the sprite's origin stays the player's logical position, so reach,
+    // hover and targeting math is untouched by the bigger canvas.
+    (this.body as Phaser.Physics.Arcade.Body).setSize(Player.BODY, Player.BODY, true);
+  }
+
+  /**
+   * Pick the animation that matches what the player is doing this frame.
+   * Driven off body velocity rather than update()'s return value so it stays
+   * correct during a dash and while the world is frozen (update() early-returns
+   * in both cases, but preUpdate keeps running).
+   */
+  private syncRigAnimation(time: number): void {
+    if (!this.rigId) return;
+    const body = this.body as Phaser.Physics.Arcade.Body | null;
+    const want: RigAnim =
+      time < this.attackUntil ? "attack" : body && (body.velocity.x || body.velocity.y) ? "walk" : "idle";
+    const key = this.resolveRigKey(want);
+    if (!key) return;
+    // Comparing against what's actually PLAYING (rather than the state we last
+    // wanted) is what makes the fallback above safe: a survivor with no walk
+    // art asks for walk every frame, resolves to idle, and still turns.
+    if (this.anims.currentAnim?.key === key && !this.restartAttack) return;
+    this.restartAttack = false;
+    this.rigAnim = want;
+    this.play(key, want !== "attack");
+  }
+
+  /**
+   * The best animation this survivor actually has for `anim` in the current
+   * facing, falling back to idle.
+   *
+   * Mid-migration a character can have idle but not yet walk or attack, and a
+   * missing animation must not strand the sprite on whatever frame happened to
+   * be up: that reads as the character refusing to turn until you release the
+   * key, since the release is what drops it back to an animation that exists.
+   */
+  private resolveRigKey(anim: RigAnim): string | null {
+    const chain: RigAnim[] = anim === "idle" ? ["idle"] : [anim, "idle"];
+    for (const a of chain) {
+      const key = rigAnimKey(this.rigId!, a, this.facing);
+      if (this.scene.anims.exists(key)) return key;
+    }
+    return null;
   }
 
   // Called every frame by MainScene. `canSprint`/`canDash` are the scene's
@@ -116,6 +201,9 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     // read no movement keys, so WASD routes to the text field, not the player.
     if (!inputEnabled) {
       body.setVelocity(0, 0);
+      // Forget what was held: keys released while input was off never reach the
+      // release branch below, so they'd linger and steer facing on re-enable.
+      this.heldOrder.length = 0;
       return { moving: false, sprinting: false, dashStarted: false, facing: this.facing };
     }
 
@@ -132,15 +220,26 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     if (down) vy += 1;
     const moving = vx !== 0 || vy !== 0;
 
-    // 4-way facing from the last-held movement direction; persists while
-    // idle. Vertical wins ties on diagonal input (arbitrary but deterministic).
-    if (moving) {
-      if (vy !== 0 && (vx === 0 || Math.abs(vy) >= Math.abs(vx))) {
-        this.facing = vy < 0 ? "up" : "down";
-      } else if (vx !== 0) {
-        this.facing = vx < 0 ? "left" : "right";
-      }
+    // 4-way facing: the most recently PRESSED direction wins, and it persists
+    // while idle.
+    //
+    // This used to break ties on a diagonal by always preferring vertical,
+    // which meant adding a direction to one you were already holding did
+    // nothing — the turn only happened when you RELEASED the first key, so the
+    // character appeared to face the direction you had just let go of. Real
+    // directional art made that immediately obvious.
+    const held: [Facing, boolean][] = [
+      ["up", up],
+      ["down", down],
+      ["left", left],
+      ["right", right],
+    ];
+    for (const [dir, isDown] of held) {
+      const i = this.heldOrder.indexOf(dir);
+      if (isDown && i === -1) this.heldOrder.push(dir);
+      else if (!isDown && i !== -1) this.heldOrder.splice(i, 1);
     }
+    if (this.heldOrder.length) this.facing = this.heldOrder[this.heldOrder.length - 1];
 
     const wantsDash =
       moving &&
@@ -198,8 +297,10 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   // Staggered captures over the dash's ~105ms window trace the path.
   playDashFx(): void {
     const spawnGhost = () => {
+      // Ghost the frame currently on screen, not the "player" placeholder —
+      // a rigged survivor must trail its own art, mid-stride.
       const ghost = this.scene.add
-        .image(this.x, this.y, "player")
+        .image(this.x, this.y, this.texture.key, this.frame.name)
         .setScale(this.scaleX, this.scaleY)
         .setAlpha(0.5)
         .setTint(0x9fd8ff)
@@ -241,23 +342,33 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   // position/facing without requiring a full Player.update().
   syncEquippedIconPosition(): void {
     if (!this.equippedIcon || !this.equippedIconTexture) return;
-    this.equippedIcon.setDepth(this.depth + 1);
     const offset = Player.ICON_OFFSET;
     let ox = 0;
     let oy = 0;
-    switch (this.facing) {
-      case "up":
-        oy = -offset;
-        break;
-      case "down":
-        oy = offset;
-        break;
-      case "left":
-        ox = -offset;
-        break;
-      case "right":
-        ox = offset;
-        break;
+    if (this.rigId) {
+      // A rigged survivor has drawn hands, so the item reads as HELD rather
+      // than as a marker floating in the facing direction: it sits beside the
+      // body at hand height, and goes behind the sprite when facing away.
+      const [hx, hy] = Player.HAND_OFFSET[this.facing];
+      ox = hx;
+      oy = hy;
+      this.equippedIcon.setDepth(this.depth + (this.facing === "up" ? -1 : 1));
+    } else {
+      this.equippedIcon.setDepth(this.depth + 1);
+      switch (this.facing) {
+        case "up":
+          oy = -offset;
+          break;
+        case "down":
+          oy = offset;
+          break;
+        case "left":
+          ox = -offset;
+          break;
+        case "right":
+          ox = offset;
+          break;
+      }
     }
     this.equippedIcon.setPosition(this.x + ox, this.y + oy);
   }
@@ -281,6 +392,36 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   // for a real swing animation until there's a facing direction / weapon
   // sprite system to attach one to.
   playSwing(): void {
+    if (this.rigId) {
+      // A real attack animation drives its own length; preUpdate drops back to
+      // walk/idle when it expires. (None of the survivors have one yet — see
+      // art/README.md on why both generated attacks were rejected.)
+      const key = rigAnimKey(this.rigId, "attack", this.facing);
+      const anim = this.scene.anims.get(key);
+      if (anim) {
+        this.attackUntil = this.scene.time.now + anim.duration;
+        this.restartAttack = true;
+        return;
+      }
+      // Without one, pulse rather than rotate: the placeholder's 25-degree spin
+      // was fine on a 20px blob but reads as a detailed character toppling
+      // over. Deliberately scale and not a positional lunge — x/y is the Arcade
+      // body's own position, so tweening it would fight velocity and the world
+      // clamp. The direction of the swing is carried by the equipped item's
+      // lunge (playEquippedSwing), which is a plain Image and free to move.
+      this.scene.tweens.killTweensOf(this);
+      this.setScale(1);
+      this.scene.tweens.add({
+        targets: this,
+        scaleX: 1.12,
+        scaleY: 0.92,
+        duration: 70,
+        yoyo: true,
+        ease: "Sine.easeOut",
+        onComplete: () => this.setScale(1),
+      });
+      return;
+    }
     this.scene.tweens.killTweensOf(this);
     this.setAngle(0);
     this.scene.tweens.add({

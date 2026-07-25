@@ -11548,6 +11548,9 @@ export class MainScene extends Phaser.Scene {
   // existing relic hook points, so nothing is "applied" for it here.
   private applyCharacter(def: CharacterDef): void {
     this.character = new RunCharacter(def);
+    // Each survivor has its own sprite and animations once real art exists for
+    // it; a card with no rig art keeps the placeholder (see art/playerRig.ts).
+    this.player.setCharacter(def.id);
 
     // Potency must land BEFORE the starting stats, so the granted points are
     // already worth the class rate the first time syncStatBonuses reads them.

@@ -2,12 +2,20 @@
 
 ## Current State
 
-_Living snapshot — edit in place, never append._ Last shipped: **Phase 3 of the art arc —
-essentially COMPLETE at 160 world props** (2026-07-25, Opus)
-(`.claude/plans/art-textures-lighting-3-biomes.md`). Forest, badlands and bayou are fully real art
-(terrain, flora + every `_picked` state, ore, POI structures + ring markers, decals), as are all
-crypt tiles and objects across four themes, all 12 map markers, all 11 ability icons and the
-larger projectiles. **341 real assets total** (181 icons + 160 world). Next: Phase 4 (player rig).
+_Living snapshot — edit in place, never append._ Last shipped: **Phase 4 of the art arc — the
+player rig** (2026-07-25, Opus) (`.claude/plans/art-textures-lighting-3-biomes.md`). All five
+survivors have real art with 4-direction idle + walk animations, themed on their starting ability,
+loaded via the new `src/art/playerRig.ts`. No attack animation (both generation routes rejected —
+see the entry below); no weapon-in-hand sprites (no per-frame hand joint is exposed, so the plan's
+anchor mechanism doesn't exist). Phase 3 before it left forest, badlands and bayou fully real
+(terrain, flora + every `_picked` state, ore, POI structures + ring markers, decals), plus all
+crypt tiles and objects across four themes, all 12 map markers, all 11 ability icons and the larger
+projectiles. **381 real assets** (181 icons + 160 world + 40 rig strips).
+
+**Next:** the ~24 creature sprites — and decide the `*_elite` derivation trap first (README rule
+4a: BootScene *generates* the 14 elite recolours at build time, so overriding a base never reaches
+its variant — author 14 more, or move derivation to after overrides). Ground texturing + biome
+blending stays deliberately last.
 
 **Still placeholder, deliberately:** the tiny 6×6 projectiles (`gremlin_rock`, `pellet_projectile`,
 `gloam_bolt` — a 32px generation downscaled to 6px is mush; the procedural dot is better), and the
@@ -277,6 +285,82 @@ touches no combat numbers.
 
 > Older entries in STATUS-archive.md.
 
+### Art arc Phase 4 — player rig: 5 survivors, idle + walk (2026-07-25, Opus)
+
+All five survivors have real art and 4-direction idle/walk animations, themed on
+their starting ability (the user, mid-session): violet gloam for the Gloamstep
+band (Vagabond wrist, Warden gauntlet) and the cracked Gloam focus (Ashcaller
+orb, Ascetic palms), blood-red for the Reaver's Bloodpact shroud. The accent is
+the part that reads at 48px — the trinket itself is 2-3 pixels.
+
+**`src/art/playerRig.ts`** is a second loader beside `overrides.ts`, because an
+animation is many frames under one logical name and a flat texture swap can't
+express that. Layout is the whole contract:
+`art/rig/<characterId>/<anim>_<dir>_f<count>.png`, a horizontal strip whose
+frame COUNT is in the filename and whose frame WIDTH is derived after load — so
+a strip carries its own metadata and there is no manifest to drift. Frames are
+sliced onto the strip's own texture (`load.spritesheet` needs the frame width up
+front, which isn't knowable until the image loads). A character with no folder
+keeps its placeholder, so this stays per-character and reversible.
+
+`Player.setCharacter(id)` is called from `applyCharacter`. Animation state is
+driven from **`preUpdate` off body velocity**, not `update()`'s return value —
+`update()` early-returns during a dash and while frozen, and the sprite still
+has to animate through both. The physics body is pinned at **18px** regardless
+of the 48px canvas (`setSize(…, true)` recentres it), so reach, hover and
+targeting math never see the bigger sprite.
+
+**Two bugs the user caught, one hiding behind the other.** He reported the
+character turning when he *released* a key rather than when he pressed one.
+The first cause was real and pre-existing: facing broke diagonal ties by always
+preferring vertical, so adding a direction to one already held did nothing and
+the turn only happened on release. Facing is now **most-recently-pressed wins**
+(`heldOrder`), falling back to whatever is still held. He then reported it again
+on the Ashcaller — which was a *different* defect with the same symptom:
+`syncRigAnimation` recorded "I'm walking now" even when that animation didn't
+exist, so a survivor with idle-but-no-walk art was stranded on its last frame
+until release dropped it back to an animation that does exist. Missing art now
+resolves down the chain to idle in the correct facing, and the guard compares
+against what is actually **playing** rather than the state last wanted.
+**The lesson: verify a fix against the case that was reported, not a case that
+happens to work** — the Vagabond had full art and looked fine.
+
+**Generation findings** (full detail in `art/README.md`): standard mode beats v3
+(1 generation vs 2, 48px vs 60px, and 8 directions the game's 4-way facing can't
+use); there are **8 job slots and a character create needs the queue empty** —
+it fails *instantly* with "heavy load" whenever anything else runs, unbilled and
+unqueued, which reads as an outage rather than a cap.
+
+**No attack animation ships.** Both routes were generated and rejected: the v3
+custom swing gave five near-identical frames then invented a white blade, and
+the `cross-punch` template re-poses the character into profile with a different
+palette, so it visibly transforms mid-swing. `playSwing` now plays a
+squash-and-stretch pulse for a rigged survivor instead of the placeholder's
+25-degree rotate (fine on a 20px blob, reads as a detailed character toppling
+over) — deliberately **scale, not a positional lunge**, since x/y *is* the
+Arcade body's position and tweening it would fight velocity and the world clamp.
+Direction is carried by the equipped item's existing lunge, which is a plain
+Image and free to move.
+
+**Weapon-in-hand sprites are not built and the plan entry is amended.** Anchoring
+per-archetype weapon art needs a per-frame hand joint, and this MCP exposes no
+`animate-with-skeleton`/keypoint output — the plan's anchor mechanism doesn't
+exist. `Player.equippedIcon` instead sits at a per-facing hand offset and draws
+*behind* the body when facing away.
+
+**Tooling:** `art/tools/png.mjs` (the codec, extracted — trim and adjust each had
+their own copy and a third was about to appear), `sheet.mjs` (strip + contact
+sheet), `fetch-rig.sh` (one command from a finished PixelLab character to the
+game's layout, deleting any stale strip for the same anim+direction first — the
+frame count is in the filename, so a re-fetch at a different count would
+otherwise leave two strips claiming one animation). A **dev-only screenshot
+bridge** in `vite.config.ts` (`POST /__shot/<path>.png`, `apply: "serve"`) lets
+the page write a PNG to disk: a WebGL canvas can't be read back with `drawImage`
+after the frame, and this arc has twice shipped art that passed every non-visual
+check. Scratch captures go to the gitignored `art/_shots/` — **not** under
+`art/rig/` or `art/sprites/`, both of which are globbed eagerly and would bundle
+them.
+
 ### Art arc Phase 3 — 160 world props, essentially complete (2026-07-25, Opus)
 
 Grew from 22 to **160** across one session — every world category except the ground itself.
@@ -364,101 +448,3 @@ generations vs 1, so animatable props stay on the cheap path until the animation
 renaming in a later code pass), more decoration variety generally, and `boulder_v2`/`rock_v2` lost
 to a PixelLab queue stall that pinned jobs at `95%` for 25+ min while still holding concurrency
 slots — reported upstream.
-
-### Phase 2 of the art arc — ALL 181 icons + UI resized + reference gallery (2026-07-25, Opus start / Sonnet finish)
-
-Plan: `.claude/plans/art-textures-lighting-3-biomes.md` (Phase 2 — **now complete**). Operational
-detail — the generation recipe, rate limits, hit rate, known-hard prompts — lives in
-`art/README.md`, which is the file to read before starting Phase 3.
-
-**All 181 icons shipped**, verified live in one final pass (181/181 overrides applied at 32×32,
-zero console errors): raw materials, ores + ingots, the full four-metal weapon ladder (sword/pike/
-warhammer/warbow across sunsteel/embersteel/gloamsteel/mirebronze), every tool tier, the full armor
-progression (Gremlin set + duskhide/emberhide/bogweave/mirehide + sunsteel/embersteel/gloamsteel/
-mirebronze helm/cuirass/greaves), all food/cooked dishes, all four relic rarities + every trophy +
-refined-trophy tier, all jewelry (6 amulets, 7 rings, cloak, gloamdrinker, 3 ability gems), every
-quest/ritual item (totems, effigies, sigils, the Gremlin King's heart), every station + all 4
-Workbench tiers + the Smelter's tier, and all 4 status-effect icons.
-
-**A second pass caught 3 icons that were generated but never landed on disk** — `mirebronze_ingot`
-was downloaded onto `icon_mirebronze_helm.png` by a stale job-ID mixup (the real helm sat completed
-and undownloaded the whole time), and `icon_cattail`/`icon_ring_sparkbound` were simply never
-fetched despite their jobs finishing minutes earlier. All three were only found by diffing the
-completed-file list against the authoritative 181-key manifest pulled from `BootScene.ts` — **don't
-trust "not on disk yet" as "never generated" once a session has queued 50+ jobs**; always audit
-against the full key list before calling a batch done.
-
-**PixelLab's queue stalled hard partway through** — multiple jobs pinned at `creating 95% eta ~0s`
-or cycling with a *growing* ETA for 20+ minutes at a stretch, well past the normal 60-90s, and this
-happened on the paid Tier 1 plan, not just the earlier free trial. Reported upstream twice via
-`agent_feedback`. Confirmed the `download` endpoint genuinely 400s at true 95% (`"still being
-generated"`) — it is not silently complete, contrary to an earlier assumption. During one such
-stall, built the reference gallery instead of idling (see below) — worth remembering as a pattern:
-API stalls are a good moment to do the next deliverable's prep work, not just poll harder.
-
-**Reference gallery**: a single self-contained HTML page — all 181 icons, grouped into 10
-categories (materials/ores/weapons/armor/food/relics/jewelry/quest-items/stations/status), each a
-magnified (2×) slot with a search box (matches name or key) and a "show not-yet-generated" toggle
-that would surface gaps on a future partial run. Published as a Claude artifact and sent to the user
-as a standalone file; **not part of the game repo** — it and the 3 generator scripts that built it
-(`gen_gallery*.cjs`) were written to reference the live `art/sprites/` + `Items.ts` + `BootScene.ts`
-data so the categorisation can't drift, then deleted once published (a one-off review tool, not a
-shippable asset). Regenerate from scratch if a full visual audit is needed again — don't hunt for
-the deleted scripts.
-
-Below is the original 32-icon partial-batch writeup from earlier in the session, superseded by the
-above but kept for the design decisions it documents:
-
-**Icons are authored at 32×32, not the placeholders' 24×24.** 32 is PixelLab's minimum object
-canvas and the better target anyway. That forced two code changes:
-
-- **`Player.equippedIcon` normalises to a fixed world size** (`Player.ICON_WORLD_SIZE` = 24).
-  It rendered item icons in the WORLD at native size, so 32px art would have silently scaled every
-  held weapon up by a third. Verified: 24px placeholder → scale 1.0, 32px art → scale 0.75, both
-  render 24×24. The swing tween had to change too — it reset to `setScale(1)`, which would have
-  snapped a held weapon to full size mid-animation.
-- **`applyTextureOverrides` splits icon resizes from sprite resizes.** Phase 1's warning says
-  "reach/hitbox math reads sprite size", which is a false positive for UI icons — and at 181 of
-  them it would bury a genuine warning on a world sprite in Phase 3. `icon_*` now reports as one
-  info line.
-
-**UI resized so the art is actually visible** (the user: "in game the icons are a bit small… let's be
-proud of the arts"). The old 34px box showed 32px art at **×1.06** — the worst case for pixel art,
-since nearest-neighbour keeps most rows 1:1 and doubles the occasional one, reading as distortion
-rather than magnification. **Every surface is now an integer scale:** `InventoryMenu.SLOT` and
-`HotbarUI.SLOT_SIZE` both 46→**70** with `ICON_BOX` **64** (**×2**, clean pixel doubling — these two
-must stay equal so an item looks the same in the backpack and on the hotbar), and `CraftingMenu`'s
-`LIST_ICON` **32** at **×1** (no resampling at all). The inventory grid went **6→7 cols, 15→10
-rows**: the vertical budget is fixed (the panel must clear the hotbar at y=900), so bigger slots buy
-fewer rows and the extra column claws the capacity back. Measured after: panel x 16..1182 / y
-48..878, columns at 28-554 / 578-800 / 824-1000 / 1024-1170, clear of both the hotbar and the
-crafting panel at x=1284. The ability bar needed no change — it derives from
-`hotbarUI.left + width`.
-
-**The crafting list already had icons** — at `iconSize` 18 against placeholder art they just read as
-coloured smudges. Now 32px at 1:1, with icon and name both centred on the row (`ROW_H` 25→36), since
-anchoring either to the row top left them visibly out of line once the icon was taller than the text.
-
-**Locked decision — tier ladders now DIFFER on purpose.** The plan required a ladder to read as one
-object in different metals. The real four-metal sword ladder came out as four distinct silhouettes,
-and the user reversed the rule: *"I like the swords like that."* A higher tier reading as a visibly
-different weapon is the stronger progression signal. Load-bearing — it means every icon is an
-independent generation, with no `create_object_state` chaining and no shared-silhouette constraint.
-It also invalidates Phase 4's inherited "metal tiers are recolours" note, flagged in the plan for
-re-deciding on its own merits.
-
-**Corrected two of my own critiques mid-session.** I called out a green matte fringe on `icon_stone`
-and anti-aliasing on `icon_relic_common`; the pixel data disproved both (zero opaque green pixels —
-the outline is `#202A1B`, a dark olive-black; zero semi-transparent pixels anywhere; 15-48 colour
-palettes). Output is genuinely clean pixel art and **needs no post-processing step**.
-
-**Throughput reality for the remaining ~150:** PixelLab caps at **4 concurrent jobs** (a 5th is
-rejected outright), so it's ~45 rounds of 4. Progress % is unreliable — jobs pin at `95% eta ~0s` or
-reset to 0% with a *growing* ETA, then finish fine; don't re-fire on a stall (reported upstream via
-`agent_feedback`). Hit rate ~85%; misses are the model over-decorating, steered with
-*plain/undecorated/torn*. **Single-bit axes are a known-hard prompt** — three attempts all gave a
-symmetric double-head or a curved pick; `icon_stone_axe` ships as the best of three.
-
-the user moved off the 40-generation trial to **Tier 1 (2,000/mo, $12)**, so cost is no longer a
-constraint on the arc — 181 icons + Phase 3's ~134 props is ~16% of one month.
-
