@@ -1964,11 +1964,35 @@ below.**
    by category, light/dark theme) was published as an artifact and sent to the user; it isn't part
    of this repo. Full detail + operational lessons (PixelLab's queue can stall 20+ minutes even on
    a paid plan, ~85% prompt hit rate, known-hard prompts) in `art/README.md` and `STATUS.md`.
-   Measured scope: **377 authored textures total** (~327 never animate, so static art is the
-   finished product for those — only ~24 creatures + the player need frames). **Sprite dimensions
+   Measured scope: **377 authored textures total**. **Sprite dimensions
    are load-bearing on world sprites** — reach/hitbox math reads them, so an override that changes
    size is warned about, not silently accepted (icons are UI-only and exempted from that warning).
-   **Next: Phase 3 (~134 world props — flora, structures, crypt tiles), then Phase 4 (player rig).**
+   **Phase 3 shipped** (2026-07-25, same day): **160 world props** — forest, badlands and bayou
+   terrain/flora/ore/POI structures, every `_picked` state, all crypt tiles and objects across four
+   themes, 12 map markers, 11 ability icons, projectiles. **341 real assets total.** Alongside the
+   art, four things worth knowing before touching this again:
+   - **`src/art/variants.ts`** — dropping `art/sprites/tree_v2.png` now varies every node of that
+     kind with **no code change**, resolved in `ResourceNode`'s constructor (one hook, ~20 spawn
+     sites) and chosen by hashing the prop's position so the world looks the same each load.
+   - **Sizing is a rule, not a list**: real art keeps its natural size; **ground clutter**
+     (placeholder ≤ the 20px player) returns to its placeholder footprint; **crops**
+     (`action === "pickup"`) are their own placeholder ×1.15 capped 30px; **POI ring markers**
+     ×1.3. Each keys off data the game already has, so new assets inherit the right rule.
+   - **`art/tools/`** is committed and is the workflow: `fetch.sh`/`fetch-raw.sh` (download +
+     trim, or download + alpha-check for decals/tiles), `trim.mjs`, `adjust.mjs` (darken /
+     desaturate / `--feather` radial alpha), `check-alpha.mjs`, and `gallery.mjs`, which
+     **regenerates the published reference gallery from the repo** so it can never drift.
+   - **Two traps, both in `art/README.md`:** "derived variants are free" holds only at BUILD time
+     (BootScene *generates* `crypt_wall_gloam` from a palette, so overriding `crypt_wall` never
+     reaches it — **the same trap awaits the 14 `*_elite` creatures in Phase 4**), and **tiles are
+     not props** (tiled textures must be seamless/full-bleed — `create_tiles_pro`, never trimmed).
+   **Animation scope was widened by the user** — "anything that moves or could move should have
+   animations even if ambient" — which **reverses the original "~327 of 377 never animate"**. It
+   decides a tool at generation time: a `create_map_object` result can never be animated, so the
+   ~19 identified ambient movers (flames, crystals, reeds, banners) get regenerated as objects
+   during the animation pass. **Ground texturing + biome blending is its own phase, deliberately
+   LAST** (the user) — it's the one part of the migration that is *not* per-asset reversible, since
+   the ground is generated rather than a sprite. **Next: Phase 4 (player rig).**
 
 **Bosses (was item 7)** — shipped, see 5c above (Boss Altar + Gremlin King). Future
 bosses should each get their own bespoke AI (per the locked "no shared boss

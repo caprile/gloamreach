@@ -9643,3 +9643,72 @@ sustained close approach) — both call the same helper proven on the other thre
 time: the preview loop needed the documented `loop.step` trick to advance game time, and enemy AI
 does not tick until a character is actually picked (`runOver` stays true), which silently made a
 first round of telegraph probes report nothing.
+
+### Art pipeline + additive coloured lighting (Phase 1 of the 3-biome art arc) (2026-07-25, Opus)
+
+Plan: `.claude/plans/art-textures-lighting-3-biomes.md`. First session of the real-pixel-art arc
+(roadmap 8). the user registered the **PixelLab MCP** at project scope; its tools need a session
+restart, so this session built the foundation everything else gets authored against. Two forks
+locked via `AskUserQuestion`: **additive coloured lights** (not Lights2D + normal maps, which would
+need a normal map for all 377 textures that PixelLab can't generate) and **icons first**.
+
+**Measured the real scope** from the live `TextureManager` rather than parsing BootScene — many
+keys are drawn by shared helpers, so static parsing only resolved 107 of 314 calls. **377 authored
+textures**: 181 icons (177 @ 24×24, 4 status icons @ 22×22), ~134 static world props/flora/nodes/
+structures/crypt tiles, ~24 creatures + player, 14 derived `*_elite` recolours, 12 map markers @
+18×18, 3 FX gradients. The other **2,197** keys are runtime RenderTextures (ground bakes, minimap,
+tile fills) and stay procedural. **~327 of 377 never animate**, so static art is the finished
+product for them, not a stopgap — this corrected an earlier assumption that animation gated
+everything.
+
+**`src/art/overrides.ts`** — drop `art/sprites/<textureKey>.png` and it replaces the generated
+texture of that name with **zero call-site changes** (Phaser keys are plain strings). Discovered via
+Vite `import.meta.glob` at build time, so there is no index file to drift the way `RECIPES.md` does;
+adding a PNG is the entire workflow, and deleting it restores the placeholder. `BootScene` gained
+its first-ever `preload()`; overrides apply after `makeTextures()` and before MainScene starts.
+It **reports size changes** (attack reach and hitboxes read sprite size — `MainScene.enemyReach`,
+`Enemy.reachBonus`) and **unmatched keys** (a misspelled filename would otherwise fail completely
+silently). `pixelArt: true` was already set, so loaded PNGs are crisp with no extra work.
+
+**Additive coloured lighting.** `NightOverlayUI` was subtractive *only* — it filled the screen dark
+and erased soft holes, so every light source looked identical no matter what its comment claimed. The
+existing code promised "doorways glow with their gem's color" and "a bile-green hole breathing
+light"; `ScreenLight` carried no colour at all, so that intent was never deliverable. Added a second
+RenderTexture rendered with `BlendModes.ADD` — it **can't** fold into the darkness mask, because
+drawing colour into a layer that renders normally would occlude the world instead of lighting it.
+`ScreenLight.color` is **optional**: omit it and behaviour is byte-for-byte the old pure reveal,
+which is what a discovered crypt ROOM wants (plainly lit, not bathed in colour). New `LIGHT_COLOR`
+in MainScene assigns per-source hues across all 14 light sources.
+
+**`ADDITIVE_STRENGTH` is 0.15, and the number matters:** additive blending *sums* overlaps and light
+sources cluster hard — a Gloaming Vein is 9 crystals inside one radius. At 0.4 the cluster saturated
+straight to white and lost the violet, i.e. the exact colour the pass exists to add. Also note the
+brush is shared between the erase and additive passes, and **erase strength reads the brush's
+alpha** — so the erase loop resets `clearTint().setAlpha(1)` explicitly. Verified the brush is left
+tinted at 0.15 after render, which is what makes that reset load-bearing rather than defensive.
+
+**Verified live** (not just typechecked): built three throwaway PNGs to exercise the override path
+end-to-end — a correct-size one applied and changed real pixels (`icon_wood` → magenta), a
+wrong-size one fired the resize warning, a bogus key fired the unmatched warning, and a
+non-overridden key was untouched; fixtures then deleted. Lighting confirmed by screenshot at deep
+night: the vein reads amethyst with crystals and ground visible through it while POI fires read warm
+amber in the same frame. Day hides **both** layers (zero cost). `tsc` clean, zero console errors.
+
+**Scope locked same-day (the user), and it deleted the hardest problem:** **armor does NOT render on
+the model** — only its inventory icon and stat lines. So there is no armor layer, the
+`inpaint`-separable-layer question is moot, and no metered API calls are needed to settle it. **The
+weapon DOES render**, and **each of the 5 survivors gets unique art + animations**. Rig volume drops
+~6× to **~300 frames**: 5 survivors × 4 dirs × ~13 frames (~260) plus weapon-in-hand at **10
+ARCHETYPES** × 4 dirs (~40) — the roster is ~25 weapons but only ~10 shapes, since the
+sword/pike/warhammer/warbow ladders are the same object in four metals (recolours, same principle as
+the 14 `*_elite` textures). Because armor is invisible, **the weapon is now the only visible signal
+of gear progression**, so the metal recolours need to read clearly distinct. Note the display
+mechanism already exists — `Player.ts`'s `equippedIcon` offsets by facing every frame and has a
+swing lunge tween; Phase 4 replaces its art and anchors it to a per-frame hand joint (which
+`animate-with-skeleton`'s `skeleton_keypoints` hands over directly). Added **Phase 5 — ability cast
+FX**: all 8 families (`blink`/`nova`/`lifelink`/`aegis`/`gravebind`/`haste`/`lance`/`snare`)
+currently reuse the `light_soft` gradient as one generic glow, so they're visually
+interchangeable; the new additive light layer is directly reusable there.
+
+**Next:** Phase 2 — the 181 icons, starting with normalising the four 22×22 status icons.
+
