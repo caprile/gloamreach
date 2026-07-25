@@ -70,11 +70,17 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   private static readonly BODY = 18;
   // Roughly where the survivor's hand sits, per facing, on the 48px rig canvas
   // (the sprite's origin is the middle of that canvas, i.e. mid-torso).
-  private static readonly HAND_OFFSET: Record<Facing, [number, number]> = {
-    down: [9, 4],
-    up: [-9, 2],
-    left: [-11, 3],
-    right: [11, 3],
+  //
+  // The third value is a tilt. Item art is an upright inventory icon, so
+  // without it a held weapon hangs straight up and down and reads as floating
+  // beside the character rather than being carried — and, since most weapon
+  // icons are near symmetric about their own long axis, mirroring alone is
+  // invisible. Tilting turns the left/right pair into a real mirror.
+  private static readonly HAND_OFFSET: Record<Facing, [number, number, number]> = {
+    down: [9, 4, 22],
+    up: [-9, 2, -22],
+    left: [-11, 3, -30],
+    right: [11, 3, 30],
   };
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
@@ -349,11 +355,13 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       // A rigged survivor has drawn hands, so the item reads as HELD rather
       // than as a marker floating in the facing direction: it sits beside the
       // body at hand height, and goes behind the sprite when facing away.
-      const [hx, hy] = Player.HAND_OFFSET[this.facing];
+      const [hx, hy, tilt] = Player.HAND_OFFSET[this.facing];
       ox = hx;
       oy = hy;
+      this.equippedIcon.setAngle(tilt);
       this.equippedIcon.setDepth(this.depth + (this.facing === "up" ? -1 : 1));
     } else {
+      this.equippedIcon.setAngle(0);
       this.equippedIcon.setDepth(this.depth + 1);
       switch (this.facing) {
         case "up":
@@ -370,6 +378,11 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
           break;
       }
     }
+    // Item art is drawn pointing right (the same convention every creature
+    // sprite follows), so it has to mirror when it's held on the body's left —
+    // otherwise a sword faces backwards the moment you turn around. The hand
+    // offset already knows which side that is, so the two can't disagree.
+    this.equippedIcon.setFlipX(ox < 0);
     this.equippedIcon.setPosition(this.x + ox, this.y + oy);
   }
 
