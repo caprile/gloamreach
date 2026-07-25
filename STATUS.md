@@ -4,8 +4,7 @@
 
 _Living snapshot — edit in place, never append._ Last shipped: **Reaver-run playtest batch, part 1
 — stat caps, shrine budget, boss pacing** (2026-07-24, Opus; full writeup under Recent Entries).
-Off the user's Reaver win (69:56, 936 kills, level 31). **14 of the 15 items are done; the 15th is a design
-decision, not a fix (see below).** Headlines: a **hard 100-point cap on every stat** plus a
+Off the user's Reaver win (69:56, 936 kills, level 31). **All 15 items are done.** Headlines: a **hard 100-point cap on every stat** plus a
 per-point retune so every stat is still growing at point 99 (Strength used to die at **24** points
 for a Reaver — 76 of his points did nothing); **dead-point allocation is now blocked, not just
 labelled**; a **`[ +5 ]`** allocation button; **Sunken Shrines capped at 3 kindlings each**
@@ -43,14 +42,23 @@ mirroring `HotbarUI.slotAt`, plus a drop branch gated by slot GROUP; position is
 dropping an `ability1`-declaring item on the R pip equips it to `ability3`. New derived
 `ABILITY_SLOT_IDS` (from `EQUIP_SLOTS`, so it can't drift).
 
-**The Workbench Lvl 4->5 glyph is NOT a bug, but it IS a content dead-end.** `gloamforge_anvil` is
-the only Lvl 5 upgrade and costs 5x Gloamsteel Ingot; Gloamsteel is smelted from Bog Ore with
-MOONSILVER as its reagent, and moonsilver is crypt-only. A Sunsteel->Mirebronze run (the user's)
-therefore has **no path to Workbench Lvl 5 at all** — the glyph is correctly hidden, but the player
-hits a wall with no explanation, which is why this has now been reported three times. Last session's
-"not a bug" verdict was mechanically right and missed this. **Needs a design decision** (a
-Mirebronze-branch Lvl 5 upgrade / a visible-but-locked entry / accept the branch ends at Lvl 4) —
-deliberately not guessed.
+**Workbench Lvl 4->5 glyph — FIXED, and it was a real bug (item 15).** My first pass wrongly closed
+this as a content dead-end; the user corrected it ("I placed down workbench, built the gloamsteel,
+100% had enough materials to upgrade to lvl 5 and it did not show the upgrade available icon").
+Root cause: **`canAffordUpgrade` counted the BACKPACK only**, and ingots/reforge inputs routinely
+live on the hotbar, so the check — and therefore the floating ▲ glyph it drives — read zero. The
+damning detail: `Crafting.ts` already carries a hotbar reference added off the user's earlier report
+of *this same thing* ("still not looking at items in hotbar when considering upgrades") — the fix
+landed in crafting and never reached the upgrade path. New `MainScene.heldCount()` (backpack +
+hotbar) and `consumeHeld()` (backpack first, then hotbar, mirroring `kindleShrine`) now back every
+upgrade/augment affordability check, all 5 cost deductions, and `formatUpgradeCost` (which otherwise
+would have read "0/5" while you held 5). Verified with materials in the HOTBAR ONLY: glyph appears,
+readout reads 8/5, 9/6, 5/3, applying takes tier 3 -> 4 and deducts exactly -5/-6/-3 from the
+hotbar, a split backpack+hotbar payment drains the backpack first, and the glyph clears afterward.
+**Lesson worth keeping: when a "materials aren't counted" bug is fixed, fix it at every cost site,
+not just the reported one.**
+
+All 15 items of the batch are now done.
 
 Before that: **Ascetic-run playtest batch —
 Miretyrant escalating waves, Bog Ore clustering, Ashcaller buff-master rework, food-buff cap, Max

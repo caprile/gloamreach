@@ -12826,9 +12826,33 @@ export class MainScene extends Phaser.Scene {
     return true;
   }
 
+  // How many of `key` the player HOLDS, backpack plus hotbar.
+  //
+  // Upgrades used to count the backpack only, which is what the user hit twice:
+  // "I placed down workbench, built the gloamsteel, 100% had enough materials to
+  // upgrade to lvl 5 and it did not show the upgrade available icon". Ingots and
+  // reforge inputs routinely live on the hotbar, so the affordability check (and
+  // therefore the floating ▲ glyph, which is driven by it) silently read zero.
+  // Crafting was already fixed for exactly this complaint — see Crafting.ts's
+  // hotbar reference, added off "still not looking at items in hotbar when
+  // considering upgrades" — but the fix never reached the upgrade path. This is
+  // that same rule, applied here.
+  private heldCount(key: string): number {
+    return this.backpack.count(key) + this.hotbar.container.count(key);
+  }
+
+  // Spend `n` of `key` from the backpack first, then the hotbar for the
+  // remainder — mirrors kindleShrine's split so a cost can be paid from wherever
+  // the material actually sits.
+  private consumeHeld(key: string, n: number): void {
+    const fromPack = Math.min(n, this.backpack.count(key));
+    if (fromPack > 0) this.backpack.removeCount(key, fromPack);
+    if (fromPack < n) this.hotbar.container.removeCount(key, n - fromPack);
+  }
+
   private canAffordUpgrade(upg: UpgradeDef): boolean {
     if (this.devNoBuildCost) return true;
-    return Object.entries(upg.costs).every(([r, n]) => this.backpack.count(r) >= (n ?? 0));
+    return Object.entries(upg.costs).every(([r, n]) => this.heldCount(r) >= (n ?? 0));
   }
 
   // Owned/required per resource, mirroring CraftingMenu's detail panel
@@ -12836,7 +12860,7 @@ export class MainScene extends Phaser.Scene {
   // the same way.
   private formatUpgradeCost(upg: UpgradeDef): string {
     return Object.entries(upg.costs)
-      .map(([r, n]) => `${itemDef(r)?.name ?? r}: ${this.backpack.count(r)}/${n}`)
+      .map(([r, n]) => `${itemDef(r)?.name ?? r}: ${this.heldCount(r)}/${n}`)
       .join(", ");
   }
 
@@ -12881,7 +12905,7 @@ export class MainScene extends Phaser.Scene {
     // determines cost/effect; the tier number is just the count. Guard against
     // a double-apply of the same id (the menu already filters applied ones).
     if (applied.includes(upg.id)) return;
-    if (!this.devNoBuildCost) for (const [r, n] of Object.entries(upg.costs)) this.backpack.removeCount(r, n ?? 0);
+    if (!this.devNoBuildCost) for (const [r, n] of Object.entries(upg.costs)) this.consumeHeld(r, n ?? 0);
     applied.push(upg.id);
     this.sfx.upgrade();
     const tier = applied.length;
@@ -12999,9 +13023,9 @@ export class MainScene extends Phaser.Scene {
     if (applied.includes(aug.id) || applied.length >= MAX_AUGMENTS_PER_ITEM) return false;
     if (!this.devNoBuildCost) {
       for (const [r, n] of Object.entries(aug.costs)) {
-        if (this.backpack.count(r) < (n ?? 0)) return false;
+        if (this.heldCount(r) < (n ?? 0)) return false;
       }
-      for (const [r, n] of Object.entries(aug.costs)) this.backpack.removeCount(r, n ?? 0);
+      for (const [r, n] of Object.entries(aug.costs)) this.consumeHeld(r, n ?? 0);
     }
     const next = [...(inst.upgrades ?? []), aug.id];
     if (equipped) {
@@ -13023,7 +13047,7 @@ export class MainScene extends Phaser.Scene {
 
   canAffordAugment(aug: GearAugmentDef): boolean {
     if (this.devNoBuildCost) return true;
-    return Object.entries(aug.costs).every(([r, n]) => this.backpack.count(r) >= (n ?? 0));
+    return Object.entries(aug.costs).every(([r, n]) => this.heldCount(r) >= (n ?? 0));
   }
 
   private applyGearAugment(aug: GearAugmentDef): void {
@@ -13033,7 +13057,7 @@ export class MainScene extends Phaser.Scene {
     if (!this.canAffordUpgrade(aug) || this.upgradeBlockReason(aug)) return;
     const applied = appliedAugmentIds(inst);
     if (applied.includes(aug.id) || applied.length >= MAX_AUGMENTS_PER_ITEM) return;
-    if (!this.devNoBuildCost) for (const [r, n] of Object.entries(aug.costs)) this.backpack.removeCount(r, n ?? 0);
+    if (!this.devNoBuildCost) for (const [r, n] of Object.entries(aug.costs)) this.consumeHeld(r, n ?? 0);
     // Keep any non-augment ids already on the field (a station's applied set can
     // never land on gear, but the merge keeps the field's contract honest).
     const next = [...(inst.upgrades ?? []), aug.id];
@@ -13058,7 +13082,7 @@ export class MainScene extends Phaser.Scene {
   private applyArmorUpgrade(slot: EquipSlot, upg: ArmorUpgradeDef): void {
     const eq = this.equipment.get(slot);
     if (!eq || !this.canAffordUpgrade(upg) || this.upgradeBlockReason(upg)) return;
-    if (!this.devNoBuildCost) for (const [r, n] of Object.entries(upg.costs)) this.backpack.removeCount(r, n ?? 0);
+    if (!this.devNoBuildCost) for (const [r, n] of Object.entries(upg.costs)) this.consumeHeld(r, n ?? 0);
     this.sfx.upgrade();
     this.equipment.set(slot, { key: eq.key, tier: upg.resultTier, upgrades: eq.upgrades });
     // Left-anchored "recipe" toast, not the top-center "info" one — the
@@ -13076,7 +13100,7 @@ export class MainScene extends Phaser.Scene {
   private applyGearUpgrade(container: ItemContainer, index: number, upg: WeaponUpgradeDef | ArmorUpgradeDef): void {
     const stack = container.slot(index);
     if (!stack || !this.canAffordUpgrade(upg) || this.upgradeBlockReason(upg)) return;
-    if (!this.devNoBuildCost) for (const [r, n] of Object.entries(upg.costs)) this.backpack.removeCount(r, n ?? 0);
+    if (!this.devNoBuildCost) for (const [r, n] of Object.entries(upg.costs)) this.consumeHeld(r, n ?? 0);
     this.sfx.upgrade();
     container.set(index, { ...stack, tier: upg.resultTier });
     this.eventLog.add("recipe", `${stationDisplayName(stack.key, upg.resultTier)} upgraded: ${upg.name}`, itemDef(stack.key)?.texture);
