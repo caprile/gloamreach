@@ -124,7 +124,7 @@ import {
 import { toolUpgradesForItem, TOOL_UPGRADES } from "../systems/ToolUpgrades";
 import { EventLog } from "../systems/EventLog";
 import { Biome, type ZoneType } from "../systems/Biome";
-import { Equipment, EQUIP_SLOTS, slotGroup, type EquipSlot, type EquippedItem } from "../systems/Equipment";
+import { Equipment, EQUIP_SLOTS, ABILITY_SLOT_IDS, slotGroup, type EquipSlot, type EquippedItem } from "../systems/Equipment";
 import { activeSets, setById, type SetId } from "../systems/SetBonuses";
 import {
   augmentEffect,
@@ -3195,6 +3195,21 @@ export class MainScene extends Phaser.Scene {
       }
     }
 
+    // The Q/E/R HUD bar is a drop target too, whether or not the inventory is
+    // open — that's the gesture players reach for first, instead of opening the
+    // inventory to find the paper-doll ability slots (the user: "need to be able
+    // to drag abilities straight to hotbar"). Same group gate as the paper-doll
+    // branch above; index 0/1/2 maps to ability1/2/3, i.e. Q/E/R, since for
+    // abilities POSITION IS THE HOTKEY.
+    const abilityIndex = this.abilityBarUI.slotAt(pointer.x, pointer.y);
+    if (abilityIndex !== null) {
+      const declared = itemDef(stack.key)?.armorSlot;
+      if (declared && slotGroup(declared) === "ability") {
+        this.equipArmorFromContainer(src.container, src.index, ABILITY_SLOT_IDS[abilityIndex]);
+      }
+      return; // a non-ability item dropped here just snaps back
+    }
+
     // Prefer a hotbar slot under the pointer, else a backpack slot.
     const hotIndex = this.hotbarUI.slotAt(pointer.x, pointer.y);
     if (hotIndex !== null) {
@@ -3655,7 +3670,7 @@ export class MainScene extends Phaser.Scene {
       announceRoll: (result) => this.announceRelicResult(result),
       refine: (recipeId) => this.refineTrophies(recipeId),
       forgeTier: () => (this.openForge?.getData("tier") as number | undefined) ?? 0,
-      convert: (id) => this.convertShards(id),
+      convert: (id, runs) => this.convertShards(id, runs),
       resolveFamilyChoice: (keepNew) => this.resolveRelicFamilyChoice(keepNew),
       commitCandidate: (id) => this.commitRelicCandidate(id),
       hasDiscovered: (key) => this.discovered.has(key),
@@ -3813,22 +3828,40 @@ export class MainScene extends Phaser.Scene {
   // One shard conversion, identified by its SHARD_CONVERSIONS row. Was
   // Gloam->Ember specifically; the bayou added Ember->Mire, and a second
   // near-identical method is how the tier gate and the ratio drift apart.
-  private convertShards(conversionId: string): void {
+  // `runs` supports the forge's "Convert All" button. Batched INSIDE one call
+  // rather than by calling this N times, so a 50-shard render produces one
+  // toast and one sound instead of fifty — the same toast-spam rule the upgrade
+  // announcements already follow. Each run still re-checks cost, so a batch can
+  // never spend shards the player doesn't have.
+  private convertShards(conversionId: string, runs = 1): void {
     const conv = SHARD_CONVERSIONS.find((c) => c.id === conversionId);
     if (!conv) return;
-    if (!this.devNoBuildCost) {
-      if (((this.openForge?.getData("tier") as number | undefined) ?? 0) < conv.minStationTier) return;
-      if (this.backpack.count(conv.fromKey) < conv.ratio) return;
-      this.backpack.removeCount(conv.fromKey, conv.ratio);
-    }
     const toName = itemDef(conv.toKey)?.name ?? conv.toKey;
-    const leftover = this.addToBackpack(conv.toKey, 1);
-    if (leftover > 0) {
-      this.spawnLooseDrop(conv.toKey, leftover, this.player.x, this.player.y, DROPPED_ITEM_MAGNET_COOLDOWN_MS);
-      this.eventLog.add("info", `Backpack full — the ${toName.toLowerCase()} landed on the floor`);
+    let made = 0;
+    let dropped = 0;
+    for (let i = 0; i < Math.max(1, runs); i++) {
+      if (!this.devNoBuildCost) {
+        if (((this.openForge?.getData("tier") as number | undefined) ?? 0) < conv.minStationTier) break;
+        if (this.backpack.count(conv.fromKey) < conv.ratio) break;
+        this.backpack.removeCount(conv.fromKey, conv.ratio);
+      }
+      const leftover = this.addToBackpack(conv.toKey, 1);
+      if (leftover > 0) {
+        this.spawnLooseDrop(conv.toKey, leftover, this.player.x, this.player.y, DROPPED_ITEM_MAGNET_COOLDOWN_MS);
+        dropped += leftover;
+      }
+      made += 1;
+    }
+    if (made === 0) return;
+    if (dropped > 0) {
+      this.eventLog.add("info", `Backpack full — ${dropped}x ${toName.toLowerCase()} landed on the floor`);
     }
     this.discoverMaterial(conv.toKey);
-    this.eventLog.add("recipe", `Rendered ${itemDef(conv.fromKey)?.name ?? conv.fromKey} into ${toName}`, itemDef(conv.toKey)?.texture);
+    this.eventLog.add(
+      "recipe",
+      `Rendered ${itemDef(conv.fromKey)?.name ?? conv.fromKey} into ${made}x ${toName}`,
+      itemDef(conv.toKey)?.texture,
+    );
     this.sfx.craft();
     this.afterRelicChange();
   }

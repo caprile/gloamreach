@@ -50,7 +50,7 @@ export interface RelicForgeMenuDeps {
   forgeTier: () => number;
   // Convert GLOAM_TO_EMBER_RATIO Gloam Shards -> 1 Ember Shard. Called at the
   // ProgressBar's completion (commit-at-end), like refine.
-  convert: (conversionId: string) => void;
+  convert: (conversionId: string, runs?: number) => void;
   // Resolve a pending "ambiguous" family conflict (see Relics.ts doc comment)
   // once the player picks Keep New / Keep Old. Returns the refund info so the
   // menu can update its result line, or null if there's nothing pending.
@@ -508,18 +508,50 @@ export class RelicForgeMenu {
         .setDepth(DEPTH_ITEM)
         .setInteractive({ useHandCursor: can })
         .on("pointerdown", () => {
-          if (can) this.beginConvert(conv.id, bx, by, btnW, btnH);
+          if (can) this.beginConvert(conv.id, bx, by, btnW, btnH, 1);
         });
       this.rows.push(btn);
       const busyThis = this.convertBusy && this.convertingId === conv.id;
       this.addText(bx + btnW / 2, by + btnH / 2, busyThis ? "Rendering…" : "Convert", 12, can ? "#f0c090" : "#6a7280", 0.5, 0.5);
       if (busyThis) this.convertBar.setPosition(bx, by).setSize(btnW, btnH);
+
+      // "Convert All" (the user's ask): shards accumulate in the hundreds, and
+      // clicking a 1-at-a-time button through a timed bar each round is the
+      // whole complaint. One bar covers the whole batch, same as a batched
+      // craft — the conversion itself still runs once per unit at commit.
+      const allRuns = Math.floor(have / conv.ratio);
+      const canAll = (this.deps.noBuildCost() ? allRuns > 0 : allRuns > 1) && !this.convertBusy;
+      const abW = 96;
+      const abX = bx - abW - 8;
+      const allBtn = this.scene.add
+        .rectangle(abX, by, abW, btnH, canAll ? 0x2a2333 : 0x14181f, 0.95)
+        .setOrigin(0, 0)
+        .setStrokeStyle(1, canAll ? 0xe8923c : 0x3a4250)
+        .setScrollFactor(0)
+        .setDepth(DEPTH_ITEM)
+        .setInteractive({ useHandCursor: canAll })
+        .on("pointerdown", () => {
+          if (canAll) this.beginConvert(conv.id, abX, by, abW, btnH, allRuns);
+        });
+      this.rows.push(allBtn);
+      this.addText(
+        abX + abW / 2,
+        by + btnH / 2,
+        allRuns > 1 ? `All (${allRuns})` : "All",
+        12,
+        canAll ? "#f0c090" : "#6a7280",
+        0.5,
+        0.5,
+      );
       y += rowH + gap;
     }
   }
 
-  // Commit-at-end, same pattern as beginRefine.
-  private beginConvert(id: string, bx: number, by: number, bw: number, bh: number): void {
+  // Commit-at-end, same pattern as beginRefine. `runs` lets one bar cover a
+  // whole batch (the "All" button) rather than making the player sit through a
+  // bar per shard; nothing is consumed until it fills, so closing mid-bar is
+  // still a clean no-op.
+  private beginConvert(id: string, bx: number, by: number, bw: number, bh: number, runs = 1): void {
     if (this.convertBusy || this.busy || this.refineBusy) return;
     this.convertBusy = true;
     this.convertingId = id;
@@ -528,7 +560,7 @@ export class RelicForgeMenu {
     this.convertBar.start(REFINE_BAR_MS, {
       onComplete: () => {
         this.convertBusy = false;
-        this.deps.convert(id);
+        this.deps.convert(id, runs);
         if (this.open) this.render();
       },
     });

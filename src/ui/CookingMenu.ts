@@ -517,11 +517,18 @@ export class CookingMenu {
         return `${name} ${have}/${need * batch}`;
       })
       .join("   ");
-    this.addText(x + 12, y + 8, costParts, 12, "#c8d0dc", 0, 0, rowW - 110);
+    const costText = this.addText(x + 12, y + 8, costParts, 12, "#c8d0dc", 0, 0, rowW - 110);
+    // That cost line WRAPS (it's given a wrap width), and a 3-long-name dish
+    // like the Blood-Glazed Snake Skewer takes two lines — so everything below
+    // it has to be measured off its REAL height. A hardcoded y+28 for "Qty:"
+    // put the quantity straight through the wrapped second line (the user: "in
+    // cooking menu, ingredients overlap with the quantity text for snake blood
+    // glazed"). Same measure-then-place rule the rest of the panels follow.
+    const belowCost = y + 8 + costText.height;
 
     if (stackable) {
-      this.addText(x + 12, y + 28, `Qty: ${batch} / ${maxBatch}`, 12, "#e8ecf2");
-      const trackY = y + 46;
+      this.addText(x + 12, belowCost + 2, `Qty: ${batch} / ${maxBatch}`, 12, "#e8ecf2");
+      const trackY = belowCost + 20;
       this.sliderTrack = { x: x + 12, y: trackY, w: SLIDER_W };
       const trackBg = this.scene.add
         .rectangle(x + 12, trackY, SLIDER_W, SLIDER_H, 0x1a1f2a, 0.95)

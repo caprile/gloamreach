@@ -4,8 +4,8 @@
 
 _Living snapshot — edit in place, never append._ Last shipped: **Reaver-run playtest batch, part 1
 — stat caps, shrine budget, boss pacing** (2026-07-24, Opus; full writeup under Recent Entries).
-Off the user's Reaver win (69:56, 936 kills, level 31). **10 of the 15 items are done — the 5
-remaining are listed below.** Headlines: a **hard 100-point cap on every stat** plus a
+Off the user's Reaver win (69:56, 936 kills, level 31). **14 of the 15 items are done; the 15th is a design
+decision, not a fix (see below).** Headlines: a **hard 100-point cap on every stat** plus a
 per-point retune so every stat is still growing at point 99 (Strength used to die at **24** points
 for a Reaver — 76 of his points did nothing); **dead-point allocation is now blocked, not just
 labelled**; a **`[ +5 ]`** allocation button; **Sunken Shrines capped at 3 kindlings each**
@@ -27,17 +27,30 @@ area, already drawn by its own gfx); Cragscale/Sandmaw/Hexling/Cinderwrought/Glo
 GremlinKing/Duneshaper/Miretyrant already telegraphed theirs. Mosslings get 500ms
 **damage-only** immunity (`Enemy.spawnInvulnUntil`) plus a fade-in — they still close on you.
 
-**STILL TO DO from this batch (5 items, none started):**
-1. **Cooking menu** ingredient text overlaps the quantity (Blood-Glazed Snake Skewer).
-2. **Auto-stacking bug** — wood sat at 69/99/44. `ItemContainer.add()` merges correctly and
-   `sortAndStack()` is only called from the manual Sort button, so something creates stacks
-   outside `add()`. Lead: the `addStack` call sites and the drag/split paths.
-3. **Convert All** on the Relic Forge Convert tab.
-4. **Drag abilities straight to the Q/E/R hotbar.**
-5. **Workbench Lvl 4->5 upgrade glyph** — re-investigate as a real bug (last session concluded
-   "not a bug: Gloamsteel undiscovered", but the user reports it again).
+**Part 3 shipped: the 4 remaining fixes.** (1) **Auto-stacking** — the fragmentation came from
+CONSUMPTION, not addition: `add()` tops up every partial it finds, but `removeCount` drains
+front-to-back and leaves the head stack partial while a tail partial from an uneven total sits
+there forever, which is exactly 69/99/44. New `ItemContainer.compactStacks(key)` runs at the end of
+`removeCount` — merge-only and position-preserving (NOT `sortAndStack`), and deliberately not hooked
+to `moveSlot`/`afterItemMove` because a Shift+click split intentionally creates a partial and would
+be undone instantly. (2) **Cooking-menu overlap** — the footer's cost line has a wrap width and a
+3-long-name dish takes two lines, while `Qty:` sat at a hardcoded `y + 28`; now measured off the
+real text height. **The identical bug existed in `JewelryMenu`** and was fixed with it. (3)
+**Convert All** on the forge's Convert tab, batched INSIDE `convertShards(id, runs)` so a 50-shard
+render is one toast and one sound rather than fifty (the toast-spam rule), each run still
+re-checking cost. (4) **Drag abilities onto the Q/E/R HUD bar** — new `AbilityBarUI.slotAt()`
+mirroring `HotbarUI.slotAt`, plus a drop branch gated by slot GROUP; position is the hotkey, so
+dropping an `ability1`-declaring item on the R pip equips it to `ability3`. New derived
+`ABILITY_SLOT_IDS` (from `EQUIP_SLOTS`, so it can't drift).
 
-All 5 remaining items are Sonnet-class fixes on existing systems - no mechanic work left in this batch.
+**The Workbench Lvl 4->5 glyph is NOT a bug, but it IS a content dead-end.** `gloamforge_anvil` is
+the only Lvl 5 upgrade and costs 5x Gloamsteel Ingot; Gloamsteel is smelted from Bog Ore with
+MOONSILVER as its reagent, and moonsilver is crypt-only. A Sunsteel->Mirebronze run (the user's)
+therefore has **no path to Workbench Lvl 5 at all** — the glyph is correctly hidden, but the player
+hits a wall with no explanation, which is why this has now been reported three times. Last session's
+"not a bug" verdict was mechanically right and missed this. **Needs a design decision** (a
+Mirebronze-branch Lvl 5 upgrade / a visible-but-locked entry / accept the branch ends at Lvl 4) —
+deliberately not guessed.
 
 Before that: **Ascetic-run playtest batch —
 Miretyrant escalating waves, Bog Ore clustering, Ashcaller buff-master rework, food-buff cap, Max
@@ -129,11 +142,11 @@ out-threatens the badlands.
 
 > Older entries in STATUS-archive.md.
 
-### Reaver-run playtest batch — stat caps, shrine budget, boss pacing, area telegraphs (2026-07-24, Opus)
+### Reaver-run playtest batch — stat caps, shrine budget, boss pacing, telegraphs, UI fixes (2026-07-24, Opus)
 
 No plan file — a fix/rework batch off the user's Reaver win (69:56, 936 kills, level 31, score
-19170, 62/62 relic rolls). **10 of 15 items; the 5 remaining are listed in
-Current State.** Every design fork was locked via `AskUserQuestion` first, and two of the
+19170, 62/62 relic rolls). **14 of 15 items; the 15th is a design decision surfaced in
+Current State, not a fix.** Every design fork was locked via `AskUserQuestion` first, and two of the
 locks reversed my initial recommendation once the real numbers were checked.
 
 **The root finding.** Intelligence was an *unbounded* self-feeding loop: `Skills.onLevelUp` feeds

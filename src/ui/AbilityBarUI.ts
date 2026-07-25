@@ -81,6 +81,19 @@ export class AbilityBarUI {
     return { x: this.leftX + i * (ICON + GAP), y: this.bottomY - ICON - LABEL_H };
   }
 
+  // Which Q/E/R slot (0..2) is under a SCREEN point, or null. Mirrors
+  // HotbarUI.slotAt so MainScene.resolveItemDrag can treat this bar as a drop
+  // target — dragging an ability item onto the HUD bar is the gesture players
+  // reach for first (the user: "need to be able to drag abilities straight to
+  // hotbar"), rather than opening the inventory to find the paper-doll slots.
+  slotAt(screenX: number, screenY: number): number | null {
+    for (let i = 0; i < 3; i++) {
+      const { x, y } = this.slotXY(i);
+      if (screenX >= x && screenX <= x + ICON && screenY >= y && screenY <= y + ICON) return i;
+    }
+    return null;
+  }
+
   private build(): void {
     const keys = ["q", "e", "r"];
     keys.forEach((key, i) => {

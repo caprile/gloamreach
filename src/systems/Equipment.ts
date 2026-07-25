@@ -35,6 +35,12 @@ export type EquipSlot =
 // its own group, and any slot within the group will do.
 export type EquipSlotGroup = "gear" | "special" | "ability";
 
+// The ability slots in hotkey order: Q, E, R. For abilities POSITION IS THE
+// HOTKEY, so this doubles as the AbilityBarUI slot order — index 0 is the Q
+// pip. Derived from EQUIP_SLOTS below rather than hand-listed, so it can never
+// drift from the table.
+
+
 export interface EquippedItem {
   key: string;
   tier: number;
@@ -64,6 +70,8 @@ export const EQUIP_SLOTS: { id: EquipSlot; label: string; group: EquipSlotGroup 
   { id: "ability2", label: "E", group: "ability" },
   { id: "ability3", label: "R", group: "ability" },
 ];
+
+export const ABILITY_SLOT_IDS: EquipSlot[] = EQUIP_SLOTS.filter((s) => s.group === "ability").map((s) => s.id);
 
 const SLOT_GROUP: Record<EquipSlot, EquipSlotGroup> = EQUIP_SLOTS.reduce(
   (acc, s) => {

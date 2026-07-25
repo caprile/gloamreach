@@ -138,6 +138,40 @@ export class ItemContainer {
         if (s.count === 0) this.slots[i] = null;
       }
     }
+    // Draining front-to-back leaves the first stack it touched partial, and a
+    // tail partial from an uneven total sits there forever — the user: "I have a
+    // stack of 69, 99, and 44 of wood". add() tops up every partial it finds, so
+    // ADDING was never the problem; consuming was. Consolidate right here, at
+    // the only path that fragments.
+    this.compactStacks(key);
+  }
+
+  // Pour later partial stacks of `key` into earlier ones, in place.
+  //
+    // Deliberately merge-only and position-preserving, NOT sortAndStack: nothing
+  // moves to a different slot and nothing is reordered, so a player's layout
+  // survives. Also deliberately NOT called from moveSlot/afterItemMove — a
+  // Shift+click split intentionally creates a partial, and compacting there
+  // would undo the split the instant it was made.
+  compactStacks(key: string): void {
+    const max = maxStackOf(key);
+    if (max <= 1) return;
+    let target: ItemStack | null = null;
+    for (let i = 0; i < this.slots.length; i++) {
+      const s = this.slots[i];
+      if (!s || s.key !== key || s.upgrades) continue; // never merge per-instance upgrade state
+      if (target && (target.tier ?? 0) === (s.tier ?? 0)) {
+        const take = Math.min(max - target.count, s.count);
+        target.count += take;
+        s.count -= take;
+        if (target.count >= max) target = null;
+        if (s.count === 0) {
+          this.slots[i] = null;
+          continue;
+        }
+      }
+      if (s.count < max) target = s;
+    }
   }
 
   // First slot that can accept `key`: a same-key stack with room, else an

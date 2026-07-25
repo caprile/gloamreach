@@ -658,11 +658,16 @@ export class JewelryMenu {
         return `${name} ${have}/${need * batch}`;
       })
       .join("   ");
-    this.addText(x + 12, y + 8, costParts, 12, "#c8d0dc", 0, 0, rowW - 110);
+    // Measured, not hardcoded: the cost line has a wrap width and a
+    // multi-ingredient recipe pushes it to two lines, which a fixed y+28 for
+    // "Qty:" then overlapped. Same fix as CookingMenu.renderFooter — that's
+    // where it was actually reported, but this footer is the same code shape.
+    const costText = this.addText(x + 12, y + 8, costParts, 12, "#c8d0dc", 0, 0, rowW - 110);
+    const belowCost = y + 8 + costText.height;
 
     if (stackable) {
-      this.addText(x + 12, y + 28, `Qty: ${batch} / ${maxBatch}`, 12, "#e8ecf2");
-      const trackY = y + 46;
+      this.addText(x + 12, belowCost + 2, `Qty: ${batch} / ${maxBatch}`, 12, "#e8ecf2");
+      const trackY = belowCost + 20;
       this.sliderTrack = { x: x + 12, y: trackY, w: SLIDER_W };
       const trackBg = this.scene.add
         .rectangle(x + 12, trackY, SLIDER_W, SLIDER_H, 0x1a1f2a, 0.95)
