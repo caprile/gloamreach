@@ -189,7 +189,7 @@ const BIOME_NAMES: Record<BiomeId | "base", string> = {
 };
 import { ysortDepth } from "../systems/depth";
 import { variantAt, clearVariantCache } from "../art/variants";
-import { artScale } from "../art/overrides";
+import { artScale, placeholderDims, scaleToLongest } from "../art/overrides";
 import { Run, type RunOutcome, type KillCategory } from "../systems/Run";
 import { RunLog } from "../systems/RunLog";
 import { clearHighScores, recordHighScore } from "../systems/HighScores";
@@ -8053,7 +8053,13 @@ export class MainScene extends Phaser.Scene {
         const r = opts.ringRadius + rng.between(-8, 8);
         const x = Phaser.Math.Clamp(cx + Math.cos(a) * r, 20, WORLD_W - 20);
         const y = Phaser.Math.Clamp(cy + Math.sin(a) * r, 20, WORLD_H - 20);
-        this.add.image(x, y, opts.ringTexture).setDepth(ysortDepth(y));
+        const img = this.add.image(x, y, opts.ringTexture).setDepth(ysortDepth(y));
+        // These are boundary MARKERS — they say "something is here", so they
+        // must not compete with the POI they surround. Sized off their own
+        // placeholder like crops, since real art arrives on a much taller
+        // canvas and a ring of 48px posts reads as a structure in its own right.
+        const was = placeholderDims(opts.ringTexture);
+        if (was) img.setScale(scaleToLongest(this, opts.ringTexture, Math.max(was.w, was.h) * 1.3));
       }
     }
   }
