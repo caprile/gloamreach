@@ -27,6 +27,14 @@ const RAMP: [number, [number, number, number]][] = [
   [1.0, [0xff, 0xe8, 0xa0]], // gold highlight
 ];
 
+// Creatures whose elite texture isn't just `<base>_elite`. The melee gremling
+// is drawn under `gremling_weak` (it is the weaker of the two gremlin types)
+// but its elite is `gremling_elite`, so the prefix rule misses it — which is
+// silent, since a missing derivation just leaves the old placeholder in place.
+const ELITE_KEY: Record<string, string> = {
+  gremling_weak: "gremling_elite",
+};
+
 /** Rec. 601 luma of pixel `i`, 0..1 — how light the source pixel reads. */
 function luma(px: Uint8ClampedArray, i: number): number {
   return (0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2]) / 255;
@@ -57,9 +65,14 @@ function ramp(l: number): [number, number, number] {
  */
 export function deriveEliteTextures(scene: Phaser.Scene, bases: string[]): string[] {
   const done: string[] = [];
+  const overridden = new Set(bases);
   for (const base of bases) {
-    const eliteKey = `${base}_elite`;
+    const eliteKey = ELITE_KEY[base] ?? `${base}_elite`;
     if (!scene.textures.exists(eliteKey) || !scene.textures.exists(base)) continue;
+    // A hand-authored elite always wins. The recolour is a stand-in for art
+    // nobody has drawn — if `<name>_elite.png` exists on disk, overwriting it
+    // with a tinted base would silently discard the better asset.
+    if (overridden.has(eliteKey)) continue;
 
     const src = scene.textures.get(base).getSourceImage() as HTMLImageElement | HTMLCanvasElement;
     const w = src.width;

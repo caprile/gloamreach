@@ -12,12 +12,16 @@ anchor mechanism doesn't exist). Phase 3 before it left forest, badlands and bay
 crypt tiles and objects across four themes, all 12 map markers, all 11 ability icons and the larger
 projectiles. **381 real assets** (181 icons + 160 world + 40 rig strips).
 
-**In progress:** the creature roster — **8 of ~24 done** (boar, snake, gremlin, gremling,
-duskrunner, cragscale, hexling, sandmaw). The `*_elite` trap is resolved: elites are now derived
-from their base's real pixels at load time, so they never need authoring. Remaining: the bayou six
-(mirejaw, blighttoad, mosswretch, murkling, fenlurker, corpselight), the crypt dwellers, and the
-8 bosses (already ≥40px, so no footprint concern). Ground texturing + biome blending stays
-deliberately last.
+**The creature roster is DONE** — all 14 common creatures across three biomes plus all 8 bosses,
+with the 14 elites deriving from them automatically. **403 real assets** (363 sprites + 40 rig
+strips); every override key resolves and no filename is unmatched. the user's call: the recoloured
+elites are "good for now" — bespoke elite art (something beyond "is now red") is a possible later
+pass, and since `eliteVariants.ts` only rebuilds keys it derives, dropping a real
+`<name>_elite.png` in would simply win.
+
+**Next:** the animation pass, and ground texturing + biome blending — the latter deliberately last,
+being the one part of the migration that is *not* per-asset reversible (the ground is generated,
+not a sprite).
 
 **Still placeholder, deliberately:** the tiny 6×6 projectiles (`gremlin_rock`, `pellet_projectile`,
 `gloam_bolt` — a 32px generation downscaled to 6px is mush; the procedural dot is better), and the

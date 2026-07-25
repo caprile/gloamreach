@@ -49,7 +49,9 @@ handle magnification. Author at native size.
 **4. Derived variants are free — don't draw them.** The 14 `*_elite` creature
 variants are recoloured from their base's own pixels at load time
 (`src/art/eliteVariants.ts`), so giving a creature real art gives its elite real
-art too. Never author an `*_elite` PNG.
+art too. You don't need to author an `*_elite` PNG — but if you *want* to (the
+recolour is "the same creature, but red", not a design), dropping one in wins:
+derivation skips any elite key that was itself overridden.
 
 **4a. BUT: "derived" means derived at BUILD time, not runtime.** `BootScene`'s
 `cryptShell("gloam", …)` *generates* `crypt_wall_gloam` from a palette — it does
