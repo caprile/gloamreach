@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { isVariantKey } from "./variants";
 
 // Real-art override layer — the bridge off placeholder art.
 //
@@ -114,8 +115,12 @@ export function applyTextureOverrides(scene: Phaser.Scene): OverrideReport {
   if (iconResizes.length) {
     console.info(`[art] ${iconResizes.length} icon(s) resized (expected — icons are UI-only).`);
   }
-  if (report.unmatched.length) {
-    console.warn(`[art] no generated texture for: ${report.unmatched.join(", ")} (misspelled filename?)`);
+  // A `<key>_v2` file is an intentional new key with no placeholder behind it
+  // (see art/variants.ts), so it is expected to be "unmatched" — only the rest
+  // is likely to be a typo.
+  const typos = report.unmatched.filter((k) => !isVariantKey(k));
+  if (typos.length) {
+    console.warn(`[art] no generated texture for: ${typos.join(", ")} (misspelled filename?)`);
   }
   if (report.failed.length) {
     console.warn(`[art] failed to load: ${report.failed.join(", ")}`);

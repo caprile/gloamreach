@@ -188,6 +188,7 @@ const BIOME_NAMES: Record<BiomeId | "base", string> = {
   base: "The Wilds",
 };
 import { ysortDepth } from "../systems/depth";
+import { variantAt, clearVariantCache } from "../art/variants";
 import { Run, type RunOutcome, type KillCategory } from "../systems/Run";
 import { RunLog } from "../systems/RunLog";
 import { clearHighScores, recordHighScore } from "../systems/HighScores";
@@ -1482,6 +1483,7 @@ export class MainScene extends Phaser.Scene {
     // by the scene shutdown — iterating them in update() threw and froze the
     // game the instant "New Run" was clicked. Reset every per-run field here so
     // "New Run" is the clean full reset the design always intended.
+    clearVariantCache();
     this.runOver = false;
     this.isDead = false;
     this.inProgressMode = false;
@@ -6693,7 +6695,7 @@ export class MainScene extends Phaser.Scene {
         const x = Phaser.Math.Clamp(center.x + rng.between(-JITTER, JITTER), 60, WORLD_W - 60);
         const y = Phaser.Math.Clamp(center.y + rng.between(-JITTER, JITTER), 60, WORLD_H - 60);
         const key = textures[rng.between(0, textures.length - 1)];
-        this.add.image(x, y, key).setDepth(ysortDepth(y));
+        this.add.image(x, y, variantAt(this, key, x, y)).setDepth(ysortDepth(y));
       }
       placed += size;
     }

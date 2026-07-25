@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import { ysortDepth } from "../systems/depth";
+import { variantAt } from "../art/variants";
 
 // A specific craftable tool (tiers can grow later, e.g. iron_axe).
 export type ToolType = "stone_axe" | "stone_pickaxe";
@@ -145,7 +146,16 @@ export class ResourceNode extends Phaser.GameObjects.Sprite {
   private glowImage: Phaser.GameObjects.Image | null = null;
 
   constructor(scene: Phaser.Scene, cfg: ResourceNodeConfig) {
-    super(scene, cfg.x, cfg.y, cfg.texture);
+    // Resolved here rather than at the ~20 spawn sites so a new `<key>_v2` PNG
+    // varies every node of that kind at once. A "picked" look must follow the
+    // variant that was actually chosen, falling back to the shared one.
+    const texture = variantAt(scene, cfg.texture, cfg.x, cfg.y);
+    const pickedTexture =
+      cfg.pickedTexture && texture !== cfg.texture && scene.textures.exists(`${texture}_picked`)
+        ? `${texture}_picked`
+        : cfg.pickedTexture;
+
+    super(scene, cfg.x, cfg.y, texture);
     this.resource = cfg.resource;
     this.amount = cfg.amount;
     this.action = cfg.action;
@@ -158,11 +168,11 @@ export class ResourceNode extends Phaser.GameObjects.Sprite {
     this.tier = cfg.tier;
     this.upgrades = cfg.upgrades;
     this.persistent = cfg.persistent ?? false;
-    this.pickedTexture = cfg.pickedTexture;
+    this.pickedTexture = pickedTexture;
     this.regrowMs = cfg.regrowMs;
     this.minToolTier = cfg.minToolTier ?? 0;
     this.shielded = cfg.shielded ?? false;
-    this.freshTexture = cfg.texture;
+    this.freshTexture = texture;
     scene.add.existing(this);
     // Trees/boulders are tall enough to visually occlude the player/enemies
     // walking past them, so they're Y-sorted against them (see

@@ -76,8 +76,57 @@ tile fills). Those stay procedural and are not art assets.
 
 ## Phase 3 — world props, flora, structures, crypt tiles (~134)
 
-Biome by biome: forest → badlands → bayou. All static. Watch `*_picked` /
-`*_shielded` state variants — they need art, but only a small delta from the base.
+Biome by biome: forest → badlands → bayou. Watch `*_picked` / `*_shielded` state
+variants — they need art, but only a small delta from the base.
+
+### Animation scope widened (the user, 2026-07-25)
+
+> "anything that moves or could move should have animations even if ambient
+> (i.e. walking, each attack type, campfire fire moving, lights moving etc)"
+
+This **reverses locked decision 4's "~327 of 377 never animate"**. Ambient motion —
+firelight, swaying reeds, pulsing crystals, flapping banners — is now in scope, so
+"static art is the finished product" only holds for genuinely inert geometry
+(rock, bone, plank, wall, fallen log).
+
+**This decides a tool at generation time, not later.** `animate_object` only accepts
+objects from `create_1_direction_object` / `create_8_direction_object`; a
+`create_map_object` result **cannot be animated** and auto-deletes after 8 hours
+(confirmed via `agent_help`). So:
+
+| Asset will ever move? | Generate with |
+|---|---|
+| No — rock, log, bone, plank, wall, rubble | `create_map_object` (cheap, w/h control) |
+| Yes — flame, crystal, reed, banner, fume, water | `create_1_direction_object` (persists, animatable) |
+
+Getting this wrong is not fatal but costs a full regeneration, so classify before
+firing a batch. Animation frames themselves stay a later pass — the point now is
+only to generate *animatable* source objects for the things that need them.
+
+**Trees are the open call.** Canopy sway is the most visible ambient motion in the
+forest, but trees are also the highest-count prop in the world, and 5aq established
+that the display list — not game logic — is the frame-rate ceiling. Animating
+thousands of them is a perf decision, not an art one. Trees ship static for now;
+revisit against a real frame budget.
+
+Animation candidates already identified: `camp_brazier`, `crypt_brazier`,
+`icon_campfire` (doubles as the placed texture), `sunken_forge`, `sunken_shrine_lit`,
+`shrine_charge`, `gloaming_vein`, `gloam_crystal_cluster`, `geode_*`,
+`moonsilver_node`, `gloamcap`, `cattail`, `bayou_reeds`, `water_lily`, `swamp_moss`,
+`emberbloom`, `dustbloom`, `miasma_fume`, `gremlin_banner`.
+
+### Sizing — world props may grow; creatures may not
+
+Nothing gameplay-relevant reads a *prop's* sprite size: node, structure and POI
+interaction all measure centre-to-centre against a flat `REACH`. Only enemies
+(`MainScene.enemyReach`, `Enemy.reachBonus`) and dens (`denReach`) scale with sprite
+radius. So props are free to be authored above their 14-30px placeholders, which is
+necessary anyway — PixelLab's canvas floor is 32px per side.
+
+`art/tools/trim.mjs` (dependency-free PNG decode/encode via `node:zlib`) crops the
+alpha bounding box. Generation pads a wide-and-short prop with transparent rows, and
+a sprite's origin is its centre — so untrimmed padding shifts the prop off its own
+anchor and makes the hover outline trace the canvas instead of the art.
 
 ## Phase 4 — player rig: 5 unique survivors + weapon-in-hand
 
