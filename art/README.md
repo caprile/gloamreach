@@ -27,8 +27,21 @@ cosmetic: attack reach and hitboxes read it (`MainScene.enemyReach`,
 warning rather than silently accepted — if you change a size deliberately,
 re-verify combat feel.
 
-**2. Keep transparency.** Everything composites over baked ground; no opaque
-background rectangles.
+**2. Keep transparency — and VERIFY it, don't assume it.** Everything composites
+over baked ground; no opaque background rectangles.
+
+"transparent background" in the prompt is a request, not a guarantee. A batch of
+ground decals came back with a **fully opaque canvas** and drew a white square
+behind every POI. It was invisible to every normal check: an image viewer
+composites over white anyway, so the art looked perfect. `trim.mjs` had been an
+*accidental* opacity check — a transparent margin is exactly what it crops — and
+decals deliberately skip trimming, which is how the signal was lost.
+
+So `art/tools/check-alpha.mjs` makes it explicit, and `fetch-raw.sh` runs it on
+every download. Four solid corners is expected for a **tile** and a bug for
+anything else. Fix it with `adjust.mjs --feather 0.5` (a deterministic radial
+alpha falloff) rather than re-rolling and hoping — and a soft edge is what a
+ground decal wants regardless, since a hard-edged blob reads as a sticker.
 
 **3. Don't pre-scale.** `pixelArt: true` and the camera's `WORLD_ZOOM` (1.5)
 handle magnification. Author at native size.
