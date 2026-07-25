@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import { applyTextureOverrides, queueTextureOverrides } from "../art/overrides";
+import { deriveEliteTextures } from "../art/eliteVariants";
 import { buildPlayerAnimations, queuePlayerRig } from "../art/playerRig";
 
 // The BootScene runs first. It generates placeholder textures in code (so the
@@ -24,7 +25,12 @@ export class BootScene extends Phaser.Scene {
     this.makeTextures();
     // Order matters: overrides replace generated textures, so they must land
     // after generation and before any scene consumes them.
-    applyTextureOverrides(this);
+    const report = applyTextureOverrides(this);
+    // Elite creature variants are GENERATED above (same draw helper, crimson
+    // palette), not recoloured at runtime — so a base that just got real art
+    // would otherwise keep a placeholder elite. Re-derive those from the real
+    // pixels now that they exist.
+    deriveEliteTextures(this, report.applied);
     // Rig strips are their own texture keys rather than overrides, so they
     // don't collide with generation — but the animations still have to exist
     // before MainScene builds a Player.
