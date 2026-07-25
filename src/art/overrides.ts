@@ -45,20 +45,25 @@ export function queueTextureOverrides(scene: Phaser.Scene): void {
   }
 }
 
-// How big the placeholder was, per key that an override replaced.
+// How big the placeholder was, for the props whose real art must be scaled back
+// down to it.
 //
-// PixelLab's canvas floor is 32px while most world placeholders are 14-30px, so
-// real art arrives roughly double size — which put mushrooms at gremlin scale
-// and made them larger than the 20px player. The placeholder dimensions were
-// art-directed against that player, so they are the correct target: render the
-// new art at the old footprint and the world keeps its established scale.
+// PixelLab's canvas floor is 32px while world placeholders run 14-30px, so real
+// art arrives roughly double size. Bigger is an improvement for most props —
+// trees, boulders, structures all read better — so the default is to keep the
+// art at its natural size.
 //
-// Icons are excluded — they are UI art with their own integer-scale rules, and
-// the one world consumer (Player.equippedIcon) already normalises itself.
+// The exception is GROUND CLUTTER. A prop whose placeholder was no larger than
+// the player was art-directed to sit below eye level; doubling it put mushrooms
+// at gremlin scale and made a branch wider than the player is tall. Those are
+// the only ones pulled back to their old footprint, and the placeholder's own
+// dimensions are the test — no hand-maintained list to keep in sync as the rest
+// of Phase 3 lands.
+//
+// Icons are excluded entirely: UI art with its own integer-scale rules, and the
+// one world consumer (Player.equippedIcon) already normalises itself.
+const CLUTTER_MAX_PX = 20; // the player sprite is 20x20
 const placeholderSize = new Map<string, { w: number; h: number }>();
-
-// Keys where the bigger art IS the change — a deliberate resize, not drift.
-const INTENTIONAL_RESIZE = new Set(["gremlin_shack"]);
 
 /**
  * Scale that renders `key`'s real art at the footprint its placeholder had, or
@@ -121,7 +126,7 @@ export function applyTextureOverrides(scene: Phaser.Scene): OverrideReport {
         });
         // Captured here because it's the only moment both sizes exist — the
         // placeholder is about to be removed.
-        if (!key.startsWith("icon_") && !INTENTIONAL_RESIZE.has(key)) {
+        if (!key.startsWith("icon_") && Math.max(old.width, old.height) <= CLUTTER_MAX_PX) {
           placeholderSize.set(key, { w: old.width, h: old.height });
         }
       }
