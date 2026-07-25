@@ -10353,6 +10353,10 @@ export class MainScene extends Phaser.Scene {
   // Registered exactly like any other enemy — and if the parent was somehow a
   // dungeon dweller, the fragments inherit that too (a Mosswretch is a surface
   // creature today, so this is defensive rather than a live path).
+  // Long enough that a fast weapon's next swing can't also be the one that kills
+  // them, short enough that it never feels like they're ignoring hits.
+  private static readonly MOSSLING_SPAWN_INVULN = 500;
+
   private spawnMosslings(parent: Mosswretch): void {
     const count = parent.deathSpawnCount();
     if (count <= 0) return;
@@ -10372,6 +10376,13 @@ export class MainScene extends Phaser.Scene {
       // Come out already angry: a fragment that has to be re-aggroed defeats the
       // "swarmed the moment you relax" point.
       m.forceAggro(this.time.now);
+      // ...but let them exist for a beat first. They spawn inside the arc the
+      // player is mid-swing on, so crit + AOE splash used to delete them on
+      // frame one and the split was invisible. Damage-only immunity — they're
+      // already closing while it runs — plus a fade-in so the window reads.
+      m.spawnInvulnUntil = this.time.now + MainScene.MOSSLING_SPAWN_INVULN;
+      m.setAlpha(0.35);
+      this.tweens.add({ targets: m, alpha: 1, duration: MainScene.MOSSLING_SPAWN_INVULN, ease: "Sine.easeOut" });
     }
   }
 

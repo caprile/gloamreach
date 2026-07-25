@@ -71,6 +71,9 @@ const MAX_HEALTH = S.hp; // ~5-6 bayou-tier hits; the badlands' 95-HP Hexling wa
 // enough ground to catch a sprinting player, so the lunge outruns a sprint while
 // it lasts — the counterplay is the 430ms tell + the locked direction, not speed.
 const LUNGE_WINDUP_MS = 430; // jaw-open/coil tell — the sidestep window
+// Swamp green, matching the Miretyrant's own telegraph so the gators read as the
+// same family of threat. Low alpha is applied by Enemy.drawAreaLane.
+const MIREJAW_TELL_COLOR = 0x5fbf87;
 const LUNGE_SPEED = S.burstSpeed!;
 const LUNGE_MAX_DIST = 340;
 const LUNGE_HIT_RADIUS = 44;
@@ -328,10 +331,23 @@ export class Mirejaw extends Enemy {
 
     if (this.attackPhase === "windup") {
       body.setVelocity(0, 0);
+      // Area tell (2026-07-24, the user: "attack area needs to show for the
+      // alligators"). The lunge is a LANE, so the lane is what's drawn — the
+      // dodge is stepping off the line, and in a pack of gators during a
+      // Miretyrant bellow wave there was no way to read which line was yours.
+      // The direction is already locked at wind-up start, so this never lies.
+      this.drawAreaLane(
+        this.x + Math.cos(this.lungeAngle) * LUNGE_MAX_DIST,
+        this.y + Math.sin(this.lungeAngle) * LUNGE_MAX_DIST,
+        LUNGE_HIT_RADIUS,
+        Phaser.Math.Clamp(elapsed / LUNGE_WINDUP_MS, 0, 1),
+        MIREJAW_TELL_COLOR,
+      );
       if (elapsed >= LUNGE_WINDUP_MS) {
         this.attackPhase = "strike";
         this.attackStartedAt = now;
         this.endWindupTell();
+        this.clearAreaTelegraph(); // the snap itself is the sprite, not a marker
         this.setAlpha(1); // bursts out of the water on the snap
         const spd = LUNGE_SPEED * this.speedMult;
         body.setVelocity(Math.cos(this.lungeAngle) * spd, Math.sin(this.lungeAngle) * spd);

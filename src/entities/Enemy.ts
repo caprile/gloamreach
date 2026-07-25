@@ -201,6 +201,14 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   private phaseGatesPassed = 0;
   private phaseInvulnUntil = 0;
 
+  // Brief post-spawn damage immunity (absolute ms; 0 = none). Mosslings burst
+  // out of a dying Mosswretch directly into the arc the player is already
+  // swinging, so a crit + AOE sweep deleted them on their first frame and the
+  // split read as "nothing happened" (the user, 2026-07-24). Unlike
+  // isPhaseLocked() this ONLY refuses damage — they still move and aggro, so the
+  // swarm still closes on you; it just gets to exist first.
+  spawnInvulnUntil = 0;
+
   // Per-damage-type incoming multiplier (Biome 2 Phase 1). Read by
   // MainScene.resolveWeaponHit via resistMultiplier(); empty for biome-1 enemies.
   private readonly resistances: Partial<Record<IncomingDamageType, number>>;
@@ -678,6 +686,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   takeHit(damage: number): boolean {
     // A phase transition is a scripted beat, not a damage window.
     if (this.isPhaseLocked()) return false;
+    if (this.scene.time.now < this.spawnInvulnUntil) return false;
     this.health = Math.max(0, this.health - this.effectiveDamage(damage));
     this.playHitFeedback();
     // Being attacked always overrides the post-giveup immunity window — an
@@ -692,6 +701,101 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     if (this.health <= 0) return true;
     this.checkPhaseGate();
     return false;
+  }
+
+  // --- Area-attack telegraphs (2026-07-24) ---
+  //
+  // the user: "attack area needs to show for the alligators". This deliberately
+  // REVERSES the original locked "tells are motion/tint, never world-space
+  // arcs" rule, re-locked with him to: an AREA attack (sweep, cone, radial
+  // slam, pounce lane) shows its footprint; a single-target bite or claw still
+  // does not. The reasoning is that a wind-up POSE can tell you a bite is
+  // coming, but nothing about a pose tells you a tail sweep reaches 120 degrees
+  // behind the gator. The bosses already worked exactly this way (GremlinKing's
+  // slam, Gloamwarden's smash, the Miretyrant's own sweep), so this extends an
+  // established language to the rest of the roster instead of inventing one.
+  //
+  // Kept low-alpha and thin-ringed on purpose — the original objection to arcs
+  // was that they looked goofy, and a loud red wedge would earn that.
+  private areaTelegraphGfx?: Phaser.GameObjects.Graphics;
+
+  // Created on first use, so an enemy that never telegraphs adds nothing to the
+  // display list (B4-P6: list length is the frame-rate ceiling).
+  private areaTelegraph(): Phaser.GameObjects.Graphics {
+    if (!this.areaTelegraphGfx) this.areaTelegraphGfx = this.scene.add.graphics();
+    this.areaTelegraphGfx.clear();
+    this.areaTelegraphGfx.setDepth(this.depth + 0.5);
+    return this.areaTelegraphGfx;
+  }
+
+  // A filled disc that grows toward the true radius as `frac` (0..1) runs, under
+  // a fixed ring at the REAL radius — so the ring tells you where the edge is
+  // from frame one and the fill tells you how long you have.
+  protected drawAreaCircle(x: number, y: number, radius: number, frac: number, color: number): void {
+    const g = this.areaTelegraph();
+    g.fillStyle(color, 0.09 + 0.2 * frac);
+    g.fillCircle(x, y, radius * (0.5 + 0.5 * frac));
+    g.lineStyle(2, color, 0.55);
+    g.strokeCircle(x, y, radius);
+  }
+
+  // Same semantics for a wedge centred on `angle`, spanning +/- halfAngle. Used
+  // for sweeps/cones, where the whole point is that the safe side isn't obvious.
+  protected drawAreaWedge(
+    x: number,
+    y: number,
+    radius: number,
+    angle: number,
+    halfAngle: number,
+    frac: number,
+    color: number,
+  ): void {
+    const g = this.areaTelegraph();
+    const pts: Phaser.Geom.Point[] = [new Phaser.Geom.Point(x, y)];
+    const steps = 14;
+    const grown = radius * (0.5 + 0.5 * frac);
+    for (let i = 0; i <= steps; i++) {
+      const a = angle - halfAngle + (i / steps) * halfAngle * 2;
+      pts.push(new Phaser.Geom.Point(x + Math.cos(a) * grown, y + Math.sin(a) * grown));
+    }
+    g.fillStyle(color, 0.08 + 0.2 * frac);
+    g.fillPoints(pts, true);
+    // Outer edge at the TRUE radius, so the reach is readable immediately.
+    g.lineStyle(2, color, 0.5);
+    g.beginPath();
+    g.arc(x, y, radius, angle - halfAngle, angle + halfAngle, false);
+    g.strokePath();
+  }
+
+  // A lane/corridor the attacker will travel through (pounces, charges) — the
+  // dodge is stepping off the line, so the line is what gets drawn.
+  protected drawAreaLane(
+    toX: number,
+    toY: number,
+    halfWidth: number,
+    frac: number,
+    color: number,
+  ): void {
+    const g = this.areaTelegraph();
+    const a = Math.atan2(toY - this.y, toX - this.x);
+    const px = -Math.sin(a) * halfWidth;
+    const py = Math.cos(a) * halfWidth;
+    g.fillStyle(color, 0.09 + 0.2 * frac);
+    g.fillPoints(
+      [
+        new Phaser.Geom.Point(this.x + px, this.y + py),
+        new Phaser.Geom.Point(toX + px, toY + py),
+        new Phaser.Geom.Point(toX - px, toY - py),
+        new Phaser.Geom.Point(this.x - px, this.y - py),
+      ],
+      true,
+    );
+    g.lineStyle(2, color, 0.5);
+    g.strokeCircle(toX, toY, halfWidth);
+  }
+
+  protected clearAreaTelegraph(): void {
+    this.areaTelegraphGfx?.clear();
   }
 
   // The damage a hit ACTUALLY applies, after this enemy's per-hit ceiling.
@@ -957,6 +1061,9 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     this.windupTween?.stop();
     this.healthBarBg.destroy();
     this.healthBarFill.destroy();
+    // Sibling GameObject, same as the bars — a despawn path that forgot these
+    // is exactly how stranded HP bars got left all over the swamp.
+    this.areaTelegraphGfx?.destroy();
     super.destroy(fromScene);
   }
 
@@ -969,6 +1076,9 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     this.scene.tweens.killTweensOf(this);
     this.healthBarBg.destroy();
     this.healthBarFill.destroy();
+    // A corpse must not keep painting a threat marker during its fade-out.
+    this.areaTelegraphGfx?.destroy();
+    this.areaTelegraphGfx = undefined;
     this.scene.tweens.add({
       targets: this,
       alpha: 0,

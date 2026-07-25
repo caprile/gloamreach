@@ -241,10 +241,21 @@ export class Duskrunner extends Enemy {
 
     if (this.attackPhase === "windup") {
       body.setVelocity(0, 0);
+      // Area tell: same lane treatment as the Boar charge / Mirejaw lunge. It
+      // matters most here because Duskrunners come in packs of 3-4, so several
+      // locked leap lines can be in the air at once.
+      this.drawAreaLane(
+        this.x + Math.cos(this.pounceAngle) * POUNCE_MAX_DIST,
+        this.y + Math.sin(this.pounceAngle) * POUNCE_MAX_DIST,
+        POUNCE_HIT_RADIUS,
+        Phaser.Math.Clamp(this.attackElapsed(now) / POUNCE_WINDUP_MS, 0, 1),
+        0xffb04a,
+      );
       if (this.attackElapsed(now) >= POUNCE_WINDUP_MS) {
         this.attackPhase = "strike";
         this.attackStartedAt = now;
         this.endWindupTell();
+        this.clearAreaTelegraph();
         const spd = POUNCE_SPEED * this.speedMult;
         body.setVelocity(Math.cos(this.pounceAngle) * spd, Math.sin(this.pounceAngle) * spd);
         this.applyFacing(Math.cos(this.pounceAngle), Math.sin(this.pounceAngle));

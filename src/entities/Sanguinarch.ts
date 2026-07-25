@@ -270,10 +270,22 @@ export class Sanguinarch extends Enemy {
     if (this.attackPhase !== "none") {
       body.setVelocity(0, 0);
       const elapsed = now - this.attackStartedAt;
+      if (this.attackPhase === "windup") {
+        // Area tell: a radial slam's reach is invisible from the pose alone, so
+        // the footprint is drawn during the wind-up (see Enemy.drawAreaCircle).
+        this.drawAreaCircle(
+          this.x,
+          this.y,
+          SLAM_RADIUS,
+          Phaser.Math.Clamp(elapsed / SLAM_WINDUP_MS, 0, 1),
+          0xff4a6a,
+        );
+      }
       if (this.attackPhase === "windup" && elapsed >= SLAM_WINDUP_MS) {
         this.attackPhase = "strike";
         this.attackStartedAt = now;
         this.endWindupTell();
+        this.clearAreaTelegraph();
         this.slamHit = false;
       } else if (this.attackPhase === "strike") {
         if (!this.slamHit) {

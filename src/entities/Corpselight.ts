@@ -313,8 +313,21 @@ export class Corpselight extends Enemy {
   // of the growing tell before it lands dodges it.
   private updateCollapse(playerX: number, playerY: number, now: number): boolean {
     (this.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0);
-    if (now < this.collapseEndsAt) return false;
+    if (now < this.collapseEndsAt) {
+      // The area tell this method's contract already assumed: "stepping out of
+      // the growing tell before it lands dodges it" was true mechanically, but
+      // there was nothing on screen to step out OF until now (2026-07-24).
+      this.drawAreaCircle(
+        this.x,
+        this.y,
+        COLLAPSE_SLAM_RADIUS,
+        Phaser.Math.Clamp(1 - (this.collapseEndsAt - now) / COLLAPSE_WINDUP_MS, 0, 1),
+        0x8fbf7a,
+      );
+      return false;
+    }
     this.endWindupTell();
+    this.clearAreaTelegraph();
     // Land the slam if the player is still inside it.
     const dist = Phaser.Math.Distance.Between(this.x, this.y, playerX, playerY);
     if (dist <= COLLAPSE_SLAM_RADIUS + this.reachBonus()) {

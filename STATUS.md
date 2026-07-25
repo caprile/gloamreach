@@ -4,8 +4,8 @@
 
 _Living snapshot — edit in place, never append._ Last shipped: **Reaver-run playtest batch, part 1
 — stat caps, shrine budget, boss pacing** (2026-07-24, Opus; full writeup under Recent Entries).
-Off the user's Reaver win (69:56, 936 kills, level 31). **This is PART 1 of a 15-item batch — 7
-items remain and are listed below.** Headlines: a **hard 100-point cap on every stat** plus a
+Off the user's Reaver win (69:56, 936 kills, level 31). **10 of the 15 items are done — the 5
+remaining are listed below.** Headlines: a **hard 100-point cap on every stat** plus a
 per-point retune so every stat is still growing at point 99 (Strength used to die at **24** points
 for a Reaver — 76 of his points did nothing); **dead-point allocation is now blocked, not just
 labelled**; a **`[ +5 ]`** allocation button; **Sunken Shrines capped at 3 kindlings each**
@@ -16,22 +16,28 @@ can't be skipped. The root cause behind the scaling complaint: Int is a **straig
 multiplier** (all skill XP becomes player XP), so it paid for more Int; the shrine loop alone
 produced **196 of his 496 points**. Both ends now bounded.
 
-**STILL TO DO from this batch (7 items, none started):**
-1. **Area-attack indicators for all enemies** (the user's alligator note; reverses the locked
-   "no world-space arcs" rule, so it was explicitly re-locked). Confirmed gap: **Mirejaw,
-   Kilnborn, Palewake, Sanguinarch, Corpselight** have area attacks with NO telegraph at all;
-   the 8 that do have one need an audit that every area attack is covered.
-2. **Mossling spawn invulnerability** (~0.5s) so crit/arc splash can't delete them on spawn.
-3. **Cooking menu** ingredient text overlaps the quantity (Blood-Glazed Snake Skewer).
-4. **Auto-stacking bug** — wood sat at 69/99/44. `ItemContainer.add()` merges correctly and
+**Part 2 also shipped: area-attack indicators + Mossling spawn immunity.** New shared
+`Enemy.drawAreaCircle/drawAreaWedge/drawAreaLane` (+ lazy Graphics, destroyed on both teardown
+paths). Wired: **Mirejaw** lunge lane (the actual "alligators" complaint — its adds fill a
+Miretyrant bellow wave), **Boar** charge lane, **Duskrunner** pounce lane, **Sanguinarch** slam
+circle, **Corpselight** collapse circle (whose code comment already promised a "growing tell"
+that didn't exist). Audited the rest: **Kilnborn needs none** (its backdraft only burns lit
+ground, and those tiles are already drawn) and **Palewake needs none** (a tether line, not an
+area, already drawn by its own gfx); Cragscale/Sandmaw/Hexling/Cinderwrought/Gloamwarden/
+GremlinKing/Duneshaper/Miretyrant already telegraphed theirs. Mosslings get 500ms
+**damage-only** immunity (`Enemy.spawnInvulnUntil`) plus a fade-in — they still close on you.
+
+**STILL TO DO from this batch (5 items, none started):**
+1. **Cooking menu** ingredient text overlaps the quantity (Blood-Glazed Snake Skewer).
+2. **Auto-stacking bug** — wood sat at 69/99/44. `ItemContainer.add()` merges correctly and
    `sortAndStack()` is only called from the manual Sort button, so something creates stacks
    outside `add()`. Lead: the `addStack` call sites and the drag/split paths.
-5. **Convert All** on the Relic Forge Convert tab.
-6. **Drag abilities straight to the Q/E/R hotbar.**
-7. **Workbench Lvl 4->5 upgrade glyph** — re-investigate as a real bug (last session concluded
+3. **Convert All** on the Relic Forge Convert tab.
+4. **Drag abilities straight to the Q/E/R hotbar.**
+5. **Workbench Lvl 4->5 upgrade glyph** — re-investigate as a real bug (last session concluded
    "not a bug: Gloamsteel undiscovered", but the user reports it again).
 
-Items 3-7 are Sonnet-class fixes on existing systems; items 1-2 are the remaining mechanic work.
+All 5 remaining items are Sonnet-class fixes on existing systems - no mechanic work left in this batch.
 
 Before that: **Ascetic-run playtest batch —
 Miretyrant escalating waves, Bog Ore clustering, Ashcaller buff-master rework, food-buff cap, Max
@@ -123,11 +129,11 @@ out-threatens the badlands.
 
 > Older entries in STATUS-archive.md.
 
-### Reaver-run playtest batch, part 1 — stat caps, shrine budget, boss pacing (2026-07-24, Opus)
+### Reaver-run playtest batch — stat caps, shrine budget, boss pacing, area telegraphs (2026-07-24, Opus)
 
 No plan file — a fix/rework batch off the user's Reaver win (69:56, 936 kills, level 31, score
-19170, 62/62 relic rolls). **Part 1 of a 15-item batch; items 8-11 and 13-15 are NOT done yet
-(see Current State).** Every design fork was locked via `AskUserQuestion` first, and two of the
+19170, 62/62 relic rolls). **10 of 15 items; the 5 remaining are listed in
+Current State.** Every design fork was locked via `AskUserQuestion` first, and two of the
 locks reversed my initial recommendation once the real numbers were checked.
 
 **The root finding.** Intelligence was an *unbounded* self-feeding loop: `Skills.onLevelUp` feeds
@@ -191,11 +197,43 @@ entire rest of the run**. Both ends are now bounded.
   new transition does, and it shrank them permanently. Confirmed inert for combat first (neither
   reads `reachBonus()`, both have `biteDamage: 0`) before setting it.
 
+**Area-attack indicators, roster-wide (item 8).** This deliberately REVERSES the locked "tells are
+motion/tint, never world-space arcs" rule, re-locked with the user as: an AREA attack shows its
+footprint, a single-target bite/claw still doesn't. The reasoning is that a wind-up POSE can tell
+you a bite is coming, but nothing about a pose tells you a tail sweep reaches 120 degrees behind
+the gator. New shared helpers on base `Enemy` — `drawAreaCircle` / `drawAreaWedge` / `drawAreaLane`
+over one lazily-created Graphics, destroyed in BOTH `destroy()` and `playDeathFeedback()` (the
+stranded-HP-bar bug class). Kept low-alpha with a thin ring at the TRUE radius, since the original
+objection to arcs was that they looked goofy.
+
+- Wired: **Mirejaw** lunge lane, **Boar** charge lane, **Duskrunner** pounce lane, **Sanguinarch**
+  slam circle, **Corpselight** collapse circle. the user's "alligators" turned out to be the
+  **Mirejaw**, not the Miretyrant — the boss already telegraphs its own sweep and chomp, and
+  Mirejaws are what fill its bellow waves from wave 3, so a pack of locked lunge lines was
+  unreadable.
+- **Audited the rest rather than blanket-adding.** `Kilnborn` needs none: its backdraft only
+  damages LIT GROUND and those burning tiles are already drawn, so a marker would be redundant.
+  `Palewake` needs none: it has no area attack at all, only a tether drain, and its line is already
+  drawn by its own gfx. Cragscale/Sandmaw/Hexling/Cinderwrought/Gloamwarden/GremlinKing/Duneshaper/
+  Miretyrant already telegraphed theirs (Cragscale via `drawRollLane`, which an early grep missed).
+- Lanes were included on the same reasoning as circles: a charge/pounce/lunge IS an area whose dodge
+  is stepping off a line, and all three lock their angle at wind-up start, so the marker never lies.
+
+**Mossling spawn immunity (item 9).** New `Enemy.spawnInvulnUntil` — 500ms of DAMAGE-ONLY immunity
+(they still move and aggro, unlike `isPhaseLocked()`), plus a 0.35->1 fade-in so the window reads.
+They burst out of a dying Mosswretch directly into the arc the player is mid-swing on, so crit + AOE
+splash deleted them on frame one and the split looked like nothing happened.
+
 `tsc` + `npm run build` clean, zero console errors, all of the above verified live via the
 browser-pane eval (cap clamping, every retuned rate against divided-out potency, both UI cap
 states, the full 3-kindling shrine lifecycle including the lapse rule, and all three bosses'
-gates/locks/refusals). Note the preview loop needed the documented `loop.step` trick to advance
-game time for the lock-expiry checks.
+gates/locks/refusals), plus Mirejaw/Boar/Duskrunner drawing 34 telegraph commands during wind-up
+and clearing to 0 at the strike. **Two paths are wired but NOT exercised live:** Sanguinarch's slam
+(needs the engorged phase after feeding on a bleeding player) and Corpselight's collapse (needs a
+sustained close approach) — both call the same helper proven on the other three. Notes for next
+time: the preview loop needed the documented `loop.step` trick to advance game time, and enemy AI
+does not tick until a character is actually picked (`runOver` stays true), which silently made a
+first round of telegraph probes report nothing.
 
 ### Ascetic-run playtest batch — Miretyrant waves, Bog Ore clustering, Ashcaller rework, Max buttons (2026-07-24, Sonnet)
 

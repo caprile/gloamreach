@@ -265,10 +265,21 @@ export class Boar extends Enemy {
 
     if (this.attackPhase === "windup") {
       body.setVelocity(0, 0);
+      // Area tell: the charge is a LANE and the dodge is stepping off it, so the
+      // lane is drawn (2026-07-24, roster-wide area indicators). The angle is
+      // already locked at wind-up start, so the marker can never mislead.
+      this.drawAreaLane(
+        this.x + Math.cos(this.chargeAngle) * CHARGE_MAX_DISTANCE,
+        this.y + Math.sin(this.chargeAngle) * CHARGE_MAX_DISTANCE,
+        CHARGE_HIT_RADIUS,
+        Phaser.Math.Clamp(this.attackElapsed(now) / CHARGE_WINDUP_MS, 0, 1),
+        0xff7a3a,
+      );
       if (this.attackElapsed(now) >= CHARGE_WINDUP_MS) {
         this.attackPhase = "strike";
         this.attackStartedAt = now;
         this.endWindupTell();
+        this.clearAreaTelegraph();
         body.setVelocity(Math.cos(this.chargeAngle) * CHARGE_SPEED, Math.sin(this.chargeAngle) * CHARGE_SPEED);
         this.applyFacing(Math.cos(this.chargeAngle), Math.sin(this.chargeAngle));
       }
