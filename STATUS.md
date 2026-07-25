@@ -2,11 +2,15 @@
 
 ## Current State
 
-_Living snapshot — edit in place, never append._ Last shipped: **Phase 3 of the art arc STARTED —
-the first 22 forest world props, an art-variant system, and two playtest fixes** (2026-07-25, Opus)
-(`.claude/plans/art-textures-lighting-3-biomes.md`). **Phase 3 is IN PROGRESS, not done** — 22 of
-~134 world props are real art (all forest: trees, rocks, flora, camp/POI structures). Badlands and
-bayou props, and all crypt tiles, are still placeholders. Then Phase 4 (player rig).
+_Living snapshot — edit in place, never append._ Last shipped: **Phase 3 of the art arc — 117 of
+~134 world props** (2026-07-25, Opus) (`.claude/plans/art-textures-lighting-3-biomes.md`).
+**Phase 3 is IN PROGRESS but close** — forest, badlands and bayou are all fully real art
+(terrain, flora + every `_picked` state, ore, POI structures, POI ring markers), plus crypt
+objects across all four themes and the first three real *tiles*. Then Phase 4 (player rig).
+
+**Still placeholder:** themed crypt floor/wall tiles (`*_gloam`/`_ember`/`_blood`), the seven
+`poi_floor_*` ground decals, projectiles, map markers, ability icons, and the ground itself
+(deliberately last — see below).
 
 **Three things this session changed beyond the art itself:**
 
@@ -52,8 +56,30 @@ life outside farmable nodes. Gremlin huts were too small; a 96×80 replacement s
 
 **PixelLab throughput collapsed mid-session** — jobs pinned at `95% eta ~0s` for 25+ minutes while
 **still holding concurrency slots**, dropping the usable 4-job limit to ~1. Reported upstream via
-`agent_feedback` (twice now, counting Phase 2). `tree_v2`/`boulder_v2`/`rock_v2` were lost to this
-and need re-firing.
+`agent_feedback` (twice now, counting Phase 2). It recovered on its own; new jobs were accepted
+while the zombies hung, so the cap — not the service — was the blocker.
+
+**Two pipeline traps found late, both recorded in `art/README.md`:**
+
+1. **"Derived variants are free" only holds at BUILD time.** `BootScene`'s `cryptShell("gloam", …)`
+   *generates* `crypt_wall_gloam` from a palette; it does not recolour `crypt_wall` at runtime.
+   `applyTextureOverrides` runs after `makeTextures()`, so **overriding a base never reaches its
+   themed variants** — a real `crypt_wall` alone would give the Miretyrant lair real art while the
+   three themed crypts kept placeholders. Every crypt *object* was therefore authored ×4.
+   **The same trap is waiting for the 14 `*_elite` creatures in Phase 4** — decide before starting:
+   author 14 more, or move derivation to after overrides.
+2. **Tiles are not props.** `crypt_wall`/`crypt_floor`/`lodge_plank`/`grass` are drawn as
+   `tileSprite`s and must be seamless; `create_map_object` centres an object on transparency and
+   visibly seams. `lodge_plank` was generated that way, caught, deleted, and redone via
+   **`create_tiles_pro`** — which returns **16 candidates as a ZIP** (not a PNG), full-bleed with no
+   transparency. **Never `trim.mjs` a tile** — it would crop the bleed that makes it tile.
+
+**Sizing is a rule, not a list** (three iterations to land it, all off the user's feedback): real art
+keeps its natural size by default; **ground clutter** (placeholder ≤ the 20px player) is pulled back
+to its placeholder footprint; **gatherable crops** (`action === "pickup"`) are sized off their own
+placeholder ×1.15 capped at 30px; **POI ring markers** likewise ×1.3. The signal is always data the
+game already has, so new assets inherit the right rule without anything to maintain. Net effect —
+trees 38×56, boulders 42×32, crops 16-28, clutter 16-18, against a 20px player.
 
 Icons are authored at **32×32**, and every UI surface renders them at an **integer** scale —
 inventory and hotbar slots went 46→**70** (`ICON_BOX` 64, ×2) and the crafting list draws its icon
@@ -62,13 +88,15 @@ magnification. The inventory grid went 6→7 cols / 15→10 rows to fit. `Player
 normalises to a fixed 24px **world** size, so icon resolution can never change how big a held weapon
 looks.
 
-**A searchable reference gallery exists** — published as a Claude artifact and sent to the user as a
-standalone HTML file (not part of the repo; it's a one-off review tool, generated then discarded
-along with the scripts that built it). Groups all 181 by category (materials/ores/weapons/armor/
-food/relics/jewelry/quest items/stations/status), filterable by name or key, with a light/dark
-theme. Regenerate by re-running the same category-map + assembler approach if a full re-review is
-ever needed again (scripts were `gen_gallery*.cjs` + `gen_gallery_categories.cjs`, deleted after
-publishing — recreate from scratch rather than hunting for them).
+**A searchable reference gallery is published** at
+`https://claude.ai/code/artifact/85634db4-b956-4b45-8b0f-c85f0af8621b` (republish the same file
+path to keep that URL). It groups every asset by category, filters by key, and offers ×1/×2/×4
+zoom over a checkerboard so transparency reads.
+
+**It is now generated from the repo, not hand-assembled** — `art/tools/gallery.mjs` reads
+`art/sprites/` and inlines every PNG as a data URI (the artifact CSP blocks external hosts, so a
+linked image would silently render nothing). Phase 2's build scripts were written ad-hoc and thrown
+away, which is exactly why this one is committed: re-run it and republish, never rebuild it.
 
 **Operational lessons from finishing the batch** (full detail in `art/README.md`): PixelLab's queue
 occasionally stalls hard — jobs pinned at `95%` or cycling with a growing ETA for **20+ minutes**,
@@ -235,9 +263,32 @@ touches no combat numbers.
 
 > Older entries in STATUS-archive.md.
 
-### Art arc Phase 3 (start) — forest world props + art variants + 2 playtest fixes (2026-07-25, Opus)
+### Art arc Phase 3 — 117 world props across all three biomes (2026-07-25, Opus)
 
-**22 of ~134 world props** are now real pixel art (`art/sprites/world/`), all forest: `tree`,
+Grew from 22 to **117 of ~134** across one session. Forest, badlands and bayou are all fully real
+art now — terrain, flora with every `_picked` state, ore nodes, POI structures and POI ring markers
+— plus crypt objects in all four themes and the first three real tiles (`crypt_floor`, `crypt_wall`,
+`lodge_plank`) via `create_tiles_pro`. Left: themed crypt tiles, `poi_floor_*` decals, projectiles,
+map markers, ability icons.
+
+**Variants shipped where repetition showed most:** `tree_v2`, `boulder_v2`, `rock_v2`, and 3
+silhouettes each for mesa spires, rockwalls and both badlands ores. Live spread confirmed the picker
+works — trees 138/110, rocks 52/44, spires 11/20/15, sunscorch ore 32/29/29.
+
+**Placement reworked twice off playtest feedback.** Decor clumps rolled their texture *per prop*, so
+every clump was an even mix of all four types at identical density — the actual "too random" tell.
+Then trees/branches/rocks/boulders moved off independent sampling (a uniform Poisson process, which
+reads as artificial precisely because real terrain clumps) onto weighted clumping. Measured with the
+Clark-Evans index: trees R=0.51, rocks R=0.66 (1.0 = random). Finally decoration was **anchored to
+existing features** rather than scattered — 22% of features get dressed, 480 → 286 props, 99% within
+50px of a real feature.
+
+**Projectile got a size guard** even though its art is deferred: a gremlin rock is 6×6 against a
+32px canvas floor, and `rotationOffset` means replacement art must keep the placeholder's facing.
+
+The original 22-prop entry follows.
+
+**22 of ~134 world props** were the first slice (`art/sprites/world/`), all forest: `tree`,
 `ironbark_tree`, `boulder`, `rock`, `branch`, `bramble`, `blackberry_bush` (+`_picked`), `cattail`,
 `decor_fern`/`_flowers`/`_mushrooms`/`_log`, `drying_rack`, `gremlin_shack` (+`_chest`),
 `boss_altar`, `war_totem`, `gremlin_banner`, `palisade_stake`, `gremlin_camp_prop`, `camp_brazier`,

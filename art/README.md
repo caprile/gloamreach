@@ -49,8 +49,22 @@ the 14 `*_elite` creatures in Phase 4.
 **4b. Tiles are not props.** `crypt_wall` / `crypt_floor` / `lodge_plank` /
 `grass` are **tiled** 32×32 textures that must be seamless. `create_map_object`
 produces a centred object on transparency and will visibly seam. Use
-`create_tiles_pro` or `create_topdown_tileset` for those. Crypt *objects*
-(pillar, rubble, brazier, stairs, chest, entrance) are ordinary props.
+`create_tiles_pro` for those. Crypt *objects* (pillar, rubble, brazier, stairs,
+chest, entrance) are ordinary props.
+
+`create_tiles_pro` notes (proven on `lodge_plank` / `crypt_floor` / `crypt_wall`):
+
+- Number the subjects in one description to get several materials from one job:
+  `"1). cracked grey stone floor slabs 2). dark mossy stone brick wall"`.
+- It returns **16 candidate tiles regardless**, so one job covers a material with
+  plenty of choice. Cost is 20-40 generations, so batch subjects rather than
+  firing one job per tile.
+- **The download is a ZIP, not a PNG** — `.../mcp/tiles-pro/<id>/download`
+  streams a zip of `<description>_<n>.png`. Unpack it and pick.
+- Output is full-bleed 32×32 with no transparency, which is what a `tileSprite`
+  needs — do **not** run `trim.mjs` on a tile, it would crop the bleed.
+- `outline_mode: "segmentation"` avoids the per-tile outline that makes a tiled
+  surface read as a grid of separate stamps.
 - `*_picked` harvested-flora states and `*_shielded` node states are *state*
   variants — these do need art, but only a small delta from the base.
 
