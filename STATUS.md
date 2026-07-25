@@ -2,15 +2,16 @@
 
 ## Current State
 
-_Living snapshot — edit in place, never append._ Last shipped: **Phase 3 of the art arc — 117 of
-~134 world props** (2026-07-25, Opus) (`.claude/plans/art-textures-lighting-3-biomes.md`).
-**Phase 3 is IN PROGRESS but close** — forest, badlands and bayou are all fully real art
-(terrain, flora + every `_picked` state, ore, POI structures, POI ring markers), plus crypt
-objects across all four themes and the first three real *tiles*. Then Phase 4 (player rig).
+_Living snapshot — edit in place, never append._ Last shipped: **Phase 3 of the art arc —
+essentially COMPLETE at 160 world props** (2026-07-25, Opus)
+(`.claude/plans/art-textures-lighting-3-biomes.md`). Forest, badlands and bayou are fully real art
+(terrain, flora + every `_picked` state, ore, POI structures + ring markers, decals), as are all
+crypt tiles and objects across four themes, all 12 map markers, all 11 ability icons and the
+larger projectiles. **341 real assets total** (181 icons + 160 world). Next: Phase 4 (player rig).
 
-**Still placeholder:** themed crypt floor/wall tiles (`*_gloam`/`_ember`/`_blood`), the seven
-`poi_floor_*` ground decals, projectiles, map markers, ability icons, and the ground itself
-(deliberately last — see below).
+**Still placeholder, deliberately:** the tiny 6×6 projectiles (`gremlin_rock`, `pellet_projectile`,
+`gloam_bolt` — a 32px generation downscaled to 6px is mush; the procedural dot is better), and the
+**ground itself**, which is its own final phase (see below).
 
 **Three things this session changed beyond the art itself:**
 
@@ -263,9 +264,29 @@ touches no combat numbers.
 
 > Older entries in STATUS-archive.md.
 
-### Art arc Phase 3 — 117 world props across all three biomes (2026-07-25, Opus)
+### Art arc Phase 3 — 160 world props, essentially complete (2026-07-25, Opus)
 
-Grew from 22 to **117 of ~134** across one session. Forest, badlands and bayou are all fully real
+Grew from 22 to **160** across one session — every world category except the ground itself.
+
+**Late additions:** all 12 map markers, all 11 ability icons (the 3 `_lesser` variants DERIVED from
+their base with `adjust.mjs` rather than generated — exactly the reuse that tool enables), the
+larger projectiles, and every crypt tile in four themes.
+
+**Projectile facing is load-bearing.** Only the javelin carries an `artAngleOffset` (+90°, art
+points UP); every other projectile's art must point RIGHT, and each needs an aspect-matched canvas
+or `artScale`'s min-axis fit squashes it (a 32×32 arrow would render 6×6, not 16×6). A size guard
+now lives in `Projectile`'s constructor.
+
+**Two bugs the console surfaced, not the eye:** `poi_ring_vein` was an orphan — that key doesn't
+exist, the Gloaming Vein POI has no ring markers, so the art was silently doing nothing (repurposed
+to `poi_ring_gorge`, which is real and was still placeholder). And `poi_floor_gorge` had been left
+at the old trimmed 170px while its siblings were regenerated at 360. **Read the `[art]` console
+warnings after a batch** — an unmatched key is invisible in-game.
+
+**A verification trap worth remembering:** measuring `artScale` via a dynamic
+`await import('/src/art/overrides.ts')` reported 1 for everything, because it returns a FRESH module
+instance whose `placeholderSize` map is empty. The `[art] resized` warnings are the reliable
+evidence that the real module recorded a key. Forest, badlands and bayou are all fully real
 art now — terrain, flora with every `_picked` state, ore nodes, POI structures and POI ring markers
 — plus crypt objects in all four themes and the first three real tiles (`crypt_floor`, `crypt_wall`,
 `lodge_plank`) via `create_tiles_pro`. Left: themed crypt tiles, `poi_floor_*` decals, projectiles,
