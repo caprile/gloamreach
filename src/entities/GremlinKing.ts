@@ -86,6 +86,9 @@ const SLAM_KNOCKBACK = 260;
 // re-applied mid-state, so crossing the threshold mid-telegraph doesn't
 // retroactively shrink an already-playing animation.
 const ENRAGE_HP_THRESHOLD = 0.5;
+// No single hit may remove more than this share of the King's HP, so the fight
+// always takes at least ~1/this many connects however overlevelled the player is.
+const BOSS_MAX_HIT_FRACTION = 0.05;
 const ENRAGE_TELEGRAPH_MULTIPLIER = 0.65;
 const ENRAGE_RECOVER_MULTIPLIER = 0.75;
 const ENRAGE_MOVE_MULTIPLIER = 1.3;
@@ -166,7 +169,17 @@ export class GremlinKing extends Enemy {
     });
     this.spawnX = cfg.x;
     this.spawnY = cfg.y;
+    // Big-boss pacing guards (base Enemy, off by default). One enrage threshold,
+    // so one scripted transition. See Enemy.maxHitFraction for the why.
+    this.maxHitFraction = BOSS_MAX_HIT_FRACTION;
+    this.phaseGates = [ENRAGE_HP_THRESHOLD];
     this.setScale(BOSS_SCALE);
+    // baseScale is the RESTING size any scale tween returns to. This boss never
+    // set it, so it sat at 1 while the sprite rendered at 2.4x — harmless until
+    // something actually tweened the scale, which the phase transition now does.
+    // Inert for combat: this boss reads neither reachBonus() nor the base bite
+    // path (biteDamage 0), so nothing but tween restore points changes.
+    this.baseScale = BOSS_SCALE;
     // Collision body stays at the base sprite's unscaled size while the
     // visual is scaled up (matches trees/boulders' already-loose approach to
     // collider precision) — a known, acceptable first-pass cosmetic gap; all
@@ -220,6 +233,17 @@ export class GremlinKing extends Enemy {
   update(delta: number, playerX: number, playerY: number, now: number): boolean {
     if (this.depleted) return false;
     this.enraged = this.health <= this.maxHealth * ENRAGE_HP_THRESHOLD;
+    // Scripted phase transition: hold everything. stateEnteredAt is pushed
+    // forward each frozen frame so the current state's timer PAUSES rather than
+    // elapsing behind the flash — otherwise a telegraph could expire mid-lock
+    // and the attack would land with no visible wind-up to dodge.
+    // (HP/poise bars keep tracking on their own — they sync in preUpdate, which
+    // Phaser drives independently of this method.)
+    if (this.isPhaseLocked()) {
+      (this.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0);
+      this.stateEnteredAt = now;
+      return false;
+    }
     this.updatePoiseRegen(delta, now);
     // Heal back between engagements (only while fully deaggro'd) so kiting away
     // to rest doesn't permanently bank chip damage.
@@ -485,8 +509,11 @@ export class GremlinKing extends Enemy {
   takeHit(damage: number): boolean {
     const depleted = super.takeHit(damage);
     if (depleted) return true;
+    // Mid-transition the hit was refused outright — don't chip poise off it.
+    if (this.isPhaseLocked()) return false;
     if (this.bossState === "staggered") return false;
-    this.poise = Math.max(0, this.poise - damage);
+    // effectiveDamage, not raw: a capped hit must not break poise at full value.
+    this.poise = Math.max(0, this.poise - this.effectiveDamage(damage));
     this.lastPoiseChipAt = this.scene.time.now;
     if (this.poise <= 0) this.enterStaggered(this.scene.time.now);
     return false;

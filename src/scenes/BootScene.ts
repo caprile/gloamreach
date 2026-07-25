@@ -4611,6 +4611,15 @@ export class BootScene extends Phaser.Scene {
     drawShrine("sunken_shrine_lit", 0x3ce0b8, 0.95, 0x46564f); // mid-rite
     drawShrine("sunken_shrine_open", 0x9ce0d0, 0.45, 0x56685f); // rite survived, bowl spilling
 
+    // Shrine charge mark (7x7) — one per kindling at the shrine's foot, drawn
+    // white so SunkenShrine can tint it lit/burned rather than needing a second
+    // texture. This is the entire "how many uses are left" readout.
+    g.clear();
+    g.fillStyle(0xffffff, 1);
+    g.fillTriangle(3, 0, 6, 3, 3, 6);
+    g.fillTriangle(3, 0, 0, 3, 3, 6);
+    g.generateTexture("shrine_charge", 7, 7);
+
     // Shrine ring basin (16x14) — the small standing offering bowls that circle
     // the shrine; purely decorative, but they're what makes it read as a rite
     // site rather than a lone rock.

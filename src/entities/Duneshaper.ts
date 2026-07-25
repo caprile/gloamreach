@@ -63,6 +63,8 @@ const RETURN_HOME_EPS = 20;
 // Phase gates (fraction of max HP). The attack pool grows as HP drops.
 const PHASE2_HP = 0.7; // + gloamfire lance
 const PHASE3_HP = 0.5; // + sunscorch barrage, and enrage timing
+// Ceiling on any single hit, as a share of max HP — the anti-one-burst governor.
+const BOSS_MAX_HIT_FRACTION = 0.05;
 const ENRAGE_TELEGRAPH_MULTIPLIER = 0.7;
 const ENRAGE_RECOVER_MULTIPLIER = 0.75;
 const ENRAGE_MOVE_MULTIPLIER = 1.3;
@@ -202,6 +204,11 @@ export class Duneshaper extends Enemy {
     this.spawnX = cfg.x;
     this.spawnY = cfg.y;
     this.baseScale = DUNESHAPER_SCALE;
+    // Big-boss pacing guards (base Enemy, off by default) — a per-hit ceiling
+    // plus a scripted transition at each attack-unlock threshold, so an
+    // overlevelled player still sees all three phases. See Enemy.maxHitFraction.
+    this.maxHitFraction = BOSS_MAX_HIT_FRACTION;
+    this.phaseGates = [PHASE2_HP, PHASE3_HP];
     this.setScale(DUNESHAPER_SCALE);
 
     const barX = cfg.x - POISE_BAR_W / 2;
@@ -238,6 +245,14 @@ export class Duneshaper extends Enemy {
   update(delta: number, playerX: number, playerY: number, now: number): boolean {
     if (this.depleted) return false;
     this.enraged = this.health <= this.maxHealth * PHASE3_HP;
+    // Scripted phase transition: hold everything, and pause the current state's
+    // timer (stateEnteredAt) so a telegraph can't elapse behind the flash and
+    // land with no wind-up to react to.
+    if (this.isPhaseLocked()) {
+      (this.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0);
+      this.stateEnteredAt = now;
+      return false;
+    }
     this.updatePoiseRegen(delta, now);
     if (!this.aggroed && this.health < this.maxHealth) {
       this.health = Math.min(this.maxHealth, this.health + DEAGGRO_REGEN_PER_SEC * (delta / 1000));
@@ -622,8 +637,10 @@ export class Duneshaper extends Enemy {
   takeHit(damage: number): boolean {
     const depleted = super.takeHit(damage);
     if (depleted) return true;
+    if (this.isPhaseLocked()) return false; // hit was refused — no poise chip either
     if (this.tyrantState === "staggered") return false;
-    this.poise = Math.max(0, this.poise - damage);
+    // effectiveDamage, not raw: a capped hit must not break poise at full value.
+    this.poise = Math.max(0, this.poise - this.effectiveDamage(damage));
     this.lastPoiseChipAt = this.scene.time.now;
     if (this.poise <= 0) this.enterStaggered(this.scene.time.now);
     return false;

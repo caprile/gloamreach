@@ -43,7 +43,7 @@ import {
   CRYPT_CELL,
   type CryptLayout,
 } from "../systems/CryptLayout";
-import { SunkenShrine, SHRINE_OFFERING } from "../entities/SunkenShrine";
+import { SunkenShrine, SHRINE_OFFERING, SHRINE_MAX_KINDLINGS } from "../entities/SunkenShrine";
 import { MiretyrantLair } from "../entities/MiretyrantLair";
 import {
   Miretyrant,
@@ -849,6 +849,11 @@ const SHRINE_LEASH_GRACE_MS = 5000;
 
 // Sunken Shrine bowl (Phase 4d). Guaranteed Tyrant Sigil — a survived rite is a
 // real fight, and the sigils are half of what the deep mire will ask for.
+// Paid once per shrine, on the third rite SURVIVED (see completeShrineRite).
+// A relic-economy reward rather than a material, so bounding the shrine farm
+// doesn't also cut a gear source.
+const SHRINE_MASTERY_REWARD = "refined_trophy_uncommon_t3";
+
 const SUNKEN_SHRINE_LOOT_TABLE: LootRollEntry[] = [
   { key: "tyrant_sigil", min: 1, max: 1, chance: 1.0 },
   { key: "gloam_shard", min: 2, max: 4, chance: 0.85 },
@@ -8062,6 +8067,7 @@ export class MainScene extends Phaser.Scene {
   // offering just says so.
   private kindleShrine(shrine: SunkenShrine): void {
     if (shrine.phase !== "dormant") return;
+    if (shrine.kindlingsLeft() <= 0) return; // spent — nothing left to give it
     const held = (key: string) => this.backpack.count(key) + this.hotbar.container.count(key);
     const missing = SHRINE_OFFERING.find((o) => held(o.key) < o.count);
     if (missing && !this.devNoBuildCost) {
@@ -8079,10 +8085,20 @@ export class MainScene extends Phaser.Scene {
       }
       this.afterItemMove();
     }
+    // Charged BEFORE the rite resolves: a lapsed rite still costs a kindling,
+    // which is what stops kindle -> farm a wave -> walk away -> repeat.
+    shrine.kindlings += 1;
     shrine.clearRite();
     shrine.setPhase("rite");
     shrine.nextWaveAt = this.time.now + SHRINE_FIRST_WAVE_DELAY_MS;
     this.eventLog.add("combat", "The bowl takes the offering — the water starts to move.");
+    const left = shrine.kindlingsLeft();
+    this.eventLog.add(
+      "info",
+      left > 0
+        ? `This shrine will answer ${left} more time${left === 1 ? "" : "s"}.`
+        : "The last of the shrine's hunger — it will not answer again.",
+    );
   }
 
   // One wave of the rite. Each is a different shape rather than more of the
@@ -8152,11 +8168,12 @@ export class MainScene extends Phaser.Scene {
   private updateShrines(now: number, delta: number): void {
     for (const shrine of this.shrines) {
       if (shrine.phase === "open") {
-        // Emptied — the shrine goes cold and can be kindled again. This is what
-        // makes it a renewable source rather than a one-shot clear.
+        // Emptied — the shrine goes cold. It can be kindled again only while it
+        // has kindlings left; out of them it retires permanently, which is the
+        // bound on what used to be an unlimited renewable.
         if (shrine.loot.isEmpty()) {
           shrine.loot.rearmIfEmpty();
-          shrine.setPhase("dormant");
+          shrine.setPhase(shrine.kindlingsLeft() > 0 ? "dormant" : "spent");
         }
         continue;
       }
@@ -8197,17 +8214,37 @@ export class MainScene extends Phaser.Scene {
       e.destroy();
     }
     shrine.clearRite();
-    shrine.setPhase("dormant");
+    const exhausted = shrine.kindlingsLeft() <= 0;
+    shrine.setPhase(exhausted ? "spent" : "dormant");
     if (Phaser.Math.Distance.Between(this.player.x, this.player.y, shrine.x, shrine.y) <= POI_RESPAWN_NOTIFY_RADIUS) {
-      this.eventLog.add("info", "The rite lapses — the shrine goes cold.");
+      this.eventLog.add(
+        "info",
+        exhausted
+          ? "The rite lapses, and the shrine's last hunger goes with it."
+          : "The rite lapses — the shrine goes cold.",
+      );
     }
   }
 
   private completeShrineRite(shrine: SunkenShrine): void {
     shrine.clearRite();
+    shrine.completions += 1;
     shrine.setPhase("open");
     this.rollContainerLoot(shrine.loot, SUNKEN_SHRINE_LOOT_TABLE);
     this.eventLog.add("info", "The rite holds — the bowl spills what it was keeping.");
+    // Clearing all three rites at one shrine without ever lapsing one pays a
+    // guaranteed tier-3 Refined Trophy (the user's ask for "some kind of
+    // guaranteed reward after you clear it 3 times"). A relic-economy payout on
+    // purpose: it never touches the gear economy, so it can't undercut the
+    // locked rule that build-defining MATERIALS are dungeon loot only.
+    if (shrine.completions >= SHRINE_MAX_KINDLINGS) {
+      shrine.loot.items.add(SHRINE_MASTERY_REWARD, 1);
+      this.eventLog.add(
+        "poi",
+        "Three rites held. Something older than the shrine settles in the bowl.",
+      );
+      this.sfx.levelUp();
+    }
   }
 
   // Dormant: always prompt-able in reach (the Boss Altar precedent — the site
@@ -8218,6 +8255,9 @@ export class MainScene extends Phaser.Scene {
     if (!inReach) return null;
     if (shrine.phase === "dormant") return "[LMB] Make an offering";
     if (shrine.phase === "open") return "[LMB] Search the offering bowl";
+    // Verb-less on purpose: there's no action left, but saying so beats leaving
+    // the player clicking a dead site wondering what they're missing.
+    if (shrine.phase === "spent") return "The shrine is spent";
     return null;
   }
 
@@ -11842,19 +11882,13 @@ export class MainScene extends Phaser.Scene {
     this.characterMenu = new CharacterMenu(this, {
       skills: this.skills,
       progression: this.progression,
-      allocate: (stat) => this.allocateStat(stat),
+      allocate: (stat, count) => this.allocateStat(stat, count),
       character: () => this.character,
       // D9: read live off the currently equipped weapon, since crit caps
       // combine weapon base + Strength/Agility + relics + gear augments — a
       // fixed point threshold would be wrong the moment the player switches
       // weapons or relics. Unarmed has no crit to cap.
-      critCapped: () => {
-        if (!this.equippedWeapon) return { chance: false, mult: false };
-        return {
-          chance: this.critChanceTotal(this.equippedWeapon) >= CRIT_CHANCE_CAP,
-          mult: this.critMultTotal(this.equippedWeapon) >= CRIT_MULT_CAP,
-        };
-      },
+      axisSaturated: (stat) => this.statAxisSaturated(stat),
     });
   }
 
@@ -11927,8 +11961,25 @@ export class MainScene extends Phaser.Scene {
   // re-syncs — every M-SS stat now feeds a cached multiplier (crit is read live
   // at hit time, but HP/stamina/heal/regen/buff-duration caches all live in the
   // pools), so it's cheap and keeps them all fresh. Refreshes the menu in place.
-  private allocateStat(stat: StatType): void {
-    if (!this.progression.allocate(stat)) return;
+  // A stat whose ONLY axis is already saturated against the LIVE build, so
+  // further points would be silently dead. Strength/Agility are the two
+  // single-axis stats whose ceiling depends on weapon base + relics + augments,
+  // which is why this can't live in Progression alongside the point cap. Wisdom
+  // is deliberately excluded: its cooldown axis caps at 100 points but buff
+  // duration is uncapped, so those points still pay for something. With no
+  // weapon equipped there's no crit total to compare against, so nothing blocks.
+  private statAxisSaturated(stat: StatType): boolean {
+    if (!this.equippedWeapon) return false;
+    if (stat === "strength") return this.critMultTotal(this.equippedWeapon) >= CRIT_MULT_CAP;
+    if (stat === "agility") return this.critChanceTotal(this.equippedWeapon) >= CRIT_CHANCE_CAP;
+    return false;
+  }
+
+  private allocateStat(stat: StatType, count = 1): void {
+    // Enforced here, not just greyed out in the menu, so every caller (dev
+    // commands, any future auto-allocate) gets the same guard.
+    if (this.statAxisSaturated(stat)) return;
+    if (this.progression.allocate(stat, count) === 0) return;
     this.syncStatBonuses();
     this.characterMenu?.refresh();
     this.refreshStatPointsBadge();

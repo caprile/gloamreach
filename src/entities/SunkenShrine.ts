@@ -18,15 +18,31 @@ import { ysortDepth } from "../systems/depth";
 //   • open    — survived. The bowl spills its spoils (a LootContainer, opened
 //               with the same ChestMenu every other cache uses).
 //
-// Emptying the bowl returns it to dormant, so it is a RENEWABLE source rather
-// than a one-shot clear — nothing in a run gets permanently exhausted.
+//   • spent   — its three kindlings are used up. Cold for good.
+//
+// Emptying the bowl returns it to dormant, so it RENEWS — but only three times
+// (2026-07-24). It used to renew without limit, and since the offering is paid
+// with drops from the very creatures the rite summons, it was a self-funding
+// infinite XP tap: the user's Ascetic run farmed level 24 -> 31 on it, which is
+// 196 stat points, more than the entire rest of the run produced. Three
+// kindlings keeps it a real repeatable side-activity with a bounded total.
+//
+// IMPORTANT: a kindling is spent when the rite STARTS, not when it's survived.
+// Counting completions instead would leave the loop wide open — kindle, farm the
+// first wave, walk away to lapse it, repeat, paying only an offering the waves
+// themselves drop.
 //
 // Plain data class like BadlandsDen/SunkenCrypt: it owns its GameObjects and
 // phase, while MainScene owns wave scheduling, the leash check and the phase
 // transitions (the same split every other POI uses).
-export type ShrinePhase = "dormant" | "rite" | "open";
+export type ShrinePhase = "dormant" | "rite" | "open" | "spent";
 
 export const SHRINE_BOWL_SIZE = 6;
+
+// How many times one shrine can be kindled per run, and how many of those must
+// be SURVIVED to earn the bonus. Equal on purpose: clearing all three without
+// lapsing one is the ask, so the bonus rewards finishing what you start.
+export const SHRINE_MAX_KINDLINGS = 3;
 
 // What one kindling costs. Both are Phase-4b roster drops with no other use
 // yet, so the rite gives the bayou's most common trash mobs an economy.
@@ -43,6 +59,11 @@ export class SunkenShrine {
   private readonly glow: Phaser.GameObjects.Image;
 
   phase: ShrinePhase = "dormant";
+  // Kindlings consumed (capped at SHRINE_MAX_KINDLINGS) and rites actually
+  // survived. Tracked separately because a lapse burns the former without
+  // advancing the latter — see the header note.
+  kindlings = 0;
+  completions = 0;
   readonly loot = new LootContainer(SHRINE_BOWL_SIZE);
   // Rite bookkeeping, driven by MainScene.updateShrines.
   wave = 0;
@@ -54,11 +75,24 @@ export class SunkenShrine {
   awayMs = 0;
   discoveredOnMap = false;
 
+  // One mark per kindling, lit while unused and dark once burned — the whole
+  // "how many uses are left" readout, with no new HUD (the rite already
+  // deliberately has none). Sits in the world, so it reads while walking up.
+  private readonly chargeMarks: Phaser.GameObjects.Image[] = [];
+
   constructor(scene: Phaser.Scene, cfg: { x: number; y: number }) {
     this.scene = scene;
     this.x = cfg.x;
     this.y = cfg.y;
     this.image = scene.add.image(cfg.x, cfg.y, "sunken_shrine").setDepth(ysortDepth(cfg.y));
+    for (let i = 0; i < SHRINE_MAX_KINDLINGS; i++) {
+      const spread = (i - (SHRINE_MAX_KINDLINGS - 1) / 2) * 11;
+      this.chargeMarks.push(
+        scene.add
+          .image(cfg.x + spread, cfg.y + 18, "shrine_charge")
+          .setDepth(ysortDepth(cfg.y) + 1),
+      );
+    }
     // The shrine breathes a little cold light even dormant — how it reads as a
     // shrine from across the swamp at night (collectLights also puts a real
     // light hole here). setPhase re-tunes this as the rite escalates.
@@ -70,6 +104,10 @@ export class SunkenShrine {
       .setAlpha(0.22)
       .setDepth(this.image.depth - 1);
     this.pulseGlow(0.34, 0.16, 1600);
+    // The marks are drawn white so they can be tinted per state; a shrine that
+    // is never kindled never reaches setPhase, so tint them here too or a
+    // pristine shrine shows bare white pips.
+    this.refreshChargeMarks();
   }
 
   private pulseGlow(alpha: number, scale: number, duration: number): void {
@@ -90,6 +128,16 @@ export class SunkenShrine {
   // it up close.
   setPhase(phase: ShrinePhase): void {
     this.phase = phase;
+    this.refreshChargeMarks();
+    if (phase === "spent") {
+      // Fully cold: no texture swap back to lit, and the glow tween is killed
+      // outright rather than dimmed, so a spent shrine never breathes again.
+      this.image.setTexture("sunken_shrine");
+      this.image.setTint(0x6a7a72);
+      this.scene.tweens.killTweensOf(this.glow);
+      this.glow.setAlpha(0).setScale(0.1);
+      return;
+    }
     if (phase === "dormant") {
       this.image.setTexture("sunken_shrine");
       this.glow.setAlpha(0.22).setScale(0.12);
@@ -111,6 +159,20 @@ export class SunkenShrine {
     const t = Math.min(1, wave / 3);
     this.glow.setAlpha(0.5 + t * 0.3).setScale(0.18 + t * 0.12);
     this.pulseGlow(0.85 + t * 0.15, 0.28 + t * 0.14, 700 - t * 200);
+  }
+
+  // Lit teal for a kindling still available, dark for one already burned.
+  private refreshChargeMarks(): void {
+    this.chargeMarks.forEach((m, i) => {
+      const used = i < this.kindlings;
+      m.setTint(used ? 0x2b3a36 : 0x3ce0b8).setAlpha(used ? 0.55 : 1);
+    });
+  }
+
+  // Kindlings left, so MainScene can gate interaction without duplicating the
+  // cap constant.
+  kindlingsLeft(): number {
+    return Math.max(0, SHRINE_MAX_KINDLINGS - this.kindlings);
   }
 
   // Rite over, one way or the other. Kept separate from setPhase so MainScene

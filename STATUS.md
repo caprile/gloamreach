@@ -2,7 +2,38 @@
 
 ## Current State
 
-_Living snapshot — edit in place, never append._ Last shipped: **Ascetic-run playtest batch —
+_Living snapshot — edit in place, never append._ Last shipped: **Reaver-run playtest batch, part 1
+— stat caps, shrine budget, boss pacing** (2026-07-24, Opus; full writeup under Recent Entries).
+Off the user's Reaver win (69:56, 936 kills, level 31). **This is PART 1 of a 15-item batch — 7
+items remain and are listed below.** Headlines: a **hard 100-point cap on every stat** plus a
+per-point retune so every stat is still growing at point 99 (Strength used to die at **24** points
+for a Reaver — 76 of his points did nothing); **dead-point allocation is now blocked, not just
+labelled**; a **`[ +5 ]`** allocation button; **Sunken Shrines capped at 3 kindlings each**
+(charged at rite START, so lapse-farming can't dodge it) with a guaranteed **Tier-3 Refined
+Trophy** for clearing all three; and **big-boss pacing guards** — a 5%-of-max-HP per-hit cap
+(floors the 3 main bosses at 20 connects) plus 900ms phase-transition invulnerability so phases
+can't be skipped. The root cause behind the scaling complaint: Int is a **straight player-XP
+multiplier** (all skill XP becomes player XP), so it paid for more Int; the shrine loop alone
+produced **196 of his 496 points**. Both ends now bounded.
+
+**STILL TO DO from this batch (7 items, none started):**
+1. **Area-attack indicators for all enemies** (the user's alligator note; reverses the locked
+   "no world-space arcs" rule, so it was explicitly re-locked). Confirmed gap: **Mirejaw,
+   Kilnborn, Palewake, Sanguinarch, Corpselight** have area attacks with NO telegraph at all;
+   the 8 that do have one need an audit that every area attack is covered.
+2. **Mossling spawn invulnerability** (~0.5s) so crit/arc splash can't delete them on spawn.
+3. **Cooking menu** ingredient text overlaps the quantity (Blood-Glazed Snake Skewer).
+4. **Auto-stacking bug** — wood sat at 69/99/44. `ItemContainer.add()` merges correctly and
+   `sortAndStack()` is only called from the manual Sort button, so something creates stacks
+   outside `add()`. Lead: the `addStack` call sites and the drag/split paths.
+5. **Convert All** on the Relic Forge Convert tab.
+6. **Drag abilities straight to the Q/E/R hotbar.**
+7. **Workbench Lvl 4->5 upgrade glyph** — re-investigate as a real bug (last session concluded
+   "not a bug: Gloamsteel undiscovered", but the user reports it again).
+
+Items 3-7 are Sonnet-class fixes on existing systems; items 1-2 are the remaining mechanic work.
+
+Before that: **Ascetic-run playtest batch —
 Miretyrant escalating waves, Bog Ore clustering, Ashcaller buff-master rework, food-buff cap, Max
 buttons** (2026-07-24, Sonnet; full writeup under Recent Entries). Off the user's Ascetic win (77:59,
 510 kills, level 25, Primal Spear → Ember Brand). Design-confirmed via `AskUserQuestion` before
@@ -91,6 +122,80 @@ out-threatens the badlands.
 ## Recent Entries
 
 > Older entries in STATUS-archive.md.
+
+### Reaver-run playtest batch, part 1 — stat caps, shrine budget, boss pacing (2026-07-24, Opus)
+
+No plan file — a fix/rework batch off the user's Reaver win (69:56, 936 kills, level 31, score
+19170, 62/62 relic rolls). **Part 1 of a 15-item batch; items 8-11 and 13-15 are NOT done yet
+(see Current State).** Every design fork was locked via `AskUserQuestion` first, and two of the
+locks reversed my initial recommendation once the real numbers were checked.
+
+**The root finding.** Intelligence was an *unbounded* self-feeding loop: `Skills.onLevelUp` feeds
+the player pool exactly the XP a skill level cost, so ALL raw skill XP eventually becomes player
+XP — which makes Int a straight **player-XP multiplier** (+150.5% at the user's 118 points), paying
+for more Int. Two numbers sized it: natural 3-biome play ends at **level 24 = 300 points**, and the
+farm took him to **level 31 = 496**, i.e. the shrine loop produced **196 points, more than the
+entire rest of the run**. Both ends are now bounded.
+
+- **Hard 100-point cap on every stat** (`Progression.STAT_POINT_CAP`). 6 x 100 = 600, so honest
+  play only ever spends ~half the budget — a real build choice, with the cap biting only the farm.
+  Re-derived against the live XP curve: a 5-biome run lands near level 29 (~435 points), so this
+  has headroom for future biomes. **This reversed my own "100 isn't enough for biome 4" answer**,
+  which had wrongly used the post-farm level 31 as the natural endpoint.
+- **Retuned per-point rates so every stat is still growing at point 99** (the user: "ideally I want
+  all of these stats to have impact up to lvl 100 — otherwise feels weird"). The offender was
+  Strength: its crit-damage axis caps at a combined 3.0x against 1.5-1.8x base weapons, so
+  +0.04x/point burned the whole budget in ~35 points (**24** for a 1.5-potency Reaver — he put in
+  100, so **76 points did nothing**). Fixed with a slower rate against the SAME ceiling, since
+  "damage is already so high": nothing here raises a cap. Str 0.04->**0.015x**, Agi 0.5->**0.45%**,
+  Int 1.5->**1%**, Vit healing 1.5->**1%**, End regen 2->**1.5%**. Endurance's flat stamina,
+  Vitality's flat HP and both Wisdom axes keep their old rates (already meaningful to 100).
+  Verified live: Strength now saturates at **exactly point 100** against a 1.5x weapon and point
+  **80** against a Gloamsteel Pike — up from 19-37.
+- **Dead-point allocation is now BLOCKED, not just annotated.** `MainScene.statAxisSaturated()` is
+  the single enforcement point (it needs weapon/relic context, so it can't live in Progression),
+  read by both `allocateStat` and the menu — so a dev/auto caller can't bypass the greyed button.
+  Wisdom is deliberately exempt: its cooldown axis caps but buff duration doesn't, so those points
+  still pay. Rows read `Vitality: 100 / 100` with `(MAXED)` / `(CAPPED — axis maxed)`.
+- **`[ +5 ]` button beside `[ + ]`** (a 100-point stat is a lot of clicks). `allocate(stat, count)`
+  returns how many landed, clamped by pool AND cap, so +5 banks whatever fits instead of
+  overshooting. Also nudged the buttons to y+1 and shortened the cap notes — the long wording ran
+  to within **1px** of the buttons, and text overlap is a live complaint elsewhere in this batch.
+- **Sunken Shrines are capped at 3 kindlings each** (`SHRINE_MAX_KINDLINGS`), 9 x 3 = 27 rites,
+  with a new `spent` phase. **A kindling is consumed when the rite STARTS, not when it's survived**
+  — counting completions would have left the loop wide open (kindle, farm wave 1, walk away to
+  lapse, repeat, paying only an offering the waves themselves drop). Visual tell: three
+  `shrine_charge` pips at the shrine's foot, lit teal / dark once burned, plus a permanently cold
+  tinted shrine when spent and a verb-less "The shrine is spent" prompt.
+- **Guaranteed reward for clearing all three:** 1 `refined_trophy_uncommon_t3` in the third bowl.
+  Chosen over the user's suggested Moonsilver/Bog Ore on purpose — Moonsilver gates the Gloamsteel
+  ingot AND the Gemwright's Table, so surfacing it would collapse the Gloamsteel-vs-Mirebronze
+  branch and break the locked "build-defining materials are dungeon loot" rule; Bog Ore is mined
+  in the very zones shrines sit in. A relic-economy payout touches neither. Confirmed it's a real
+  `TROPHY_ROLL` key (Uncommon @ power tier 3, x2.25).
+- **Big-boss pacing guards** (Gremlin King / Duneshaper / Miretyrant only; mini-bosses stay
+  burstable). Both default OFF on base `Enemy`, so every normal enemy is unchanged. (1) A **per-hit
+  damage cap** of 5% of max HP (`maxHitFraction`) — the user one-shot the Miretyrant inside a single
+  Bloodrush window at level 31 and saw neither phase. Floors all three at **20 connects** without
+  touching player damage anywhere else; verified a Murkling still dies to one hit. (2)
+  **Phase-transition invulnerability** (`phaseGates`, 900ms): King [50%], Duneshaper [70%, 50%],
+  Miretyrant [65%, 35%]. Advances at most one gate per hit so no phase is ever skipped.
+- Three subtleties in that boss work worth keeping: the bosses chip **poise** from the same hit, so
+  they now route it through `effectiveDamage()` (a capped hit must not break poise at full value)
+  and skip it entirely while phase-locked; and each boss's `update()` pushes `stateEnteredAt`
+  forward every frozen frame so **the current state's timer pauses** — otherwise a telegraph would
+  elapse behind the flash and the attack would land with no wind-up to dodge (verified: the
+  Miretyrant resumed mid-telegraph, tint `0xffd24a`, not mid-attack).
+- **Latent bug fixed on the way:** `GremlinKing` and `Miretyrant` never set `baseScale`, so it sat
+  at 1 while their sprites rendered at 2.4x/2.6x. Harmless until something tweened the scale — the
+  new transition does, and it shrank them permanently. Confirmed inert for combat first (neither
+  reads `reachBonus()`, both have `biteDamage: 0`) before setting it.
+
+`tsc` + `npm run build` clean, zero console errors, all of the above verified live via the
+browser-pane eval (cap clamping, every retuned rate against divided-out potency, both UI cap
+states, the full 3-kindling shrine lifecycle including the lapse rule, and all three bosses'
+gates/locks/refusals). Note the preview loop needed the documented `loop.step` trick to advance
+game time for the lock-expiry checks.
 
 ### Ascetic-run playtest batch — Miretyrant waves, Bog Ore clustering, Ashcaller rework, Max buttons (2026-07-24, Sonnet)
 
@@ -356,123 +461,4 @@ poster without knowing pool sizes and would drift on every tuning pass.
 **All numbers first-pass/tunable.** The Reaver is the card most likely to need it: +25% damage
 taken *and* −20% max HP against the newly-lethal bayou is the sharpest edge on the roster, and
 the 6 HP/kill that pays for it does nothing during a boss fight, where there is nothing to kill.
-
-### Warden-run playtest batch — the flat-armor collapse (2026-07-24, Opus)
-
-No plan file. Off the user's Warden victory run (77:55, 633 kills, level 28, full Gloamsteel +
-Gloamsteel Longsword) and a ~17-item feedback dump. Scope and the two design forks were locked
-via `AskUserQuestion` before any code changed.
-
-**THE ROOT CAUSE — one line explained most of the dump.** `applyDamageToPlayer` computes
-`max(1, round(dmg × (1 − relicRed) − flatArmor))`. Flat armor is uncapped and had grown
-**10.5×** across three biomes (full heavy set: 7 → 13 → 56 → **74**, 83 with augments) while the
-strongest attack in the game grew **2×** (60 → 124). So essentially **every physical attack in
-biomes 2 and 3 was pinned to the `max(1, …)` floor**, the win-con boss included. That single
-fact accounts for: Miretyrant hitting for -1/-2/-12, Murklings doing 1, the Duneshaper's
-"5-circle attack" doing 1 (it is Sand Spikes — `buildSpikesCross` = centre + 4 arms — and the
-boss's ONLY physical attack, while its four magic ones bypassed armor and landed full), "bayou
-enemies are so weak", the 5:1 badlands-vs-bayou danger ratio, and "I don't feel like I need the
-next tier of gear". It also explains the two things the user singled out as *correct*: the
-Corpselight/Mosswretch woods felt right because Corpselight orbs are `magic` and Mosswretch's
-smash was one of only two physical hits big enough to clear 74 armor at all — and "Mosswretch
-elites do way more damage than any of the minibosses" was literally true, since elite smash
-landed 25 while Gloamwarden's 22/24 attacks and Sanguinarch's 50 both landed **1**.
-
-**the user's call: keep flat subtraction** ("no this is confusing, should always be flat
-subtraction") and **raise enemy damage to match today's armor** rather than compress armor or
-switch to a DR curve. So this is a numbers pass, not a formula change.
-
-**Wiring first — three enemies were silently ignoring the balance table.** `enemyStats.ts` said
-Sanguinarch did 34/88 and Kilnborn's backdraft 72; the entities were still running **15/50** and
-**58**. The HP half of that buff had landed (entities read `S.hp`), the damage half never did,
-and nothing could catch it. **Every remaining un-wired entity is now wired** (all of badlands +
-Palewake/Kilnborn/Sanguinarch), so the drift class is closed. Two unit traps found while wiring:
-Palewake's tether table value is per-SECOND but the entity ticks every 450ms, so the hardcoded
-10/tick was actually 22/s — the entity was doing *more* than the table advertised, not less;
-same for Kilnborn's burning ground (7 per 620ms = 11/s). Both now convert properly.
-
-**New sizing rule, documented at the top of `enemyStats.ts`:** size an attack by the NET number
-you want it to land through its biome's armor, not by its paper value. Both prior Miretyrant
-passes claimed to target "~35-55 net through 74 armor" and both failed the same way — they
-picked raw numbers and never did the subtraction.
-
-**Numbers (verified live, below).** Bayou commons 38-80 → 108-170; Mirejaw death-roll tick
-18 → 105 (a per-tick 18 was under armor three times over, so the signature move landed 3 total);
-crypt wardens Sanguinarch 15/50 → 118/205, Kilnborn 30/58/7 → 48/105/20, Palewake 22/s → 30/s;
-**Miretyrant 110/98/124/92 → 225/210/255/200**. Badlands was deliberately left almost alone
-(the user reports biome 1→2 progression feels right) — only the two clearly-broken things:
-Gloamwarden 22/24 → 78/84 (its attacks were *below* a full Sunsteel set's armor, so the vein
-guardian could not exceed 1 damage against any heavy build) and Duneshaper Sand Spikes 56 → 125.
-
-**The rest of the batch:**
-- **Miretyrant adds** are now **elite** and the mix flipped to favour Blighttoad (45/55). the user:
-  "the ADDs are useless because my crit splash insta kills them." The ratio flip matters more than
-  the elite flag — a Murkling's claw is physical and so is the first thing an endgame armor pool
-  erases, while a Blighttoad's payload is poison, which bypasses armor entirely.
-- **Delayed poison death-bloom** (the user's own suggestion). A killed Blighttoad's corpse swells
-  for a telegraphed 1.1s fuse, then bursts into a poison cloud. Reuses the Mosswretch spore-cloud
-  hazard record wholesale — no new damage code, expiry sweep or environment hook. Elite blooms
-  deny *more ground* (2 offset clouds) rather than more damage, because `foldSporeCloud` is a
-  boolean "inside any cloud" test that maxes dps rather than summing it, so stacking clouds on one
-  point would have been a silent no-op.
-- **Ranged "mini-stun" removed.** There was never a stagger mechanic — it was
-  `Enemy.playHitFeedback`'s x-shake, which previously skipped only *moving* attackers on the theory
-  that jittering a planted one was harmless. A planted attacker is exactly what a ranged player
-  creates, so every arrow visibly knocked a casting enemy sideways. Any committed attack phase now
-  suppresses it.
-- **Bows reined in.** D3 raised bow damage +40% and cut cooldowns -25%; the cooldown half was right
-  and is kept, the damage half had put every Warbow *above* its same-tier Sword per hit (15>14,
-  21>19, 28>25) at 92-98% of its DPS from 380-420px away. Now 12/16/21 — under the Sword per hit
-  and a consistent **73%** of its DPS.
-- **Palewake's tether no longer drops while it's invisible** (the user). It was cleared on entering
-  the stalk, so a third of every cycle was dead air in which the fight's only damage source did
-  nothing *and* the boss could not be hit. Deliberately no unravel from a stalk-phase break — the
-  punish window is still earned by breaking the committed channel.
-- **Bayou elite/trophy density.** Both bayou POIs bypassed the elite roll entirely (Sunken Shrine
-  waves 1-2 and *every* Drowned Lodge resident were hardcoded normal) and both dungeons rolled at
-  the 8% badlands base rather than the bayou's 16%. Now: crypts/lair **41%**
-  (`CRYPT_ELITE_CHANCE_MULT` — answers "dungeons are easy" and the trophy drought with one lever,
-  since a crypt is fixed, finite and non-respawning), POIs **24%**, and the Shrine rite escalates to
-  an **all-elite final wave** (the Duskrunner Warren's shape, which is what the user asked for).
-- **Warden's boon swapped**, `maxHpPct: 20` → `damageTakenMult: 0.85`. the user asked whether
-  1.5× vitality potency + 20% max HP was safe; it wasn't, and it was also broken in the other
-  direction — `maxHpPct` is a % of the **100 base**, so "+20% max HP" was a flat +20, about 4% of
-  his endgame pool. Damage reduction is a multiplier (never decays) on an axis the card's vitality
-  potency doesn't already own. **NOTE:** every other `maxHpPct`/`maxStaminaPct` modifier has the
-  same decay problem — the Vagabond's "-10% max Stamina" and Ashcaller's "-15% max HP" *banes*
-  quietly evaporate late-game. Left alone pending the user's call.
-- **Corpselight friendly fire: no bug.** Enemy projectiles only ever overlap the player; there is
-  no enemy-vs-enemy damage path anywhere in the codebase. Mosslings are 16% HP and force-aggro on
-  spawn, so the player's own AOE/crit-splash is what kills them.
-- **Flicker fixed.** `HotbarUI`, `UpgradeMenu` and `EventLogUI` all did a synchronous full
-  destroy-and-rebuild per call, and MainScene called them repeatedly per frame (Hotbar twice per
-  equip, once per collected node — so N times during a magnet sweep). All three given the same
-  `refreshQueued` + `POST_UPDATE` coalescing `InventoryMenu`/`CraftingMenu` already had, plus a
-  redundant `hotbarUI.refresh()` removed from `afterItemMove` (verified redundant:
-  `recomputeEquipped` has no early return). Measured 12 calls → 12 rebuilds, now → **1**. Also
-  fixed a knock-on the coalescing exposed: the surviving repaint still killed the hover tooltip,
-  and Phaser won't re-fire `pointerover` until the pointer physically moves, so a hovered slot's
-  tooltip vanished for good.
-- **Ability slots are now player-chosen** (the user: "I should be able to drag and drop it in").
-  Every ability item declares `armorSlot: "ability1"`, and the drop gate was an *equality* check, so
-  dropping on E or R always snapped back and equips always auto-filled the first free slot. The gate
-  now compares slot GROUP and threads the hovered slot through as an explicit target; paper-doll →
-  paper-doll is a real swap instead of a no-op, so Q/E/R can be reordered without unequipping.
-  Group-generic, so the 4-slot `special` group got the same capability for free. Quick-equip
-  (double/Ctrl-click) deliberately still auto-fills.
-
-**Verification.** `tsc` + `npm run build` clean, zero console errors. Live against the running dev
-server: table values reach the entities; end-to-end `applyDamageToPlayer` at a real
-`totalPlayerDefense` of **74** and a 500 HP pool gives Miretyrant slam **181** (141 with a typical
--15.8% relic — ~4 hits), chomp 151/115, Mosswretch 91/65, Murkling 34/17 (was 1); light Mirehide
-(36 armor) takes 219 and Embersteel (56, entering the biome) 199, so the gear tier now reads.
-Death bloom: 0 clouds during the fuse, 1 after, 3 for an elite, hazard confirmed at the point
-(`moveMult 0.6 / poisonDps 5`). Palewake drained **70 damage while invisible** across a full cycle
-(previously 0) plus 126 while manifest. Hit-feedback: 0 tweens while attacking, 1 while idle.
-Elite rates over 20k rolls: base 7.9%, bayou surface 16.1%, POI 24.4%, crypt 40.6%. Two bugs in my
-own test harness were caught and fixed rather than reported as results — a wrong Equipment slot id
-(`gear1` vs `helmet`) that read armor as 0, and a wrong `Palewake.update` argument order.
-
-**Housekeeping:** a stray duplicate `## Recent Entries` heading left mid-file by an earlier prune
-was removed, and the oldest entry moved to `STATUS-archive.md`.
 

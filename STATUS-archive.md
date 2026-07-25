@@ -9148,3 +9148,123 @@ changes target those two lines directly.
 Vite log during the Enemy.ts edit — traced to an 11-second window mid-edit before the closing brace
 was added, self-resolved on the next save, and predates every live verification in this batch.
 `RECIPES.md` updated (relic tables only — no recipe/cost changes otherwise).
+
+### Warden-run playtest batch — the flat-armor collapse (2026-07-24, Opus)
+
+No plan file. Off the user's Warden victory run (77:55, 633 kills, level 28, full Gloamsteel +
+Gloamsteel Longsword) and a ~17-item feedback dump. Scope and the two design forks were locked
+via `AskUserQuestion` before any code changed.
+
+**THE ROOT CAUSE — one line explained most of the dump.** `applyDamageToPlayer` computes
+`max(1, round(dmg × (1 − relicRed) − flatArmor))`. Flat armor is uncapped and had grown
+**10.5×** across three biomes (full heavy set: 7 → 13 → 56 → **74**, 83 with augments) while the
+strongest attack in the game grew **2×** (60 → 124). So essentially **every physical attack in
+biomes 2 and 3 was pinned to the `max(1, …)` floor**, the win-con boss included. That single
+fact accounts for: Miretyrant hitting for -1/-2/-12, Murklings doing 1, the Duneshaper's
+"5-circle attack" doing 1 (it is Sand Spikes — `buildSpikesCross` = centre + 4 arms — and the
+boss's ONLY physical attack, while its four magic ones bypassed armor and landed full), "bayou
+enemies are so weak", the 5:1 badlands-vs-bayou danger ratio, and "I don't feel like I need the
+next tier of gear". It also explains the two things the user singled out as *correct*: the
+Corpselight/Mosswretch woods felt right because Corpselight orbs are `magic` and Mosswretch's
+smash was one of only two physical hits big enough to clear 74 armor at all — and "Mosswretch
+elites do way more damage than any of the minibosses" was literally true, since elite smash
+landed 25 while Gloamwarden's 22/24 attacks and Sanguinarch's 50 both landed **1**.
+
+**the user's call: keep flat subtraction** ("no this is confusing, should always be flat
+subtraction") and **raise enemy damage to match today's armor** rather than compress armor or
+switch to a DR curve. So this is a numbers pass, not a formula change.
+
+**Wiring first — three enemies were silently ignoring the balance table.** `enemyStats.ts` said
+Sanguinarch did 34/88 and Kilnborn's backdraft 72; the entities were still running **15/50** and
+**58**. The HP half of that buff had landed (entities read `S.hp`), the damage half never did,
+and nothing could catch it. **Every remaining un-wired entity is now wired** (all of badlands +
+Palewake/Kilnborn/Sanguinarch), so the drift class is closed. Two unit traps found while wiring:
+Palewake's tether table value is per-SECOND but the entity ticks every 450ms, so the hardcoded
+10/tick was actually 22/s — the entity was doing *more* than the table advertised, not less;
+same for Kilnborn's burning ground (7 per 620ms = 11/s). Both now convert properly.
+
+**New sizing rule, documented at the top of `enemyStats.ts`:** size an attack by the NET number
+you want it to land through its biome's armor, not by its paper value. Both prior Miretyrant
+passes claimed to target "~35-55 net through 74 armor" and both failed the same way — they
+picked raw numbers and never did the subtraction.
+
+**Numbers (verified live, below).** Bayou commons 38-80 → 108-170; Mirejaw death-roll tick
+18 → 105 (a per-tick 18 was under armor three times over, so the signature move landed 3 total);
+crypt wardens Sanguinarch 15/50 → 118/205, Kilnborn 30/58/7 → 48/105/20, Palewake 22/s → 30/s;
+**Miretyrant 110/98/124/92 → 225/210/255/200**. Badlands was deliberately left almost alone
+(the user reports biome 1→2 progression feels right) — only the two clearly-broken things:
+Gloamwarden 22/24 → 78/84 (its attacks were *below* a full Sunsteel set's armor, so the vein
+guardian could not exceed 1 damage against any heavy build) and Duneshaper Sand Spikes 56 → 125.
+
+**The rest of the batch:**
+- **Miretyrant adds** are now **elite** and the mix flipped to favour Blighttoad (45/55). the user:
+  "the ADDs are useless because my crit splash insta kills them." The ratio flip matters more than
+  the elite flag — a Murkling's claw is physical and so is the first thing an endgame armor pool
+  erases, while a Blighttoad's payload is poison, which bypasses armor entirely.
+- **Delayed poison death-bloom** (the user's own suggestion). A killed Blighttoad's corpse swells
+  for a telegraphed 1.1s fuse, then bursts into a poison cloud. Reuses the Mosswretch spore-cloud
+  hazard record wholesale — no new damage code, expiry sweep or environment hook. Elite blooms
+  deny *more ground* (2 offset clouds) rather than more damage, because `foldSporeCloud` is a
+  boolean "inside any cloud" test that maxes dps rather than summing it, so stacking clouds on one
+  point would have been a silent no-op.
+- **Ranged "mini-stun" removed.** There was never a stagger mechanic — it was
+  `Enemy.playHitFeedback`'s x-shake, which previously skipped only *moving* attackers on the theory
+  that jittering a planted one was harmless. A planted attacker is exactly what a ranged player
+  creates, so every arrow visibly knocked a casting enemy sideways. Any committed attack phase now
+  suppresses it.
+- **Bows reined in.** D3 raised bow damage +40% and cut cooldowns -25%; the cooldown half was right
+  and is kept, the damage half had put every Warbow *above* its same-tier Sword per hit (15>14,
+  21>19, 28>25) at 92-98% of its DPS from 380-420px away. Now 12/16/21 — under the Sword per hit
+  and a consistent **73%** of its DPS.
+- **Palewake's tether no longer drops while it's invisible** (the user). It was cleared on entering
+  the stalk, so a third of every cycle was dead air in which the fight's only damage source did
+  nothing *and* the boss could not be hit. Deliberately no unravel from a stalk-phase break — the
+  punish window is still earned by breaking the committed channel.
+- **Bayou elite/trophy density.** Both bayou POIs bypassed the elite roll entirely (Sunken Shrine
+  waves 1-2 and *every* Drowned Lodge resident were hardcoded normal) and both dungeons rolled at
+  the 8% badlands base rather than the bayou's 16%. Now: crypts/lair **41%**
+  (`CRYPT_ELITE_CHANCE_MULT` — answers "dungeons are easy" and the trophy drought with one lever,
+  since a crypt is fixed, finite and non-respawning), POIs **24%**, and the Shrine rite escalates to
+  an **all-elite final wave** (the Duskrunner Warren's shape, which is what the user asked for).
+- **Warden's boon swapped**, `maxHpPct: 20` → `damageTakenMult: 0.85`. the user asked whether
+  1.5× vitality potency + 20% max HP was safe; it wasn't, and it was also broken in the other
+  direction — `maxHpPct` is a % of the **100 base**, so "+20% max HP" was a flat +20, about 4% of
+  his endgame pool. Damage reduction is a multiplier (never decays) on an axis the card's vitality
+  potency doesn't already own. **NOTE:** every other `maxHpPct`/`maxStaminaPct` modifier has the
+  same decay problem — the Vagabond's "-10% max Stamina" and Ashcaller's "-15% max HP" *banes*
+  quietly evaporate late-game. Left alone pending the user's call.
+- **Corpselight friendly fire: no bug.** Enemy projectiles only ever overlap the player; there is
+  no enemy-vs-enemy damage path anywhere in the codebase. Mosslings are 16% HP and force-aggro on
+  spawn, so the player's own AOE/crit-splash is what kills them.
+- **Flicker fixed.** `HotbarUI`, `UpgradeMenu` and `EventLogUI` all did a synchronous full
+  destroy-and-rebuild per call, and MainScene called them repeatedly per frame (Hotbar twice per
+  equip, once per collected node — so N times during a magnet sweep). All three given the same
+  `refreshQueued` + `POST_UPDATE` coalescing `InventoryMenu`/`CraftingMenu` already had, plus a
+  redundant `hotbarUI.refresh()` removed from `afterItemMove` (verified redundant:
+  `recomputeEquipped` has no early return). Measured 12 calls → 12 rebuilds, now → **1**. Also
+  fixed a knock-on the coalescing exposed: the surviving repaint still killed the hover tooltip,
+  and Phaser won't re-fire `pointerover` until the pointer physically moves, so a hovered slot's
+  tooltip vanished for good.
+- **Ability slots are now player-chosen** (the user: "I should be able to drag and drop it in").
+  Every ability item declares `armorSlot: "ability1"`, and the drop gate was an *equality* check, so
+  dropping on E or R always snapped back and equips always auto-filled the first free slot. The gate
+  now compares slot GROUP and threads the hovered slot through as an explicit target; paper-doll →
+  paper-doll is a real swap instead of a no-op, so Q/E/R can be reordered without unequipping.
+  Group-generic, so the 4-slot `special` group got the same capability for free. Quick-equip
+  (double/Ctrl-click) deliberately still auto-fills.
+
+**Verification.** `tsc` + `npm run build` clean, zero console errors. Live against the running dev
+server: table values reach the entities; end-to-end `applyDamageToPlayer` at a real
+`totalPlayerDefense` of **74** and a 500 HP pool gives Miretyrant slam **181** (141 with a typical
+-15.8% relic — ~4 hits), chomp 151/115, Mosswretch 91/65, Murkling 34/17 (was 1); light Mirehide
+(36 armor) takes 219 and Embersteel (56, entering the biome) 199, so the gear tier now reads.
+Death bloom: 0 clouds during the fuse, 1 after, 3 for an elite, hazard confirmed at the point
+(`moveMult 0.6 / poisonDps 5`). Palewake drained **70 damage while invisible** across a full cycle
+(previously 0) plus 126 while manifest. Hit-feedback: 0 tweens while attacking, 1 while idle.
+Elite rates over 20k rolls: base 7.9%, bayou surface 16.1%, POI 24.4%, crypt 40.6%. Two bugs in my
+own test harness were caught and fixed rather than reported as results — a wrong Equipment slot id
+(`gear1` vs `helmet`) that read armor as 0, and a wrong `Palewake.update` argument order.
+
+**Housekeeping:** a stray duplicate `## Recent Entries` heading left mid-file by an earlier prune
+was removed, and the oldest entry moved to `STATUS-archive.md`.
+

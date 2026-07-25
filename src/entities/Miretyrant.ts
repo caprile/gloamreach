@@ -58,6 +58,10 @@ const RETURN_HOME_EPS = 20;
 // Phase gates (fraction of max HP).
 const PHASE2_HP = 0.65; // + death roll
 const PHASE3_HP = 0.35; // + enrage timing, and the bellow interval halves
+// Ceiling on any single hit, as a share of max HP. This is the boss the guard
+// exists for: the user killed it in one Bloodrush window at level 31 without
+// seeing either phase. 5% floors the fight at ~20 connects however strong you are.
+const BOSS_MAX_HIT_FRACTION = 0.05;
 const ENRAGE_TELEGRAPH_MULTIPLIER = 0.75;
 const ENRAGE_RECOVER_MULTIPLIER = 0.75;
 const ENRAGE_MOVE_MULTIPLIER = 1.25;
@@ -196,7 +200,15 @@ export class Miretyrant extends Enemy {
     this.spawnX = cfg.x;
     this.spawnY = cfg.y;
     this.baseScale = MIRETYRANT_SCALE;
+    // Big-boss pacing guards (base Enemy, off by default). See
+    // Enemy.maxHitFraction — this boss is the reason both exist.
+    this.maxHitFraction = BOSS_MAX_HIT_FRACTION;
+    this.phaseGates = [PHASE2_HP, PHASE3_HP];
     this.setScale(MIRETYRANT_SCALE);
+    // See GremlinKing: baseScale is the resting size a scale tween returns to,
+    // and this boss never set it either. Inert for combat (no reachBonus reads,
+    // biteDamage 0) but required now that phase transitions tween the scale.
+    this.baseScale = MIRETYRANT_SCALE;
 
     const barX = cfg.x - this.barW / 2;
     const barY = cfg.y - this.barOffsetY + this.barH + 2;
@@ -255,6 +267,15 @@ export class Miretyrant extends Enemy {
   update(delta: number, playerX: number, playerY: number, now: number): boolean {
     if (this.depleted) return false;
     this.enraged = this.health <= this.maxHealth * PHASE3_HP;
+    // Scripted phase transition: hold everything, and pause the current state's
+    // timer (stateEnteredAt) so a telegraph can't elapse behind the flash and
+    // land with no wind-up to react to. The bellow clock is left alone — adds
+    // already in the water keep fighting, only the boss itself pauses.
+    if (this.isPhaseLocked()) {
+      (this.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0);
+      this.stateEnteredAt = now;
+      return false;
+    }
     this.updatePoiseRegen(delta, now);
     if (!this.aggroed && this.health < this.maxHealth) {
       this.health = Math.min(this.maxHealth, this.health + DEAGGRO_REGEN_PER_SEC * (delta / 1000));
@@ -645,8 +666,10 @@ export class Miretyrant extends Enemy {
   takeHit(damage: number): boolean {
     const depleted = super.takeHit(damage);
     if (depleted) return true;
+    if (this.isPhaseLocked()) return false; // hit was refused — no poise chip either
     if (this.tyrantState === "staggered") return false;
-    this.poise = Math.max(0, this.poise - damage);
+    // effectiveDamage, not raw: a capped hit must not break poise at full value.
+    this.poise = Math.max(0, this.poise - this.effectiveDamage(damage));
     this.lastPoiseChipAt = this.scene.time.now;
     if (this.poise <= 0) this.enterStaggered(this.scene.time.now);
     return false;

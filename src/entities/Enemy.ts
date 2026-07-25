@@ -84,6 +84,12 @@ const CLOSE_REAGGRO_RADIUS = 50; // px — overrides the immunity window even be
 // check is allowed to fire.
 const AGGRO_PERSIST_MS = 4000;
 
+// How long a big boss is invulnerable while a phase transition plays. Long
+// enough to read as a deliberate beat, short enough not to feel like a wasted
+// turn — and it pauses the boss's own state machine, so it isn't free damage
+// time for the player either.
+const PHASE_TRANSITION_MS = 900;
+
 // Absolute ceiling on one continuous pursuit, measured from when it began and
 // NEVER reset — only cleared when the enemy actually disengages.
 //
@@ -174,6 +180,27 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   // constructor; read for run-score kill classification (see Run.ts) and to
   // append the shared trophy drop.
   elite = false;
+
+  // --- Big-boss pacing guards (2026-07-24). Both default OFF, so every normal
+  // enemy behaves exactly as before and only the three main bosses opt in. ---
+  //
+  // Per-hit damage ceiling, as a FRACTION of maxHealth. An overlevelled crit +
+  // AOE build deleted the Miretyrant inside a single attack-speed ability window
+  // (the user at level 31: "I killed the myrtyrant in 1 burst of my attack speed
+  // ability ... that was not fun. I want to feel strong but not insta delete
+  // bosses"). Capping per HIT guarantees a floor on how many connects a boss
+  // takes without touching player damage anywhere else in the world — it is an
+  // invisible governor that only a build far past the curve ever notices.
+  // 0 = uncapped.
+  maxHitFraction = 0;
+
+  // HP fractions, DESCENDING, at which this enemy locks into a brief scripted
+  // invulnerable transition. Guarantees each phase is actually seen instead of
+  // being blown through: a burst can no longer cross two thresholds unwitnessed.
+  phaseGates: readonly number[] = [];
+  private phaseGatesPassed = 0;
+  private phaseInvulnUntil = 0;
+
   // Per-damage-type incoming multiplier (Biome 2 Phase 1). Read by
   // MainScene.resolveWeaponHit via resistMultiplier(); empty for biome-1 enemies.
   private readonly resistances: Partial<Record<IncomingDamageType, number>>;
@@ -649,7 +676,9 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   // Same shape/feel as ResourceNode.takeHit: apply damage + feedback, return
   // true once depleted so the caller awards loot and destroys.
   takeHit(damage: number): boolean {
-    this.health = Math.max(0, this.health - damage);
+    // A phase transition is a scripted beat, not a damage window.
+    if (this.isPhaseLocked()) return false;
+    this.health = Math.max(0, this.health - this.effectiveDamage(damage));
     this.playHitFeedback();
     // Being attacked always overrides the post-giveup immunity window — an
     // enemy that just backed off doesn't stand there tanking hits without
@@ -660,7 +689,57 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
       this.state = "chasing";
       this.startPursuit(this.scene.time.now);
     }
-    return this.health <= 0;
+    if (this.health <= 0) return true;
+    this.checkPhaseGate();
+    return false;
+  }
+
+  // The damage a hit ACTUALLY applies, after this enemy's per-hit ceiling.
+  //
+  // A subclass that chips a SECOND meter from the same hit (the bosses' poise)
+  // must route its raw damage through this too — otherwise a capped hit would
+  // still break poise at full value and one burst would hand over the stagger
+  // punish window it was supposed to have to earn.
+  protected effectiveDamage(raw: number): number {
+    return this.maxHitFraction > 0 ? Math.min(raw, this.maxHealth * this.maxHitFraction) : raw;
+  }
+
+  // True while a scripted phase transition is playing: no HP damage, no poise
+  // chip, and (the bosses check this at the top of update) no acting either.
+  isPhaseLocked(): boolean {
+    return this.scene.time.now < this.phaseInvulnUntil;
+  }
+
+  // Advances at most ONE gate per hit on purpose: if a single hit somehow lands
+  // past two thresholds, the second transition still plays on the next hit
+  // rather than being silently swallowed, so no phase is ever skipped.
+  private checkPhaseGate(): void {
+    if (this.phaseGatesPassed >= this.phaseGates.length) return;
+    if (this.health > this.maxHealth * this.phaseGates[this.phaseGatesPassed]) return;
+    this.phaseGatesPassed += 1;
+    this.phaseInvulnUntil = this.scene.time.now + PHASE_TRANSITION_MS;
+    this.playPhaseTransitionTell();
+  }
+
+  // The transition's read: a hard white flash that decays back to the HP tint,
+  // plus a swell. Deliberately loud — it has to be obvious that hits are being
+  // refused right now, or the invulnerability reads as damage not registering.
+  private playPhaseTransitionTell(): void {
+    this.scene.tweens.killTweensOf(this);
+    this.setTint(0xffffff);
+    const baseScale = this.baseScale;
+    this.scene.tweens.add({
+      targets: this,
+      scale: baseScale * 1.22,
+      duration: PHASE_TRANSITION_MS * 0.35,
+      yoyo: true,
+      ease: "Sine.easeOut",
+      onComplete: () => {
+        if (this.depleted) return;
+        this.setScale(baseScale);
+        this.applyHpTint();
+      },
+    });
   }
 
   // Never disrupt a committed attack — the x-shake below writes this.x directly

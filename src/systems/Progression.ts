@@ -38,11 +38,11 @@ export function statDisplayName(stat: StatType): string {
 // Strength scales crit MULTIPLIER, Agility scales crit CHANCE — both apply to
 // all weapons and multiply together, so a crit build wants both.
 const STAT_DESCRIPTIONS: Record<StatType, string> = {
-  endurance: "+3 max Stamina & +2% stamina regen per point",
-  vitality: "+4 max HP & +1.5% healing received per point",
-  strength: "+0.04x crit damage per point (all weapons)",
-  agility: "+0.5% crit chance per point (all weapons)",
-  intelligence: "+1.5% skill XP gain per point",
+  endurance: "+3 max Stamina & +1.5% stamina regen per point",
+  vitality: "+4 max HP & +1% healing received per point",
+  strength: "+0.015x crit damage per point (all weapons)",
+  agility: "+0.45% crit chance per point (all weapons)",
+  intelligence: "+1% skill XP gain per point",
   wisdom: "+2% buff/food duration & -0.5% ability cooldown per point",
 };
 export function statDescription(stat: StatType): string {
@@ -109,14 +109,43 @@ export function xpToNextPlayerLevel(level: number): number {
   return Math.round(XP_BASE * Math.pow(level + 1, XP_EXPONENT));
 }
 
-// --- per-point stat values (M-SS, all tunable) ---
+// The hard ceiling on how many points may be allocated to ANY single stat.
+//
+// Why a point cap at all: an Ascetic playtest (2026-07-24) reached level 31 by
+// farming renewable Sunken Shrines and dumped 118 points into Intelligence,
+// which is a straight player-XP multiplier (all raw skill XP becomes player XP
+// via Skills' onLevelUp feed) — i.e. Int paid for more Int, unbounded. Capping
+// every stat bounds total character power no matter how long a run farms.
+//
+// Why 100 specifically: natural 3-biome play ends around level 24 = 300 points
+// (verified with the user), and 6 stats x 100 = 600, so honest progression only
+// ever spends ~half the budget — a real build choice, with the cap biting only
+// the farm. Re-checked against the real XP curve: even a 5-biome run lands near
+// level 29 (~435 points), so this has headroom for future biomes.
+export const STAT_POINT_CAP = 100;
+
+// --- per-point stat values (M-SS, retuned 2026-07-24) ---
+//
+// Retune rule (the user: "ideally I want all of these stats to have impact up to
+// lvl 100 — otherwise feels weird"): every stat must still be GROWING at point
+// 99. Strength was the offender — its crit-damage axis is capped at a combined
+// 3.0x and base weapon mults run 1.5-1.8x, so a +0.04x/point rate burned the
+// whole ~1.4x budget in ~35 points (24 for a 1.5-potency Reaver). The fix is a
+// slower rate against the SAME ceiling, not a bigger ceiling: damage is already
+// high, so nothing here raises a cap. Endurance's flat stamina, Vitality's flat
+// HP and both Wisdom axes keep their old rates — they were already meaningful
+// to 100 — while the % axes are trimmed so they saturate near the point cap
+// rather than far short of it or never.
 const ENDURANCE_STAMINA_PER_POINT = 3;
-const ENDURANCE_STAMINA_REGEN_PCT_PER_POINT = 0.02; // +2% stamina regen rate
+const ENDURANCE_STAMINA_REGEN_PCT_PER_POINT = 0.015; // +1.5% -> +150% at the cap
 const VITALITY_HP_PER_POINT = 4;
-const VITALITY_HEALING_PCT_PER_POINT = 0.015; // +1.5% healing received
-const STRENGTH_CRIT_MULT_PER_POINT = 0.04; // +0.04x crit damage multiplier
-const AGILITY_CRIT_CHANCE_PER_POINT = 0.005; // +0.5% crit chance
-const INT_XP_PCT_PER_POINT = 0.015; // +1.5% skill XP gain
+const VITALITY_HEALING_PCT_PER_POINT = 0.01; // +1% -> +100% at the cap
+// 0.015x/point reaches the 3.0x combined crit cap around point 93-100 against a
+// 1.5x base weapon (earlier on a 1.8x pike or with a crit-damage relic, which is
+// why MainScene's live critCapped check — not this constant — gates allocation).
+const STRENGTH_CRIT_MULT_PER_POINT = 0.015;
+const AGILITY_CRIT_CHANCE_PER_POINT = 0.0045; // +0.45% -> saturates 60% cap near the point cap
+const INT_XP_PCT_PER_POINT = 0.01; // +1% -> +100% at the cap, closing the XP loop
 const WISDOM_BUFF_DURATION_PCT_PER_POINT = 0.02; // +2% buff/food duration
 // Wisdom's SECOND axis. Buff duration alone was invisible in play (the user, at 55
 // points: "I put wisdom to 55 this run and I'm not sure I really felt it. what
@@ -182,12 +211,28 @@ export class PlayerProgression {
     return this.stats[stat];
   }
 
-  // Spend one unspent point on `stat`. Returns false (no-op) if none unspent.
-  allocate(stat: StatType): boolean {
-    if (this.unspentPoints <= 0) return false;
-    this.unspentPoints -= 1;
-    this.stats[stat] += 1;
-    return true;
+  // Spend up to `count` unspent points on `stat`, clamped by both the unspent
+  // pool and STAT_POINT_CAP. Returns how many actually landed (0 = no-op), so a
+  // batch button ("+5") can partially fill without ever overshooting the cap.
+  allocate(stat: StatType, count = 1): number {
+    const take = Math.min(count, this.unspentPoints, this.pointsUntilCap(stat));
+    if (take <= 0) return 0;
+    this.unspentPoints -= take;
+    this.stats[stat] += take;
+    return take;
+  }
+
+  // Headroom left on `stat` before STAT_POINT_CAP. Never negative — setStat (the
+  // dev bypass) can legitimately push a stat past the cap.
+  pointsUntilCap(stat: StatType): number {
+    return Math.max(0, STAT_POINT_CAP - this.stats[stat]);
+  }
+
+  // True once `stat` cannot take another point. Distinct from an AXIS being
+  // saturated (see wisdomAbilityCdrCapped / MainScene's critCapped): this is the
+  // universal per-stat ceiling and applies to every stat equally.
+  atPointCap(stat: StatType): boolean {
+    return this.pointsUntilCap(stat) <= 0;
   }
 
   // DEV-only direct set (the `setstat` console command) — bypasses unspentPoints

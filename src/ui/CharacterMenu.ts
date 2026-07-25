@@ -11,6 +11,7 @@ import {
   type SkillType,
 } from "../systems/Skills";
 import {
+  STAT_POINT_CAP,
   STAT_TYPES,
   statDisplayName,
   statDescription,
@@ -24,7 +25,7 @@ import { affinityLines, type RunCharacter } from "../systems/Characters";
 export interface CharacterMenuDeps {
   skills: Skills;
   progression: PlayerProgression;
-  allocate: (stat: StatType) => void;
+  allocate: (stat: StatType, count?: number) => void;
   // A GETTER, not a reference: applyCharacter replaces MainScene's RunCharacter
   // instance, so holding the object here would go stale after the picker.
   character: () => RunCharacter;
@@ -34,7 +35,9 @@ export interface CharacterMenuDeps {
   // caps depend on the whole build, so this reads live off the equipped
   // weapon rather than being a fixed point threshold. Optional so a caller
   // that doesn't care (there is only one — MainScene) isn't forced to wire it.
-  critCapped?: () => { chance: boolean; mult: boolean };
+  // True when `stat`'s only axis is already saturated against the live build, so
+  // further points are dead. Owned by the scene (needs weapon/relic context).
+  axisSaturated?: (stat: StatType) => boolean;
 }
 
 const PANEL_W = 460;
@@ -333,13 +336,31 @@ export class CharacterMenu {
 
   private renderStatRow(stat: StatType, x0: number, y: number): void {
     const p = this.deps.progression;
-    const canSpend = p.unspentPoints > 0;
+
+    // Two independent reasons a point would be wasted here, both of which BLOCK
+    // allocation rather than just annotating it (the user's Ascetic run poured 76
+    // points into an already-saturated Strength and the sheet only said so after
+    // the fact):
+    //   • the universal STAT_POINT_CAP, and
+    //   • a SINGLE-AXIS stat whose only effect is already saturated against the
+    //     live build (Strength/Agility crit — see MainScene.statAxisSaturated,
+    //     which is also what actually enforces it at the allocate site, so this
+    //     is presentation of one rule rather than a second copy of it).
+    const axisDead = this.deps.axisSaturated?.(stat) ?? false;
+    const atCap = p.atPointCap(stat);
+    const canSpend = p.unspentPoints > 0 && !atCap && !axisDead;
 
     // A class's stat potency changes what each point is WORTH, so mark the row
     // — the "Now:" line below already reflects it (statTotalEffect reads the
     // getters), but without this the player can't tell why the numbers differ.
     const potency = p.potency(stat);
-    const label = this.text(x0, y, `${statDisplayName(stat)}: ${p.statValue(stat)}`, 13, "#ffffff");
+    const label = this.text(
+      x0,
+      y,
+      `${statDisplayName(stat)}: ${p.statValue(stat)} / ${STAT_POINT_CAP}`,
+      13,
+      "#ffffff",
+    );
     if (potency !== 1) {
       const mark = `x${potency.toFixed(2).replace(/\.?0+$/, "")} per point`;
       this.text(x0 + label.width + 8, y + 1, mark, 11, "#8a6ec0");
@@ -352,30 +373,48 @@ export class CharacterMenu {
     // that prompted this (100 points reaches it, nothing said so), but the
     // same silent-dead-point trap applies to Strength/Agility's crit
     // contribution once it's saturated against the current build.
-    const capped =
-      (stat === "wisdom" && p.wisdomAbilityCdrCapped()) ||
-      (stat === "strength" && (this.deps.critCapped?.().mult ?? false)) ||
-      (stat === "agility" && (this.deps.critCapped?.().chance ?? false));
-    const nowLine = `Now: ${statTotalEffect(stat, p)}${capped ? "  (CAPPED — this axis is maxed)" : ""}`;
-    this.text(x0, y + 31, nowLine, 11, "#e3b25a");
+    // Note the ordering: MAXED (the point cap) outranks a saturated axis, since
+    // it's the stricter statement — a stat at 100/100 can't take points whether
+    // or not its axis still had room.
+    // Kept short on purpose: this line sits directly under the allocation
+    // buttons, and the long-form wording ran to within 1px of them. The row
+    // label already reads "Vitality: 100 / 100", so "(MAXED)" loses nothing.
+    const note = atCap
+      ? "  (MAXED)"
+      : axisDead
+        ? "  (CAPPED — axis maxed)"
+        : stat === "wisdom" && p.wisdomAbilityCdrCapped()
+          ? "  (cooldown maxed)"
+          : "";
+    this.text(x0, y + 31, `Now: ${statTotalEffect(stat, p)}${note}`, 11, "#e3b25a");
 
-    // "+" button, right-aligned. Greyed/no-op when no points are unspent.
-    const btn = this.scene.add
-      .text(this.panelX + PANEL_W - 16, y + 4, "[ + ]", {
-        fontFamily: "monospace",
-        fontSize: "18px",
-        color: canSpend ? "#0a0a0a" : "#4a4a4a",
-        backgroundColor: canSpend ? "#e3b25a" : "#2a2a2a",
-        padding: { x: 8, y: 4 },
-      })
-      .setOrigin(1, 0)
-      .setScrollFactor(0)
-      .setDepth(DEPTH_TEXT)
-      .setInteractive({ useHandCursor: canSpend })
-      .on("pointerdown", () => {
-        if (canSpend) this.deps.allocate(stat);
-      });
-    this.rows.push(btn);
+    // Allocation buttons, right-aligned: [ + ] and a batch [ +5 ] (a 100-point
+    // stat is a lot of individual clicks). Both grey out and no-op together, and
+    // +5 clamps against the pool AND the cap inside allocate(), so it can never
+    // overshoot — it just banks whatever fits.
+    let bx = this.panelX + PANEL_W - 16;
+    for (const step of [5, 1]) {
+      const enabled = canSpend && p.pointsUntilCap(stat) > 0;
+      const btn = this.scene.add
+        // y+1 rather than y+4: the button box is 26px tall and the "Now:" line
+        // sits at y+31, so this keeps a real gap instead of a 1px one.
+        .text(bx, y + 1, step === 1 ? "[ + ]" : `[ +${step} ]`, {
+          fontFamily: "monospace",
+          fontSize: "18px",
+          color: enabled ? "#0a0a0a" : "#4a4a4a",
+          backgroundColor: enabled ? "#e3b25a" : "#2a2a2a",
+          padding: { x: 8, y: 4 },
+        })
+        .setOrigin(1, 0)
+        .setScrollFactor(0)
+        .setDepth(DEPTH_TEXT)
+        .setInteractive({ useHandCursor: enabled })
+        .on("pointerdown", () => {
+          if (enabled) this.deps.allocate(stat, step);
+        });
+      this.rows.push(btn);
+      bx -= btn.width + 6;
+    }
   }
 
   private text(
