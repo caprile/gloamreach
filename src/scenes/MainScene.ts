@@ -552,6 +552,10 @@ const LIGHT_COLOR = {
   // the theme threaded into cryptLightPoints, which is currently just {x,y}.
   gorge: 0x7fd84a, // the Sunken Gorge's maw — "a bile-green hole breathing light"
   shrine: 0x9fd45a, // Sunken Shrine bowl-fire — sickly swamp green-gold
+  // Deliberately the only COOL, near-white light underground. Every other
+  // interior source is warm firelight, so the way out never reads as one more
+  // brazier.
+  daylightShaft: 0xdfe8ff,
 } as const;
 // Nightfall surge (M-DN): how many extra enemies spawn in unexplored cells
 // around the player at each dusk, and the ring (world px) they appear in —
@@ -2553,6 +2557,16 @@ export class MainScene extends Phaser.Scene {
         if (!onScreen(p.x, p.y)) continue;
         const s = toScreen(p.x, p.y);
         lights.push({ x: s.x, y: s.y, radius: CRYPT_LIGHT_RADIUS * z, color: LIGHT_COLOR.poiFire });
+      }
+      // The way OUT gets its own shaft of daylight. Playtest: the exit was hard
+      // to pick out once real art made the floor busier, and a dungeon you can't
+      // find your way out of is the worst thing for it to be. Warmer and wider
+      // than a brazier so it reads as "outside is that way" from across a room,
+      // and it costs nothing else — the light layer already existed.
+      const stairs = this.activeDungeon.exitStairs;
+      if (stairs && onScreen(stairs.x, stairs.y)) {
+        const s = toScreen(stairs.x, stairs.y);
+        lights.push({ x: s.x, y: s.y, radius: CRYPT_LIGHT_RADIUS * 1.7 * z, color: LIGHT_COLOR.daylightShaft });
       }
       // Discovered rooms/corridors stay lit — a stretched soft brush per space,
       // so a whole room lights at once instead of a circle following the player.

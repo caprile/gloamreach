@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import { ExploredMap } from "../systems/ExploredMap";
+import { artScale } from "../art/overrides";
 
 // Full-screen world map overlay (opened with M or the corner Map button). Shows
 // EVERYTHING explored so far — the shrunk fog color cache from ExploredMap —
@@ -295,6 +296,9 @@ export class WorldMapUI {
       const lm = this.map.landmarks[i];
       if (!this.icons[i]) {
         const img = this.scene.add.image(0, 0, lm.iconKey).setScrollFactor(0).setDepth(OVERLAY_DEPTH + 1);
+        // Map markers are 18x18 against PixelLab's 32px canvas floor, so real
+        // art would nearly double and start colliding with its own label.
+        img.setScale(artScale(this.scene, lm.iconKey));
         const label = this.scene.add
           .text(0, 0, lm.label, {
             fontFamily: "monospace",
