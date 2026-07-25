@@ -6241,8 +6241,8 @@ export class MainScene extends Phaser.Scene {
     const place = (x: number, y: number) => {
       // Clamp to the zone's organic outline, not a circle.
       if (Math.hypot(x - z.x, y - z.y) > this.zoneEdge(z, Math.atan2(y - z.y, x - z.x))) return;
-      const tex = rng.frac() < 0.4 ? "badlands_mesa_spire" : "badlands_rockwall";
-      const img = solids.create(x, y, tex) as Phaser.Physics.Arcade.Image;
+      const base = rng.frac() < 0.4 ? "badlands_mesa_spire" : "badlands_rockwall";
+      const img = solids.create(x, y, variantAt(this, base, x, y)) as Phaser.Physics.Arcade.Image;
       img.setDepth(ysortDepth(y));
       this.obstaclePositions.push({ x, y, r: Math.max(img.width, img.height) / 2 });
     };

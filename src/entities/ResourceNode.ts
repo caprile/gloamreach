@@ -1,7 +1,7 @@
 import Phaser from "phaser";
 import { ysortDepth } from "../systems/depth";
 import { variantAt } from "../art/variants";
-import { artScale } from "../art/overrides";
+import { artScale, placeholderDims, scaleToLongest } from "../art/overrides";
 
 // A specific craftable tool (tiers can grow later, e.g. iron_axe).
 export type ToolType = "stone_axe" | "stone_pickaxe";
@@ -145,6 +145,13 @@ export class ResourceNode extends Phaser.GameObjects.Sprite {
   // node is obvious at a glance (playtest: players consistently missed
   // that it could be mined once cracked open).
   private glowImage: Phaser.GameObjects.Image | null = null;
+  // Gatherable crops are sized off their OWN placeholder rather than one flat
+  // cap: the placeholders already encode a hierarchy (a berry bush was drawn
+  // bigger than a mushroom) that a single number flattens. The modest growth
+  // keeps the richer real art feeling bigger without letting a herb rival a
+  // tree, and the ceiling stops anything tall running away with it.
+  private static readonly CROP_GROWTH = 1.15;
+  private static readonly CROP_MAX_PX = 30;
 
   constructor(scene: Phaser.Scene, cfg: ResourceNodeConfig) {
     // Resolved here rather than at the ~20 spawn sites so a new `<key>_v2` PNG
@@ -157,10 +164,10 @@ export class ResourceNode extends Phaser.GameObjects.Sprite {
         : cfg.pickedTexture;
 
     super(scene, cfg.x, cfg.y, texture);
-    this.setScale(artScale(scene, texture));
+    this.action = cfg.action;
+    this.applyArtScale(texture);
     this.resource = cfg.resource;
     this.amount = cfg.amount;
-    this.action = cfg.action;
     this.displayName = cfg.displayName;
     this.loose = cfg.loose;
     this.isDrop = cfg.isDrop ?? false;
@@ -303,7 +310,27 @@ export class ResourceNode extends Phaser.GameObjects.Sprite {
   // the node would visibly jump size mid-harvest.
   private swapTexture(key: string): void {
     this.setTexture(key);
-    this.setScale(artScale(this.scene, key));
+    this.applyArtScale(key);
+  }
+
+  // The world has a size hierarchy: a tree or a boulder should read as bigger
+  // than the herbs and berries growing around it. Real art arrives on a canvas
+  // that ignores that, so a picked mushroom came back taller than the player.
+  //
+  // `action` is the signal, not the texture name — "pickup" IS the set of
+  // things you bend down to gather, so chop/mine nodes (trees, boulders, ore)
+  // stay at full size and every future crop inherits the cap for free.
+  private applyArtScale(key: string): void {
+    const was = this.action === "pickup" ? placeholderDims(key) : undefined;
+    if (!was) {
+      this.setScale(artScale(this.scene, key));
+      return;
+    }
+    const target = Math.min(
+      Math.max(was.w, was.h) * ResourceNode.CROP_GROWTH,
+      ResourceNode.CROP_MAX_PX,
+    );
+    this.setScale(scaleToLongest(this.scene, key, target));
   }
 
   private regrow(): void {

@@ -66,20 +66,35 @@ const CLUTTER_MAX_PX = 20; // the player sprite is 20x20
 const placeholderSize = new Map<string, { w: number; h: number }>();
 
 /**
+ * The placeholder's dimensions for `key`, if real art replaced it at a
+ * different size. Exposed so callers can set their own size policy — a
+ * gatherable crop wants a different rule from a tree, and the placeholder is
+ * the only record of how big the thing was originally meant to read.
+ *
+ * Variants borrow their base's dimensions, since they have no placeholder.
+ */
+export function placeholderDims(key: string): { w: number; h: number } | undefined {
+  return placeholderSize.get(key) ?? placeholderSize.get(key.replace(/_v\d+$/, ""));
+}
+
+/**
  * Scale that renders `key`'s real art at the footprint its placeholder had, or
  * 1 when there is no override, no placeholder, or the resize was deliberate.
  */
 export function artScale(scene: Phaser.Scene, key: string): number {
-  // A variant (`tree_v2`) has no placeholder of its own, so it borrows its
-  // base's footprint — otherwise variants would tower over the thing they're
-  // meant to be interchangeable with.
-  const was = placeholderSize.get(key) ?? placeholderSize.get(key.replace(/_v\d+$/, ""));
-  if (!was) return 1;
+  const was = placeholderDims(key);
+  // Only ground clutter is pulled back. Everything larger keeps its real art
+  // size, where bigger reads better.
+  if (!was || Math.max(was.w, was.h) > CLUTTER_MAX_PX) return 1;
+  return scaleToLongest(scene, key, Math.max(was.w, was.h));
+}
+
+/** Uniform scale that renders `key` with its longest side at `targetPx`. */
+export function scaleToLongest(scene: Phaser.Scene, key: string, targetPx: number): number {
   const now = scene.textures.get(key).getSourceImage();
-  if (!now.width || !now.height) return 1;
-  // Uniform scale off the larger axis so nothing overflows its old footprint
-  // and the art never distorts.
-  return Math.min(was.w / now.width, was.h / now.height);
+  const longest = Math.max(now.width, now.height);
+  if (!longest) return 1;
+  return targetPx / longest;
 }
 
 export interface OverrideReport {
@@ -126,7 +141,7 @@ export function applyTextureOverrides(scene: Phaser.Scene): OverrideReport {
         });
         // Captured here because it's the only moment both sizes exist — the
         // placeholder is about to be removed.
-        if (!key.startsWith("icon_") && Math.max(old.width, old.height) <= CLUTTER_MAX_PX) {
+        if (!key.startsWith("icon_")) {
           placeholderSize.set(key, { w: old.width, h: old.height });
         }
       }
