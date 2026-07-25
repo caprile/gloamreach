@@ -56,6 +56,10 @@ chest, entrance) are ordinary props.
 
 - Number the subjects in one description to get several materials from one job:
   `"1). cracked grey stone floor slabs 2). dark mossy stone brick wall"`.
+- **Two or three subjects, not six.** A six-subject prompt (violet/ember/blood ×
+  floor+wall) came back with the violet and ember themes dominating all 16 tiles
+  and **no blood tiles at all** — the later subjects were simply dropped. Batch
+  by theme and re-fire; it's one job either way.
 - It returns **16 candidate tiles regardless**, so one job covers a material with
   plenty of choice. Cost is 20-40 generations, so batch subjects rather than
   firing one job per tile.
