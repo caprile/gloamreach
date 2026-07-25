@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import type { IncomingDamageType } from "../systems/Weapons";
+import { artScale } from "../art/overrides";
 
 // Generic reusable projectile — first ranged-attack primitive in the game
 // (Gremlin's rock throw). Not Gremlin-specific: the Slingshot is expected to
@@ -82,6 +83,11 @@ export class Projectile extends Phaser.Physics.Arcade.Sprite {
 
   constructor(scene: Phaser.Scene, cfg: ProjectileConfig) {
     super(scene, cfg.x, cfg.y, cfg.texture);
+    // Projectiles are the smallest sprites in the game (a gremlin rock is 6x6)
+    // and PixelLab's canvas floor is 32px, so real art would arrive five times
+    // oversized and read as a boulder in flight. Also note rotationOffset
+    // below: replacement art must keep the placeholder's facing.
+    this.setScale(artScale(scene, cfg.texture));
     this.damage = cfg.damage;
     this.sourceIsPlayer = cfg.sourceIsPlayer;
     this.isCrit = cfg.isCrit ?? false;
