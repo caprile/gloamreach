@@ -2,12 +2,58 @@
 
 ## Current State
 
-_Living snapshot — edit in place, never append._ Last shipped: **Phase 2 of the art arc COMPLETE —
-all 181 icons + the UI resized around them + a reference gallery** (2026-07-25, Sonnet, continuing
-Opus's same-day Phase 1/2 start) (`.claude/plans/art-textures-lighting-3-biomes.md`). Every one of
-the 181 icon textures is now real pixel art in `art/sprites/`, verified live in-game (181/181
-overrides applied at 32×32, zero console errors). **Phase 2 is done — next is Phase 3 (~134 world
-props: flora, structures, crypt tiles), then Phase 4 (player rig).**
+_Living snapshot — edit in place, never append._ Last shipped: **Phase 3 of the art arc STARTED —
+the first 22 forest world props, an art-variant system, and two playtest fixes** (2026-07-25, Opus)
+(`.claude/plans/art-textures-lighting-3-biomes.md`). **Phase 3 is IN PROGRESS, not done** — 22 of
+~134 world props are real art (all forest: trees, rocks, flora, camp/POI structures). Badlands and
+bayou props, and all crypt tiles, are still placeholders. Then Phase 4 (player rig).
+
+**Three things this session changed beyond the art itself:**
+
+1. **`src/art/variants.ts` — a `<key>_v2` PNG now varies every node of that kind, no code change.**
+   the user: decorations, rocks, boulders and trees all look too uniform. `scatterDecorClustered`
+   already fixed the *spacing*; this fixes the *shapes*, since the eye locks onto a repeated
+   silhouette however well positions are scattered. Resolved inside **`ResourceNode`'s constructor**
+   rather than at the ~20 spawn sites, and picked by **hashing the prop's position** so the world
+   looks the same on every load without threading an RNG through the samplers. A `_picked` state
+   follows the variant actually chosen (`<variant>_picked`), falling back to the shared one.
+   `overrides.ts` no longer flags `_v2` keys as typos — they are intentionally new keys.
+2. **Animation scope widened (the user): "anything that moves or could move should have animations
+   even if ambient."** This **reverses locked decision 4's "~327 of 377 never animate."** It decides
+   a tool *at generation time*: `animate_object` only accepts `create_1_direction_object` /
+   `create_8_direction_object` results — a **`create_map_object` result can never be animated** and
+   auto-deletes after 8h (confirmed via `agent_help`). Static geometry (rock, log, plank, wall) stays
+   on the cheap map-object path; flames/crystals/reeds/banners/water need the object path.
+   **Cost fork:** a 1-direction object is **25 generations** vs 1 (it returns 64 candidates to pick
+   from — proven on `camp_brazier`). So Phase 3 continues on map objects, and the ~19 identified
+   animatable props get regenerated as objects during the animation pass, style-matched from the
+   approved PNG. **Trees are the open call** — canopy sway is the most visible ambient motion, but
+   trees are the highest-count prop and 5aq established the display list is the frame-rate ceiling.
+3. **Sizing rule settled: world props may grow, creatures may not.** Nothing gameplay-relevant reads
+   a *prop's* sprite size — node/structure/POI interaction is centre-to-centre against a flat
+   `REACH`. Only enemies (`enemyReach`, `Enemy.reachBonus`) and dens (`denReach`) scale with sprite
+   radius. Props therefore ship at whatever the art wants, which is forced anyway: PixelLab's canvas
+   floor is 32px and most placeholders are 14-30px. New `art/tools/trim.mjs` (dependency-free PNG
+   decode/encode via `node:zlib`) crops the alpha box — generation pads a wide prop with transparent
+   rows, and a sprite's origin is its centre, so untrimmed padding shifts the prop off its own anchor.
+
+**Two playtest fixes.** **Blackberry bushes appeared to vanish when picked** — the mechanic was
+fine (node survives, texture swaps, regrows); the cause was **my own partial migration**: the base
+had real 33×25 art while `blackberry_bush_picked` was still a 24×20 placeholder, so harvesting
+swapped art *styles* mid-world. **A `_picked`/`_shielded` state variant must ship in the same batch
+as its base.** Verified live. **The three warbow icons drew as sticks** — no limb curve, no string.
+`trim --report` turns out to be an objective acceptance test: a "bow" whose alpha content is 3-7px
+wide cannot be one. All three regenerated and re-measured (16-30px wide).
+
+**Still open from this session's feedback:** `decor_log` reads as choppable but isn't — the user
+wants it re-arted as something inert (regenerated as exposed mossy roots; the *key* should probably
+be renamed in a later code pass) and wants **more decoration variety generally** to give the map
+life outside farmable nodes. Gremlin huts were too small; a 96×80 replacement shipped.
+
+**PixelLab throughput collapsed mid-session** — jobs pinned at `95% eta ~0s` for 25+ minutes while
+**still holding concurrency slots**, dropping the usable 4-job limit to ~1. Reported upstream via
+`agent_feedback` (twice now, counting Phase 2). `tree_v2`/`boulder_v2`/`rock_v2` were lost to this
+and need re-firing.
 
 Icons are authored at **32×32**, and every UI surface renders them at an **integer** scale —
 inventory and hotbar slots went 46→**70** (`ICON_BOX` 64, ×2) and the crafting list draws its icon
@@ -41,7 +87,7 @@ the user is on PixelLab **Tier 1 (2,000 generations/mo)**; the whole 181-icon pa
 those. **The API key was pasted in plaintext and should still be rotated.**
 
 **Gameplay state is unchanged from the previous batch:** **Reaver-run playtest batch, part 1 —
-stat caps, shrine budget, boss pacing** (2026-07-24, Opus; full writeup under Recent Entries).
+stat caps, shrine budget, boss pacing** (2026-07-24, Opus; full writeup in `STATUS-archive.md`).
 Off the user's Reaver win (69:56, 936 kills, level 31). **All 15 items are done.** Headlines: a **hard 100-point cap on every stat** plus a
 per-point retune so every stat is still growing at point 99 (Strength used to die at **24** points
 for a Reaver — 76 of his points did nothing); **dead-point allocation is now blocked, not just
@@ -188,6 +234,51 @@ touches no combat numbers.
 ## Recent Entries
 
 > Older entries in STATUS-archive.md.
+
+### Art arc Phase 3 (start) — forest world props + art variants + 2 playtest fixes (2026-07-25, Opus)
+
+**22 of ~134 world props** are now real pixel art (`art/sprites/world/`), all forest: `tree`,
+`ironbark_tree`, `boulder`, `rock`, `branch`, `bramble`, `blackberry_bush` (+`_picked`), `cattail`,
+`decor_fern`/`_flowers`/`_mushrooms`/`_log`, `drying_rack`, `gremlin_shack` (+`_chest`),
+`boss_altar`, `war_totem`, `gremlin_banner`, `palisade_stake`, `gremlin_camp_prop`, `camp_brazier`,
+plus the first variant `tree_v2`. Badlands, bayou and crypt tiles are untouched.
+
+**New tooling, all in `art/tools/`:** `trim.mjs` (dependency-free PNG decode/encode over
+`node:zlib`) crops a sprite to its alpha box; `fetch.sh` downloads a job by id straight into
+`art/sprites/world/` and trims it; `gallery.mjs` rebuilds the published reference page from whatever
+is on disk, inlining every PNG as a data URI because the artifact CSP blocks external hosts. The
+gallery is now **regenerated from the repo, not hand-assembled** — Phase 2's build scripts were
+discarded after publishing, which is why this one is committed.
+
+**`src/art/variants.ts`.** the user: props look too uniform. Dropping `art/sprites/tree_v2.png` is
+now the entire change needed to add a second tree — same "add a PNG, it works" contract as the
+override layer. Resolved in `ResourceNode`'s constructor (one hook, ~20 spawn sites) and selected by
+hashing the prop's x/y, so appearance is stable across reloads without threading an RNG through the
+samplers, and neighbouring props don't alternate in a visible stripe. `pickedTexture` follows the
+chosen variant when `<variant>_picked` exists. `scatterDecorClustered` routes through the same
+helper. `clearVariantCache()` in `create()` per the `scene.restart()` field-init rule.
+
+**Blackberry-bush "disappearing" bug — caused by the migration, not the mechanic.** `harvest()`
+worked correctly the whole time (node stays in `nodes`, active, visible, regrows). The bush had real
+33×25 art while `blackberry_bush_picked` was still a 24×20 generated placeholder, so picking swapped
+art *styles* mid-world and read as vanishing. Verified live via `preview_eval`.
+**Rule: a `_picked`/`_shielded` state variant ships in the same batch as its base.**
+
+**Warbow icons.** All three drew as sticks — the model reliably omits limb curve and string from
+"longbow". `trim --report` is an objective acceptance test here: content 3-7px wide is a stick, a
+real D-bow measures 16-30px. Prompting the *geometry* ("shaped like the letter D, thick curved limb
+on the right, thin straight taut bowstring on the left") landed all three. **Same class of
+known-hard prompt as the single-bit axe** — steer with shape, not with the weapon's name.
+
+**Decisions recorded in the plan file:** animation scope widened to ambient motion (which fixes the
+generation tool per asset, since a `create_map_object` result can never be animated); world props
+may be authored larger than their placeholders but creatures may not; a 1-direction object costs 25
+generations vs 1, so animatable props stay on the cheap path until the animation pass.
+
+**Open:** `decor_log` reads as choppable but isn't (re-arted as inert mossy roots; the key wants
+renaming in a later code pass), more decoration variety generally, and `boulder_v2`/`rock_v2` lost
+to a PixelLab queue stall that pinned jobs at `95%` for 25+ min while still holding concurrency
+slots — reported upstream.
 
 ### Phase 2 of the art arc — ALL 181 icons + UI resized + reference gallery (2026-07-25, Opus start / Sonnet finish)
 
@@ -354,108 +445,3 @@ interchangeable; the new additive light layer is directly reusable there.
 
 **Next:** Phase 2 — the 181 icons, starting with normalising the four 22×22 status icons.
 
-### Reaver-run playtest batch — stat caps, shrine budget, boss pacing, telegraphs, UI fixes (2026-07-24, Opus)
-
-No plan file — a fix/rework batch off the user's Reaver win (69:56, 936 kills, level 31, score
-19170, 62/62 relic rolls). **14 of 15 items; the 15th is a design decision surfaced in
-Current State, not a fix.** Every design fork was locked via `AskUserQuestion` first, and two of the
-locks reversed my initial recommendation once the real numbers were checked.
-
-**The root finding.** Intelligence was an *unbounded* self-feeding loop: `Skills.onLevelUp` feeds
-the player pool exactly the XP a skill level cost, so ALL raw skill XP eventually becomes player
-XP — which makes Int a straight **player-XP multiplier** (+150.5% at the user's 118 points), paying
-for more Int. Two numbers sized it: natural 3-biome play ends at **level 24 = 300 points**, and the
-farm took him to **level 31 = 496**, i.e. the shrine loop produced **196 points, more than the
-entire rest of the run**. Both ends are now bounded.
-
-- **Hard 100-point cap on every stat** (`Progression.STAT_POINT_CAP`). 6 x 100 = 600, so honest
-  play only ever spends ~half the budget — a real build choice, with the cap biting only the farm.
-  Re-derived against the live XP curve: a 5-biome run lands near level 29 (~435 points), so this
-  has headroom for future biomes. **This reversed my own "100 isn't enough for biome 4" answer**,
-  which had wrongly used the post-farm level 31 as the natural endpoint.
-- **Retuned per-point rates so every stat is still growing at point 99** (the user: "ideally I want
-  all of these stats to have impact up to lvl 100 — otherwise feels weird"). The offender was
-  Strength: its crit-damage axis caps at a combined 3.0x against 1.5-1.8x base weapons, so
-  +0.04x/point burned the whole budget in ~35 points (**24** for a 1.5-potency Reaver — he put in
-  100, so **76 points did nothing**). Fixed with a slower rate against the SAME ceiling, since
-  "damage is already so high": nothing here raises a cap. Str 0.04->**0.015x**, Agi 0.5->**0.45%**,
-  Int 1.5->**1%**, Vit healing 1.5->**1%**, End regen 2->**1.5%**. Endurance's flat stamina,
-  Vitality's flat HP and both Wisdom axes keep their old rates (already meaningful to 100).
-  Verified live: Strength now saturates at **exactly point 100** against a 1.5x weapon and point
-  **80** against a Gloamsteel Pike — up from 19-37.
-- **Dead-point allocation is now BLOCKED, not just annotated.** `MainScene.statAxisSaturated()` is
-  the single enforcement point (it needs weapon/relic context, so it can't live in Progression),
-  read by both `allocateStat` and the menu — so a dev/auto caller can't bypass the greyed button.
-  Wisdom is deliberately exempt: its cooldown axis caps but buff duration doesn't, so those points
-  still pay. Rows read `Vitality: 100 / 100` with `(MAXED)` / `(CAPPED — axis maxed)`.
-- **`[ +5 ]` button beside `[ + ]`** (a 100-point stat is a lot of clicks). `allocate(stat, count)`
-  returns how many landed, clamped by pool AND cap, so +5 banks whatever fits instead of
-  overshooting. Also nudged the buttons to y+1 and shortened the cap notes — the long wording ran
-  to within **1px** of the buttons, and text overlap is a live complaint elsewhere in this batch.
-- **Sunken Shrines are capped at 3 kindlings each** (`SHRINE_MAX_KINDLINGS`), 9 x 3 = 27 rites,
-  with a new `spent` phase. **A kindling is consumed when the rite STARTS, not when it's survived**
-  — counting completions would have left the loop wide open (kindle, farm wave 1, walk away to
-  lapse, repeat, paying only an offering the waves themselves drop). Visual tell: three
-  `shrine_charge` pips at the shrine's foot, lit teal / dark once burned, plus a permanently cold
-  tinted shrine when spent and a verb-less "The shrine is spent" prompt.
-- **Guaranteed reward for clearing all three:** 1 `refined_trophy_uncommon_t3` in the third bowl.
-  Chosen over the user's suggested Moonsilver/Bog Ore on purpose — Moonsilver gates the Gloamsteel
-  ingot AND the Gemwright's Table, so surfacing it would collapse the Gloamsteel-vs-Mirebronze
-  branch and break the locked "build-defining materials are dungeon loot" rule; Bog Ore is mined
-  in the very zones shrines sit in. A relic-economy payout touches neither. Confirmed it's a real
-  `TROPHY_ROLL` key (Uncommon @ power tier 3, x2.25).
-- **Big-boss pacing guards** (Gremlin King / Duneshaper / Miretyrant only; mini-bosses stay
-  burstable). Both default OFF on base `Enemy`, so every normal enemy is unchanged. (1) A **per-hit
-  damage cap** of 5% of max HP (`maxHitFraction`) — the user one-shot the Miretyrant inside a single
-  Bloodrush window at level 31 and saw neither phase. Floors all three at **20 connects** without
-  touching player damage anywhere else; verified a Murkling still dies to one hit. (2)
-  **Phase-transition invulnerability** (`phaseGates`, 900ms): King [50%], Duneshaper [70%, 50%],
-  Miretyrant [65%, 35%]. Advances at most one gate per hit so no phase is ever skipped.
-- Three subtleties in that boss work worth keeping: the bosses chip **poise** from the same hit, so
-  they now route it through `effectiveDamage()` (a capped hit must not break poise at full value)
-  and skip it entirely while phase-locked; and each boss's `update()` pushes `stateEnteredAt`
-  forward every frozen frame so **the current state's timer pauses** — otherwise a telegraph would
-  elapse behind the flash and the attack would land with no wind-up to dodge (verified: the
-  Miretyrant resumed mid-telegraph, tint `0xffd24a`, not mid-attack).
-- **Latent bug fixed on the way:** `GremlinKing` and `Miretyrant` never set `baseScale`, so it sat
-  at 1 while their sprites rendered at 2.4x/2.6x. Harmless until something tweened the scale — the
-  new transition does, and it shrank them permanently. Confirmed inert for combat first (neither
-  reads `reachBonus()`, both have `biteDamage: 0`) before setting it.
-
-**Area-attack indicators, roster-wide (item 8).** This deliberately REVERSES the locked "tells are
-motion/tint, never world-space arcs" rule, re-locked with the user as: an AREA attack shows its
-footprint, a single-target bite/claw still doesn't. The reasoning is that a wind-up POSE can tell
-you a bite is coming, but nothing about a pose tells you a tail sweep reaches 120 degrees behind
-the gator. New shared helpers on base `Enemy` — `drawAreaCircle` / `drawAreaWedge` / `drawAreaLane`
-over one lazily-created Graphics, destroyed in BOTH `destroy()` and `playDeathFeedback()` (the
-stranded-HP-bar bug class). Kept low-alpha with a thin ring at the TRUE radius, since the original
-objection to arcs was that they looked goofy.
-
-- Wired: **Mirejaw** lunge lane, **Boar** charge lane, **Duskrunner** pounce lane, **Sanguinarch**
-  slam circle, **Corpselight** collapse circle. the user's "alligators" turned out to be the
-  **Mirejaw**, not the Miretyrant — the boss already telegraphs its own sweep and chomp, and
-  Mirejaws are what fill its bellow waves from wave 3, so a pack of locked lunge lines was
-  unreadable.
-- **Audited the rest rather than blanket-adding.** `Kilnborn` needs none: its backdraft only
-  damages LIT GROUND and those burning tiles are already drawn, so a marker would be redundant.
-  `Palewake` needs none: it has no area attack at all, only a tether drain, and its line is already
-  drawn by its own gfx. Cragscale/Sandmaw/Hexling/Cinderwrought/Gloamwarden/GremlinKing/Duneshaper/
-  Miretyrant already telegraphed theirs (Cragscale via `drawRollLane`, which an early grep missed).
-- Lanes were included on the same reasoning as circles: a charge/pounce/lunge IS an area whose dodge
-  is stepping off a line, and all three lock their angle at wind-up start, so the marker never lies.
-
-**Mossling spawn immunity (item 9).** New `Enemy.spawnInvulnUntil` — 500ms of DAMAGE-ONLY immunity
-(they still move and aggro, unlike `isPhaseLocked()`), plus a 0.35->1 fade-in so the window reads.
-They burst out of a dying Mosswretch directly into the arc the player is mid-swing on, so crit + AOE
-splash deleted them on frame one and the split looked like nothing happened.
-
-`tsc` + `npm run build` clean, zero console errors, all of the above verified live via the
-browser-pane eval (cap clamping, every retuned rate against divided-out potency, both UI cap
-states, the full 3-kindling shrine lifecycle including the lapse rule, and all three bosses'
-gates/locks/refusals), plus Mirejaw/Boar/Duskrunner drawing 34 telegraph commands during wind-up
-and clearing to 0 at the strike. **Two paths are wired but NOT exercised live:** Sanguinarch's slam
-(needs the engorged phase after feeding on a bleeding player) and Corpselight's collapse (needs a
-sustained close approach) — both call the same helper proven on the other three. Notes for next
-time: the preview loop needed the documented `loop.step` trick to advance game time, and enemy AI
-does not tick until a character is actually picked (`runOver` stays true), which silently made a
-first round of telegraph probes report nothing.
