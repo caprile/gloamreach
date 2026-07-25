@@ -22,10 +22,10 @@ alongside the feature it describes, so it survives for future sessions.
 doing anything else.** This file (CLAUDE.md) auto-loads, but `STATUS.md` does not — and
 `STATUS.md` is where the actual "what just shipped / what's in progress / what's next"
 lives, not here. This file's **Roadmap** section only tracks milestone-level features and
-deliberately omits small playtest-fix batches (e.g. the ongoing 2026-07-15 8-session
-playtest plan, `.claude/plans/playtest-2026-07-15-session-plan.md` — S1-S8, only S1/S2
-shipped so far) — those are tracked in `STATUS.md` only. Skipping this read is why a past
-session felt "unaware" of recent work despite STATUS.md itself being current.
+deliberately omits small playtest-fix batches (e.g. the 2026-07-15 8-session playtest plan,
+`.claude/plans/playtest-2026-07-15-session-plan.md` — S1-S8, **all shipped**) — those are
+tracked in `STATUS.md` only. Skipping this read is why a past session felt "unaware" of
+recent work despite STATUS.md itself being current.
 
 ## Stack
 
@@ -1862,6 +1862,72 @@ below.**
      forged-armor upgrades per-set (~25% of the piece) instead of a flat +1; Miretyrant re-bumped;
      Sanguinarch 420→620 HP; Gloamdrinker lifelink 12%→8%; Wisdom gained **−0.5% ability
      cooldown/point**; XP exponent 1.8→1.7.
+
+5as. **Reaver-run playtest batch — stat caps, shrine budget, boss pacing, area telegraphs**
+   (2026-07-24, Opus, no plan file — a 15-item fix/rework batch off the user's Reaver win: 69:56,
+   936 kills, level 31). Every design fork was locked via `AskUserQuestion` first, and two locks
+   reversed my own initial recommendation once the real numbers were checked. Full detail in
+   `STATUS.md`; the load-bearing rules this establishes:
+   - **The scaling runaway had one root cause: Intelligence is a straight player-XP multiplier.**
+     `Skills.onLevelUp` feeds the player pool exactly the XP each skill level cost, so ALL raw
+     skill XP eventually becomes player XP — meaning Int paid for more Int, unbounded. Two numbers
+     sized it: natural 3-biome play ends at **level 24 = 300 points**, and the shrine farm took
+     the user to level 31 = 496, i.e. **196 points, more than the entire rest of the run**.
+   - **`STAT_POINT_CAP` = 100, a hard cap on every stat** (6 × 100 = 600, so honest play only ever
+     spends ~half the budget — the cap bites the farm, not progression; verified headroom through
+     5 biomes). Paired with a retune under a new rule: **every stat must still be GROWING at point
+     99.** Strength was the offender — its crit-damage axis caps at a combined 3.0× and base weapon
+     mults run 1.5-1.8×, so +0.04x/point burned the whole budget in ~35 points (**24** for a
+     1.5-potency Reaver). Fixed with a slower rate against the **same ceiling**, never a bigger one
+     (the user: "damage is already so high"): Str .04→**.015x**, Agi .5→**.45%**, Int 1.5→**1%**,
+     Vit healing 1.5→**1%**, End regen 2→**1.5%**. Flat HP/stamina and both Wisdom axes unchanged.
+   - **Dead-point allocation is BLOCKED at the model, not just greyed in the menu**
+     (`MainScene.statAxisSaturated` is the single enforcement point, since Str/Agi ceilings depend
+     on weapon base + relics; Wisdom is exempt because its second axis is uncapped).
+   - **Sunken Shrines are capped at 3 kindlings each**, and a kindling is spent when the rite
+     STARTS, not when it's survived — counting completions would leave the loop wide open (kindle,
+     farm wave 1, walk away to lapse, repeat, paying only an offering the waves themselves drop).
+     Clearing all three pays a guaranteed Tier-3 Refined Trophy: a **relic-economy** reward on
+     purpose, so bounding the farm can't cut a gear source, and specifically NOT the Moonsilver
+     the user suggested (it gates the Gloamsteel ingot AND the Gemwright's Table, so surfacing it
+     would collapse the Gloamsteel-vs-Mirebronze branch choice).
+   - **Big-boss pacing guards on base `Enemy`, default OFF** so no normal enemy changes:
+     `maxHitFraction` (5% of max HP per hit — floors the 3 main bosses at ~20 connects without
+     touching player damage anywhere else) and `phaseGates` (900ms scripted invulnerable
+     transition, at most one gate per hit so no phase is skippable). Three subtleties: bosses chip
+     **poise** from the same hit and must route it through `effectiveDamage()`; poise is skipped
+     entirely while phase-locked; and each boss pushes `stateEnteredAt` forward every frozen frame
+     so **the current state's timer pauses** — otherwise a telegraph elapses behind the flash and
+     the attack lands with no wind-up to dodge.
+   - **Area-attack indicators, roster-wide — this REVERSES the locked "tells are motion/tint,
+     never world-space arcs" rule.** Re-locked as: an AREA attack shows its footprint, a
+     single-target bite/claw still doesn't (a pose can tell you a bite is coming; nothing about a
+     pose tells you a sweep reaches 120° behind the gator). Shared
+     `Enemy.drawAreaCircle/drawAreaWedge/drawAreaLane` over one lazily-created Graphics, destroyed
+     in BOTH `destroy()` and `playDeathFeedback()`. Wired to Mirejaw (lunge lane — the user's
+     "alligators" were the Mirejaw, not the Miretyrant, which already telegraphed its own sweep),
+     Boar charge, Duskrunner pounce, Sanguinarch slam, Corpselight collapse. **Audited rather than
+     blanket-added:** Kilnborn needs none (its backdraft only burns lit ground, already drawn) and
+     Palewake needs none (a tether line, not an area).
+   - **`heldCount()` / `consumeHeld()` — upgrades now count HOTBAR materials.** the user reported
+     the Workbench Lvl 4→5 glyph missing twice; I wrongly closed it as a content dead-end before he
+     corrected me. `canAffordUpgrade` counted the backpack only, and ingots live on the hotbar, so
+     the check (and the ▲ glyph it drives) read zero. `Crafting.ts` already carried a hotbar
+     reference added off the user's *earlier* report of the same thing — the fix landed in crafting
+     and never reached the upgrade path. **Standing lesson: fix a "materials aren't counted" bug at
+     EVERY cost site, not just the reported one.**
+   - Also: `ItemContainer.compactStacks` at the end of `removeCount` (stack fragmentation came from
+     CONSUMPTION, not addition — `add()` tops up every partial, but `removeCount` drains
+     front-to-back and leaves the head partial; merge-only and position-preserving, and
+     deliberately NOT hooked to `moveSlot` because a Shift+click split would be undone instantly);
+     a measured-height fix for the cooking footer's wrapped cost line overlapping `Qty:` (the same
+     bug existed in `JewelryMenu`); a batched **Convert All** on the forge (one toast per batch, not
+     per shard); Mossling 500ms **damage-only** spawn immunity; and ability items can be dragged
+     onto the **Q/E/R HUD bar** (`AbilityBarUI.slotAt`, gated by slot group — position is the
+     hotkey, so the R pip equips `ability3`).
+   - **Verification gotcha worth keeping:** enemy AI does not tick until a character is actually
+     picked (`runOver` stays true), which silently made a first round of telegraph probes report
+     nothing at all.
 
 **Not yet built — next up in rough order:**
 6. **World & discovery** — much bigger generated world, biomes, map, a single giant
