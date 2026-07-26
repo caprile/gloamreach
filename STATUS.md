@@ -359,6 +359,19 @@ Two impact sprites are wired as the exemplars: the **Gloamwarden's crystal erupt
 actually uses, so what you see is what hits, and both torn down on the DESPAWN path as well as
 death (the bug that stranded HP bars).
 
+**Perf, same session: "a little hitchy while running around at 100 run skill"** (the user). Not a
+stall — the frame budget being tipped over the line. Measured while sprinting at the Running-100
+ceiling (~264px/s): the game was already spending ~11.8ms of its 16.7ms, and a chunk-rebuild
+slice cost ~3.4ms at p95, pushing the 95th-percentile frame to **16.1ms** with occasional 30ms
+frames. Rebuilds happen most often exactly when you're running, which is why it showed up there.
+Fixed by thinning the slices (`ROWS_PER_FRAME` 8 -> 5): p95 **16.1 -> 15.1ms**, worst frame
+**30.4 -> 20.2ms**, chunk slice **3.4 -> 1.9ms**. The floor on thinness is that the rebuild must
+OUTRUN the player — a build starts 288px from the old chunk's centre and the old chunk stops
+covering the camera at 452px, so there is ~620ms at full sprint to finish, and a 29-frame build
+(~365ms) fits with room. Verified over 12s of diagonal sprinting: **zero** falls back to the
+synchronous path. Worth knowing for later: most of the frame is the game itself, not the ground
+layer, which now adds ~1.4ms at p95.
+
 **Bug, same session: a mini-boss health bar stayed pinned to the top of the screen after you ran
 away** (the user). Every boss leashes on how far IT has travelled from ITS OWN spawn, which never
 trips for one that can't close the distance — a crypt warden held back by a wall, or any boss you

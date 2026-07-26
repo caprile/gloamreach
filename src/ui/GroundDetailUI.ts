@@ -40,10 +40,25 @@ export class GroundDetailUI {
   // Half the visible world, plus slack. The camera shows 1280x720 world px at
   // zoom 1.5; anything beyond this from the chunk's edge is off screen.
   private static readonly VIEW_HALF = 700;
-  // Rows stamped per frame while rebuilding. The whole chunk is ~21,000 stamps;
-  // doing it in one go is a visible hitch every few seconds, so it's spread over
-  // ~9 frames into an offscreen buffer and swapped in when complete.
-  private static readonly ROWS_PER_FRAME = 8;
+  // Rows stamped per frame while rebuilding. The whole chunk is ~21,000 stamps,
+  // so it is spread across frames into an offscreen buffer and swapped in when
+  // complete rather than done in one visible hitch.
+  //
+  // How thin the slices are is a real tuning decision, not a detail. Measured
+  // while sprinting at the Running-100 ceiling (~264px/s), the frame budget was
+  // already ~11.8ms of the 16.7ms available; at 8 rows a slice cost ~3.4ms at
+  // p95, which tipped the 95th-percentile frame to 16.1ms and produced the
+  // occasional 30ms one — felt as a slight hitch while running, exactly when the
+  // chunk rebuilds most often.
+  //
+  // The ceiling on thinness is that the rebuild must OUTRUN THE PLAYER. A build
+  // starts when the player crosses a SNAP boundary (so SNAP/2 = 288px from the
+  // old chunk's centre) and the old chunk stops covering the camera at
+  // SPAN/2 - VIEW_HALF = 452px — leaving 164px, about 620ms at full sprint, to
+  // finish. Miss that and update() falls back to the full synchronous rebuild,
+  // trading a small recurring cost for a big one-off stall. At 5 rows a build is
+  // 29 frames (~365ms), comfortably inside that, and the slice drops to ~2ms.
+  private static readonly ROWS_PER_FRAME = 5;
 
   private readonly scene: Phaser.Scene;
   /**
