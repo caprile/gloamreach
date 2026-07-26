@@ -19,9 +19,12 @@ elites are "good for now" — bespoke elite art (something beyond "is now red") 
 pass, and since `eliteVariants.ts` only rebuilds keys it derives, dropping a real
 `<name>_elite.png` in would simply win.
 
-**Next:** the animation pass, and ground texturing + biome blending — the latter deliberately last,
-being the one part of the migration that is *not* per-asset reversible (the ground is generated,
-not a sprite).
+**Next:** ground texturing + biome blending — deliberately last, being the one part of the
+migration that is *not* per-asset reversible (the ground is generated, not a sprite). Also open
+from the user's notes: a stouter/gobliny gremlin (the humanoid rig reads too human; custom
+proportions came out worse, so it needs a different approach), a real rock-throw animation for the
+ranged gremlin, art for the ATTACKS themselves (e.g. the Gloamwarden's ground spikes), and the ~19
+ambient props that need regenerating as objects to animate.
 
 **Still placeholder, deliberately:** the tiny 6×6 projectiles (`gremlin_rock`, `pellet_projectile`,
 `gloam_bolt` — a 32px generation downscaled to 6px is mush; the procedural dot is better), and the
