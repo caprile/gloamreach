@@ -54,6 +54,13 @@ const AGGRO_RADIUS = 105; // px — player enters this range, Boar starts chasin
 const DEAGGRO_RADIUS = 190; // wider gap than AGGRO_RADIUS to avoid boundary flicker (kept ~2x aggro, same ratio as before)
 const CHASE_SPEED = 60; // px/s — slower than player base (95), so it's escapable
 const WANDER_SPEED = 20; // px/s idle wander
+// A stroll covers 20-50px at WANDER_SPEED, i.e. 1-2.5s of movement — so these
+// bounds mean a creature spends most of its idle time standing still.
+const WANDER_REST_MIN_MS = 4000;
+const WANDER_REST_MAX_MS = 9000;
+// Past this from its spawn point, the next stroll aims roughly back home
+// instead of anywhere. Loose enough to still look like wandering.
+const WANDER_HOME_RADIUS = 90;
 const MELEE_RANGE = 28; // px — how close the default melee enemy must be to start a swing
 
 // Default "give up eventually" behavior for any non-boss enemy (user
@@ -709,12 +716,25 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
       return false;
     }
 
-    // Idle wander: pick a small nearby target periodically, drift toward it.
+    // Idle wander: a short stroll, then STAND STILL for a while.
+    //
+    // The old cadence re-picked every 2-4s and a stroll takes 1-2.5s, so a
+    // creature was in motion most of the time and the world read as jittery
+    // (the user: "creatures don't need to be moving around so much in idle,
+    // they can chill for a sec"). Resting longer than it walks is what makes
+    // idle read as idle.
     if (now >= this.nextWanderAt) {
-      const angle = Phaser.Math.FloatBetween(0, Math.PI * 2);
+      // ...and stay near where it spawned. Left purely random, a long idle is
+      // a random walk, which drifts a creature arbitrarily far from its anchor.
+      const home = Phaser.Math.Distance.Between(this.x, this.y, this.homeX, this.homeY);
+      const angle =
+        home > WANDER_HOME_RADIUS
+          ? Phaser.Math.Angle.Between(this.x, this.y, this.homeX, this.homeY) +
+            Phaser.Math.FloatBetween(-0.7, 0.7)
+          : Phaser.Math.FloatBetween(0, Math.PI * 2);
       const d2 = Phaser.Math.Between(20, 50);
       this.wanderTarget = { x: this.x + Math.cos(angle) * d2, y: this.y + Math.sin(angle) * d2 };
-      this.nextWanderAt = now + Phaser.Math.Between(2000, 4000);
+      this.nextWanderAt = now + Phaser.Math.Between(WANDER_REST_MIN_MS, WANDER_REST_MAX_MS);
     }
     if (this.wanderTarget) {
       const d = Phaser.Math.Distance.Between(this.x, this.y, this.wanderTarget.x, this.wanderTarget.y);

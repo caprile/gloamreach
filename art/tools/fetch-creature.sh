@@ -1,20 +1,24 @@
 #!/usr/bin/env bash
 # Pull a finished PixelLab character into the game's CREATURE rig layout.
 #
-#   art/tools/fetch-creature.sh <pixellab-character-id> <textureKey> [direction]
-#   e.g. art/tools/fetch-creature.sh 44a670c2-... boar east
+#   art/tools/fetch-creature.sh <pixellab-character-id> <textureKey> [move-dir] [idle-dir]
+#   e.g. art/tools/fetch-creature.sh 44a670c2-... boar east east
+#        art/tools/fetch-creature.sh a527da27-... gremlin east south
 #
-# Only ONE direction is kept; the others come down in the archive and are
-# ignored. Which one depends on the creature's shape, and it matters a lot:
+# Only ONE direction per animation is kept; the rest come down in the archive
+# and are ignored. Which one is a per-ANIMATION choice, not per-creature:
 #
-#   quadrupeds -> east   a boar reads side-on, and a front-facing one is a blob
-#   humanoids  -> south  a profile hides the ears, face and held item that make
-#                        a gremlin a gremlin — it came out as a generic green
-#                        man. Front-facing is also how the placeholders were
-#                        drawn, so the roster stays consistent.
+#   move/attack -> east   a creature that walks should face where it's going;
+#                         a front-facing walk cycle reads as moonwalking.
+#   idle        -> south  standing still, a profile hides the ears, face and
+#                         held item that make a gremlin a gremlin (it came out
+#                         as a generic green man). Front-facing is also how the
+#                         placeholders were drawn.
 #
-# flipX still mirrors at runtime; on a front-facing sprite that reads as the
-# creature turning, which is what the placeholders always did.
+# Quadrupeds want east for everything — a front-on boar is a blob. Humanoids
+# split: front-facing when idle, side-on when moving (the user).
+#
+# flipX still mirrors at runtime, so a side-on walk faces either way.
 #
 # Each animation becomes one horizontal strip:
 #
@@ -25,10 +29,11 @@
 # static sprite, so the still and the animation can never be different art.
 set -euo pipefail
 
-[ $# -ge 2 ] || { echo "usage: fetch-creature.sh <pixellab-character-id> <textureKey> [direction]" >&2; exit 1; }
+[ $# -ge 2 ] || { echo "usage: fetch-creature.sh <id> <textureKey> [move-dir] [idle-dir]" >&2; exit 1; }
 PL_ID="$1"
 KEY="$2"
-DIR="${3:-east}"
+MOVE_DIR="${3:-east}"
+IDLE_DIR="${4:-$MOVE_DIR}"
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 OUT="$ROOT/art/creatures"
@@ -40,14 +45,19 @@ unzip -qo "$TMP/char.zip" -d "$TMP/x"
 SRC="$(find "$TMP/x" -maxdepth 1 -mindepth 1 -type d | head -1)"
 mkdir -p "$OUT" "$ROOT/art/sprites/world"
 
-for dir in "$SRC"/animations/*/"$DIR"/; do
-  [ -d "$dir" ] || continue
-  anim="$(basename "$(dirname "$dir")")"
+for group in "$SRC"/animations/*/; do
+  [ -d "$group" ] || continue
+  anim="$(basename "$group")"
   # A character with two animations of the same NAME (e.g. an east `attack`
   # kept alongside a new south one) gets a group-id suffix on the folder —
   # `attack-902741fb`. The rig parses `<key>_<anim>_f<n>`, so strip it back to
   # the bare name.
   anim="${anim%%-*}"
+  # Idle takes its own direction; everything that MOVES takes the move one.
+  want="$MOVE_DIR"
+  [ "$anim" = "idle" ] && want="$IDLE_DIR"
+  dir="$group$want/"
+  [ -d "$dir" ] || continue
   frames=("$dir"frame_*.png)
   # Drop any earlier strip for this anim first — the frame count is in the
   # filename, so a re-fetch at a different count would leave BOTH on disk and
@@ -61,6 +71,8 @@ done
 # character's full canvas. Trimming only the still would make the creature
 # visibly jump size the moment it moves. Transparent padding costs nothing to
 # draw, and the body/reach footprint is pinned separately anyway.
-if [ -f "$SRC/rotations/$DIR.png" ]; then
-  cp "$SRC/rotations/$DIR.png" "$ROOT/art/sprites/world/$KEY.png"
+# The static sprite matches the IDLE direction: it's what a resting creature
+# shows before any animation starts, so it has to agree with the idle strip.
+if [ -f "$SRC/rotations/$IDLE_DIR.png" ]; then
+  cp "$SRC/rotations/$IDLE_DIR.png" "$ROOT/art/sprites/world/$KEY.png"
 fi
