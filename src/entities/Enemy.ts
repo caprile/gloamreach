@@ -586,7 +586,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   protected markAttackLanded(now: number): void {
     this.pursuitClockStart = now;
     this.extendAggroPersist(now);
-    this.markAttackAnim(now);
+    this.markAttackAnim();
   }
 
   /**
@@ -598,10 +598,16 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
    * standing still, and played its front-facing idle mid-attack (the user).
    * Stamping the window from the attack markers means every attacker gets it,
    * including the ones with entirely custom state machines.
+   *
+   * Deliberately takes NO time argument: it stamps from the same clock
+   * syncCreatureAnimation reads. Callers pass their own `now`, which is scene
+   * time in the real game but trivially diverges elsewhere, and a window
+   * stamped on one clock and compared against another never expires.
    */
   private attackAnimUntil = 0;
   private static readonly ATTACK_ANIM_MS = 450;
-  protected markAttackAnim(now: number): void {
+  protected markAttackAnim(): void {
+    const now = this.scene.time.now;
     this.attackAnimUntil = Math.max(this.attackAnimUntil, now + Enemy.ATTACK_ANIM_MS);
   }
 
@@ -619,7 +625,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   // means what it says: 30s of pursuit without CONNECTING backs off.
   protected markAttackAttempted(now: number): void {
     this.extendAggroPersist(now);
-    this.markAttackAnim(now);
+    this.markAttackAnim();
   }
 
   // A projectile this enemy fired actually hit the player — the ranged

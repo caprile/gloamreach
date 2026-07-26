@@ -175,7 +175,7 @@ export class Gloamwarden extends Enemy {
         this.updateExecuting(delta, now);
         return false;
       case "recovering":
-        this.updateRecovering(now);
+        this.updateRecovering(now, playerX, playerY);
         return false;
       default:
         this.updateIdle(playerX, playerY, now);
@@ -276,6 +276,9 @@ export class Gloamwarden extends Enemy {
   private beginExecute(now: number): void {
     this.wardenState = "executing";
     this.stateEnteredAt = now;
+    // Bosses resolve damage through checkPlayerHit() and never touch the
+    // shared attackPhase, so nothing else would ever play their attack strip.
+    this.markAttackAnim();
     this.hasHitThisAttack = false;
     this.telegraphGfx.clear();
     const body = this.body as Phaser.Physics.Arcade.Body;
@@ -324,7 +327,12 @@ export class Gloamwarden extends Enemy {
     (this.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0);
   }
 
-  private updateRecovering(now: number): void {
+  private updateRecovering(now: number, playerX: number, playerY: number): void {
+    // Turn back toward the player as it recovers. A committed attack faces
+    // its LOCKED heading, and the travelling ones (leap, charge, roll) carry
+    // the boss PAST you — so without this it spends its whole punish window
+    // staring the wrong way (the user, on the Gloamwarden).
+    this.applyFacing(playerX - this.x, playerY - this.y);
     if (now >= this.stateEnteredAt + this.currentStateDurationMs) {
       this.wardenState = "idle";
       this.nextAttackReadyAt = now + ATTACK_COOLDOWN_MS;
