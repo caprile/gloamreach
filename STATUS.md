@@ -2,18 +2,23 @@
 
 ## Current State
 
-_Living snapshot — edit in place, never append._ Last shipped: **the creature animation pass +
-a UI slim-down** (2026-07-25, Opus) (`.claude/plans/art-textures-lighting-3-biomes.md`).
+_Living snapshot — edit in place, never append._ Last shipped: **creature art pass 2 — gator
+Mirejaw, ghost Corpselight, per-creature attack animations** (2026-07-25, Opus)
+(`.claude/plans/art-textures-lighting-3-biomes.md`).
 
 **The art migration now covers everything except the ground.** Icons (181), world props/flora/
 ore/POI structures/crypt tiles/map markers/ability icons (182), the **player rig** (5 survivors,
 4-direction idle + walk, themed on their starting ability, `src/art/playerRig.ts`), and the
-**creature roster** — all 14 common creatures plus all 8 bosses, **20 of 22 animated**
+**creature roster** — all 14 common creatures plus all 8 bosses, **19 of 22 animated**
 (idle/walk/attack, `src/art/creatureRig.ts`), with the 14 elites recoloured from their bases
 automatically. Roughly **500 real assets**; every override key resolves, no filename unmatched.
+**Each animated creature now plays the attack it actually performs** (Gremlin throws, Palewake
+hauls its tether, Kilnborn spins, gators chomp) rather than a shared `cross-punch` — the mapping
+table lives in `art/README.md`.
 
-**Deliberately NOT animated:** Snake and Sandmaw — a legless serpent and a burrowing worm fit
-neither the humanoid nor the quadruped skeleton, and both are ambushers whose read is stillness.
+**Deliberately NOT animated:** Snake, Sandmaw and Corpselight — a legless serpent, a burrowing
+worm and a floating wisp fit neither the humanoid nor the quadruped skeleton. The first two are
+ambushers whose read is stillness; the Corpselight already hovers via `bobPhase` in code.
 **Deliberately still placeholder:** the tiny 6x6 projectiles (a 32px generation downscaled to 6px
 is mush) and the ground itself. **No player attack animation** — both generation routes were tried
 and rejected; the body pulses and the held item lunges instead. **No weapon-in-hand sprites** — the
@@ -23,12 +28,16 @@ the user's call on elites: the recolour is "good for now". Bespoke elite art is 
 pass, and since `eliteVariants.ts` skips any elite key that was itself overridden, dropping in a
 real `<name>_elite.png` simply wins.
 
-**Next:** ground texturing + biome blending — deliberately last, being the one part of the
-migration that is *not* per-asset reversible (the ground is generated, not a sprite). Also open
-from the user's notes: a stouter/gobliny gremlin (the humanoid rig reads too human; custom
-proportions came out worse, so it needs a different approach), a real rock-throw animation for the
-ranged gremlin, art for the ATTACKS themselves (e.g. the Gloamwarden's ground spikes), and the ~19
-ambient props that need regenerating as objects to animate.
+**Next, in the user's stated order:** (1) **ground/backdrop texturing + biome blending** —
+deliberately last of the asset work, being the one part of the migration that is *not* per-asset
+reversible (the ground is generated, not a sprite); (2) **AOE / attack FX art** — the
+Cinderwrought's cinder cone, the Gloamwarden's ground spikes and the rest of the telegraph
+footprints, all currently procedural `Graphics`; (3) **on-theme inventory and crafting menu art**
+(`create_ui_asset` for panel/slot frames, buttons, tabs); (4) a **unique in-game cursor**
+(`input.setDefaultCursor`, worth a hover/attack variant given the game is mouse-driven). Also
+still open from the user's earlier notes: a stouter/gobliny gremlin (the humanoid rig reads too
+human; custom proportions came out worse, so it needs a different approach) and the ~19 ambient
+props that need regenerating as objects to animate.
 
 **Still placeholder, deliberately:** the tiny 6×6 projectiles (`gremlin_rock`, `pellet_projectile`,
 `gloam_bolt` — a 32px generation downscaled to 6px is mush; the procedural dot is better), and the
@@ -297,6 +306,55 @@ touches no combat numbers.
 ## Recent Entries
 
 > Older entries in STATUS-archive.md.
+
+### Creature art pass 2 — gator Mirejaw, ghost Corpselight, per-creature attacks (2026-07-25, Opus)
+
+Three playtest notes off the animated roster, all art-layer only — **no code changed**, `tsc`
+clean, and every fix is a PNG swap the existing loaders pick up.
+
+**1. "The alligator looks like a dog."** It did. The Mirejaw was a quadruped `create_character`
+whose description ("gloam-gator") never named the anatomy that makes a gator a gator, and the
+skeleton — which controls the pose but not the shape — filled in a retriever. Regenerated as
+**Mirejaw v2** (`lion` template) with the anatomy spelled out: *huge long flat toothy snout, body
+pressed low and flat to the ground on short splayed legs, very long thick tapering tail, no fur*.
+One generation, unmistakably an alligator. **The lesson is cheap to reuse:** the skeleton is the
+pose, the description is the animal.
+
+**2. "It should be biting, not clawing."** The old attack was a paw-swipe. The quadruped set has
+`jump-attack` — a lunging strike with the jaws open — which is both the right verb and a match for
+the Mirejaw's actual in-game Lunge. Verified frame-by-frame and live: it now closes and chomps.
+The Miretyrant was checked too and left alone; its custom attack already turns front-on and opens
+its jaws.
+
+**3. "The Corpselight used to be a cool ghost, now it's a humanoid."** Also correct, and
+structural rather than a bad roll: a humanoid `create_character` **always has legs**, so a legless
+floating swamp-haunt could never come out of that path. It now ships as a **static
+`create_map_object`** — a tattered shroud under a glowing wisp-head, matching the placeholder
+the user liked — and its three strips were deleted. Nothing was lost: `Corpselight.bobPhase`
+already rides rotation for a hover, so it reads as floating with no animation at all, and a walk
+cycle on a thing with no legs was the wrong ask from the start. Joins snake and sandmaw as
+**deliberately static** (so: **19 of 22 animated**, 3 static by design). Two variants were
+generated and the narrower shroud-plus-flame-head one was installed as the closer match to the
+old art; the broader hooded version is the alternative if the user prefers it.
+
+**4. "The attack animations feel a bit repetitive."** The cause was a single line in the original
+recipe: *humanoids use `cross-punch`*. Twelve visually distinct creatures all threw the same
+punch. Each now plays the attack it actually performs — **`throw-object`** for the Gremlin (which
+closes the standing "the ranged gremlin needs a real rock-throw" backlog item),
+**`pull-heavy-object`** for the Palewake's drain tether, **`hurricane-kick`** for the Kilnborn's
+radial backdraft, **`two-footed-jump`** for the Gremlin King's leaping smash, and so on; the full
+table is in `art/README.md`. Murkling deliberately keeps `cross-punch` as the swarm baseline —
+it's no longer the shared default, just one creature's attack. Cost was **~12 generations total**
+(a template animation is 1 generation and only one direction is generated), which is why this was
+worth doing properly rather than tolerating.
+
+**Process note worth keeping:** re-fetching a creature rewrites *all three* strips plus the static
+sprite from whichever direction is passed, so idle/walk were backed up and restored after each
+fetch. Only the attack strip is new — nothing else could regress.
+
+Verified live: all 11 touched textures load at the expected sizes, the 19 animated creatures
+register idle/walk/attack, elites derive correctly from the new art (including the recoloured
+animation strips), and a spawned Mirejaw was caught mid-lunge with its jaws open.
 
 ### Creature animation + the UI slim-down (2026-07-25, Opus)
 

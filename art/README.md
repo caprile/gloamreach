@@ -215,9 +215,46 @@ animated creature costs ~4 generations.
 **Template animation sets differ per skeleton — read them per creature** from
 `get_character`'s `available_animations`. `bear`/`lion` have real attacks;
 `dog` has none (`bark` stands in for a lunge); `cat` has none (`jump` for a
-toad's lunge, `angry` for a snarl). Humanoids use `walking-6-frames` +
-`cross-punch` (or `fireball` for casters) + `breathing-idle` /
-`fight-stance-idle-8-frames`.
+toad's lunge, `angry` for a snarl). Humanoids walk with `walking-6-frames` and
+idle with `breathing-idle` / `fight-stance-idle-8-frames`.
+
+**One attack template for every humanoid reads as repetitive.** The first pass
+gave every humanoid `cross-punch` (casters `fireball`), which the user called
+out immediately: twelve different-looking creatures all threw the same punch.
+Attacks are now assigned per creature to match the attack it actually performs
+in game, which costs nothing extra — a template animation is **1 generation per
+direction**, and only one direction is generated.
+
+| Creature | Template | The attack it's playing |
+|---|---|---|
+| Gremlin (ranged) | `throw-object` | the rock throw — a real wind-up and release |
+| Gremling | `lead-jab` | fast, small claw (3 frames — suits it) |
+| Gremlin King | `two-footed-jump` | leaping smash / ground slam |
+| Murkling | `cross-punch` | kept — the generic swarm baseline |
+| Hexling, Duneshaper | `fireball` | casters |
+| Cinderwrought | `pushing` | heaves the cinder cone forward |
+| Gloamwarden | `flying-kick` | leaping smash |
+| Mosswretch | `surprise-uppercut` | big rising two-arm smash |
+| Palewake | `pull-heavy-object` | drags the drain tether in |
+| Kilnborn | `hurricane-kick` | a spin — the radial backdraft |
+| Mirejaw, Sanguinarch | `jump-attack` | lunging chomp / pounce (quadruped) |
+| Boar, Cragscale, Miretyrant | `attack` | quadruped strike / chomp |
+
+**A quadruped skeleton plus a thin description reads as a dog.** The first
+Mirejaw was "a gloam-gator" on a quadruped rig and came out a green retriever.
+The skeleton controls the pose; only the *description* carries anatomy, so it
+has to name the parts that distinguish the animal — for the gator, "huge long
+flat toothy snout, body pressed low and flat to the ground on short splayed
+legs, very long thick tapering tail, no fur". Same 1 generation, and the second
+attempt was unmistakably an alligator.
+
+**Not every creature belongs on the character path.** The humanoid skeleton
+always has legs, so the Corpselight — a legless floating swamp-haunt — came out
+as a person in a hooded coat. It ships as a **static `create_map_object`**
+instead, like the snake and sandmaw: the entity already bobs in code
+(`Corpselight.bobPhase` rides rotation), so it reads as hovering with no strips
+at all, and a walk cycle on a thing with no legs was always the wrong ask. Ask
+"does this creature have the skeleton?" *before* spending a character create.
 
 **Two things that bit, both now handled by the script:** PixelLab appends a
 group-id suffix to the folder when a character has two animations of the same
@@ -232,8 +269,9 @@ size the moment it moves.
 **Elites are free.** `creatureRig` recolours each strip through the same ramp as
 the static elites, so an animated creature's elite comes along automatically.
 
-**Shapes that fit no skeleton stay static** (snake, sandmaw). That is a finished
-state, not a gap: both are ambushers whose read is stillness.
+**Shapes that fit no skeleton stay static** (snake, sandmaw, corpselight). That
+is a finished state, not a gap: the first two are ambushers whose read is
+stillness, and the third is a legless wisp that hovers rather than walks.
 
 ## Regenerating the manifest
 

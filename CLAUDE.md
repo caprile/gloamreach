@@ -1995,7 +1995,7 @@ below.**
    the ground is generated rather than a sprite.
    **Phase 4 (player rig) + the creature roster shipped** (2026-07-25, same day). Five survivors
    with 4-direction idle + walk, themed on their starting ability (`src/art/playerRig.ts`); all 14
-   common creatures and all 8 bosses with real art, **20 of 22 animated** idle/walk/attack
+   common creatures and all 8 bosses with real art, **19 of 22 animated** idle/walk/attack
    (`src/art/creatureRig.ts`). The `*_elite` trap above is **resolved**: elites are recoloured from
    their base's real pixels at load time (`src/art/eliteVariants.ts`) — including animation strips —
    so they never need authoring, and a hand-authored `<name>_elite.png` still wins.
@@ -2005,11 +2005,26 @@ below.**
    face/held item that identify a humanoid), movement and attacks face side-on (a front-facing walk
    moonwalks); and a creature's **body + reach stay pinned to its placeholder footprint**
    (`placeholderDims`), so real art can be bigger without silently rebalancing combat.
-   **Deliberately not animated:** Snake and Sandmaw (neither fits a humanoid or quadruped skeleton,
-   and both are ambushers whose read is stillness). **No player attack animation** — both routes
+   **Deliberately not animated:** Snake, Sandmaw and Corpselight (none fits a humanoid or quadruped
+   skeleton; the first two are ambushers whose read is stillness, the third is a legless wisp that
+   already hovers via `bobPhase` in code). **No player attack animation** — both routes
    were rejected; the body pulses and the held item lunges. **No weapon-in-hand sprites** — the
    plan's anchor needed a per-frame hand joint the API doesn't expose.
-   **Next: ground texturing + biome blending** (the last phase), plus attack/ability FX art.
+   **A second creature pass followed the same day** off the user's playtest, art-layer only (no code
+   changed): the **Mirejaw was regenerated as a real alligator** (the old one read as a dog — a
+   quadruped skeleton controls the POSE, only the description carries the ANATOMY, so it has to
+   name snout/low body/tail/no-fur explicitly) with a **lunging chomp** (`jump-attack`) instead of a
+   paw-swipe; the **Corpselight moved off the character path entirely** to a static
+   `create_map_object` ghost, because a humanoid skeleton always has legs and no prompt was ever
+   going to produce a legless floating haunt from it; and **every creature's attack template now
+   matches the attack it actually performs** (Gremlin `throw-object`, Palewake `pull-heavy-object`,
+   Kilnborn `hurricane-kick`, Gremlin King `two-footed-jump`, …) — the original recipe's blanket
+   "humanoids use `cross-punch`" is what made the roster feel repetitive. Full mapping table +
+   both lessons in `art/README.md`.
+   **Next, in the user's stated order:** ground/backdrop texturing + biome blending (the last
+   non-reversible phase) → **AOE/attack FX art** (Cinderwrought's cinder cone, Gloamwarden's ground
+   spikes, telegraph footprints — all procedural `Graphics` today) → **on-theme inventory/crafting
+   menu art** (`create_ui_asset`) → a **unique in-game cursor** (`input.setDefaultCursor`).
 
 **Bosses (was item 7)** — shipped, see 5c above (Boss Altar + Gremlin King). Future
 bosses should each get their own bespoke AI (per the locked "no shared boss
