@@ -359,6 +359,15 @@ Two impact sprites are wired as the exemplars: the **Gloamwarden's crystal erupt
 actually uses, so what you see is what hits, and both torn down on the DESPAWN path as well as
 death (the bug that stranded HP bars).
 
+**Bug, same session: a mini-boss health bar stayed pinned to the top of the screen after you ran
+away** (the user). Every boss leashes on how far IT has travelled from ITS OWN spawn, which never
+trips for one that can't close the distance — a crypt warden held back by a wall, or any boss you
+simply walked away from and left standing at home. Reproduced at 4243px with the warden still
+reporting aggro. Fixed as a DISPLAY concern rather than by touching five AI state machines: the
+bar now also requires the boss within `BOSS_BAR_MAX_DIST` (1000px, comfortably past the ~735px
+visible corner so it can't flicker at the screen edge). One gate covers big bosses and
+mini-bosses alike, the aggro state is untouched, and walking back brings the bar straight back.
+
 **Not done, deliberately:** the Cinderwrought's cinder cone stays procedural. `create_map_object`
 resists top-down fire — a "top-down fan of fire" returns a side-on campfire, a "triangular wedge
 of flame from above" returns a flat triangle, and the one generation that did produce real flame

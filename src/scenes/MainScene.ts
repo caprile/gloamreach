@@ -9658,12 +9658,33 @@ export class MainScene extends Phaser.Scene {
   // Poise-break punish multiplier for a staggerable boss/mini-boss, else 1.
   // Shared by the primary melee hit, arc secondaries, and ranged so the three
   // can't drift.
+  // The top-of-screen boss bar is a DISPLAY concern, so it can't hang off the
+  // AI's aggro flag alone. Every boss leashes on how far IT has travelled from
+  // ITS OWN spawn — which never trips for one that can't close the distance: a
+  // crypt warden held back by a wall, or any boss you simply walked away from
+  // and left standing at home. the user saw the result as a mini-boss health bar
+  // still pinned to the top of the screen thousands of pixels later.
+  //
+  // Gating on distance to the player fixes every boss at once and can't
+  // destabilise a fight, since a boss out here is off screen anyway. The range
+  // is comfortably past the visible world (1280x720 at zoom 1.5, so ~735px
+  // corner to centre) so the bar doesn't flicker at the screen edge, and a boss
+  // that charges briefly out of view keeps its bar.
+  private static readonly BOSS_BAR_MAX_DIST = 1000;
+
+  private withinBossBarRange(e: { x: number; y: number }): boolean {
+    return (
+      Phaser.Math.Distance.Between(this.player.x, this.player.y, e.x, e.y) <=
+      MainScene.BOSS_BAR_MAX_DIST
+    );
+  }
+
   // Whichever "big" boss (Gremlin King / Duneshaper / Miretyrant) is engaged, for
   // the fixed top-of-screen BossHealthUI. Takes priority over an engaged mini-boss
   // (see engagedMiniBoss, which now also feeds the big bar as of 2026-07-23).
   private engagedBigBoss(): BossBarTarget | null {
     for (const b of [this.gremlinKing, this.duneshaper, this.miretyrant]) {
-      if (b && !b.depleted && b.isEngaged()) return b;
+      if (b && !b.depleted && b.isEngaged() && this.withinBossBarRange(b)) return b;
     }
     return null;
   }
@@ -9679,7 +9700,7 @@ export class MainScene extends Phaser.Scene {
   // from its own in-world tell.
   private engagedMiniBoss(): BossBarTarget | null {
     for (const e of this.enemies) {
-      if (e.depleted || !e.isAggro()) continue;
+      if (e.depleted || !e.isAggro() || !this.withinBossBarRange(e)) continue;
       if (
         !(
           e instanceof Gloamwarden ||
