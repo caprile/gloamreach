@@ -249,7 +249,7 @@ export class Cinderwrought extends Enemy {
     // walks slowly (95px/s) and the hitboxes are wide/long, they're inside the
     // shape at this instant — the only escape is a dash's i-frames.
     this.attackAngle = Phaser.Math.Angle.Between(this.x, this.y, playerX, playerY);
-    this.applyFacing(Math.cos(this.attackAngle), Math.sin(this.attackAngle));
+    this.faceAngle(this.attackAngle);
     this.currentStateDurationMs = this.currentAttack === "cone" ? CONE_IMPACT_MS : HAMMER_IMPACT_MS;
   }
 

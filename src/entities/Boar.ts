@@ -281,7 +281,7 @@ export class Boar extends Enemy {
         this.endWindupTell();
         this.clearAreaTelegraph();
         body.setVelocity(Math.cos(this.chargeAngle) * CHARGE_SPEED, Math.sin(this.chargeAngle) * CHARGE_SPEED);
-        this.applyFacing(Math.cos(this.chargeAngle), Math.sin(this.chargeAngle));
+        this.faceAngle(this.chargeAngle);
       }
       return false;
     }

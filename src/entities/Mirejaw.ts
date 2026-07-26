@@ -285,7 +285,7 @@ export class Mirejaw extends Enemy {
     }
     const angle = Phaser.Math.Angle.Between(this.x, this.y, this.wanderTgt.x, this.wanderTgt.y);
     body.setVelocity(Math.cos(angle) * LURK_DRIFT, Math.sin(angle) * LURK_DRIFT);
-    this.applyFacing(Math.cos(angle), Math.sin(angle));
+    this.faceAngle(angle);
   }
 
   private surface(): void {

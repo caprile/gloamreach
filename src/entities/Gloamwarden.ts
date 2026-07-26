@@ -286,7 +286,7 @@ export class Gloamwarden extends Enemy {
       const angle = Phaser.Math.Angle.Between(this.x, this.y, this.smashTargetX, this.smashTargetY);
       const speed = dist > 0 ? dist / (SMASH_LEAP_MS / 1000) : 0;
       body.setVelocity(Math.cos(angle) * speed, Math.sin(angle) * speed);
-      this.applyFacing(Math.cos(angle), Math.sin(angle));
+      this.faceAngle(angle);
     } else {
       // Eruption: rooted, spikes burst at the locked spot for the impact window.
       body.setVelocity(0, 0);

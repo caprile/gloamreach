@@ -271,7 +271,7 @@ export class Mosswretch extends Enemy {
       } else {
         const angle = Phaser.Math.Angle.Between(this.x, this.y, this.wanderTgt.x, this.wanderTgt.y);
         body.setVelocity(Math.cos(angle) * WANDER_SPEED, Math.sin(angle) * WANDER_SPEED);
-        this.applyFacing(Math.cos(angle), Math.sin(angle));
+        this.faceAngle(angle);
       }
     }
     return false;

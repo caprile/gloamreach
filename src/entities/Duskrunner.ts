@@ -258,7 +258,7 @@ export class Duskrunner extends Enemy {
         this.clearAreaTelegraph();
         const spd = POUNCE_SPEED * this.speedMult;
         body.setVelocity(Math.cos(this.pounceAngle) * spd, Math.sin(this.pounceAngle) * spd);
-        this.applyFacing(Math.cos(this.pounceAngle), Math.sin(this.pounceAngle));
+        this.faceAngle(this.pounceAngle);
       }
       return false;
     }

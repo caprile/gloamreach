@@ -383,7 +383,7 @@ export class GremlinKing extends Enemy {
       const angle = Phaser.Math.Angle.Between(this.x, this.y, this.smashTargetX, this.smashTargetY);
       const speed = dist > 0 ? dist / (SMASH_LEAP_MS / 1000) : 0;
       body.setVelocity(Math.cos(angle) * speed, Math.sin(angle) * speed);
-      this.applyFacing(Math.cos(angle), Math.sin(angle));
+      this.faceAngle(angle);
     } else {
       body.setVelocity(0, 0);
       this.currentStateDurationMs = SLAM_EXECUTE_MS;

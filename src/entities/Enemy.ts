@@ -480,7 +480,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     if (this.rigged === undefined) this.rigged = hasCreatureRig(this.scene, this.artKey);
     if (!this.rigged || this.depleted) return;
     const body = this.body as Phaser.Physics.Arcade.Body | null;
-    const want: CreatureAnim = this.isAttacking()
+    const want: CreatureAnim = this.isAttacking() || this.scene.time.now < this.attackAnimUntil
       ? "attack"
       : body && (body.velocity.x || body.velocity.y)
         ? "walk"
@@ -586,6 +586,23 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   protected markAttackLanded(now: number): void {
     this.pursuitClockStart = now;
     this.extendAggroPersist(now);
+    this.markAttackAnim(now);
+  }
+
+  /**
+   * Hold the attack ANIMATION for a beat.
+   *
+   * `isAttacking()` only reflects the shared melee swing (`attackPhase`), which
+   * a bespoke attack never sets — so a Hexling casting flame or a Gremlin
+   * throwing a rock looked, to the animation layer, exactly like a creature
+   * standing still, and played its front-facing idle mid-attack (the user).
+   * Stamping the window from the attack markers means every attacker gets it,
+   * including the ones with entirely custom state machines.
+   */
+  private attackAnimUntil = 0;
+  private static readonly ATTACK_ANIM_MS = 450;
+  protected markAttackAnim(now: number): void {
+    this.attackAnimUntil = Math.max(this.attackAnimUntil, now + Enemy.ATTACK_ANIM_MS);
   }
 
   // Call when an attack is merely ATTEMPTED (a shot fired, which may well miss)
@@ -602,6 +619,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   // means what it says: 30s of pursuit without CONNECTING backs off.
   protected markAttackAttempted(now: number): void {
     this.extendAggroPersist(now);
+    this.markAttackAnim(now);
   }
 
   // A projectile this enemy fired actually hit the player — the ranged
@@ -758,6 +776,12 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   // the update while nearly stopped so it keeps its last facing (e.g. mid-bite)
   // instead of snapping to an arbitrary angle from a near-zero velocity.
   protected applyFacing(vx: number, vy: number): void {
+    // NOTE: this takes a VELOCITY, not a direction. A unit vector is below the
+    // near-stopped threshold below and silently does nothing — which is how the
+    // Hexling ended up walking right while facing left (the user), and it had
+    // gone unnoticed because the placeholder sprite was symmetric enough not to
+    // show it. Ten call sites had the same bug. If you have an angle, use
+    // faceAngle(); if you have a direction, scale it by the actual speed.
     if (Math.abs(vx) < 3 && Math.abs(vy) < 3) return;
     if (this.upright) {
       this.applyUprightFacing(vx, vy);
@@ -784,7 +808,12 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   // those tells previously didn't rotate the sprite. Same nose-first PI offset.
   protected faceAngle(angle: number): void {
     if (this.upright) {
-      this.applyUprightFacing(Math.cos(angle), Math.sin(angle));
+      // Scaled to a real magnitude on purpose. applyUprightFacing ignores
+      // |vx| <= 3 so an enemy moving straight up/down doesn't flip-flop on
+      // horizontal noise — which means a UNIT vector lands under that
+      // threshold and silently does nothing. That guard is why the Hexling
+      // walked right while facing left.
+      this.applyUprightFacing(Math.cos(angle) * 100, Math.sin(angle) * 100);
       return;
     }
     this.setRotation(angle + Math.PI);
