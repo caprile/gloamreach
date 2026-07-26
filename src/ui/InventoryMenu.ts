@@ -6,7 +6,7 @@ import { itemDef, itemBiome, itemCategory, type ItemBiome, type ItemCategory } f
 import type { Skills } from "../systems/Skills";
 import type { PlayerProgression } from "../systems/Progression";
 import type { WeaponType } from "../systems/Weapons";
-import { RARITY_COLOR, rarityIcon, rarityName, relicEffectText, relicFamilyName, type RelicEffectSummary, type RelicFamilySlot, type RelicGroup } from "../systems/Relics";
+import { RARITY_COLOR, rarityIcon, rarityName, relicEffectText, relicFamilyName, uniqueText, type RelicEffectSummary, type RelicFamilySlot, type RelicGroup } from "../systems/Relics";
 import { appliedAugmentIds, isAugmentableItem, MAX_AUGMENTS_PER_ITEM } from "../systems/GearAugments";
 import { Tooltip } from "./Tooltip";
 
@@ -65,10 +65,10 @@ export interface InventoryMenuDeps {
   // filled) — surfaced right on the Inventory panel since playtesters kept
   // checking the Equipment column for them instead of the HUD relic bar.
   relicFamilySlots: () => RelicFamilySlot[];
-  // Aggregated "all relic effects" — one row per channel the owned relics
-  // touch, each with its grand total + the relics contributing to it (rendered
-  // below the relic slots; hovering a row shows the per-relic breakdown).
-  relicEffectSummary: () => RelicEffectSummary[];
+  // Every numeric axis acting on the player: one combined number each, with the
+  // contributions that built it. Assembled by MainScene so this panel never
+  // re-derives a number combat already knows.
+  activeEffects: () => EffectAxisView[];
   // Left-press on a filled slot begins dragging that stack.
   beginDrag: (container: ItemContainer, index: number, pointer: Phaser.Input.Pointer) => void;
   // Left-press on an occupied equipment slot begins dragging the equipped
@@ -105,8 +105,25 @@ export interface InventoryMenuDeps {
   upgradeReady: (key: string, tier: number, appliedIds?: string[]) => boolean;
 }
 
-/** Backpack biome filters, plus the Relics view that replaces the grid. */
-type InventoryTab = ItemBiome | "all" | "relics";
+// One axis of the Active Effects tab: the combined number the game actually
+// uses, plus the individual things that built it. Assembled by
+// MainScene.activeEffects() — the menu stays presentation-only, so a number
+// here can never disagree with the number combat uses.
+export interface EffectAxisView {
+  label: string;
+  total: string;
+  parts: { label: string; amount: string }[];
+}
+
+// A trailing block with no combined number — conditional procs and set bonuses,
+// which are sentences rather than an addend on some axis.
+interface FxNote {
+  title: string;
+  lines: { text: string; color: string; small?: boolean }[];
+}
+
+/** Backpack biome filters, plus the Relics/Effects views that replace the grid. */
+type InventoryTab = ItemBiome | "all" | "relics" | "effects";
 
 export const PANEL_X = 16;
 export const PANEL_Y = 48;
@@ -219,13 +236,12 @@ const TRASH_ROW = Math.max(...Object.values(ARMOR_LAYOUT).filter((p) => p.col ==
 const TRASH_X = ARMOR_X + (SLOT + GAP);
 const TRASH_Y = ARMOR_Y + TRASH_ROW * ARMOR_ROW_PITCH;
 
-// Combat stats now sit UNDER the equipment grid instead of beside it — the
-// side-by-side column cost 200px of width for a handful of short text rows,
-// and width is the scarce axis (the panel has to stay clear of the player).
-const STATS_X = ARMOR_X;
-const STATS_Y = ARMOR_Y + ARMOR_H + 26;
-const STATS_W = 200;
-const STATS_H = 150;
+// The Combat block used to sit under the equipment grid; it is now the first
+// section of the Active Effects tab. This width floor is all that survives of
+// it — the equipment column is narrower than the old stats block, and letting
+// the panel shrink to it would move every anchor the paper-doll is tuned
+// against for no gain.
+const EQUIP_COL_MIN_W = 200;
 
 // Relics moved out of the panel entirely and onto their own backpack TAB
 // (the user). They were a 4th side-by-side column purely so equipped relics
@@ -238,13 +254,32 @@ const RELICS_Y = BP_GRID_TOP;
 const RELIC_GRID_ROWS = Math.ceil(8 / RELICS_COLS); // 2
 const RELIC_GRID_H = RELIC_GRID_ROWS * SLOT + (RELIC_GRID_ROWS - 1) * GAP;
 const RELICS_W = RELICS_COLS * SLOT + (RELICS_COLS - 1) * GAP;
-const RELIC_FX_Y = RELICS_Y + RELIC_GRID_H + 20; // "Effects" header baseline
 const RELIC_FX_ROW_H = 17;
 
-export const PANEL_W = ARMOR_X + Math.max(ARMOR_W, STATS_W) - PANEL_X + 12;
-// The backpack column is the tallest thing in the panel, so it alone sets the
-// height; Equipment + Combat stacked still finish well above it.
-export const PANEL_H = Math.max(BACKPACK_Y + BACKPACK_H + 20, STATS_Y + STATS_H) - PANEL_Y;
+// Active Effects tab. It replaced the Combat block under Equipment AND the
+// relic Effects list under the relic slots (the user) — one place answering
+// "what is actually acting on me right now" instead of two partial ones. Both
+// of those were narrow columns, which is exactly why the unified list didn't
+// fit anywhere: it needs the backpack's full width, and even then it runs long
+// enough to want TWO columns. Sections are placed greedily and never split
+// across a column, so a section always reads as one block.
+//
+// Two columns is enough because the content is BOUNDED, not open-ended: at most
+// 8 relic channels and 8 procs (one relic per family), 5 jewelry channels, and a
+// handful of set bonuses. A maximal loadout — every family filled with a Mythic,
+// three passives worn, a full set — measures 621px against a 826px floor.
+const FX_COL_GAP = 22;
+const FX_COL_W = Math.floor((BACKPACK_W - FX_COL_GAP) / 2);
+const FX_ROW_H = 18; // an axis's own header row
+const FX_PART_H = 13; // one indented contribution
+const FX_INDENT = 12;
+const FX_SECTION_GAP = 8;
+
+export const PANEL_W = ARMOR_X + Math.max(ARMOR_W, EQUIP_COL_MIN_W) - PANEL_X + 12;
+// The backpack column is the tallest thing in the panel and now the only thing
+// that sets its height — the Combat block that used to hang below Equipment
+// moved into the Active Effects tab.
+export const PANEL_H = BACKPACK_Y + BACKPACK_H + 20 - PANEL_Y;
 
 // Top-left grid inventory (Tab). Renders the backpack ItemContainer as a grid
 // plus worn-equipment placeholders. Slots are drag sources (and the whole
@@ -553,54 +588,26 @@ export class InventoryMenu {
     const x0 = PANEL_X + 12;
 
     const relicTab = this.activeTab === "relics";
+    const effectsTab = this.activeTab === "effects";
+    const gridTab = !relicTab && !effectsTab;
+    const heading = relicTab ? "Relics" : effectsTab ? "Active Effects" : "Backpack";
     this.addText(x0, PANEL_Y + 10, "Inventory", 15, "#ffffff");
-    this.addText(BACKPACK_X, PANEL_Y + 36, relicTab ? "Relics" : "Backpack", 12, "#8a93a3");
-    if (!relicTab) this.renderSortButton();
+    this.addText(BACKPACK_X, PANEL_Y + 36, heading, 12, "#8a93a3");
+    if (gridTab) this.renderSortButton();
     this.addText(ARMOR_X, PANEL_Y + 36, "Equipment", 12, "#8a93a3");
     this.renderTabs();
-    // The relics tab takes over the backpack's whole area, so its search box
-    // and grid are skipped rather than drawn underneath.
+    // The relics and effects tabs take over the backpack's whole area, so its
+    // search box and grid are skipped rather than drawn underneath.
     if (relicTab) {
       this.renderRelics(RELICS_X, RELICS_Y);
-      this.renderRelicEffects(RELICS_X, RELIC_FX_Y);
+    } else if (effectsTab) {
+      this.renderActiveEffects(BACKPACK_X, BP_GRID_TOP);
     } else {
       this.renderSearch();
       this.renderBackpackGrid();
     }
     this.renderArmor(ARMOR_X, ARMOR_Y);
     this.renderTrash();
-    this.addText(STATS_X, STATS_Y - 18, "Combat", 12, "#8a93a3");
-    this.renderCombatStats(STATS_X, STATS_Y);
-  }
-
-  // Aggregated "all relic effects" — one row per active channel with its grand
-  // total, stacked below the relic slots. Hovering a row reuses the relic
-  // tooltip to break down which relics contribute (task from the S3 triage:
-  // "total aggregated effect list + hover a stat -> which relic grants it").
-  private renderRelicEffects(x0: number, y0: number): void {
-    const summary = this.deps.relicEffectSummary();
-    this.addText(x0, y0, "Effects", 11, "#8a93a3");
-    if (summary.length === 0) {
-      this.addText(x0, y0 + 16, "—", 10, "#5b6472");
-      return;
-    }
-    const totalX = x0 + RELICS_W;
-    summary.forEach((row, i) => {
-      const y = y0 + 18 + i * RELIC_FX_ROW_H;
-      // A wide invisible hit-rect over the whole row so hovering anywhere on
-      // it pops the source breakdown.
-      const hit = this.scene.add
-        .rectangle(x0, y, RELICS_W, RELIC_FX_ROW_H, 0x000000, 0.001)
-        .setOrigin(0, 0)
-        .setScrollFactor(0)
-        .setDepth(3001)
-        .setInteractive()
-        .on("pointerover", () => this.showRelicEffectTooltip(row, x0, y))
-        .on("pointerout", () => this.hideRelicTooltip());
-      this.rows.push(hit);
-      this.addText(x0, y, row.label, 10, "#a7b0bd");
-      this.addText(totalX, y, row.total, 10, "#c8d0da", 1, 0);
-    });
   }
 
   // Reuses the Relics-column tooltip surface to show which relics feed one
@@ -626,70 +633,106 @@ export class InventoryMenu {
     const w = this.relicTipText.width + padX * 2;
     const h = this.relicTipText.height + padY * 2;
     let tx = rowX - w - 6;
-    if (tx < 4) tx = rowX + RELICS_W + 6;
+    if (tx < 4) tx = rowX + FX_COL_W + 6;
     const ty = Phaser.Math.Clamp(rowY, 4, this.scene.scale.height - h - 4);
     this.relicTipBg!.setPosition(tx, ty).setSize(w, h).setVisible(true);
     this.relicTipText.setPosition(tx + padX, ty + padY).setVisible(true);
   }
 
-  // Live equipped-loadout summary — damage/attack speed/attack stamina cost
-  // (all from the currently equipped hotbar weapon, blank if none) plus total
-  // armor (summed across every worn armor piece, 0 if none worn).
-  private renderCombatStats(x0: number, y0: number): void {
-    const stats = this.deps.combatStats();
+  // --- Active Effects tab -------------------------------------------------
+  //
+  // One answer to "what is acting on me right now": every axis as ONE combined
+  // number, with the things that built it indented underneath. the user's shape,
+  // and the reason the old presentation was wrong — a Combat block listing the
+  // weapon's damage and a separate relic list showing "+10.5% Damage" made the
+  // reader do the multiplication themselves, in two places that never named the
+  // same stat the same way.
+  //
+  // Numbers come from MainScene.activeEffects(); the only things assembled here
+  // are the trailing NOTES (procs, set bonuses), which have no combined number
+  // because they are conditional sentences rather than an addend on an axis.
+  private effectNotes(): FxNote[] {
+    const out: FxNote[] = [];
+    const procs = this.deps
+      .relicFamilySlots()
+      .filter((s) => s.group?.def.unique)
+      .map((s) => ({ name: s.group!.def.name, text: uniqueText(s.group!.def, s.group!.powerTier) }));
+    if (procs.length) {
+      out.push({
+        title: "Procs",
+        lines: procs.flatMap((p) => [
+          { text: p.name, color: "#c8a8f0" },
+          { text: p.text, color: "#8a7fa8", small: true },
+        ]),
+      });
+    }
+    const sets = this.deps.combatStats().setBonuses;
+    if (sets.length) {
+      out.push({
+        title: "Set Bonuses",
+        lines: sets.flatMap((set) => [
+          { text: `◆ ${set.name}`, color: "#f0a840" },
+          { text: set.desc, color: "#9a8560", small: true },
+        ]),
+      });
+    }
+    return out;
+  }
+
+  private renderActiveEffects(x0: number, y0: number): void {
+    const axes = this.deps.activeEffects();
+    const notes = this.effectNotes();
+    // Estimate every block first, then split at the halfway mark rather than
+    // filling column one until it overflows. Greedy filling packed column one
+    // to within a pixel of the panel floor while column two sat a third empty —
+    // correct, but permanently one relic away from running off the panel.
+    const blocks: { est: number; draw: (x: number, y: number) => number }[] = [
+      ...axes.map((axis) => ({
+        est: FX_ROW_H + axis.parts.length * FX_PART_H + FX_SECTION_GAP,
+        draw: (x: number, y: number) => this.drawAxis(x, y, axis),
+      })),
+      ...notes.map((note) => ({
+        // Note lines wrap, so budget a second line for each.
+        est: FX_ROW_H + note.lines.length * (FX_PART_H + 6) + FX_SECTION_GAP,
+        draw: (x: number, y: number) => this.drawNote(x, y, note),
+      })),
+    ];
+    const total = blocks.reduce((h, b) => h + b.est, 0);
+    let col = 0;
     let y = y0;
-    const lineGap = 20;
-    this.addText(x0, y, stats.weaponName ?? "No weapon equipped", 12, stats.weaponName ? "#e8ecf2" : "#5b6472");
-    y += lineGap;
-    // S7 weapon-type identity line — a muted italic-toned hint under the name so
-    // the player reads what this weapon type is best at (AOE / cripple / burst).
-    if (stats.identity) {
-      const idT = this.addText(x0, y, stats.identity, 10, "#7f97b0", 0, 0, STATS_W);
-      y += idT.height + 4;
-    } else {
-      y += 4;
+    let used = 0;
+    for (const block of blocks) {
+      if (col === 0 && y > y0 && used + block.est > total / 2) {
+        col = 1;
+        y = y0;
+      }
+      used += block.est;
+      y = block.draw(x0 + col * (FX_COL_W + FX_COL_GAP), y) + FX_SECTION_GAP;
     }
-    // Neutral grey throughout (matches Attack Range/Move Speed below) — per
-    // the user, red/green should be reserved for actual buff/debuff markers
-    // (e.g. "boosted by an item"), not decorative per-stat coloring.
-    this.addText(
-      x0,
-      y,
-      `Damage: ${stats.weaponName ? `${stats.damage} ${stats.damageTypeName}` : "-"}`,
-      12,
-      "#8a93a3",
-    );
-    y += lineGap;
-    this.addText(x0, y, `Attack Speed: ${stats.weaponName ? `${stats.attackSpeed.toFixed(1)}/s` : "-"}`, 12, "#8a93a3");
-    y += lineGap;
-    this.addText(
-      x0,
-      y,
-      `Crit: ${stats.weaponName ? `${Math.round(stats.critChance * 100)}% x${stats.critMult.toFixed(2)}` : "-"}`,
-      12,
-      "#8a93a3",
-    );
-    y += lineGap;
-    this.addText(x0, y, `Attack Stamina: ${stats.weaponName ? stats.staminaCost : "-"}`, 12, "#8a93a3");
-    y += lineGap;
-    this.addText(x0, y, `Armor: ${stats.armor}`, 12, "#8a93a3");
-    y += lineGap;
-    this.addText(x0, y, `Attack Range: ${stats.attackRange}`, 12, "#8a93a3");
-    y += lineGap;
-    y += lineGap;
-    const speed = this.deps.runSpeedBreakdown();
-    this.addText(x0, y, `Move Speed: ${speed.walk} / ${speed.sprint} spr`, 12, "#8a93a3");
-    // Active full-set bonuses (biome 2 forged gear payoff) — highlighted amber
-    // so the reward reads as special, with the effect on the line beneath.
-    for (const set of stats.setBonuses) {
-      y += lineGap + 6;
-      this.addText(x0, y, `◆ ${set.name}`, 12, "#f0a840");
-      y += lineGap;
-      // Wrap the effect text to the column width so a long set-bonus desc
-      // (e.g. Emberblink) no longer runs off the panel/screen edge — S6.
-      const descT = this.addText(x0, y, set.desc, 10, "#9a8560", 0, 0, STATS_W);
-      y += descT.height;
+  }
+
+  // One axis: the combined number on its own row, its contributions indented
+  // under it. Returns the y it finished at.
+  private drawAxis(x: number, y0: number, axis: EffectAxisView): number {
+    this.addText(x, y0, axis.label, 12, "#e8ecf2");
+    this.addText(x + FX_COL_W, y0, axis.total, 13, "#ffffff", 1, 0);
+    let y = y0 + FX_ROW_H;
+    for (const part of axis.parts) {
+      this.addText(x + FX_INDENT, y, `• ${part.label}`, 10, "#7f8794");
+      this.addText(x + FX_COL_W, y, part.amount, 10, "#9aa4b5", 1, 0);
+      y += FX_PART_H;
     }
+    return y;
+  }
+
+  private drawNote(x: number, y0: number, note: FxNote): number {
+    this.addText(x, y0, note.title, 12, "#e8ecf2");
+    let y = y0 + FX_ROW_H;
+    for (const line of note.lines) {
+      const t = this.addText(x + FX_INDENT, y, line.text, line.small ? 10 : 11, line.color, 0, 0, FX_COL_W - FX_INDENT);
+      y += line.small ? t.height + 3 : FX_PART_H;
+    }
+    return y;
   }
 
   // The 8-slot relic loadout (Phase 5) — one fixed slot per family, paper-doll
@@ -896,7 +939,7 @@ export class InventoryMenu {
   private renderTabs(): void {
     // "Relics" is a peer of the biome tabs rather than a column of its own —
     // it swaps what the backpack area shows, not what it filters.
-    const tabs: InventoryTab[] = ["all", ...this.presentBiomes(), "relics"];
+    const tabs: InventoryTab[] = ["all", ...this.presentBiomes(), "relics", "effects"];
     if (!tabs.includes(this.activeTab)) this.activeTab = "all";
     const labels: Record<InventoryTab, string> = {
       all: "All",
@@ -904,6 +947,7 @@ export class InventoryMenu {
       badlands: "Badlands",
       bayou: "Bayou",
       relics: "Relics",
+      effects: "Effects",
     };
     let x = BACKPACK_X;
     for (const tab of tabs) {

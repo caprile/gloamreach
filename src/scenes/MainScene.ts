@@ -112,6 +112,7 @@ import {
 } from "../systems/StationUpgrades";
 import {
   armorUpgradesForItem,
+  armorDefenseForTier,
   totalPlayerDefense,
   ARMOR_UPGRADES,
   type ArmorUpgradeDef,
@@ -164,7 +165,7 @@ import { ContextMenu, type ContextMenuItem } from "../ui/ContextMenu";
 import { DryingRackMenu } from "../ui/DryingRackMenu";
 import { CookingMenu } from "../ui/CookingMenu";
 import { JewelryMenu } from "../ui/JewelryMenu";
-import { EquipmentEffects, describePassive } from "../systems/EquipmentEffects";
+import { EquipmentEffects, describePassive, type EquipPassive } from "../systems/EquipmentEffects";
 import { JEWELRY_RECIPES, type JewelryRecipe } from "../systems/Jewelry";
 import { BuffBarUI } from "../ui/BuffBarUI";
 import { StatusBarUI, type StatusEffect } from "../ui/StatusBarUI";
@@ -180,6 +181,7 @@ import {
   type ArmorSlotView,
   type CombatStatsView,
   type RunSpeedView,
+  type EffectAxisView,
 } from "../ui/InventoryMenu";
 import { HotbarUI } from "../ui/HotbarUI";
 import { EventLogUI } from "../ui/EventLogUI";
@@ -239,6 +241,7 @@ import {
   type RollResult,
   type ChoiceResolution,
   type RelicGroup,
+  type RelicEffect,
 } from "../systems/Relics";
 import { RelicForgeMenu } from "../ui/RelicForgeMenu";
 import { PassiveBarUI, type PassiveEntry } from "../ui/PassiveBarUI";
@@ -13519,7 +13522,7 @@ export class MainScene extends Phaser.Scene {
       combatStats: () => this.combatStats(),
       runSpeedBreakdown: () => this.runSpeedBreakdown(),
       relicFamilySlots: () => this.relics.familySlots(),
-      relicEffectSummary: () => this.relics.effectSummary(),
+      activeEffects: () => this.activeEffects(),
       beginDrag: (c, i, p) => this.beginItemDrag(c, i, p),
       beginArmorDrag: (slot, p) => this.beginArmorDrag(slot, p),
       unequipArmorSlot: (slot) => this.unequipArmorSlot(slot),
@@ -13683,6 +13686,170 @@ export class MainScene extends Phaser.Scene {
       identity: weaponIdentityLine(this.equippedWeapon),
       setBonuses,
     };
+  }
+
+  // The Inventory panel's Active Effects tab: every numeric axis acting on the
+  // player, each as ONE combined number with the individual contributions that
+  // built it indented underneath (the user: "I don't want to see them
+  // separated"). Grouping by SOURCE — weapon here, relics there, class
+  // somewhere else — is what the old Combat block and the relic Effects list
+  // did between them, and it never answered the question the player is actually
+  // asking, which is "what is my damage, and why is it that".
+  //
+  // Assembled here rather than in the menu so it reads from the same helpers
+  // the real combat math does; a panel that re-derives a number is a panel that
+  // will eventually disagree with the game. An axis is emitted only when
+  // something actually contributes to it, so a fresh run shows a short list
+  // instead of a wall of zeroes.
+  private activeEffects(): EffectAxisView[] {
+    const out: EffectAxisView[] = [];
+    const pct = (v: number) => `${v >= 0 ? "+" : ""}${(v * 100).toFixed(1).replace(/\.0$/, "")}%`;
+    const flat = (v: number) => `${v >= 0 ? "+" : ""}${Math.round(v)}`;
+    // A relic channel's per-relic rows, already named and formatted by Relics.
+    const summary = this.relics.effectSummary();
+    // Typed against the channel keys themselves: the first cut passed
+    // "damageMult" (the getter's name, not the channel's) and the Damage axis
+    // silently lost its relic contribution while still printing the right
+    // total — a mismatch nothing would ever have flagged.
+    const relicParts = (...keys: (keyof RelicEffect)[]) =>
+      keys.flatMap((key) =>
+        (summary.find((r) => r.key === key)?.sources ?? []).map((s) => ({ label: s.name, amount: s.amount })),
+      );
+    const named = (v: number) => ({ label: this.character.name(), amount: pct(v - 1) });
+    // Only emit an axis something actually feeds.
+    const push = (label: string, total: string, parts: { label: string; amount: string }[], min = 1) => {
+      if (parts.length >= min) out.push({ label, total, parts });
+    };
+
+    const weapon = this.equippedWeapon;
+    if (weapon) {
+      const wName = this.equippedWeaponName ?? "Weapon";
+      const dmgType = weaponPrimaryDamageType(weapon);
+      const skillMult = weaponSkillDamageMultiplier(dmgType, this.skills);
+      const dmgParts = [{ label: wName, amount: flat(weaponDamage(weapon)) }];
+      const tierBonus = weaponTierDamageBonus(weapon, this.equippedWeaponTier);
+      if (tierBonus) dmgParts.push({ label: `Upgrade tier ${this.equippedWeaponTier}`, amount: flat(tierBonus) });
+      if (this.equippedWeaponAugment.damageBonus)
+        dmgParts.push({ label: "Gem augment", amount: flat(this.equippedWeaponAugment.damageBonus) });
+      if (skillMult !== 1) dmgParts.push({ label: `${skillDisplayName(dmgType)} skill`, amount: pct(skillMult - 1) });
+      dmgParts.push(...relicParts("damagePct"));
+      if (this.character.damageDealtMult() !== 1) dmgParts.push(named(this.character.damageDealtMult()));
+      push(
+        `Damage — ${damageTypeDisplayName(dmgType)}`,
+        `${Math.round(this.equippedWeaponBaseDamage() * this.damageBonusMult(dmgType))}`,
+        dmgParts,
+      );
+
+      const critParts = [{ label: wName, amount: pct(weaponBaseCritChance(weapon)) }];
+      if (this.progression.critChanceBonus())
+        critParts.push({ label: "Agility", amount: pct(this.progression.critChanceBonus()) });
+      critParts.push(...relicParts("critChancePct"));
+      if (this.equippedWeaponAugment.critChancePct)
+        critParts.push({ label: "Gem augment", amount: pct(this.equippedWeaponAugment.critChancePct / 100) });
+      push("Crit Chance", `${Math.round(this.critChanceTotal(weapon) * 100)}%`, critParts);
+
+      const cdParts = [{ label: wName, amount: `x${weaponBaseCritMult(weapon).toFixed(2)}` }];
+      if (this.progression.critMultBonus())
+        cdParts.push({ label: "Strength", amount: `+${this.progression.critMultBonus().toFixed(2)}` });
+      cdParts.push(...relicParts("critDamagePct"));
+      if (this.equippedWeaponAugment.critMultBonus)
+        cdParts.push({ label: "Gem augment", amount: `+${this.equippedWeaponAugment.critMultBonus.toFixed(2)}` });
+      push("Crit Damage", `x${this.critMultTotal(weapon).toFixed(2)}`, cdParts);
+
+      push(
+        "Attack Stamina",
+        `${Math.round(weaponStaminaCost(weapon) * this.relics.staminaCostMult())}`,
+        [{ label: wName, amount: flat(weaponStaminaCost(weapon)) }, ...relicParts("staminaCostPct")],
+      );
+    } else {
+      // Say so rather than omitting the stat the player opened the tab to
+      // check — a silently missing Damage row reads as a broken panel.
+      out.push({ label: "Damage", total: "—", parts: [{ label: "No weapon equipped", amount: "" }] });
+    }
+
+    // Armor is the one axis whose contributions are literally the things in the
+    // paper doll beside it.
+    const armorParts: { label: string; amount: string }[] = [];
+    for (const { id } of EQUIP_SLOTS) {
+      const eq = this.equipment.get(id);
+      if (!eq) continue;
+      const d = armorDefenseForTier(eq.key, eq.tier) + (augmentEffect(eq).defenseBonus ?? 0);
+      if (d) armorParts.push({ label: itemDef(eq.key)?.name ?? eq.key, amount: flat(d) });
+    }
+    if (!armorParts.length) armorParts.push({ label: "No armor worn", amount: "" });
+    push("Armor", `${totalPlayerDefense(this.equipment)}`, armorParts);
+
+    const dtParts = relicParts("damageTakenPct");
+    if (this.character.damageTakenMult() !== 1) dtParts.push(named(this.character.damageTakenMult()));
+    push("Damage Taken", pct(this.character.damageTakenMult() * this.relics.damageTakenMult() - 1), dtParts);
+
+    // "Base" alone isn't an effect, so these need a real second contributor
+    // before the axis is worth a row.
+    const hpParts = [{ label: "Base", amount: "100" }];
+    if (this.progression.vitalityHealthBonus())
+      hpParts.push({ label: "Vitality", amount: flat(this.progression.vitalityHealthBonus()) });
+    hpParts.push(...relicParts("maxHpPct", "maxHp"));
+    if (this.character.maxHpMult() !== 1) hpParts.push(named(this.character.maxHpMult()));
+    push("Max HP", `${Math.round(this.health.max)}`, hpParts, 2);
+
+    const stParts = [{ label: "Base", amount: "130" }];
+    if (this.progression.enduranceStaminaBonus())
+      stParts.push({ label: "Endurance", amount: flat(this.progression.enduranceStaminaBonus()) });
+    stParts.push(...relicParts("maxStaminaPct", "maxStamina"));
+    push("Max Stamina", `${Math.round(this.stamina.max)}`, stParts, 2);
+
+    const speed = this.runSpeedBreakdown();
+    const moveParts = [{ label: "Base", amount: `${PLAYER_WALK_SPEED}` }, ...relicParts("moveSpeedPct")];
+    if (this.character.moveSpeedMult() !== 1) moveParts.push(named(this.character.moveSpeedMult()));
+    push("Move Speed", `${speed.walk}`, moveParts);
+    push("Sprint Speed", `${speed.sprint}`, [
+      { label: "Base sprint", amount: "x1.75" },
+      { label: `Running skill Lv ${speed.runningLevel}`, amount: flat(speed.runningBonus) },
+    ]);
+
+    const healParts = relicParts("killHeal");
+    if (this.character.killHealBonus()) healParts.push({ label: this.character.name(), amount: flat(this.character.killHealBonus()) });
+    push("HP per Kill", `${Math.round(this.relics.killHeal() + this.character.killHealBonus())}`, healParts);
+
+    const xpParts: { label: string; amount: string }[] = [];
+    if (this.progression.xpMult() !== 1)
+      xpParts.push({ label: "Intelligence", amount: pct(this.progression.xpMult() - 1) });
+    xpParts.push(...relicParts("xpPct"));
+    if (this.character.xpMult() !== 1) xpParts.push(named(this.character.xpMult()));
+    push("Skill XP", pct(this.progression.xpMult() * this.relics.xpMult() * this.character.xpMult() - 1), xpParts);
+
+    // Jewelry channels, driven off the passive record itself so a new channel
+    // needs no edit here — only a row in this table.
+    const cdrParts: { label: string; amount: string }[] = [];
+    if (this.progression.abilityCooldownMult() !== 1)
+      cdrParts.push({ label: "Wisdom", amount: pct(this.progression.abilityCooldownMult() - 1) });
+    const jewel: { key: keyof EquipPassive; label: string; total: string; fmt: (v: number) => string }[] = [
+      {
+        key: "abilityCooldownPct",
+        label: "Ability Cooldown",
+        total: pct(this.progression.abilityCooldownMult() * this.equipEffects.abilityCooldownMult() - 1),
+        fmt: (v) => `-${v}%`,
+      },
+      { key: "abilityPowerPct", label: "Ability Power", total: pct(this.equipEffects.abilityPowerMult() - 1), fmt: (v) => `+${v}%` },
+      { key: "gatherBonusPct", label: "Bonus Gather", total: pct(this.equipEffects.gatherBonusChance()), fmt: (v) => `+${v}%` },
+      { key: "lightRadiusPct", label: "Light Radius", total: pct(this.equipEffects.lightRadiusMult() - 1), fmt: (v) => `+${v}%` },
+      {
+        key: "statusResistPct",
+        label: "Bleed/Poison Taken",
+        total: pct(this.equipEffects.statusResistMult() - 1),
+        fmt: (v) => `-${v}%`,
+      },
+    ];
+    for (const ch of jewel) {
+      const parts = ch.key === "abilityCooldownPct" ? [...cdrParts] : [];
+      for (const { id } of EQUIP_SLOTS) {
+        const eq = this.equipment.get(id);
+        const v = eq ? (itemDef(eq.key)?.passive?.[ch.key] as number | undefined) : undefined;
+        if (v) parts.push({ label: itemDef(eq!.key)?.name ?? eq!.key, amount: ch.fmt(v) });
+      }
+      push(ch.label, ch.total, parts);
+    }
+    return out;
   }
 
   // Live "what determines the player's move speed right now" breakdown —

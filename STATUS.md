@@ -2,22 +2,28 @@
 
 ## Current State
 
-_Living snapshot — edit in place, never append._ Last shipped: **attack-FX art across the whole
-roster** (2026-07-26, Opus) — the first of the three items in the user's stated order. Ten attacks
-now show a real art sprite when they hit, via two shared spawners in `src/art/attackFx.ts`
-(`burstFx` / `coneFx`), plus two bosses that previously had a telegraph and then no visible hit at
-all. Before it: the Vagabond-win playtest batch (~30 items, plan in
+_Living snapshot — edit in place, never append._ Last shipped: **the Inventory's Active Effects
+tab** (2026-07-26, Opus) — every stat acting on the player as ONE combined number with its
+contributions indented underneath, replacing both the Combat block and the relic effects list.
+Before it, same day: **attack-FX art across the whole roster** — ten attacks now show a real art
+sprite when they hit, via two shared spawners in `src/art/attackFx.ts` (`burstFx` / `coneFx`), plus
+two bosses that previously had a telegraph and then no visible hit at all. Before those: the
+Vagabond-win playtest batch (~30 items, plan in
 `.claude/plans/vagabond-win-playtest-batch.md`), the perf pass (12.7 -> 5.0ms frames) and the
 ground-texturing phase.
 
 **In progress / next.** Next in the user's stated order: **on-theme inventory/crafting menu art**
 (`create_ui_asset` for panel/slot frames, buttons, tabs), then a **unique in-game cursor**
-(`input.setDefaultCursor`, worth a hover/attack variant given the game is mouse-driven). One item
-from the Vagabond batch is still deliberately UNSHIPPED and needs the user's call: the **Active
-Effects column**. He locked "replace the Combat column", but the column has only **190px** below its
-header while a unified list runs to ~1720px — it has to move to the wide tab area instead. Note
-`STATS_H = 150` is already fiction; today's Combat block ends at 860 against an 830 panel bottom, so
-that overflow predates this work.
+(`input.setDefaultCursor`, worth a hover/attack variant given the game is mouse-driven). Nothing
+from the Vagabond batch is outstanding — the Active Effects item that was held back has shipped.
+
+**The Active Effects shape is a rule worth keeping.** A stat is ONE number with its sources
+indented under it, never a category per source. Grouping by source is what the old Combat block and
+relic list did between them, and it made the reader do the multiplication themselves in two places
+that named the same stat differently. The data is assembled in `MainScene.activeEffects()` off the
+same helpers combat uses — a panel that re-derives a number will eventually disagree with the game,
+and the first cut proved it by looking up a relic channel under the wrong key and printing a
+correct total with a missing contribution.
 
 **Three findings from that batch worth carrying forward.** (1) **Skills were mostly inert** — 4 of
 11 did anything for a real end-game build, and Light Armor had been capped since level 20 of 100;
@@ -347,6 +353,54 @@ touches no combat numbers.
 
 > Older entries in STATUS-archive.md.
 
+### Active Effects tab — one number per stat, sources indented under it (2026-07-26, Opus)
+
+The item held back from the Vagabond batch, unblocked by the user's call: **get rid of the Combat
+and relic stats specifically**. That was the missing piece — the previous attempt failed trying to
+keep the Combat column AND fit a unified list into the 190px under it. Deleting both is what frees
+the space.
+
+**The presentation is the point, and I got it wrong first.** I initially shipped the list grouped by
+SOURCE — a Weapon section, a Relics section, a Worn Gear section. the user corrected it mid-session:
+he wants **one combined number per stat with its contributions indented underneath**. He's right,
+and the reason is the same reason the old panel was bad: a Combat block saying `Damage: 20` beside a
+relic list saying `Damage +10.5%` makes the reader do the multiplication themselves, in two places
+that never even named the stat the same way. Now:
+
+```
+Damage — Blunt                    20
+  • Embersteel Warhammer         +23
+  • Berserker's Mantle        +10.5%
+  • The Vagabond                -25%
+```
+
+**16 axes**, each emitted only when something feeds it: damage, crit chance, crit damage, attack
+stamina, armor, damage taken, max HP, max stamina, move, sprint, HP/kill, skill XP, ability
+cooldown, ability power, bonus gather, light radius, bleed/poison taken. Contributions name the
+actual thing — the weapon, the relic, the class card, the stat, the ring — not a category. Trailing
+**Procs** and **Set Bonuses** blocks keep the list form, since a conditional has no combined number
+to be an addend of.
+
+**Assembled in `MainScene.activeEffects()`, not the menu.** It reads the same helpers combat does,
+so a panel number can't drift from a fight number. That immediately paid for itself: the first cut
+looked up the relic damage channel as `damageMult` (the getter's name) when the channel is
+`damagePct`, so the Damage axis printed the right total with its relic contribution silently
+missing. The lookup is now typed `keyof RelicEffect`, so that class of mistake is a compile error.
+
+**Removed:** the `Combat` block under Equipment and the `Effects` list under the relic slots. The
+relic SLOTS stay — they're the paper doll of what's equipped, which is why they went on the panel.
+
+**Two balanced columns.** The first cut filled column one until it overflowed, which packed it to
+**within 1px of the panel floor** while column two sat a third empty — correct, and permanently one
+relic away from running off the panel. It now estimates every block and splits at the halfway mark:
+a maximal build (every family a Mythic at tier 2, full Embersteel set, three passives, 20 in every
+stat) measures **721 / 729 against an 826 floor**. A block never splits across columns.
+
+Verified live: the maximal build's Damage total reconciles by hand (23 x (1 + 0.105 - 0.25) = 20),
+all three tabs render and are clickable with a real mouse, and the empty state degrades to a
+six-axis baseline that still says "No weapon equipped" / "No armor worn" rather than omitting the
+stat the player opened the tab to check. `tsc` clean, no console errors.
+
 ### Attack-FX art: impacts across the whole roster (2026-07-26, Opus)
 
 The first of the three items in the user's stated order. The telegraph/attack depth split shipped
@@ -404,110 +458,3 @@ Verified live via `preview_eval` + screenshots: all 10 FX keys resolve to real-a
 spawner produces the right texture at the right footprint and rotation, the nova's final size matches
 its damage radius exactly, the sweep clamps to 330px, and no console errors. `tsc` clean. No
 `RECIPES.md` change.
-
-### Vagabond-win playtest batch — 4 batches, ~30 items (2026-07-26, Opus)
-
-Off the user's 77:26 Vagabond victory (476 kills, 133 elite, 3 boss, level 25, score 10890). Plan +
-locked decisions: `.claude/plans/vagabond-win-playtest-batch.md`. Every design fork was locked via
-`AskUserQuestion` BEFORE any code changed, at his explicit request.
-
-**The numbers review he asked for first.** Skills were the weakest system: only 4 of 11 did anything
-for his build, and his single largest investment — **Light Armor 57 — had been capped since level
-20**, because its one effect (dash i-frames, +5ms/level, cap +100ms) tops out there. Pierce 40 was
-dead because he finished on a magic weapon (weapon skills are per-damage-type, so the swap threw that
-investment away). Stats: **crit chance 59% against a hard 60% cap**, and the Vagabond's x1.5 Agility
-potency meant saturation at ~52 points, not 100 — he effectively had five stats. And the score's
-**speed multiplier was a dead mechanic**: `clamp(10min/elapsed,1,3)` can only exceed 1 BELOW par, so
-all five recorded wins (69:56-98:17) scored exactly x1.00 and score was ~80% flat kill points.
-
-**Batch 1 — bugs/UI.** Crafting list overflow + tab overlap: two causes in the row-windowing math —
-the wheel steps in whole rows but `maxListScroll` was not a row multiple (so at the bottom of the
-range every row sat a fraction high and the top one drew over the tabs), and `lastRow` used `ceil`,
-including a partly-visible row nothing clipped. Fixed by never drawing a partial row rather than
-adding a geometry mask, because **a mask clips rendering but not input** — a row hidden behind the
-tabs would still eat clicks meant for them. Panel + list column both +72px so "Effigy of the
-Duneshaper" fits (detail column byte-identical). Per-container chest titles (six lootables shared one
-hardcoded "Gremlin Shack Chest"). **Stat headroom display** — the real answer to his skills
-complaint, which was visibility rather than power: Strength/Agility rows now show
-`59.0% of 60.0% cap (~1 pt left)` with a hover breakdown naming the sources, so equipping a Mythic
-crit relic visibly drops headroom 65 -> 40 points. Hint card steps left of an open crafting panel.
-Mirehide Leggings "missing art" was a **broken asset**: 2 distinct colours, max luminance 8 — a flat
-black silhouette, so brightening could not recover detail that was never there; regenerated. Refine
-All (bounded by BOTH inputs, re-checked per run). Specials hover numbers: **25 of 25 now show
-figures, 21 were missing** — `Tooltip` had a `passive` branch but no `grantsAbility` branch (the whole
-ability roster hovered blank), and four epic uniques had their magnitudes as private MainScene
-consts, so nothing player-facing COULD quote them; those ten constants moved into `SetBonuses.ts` and
-the text is derived from them.
-
-**Batch 2 — combat readability.** **Hold left-click to attack/chop/mine**: every action reached was
-already cooldown-gated (the gather path's throttle comment literally said "holding/spamming LMB") —
-only the input repeat was missing. Deliberately narrow: repeats only for enemy / smashable den /
-resource node, because a chest would reopen every frame and eating-from-hotbar would swallow a stack
-in under a second (verified: 10 food, 2s held on open ground, 0 eaten). **Cragscale telegraph** was
-the one lane that followed its creature — its bespoke `drawRollLane` re-anchored to the live sprite
-every frame DURING the roll, so the far cap kept projecting ahead of it; now locked to the launch
-point. Audited the rest of the roster: every other telegraph either anchors to a locked point or only
-draws while stationary. **Wind-up tells reworked** — the user flagged the attack animations twice as
-unreadable, and inspecting the strips showed why: Mosswretch/Murkling/Duskrunner barely change
-silhouette across their whole attack, so the sprite cannot carry the read at 20-40px. That makes the
-tell the load-bearing signal, and it used `Quad.easeIn` — at 69ms into a 600ms wind-up the scale
-change was **1.002** (invisible). Now a fast commit-pop then a linear grow: **1.089 at the same
-moment**, climbing steadily to 1.18. Both tween stages are cancelled at every abandon site, verified
-against the stuck-oversized risk (0 of 1184 live enemies).
-
-**Batch 3 — balance/economy, all 8.** Score par 10 -> 90 min (his runs now span x1.29 -> x1.00).
-Agility 0.45 -> 0.3%/pt — the rate slowed against the SAME ceiling per the standing rule, so a
-x1.5-potency build with a Mythic relic caps at point 91 instead of ~52, and neutral play never caps.
-**Light Armor got its second axis: dash DISTANCE** (+0.4%/level to +40%), so levels 20-100 finally
-pay; the i-frame cap is deliberately unchanged, since a 400ms invulnerable window would make attacks
-ignorable. Duskhide 4->5 and Emberhide 7->8 armor: **Duskhide Lvl 1 was 12 against a fully-upgraded
-Gremlin set's 13** — arriving in the badlands made you worse; now 15 vs 13, with the "base Ember beats
-maxed Duskhide" rule preserved. bog_ore 24 -> 40 nodes (he finished with 50 unspent Moonsilver and no
-ore — the ingot's other input is what proved the shortfall is here). Mirejaw meat 1-2 -> 2-4 (elite
-4-6); **Blighttoad is the second bayou food source** (Blighttoad Legs), so the menu is 4 dishes, two
-per animal, all behind a new **Campfire Lvl 5 (Mirelight Hearth)** — the Lily-Gilded Feast (2 gator
-meat) is retired, and its orphaned lily-platter art was renamed onto the replacement rather than
-dropped to a placeholder. **Elite Mosswretches spawn Elite Mosslings** (x1.5 HP/damage, bigger,
-crimson) but deliberately keep `elite: false`, because an existing guard says a spawnling must not
-drop a trophy and elite status also drives 30-point kill scoring — stats and look without a
-trophy/points fountain.
-
-**Batch 4 — Miretyrant.** **Bellow adds now force-aggro on spawn**: they surface at the arena edge,
-deliberately away from the player, which is exactly the distance their own radius may never close
-while you fight the boss. **Mirejaw needed its own `forceAggro` override** — it tracks aggro in a
-private `mode`, so the base call would set `state: chasing` while leaving it lurking (the documented
-trap). **New attack: the Gloamtide** — a full-height wall of mire crossing the WHOLE arena in 560ms
-behind a 1000ms telegraph, with one 172px gap. It is the only attack anchored on the ROOM rather than
-the boss, so spacing against the Miretyrant does nothing; direction and gap lock at telegraph start,
-and the gap is placed away from where the player stood, so the safe spot is never where they already
-are. New phase gate at 82% introduces it (pool now 3 -> 4 -> 5 attacks). HP 3600 -> 4200 only — an
-earlier pass had cut 4600 -> 3600 as a marathon, so length comes from new content first. Dodge audit
-passed with no changes: all five attacks demand a dodge, the Death Roll being the designated
-outrunnable one.
-
-**Elite readability.** the user: Hexlings and Sandmaws were indistinguishable from their elites.
-Measured the cause — the elite recolour is a HUE shift, and **Sandmaw's elite was literally the same
-hue as its base (14 deg -> 14 deg)**, Hexling 8 deg, Duskrunner 7 deg, against Mirejaw's 96 deg. A hue
-shift cannot say "elite" on a creature that is already red. Fixed with a **gold rim light** on the
-silhouette — hue-independent, derived from the base's own pixels (so it works on animation strips and
-any future creature for free) and keeping the roster convention that every elite looks the same kind
-of different. Base-vs-elite distance: Sandmaw 57 -> 77, Hexling 55 -> 99, Duskrunner 59 -> 118.
-
-**Art.** Ember Brand and Gloam Brand are staffs now (his objection was conceptual — a magic weapon
-should not look like a sword — so leaving the higher tier as the odd sword out would have read as an
-oversight). Embersteel Pike regenerated as an ornate ember/gold polearm. **Embersteel bow got its own
-arrow**: projectile textures were already per-weapon data, it just shared the plain steel one. Worth
-remembering — I first built it procedurally on the strength of a STATUS note saying projectiles are
-deliberately placeholder, but **that note is about the tiny 6x6 ones; arrows have real art** in
-`art/sprites/world/`, so the 20x8 stub rendered as a block beside a 96x9 arrow. Caught by looking,
-not by reasoning. Held tools also carry head-down now: the pickaxe icon was rotated 90 CW on disk (so
-hotbar/inventory/hand all move together) with `ItemDef.heldTiltMirrored` negating the tilt to keep
-the ~45-degree pose. New `art/tools/mirror.mjs` + `rotate.mjs`.
-
-**NOT shipped — the Active Effects column.** Built it, then measured: the column header sits at
-y=640 with **190px to the panel bottom**, the weapon block alone needs ~200, and a unified list with
-8 relic channels ran to y=1720 — 46 objects off the panel and off the screen. Reverted rather than
-ship that. Note `STATS_H = 150` is already fiction: today's Combat block ends at 860 against an 830
-panel bottom. The unified list needs the wide tab area, which is the user's call.
-
-`RECIPES.md` + dashboard (Enemies tab, Miretyrant) updated.
