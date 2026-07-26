@@ -34,7 +34,7 @@ const S = enemyStat("duneshaper");
 export type TyrantState = "idle" | "telegraphing" | "executing" | "recovering" | "staggered";
 export type TyrantAttack = "volley" | "spikes" | "nova" | "lance" | "barrage";
 
-const MAX_HEALTH = S.hp; // 1250→2500 (PB17: the user wanted the final boss ≥2× tankier — a real endurance fight)
+const MAX_HEALTH = S.hp; // 1250→2500 (PB17: The user wanted the final boss ≥2× tankier — a real endurance fight)
 export const DUNESHAPER_SCALE = 2.3;
 const AGGRO_RADIUS = 300;
 const LEASH_RADIUS = 580; // kited past this -> fully deaggros

@@ -28,7 +28,7 @@ const ELITE = S.elite!;
 // that until now only badlands Hexlings supplied, so hunting haunts is the local
 // answer to "must I walk back to the badlands to forge bayou gear?".
 //
-// C3 (2026-07-23): the TWO-FORM TRANSFORM. the user rejected the phase-out and
+// C3 (2026-07-23): the TWO-FORM TRANSFORM. The user rejected the phase-out and
 // blink ideas as done-before ("we've done untargetable windows and teleporting,
 // get more creative") and asked for exactly this: close to melee and the wisp
 // COLLAPSES into the drowned corpse the light was luring you toward — bigger,

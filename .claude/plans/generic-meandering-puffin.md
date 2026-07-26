@@ -3,7 +3,7 @@
 ## Context
 
 Today **crafting, drying-rack processing, campfire cooking, and relic-forge rolls all
-complete instantly** in a single synchronous call — the item just appears. the user wants a
+complete instantly** in a single synchronous call — the item just appears. The user wants a
 short **loading bar per action before the result lands**, for two distinct feels:
 
 1. **Craft / process / cook** — a *quick* bar (not a slog); a **single** bar even for a

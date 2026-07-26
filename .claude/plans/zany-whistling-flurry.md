@@ -4,14 +4,14 @@
 
 Cooking tops out at a **Lvl 2 campfire** with 4 forest-only, plain-HP-regen dishes, while the badlands
 drops five raw food ingredients (`duskrunner_meat`, `emberbloom`, `sunfruit`, `gloamcap`, `dustbloom`)
-with **no recipes**. the user wants higher campfire tiers, cross-biome dishes, and a cooking-menu rework —
+with **no recipes**. The user wants higher campfire tiers, cross-biome dishes, and a cooking-menu rework —
 but designing this surfaced that the whole **station-upgrade model is wrong** and must be fixed first.
 
 ### The upgrade model must change (the user, locked)
 
 Today each `StationUpgradeDef` has a hardcoded `resultTier`; the shared Upgrade panel offers only the
 upgrade whose `resultTier === currentTier + 1` and **locks the rest** ("Requires previous tier") — a
-**strict ladder**. the user wants that gone:
+**strict ladder**. The user wants that gone:
 
 - **No ladder.** Any *discovered* upgrade for a station shows in the Upgrade menu immediately, regardless
   of the station's current level. A Lvl 1 Workbench carried into the badlands can take the badlands

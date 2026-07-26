@@ -42,7 +42,7 @@ points — the opposite of M-R1's locked "reward going fast" intent.
 2. **Light Armor's second axis = dash DISTANCE**, alongside the existing i-frame window.
 3. **Agility: slow the rate, keep the 60% cap.** Never raise a ceiling — damage is already
    high. Same rule as the 5as retune.
-4. **The headline skills ask is VISIBILITY, not power**: the user's real complaint is "not
+4. **The headline skills ask is VISIBILITY, not power**: The user's real complaint is "not
    knowing whether I have points left, i.e. whether a relic pushed me into a soft cap."
    The Stats tab must show each axis's total vs its cap, points remaining, and the source
    breakdown (weapon base / stat / relic / class potency).

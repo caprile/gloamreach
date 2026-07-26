@@ -129,7 +129,7 @@ const WEAPON_DAMAGE: Record<WeaponType, number> = {
   // cooldown half of that was right and is untouched; the damage half
   // overshot — it put every bow ABOVE its same-tier sword on per-hit damage
   // (15>14, 21>19, 28>25) at 92-98% of its DPS, from 380-420px away with no
-  // risk. the user, 2026-07-24: "no reason why longsword should be dealing less
+  // risk. The user, 2026-07-24: "no reason why longsword should be dealing less
   // dmg than the bow" / "feels better with just melee... ranged makes it super
   // easy." Each bow now sits clearly under its tier's sword per hit and at
   // ~73% of its DPS — range and safety ARE the compensation, so they cannot
@@ -444,7 +444,7 @@ export function weaponArc(weapon: WeaponType): WeaponArc {
 // enemies have no armor stat at all, so against them the bypass did precisely
 // nothing. What was left was strictly worse than the alternatives: the Gloam
 // Brand deals 44 DPS to the Gloamsteel Pike's 52 and Sword's 53, AND is shrugged
-// off (x0.4-0.5) by the gloam-casters. the user, correctly: "the magic weapons
+// off (x0.4-0.5) by the gloam-casters. The user, correctly: "the magic weapons
 // feel like trash idk maybe we need to buff them or give them gnarly AOE."
 //
 // So: a magic weapon trades single-target DPS for a real crowd answer, which is

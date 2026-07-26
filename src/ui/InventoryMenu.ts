@@ -644,7 +644,7 @@ export class InventoryMenu {
   // --- Active Effects tab -------------------------------------------------
   //
   // One answer to "what is acting on me right now": every axis as ONE combined
-  // number, with the things that built it indented underneath. the user's shape,
+  // number, with the things that built it indented underneath. The user's shape,
   // and the reason the old presentation was wrong — a Combat block listing the
   // weapon's damage and a separate relic list showing "+10.5% Damage" made the
   // reader do the multiplication themselves, in two places that never named the

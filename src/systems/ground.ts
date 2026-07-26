@@ -100,7 +100,7 @@ export function groundTextureKeys(): string[] {
 }
 
 // The art is authored at 32px, but the layer stamps QUADRANTS of it on a 16px
-// grid (see GroundDetailUI / registerGroundTileFrames). the user asked for finer,
+// grid (see GroundDetailUI / registerGroundTileFrames). The user asked for finer,
 // curvier material boundaries, and the naive way to get them — smaller tiles —
 // would halve the ground's pixel resolution against every other sprite in the
 // game. Instead only the material DECISION gets finer: a cell keeps the quadrant

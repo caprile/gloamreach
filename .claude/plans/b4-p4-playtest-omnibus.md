@@ -1,6 +1,6 @@
 # B4-P4 — 25-item playtest omnibus (bugs + gaps + world density + combat feel)
 
-Source: the user's 95-min Ascetic run (lvl 18, ~60 in Endurance/Vitality/Agility, cleared the
+Source: The user's 95-min Ascetic run (lvl 18, ~60 in Endurance/Vitality/Agility, cleared the
 full bayou and killed the Miretyrant in **Embersteel** gear — one tier below the bayou set).
 
 That last fact is the thesis of this batch: **the endgame tier was never necessary**, the map

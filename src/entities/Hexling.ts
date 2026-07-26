@@ -36,7 +36,7 @@ const WANDER_RADIUS = 60;
 
 const MAX_HEALTH = S.hp; // was 55, was 30 — playtest: badlands enemies died too fast even in Woods-tier gear; a stand-and-cast caster needs to actually survive being closed on to threaten its Flame Strike punish
 // 22, not 14 — badlands-rebalance pass: magic bypasses armor entirely, so a
-// Hexling's raw number IS the net damage. the user: "base hexlings should kill
+// Hexling's raw number IS the net damage. The user: "base hexlings should kill
 // you in like 3 hits" — bolt + flame (below) are both bumped to make that true
 // even at full HP/Vitality, not just against an unarmored player.
 // Fired as a tight 3-bolt volley now (see castBolt), not a single shot — the

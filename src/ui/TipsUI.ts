@@ -3,7 +3,7 @@ import Phaser from "phaser";
 // Static "How to Play" reference — opened from the Pause menu's "Tips" button.
 // REWORKED (S2, 2026-07-15 playtest batch): this used to dump every
 // contextual hint discovered so far as one un-scrollable joined Text, which
-// overflowed the panel once a run had seen more than a handful. the user's
+// overflowed the panel once a run had seen more than a handful. The user's
 // call: replace the dynamic dump with a curated static block covering core
 // controls + how-to-play in generic terms — no spoilers, no win-condition.
 // The one-off corner popups (HintUI, driven by Hints.ts) are untouched and

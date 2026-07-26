@@ -2,7 +2,7 @@
 // Framework-free (no Phaser), like Run/Health/Buffs/Skills, so a fresh
 // `new RunLog()` in create() fully resets it alongside the Run itself.
 //
-// WHY THIS EXISTS, and why it is deliberately NOT an event log. the user asked
+// WHY THIS EXISTS, and why it is deliberately NOT an event log. The user asked
 // for "every item crafted, every enemy killed, every upgrade done, every relic
 // rolled" as a balancing export. Most of that stream answers nothing: you
 // already know what you crafted. What no one can see from inside a run is

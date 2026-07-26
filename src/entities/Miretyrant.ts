@@ -34,7 +34,7 @@ const S = enemyStat("miretyrant");
 export type MiretyrantState = "idle" | "telegraphing" | "executing" | "recovering" | "staggered";
 export type MiretyrantAttack = "chomp" | "sweep" | "slam" | "roll" | "surge";
 
-// 3200 -> 4600. the user cleared the whole bayou and killed this in EMBERSTEEL
+// 3200 -> 4600. The user cleared the whole bayou and killed this in EMBERSTEEL
 // gear — a full tier below the bayou set it is meant to gate — and called the
 // fight "too easy and boring". The boring half is answered by the phase-3 mire
 // pools below (an arena that closes in, rather than a longer bar); this is the
@@ -62,7 +62,7 @@ const SURGE_HP = 0.82; // + gloamtide (the room-wide sweep) — the earliest gat
 const PHASE2_HP = 0.65; // + death roll
 const PHASE3_HP = 0.35; // + enrage timing, and the bellow interval halves
 // Ceiling on any single hit, as a share of max HP. This is the boss the guard
-// exists for: the user killed it in one Bloodrush window at level 31 without
+// exists for: The user killed it in one Bloodrush window at level 31 without
 // seeing either phase. 5% floors the fight at ~20 connects however strong you are.
 const BOSS_MAX_HIT_FRACTION = 0.05;
 const ENRAGE_TELEGRAPH_MULTIPLIER = 0.75;

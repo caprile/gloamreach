@@ -23,7 +23,7 @@ import { ysortDepth } from "../systems/depth";
 // Emptying the bowl returns it to dormant, so it RENEWS — but only three times
 // (2026-07-24). It used to renew without limit, and since the offering is paid
 // with drops from the very creatures the rite summons, it was a self-funding
-// infinite XP tap: the user's Ascetic run farmed level 24 -> 31 on it, which is
+// infinite XP tap: The user's Ascetic run farmed level 24 -> 31 on it, which is
 // 196 stat points, more than the entire rest of the run produced. Three
 // kindlings keeps it a real repeatable side-activity with a bounded total.
 //

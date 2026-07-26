@@ -886,7 +886,7 @@ mouse-driven only. Don't reintroduce a keybind for this without being asked. Spa
    queued** behind this polish pass.
 
 5r. **Balancing dashboard + 25-min playtest triage** — off the master-plan build order,
-   built on Opus (a new tooling deliverable, though not a game mechanic). the user's 25-min
+   built on Opus (a new tooling deliverable, though not a game mechanic). The user's 25-min
    playtest produced a 12-item feedback dump; triaged and locked the order/scope via
    `AskUserQuestion`, and shipped **the dashboard first** this session. **`dashboard.html`**
    (repo root) + **`src/dashboard/main.ts`** are a **second Vite entry** (added to
@@ -941,7 +941,7 @@ mouse-driven only. Don't reintroduce a keybind for this without being asked. Spa
    GremlinKing cleave replacement, 5 bug fixes, 2 small features — then master-plan tail M-TE, M-W1.
 5t. **40-min-playtest fix batch (12 items) + relic rarity/tier rework** — off the master-plan
    build order, built on Opus (the relic change is a new data model). No new milestone letter.
-   the user's session ("almost died a lot, feels harder — good"). **Relic rework (`Relics.ts`,
+   The user's session ("almost died a lot, feels harder — good"). **Relic rework (`Relics.ts`,
    supersedes 5m/5n's success-%-by-rarity model):** a trophy's rarity now drives an
    **outcome table** (`TROPHY_OUTCOME_ODDS` + `rollOutcomeRarity()`) over the RESULT rarity —
    **Common** trophy → 1% Rare / 2.5% Uncommon / 10% Common (else fail, never Mythic); **Uncommon**
@@ -1325,7 +1325,7 @@ below.**
 
 5ag. **Biome 2 — Phase 3 POI 1: the Duskrunner Warren.** Plan:
    `.claude/plans/biome-2-sunscorch-badlands.md` (Phase 3, umbrella). Built on **Opus** (new POI
-   mechanic). the user scoped Phase 3 to **"two POIs first"** (badlands boss + Gremlin King rework
+   mechanic). The user scoped Phase 3 to **"two POIs first"** (badlands boss + Gremlin King rework
    deferred) then specced POI 1: deliberately **NOT** a Gremlin-Shack clone but a **two-wave
    destructible den**. `src/entities/BadlandsDen.ts` (plain data class; MainScene owns wave/smash
    scheduling) is a burrow mound whose lifecycle is a `DenPhase` machine:

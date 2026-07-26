@@ -2,7 +2,7 @@
 
 > Phase 4 of the biome-2 umbrella (`.claude/plans/biome-2-sunscorch-badlands.md`). Built on **Opus**
 > (new mechanic: smelting station + a new gear tier + new gating). **Sliced into two sessions** per
-> the user. **On approval, copy this file into the repo's `.claude/plans/` (as
+> The user. **On approval, copy this file into the repo's `.claude/plans/` (as
 > `biome-2-phase-4-forging.md`) and commit it** per `feedback_plans_must_be_in_repo`.
 >
 > **This plan file covers BOTH sessions; only Session 1 is built now.** Session 2's catalog is

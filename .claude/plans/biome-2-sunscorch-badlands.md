@@ -15,7 +15,7 @@
 The forest (biome 1) content is complete and the circular-world *geometry* already shipped
 (roadmap 5v: `WORLD_RADIUS` 4000, forest in a central `BIOME_RADIUS` 2000 circle, empty
 grass out to the edge — headroom deliberately left for exactly this). This is the **M-W1
-content pass**: fill the outer ring with a second biome and the systems it needs. the user
+content pass**: fill the outer ring with a second biome and the systems it needs. The user
 wants biomes to **blend naturally** (no hard ring — earlier biomes may leak into the next),
 danger scaling outward per the locked master-plan direction.
 
@@ -232,7 +232,7 @@ textures. Elite trophies: give badlands elites their own tier-2 species trophies
 
 ## Phase 3 — Badlands boss + Gremlin King rework + two unique POIs (L, Opus)
 
-> **Status (2026-07-12):** Underway — see `biome-2-phase-3-pois.md` for the detailed slice. the user
+> **Status (2026-07-12):** Underway — see `biome-2-phase-3-pois.md` for the detailed slice. The user
 > scoped this to **"two POIs first"** (boss + King rework deferred). **POI 1 — the Duskrunner
 > Warren (a two-wave destructible den → lootable cache) — SHIPPED. POI 2 — the Sunken Forge
 > (a bespoke fire/forge mini-boss, the Cinderwrought — Cinder Cone + Forge Hammer) — SHIPPED.**

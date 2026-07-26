@@ -316,7 +316,7 @@ weapon uses, so leveling it turns chip damage into real damage over a run.
 **D3 bow buff (2026-07-23), half-reverted (2026-07-24):** D3 raised bow damage +40% AND cut
 cooldowns -25%. The cooldown half was right and is untouched — the rate of fire genuinely was
 bad. The damage half overshot: it put every Warbow ABOVE its same-tier Sword on per-hit damage
-(15>14, 21>19, 28>25) while reaching 92-98% of its DPS, from 380-420px away at no risk. the user:
+(15>14, 21>19, 28>25) while reaching 92-98% of its DPS, from 380-420px away at no risk. The user:
 "no reason why longsword should be dealing less dmg than the bow" and "feels better with just
 melee... ranged makes it super easy." Each bow now sits clearly under its tier's Sword per hit
 and at a consistent **73% of its DPS** — range and safety ARE the compensation, so they cannot

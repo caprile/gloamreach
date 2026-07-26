@@ -67,7 +67,7 @@ weapon/armor/gem callouts. Every decision was locked via `AskUserQuestion` befor
 one of those rounds corrected my own framing, which is the most important thing in this entry.
 
 **The framing correction.** I first proposed the new set as a *badlands* mid-tier sitting between
-Sunsteel and Embersteel. the user pushed back ("why would the new set be anything Badlands
+Sunsteel and Embersteel. The user pushed back ("why would the new set be anything Badlands
 related?"), and re-reading his original note ("upgraded straight from sunsteel") the real defect
 was obvious: **Sunsteel is a dead end.** Gloamsteel reforges from an *Embersteel* piece, so a
 player who skipped the Embersteel tier had no path into bayou-grade gear at all. The branch
@@ -134,7 +134,7 @@ comfortably covers Gloamsteel *and* the four new jewelry pieces in one run.
 
 ### B4-P4 — 25-item playtest omnibus: bugs, bayou gaps, world density, combat feel (2026-07-22, Opus)
 
-Plan: `.claude/plans/b4-p4-playtest-omnibus.md`. the user's 95-minute Ascetic run (lvl 18, ~60 in
+Plan: `.claude/plans/b4-p4-playtest-omnibus.md`. The user's 95-minute Ascetic run (lvl 18, ~60 in
 three stats) cleared the **whole bayou and killed the final boss in EMBERSTEEL gear** — a full tier
 below the set that content gates. That, not any single bug, is the thesis: the endgame tier was
 never necessary and the map was too big for the materials in it. 25 items, all four buckets in one
@@ -233,7 +233,7 @@ want real play rather than sampling.
 ### Biome 2 — Phase 3: Duskrunner Warren POI (two-wave destructible den)
 
 Plan: `.claude/plans/biome-2-sunscorch-badlands.md` (Phase 3, umbrella). Built on **Opus** (new
-POI mechanic). the user scoped Phase 3 to **"two POIs first"** (the badlands boss + Gremlin King
+POI mechanic). The user scoped Phase 3 to **"two POIs first"** (the badlands boss + Gremlin King
 critical-drop rework stay deferred), then specced POI 1 in detail — it is deliberately NOT a
 Gremlin-Shack clone.
 
@@ -347,7 +347,7 @@ dashboard change. See [[survivor-rpg-biome-2-plan]], [[survivor-rpg-circular-wor
 ### Welcome overlay — show once per page load during early access
 
 Off the build order, built on Sonnet (gating tweak on an existing system, no new
-mechanic). the user reopened the deployed playtest link and didn't get the welcome — not a
+mechanic). The user reopened the deployed playtest link and didn't get the welcome — not a
 deploy bug: the overlay's `localStorage` flag (`survivor-rpg:welcome-seen:v1`) is
 once-ever-per-browser, and his browser had already dismissed it. Locked direction: for an
 early-access playtest, show it **every session** (once per fresh page load) without
@@ -369,7 +369,7 @@ re-spamming on in-session New Run restarts.
 ### Welcome + How to Play overlay, keybind clarity fix
 
 Off the playtest-readiness backlog, built on Sonnet (new UI on existing freeze/menu
-patterns, no new core mechanic). the user flagged two gaps: Ctrl+Click and Shift+Click
+patterns, no new core mechanic). The user flagged two gaps: Ctrl+Click and Shift+Click
 (quick-move / split-stack) had no in-game callout anywhere, and there was no cold-start
 "what is this game" moment for new playtesters.
 
@@ -467,7 +467,7 @@ spec + pity), first roll guaranteed. `RelicForgeMenu` readout + the dashboard Re
 The remaining balance half of the 25-min-playtest triage's "light both rebalance"
 ([[survivor-rpg-playtest-feedback-2026-07-11]]), plus the boss damage bump and the
 cleave-replacement design. Number tuning + swapping one attack inside the *existing*
-GremlinKing state machine — Sonnet-class work, built on Opus. the user locked the two open
+GremlinKing state machine — Sonnet-class work, built on Opus. The user locked the two open
 forks via `AskUserQuestion`: cleave replacement = **leaping smash**; scope = **full balance
 pass this session**.
 
@@ -538,7 +538,7 @@ tier**, to the user's exact spec:
   the incremental +1; the stored `defenseBonus` is the cumulative bonus over base (matches
   `armorDefenseForTier`). **No wiring needed** — the UpgradeMenu / `applyArmorUpgrade` path was
   already tier-generic (weapon lvl2/lvl3 already exercised it).
-- the user's note: the +1/tier proportional impact shrinks as raw armor numbers climb, so this
+- The user's note: the +1/tier proportional impact shrinks as raw armor numbers climb, so this
   curve is expected to be re-scaled per future biome, not assumed to hold deeper in.
 
 **Upgrade-menu UX polish** (`src/ui/UpgradeMenu.ts` — one menu serves station/armor/weapon
@@ -4171,7 +4171,7 @@ locked build order: **M-WC (Gremlin War Camp) + M-TE (trophy-gated gear)**, then
 
 ### Previously: Contextual hints + pause menu (playtest-readiness pass)
 
-Off the master-plan build order: the user paused M-TE (trophy gear) to instead polish the
+Off the master-plan build order: The user paused M-TE (trophy gear) to instead polish the
 first biome enough for outside playtesters. The first item of that pass tackles the
 biggest cold-start problem — a fresh player has no idea what the goal is or how the
 controls work. Built on Opus (two new systems). Plan:
@@ -4260,7 +4260,7 @@ a short **loading bar before the result lands**, with two distinct feels. Built 
 
 ### Previously: Balancing dashboard + 25-min playtest triage
 
-Off the master-plan build order (like 5q). the user's 25-min run (player lvl 7, ~lvl 16
+Off the master-plan build order (like 5q). The user's 25-min run (player lvl 7, ~lvl 16
 Slash on a Bone Knife, 18 kills + 1 boss, 2 relics) produced a 12-item feedback dump.
 Triaged and locked the order/scope via `AskUserQuestion`; **tackled the dashboard first**
 this session (a tooling deliverable, not a game mechanic). Combat + balance work is queued
@@ -5887,7 +5887,7 @@ in two passes this session — the second off the user's own testing of the firs
   `applyWeaponUpgrade`, `cookAtCampfire`) — but `CraftingMenu.isCraftable()`, `CookingMenu`'s inline
   `canAffordCook` check, and `MainScene.maxCraftBatches`/`maxCookBatches` each independently recomputed
   affordability straight from `Crafting.canAfford`/backpack counts for **display** (grey-out + the
-  batch-quantity slider), completely bypassing the flag. the user hit this immediately: nobuildcost ON,
+  batch-quantity slider), completely bypassing the flag. The user hit this immediately: nobuildcost ON,
   craft button still greyed out. Fixed by adding a `noBuildCost: () => boolean` dep to both
   `CraftingMenuDeps` and `CookingMenuDeps` (short-circuits `isCraftable`/`canCook` to true) and making
   `maxCraftBatches`/`maxCookBatches` skip their cost-cap loop (room cap stays) when the flag is set.
@@ -6722,7 +6722,7 @@ correct after closing Tips). No `RECIPES.md` change (no recipe/cost changes). **
 Wave 2 (S1, S3), then Wave 3 (S7 → S8).
 
 ### S6 — Cinderwrought rebalance (2026-07-15, Sonnet)
-Wave 1 of the 8-session 2026-07-15 playtest plan (`playtest-2026-07-15-session-plan.md`). the user's
+Wave 1 of the 8-session 2026-07-15 playtest plan (`playtest-2026-07-15-session-plan.md`). The user's
 locked play-pattern goal for the Sunken Forge's two-guard fight: **stagger one while you 1v1 the
 other** — today it's too tough with both Cinderwroughts perma-attacking at once. All changes in
 `src/entities/Cinderwrought.ts`:
@@ -6946,7 +6946,7 @@ power tier. Fix locked with the user.
   **"ambiguous" → the Keep New / Keep Old prompt** whenever rarity and tier disagree (higher tier but
   lower rarity, or vice versa); strict dominance on both axes still auto-replaces/declines. Locked with
   the user ("not always want mythic over rare depending on tier").
-- **Refined-Uncommon Rare roll rate 5%→12%** (uncommon outcome table's Rare band). the user's ask.
+- **Refined-Uncommon Rare roll rate 5%→12%** (uncommon outcome table's Rare band). The user's ask.
 - **Sandmaw** (`Sandmaw.ts`) — signature **bleed** (4/s×5s) added to the erupt hit (returned from
   `checkPlayerHit` + threaded through `applyDamageToPlayer`'s existing bleed param), and a **faster erupt**
   (windup 560→470ms). No new vulnerability window (the user: "just bleed + faster").
@@ -6995,7 +6995,7 @@ power tier. Fix locked with the user.
   magic AND the Ember Brand deals fire, so resisting magic while being fire-weak punished the ember/fire
   path it's meant to reward. Now its ONLY resist line is **fire ×1.25 (weak)**; everything else neutral.
 - **Unified passive/proc HUD** (`src/ui/PassiveBarUI.ts`, new — REPLACES `RelicBarUI` + `ProcBarUI`, both
-  deleted). the user wanted Dota-style passive/proc icons LEFT of the hotbar. One data-driven strip of
+  deleted). The user wanted Dota-style passive/proc icons LEFT of the hotbar. One data-driven strip of
   hoverable square icons: one per owned relic (proc relics carry live state — **Onslaught** shows the
   1·2·3 count + a ready-glow on the pre-proc hit; **Guardian** shows a draining cooldown cover + a
   BLOCK-armed glow) + one per active **armor set-bonus** (Molten Bulwark / Emberblink, icon = the set's
@@ -7050,7 +7050,7 @@ cooldown-only, equipment-granted Q/E/R abilities; melee-core bayou; big-boss-onl
 This phase = **blocking terrain + a generic environmental-zone hook** in biome 2, **reworked same-session
 into a badlands MACRO-ZONE system** after the user's feedback (the initial version — sparse "light-dressing"
 lone rocks + ~12 small bramble patches — read as "too random / hard to distinguish; the whole biome feels
-like uniform scatter with no structure"). the user chose "full biome macro-zones" + "ground decal + bold props".
+like uniform scatter with no structure"). The user chose "full biome macro-zones" + "ground decal + bold props".
 
 **Macro-zones.** `placeBadlandsZones()` drops **~10 LARGE themed sub-zones** (`badlandsZones: {type,x,y,r}[]`,
 radii 300–470, min-sep 720, placed after every POI — with the WHOLE zone radius kept clear of every POI's
@@ -7195,7 +7195,7 @@ thing).
 ### B3-P2b — Biome-3 Phase 2b: Jewelry-effect pipeline + Gemwright's Table (2026-07-21, Opus)
 
 Makes 2a's abilities obtainable and lays the jewelry/gems economy. Plan:
-`.claude/plans/biome-3-phase-2b-jewelry-station.md`. the user's scope corrections mid-planning: gems +
+`.claude/plans/biome-3-phase-2b-jewelry-station.md`. The user's scope corrections mid-planning: gems +
 jewelry crafting are **biome-3+ content** (gems not findable before biome 3; no badlands node); the
 station is a **dedicated new station with a Duneshaper-boss-drop-gated upgrade** (the Gremlin King's
 Heart → Smelter pattern); and passive jewelry must feel **distinct from relics** (which own raw-% combat
@@ -7961,7 +7961,7 @@ Plan: `.claude/plans/biome-3-phase-5-boss-relic-choice.md`. **The last phase of 
 new-systems arc — the umbrella is now COMPLETE.**
 
 **The umbrella's spec changed during the locking pass.** It called for a kill-time modal (a
-full-screen 3-card picker of relic / ability / stat boon / gem / special item). the user
+full-screen 3-card picker of relic / ability / stat boon / gem / special item). The user
 redirected: *"it can be a relic but now im thinking when you roll the boss trophy, instead of it
 outright giving you a single random relic, you get 3 random relics to pick from of the pool —
 within the relic forge menu."* So the choice moved **out of a kill-time modal and into the Relic
@@ -8417,7 +8417,7 @@ routes both secondaries through one parameter instead.
 **The design problem behind it.** Fixing the lookup surfaced that "Fuel: Moonsilver" reads as nonsense —
 the slot was never really fuel, it was a generic "A + B → output" ingredient slot, named for its
 first case. Worse, once Hex Essence stopped being universal, the two B4-P5 alloy recipes were
-smelting metal **with no heat source at all**. the user proposed a third slot; locked via
+smelting metal **with no heat source at all**. The user proposed a third slot; locked via
 `AskUserQuestion` on the variant where **all three slots are always required**, which is *less*
 complexity than an optional one (nothing to special-case in the slider/process math):
 
@@ -9170,7 +9170,7 @@ smash was one of only two physical hits big enough to clear 74 armor at all — 
 elites do way more damage than any of the minibosses" was literally true, since elite smash
 landed 25 while Gloamwarden's 22/24 attacks and Sanguinarch's 50 both landed **1**.
 
-**the user's call: keep flat subtraction** ("no this is confusing, should always be flat
+**The user's call: keep flat subtraction** ("no this is confusing, should always be flat
 subtraction") and **raise enemy damage to match today's armor** rather than compress armor or
 switch to a DR curve. So this is a numbers pass, not a formula change.
 
@@ -9197,7 +9197,7 @@ Gloamwarden 22/24 → 78/84 (its attacks were *below* a full Sunsteel set's armo
 guardian could not exceed 1 damage against any heavy build) and Duneshaper Sand Spikes 56 → 125.
 
 **The rest of the batch:**
-- **Miretyrant adds** are now **elite** and the mix flipped to favour Blighttoad (45/55). the user:
+- **Miretyrant adds** are now **elite** and the mix flipped to favour Blighttoad (45/55). The user:
   "the ADDs are useless because my crit splash insta kills them." The ratio flip matters more than
   the elite flag — a Murkling's claw is physical and so is the first thing an endgame armor pool
   erases, while a Blighttoad's payload is poison, which bypasses armor entirely.
@@ -9226,7 +9226,7 @@ guardian could not exceed 1 damage against any heavy build) and Duneshaper Sand 
   (`CRYPT_ELITE_CHANCE_MULT` — answers "dungeons are easy" and the trophy drought with one lever,
   since a crypt is fixed, finite and non-respawning), POIs **24%**, and the Shrine rite escalates to
   an **all-elite final wave** (the Duskrunner Warren's shape, which is what the user asked for).
-- **Warden's boon swapped**, `maxHpPct: 20` → `damageTakenMult: 0.85`. the user asked whether
+- **Warden's boon swapped**, `maxHpPct: 20` → `damageTakenMult: 0.85`. The user asked whether
   1.5× vitality potency + 20% max HP was safe; it wasn't, and it was also broken in the other
   direction — `maxHpPct` is a % of the **100 base**, so "+20% max HP" was a flat +20, about 4% of
   his endgame pool. Damage reduction is a multiplier (never decays) on an axis the card's vitality
@@ -9271,7 +9271,7 @@ was removed, and the oldest entry moved to `STATUS-archive.md`.
 ### Survivor roster rework — distinctive, non-decaying, double-edged (2026-07-24, Opus)
 
 No plan file; a follow-on to the same session's damage batch, prompted by the `maxHpPct` decay
-finding. the user: "consider a rework of the starting survivors... I want them to feel distinctive
+finding. The user: "consider a rework of the starting survivors... I want them to feel distinctive
 and double edged sworded." Three forks locked via `AskUserQuestion`.
 
 **Three problems found:**
@@ -9404,7 +9404,7 @@ repaint lands after `update()` has already run.
 No plan file — a fix/tuning batch off the user's "not even finishing this — it's unplayable" bayou
 run. Root cause of most of it: the 2026-07-24 pt1 damage pass sized bayou commons against
 end-of-bayou Gloamsteel (74 armor), but a player entering the bayou wears badlands gear (~16-36), so
-those raws landed near full and 2-shot. the user's own diagnosis in the dump: **Sanguinarch (118/205)
+those raws landed near full and 2-shot. The user's own diagnosis in the dump: **Sanguinarch (118/205)
 feels right as a miniboss, and commons were doing 2-3× that** — the ordering was inverted. Every
 decision below was locked with him via `AskUserQuestion` before any code changed (he asked to review
 the exact damage numbers first, too).
@@ -9466,7 +9466,7 @@ were reviewed and judged healthy — no stat rebalance shipped, since the "too e
 entirely to the Miretyrant encounter, not the character sheet.
 
 - **Miretyrant bellow waves now escalate on a SCRIPT** (`src/entities/Miretyrant.ts` +
-  `MainScene.updateMiretyrantBellow`/`miretyrantWaveComposition`). the user: "Honestly just spawn
+  `MainScene.updateMiretyrantBellow`/`miretyrantWaveComposition`). The user: "Honestly just spawn
   alligators instead of the frog dudes ... fighting strong adds the whole time ... hella frogs into
   some big scary alligators." The boss itself only hands MainScene a 1-based wave INDEX
   (`consumeBellow()`, renamed from a bare add-count — `pendingWave`/`bellowCount` replace the old
@@ -9481,7 +9481,7 @@ entirely to the Miretyrant encounter, not the character sheet.
   purely an add-pressure fix). Verified live: `miretyrantWaveComposition(1..6, false|true)` returns
   the exact scripted composition at every wave index and both enrage states.
 - **Bog Ore now clusters in the bayou's dangerous zones**
-  (`MainScene.spawnBayouNodes`). the user's actual ask, after a mid-session correction — he'd said
+  (`MainScene.spawnBayouNodes`). The user's actual ask, after a mid-session correction — he'd said
   "gloam ore" but meant **Bog Ore** (the bayou's sole surface metal, gating the whole
   Sunsteel→Mirebronze reforge flow he ran this session); gloam shards are a leftover-from-biome-2
   material that were never touched. The flat 46-node scatter is now a 24-node baseline (general
@@ -9521,7 +9521,7 @@ entirely to the Miretyrant encounter, not the character sheet.
   *discovered* and *affordable*. Isolated the real cause: `gloamforge_anvil` (Lvl4→5) requires
   Gloamsteel Ingot specifically in its costs, and `upgradeIngredientsKnown` gates on the material
   having been actually **discovered** (smelted/held at least once) — the exact same "you had to
-  actually smelt this" gate `emberforge_anvil` already uses for Embersteel. the user's run took the
+  actually smelt this" gate `emberforge_anvil` already uses for Embersteel. The user's run took the
   **Sunsteel→Mirebronze** branch this session (his own words), which never touches Gloamsteel Ingot
   at all, so the upgrade correctly stayed hidden — confirmed by forcing `discovered.delete
   ('gloamsteel_ingot')` (glyph vanishes, matching the report) then `discoverMaterial('gloamsteel_
@@ -9616,7 +9616,7 @@ stranded-HP-bar bug class). Kept low-alpha with a thin ring at the TRUE radius, 
 objection to arcs was that they looked goofy.
 
 - Wired: **Mirejaw** lunge lane, **Boar** charge lane, **Duskrunner** pounce lane, **Sanguinarch**
-  slam circle, **Corpselight** collapse circle. the user's "alligators" turned out to be the
+  slam circle, **Corpselight** collapse circle. The user's "alligators" turned out to be the
   **Mirejaw**, not the Miretyrant — the boss already telegraphs its own sweep and chomp, and
   Mirejaws are what fill its bellow waves from wave 3, so a pack of locked lunge lines was
   unreadable.
@@ -9647,7 +9647,7 @@ first round of telegraph probes report nothing.
 ### Art pipeline + additive coloured lighting (Phase 1 of the 3-biome art arc) (2026-07-25, Opus)
 
 Plan: `.claude/plans/art-textures-lighting-3-biomes.md`. First session of the real-pixel-art arc
-(roadmap 8). the user registered the **PixelLab MCP** at project scope; its tools need a session
+(roadmap 8). The user registered the **PixelLab MCP** at project scope; its tools need a session
 restart, so this session built the foundation everything else gets authored against. Two forks
 locked via `AskUserQuestion`: **additive coloured lights** (not Lights2D + normal maps, which would
 need a normal map for all 377 textures that PixelLab can't generate) and **icons first**.
@@ -9807,7 +9807,7 @@ reset to 0% with a *growing* ETA, then finish fine; don't re-fire on a stall (re
 *plain/undecorated/torn*. **Single-bit axes are a known-hard prompt** — three attempts all gave a
 symmetric double-head or a curved pick; `icon_stone_axe` ships as the best of three.
 
-the user moved off the 40-generation trial to **Tier 1 (2,000/mo, $12)**, so cost is no longer a
+The user moved off the 40-generation trial to **Tier 1 (2,000/mo, $12)**, so cost is no longer a
 constraint on the arc — 181 icons + Phase 3's ~134 props is ~16% of one month.
 
 ### Art arc Phase 3 — 160 world props, essentially complete (2026-07-25, Opus)
@@ -9920,7 +9920,7 @@ The common roster is 14-32px against PixelLab's 32px canvas floor, so real art
 is bigger — and `enemyReach()` gives the player more reach against physically
 bigger enemies, so the art pass would have quietly buffed the player against
 every common enemy at once while their own flat melee constants didn't grow
-back. the user chose "grow the art, keep the reach". Implemented as **two**
+back. The user chose "grow the art, keep the reach". Implemented as **two**
 pinned values rather than the single re-baselined constant the option
 described, because growth isn't uniform (murkling +9 radius vs cragscale +2, so
 one constant can only approximate it): `Enemy`'s constructor pins the physics

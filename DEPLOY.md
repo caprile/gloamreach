@@ -21,7 +21,7 @@ intentionally excluded from the production build; it stays available locally at
 
 ### 1. Work locally (private — nobody sees this)
 ```powershell
-cd "C:\Users\the user\Desktop\VibeCoding\survivor-rpg"
+cd "$HOME\Desktop\VibeCoding\survivor-rpg"
 npm run dev
 ```
 Play/test at http://127.0.0.1:5173/. Edits hot-reload. Nothing here touches the

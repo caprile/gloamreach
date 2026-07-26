@@ -68,7 +68,7 @@ the only non-reversible one — it is generated, not a sprite, so the override l
 it. It is now real 32px pixel art: `src/ui/GroundDetailUI.ts` keeps a 2304px chunk of stamped
 tiles around the player (constant cost at any world size) drawn *over* the existing colour
 field, which still owns every biome boundary and POI floor stamp. 10 materials across the three
-biomes, 28 tiles. the user's three live notes all landed: real water in the forest creek, a
+biomes, 28 tiles. The user's three live notes all landed: real water in the forest creek, a
 two-probe dither that softens every material boundary in the world at once, and a 16px stamp
 grid carved out of the 32px art so boundaries curve without halving the ground's pixel
 resolution. Two new tools came out of it — `check-seam.mjs` (a third of every tiles-pro batch
@@ -94,7 +94,7 @@ is mush). **No player attack animation** — both generation routes were tried
 and rejected; the body pulses and the held item lunges instead. **No weapon-in-hand sprites** — the
 plan's anchor needed a per-frame hand joint the API doesn't expose.
 
-the user's call on elites: the recolour is "good for now". Bespoke elite art is a possible later
+The user's call on elites: the recolour is "good for now". Bespoke elite art is a possible later
 pass, and since `eliteVariants.ts` skips any elite key that was itself overridden, dropping in a
 real `<name>_elite.png` simply wins.
 
@@ -224,7 +224,7 @@ re-fetching each pending job ID directly rather than assuming "not on disk" mean
 generated." **Always verify a batch against the authoritative key list before calling it done** —
 this is why the last ~15 icons took longer than the throughput math predicted.
 
-the user is on PixelLab **Tier 1 (2,000 generations/mo)**; the whole 181-icon pass used under 200 of
+The user is on PixelLab **Tier 1 (2,000 generations/mo)**; the whole 181-icon pass used under 200 of
 those. **The API key was pasted in plaintext and should still be rotated.**
 
 **Gameplay state is unchanged from the previous batch:** **Reaver-run playtest batch, part 1 —
@@ -332,7 +332,7 @@ Warden = slow and unkillable; Ascetic = elites twice as common AND worth double.
 `max(1, round(dmg × (1 − relicRed) − flatArmor))`, flat armor is uncapped, and armor had grown
 **10.5×** across three biomes (7 → 13 → 56 → **74**) while the strongest attack grew **2×**
 (60 → 124). Essentially **every physical attack in biomes 2 and 3 was pinned to the `max(1, …)`
-floor** — the win-con boss included. the user's call was to KEEP flat subtraction and raise enemy
+floor** — the win-con boss included. The user's call was to KEEP flat subtraction and raise enemy
 damage to match, so this was a numbers pass, not a formula change: Miretyrant 110/98/124/92 →
 225/210/255/200, bayou commons 38-80 → 108-170, crypt wardens roughly doubled, plus the two
 clearly-broken badlands cases (Gloamwarden 22/24 → 78/84, Duneshaper Sand Spikes 56 → 125).
@@ -382,7 +382,7 @@ Item 3 of the user's order, and reworked twice mid-session off his feedback — 
 because both corrections were about restraint rather than about the art.
 
 **Shipped first, then cut back:** three cursors (arrow / gauntlet / attack reticle) driven by the
-prompt state `updateHover` already computes. the user's call was **"only a single icon, with a
+prompt state `updateHover` already computes. The user's call was **"only a single icon, with a
 clicky animation when you click on something that is interactible"**, and he's right — the
 bottom-right prompt and the hover outline already report what's under the pointer, so a third
 signal that changes SHAPE is noise competing with two that already work. He also picked the
@@ -396,7 +396,7 @@ element under the pointer (`hitTestPointer`). Driven by wall-clock timers rather
 clock, because menus stay usable while the run is paused and a cursor frozen mid-press on the
 pause menu's own buttons would be a visible bug.
 
-**the user's third note — "make sure it is easily readable everywhere" — is why the outline exists**
+**The user's third note — "make sure it is easily readable everywhere" — is why the outline exists**
 and why it lives in `cursor.ts` rather than in the PNG: a dark gauntlet dragged across near-black
 menu panels, unlit crypt floors and the night overlay would vanish on all three. A 1px pale rim is
 traced around the silhouette at build time, and since the art keeps its own dark outline inside it,
@@ -472,7 +472,7 @@ keep the Combat column AND fit a unified list into the 190px under it. Deleting 
 the space.
 
 **The presentation is the point, and I got it wrong first.** I initially shipped the list grouped by
-SOURCE — a Weapon section, a Relics section, a Worn Gear section. the user corrected it mid-session:
+SOURCE — a Weapon section, a Relics section, a Worn Gear section. The user corrected it mid-session:
 he wants **one combined number per stat with its contributions indented underneath**. He's right,
 and the reason is the same reason the old panel was bad: a Combat block saying `Damage: 20` beside a
 relic list saying `Damage +10.5%` makes the reader do the multiplication themselves, in two places

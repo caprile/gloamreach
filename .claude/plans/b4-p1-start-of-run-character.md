@@ -3,7 +3,7 @@
 ## Context
 
 The biome-3 + new-systems umbrella is complete (all 5 phases) and nothing is queued behind
-it. the user picked the roadmap's own top deferred candidate
+it. The user picked the roadmap's own top deferred candidate
 (`.claude/plans/biome-3-and-new-systems-roadmap.md`, Phase 5 "Later"): a **start-of-run base
 character**.
 

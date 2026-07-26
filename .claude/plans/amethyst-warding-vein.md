@@ -173,7 +173,7 @@ Built on Opus. Everything above shipped as designed except where noted below.
 - **Refine-tab layout** — a recipe LIST with per-row cost readout + a Refine button (a timed
   `ProgressBar`, commit-at-end).
 
-**the user's post-ship tweaks (locked):**
+**The user's post-ship tweaks (locked):**
 - **Refine is gated behind Relic Forge Lvl 2**, not just a tab. A new **Gloam Conduit** station
   upgrade (`StationUpgrades.ts`, **15 Stone + 1 Gloam Shard**, workbench-gated like every
   tier-1-base upgrade) unlocks it — so you can't refine until you've mined at least one shard.

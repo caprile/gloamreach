@@ -2,7 +2,7 @@
 
 ## Context
 
-This is a **design roadmap**, not a single implementation plan. the user brainstormed a large pile
+This is a **design roadmap**, not a single implementation plan. The user brainstormed a large pile
 of ideas centered on **Biome 3 — a haunted bayou** (working name **Duskmire Bayou**; purple, misty,
 swampy), plus a set of **game-wide systems** much bigger than one biome: activated abilities, a
 jewelry/gems material class, equipment-granted powers, game-wide epic loot, augment/reforge gear

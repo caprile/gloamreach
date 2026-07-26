@@ -198,7 +198,7 @@ const BADLANDS: EnemyStat[] = [
     moveSpeed: 48,
     attacks: [
       { name: "Gloam volley (x6)", damage: 22, cls: "magic", kind: "ranged", intervalMs: 1600, projectileSpeed: 460 },
-      // 56 → 125 (2026-07-24). the user: "5 circle duneshaper attack only does
+      // 56 → 125 (2026-07-24). The user: "5 circle duneshaper attack only does
       // -1 dmg" — this is that attack (buildSpikesCross = centre + 4 arms), and
       // it was the boss's ONLY physical one, so it alone ate the flat-armor
       // subtraction while its four magic attacks bypassed it and landed full.
@@ -230,13 +230,13 @@ const BAYOU: EnemyStat[] = [
     // 135/170 → 68/100 (2026-07-24 pt2). The pt1 pass sized against 74 armor
     // (end-of-bayou Gloamsteel), but players FIGHT the bayou in badlands gear
     // (~16-36), so those landed near full and 2-shot an undergeared player.
-    // the user: commons should be a clear FRACTION of Sanguinarch (118/205), not
+    // The user: commons should be a clear FRACTION of Sanguinarch (118/205), not
     // out-hit the minibosses. Now ~52/84 net at 16 armor (5-6 hits to kill),
     // near-nothing through full Gloamsteel — heavy armor still trivializes it.
     attacks: [
       { name: "Chomp", damage: 68, cls: "physical", kind: "melee", intervalMs: 1200, bleedDps: 6 },
       { name: "Lunge", damage: 100, cls: "physical", kind: "aoe", intervalMs: 3750, bleedDps: 9 },
-      // C1 (2026-07-23): the signature DEATH ROLL. the user: the Mirejaw "feels
+      // C1 (2026-07-23): the signature DEATH ROLL. The user: the Mirejaw "feels
       // like a glorified boar" — lunge-then-bite is exactly a Boar's kit. This
       // is the move that makes it a gator: a landed chomp latches and thrashes,
       // ticking damage+bleed in a tight radius, then leaves it planted for a
@@ -259,7 +259,7 @@ const BAYOU: EnemyStat[] = [
     moveSpeed: 300, // hops in bursts (150px hops); not a steady walk
     // Bite 66→44 (the poison is the payload, not the bite); poison per-stack 6→4
     // with a hard 3-stack cap so a swarm can't melt you (2026-07-23 rebalance).
-    // 125 → 48 (2026-07-24 pt2). the user: "1 regular frog is chunking me HP
+    // 125 → 48 (2026-07-24 pt2). The user: "1 regular frog is chunking me HP
     // wise. That plus the poison is absurd damage." ~32 net at 16 armor; the
     // poison (armor-bypassing, the real payload) is untouched, so the toad still
     // matters — the bite just no longer chunks on its own.
@@ -280,7 +280,7 @@ const BAYOU: EnemyStat[] = [
       // of Sanguinarch's slam (205) per the anchor. Elite ×1.5 = 147 — the user's
       // "192 from elite tree guy" is gone; it costs ~a third of your HP, not a kill.
       { name: "Smash", damage: 98, cls: "physical", kind: "melee", intervalMs: 1600 },
-      // C2 (2026-07-23): the user — "[Mosswretch] lacks attack moves... feels a
+      // C2 (2026-07-23): The user — "[Mosswretch] lacks attack moves... feels a
       // bit weird." It had exactly one. The spore burst is the answer to its own
       // core problem: it is the slowest thing in the game and cannot catch you,
       // so instead of chasing it DENIES GROUND — a lingering cloud that slows
@@ -312,7 +312,7 @@ const BAYOU: EnemyStat[] = [
     // homing turn-rate is loosened so the orb is dodgeable by movement (2026-07-23).
     attacks: [
       { name: "Homing orb (wisp form)", damage: 22, cls: "magic", kind: "ranged", intervalMs: 1900, projectileSpeed: 170, homing: true },
-      // C3 (2026-07-23): the TRANSFORM. the user — "make that guy cooler besides
+      // C3 (2026-07-23): the TRANSFORM. The user — "make that guy cooler besides
       // just a ranged gremlin... maybe it transforms when you get within melee
       // range to a bigger melee focused dude with more HP." Close to melee and
       // the wisp COLLAPSES into the drowned corpse the light was luring you to:
@@ -398,7 +398,7 @@ const BAYOU: EnemyStat[] = [
     poise: null, elite: null, // resistances removed (2026-07-24 pt2)
   },
   {
-    // HP 3600 -> 4200 (2026-07-26). the user won and called the fight "fairly
+    // HP 3600 -> 4200 (2026-07-26). The user won and called the fight "fairly
     // easy", asking for it to be LONGER — but an earlier pass had already cut
     // 4600 -> 3600 precisely because a longer bar alone was a marathon. So the
     // length comes from new content first (the Gloamtide room-sweep + its own
@@ -417,7 +417,7 @@ const BAYOU: EnemyStat[] = [
       // The previous two both claimed to target "~35-55 net through 74 armor"
       // and both failed the same way: they picked raw numbers and never
       // subtracted. 124 - 74 is 30 BEFORE the relic reduction, and once the
-      // Gloam Bulwark amulet is worn it is 3, then 1. the user measured -1, -2
+      // Gloam Bulwark amulet is worn it is 3, then 1. The user measured -1, -2
       // and -12 off a win-con boss and killed it in ~50 sword hits.
       //
       // Sized from the target backwards instead: the fight should be over in

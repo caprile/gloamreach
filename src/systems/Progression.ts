@@ -145,7 +145,7 @@ const VITALITY_HEALING_PCT_PER_POINT = 0.01; // +1% -> +100% at the cap
 // why MainScene's live critCapped check — not this constant — gates allocation).
 const STRENGTH_CRIT_MULT_PER_POINT = 0.015;
 // 0.0045 -> 0.003 (2026-07-26). At 0.45%/point a HIGH-POTENCY class saturated the
-// 60% cap at roughly HALF the point cap: the user's x1.5-Agility Vagabond finished a
+// 60% cap at roughly HALF the point cap: The user's x1.5-Agility Vagabond finished a
 // run at 59% of 60 with 50 points spent, i.e. ~52 points was the whole stat, leaving
 // him effectively five stats instead of six. Per the standing rule the ceiling is NOT
 // raised (damage is already high) — the rate is slowed so the cap arrives near the

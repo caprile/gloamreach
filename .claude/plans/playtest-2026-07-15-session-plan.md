@@ -1,6 +1,6 @@
 # Playtest feedback 2026-07-15 — organized session plan
 
-Source: the user's playtest feedback dump (15 items), triaged + grounded against the code
+Source: The user's playtest feedback dump (15 items), triaged + grounded against the code
 2026-07-15. This doc groups the feedback into **8 sessions** by file-footprint (so parallel
 work doesn't collide) and model (Opus for new mechanics, Sonnet for fixes/tuning, per the
 model-switch convention). All design forks were locked via `AskUserQuestion` — the locked

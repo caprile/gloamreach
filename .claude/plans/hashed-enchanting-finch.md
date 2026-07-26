@@ -155,7 +155,7 @@ Reworked into a **3-tier set with a flat +1 armor per tier**, to the user's exac
   no higher Workbench tier exists yet). `deltaLabel` is the incremental +1; the stored
   `defenseBonus` is cumulative over base (matches `armorDefenseForTier`). No wiring needed — the
   UpgradeMenu / `applyArmorUpgrade` path was already tier-generic (weapon lvl2/lvl3 exercised it).
-- the user's note: the +1/tier proportional impact shrinks as raw numbers climb; re-scale per
+- The user's note: the +1/tier proportional impact shrinks as raw numbers climb; re-scale per
   future biome, don't assume this curve holds deeper in.
 
 **Same-session upgrade-menu UX polish** (`src/ui/UpgradeMenu.ts`, applies to station/armor/weapon
@@ -183,7 +183,7 @@ compendium). Then master-plan tail M-TE → M-W1.
 
 The remaining balance half of the triage's "light both rebalance," plus the boss damage bump and
 the cleave-replacement design. Number tuning + swapping one attack inside the existing GremlinKing
-state machine (Sonnet-class; built on Opus). the user locked the two open forks via `AskUserQuestion`:
+state machine (Sonnet-class; built on Opus). The user locked the two open forks via `AskUserQuestion`:
 cleave replacement = **leaping smash** (over spinning-sweep / ground-fissure / summon-adds); scope =
 **full balance pass this session**.
 

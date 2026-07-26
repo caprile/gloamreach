@@ -7,7 +7,7 @@ Phase 5 of `.claude/plans/biome-3-and-new-systems-roadmap.md` — the last phase
 The umbrella specced a **post-boss modal**: kill a big boss → a full-screen 3-card picker
 opens immediately (relic / ability / stat boon / gem / special item).
 
-the user redirected during the locking pass (2026-07-22):
+The user redirected during the locking pass (2026-07-22):
 
 > "it can be a relic but now im thinking when you roll the boss trophy, instead of it
 > outright giving you a single random relic, you get 3 random relics to pick from of the
