@@ -1992,7 +1992,24 @@ below.**
    ~19 identified ambient movers (flames, crystals, reeds, banners) get regenerated as objects
    during the animation pass. **Ground texturing + biome blending is its own phase, deliberately
    LAST** (the user) — it's the one part of the migration that is *not* per-asset reversible, since
-   the ground is generated rather than a sprite. **Next: Phase 4 (player rig).**
+   the ground is generated rather than a sprite.
+   **Phase 4 (player rig) + the creature roster shipped** (2026-07-25, same day). Five survivors
+   with 4-direction idle + walk, themed on their starting ability (`src/art/playerRig.ts`); all 14
+   common creatures and all 8 bosses with real art, **20 of 22 animated** idle/walk/attack
+   (`src/art/creatureRig.ts`). The `*_elite` trap above is **resolved**: elites are recoloured from
+   their base's real pixels at load time (`src/art/eliteVariants.ts`) — including animation strips —
+   so they never need authoring, and a hand-authored `<name>_elite.png` still wins.
+   **Rules worth carrying forward:** creature art is generated via `create_character`, NOT
+   `create_1_direction_object` (1 generation vs 25, no review step, and quadrupeds have a real
+   attack template); **direction is per-ANIMATION** — idle faces front (a profile hides the ears/
+   face/held item that identify a humanoid), movement and attacks face side-on (a front-facing walk
+   moonwalks); and a creature's **body + reach stay pinned to its placeholder footprint**
+   (`placeholderDims`), so real art can be bigger without silently rebalancing combat.
+   **Deliberately not animated:** Snake and Sandmaw (neither fits a humanoid or quadruped skeleton,
+   and both are ambushers whose read is stillness). **No player attack animation** — both routes
+   were rejected; the body pulses and the held item lunges. **No weapon-in-hand sprites** — the
+   plan's anchor needed a per-frame hand joint the API doesn't expose.
+   **Next: ground texturing + biome blending** (the last phase), plus attack/ability FX art.
 
 **Bosses (was item 7)** — shipped, see 5c above (Boss Altar + Gremlin King). Future
 bosses should each get their own bespoke AI (per the locked "no shared boss

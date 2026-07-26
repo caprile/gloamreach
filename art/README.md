@@ -177,6 +177,64 @@ animate_character template "breathing-idle" -> idle (4f)
   colour — violet gloam for Gloamstep/Gloamburst, blood-red for the Bloodpact
   shroud — because that accent is what actually reads at 48px, not the trinket.
 
+## Animated creatures (`art/creatures/`)
+
+Same strip idea as the player rig, with one simplification: creatures are drawn
+facing right and mirrored with `flipX`, so there are no per-direction strips —
+one strip per animation is the whole creature.
+
+```
+art/creatures/<textureKey>_<anim>_f<frameCount>.png
+art/creatures/boar_walk_f6.png
+```
+
+`<textureKey>` is the creature's own texture key and can contain underscores
+(`gremling_weak`, `gremlin_king`), so the filename is parsed from the RIGHT.
+`Enemy` drives it from `preUpdate` off body velocity and the attack state, so
+every subclass gets animation without touching its own AI — including the ones
+that fully override `update()`. A creature with no strips keeps its static
+sprite.
+
+`art/tools/fetch-creature.sh <pixellab-character-id> <textureKey> [move-dir] [idle-dir]`
+
+**Route: `create_character`, NOT objects.** `create_1_direction_object` was
+piloted and rejected — 25 generations each, a 64-candidate review step per
+creature, and a loose style match even when given the approved art as a style
+reference. A character is **1 generation**, needs no review, and quadrupeds have
+a real `attack-right` template. Only one direction is generated, so a fully
+animated creature costs ~4 generations.
+
+**Direction is per-ANIMATION, not per-creature:**
+
+| | |
+|---|---|
+| move / attack | `east` — a creature should face where it's going; a front-facing walk cycle moonwalks |
+| idle (humanoids) | `south` — a profile hides the ears, face and held item that identify a humanoid. It came out as a generic green man |
+| idle (quadrupeds) | `east` — a front-on boar is a blob |
+
+**Template animation sets differ per skeleton — read them per creature** from
+`get_character`'s `available_animations`. `bear`/`lion` have real attacks;
+`dog` has none (`bark` stands in for a lunge); `cat` has none (`jump` for a
+toad's lunge, `angry` for a snarl). Humanoids use `walking-6-frames` +
+`cross-punch` (or `fireball` for casters) + `breathing-idle` /
+`fight-stance-idle-8-frames`.
+
+**Two things that bit, both now handled by the script:** PixelLab appends a
+group-id suffix to the folder when a character has two animations of the same
+name (`attack-902741fb`), and a re-fetch at a different frame count would leave
+two strips claiming one animation, so stale ones are deleted first.
+
+**The static sprite is NOT trimmed** for an animated creature — it's the frame
+shown before the first animation starts, and the animation frames are the
+character's full canvas. Trimming only the still makes the creature visibly jump
+size the moment it moves.
+
+**Elites are free.** `creatureRig` recolours each strip through the same ramp as
+the static elites, so an animated creature's elite comes along automatically.
+
+**Shapes that fit no skeleton stay static** (snake, sandmaw). That is a finished
+state, not a gap: both are ambushers whose read is stillness.
+
 ## Regenerating the manifest
 
 Keys and true dimensions come from the live `TextureManager`, not from parsing
@@ -199,13 +257,15 @@ the UUID test — those stay procedural and are not art assets.
 |---|---:|---|
 | Icons | 181 | never |
 | World props / flora / nodes / structures / crypt tiles | ~134 | never |
-| Creatures + player | ~24 | needs frames |
-| Elite variants | 14 | derived |
+| Creatures + player | ~24 | DONE — see the two rig sections |
+| Elite variants | 14 | derived (recoloured from the base, incl. strips) |
 | Map markers | 12 | never |
 | FX gradients | 3 | keep procedural |
 
-**~327 of 377 assets never animate**, so static art is not a stopgap for them —
-it's the finished product. Only the ~24 creature sprites need an animation rig.
+Most assets never animate, so static art is not a stopgap for them — it's the
+finished product. The exceptions are the player (`art/rig/`) and the creatures
+(`art/creatures/`), both done, plus the ~19 ambient props (flames, crystals,
+reeds, banners) that still need regenerating as objects to be animatable.
 
 ## Current slice: icons (181)
 

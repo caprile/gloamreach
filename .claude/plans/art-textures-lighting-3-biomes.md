@@ -158,9 +158,23 @@ the plan below:
   against a 20x20 placeholder. Nothing reads the player's sprite size, and the
   physics body is pinned at 18px, so this is purely how big the survivor looks.
 
-Remaining: the 14 `*_elite` creature variants and the rest of the creature
-roster still have no art, and the `*_elite` build-time derivation trap
-(README rule 4a) is still unresolved.
+**Creatures shipped after it (same day), and animated.** All 14 common creatures
+plus all 8 bosses have real art; 20 of 22 are animated (idle/walk/attack) via
+`src/art/creatureRig.ts`. The `*_elite` derivation trap is resolved — elites are
+recoloured from their base's real pixels at load time (`src/art/eliteVariants.ts`),
+including animation strips, so they never need authoring.
+
+**This partly reverses locked decision 4 ("animation is a separate, later
+milestone").** the user asked for movement + attack animations on everything, and
+the cost turned out to be ~4 generations per creature rather than the ~27 the
+object route implied — cheap enough not to defer. See `art/README.md` for the
+route comparison and the per-animation direction rule.
+
+Remaining in the arc: ground texturing + biome blending (deliberately last), the
+~19 ambient props that need regenerating as objects to animate, art for the
+ATTACKS themselves (currently `Graphics` telegraphs, not sprites), and a
+stouter/gobliny gremlin — the humanoid rig reads too human and custom
+proportions came out worse, so it needs a different approach.
 
 **No longer blocked.** Locked by the user 2026-07-25:
 

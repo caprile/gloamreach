@@ -2,22 +2,26 @@
 
 ## Current State
 
-_Living snapshot — edit in place, never append._ Last shipped: **Phase 4 of the art arc — the
-player rig** (2026-07-25, Opus) (`.claude/plans/art-textures-lighting-3-biomes.md`). All five
-survivors have real art with 4-direction idle + walk animations, themed on their starting ability,
-loaded via the new `src/art/playerRig.ts`. No attack animation (both generation routes rejected —
-see the entry below); no weapon-in-hand sprites (no per-frame hand joint is exposed, so the plan's
-anchor mechanism doesn't exist). Phase 3 before it left forest, badlands and bayou fully real
-(terrain, flora + every `_picked` state, ore, POI structures + ring markers, decals), plus all
-crypt tiles and objects across four themes, all 12 map markers, all 11 ability icons and the larger
-projectiles. **381 real assets** (181 icons + 160 world + 40 rig strips).
+_Living snapshot — edit in place, never append._ Last shipped: **the creature animation pass +
+a UI slim-down** (2026-07-25, Opus) (`.claude/plans/art-textures-lighting-3-biomes.md`).
 
-**The creature roster is DONE and 20 of 22 are ANIMATED** — all 14 common creatures across three biomes plus all 8 bosses,
-with the 14 elites deriving from them automatically. **403 real assets** (363 sprites + 40 rig
-strips); every override key resolves and no filename is unmatched. the user's call: the recoloured
-elites are "good for now" — bespoke elite art (something beyond "is now red") is a possible later
-pass, and since `eliteVariants.ts` only rebuilds keys it derives, dropping a real
-`<name>_elite.png` in would simply win.
+**The art migration now covers everything except the ground.** Icons (181), world props/flora/
+ore/POI structures/crypt tiles/map markers/ability icons (182), the **player rig** (5 survivors,
+4-direction idle + walk, themed on their starting ability, `src/art/playerRig.ts`), and the
+**creature roster** — all 14 common creatures plus all 8 bosses, **20 of 22 animated**
+(idle/walk/attack, `src/art/creatureRig.ts`), with the 14 elites recoloured from their bases
+automatically. Roughly **500 real assets**; every override key resolves, no filename unmatched.
+
+**Deliberately NOT animated:** Snake and Sandmaw — a legless serpent and a burrowing worm fit
+neither the humanoid nor the quadruped skeleton, and both are ambushers whose read is stillness.
+**Deliberately still placeholder:** the tiny 6x6 projectiles (a 32px generation downscaled to 6px
+is mush) and the ground itself. **No player attack animation** — both generation routes were tried
+and rejected; the body pulses and the held item lunges instead. **No weapon-in-hand sprites** — the
+plan's anchor needed a per-frame hand joint the API doesn't expose.
+
+the user's call on elites: the recolour is "good for now". Bespoke elite art is a possible later
+pass, and since `eliteVariants.ts` skips any elite key that was itself overridden, dropping in a
+real `<name>_elite.png` simply wins.
 
 **Next:** ground texturing + biome blending — deliberately last, being the one part of the
 migration that is *not* per-asset reversible (the ground is generated, not a sprite). Also open
@@ -454,91 +458,3 @@ after the frame, and this arc has twice shipped art that passed every non-visual
 check. Scratch captures go to the gitignored `art/_shots/` — **not** under
 `art/rig/` or `art/sprites/`, both of which are globbed eagerly and would bundle
 them.
-
-### Art arc Phase 3 — 160 world props, essentially complete (2026-07-25, Opus)
-
-Grew from 22 to **160** across one session — every world category except the ground itself.
-
-**Late additions:** all 12 map markers, all 11 ability icons (the 3 `_lesser` variants DERIVED from
-their base with `adjust.mjs` rather than generated — exactly the reuse that tool enables), the
-larger projectiles, and every crypt tile in four themes.
-
-**Projectile facing is load-bearing.** Only the javelin carries an `artAngleOffset` (+90°, art
-points UP); every other projectile's art must point RIGHT, and each needs an aspect-matched canvas
-or `artScale`'s min-axis fit squashes it (a 32×32 arrow would render 6×6, not 16×6). A size guard
-now lives in `Projectile`'s constructor.
-
-**Two bugs the console surfaced, not the eye:** `poi_ring_vein` was an orphan — that key doesn't
-exist, the Gloaming Vein POI has no ring markers, so the art was silently doing nothing (repurposed
-to `poi_ring_gorge`, which is real and was still placeholder). And `poi_floor_gorge` had been left
-at the old trimmed 170px while its siblings were regenerated at 360. **Read the `[art]` console
-warnings after a batch** — an unmatched key is invisible in-game.
-
-**A verification trap worth remembering:** measuring `artScale` via a dynamic
-`await import('/src/art/overrides.ts')` reported 1 for everything, because it returns a FRESH module
-instance whose `placeholderSize` map is empty. The `[art] resized` warnings are the reliable
-evidence that the real module recorded a key. Forest, badlands and bayou are all fully real
-art now — terrain, flora with every `_picked` state, ore nodes, POI structures and POI ring markers
-— plus crypt objects in all four themes and the first three real tiles (`crypt_floor`, `crypt_wall`,
-`lodge_plank`) via `create_tiles_pro`. Left: themed crypt tiles, `poi_floor_*` decals, projectiles,
-map markers, ability icons.
-
-**Variants shipped where repetition showed most:** `tree_v2`, `boulder_v2`, `rock_v2`, and 3
-silhouettes each for mesa spires, rockwalls and both badlands ores. Live spread confirmed the picker
-works — trees 138/110, rocks 52/44, spires 11/20/15, sunscorch ore 32/29/29.
-
-**Placement reworked twice off playtest feedback.** Decor clumps rolled their texture *per prop*, so
-every clump was an even mix of all four types at identical density — the actual "too random" tell.
-Then trees/branches/rocks/boulders moved off independent sampling (a uniform Poisson process, which
-reads as artificial precisely because real terrain clumps) onto weighted clumping. Measured with the
-Clark-Evans index: trees R=0.51, rocks R=0.66 (1.0 = random). Finally decoration was **anchored to
-existing features** rather than scattered — 22% of features get dressed, 480 → 286 props, 99% within
-50px of a real feature.
-
-**Projectile got a size guard** even though its art is deferred: a gremlin rock is 6×6 against a
-32px canvas floor, and `rotationOffset` means replacement art must keep the placeholder's facing.
-
-The original 22-prop entry follows.
-
-**22 of ~134 world props** were the first slice (`art/sprites/world/`), all forest: `tree`,
-`ironbark_tree`, `boulder`, `rock`, `branch`, `bramble`, `blackberry_bush` (+`_picked`), `cattail`,
-`decor_fern`/`_flowers`/`_mushrooms`/`_log`, `drying_rack`, `gremlin_shack` (+`_chest`),
-`boss_altar`, `war_totem`, `gremlin_banner`, `palisade_stake`, `gremlin_camp_prop`, `camp_brazier`,
-plus the first variant `tree_v2`. Badlands, bayou and crypt tiles are untouched.
-
-**New tooling, all in `art/tools/`:** `trim.mjs` (dependency-free PNG decode/encode over
-`node:zlib`) crops a sprite to its alpha box; `fetch.sh` downloads a job by id straight into
-`art/sprites/world/` and trims it; `gallery.mjs` rebuilds the published reference page from whatever
-is on disk, inlining every PNG as a data URI because the artifact CSP blocks external hosts. The
-gallery is now **regenerated from the repo, not hand-assembled** — Phase 2's build scripts were
-discarded after publishing, which is why this one is committed.
-
-**`src/art/variants.ts`.** the user: props look too uniform. Dropping `art/sprites/tree_v2.png` is
-now the entire change needed to add a second tree — same "add a PNG, it works" contract as the
-override layer. Resolved in `ResourceNode`'s constructor (one hook, ~20 spawn sites) and selected by
-hashing the prop's x/y, so appearance is stable across reloads without threading an RNG through the
-samplers, and neighbouring props don't alternate in a visible stripe. `pickedTexture` follows the
-chosen variant when `<variant>_picked` exists. `scatterDecorClustered` routes through the same
-helper. `clearVariantCache()` in `create()` per the `scene.restart()` field-init rule.
-
-**Blackberry-bush "disappearing" bug — caused by the migration, not the mechanic.** `harvest()`
-worked correctly the whole time (node stays in `nodes`, active, visible, regrows). The bush had real
-33×25 art while `blackberry_bush_picked` was still a 24×20 generated placeholder, so picking swapped
-art *styles* mid-world and read as vanishing. Verified live via `preview_eval`.
-**Rule: a `_picked`/`_shielded` state variant ships in the same batch as its base.**
-
-**Warbow icons.** All three drew as sticks — the model reliably omits limb curve and string from
-"longbow". `trim --report` is an objective acceptance test here: content 3-7px wide is a stick, a
-real D-bow measures 16-30px. Prompting the *geometry* ("shaped like the letter D, thick curved limb
-on the right, thin straight taut bowstring on the left") landed all three. **Same class of
-known-hard prompt as the single-bit axe** — steer with shape, not with the weapon's name.
-
-**Decisions recorded in the plan file:** animation scope widened to ambient motion (which fixes the
-generation tool per asset, since a `create_map_object` result can never be animated); world props
-may be authored larger than their placeholders but creatures may not; a 1-direction object costs 25
-generations vs 1, so animatable props stay on the cheap path until the animation pass.
-
-**Open:** `decor_log` reads as choppable but isn't (re-arted as inert mossy roots; the key wants
-renaming in a later code pass), more decoration variety generally, and `boulder_v2`/`rock_v2` lost
-to a PixelLab queue stall that pinned jobs at `95%` for 25+ min while still holding concurrency
-slots — reported upstream.
