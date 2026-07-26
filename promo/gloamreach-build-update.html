@@ -304,7 +304,7 @@
     <div class="stat"><div class="n">3</div><div class="t">BIOMES</div></div>
     <div class="stat"><div class="n">22</div><div class="t">CREATURES</div></div>
     <div class="stat"><div class="n">8</div><div class="t">BOSSES</div></div>
-    <div class="stat"><div class="n">19</div><div class="t">DUNGEONS</div></div>
+    <div class="stat"><div class="n">18</div><div class="t">DUNGEONS</div></div>
     <div class="stat"><div class="n">5</div><div class="t">SURVIVORS</div></div>
     <div class="stat"><div class="n">400+</div><div class="t">SPRITES</div></div>
     <div class="stat"><div class="n em">1</div><div class="t">LIFE</div></div>
@@ -345,19 +345,16 @@ function diorama(id, list) {
   });
 }
 diorama("dio1", [
-  ["decor_mushrooms", 2], ["cattail", 2], ["snake", 2], ["boulder", 2],
-  ["blackberry_bush", 2], ["gremling_weak", 2], ["tree", 2], ["boar", 2],
-  ["decor_fern", 2], ["gremlin", 2], ["tree_v2", 2],
+  ["decor_mushrooms", 2], ["snake", 2], ["blackberry_bush", 2], ["gremling_weak", 2],
+  ["tree", 2], ["boar", 2], ["gremlin", 2], ["tree_v2", 2],
 ]);
 diorama("dio2", [
-  ["decor_skull", 2], ["emberbloom", 2], ["sandmaw", 2], ["badlands_boulder", 2],
-  ["hexling", 2], ["sunfruit_cactus", 2], ["cragscale", 2], ["sunscorch_ore_node", 2],
-  ["duskrunner", 2], ["badlands_deadtree", 2], ["badlands_mesa_spire", 2],
+  ["emberbloom", 2], ["sandmaw", 2], ["sunfruit_cactus", 2], ["hexling", 2],
+  ["cragscale", 2], ["duskrunner", 2], ["badlands_deadtree", 2], ["badlands_mesa_spire", 2],
 ]);
 diorama("dio3", [
-  ["water_lily", 2], ["gloamcap", 2], ["murkling", 2], ["bayou_bones", 2],
-  ["blighttoad", 2], ["swamp_moss", 2], ["mirejaw", 2], ["corpselight", 2],
-  ["mosswretch", 2], ["bayou_reeds", 2], ["bayou_cypress", 2],
+  ["water_lily", 2], ["gloamcap", 2], ["murkling", 2], ["blighttoad", 2],
+  ["mirejaw", 2], ["corpselight", 2], ["bayou_reeds", 2], ["bayou_cypress", 2],
 ]);
 
 /* ---------- gear rows: real item icons ---------- */
@@ -376,21 +373,21 @@ function row(id, list) {
   });
 }
 row("g-gather", [
-  "wood", "stone", "leather", "bones", "blackberry", "cattail", "sunfruit", "gloamcap",
+  "wood", "stone", "leather", "bones", "blackberry", "sunfruit", "gloamcap",
   "clay", "sunscorch_ore", "gloam_shard", "moonsilver",
 ]);
 row("g-build", [
   "stone_axe", "stone_pickaxe", "torch", "campfire", "workbench", "drying_rack",
-  "smelter", "relic_forge", "jewelry_station", ">", "sunsteel_ingot", "gloamsteel_ingot",
+  "smelter", "relic_forge", ">", "sunsteel_ingot", "gloamsteel_ingot",
 ]);
 row("g-arms", [
   "wood_club", "bone_knife", "primal_spear", "sunsteel_sword", "sunsteel_warhammer",
-  "embersteel_pike", "gloamsteel_warbow", "gremlin_cap", "duskhide_vest",
-  "sunsteel_cuirass", "embersteel_helm", "mirehide_hood",
+  "gloamsteel_warbow", "gremlin_cap", "duskhide_vest", "sunsteel_cuirass",
+  "embersteel_helm", "mirehide_hood",
 ]);
 row("g-relic", [
-  "cooked_boar_meat", "bramble_boar_skewer", "sunscorch_feast", "relic_common",
-  "relic_uncommon", "relic_rare", "relic_mythic", "gem_gloam", "gem_ember",
+  "cooked_boar_meat", "sunscorch_feast", "relic_common", "relic_uncommon",
+  "relic_rare", "relic_mythic", "gem_gloam", "gem_ember",
   "ability_blink", "ability_nova", "ability_snare",
 ]);
 
@@ -486,7 +483,7 @@ scene("key", {
   grid: 16, seed: 71,
   sky: [[0, "#0a0c1a"], [0.42, "#171436"], [0.74, "#2b1e52"], [1, "#3a2a63"]],
   stars: 150, mote: "#5a4d9a", moteBright: "#b9a5ff",
-  orb: [126, 6, 6, "#d9ccff", "rgba(167,139,255,0.30)"], orbCrater: "#b3a2e8",
+  orb: [124, 8, 5, "#d9ccff", "rgba(167,139,255,0.30)"], orbCrater: "#b3a2e8",
   layers: [
     { kind: "trees", base: 0.72, color: "#332a63", min: 4, vary: 5 },
     { kind: "trees", base: 0.86, color: "#211a49", min: 5, vary: 6 },
