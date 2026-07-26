@@ -21,6 +21,7 @@ import {
   type StatType,
 } from "../systems/Progression";
 import { affinityLines, type RunCharacter } from "../systems/Characters";
+import { bindFrame } from "./frames";
 
 export interface CharacterMenuDeps {
   skills: Skills;
@@ -89,6 +90,7 @@ export class CharacterMenu {
       .setScrollFactor(0)
       .setDepth(DEPTH_BG)
       .setVisible(false);
+    bindFrame(this.bg, "panel");
     this.tooltip = scene.add
       .text(0, 0, "", {
         fontFamily: "monospace",

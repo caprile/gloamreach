@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { bindFrame } from "./frames";
 
 // Fixed-HUD depth band (must clear WORLD_H 2688; below the 3000+ menus). Sits
 // just above the passive bar's band (2832-2835) so they never fight.
@@ -37,6 +38,7 @@ export interface AbilityBarEntry {
 interface Slot {
   key: string;
   bg: Phaser.GameObjects.Rectangle;
+  frame: Phaser.GameObjects.NineSlice | null;
   glow: Phaser.GameObjects.Rectangle;
   icon: Phaser.GameObjects.Image;
   keyBg: Phaser.GameObjects.Rectangle;
@@ -109,6 +111,9 @@ export class AbilityBarUI {
         .setStrokeStyle(2, EMPTY_BORDER)
         .setScrollFactor(0)
         .setDepth(DEPTH_BG);
+      // Bound (not per-render) because these slots are built once and only
+      // repositioned; the follower keeps the frame on the moving rectangle.
+      const frame = bindFrame(bg, "slot");
       const icon = this.scene.add
         .image(x + ICON / 2, y + ICON / 2, "ability_blink")
         .setScrollFactor(0)
@@ -168,7 +173,7 @@ export class AbilityBarUI {
           if (this.hoveredKey === key) this.hoveredKey = null;
           this.hideTooltip();
         });
-      this.slots.push({ key, bg, glow, icon, keyBg, keyLabel, cdOverlay, cdText, hit, x, y });
+      this.slots.push({ key, bg, frame, glow, icon, keyBg, keyLabel, cdOverlay, cdText, hit, x, y });
     });
   }
 
@@ -190,6 +195,13 @@ export class AbilityBarUI {
     });
   }
 
+  // Border colour is the slot's state tell. With art on the edge it's a tint on
+  // the frame; without art it stays the flat stroke it always was.
+  private setSlotBorder(s: { bg: Phaser.GameObjects.Rectangle; frame: Phaser.GameObjects.NineSlice | null }, color: number): void {
+    if (s.frame) s.frame.setTint(color);
+    else s.bg.setStrokeStyle(2, color);
+  }
+
   // Called every frame with the live Q/E/R state.
   update(entries: AbilityBarEntry[]): void {
     for (const e of entries) {
@@ -204,13 +216,13 @@ export class AbilityBarUI {
       }
       // Border / glow: active window (crimson) > ready (blue) > empty (dim).
       if (e.active) {
-        s.bg.setStrokeStyle(2, ACTIVE_BORDER);
+        this.setSlotBorder(s, ACTIVE_BORDER);
         s.glow.setFillStyle(ACTIVE_BORDER, 0.3);
       } else if (equipped) {
-        s.bg.setStrokeStyle(2, READY_BORDER);
+        this.setSlotBorder(s, READY_BORDER);
         s.glow.setFillStyle(0xffffff, 0);
       } else {
-        s.bg.setStrokeStyle(2, EMPTY_BORDER);
+        this.setSlotBorder(s, EMPTY_BORDER);
         s.glow.setFillStyle(0xffffff, 0);
       }
       // Cooldown sweep + numeric — only when equipped, off its active window,

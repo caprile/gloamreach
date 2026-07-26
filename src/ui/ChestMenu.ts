@@ -3,6 +3,7 @@ import { ItemContainer } from "../systems/ItemContainer";
 import { itemDef } from "../systems/Items";
 import type { Skills } from "../systems/Skills";
 import { Tooltip } from "./Tooltip";
+import { bindFrame, frameInto } from "./frames";
 
 export interface ChestMenuDeps {
   backpack: ItemContainer;
@@ -73,6 +74,7 @@ export class ChestMenu {
       .setScrollFactor(0)
       .setDepth(DEPTH_BG)
       .setVisible(false);
+    bindFrame(this.bg, "panel");
   }
 
   openMenu(): void {
@@ -196,6 +198,7 @@ export class ChestMenu {
           if (pointer.leftButtonDown()) this.deps.beginDrag(container, i, pointer);
         });
       this.rows.push(box);
+      frameInto(this.rows, box, "slot");
 
       if (!stack) continue;
       const def = itemDef(stack.key);

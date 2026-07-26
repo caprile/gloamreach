@@ -167,6 +167,38 @@ export class BootScene extends Phaser.Scene {
     }
   }
 
+  // Menu chrome (see src/ui/frames.ts). These are BORDERS with a transparent
+  // centre, nine-sliced onto whatever rectangle a menu already draws — so the
+  // centre must stay empty at every size, and the border must be exactly the
+  // inset frames.ts cuts at or the corners smear.
+  //
+  // Like every other placeholder these are the fallback, not the target: real
+  // art at art/sprites/ui_panel.png replaces them with no code change.
+  private makeUiFrameTextures(g: Phaser.GameObjects.Graphics): void {
+    const border = (size: number, inset: number, key: string, accent: number) => {
+      g.clear();
+      // Drawn as four bands rather than a filled rect with a hole punched in it:
+      // Graphics has no even-odd fill, and an opaque centre would black out the
+      // panel fill the frame is supposed to sit on top of.
+      const bands = (off: number, thick: number, color: number, alpha: number) => {
+        g.fillStyle(color, alpha);
+        g.fillRect(off, off, size - off * 2, thick); // top
+        g.fillRect(off, size - off - thick, size - off * 2, thick); // bottom
+        g.fillRect(off, off, thick, size - off * 2); // left
+        g.fillRect(size - off - thick, off, thick, size - off * 2); // right
+      };
+      bands(0, inset, 0x171b23, 1); // plate
+      bands(0, 1, 0x05070a, 1); // outer edge
+      bands(1, 1, 0x2f3646, 1); // top bevel
+      bands(inset - 2, 1, 0x05070a, 1); // inner edge shadow
+      bands(inset - 1, 1, accent, 0.55); // gloam inlay
+      g.generateTexture(key, size, size);
+    };
+
+    border(128, 26, "ui_panel", 0x8a5cd0);
+    border(40, 10, "ui_slot", 0x6a4aa0);
+  }
+
   private makeTextures(): void {
     const g = this.add.graphics();
 
@@ -182,6 +214,7 @@ export class BootScene extends Phaser.Scene {
 
     this.makeGroundMaterialTiles(g);
     this.makeAttackFxTextures(g);
+    this.makeUiFrameTextures(g);
 
     // Player (20x20) — a front-facing little adventurer in a blue tunic. The
     // sprite orientation is static (facing is tracked only to offset the equipped

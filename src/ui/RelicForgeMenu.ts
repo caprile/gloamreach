@@ -28,6 +28,7 @@ import {
 } from "../systems/Relics";
 import { RelicRevealFx } from "./RelicRevealFx";
 import { ProgressBar } from "./ProgressBar";
+import { bindFrame } from "./frames";
 
 export interface RelicForgeMenuDeps {
   backpack: ItemContainer;
@@ -165,6 +166,7 @@ export class RelicForgeMenu {
       .setScrollFactor(0)
       .setDepth(DEPTH_BG)
       .setVisible(false);
+    bindFrame(this.bg, "panel");
   }
 
   openMenu(): void {

@@ -2,20 +2,31 @@
 
 ## Current State
 
-_Living snapshot — edit in place, never append._ Last shipped: **the Inventory's Active Effects
-tab** (2026-07-26, Opus) — every stat acting on the player as ONE combined number with its
-contributions indented underneath, replacing both the Combat block and the relic effects list.
-Before it, same day: **attack-FX art across the whole roster** — ten attacks now show a real art
-sprite when they hit, via two shared spawners in `src/art/attackFx.ts` (`burstFx` / `coneFx`), plus
-two bosses that previously had a telegraph and then no visible hit at all. Before those: the
-Vagabond-win playtest batch (~30 items, plan in
-`.claude/plans/vagabond-win-playtest-batch.md`), the perf pass (12.7 -> 5.0ms frames) and the
-ground-texturing phase.
+_Living snapshot — edit in place, never append._ Last shipped: **menu chrome art** (2026-07-26,
+Opus) — item 2 of the user's stated order. Every panel and slot in the game now wears a real
+blackened-iron frame with a violet gloam inlay, applied through one shared layer
+(`src/ui/frames.ts`) rather than by rewriting thirty menus. Before it, same day: the Inventory's
+**Active Effects tab** (one combined number per stat with its contributions indented under it,
+replacing the Combat block and the relic effects list) and **attack-FX art across the whole
+roster** (`src/art/attackFx.ts`).
 
-**In progress / next.** Next in the user's stated order: **on-theme inventory/crafting menu art**
-(`create_ui_asset` for panel/slot frames, buttons, tabs), then a **unique in-game cursor**
-(`input.setDefaultCursor`, worth a hover/attack variant given the game is mouse-driven). Nothing
-from the Vagabond batch is outstanding — the Active Effects item that was held back has shipped.
+**In progress / next.** Next in the user's stated order: **(3) a unique in-game cursor**
+(`input.setDefaultCursor`, worth a hover/attack variant given the game is mouse-driven). Menu
+**buttons and tabs are deliberately still flat** — the agreed scope was frames + slots, and the
+generated kit's button/tab pieces are already downloaded (`art/work/kit_1.png`, `kit_3.png`) if
+that's wanted next. Also still open from earlier notes: a stouter/gobliny gremlin, and the ~19
+ambient props that need regenerating as objects before they can animate.
+
+**The menu-chrome rule: chrome sits BESIDE the rectangle, never replaces it.** A menu's
+`add.rectangle` owns its fill, alpha, hit area and — for slots — a stroke encoding state. The art
+is therefore a border with a **hollow centre**, drawn **outside** the rectangle's bounds, with
+state moved from the stroke onto a **tint**. Each of those three is forced: a nine-slice stretches
+its centre (hammered metal smears across a 700x850 panel); the layouts were written against a 1px
+stroke, so a real border would sit on top of the inventory's 12px text margin and a 70px slot's
+64px icon; and art plus a flat stroke is a double border. `bindFrame` makes a panel's frame follow
+its rectangle's position/size/visibility every frame — the station menus re-anchor and resize
+theirs on every open, and mirroring that by hand at ~30 sites is how an eleventh menu ends up
+leaving a frame floating over the world.
 
 **The Active Effects shape is a rule worth keeping.** A stat is ONE number with its sources
 indented under it, never a category per source. Grouping by source is what the old Combat block and
@@ -352,6 +363,53 @@ touches no combat numbers.
 ## Recent Entries
 
 > Older entries in STATUS-archive.md.
+
+### Menu chrome: real frames on every panel and slot (2026-07-26, Opus)
+
+Item 2 of the user's three-item order. He couldn't pick a style from a description ("I'd need to
+see it"), so the direction was locked as **dark iron & gloam-violet** — the option that keeps the
+existing amber selection and violet relic highlights working — and the priority was getting it on
+screen fast rather than getting it perfect on paper.
+
+**The whole pass is one file plus two PNGs.** `src/ui/frames.ts` draws chrome next to the
+rectangles the menus already have, instead of replacing them; the rules and why each is forced are
+in Current State above and `art/README.md`. Call sites are one line: `bindFrame(this.bg, "panel")`
+for a panel, `frameInto(this.rows, box, "slot")` for anything rebuilt per render. **Migrated:**
+Inventory (panel + backpack cells + equipment slots + relic sockets), Hotbar, Crafting, Chest,
+Cooking, Drying Rack (both slot sizes), Jewelry, Relic Forge, Character, Upgrade, Pause, Tooltip,
+plus the Q/E/R ability bar and the buff bar — those two aren't menus, but they sit against the
+hotbar and leaving them flat would have read as a half-finished pass.
+
+**Generation notes** (full recipe in `art/README.md`): `create_ui_asset` will not draw a bare
+frame — it returns a whole title-screen mockup, castle and dragon included. That's fine, since the
+border is the deliverable, and new `art/tools/hollow.mjs` cuts the interior out (with `--corner`
+to spare the thicker riveted corner plates a uniform cut would slice through). Two more tools came
+out of it: `scale.mjs`, which box-averages rather than dropping pixels because the border's
+thickness is a hard requirement (it has to fit inside a 12px content margin) and nearest-neighbour
+eats the one-pixel rivets; and `split.mjs`, which flood-fills a multi-element kit sheet apart —
+one job for a matched set beats three jobs whose styles drift, and the socket that shipped came
+out of the same job as the button and tab.
+
+**A generated slot came back far too decorated** — bright violet corner gems, attractive once and
+a mess tiled seventy times across a backpack grid. The kit's plain riveted socket, scaled down,
+was the answer. **Judge a slot asset by imagining the grid, not the sprite.**
+
+**Two things worth knowing about the follower.** It registers one `POST_UPDATE` listener per Scene
+INSTANCE, and `scene.restart()` reuses the instance — so New Run neither stacks listeners nor
+strands frames. Verified explicitly against the codebase's own restart gotcha: listener count 2
+before and after, nine-slice count 30 before and after. And frames inherit `scrollFactor` from
+their rectangle, so `syncCameras` classifies them as UI automatically — zero unclassified, no
+double-draw.
+
+Verified live: frame tracks a panel moved and resized mid-flight (500x300 -> 512x312 at -6,-6),
+visibility follows the panel exactly, and with only the crafting menu open the visible frame count
+is exactly 22 (18 hotbar + 3 ability + 1 panel) with 8 hidden panel frames parked — no leak per
+repaint. `tsc` + `npm run build` clean, no console errors.
+
+**Buttons and tabs are deliberately untouched** (the agreed scope was frames + slots), and the
+**Tooltip is framed with a bleed** so its border sits almost entirely outside the box — a tooltip
+pops over dense grids hundreds of times a session and can't afford to lose its 8/6px text padding
+to an ornament.
 
 ### Active Effects tab — one number per stat, sources indented under it (2026-07-26, Opus)
 

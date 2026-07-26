@@ -9,6 +9,7 @@ import { MAX_AUGMENTS_PER_ITEM, describeAugmentEffect, type GearAugmentDef } fro
 import type { Skills } from "../systems/Skills";
 import { Tooltip } from "./Tooltip";
 import { ProgressBar } from "./ProgressBar";
+import { bindFrame } from "./frames";
 
 // A short "crafting…" bar plays before the piece (or the whole batch) lands in
 // the bag — same commit-at-end pattern as CookingMenu/CraftingMenu.
@@ -122,6 +123,7 @@ export class JewelryMenu {
       .setScrollFactor(0)
       .setDepth(DEPTH_BG)
       .setVisible(false);
+    bindFrame(this.bg, "panel");
 
     this.maskShape = scene.make.graphics({}, false).setScrollFactor(0);
     this.maskShape.fillStyle(0xffffff).fillRect(this.panelX, this.viewTop, this.panelW, VIEW_H);

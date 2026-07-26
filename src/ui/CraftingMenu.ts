@@ -10,6 +10,7 @@ import { weaponSkillDamageMultiplier, type Skills } from "../systems/Skills";
 import type { PlayerProgression } from "../systems/Progression";
 import { MARGIN as MINIMAP_MARGIN, PANEL_H as MINIMAP_H } from "./MinimapUI";
 import { ProgressBar } from "./ProgressBar";
+import { bindFrame } from "./frames";
 
 // A quick "crafting…" bar plays before the item lands — a small satisfying
 // beat, deliberately short so it never feels like a slog. One bar covers the
@@ -171,6 +172,7 @@ export class CraftingMenu {
       .setScrollFactor(0)
       .setDepth(3000)
       .setVisible(false);
+    bindFrame(this.bg, "panel");
   }
 
   toggle(): void {

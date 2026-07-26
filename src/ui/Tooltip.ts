@@ -20,6 +20,7 @@ import { ARMOR_SETS } from "../systems/SetBonuses";
 import { armorDefenseForTier } from "../systems/ArmorUpgrades";
 import { weaponTierDamageBonus } from "../systems/WeaponUpgrades";
 import type { PlayerProgression } from "../systems/Progression";
+import { frameInto } from "./frames";
 
 export type TooltipPlacement = "right" | "above";
 
@@ -181,6 +182,11 @@ export class Tooltip {
     text.setPosition(tx + padX, ty + padY);
 
     this.parts.push(bgBox, text);
+    // Framed almost entirely OUTSIDE the box (bleed ~= the art's own border), so
+    // the chrome matches the menus without eating the 8/6px text padding a
+    // tooltip is laid out against. A tooltip pops up over dense grids hundreds
+    // of times a session, so it earns an edge, not an ornament.
+    frameInto(this.parts, bgBox, "slot", { bleed: 8 });
   }
 
   // The static "Damage" stat is overridden with a live "base (adjusted)"

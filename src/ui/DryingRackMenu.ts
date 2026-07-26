@@ -5,6 +5,7 @@ import { SECONDARY_SIDES, type ProcessingStation, type SecondarySide } from "../
 import type { Skills } from "../systems/Skills";
 import { Tooltip } from "./Tooltip";
 import { ProgressBar } from "./ProgressBar";
+import { bindFrame, frameInto } from "./frames";
 
 // A short "drying…" bar plays before the output lands — one bar for the whole
 // batch (a 8->4 run is a single bar), a touch longer than a plain craft.
@@ -134,6 +135,7 @@ export class DryingRackMenu {
       .setScrollFactor(0)
       .setDepth(DEPTH_BG)
       .setVisible(false);
+    bindFrame(this.bg, "panel");
   }
 
   openMenu(): void {
@@ -329,6 +331,7 @@ export class DryingRackMenu {
           else this.deps.beginDrag(backpack, index, pointer);
         });
       this.rows.push(box);
+      frameInto(this.rows, box, "slot");
       this.visibleCells.push({ x, y, index });
 
       const def = itemDef(stack.key);
@@ -579,6 +582,7 @@ export class DryingRackMenu {
       .setScrollFactor(0)
       .setDepth(DEPTH_ITEM);
     this.rows.push(box);
+    frameInto(this.rows, box, "slot");
     if (!slot) return;
     const def = itemDef(slot.key);
     if (def) {

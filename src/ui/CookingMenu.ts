@@ -6,6 +6,7 @@ import { stationDisplayName } from "../systems/StationUpgrades";
 import type { Skills } from "../systems/Skills";
 import { Tooltip } from "./Tooltip";
 import { ProgressBar } from "./ProgressBar";
+import { bindFrame } from "./frames";
 
 // A short "cooking…" bar plays before the dish (or the whole batch) lands in
 // the bag. One bar covers the whole batch, same as CraftingMenu/DryingRack.
@@ -127,6 +128,7 @@ export class CookingMenu {
       .setScrollFactor(0)
       .setDepth(DEPTH_BG)
       .setVisible(false);
+    bindFrame(this.bg, "panel");
 
     // Geometry mask over the viewport rect. Both the mask shape and the masked
     // list objects are scrollFactor(0) (camera-locked), so they line up in

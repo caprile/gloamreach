@@ -5,6 +5,7 @@ import type { WeaponUpgradeDef } from "../systems/WeaponUpgrades";
 import type { ToolUpgradeDef } from "../systems/ToolUpgrades";
 import { isGearAugment, MAX_AUGMENTS_PER_ITEM, type GearAugmentDef } from "../systems/GearAugments";
 import { ProgressBar } from "./ProgressBar";
+import { bindFrame } from "./frames";
 
 // A short "upgrading…" bar plays over the clicked row before the tier lands —
 // same commit-at-end feel as craft/process/cook (ProgressBar / roadmap 5p).
@@ -123,6 +124,7 @@ export class UpgradeMenu {
       .setScrollFactor(0)
       .setDepth(DEPTH_BG)
       .setVisible(false);
+    bindFrame(this.bg, "panel");
   }
 
   openMenu(anchor?: { x: number; y: number }): void {

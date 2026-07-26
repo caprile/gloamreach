@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { frameInto } from "./frames";
 
 export interface PauseMenuDeps {
   hintsEnabled: () => boolean;
@@ -57,14 +58,16 @@ export class PauseMenuUI {
         .setDepth(DEPTH_SCRIM)
         .setInteractive(),
     );
-    this.objects.push(
-      this.scene.add
-        .rectangle(this.panelX, this.panelY, PANEL_W, PANEL_H, 0x0a0a0a, 0.97)
-        .setOrigin(0, 0)
-        .setStrokeStyle(1, 0x555e6e)
-        .setScrollFactor(0)
-        .setDepth(DEPTH_PANEL),
-    );
+    const panel = this.scene.add
+      .rectangle(this.panelX, this.panelY, PANEL_W, PANEL_H, 0x0a0a0a, 0.97)
+      .setOrigin(0, 0)
+      .setStrokeStyle(1, 0x555e6e)
+      .setScrollFactor(0)
+      .setDepth(DEPTH_PANEL);
+    this.objects.push(panel);
+    // Rebuilt on every open rather than bound, since the whole panel is torn
+    // down when it closes.
+    frameInto(this.objects, panel, "panel");
 
     let y = this.panelY + 30;
     this.text(cx, y, "PAUSED", 28, "#ffffff", 0.5);

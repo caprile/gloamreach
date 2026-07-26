@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import type { ActiveBuff } from "../systems/Buffs";
+import { frameRect } from "./frames";
 
 const ICON = 28;
 const GAP = 6;
@@ -13,6 +14,7 @@ const DEPTH_TIP = 2955;
 
 interface Entry {
   bg: Phaser.GameObjects.Rectangle;
+  frame: Phaser.GameObjects.NineSlice | null;
   icon: Phaser.GameObjects.Image;
   meterBg: Phaser.GameObjects.Rectangle;
   meter: Phaser.GameObjects.Rectangle;
@@ -69,6 +71,7 @@ export class BuffBarUI {
   private rebuild(buffs: ActiveBuff[]): void {
     for (const e of this.entries.values()) {
       e.bg.destroy();
+      e.frame?.destroy();
       e.icon.destroy();
       e.meterBg.destroy();
       e.meter.destroy();
@@ -91,6 +94,8 @@ export class BuffBarUI {
         .setStrokeStyle(1, 0x8fe38f)
         .setScrollFactor(0)
         .setDepth(DEPTH_ICON);
+      // Buff green moves off the stroke and onto the frame.
+      const frame = frameRect(bg, "slot", { accent: 0x8fe38f });
       const icon = this.scene.add
         .image(x + ICON / 2, y + ICON / 2 - 1, b.icon)
         .setScrollFactor(0)
@@ -119,7 +124,7 @@ export class BuffBarUI {
           this.hideTooltip();
         });
 
-      this.entries.set(b.id, { bg, icon, meterBg, meter, hit });
+      this.entries.set(b.id, { bg, frame, icon, meterBg, meter, hit });
       x += ICON + GAP;
     }
   }

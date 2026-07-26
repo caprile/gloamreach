@@ -427,6 +427,71 @@ Object.fromEntries(window.__game.textures.getTextureKeys()
 Runtime RenderTextures (ground bakes, minimap, tile fills) are filtered out by
 the UUID test — those stay procedural and are not art assets.
 
+## Menu chrome (`ui_panel`, `ui_slot`)
+
+The menus are the one surface where a texture swap alone was not enough. Every
+panel and slot in `src/ui` is a flat `add.rectangle` that owns its fill, its
+alpha, its hit area and — for slots — a **stroke that encodes state** (selected,
+filled, rarity). Replacing those rectangles would have meant rewriting the
+pointer maths in thirty files.
+
+So `src/ui/frames.ts` adds chrome *beside* them instead. Three rules make it
+work, and all three are forced by something concrete:
+
+- **The art is a border with a HOLLOW centre.** A nine-slice stretches its
+  centre, and hammered metal stretched across a 700x850 panel looks like a
+  rendering bug. Only the border, which is sliced rather than stretched, is art;
+  the rectangle's own fill shows through the middle.
+- **The frame is drawn OUTSIDE the rectangle** (`BLEED`). The layouts were
+  written against a 1px stroke: the inventory's text starts 12px in, and a
+  70px slot holds a 64px icon. A border thick enough to read as metal would sit
+  on top of both. Growing outward keeps every content box where it already was.
+  The bleed is capped at the gap between neighbours (6px between slots) so
+  frames meet rather than overlap.
+- **State moves from the stroke to a TINT.** Art plus a flat stroke is a double
+  border, so `frameRect` clears the stroke and `accent` carries the signal —
+  amber for the selected hotbar slot, rarity colour on a relic socket, green on
+  a buff.
+
+`bindFrame` is for a panel's long-lived background: the frame follows its
+rectangle's position, size and visibility every frame, because the station menus
+re-anchor and resize theirs on every open, and a frame left floating over the
+world after its menu closed is about as visible as a bug gets. `frameInto` is
+for everything rebuilt per render, and pushes into the menu's own cleanup array.
+
+`INSETS` must match the art's real border, and for the panel that means its
+**corner plate** (28px), not its edge bar (14px) — a plate reaching past the
+slice line gets stretched.
+
+### Generating it
+
+`create_ui_asset` is the tool, and it does not draw a bare frame — asking for
+one returns a **whole title-screen mockup**, castle and all. That's fine: the
+border is the deliverable and the interior is discarded.
+
+```
+create_ui_asset  elements ["panel"], 512x512, no_background
+  -> trim.mjs -> hollow.mjs --inset 31 --corner 60 --fade 2 -> scale.mjs --to 185
+```
+
+- **`hollow.mjs`** cuts the centre out. `--corner` keeps the thicker riveted
+  plates a uniform cut would slice through, and its value is also what the
+  nine-slice inset must be.
+- **`scale.mjs`** exists because the border's thickness is a hard requirement,
+  not a preference — it has to fit inside a 12px content margin. It box-averages
+  on the way down: nearest-neighbour drops the one-pixel rivets that are exactly
+  what makes a frame read as metal.
+- **`split.mjs`** separates a multi-element kit sheet (`elements: ["icon_button",
+  "button", "tab"]`) into its pieces by flood fill. One job for a matched set is
+  both cheaper and safer than three jobs whose styles can drift — the slot
+  socket that shipped came out of the same job as the button and tab.
+
+**A generated slot is far more decorated than a slot should be.** The first
+48x48 socket came back with bright violet corner gems; one of those is
+attractive, seventy of them tiled across a backpack grid is a mess. The kit's
+plain riveted socket, scaled down, was the right answer. Judge a slot asset by
+imagining the whole grid, not the single sprite.
+
 ## Scope
 
 | Category | Count | Animation |

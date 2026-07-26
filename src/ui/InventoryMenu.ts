@@ -8,6 +8,7 @@ import type { PlayerProgression } from "../systems/Progression";
 import type { WeaponType } from "../systems/Weapons";
 import { RARITY_COLOR, rarityIcon, rarityName, relicEffectText, relicFamilyName, uniqueText, type RelicEffectSummary, type RelicFamilySlot, type RelicGroup } from "../systems/Relics";
 import { appliedAugmentIds, isAugmentableItem, MAX_AUGMENTS_PER_ITEM } from "../systems/GearAugments";
+import { bindFrame, frameInto } from "./frames";
 import { Tooltip } from "./Tooltip";
 
 export interface ArmorSlotView {
@@ -328,6 +329,7 @@ export class InventoryMenu {
       .setScrollFactor(0)
       .setDepth(3000)
       .setVisible(false);
+    bindFrame(this.bg, "panel");
 
     // Search box focus tracking: clicking the search box focuses it; clicking
     // anywhere else (or nothing) unfocuses. One deterministic handler beats
@@ -760,6 +762,9 @@ export class InventoryMenu {
         })
         .on("pointerout", () => this.hideRelicTooltip());
       this.rows.push(box);
+      // Rarity moves from the stroke onto the frame, so a Mythic still reads
+      // as one at a glance across the family grid.
+      frameInto(this.rows, box, "slot", rarity ? { accent: RARITY_COLOR[rarity] } : { accent: 0x6a7080 });
 
       if (slot.group) {
         const gem = this.scene.add
@@ -866,6 +871,9 @@ export class InventoryMenu {
           if (slot.itemKey) this.deps.beginArmorDrag(slot.id, pointer);
         });
       this.rows.push(box);
+      // The stroke used to be the "something is worn here" tell; with art on
+      // the edge that becomes a tint, so an empty socket still reads as empty.
+      frameInto(this.rows, box, "slot", slot.itemKey ? {} : { accent: 0x6a7080 });
 
       if (slot.itemKey) {
         const def = itemDef(slot.itemKey);
@@ -1146,6 +1154,7 @@ export class InventoryMenu {
         this.deps.beginDrag(backpack, index, pointer);
       });
     this.rows.push(box);
+    frameInto(this.rows, box, "slot");
     this.visibleCells.push({ x, y, index });
 
     const def = itemDef(stack.key);

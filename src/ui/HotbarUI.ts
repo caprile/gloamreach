@@ -6,6 +6,7 @@ import type { Skills } from "../systems/Skills";
 import type { PlayerProgression } from "../systems/Progression";
 import type { WeaponType } from "../systems/Weapons";
 import { appliedAugmentIds, isAugmentableItem, MAX_AUGMENTS_PER_ITEM } from "../systems/GearAugments";
+import { frameInto } from "./frames";
 import { Tooltip } from "./Tooltip";
 
 // Bumped 40->46 to match the InventoryMenu slot size (S3) — icons render the
@@ -234,6 +235,12 @@ export class HotbarUI {
           this.deps.beginDrag(this.hotbar.container, i, pointer);
         });
       this.rows.push(box);
+      // Selection was a 2px amber stroke; with art on the edge it becomes an
+      // amber tint on the frame. Row 2 keeps its green cast so the stations row
+      // still reads as a different row at a glance.
+      frameInto(this.rows, box, "slot", {
+        accent: isSelected ? 0xffe08a : isRow2 ? 0x93b089 : 0x9aa2b0,
+      });
 
       const num = this.scene.add
         .text(x + 3, y + 2, `${col + 1}`, {
