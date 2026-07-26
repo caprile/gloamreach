@@ -236,6 +236,46 @@ existing cast sites, not a rig. Worth deciding per family whether the tell is a
 sprite animation, a shader-free additive flash (the new additive light layer is
 directly reusable here), or both.
 
+## Creature pass 2 — DONE (2026-07-25)
+
+Off the user's playtest of the animated roster. Art layer only; no code changed.
+Full detail in `STATUS.md`, mapping table + recipes in `art/README.md`.
+
+- **Mirejaw regenerated as a real alligator.** The original read as a dog. A
+  quadruped skeleton controls the **pose**; only the description carries the
+  **anatomy**, and "gloam-gator" carried none of it. Naming the parts fixed it in
+  one generation. Its attack moved from a paw-swipe to `jump-attack` — a lunging
+  chomp, which also matches its in-game Lunge.
+- **Corpselight moved off the character path** to a static `create_map_object`
+  ghost. A humanoid rig always has legs, so a legless floating haunt was never
+  reachable from it. `Corpselight.bobPhase` already hovers it in code, so it lost
+  nothing by dropping its three strips. Roster is now **19 of 22 animated**, with
+  snake / sandmaw / corpselight static by design.
+- **Attack templates are now per-creature.** This plan's Phase 4 recipe said
+  *humanoids use `cross-punch`*, which made twelve distinct creatures throw one
+  punch — the single biggest cause of the roster feeling repetitive. Each now
+  plays its real attack. **Correct the recipe when generating any future
+  creature:** pick the template from what the creature does, not from a default.
+  A template animation is 1 generation for the one direction kept, so this is
+  nearly free.
+- **Re-fetch caveat:** `fetch-creature.sh` rewrites all three strips *and* the
+  static sprite from whichever direction is passed. When only the attack changes,
+  back up idle/walk and restore them afterwards.
+
+## Phase 6 — UI art + cursor (added by the user, 2026-07-25)
+
+Two items added to the arc after the creature pass, both queued behind the ground:
+
+- **On-theme inventory + crafting menu art.** The panels are flat rects today.
+  `create_ui_asset` is the relevant endpoint (panel frames, slot frames, buttons,
+  tab headers). Constraint to respect: `InventoryMenu.SLOT` and
+  `HotbarUI.SLOT_SIZE` must stay equal and icons must render at an **integer**
+  scale, so a decorative slot frame has to fit *around* the 64px icon box rather
+  than eat into it.
+- **A unique in-game cursor.** `input.setDefaultCursor` takes a CSS `url()`.
+  Worth a hover/attack variant, since the whole interaction model is mouse-driven
+  and the game already tracks a hovered-interactable state per frame.
+
 ## Notes / follow-ups
 
 - Per-gem crypt doorway colour needs the theme threaded into `cryptLightPoints`
