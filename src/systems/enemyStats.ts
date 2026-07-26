@@ -398,7 +398,14 @@ const BAYOU: EnemyStat[] = [
     poise: null, elite: null, // resistances removed (2026-07-24 pt2)
   },
   {
-    id: "miretyrant", name: "Miretyrant", biome: "bayou", role: "boss", hp: 3600, scale: 2.6,
+    // HP 3600 -> 4200 (2026-07-26). the user won and called the fight "fairly
+    // easy", asking for it to be LONGER — but an earlier pass had already cut
+    // 4600 -> 3600 precisely because a longer bar alone was a marathon. So the
+    // length comes from new content first (the Gloamtide room-sweep + its own
+    // phase gate at 82%, and adds that now actually aggro), and the bar grows
+    // only enough to give that content room to happen. Still under the 4600 that
+    // was rejected as a slog.
+    id: "miretyrant", name: "Miretyrant", biome: "bayou", role: "boss", hp: 4200, scale: 2.6,
     moveSpeed: 66, burstSpeed: 300,
     // Its physical hits (46-58) were gutted to -1/-2 by flat armor + the 75%
     // reduction cap, so the win-con boss "did nothing". Bumped so each lands ~35-63

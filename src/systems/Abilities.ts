@@ -212,3 +212,25 @@ export const ABILITY_DEFS: Record<AbilityId, AbilityDef> = {
     icon: "ability_aegis",
   },
 };
+
+// Human-readable lines for the ability an item grants — the counterpart to
+// EquipmentEffects.describePassive, and reused by the item Tooltip so the
+// numbers live only in this table.
+//
+// An ability-granting item used to hover with no numbers at all (the user: "some
+// of the specials still don't have their numbers associated to them"): the
+// Tooltip handled `passive` but had no `grantsAbility` branch, so the entire
+// ability roster was blank on hover. Magnitudes (damage, radius, distance) are
+// already quoted inside each def's `description` — MainScene's cast dispatcher
+// owns the constants, not this table — so the description carries them and the
+// lines below add what IS structured data here.
+//
+// `power` is surfaced whenever it isn't full strength, because that scalar is
+// the only thing distinguishing a "lesser" variant from its full version.
+export function describeAbility(def: AbilityDef): string[] {
+  const out = [`Grants: ${def.name}`, def.description];
+  out.push(`Cooldown: ${(def.cooldownMs / 1000).toFixed(1)}s`);
+  if (def.activeMs) out.push(`Active for: ${(def.activeMs / 1000).toFixed(1)}s`);
+  if (def.power !== 1) out.push(`Power: ${Math.round(def.power * 100)}% strength`);
+  return out;
+}

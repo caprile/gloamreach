@@ -26,7 +26,36 @@ export interface ArmorSet {
   pieces: string[];
   bonusName: string;
   bonusDesc: string;
+  // Concrete figures for the bonus, shown on the granting item's tooltip.
+  // DERIVED from the constants below rather than written out, so the numbers
+  // have exactly one home — bonusDesc alone is prose ("greatly reduces incoming
+  // damage"), which is what left these four uniques hovering with no numbers at
+  // all (the user: "some of the specials still don't have their numbers").
+  bonusStats: string[];
 }
+
+// Magnitudes for the four bonuses. These used to live in MainScene as private
+// consts, which is why nothing player-facing could quote them; MainScene now
+// imports them from here. Plain numbers only — this file stays Phaser-free.
+export const SET_THORNS_FIRE_DAMAGE = 9;
+export const SET_MOLTEN_DAMAGE_REDUCTION = 0.15; // 15% off every incoming hit (physical/magic/fire)
+export const SET_EMBERBLINK_DASH_MULT = 1.6;
+export const SET_EMBERBLINK_BURST_RADIUS = 95;
+export const SET_EMBERBLINK_BURST_DAMAGE = 16;
+export const SET_GLOAM_BULWARK_DAMAGE_REDUCTION = 0.22;
+export const SET_GLOAM_THORNS_FIRE_DAMAGE = 15;
+export const SET_MIREBLINK_DASH_MULT = 1.9;
+export const SET_MIREBLINK_BURST_RADIUS = 120;
+export const SET_MIREBLINK_BURST_DAMAGE = 26;
+
+const bulwarkStats = (reductionPct: number, thorns: number): string[] => [
+  `-${Math.round(reductionPct * 100)}% damage taken (all types)`,
+  `${thorns} fire damage to melee attackers`,
+];
+const blinkStats = (dashMult: number, radius: number, damage: number): string[] => [
+  `Dash distance x${dashMult}`,
+  `${damage} fire damage in a ${radius}px burst on landing`,
+];
 
 export const ARMOR_SETS: ArmorSet[] = [
   {
@@ -37,6 +66,7 @@ export const ARMOR_SETS: ArmorSet[] = [
     pieces: ["amulet_molten_bulwark"],
     bonusName: "Molten Bulwark",
     bonusDesc: "Reduces all incoming damage. Melee attackers are seared for fire damage.",
+    bonusStats: bulwarkStats(SET_MOLTEN_DAMAGE_REDUCTION, SET_THORNS_FIRE_DAMAGE),
   },
   {
     id: "emberhide",
@@ -46,6 +76,7 @@ export const ARMOR_SETS: ArmorSet[] = [
     pieces: ["ring_emberblink"],
     bonusName: "Emberblink",
     bonusDesc: "Your dash travels farther and erupts in fire where you land.",
+    bonusStats: blinkStats(SET_EMBERBLINK_DASH_MULT, SET_EMBERBLINK_BURST_RADIUS, SET_EMBERBLINK_BURST_DAMAGE),
   },
   // Biome-3 Phase 3: the bayou reforge of each Ember set. Deliberately the SAME
   // two mechanics, turned up — a reforged set is the same identity worn better,
@@ -59,6 +90,7 @@ export const ARMOR_SETS: ArmorSet[] = [
     pieces: ["amulet_gloam_bulwark"],
     bonusName: "Gloam Bulwark",
     bonusDesc: "Greatly reduces all incoming damage. Melee attackers are seared badly.",
+    bonusStats: bulwarkStats(SET_GLOAM_BULWARK_DAMAGE_REDUCTION, SET_GLOAM_THORNS_FIRE_DAMAGE),
   },
   {
     id: "mirehide",
@@ -68,6 +100,7 @@ export const ARMOR_SETS: ArmorSet[] = [
     pieces: ["ring_mireblink"],
     bonusName: "Mireblink",
     bonusDesc: "Your dash travels much farther and erupts violently where you land.",
+    bonusStats: blinkStats(SET_MIREBLINK_DASH_MULT, SET_MIREBLINK_BURST_RADIUS, SET_MIREBLINK_BURST_DAMAGE),
   },
 ];
 

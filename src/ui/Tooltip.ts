@@ -15,6 +15,8 @@ import {
 } from "../systems/Weapons";
 import { weaponSkillDamageMultiplier, type Skills } from "../systems/Skills";
 import { describePassive } from "../systems/EquipmentEffects";
+import { ABILITY_DEFS, describeAbility } from "../systems/Abilities";
+import { ARMOR_SETS } from "../systems/SetBonuses";
 import { armorDefenseForTier } from "../systems/ArmorUpgrades";
 import { weaponTierDamageBonus } from "../systems/WeaponUpgrades";
 import type { PlayerProgression } from "../systems/Progression";
@@ -134,6 +136,24 @@ export class Tooltip {
     if (def.passive) {
       lines.push("");
       for (const l of describePassive(def.passive)) lines.push(l);
+    }
+    // Ability-granting jewelry (B3-P2a): cooldown/active window/power. Without
+    // this the whole ability roster hovered with no numbers at all.
+    if (def.grantsAbility) {
+      const ability = ABILITY_DEFS[def.grantsAbility];
+      if (ability) {
+        lines.push("");
+        for (const l of describeAbility(ability)) lines.push(l);
+      }
+    }
+    // The four bonus-granting uniques (B4-P5). Their `stats` only name the effect
+    // ("Effect: Gloam Bulwark") and the prose description avoids figures, so the
+    // real magnitudes come from ARMOR_SETS.bonusStats.
+    const set = ARMOR_SETS.find((s) => s.pieces.includes(key));
+    if (set) {
+      lines.push("");
+      lines.push(set.bonusName);
+      for (const l of set.bonusStats) lines.push(l);
     }
 
     const text = this.scene.add

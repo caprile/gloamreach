@@ -1453,6 +1453,25 @@ export class BootScene extends Phaser.Scene {
     g.fillTriangle(12, 0, 12, 6, 16, 3);
     g.generateTexture("gloam_arrow_projectile", 16, 6);
 
+    // Embersteel arrow in flight. It used to share the plain steel
+    // `arrow_projectile` with the Sunsteel bow, which made the badlands upgrade
+    // both invisible as a tier AND literally hard to follow against dust and
+    // fire (the user: "the embersteel projectiles are kind of hard to see. Would
+    // look cool if each bow had their own unique looking projectile"). Drawn
+    // bigger and self-lit rather than regenerated as art — a 32px generation
+    // downscaled to this size is mush, which is why every projectile in the game
+    // is still procedural.
+    g.clear();
+    g.fillStyle(0xff9a3c, 0.45);
+    g.fillRect(0, 1, 20, 6); // hot outer glow, the part you actually track
+    g.fillStyle(0x5a3a1e, 1);
+    g.fillRect(2, 3, 12, 2); // shaft
+    g.fillStyle(0xffd070, 1);
+    g.fillTriangle(14, 1, 14, 7, 20, 4); // ember-bright head
+    g.fillStyle(0xfff2c0, 1);
+    g.fillTriangle(15, 2.5, 15, 5.5, 18, 4); // white-hot core
+    g.generateTexture("ember_arrow_projectile", 20, 8);
+
     // Gloamdrinker — a bound censer: chain, violet-lit bowl, blood-gem core.
     g.clear();
     g.fillStyle(0x574d5f, 1);
@@ -1638,7 +1657,7 @@ export class BootScene extends Phaser.Scene {
     g.fillRect(9, 5, 3, 2);
     g.generateTexture("icon_mossbound_mirejaw", ICON, ICON);
 
-    // Lily-Gilded Feast: a platter with a pale lily bloom on top.
+    // Mirelight Platter: a platter with a pale lily bloom on top.
     g.clear();
     g.fillStyle(0x5c5140, 1);
     g.fillRect(3, 13, 18, 4); // platter
@@ -1650,7 +1669,35 @@ export class BootScene extends Phaser.Scene {
     g.fillRect(14, 5, 4, 4);
     g.fillStyle(0xd8c98a, 1);
     g.fillRect(15, 6, 2, 2);
-    g.generateTexture("icon_lilygilded_feast", ICON, ICON);
+    g.generateTexture("icon_mirelight_platter", ICON, ICON);
+
+    // Blighttoad Legs: a raw pair of green-grey hind legs.
+    g.clear();
+    g.fillStyle(0x7d9152, 1);
+    g.fillRect(6, 6, 4, 11);
+    g.fillRect(13, 6, 4, 11);
+    g.fillStyle(0x9db06a, 1);
+    g.fillRect(7, 8, 2, 7);
+    g.fillRect(14, 8, 2, 7);
+    g.fillStyle(0xd8cbb0, 1); // exposed bone ends
+    g.fillRect(6, 16, 4, 3);
+    g.fillRect(13, 16, 4, 3);
+    g.generateTexture("icon_blighttoad_legs", ICON, ICON);
+
+    // Fire-Roasted Toad Legs: the same pair, browned, on a skewer.
+    g.clear();
+    g.fillStyle(0x6b4a2a, 1);
+    g.fillRect(11, 2, 2, 20); // skewer
+    g.fillStyle(0xa8703c, 1);
+    g.fillRect(5, 7, 5, 10);
+    g.fillRect(14, 7, 5, 10);
+    g.fillStyle(0xc98f4e, 1);
+    g.fillRect(6, 9, 3, 6);
+    g.fillRect(15, 9, 3, 6);
+    g.fillStyle(0x5e3a1e, 1); // char marks
+    g.fillRect(6, 12, 3, 1);
+    g.fillRect(15, 12, 3, 1);
+    g.generateTexture("icon_fireroasted_toad_legs", ICON, ICON);
 
     // Campfire: stacked logs + flame.
     g.clear();

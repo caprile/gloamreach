@@ -112,26 +112,40 @@ export const COOK_RECIPES: CookRecipe[] = [
   // there any food in bayou?"). These sit at the existing top campfire tier
   // rather than adding a Lvl 5: by the bayou you have a Lvl 4 fire, and the
   // gate that matters is having bayou INGREDIENTS. ---
+  // All four sit behind the Mirelight Hearth (campfire Lvl 5, tier 4) rather than
+  // the Emberforge tier the badlands already reaches (the user: "add a new level to
+  // the campfire that unlocks the bayou food ... the bayou food shouldn't come with
+  // lvl 4 campfire"). Two anchor on gator meat and two on toad legs, so neither
+  // food source carries the whole menu.
   {
     id: "seared_mirejaw_tail",
     name: "Seared Mirejaw Tail",
     output: "seared_mirejaw_tail",
     inputs: { shishkabob: 1, mirejaw_meat: 1 }, // the simple one — meat on a stick, like the Duskrunner Skewer
-    requiredCampfireTier: 2,
+    requiredCampfireTier: 4,
+  },
+  {
+    id: "fireroasted_toad_legs",
+    name: "Fire-Roasted Toad Legs",
+    output: "fireroasted_toad_legs",
+    inputs: { shishkabob: 1, blighttoad_legs: 2 }, // the toad-side simple dish
+    requiredCampfireTier: 4,
   },
   {
     id: "mossbound_mirejaw",
     name: "Mossbound Mirejaw",
     output: "mossbound_mirejaw",
     inputs: { shishkabob: 1, mirejaw_meat: 1, swamp_moss: 2 }, // bayou-native, finally uses swamp moss
-    requiredCampfireTier: 3,
+    requiredCampfireTier: 4,
   },
   {
-    id: "lilygilded_feast",
-    name: "Lily-Gilded Feast",
-    output: "lilygilded_feast",
-    inputs: { shishkabob: 1, mirejaw_meat: 2, water_lily: 2, swamp_moss: 1 }, // the bayou's best
-    requiredCampfireTier: 3,
+    id: "mirelight_platter",
+    name: "Mirelight Platter",
+    output: "mirelight_platter",
+    // Replaced the Lily-Gilded Feast's 2x Mirejaw Meat with toad legs — the
+    // bayou's best dish no longer doubles down on the same animal.
+    inputs: { shishkabob: 1, blighttoad_legs: 2, water_lily: 2, swamp_moss: 1 },
+    requiredCampfireTier: 4,
   },
 ];
 

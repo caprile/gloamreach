@@ -45,6 +45,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   private heldOrder: Facing[] = [];
   private equippedIcon: Phaser.GameObjects.Image | null = null;
   private equippedIconTexture: string | null = null;
+  private equippedIconTiltMirrored = false;
   private equippedIconScale = 1;
   private static readonly ICON_OFFSET = 16; // px from player center, in facing direction
   // The held item renders at a fixed world size regardless of its source
@@ -327,8 +328,15 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
   // Called by MainScene whenever the equipped tool/weapon changes (hotbar
   // select/cycle/drag/craft). Pass null to hide (nothing equipped).
-  setEquippedIcon(texture: string | null): void {
+  //
+  // `tiltMirrored` negates the held tilt for an icon whose art was mirrored on
+  // disk (see art/tools/mirror.mjs). The angle you see is the art's own lean plus
+  // HAND_OFFSET's tilt, so mirroring the art flips the lean's sign and the tilt
+  // starts ADDING to it — the mirrored pickaxe stood bolt upright instead of
+  // sitting at its usual ~45 degrees. Negating the tilt restores the pose.
+  setEquippedIcon(texture: string | null, tiltMirrored = false): void {
     this.equippedIconTexture = texture;
+    this.equippedIconTiltMirrored = tiltMirrored;
     if (!texture) {
       this.equippedIcon?.setVisible(false);
       return;
@@ -358,7 +366,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       const [hx, hy, tilt] = Player.HAND_OFFSET[this.facing];
       ox = hx;
       oy = hy;
-      this.equippedIcon.setAngle(tilt);
+      this.equippedIcon.setAngle(this.equippedIconTiltMirrored ? -tilt : tilt);
       this.equippedIcon.setDepth(this.depth + (this.facing === "up" ? -1 : 1));
     } else {
       this.equippedIcon.setAngle(0);

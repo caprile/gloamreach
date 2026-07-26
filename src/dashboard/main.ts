@@ -409,20 +409,21 @@ const ENEMIES: EnemyStat[] = [
   },
   {
     name: "The Miretyrant (FINAL BOSS)",
-    hp: 3600,
+    hp: 4200,
     speed: 66,
     aggro: 330,
     attacks: [
       { label: "Lunging Chomp (locked-heading gap-closer + jaw snap, 300px lunge / 74px snap — step off the LINE)", damage: 110, telegraphMs: 600 },
       { label: "Tail Sweep (rear-to-front arc, 165px / ±120° — dodge by DISTANCE or dash through, a sidestep won't clear it)", damage: 98, telegraphMs: 700 },
       { label: "Muck Slam (radial AoE under itself, 150px, growing telegraph)", damage: 124, telegraphMs: 820 },
+      { label: "Gloamtide @82% HP (a full-height wall of mire sweeps the WHOLE arena in 560ms with a single 172px gap — the only attack anchored on the ROOM instead of the boss, so spacing yourself against it does nothing. Get to the gap or dash the wall; the gap is always placed away from where you were standing at telegraph start)", damage: 210, telegraphMs: 1000 },
       { label: "Death Roll @65% HP (travelling multi-hit spin along a locked line, 300px/s for 900ms, can re-hit every 420ms — outrun it ACROSS, never along)", damage: 92, telegraphMs: 780 },
       { label: "Bellow (own 15s timer, 8.5s enraged — surfaces 3 adds, 5 enraged; max 8 concurrent). Not damage: the adds are the attack.", damage: 0, telegraphMs: 700 },
       { label: "Mire Pools @35% HP (phase 3) — every Muck Slam and Death Roll leaves a permanent 90px pool that slows to 0.55x and poisons 7/s. Not an attack it aims: the ARENA closes in.", damage: 0, telegraphMs: 0 },
     ],
     loot: "8-12 Gloam Shard + 1 Tier-3 Boss Trophy (was Tier 2 — the deepest boss was paying out at the previous biome's magnitude; unreachable in practice, this kill wins the run)",
     notes:
-      "DUSKMIRE BAYOU FINAL BOSS + WIN-CONDITION (B3-P4d), demoting the Duneshaper to a mid-boss. Fought at the bottom of the Sunken Gorge — its own boss dungeon (approach rooms + one 832×576 arena), unsealed by offering an Effigy of the Miretyrant at the maw. A BRUISER, deliberately the opposite of the caster Duneshaper: it closes to ~96px and stays there, and every dodge is a spacing dodge. Poise 450 (stagger → 1.35× for 2.2s), scale 2.6, regens 16 HP/s deaggro'd, leash 620 (no arena seal — you can always retreat, and it resets). Resistances: slash ×0.8, blunt ×1.2, poison ×0.25 — a thick swamp hide that folds to a warhammer, deliberately NOT the Duneshaper's fire-weakness so the two finales reward different loadouts. Phases: +Death Roll at 65% HP, enrage timing (0.75× telegraph/recovery, 1.25× move) + halved bellow interval at 35%.",
+      "DUSKMIRE BAYOU FINAL BOSS + WIN-CONDITION (B3-P4d), demoting the Duneshaper to a mid-boss. Fought at the bottom of the Sunken Gorge — its own boss dungeon (approach rooms + one 832×576 arena), unsealed by offering an Effigy of the Miretyrant at the maw. A BRUISER, deliberately the opposite of the caster Duneshaper: it closes to ~96px and stays there, and every dodge is a spacing dodge. Poise 450 (stagger → 1.35× for 2.2s), scale 2.6, regens 16 HP/s deaggro'd, leash 620 (no arena seal — you can always retreat, and it resets). Resistances: slash ×0.8, blunt ×1.2, poison ×0.25 — a thick swamp hide that folds to a warhammer, deliberately NOT the Duneshaper's fire-weakness so the two finales reward different loadouts. Phases: +Gloamtide at 82% HP, +Death Roll at 65%, enrage timing (0.75× telegraph/recovery, 1.25× move) + halved bellow interval at 35%. 2026-07-26 (the user won and called it \"fairly easy\", asking for a longer fight and a room-wide sweep): HP 3600→4200, a new 82% phase gate introducing the Gloamtide, and bellow adds now FORCE-AGGRO on spawn (they surfaced at the arena edge and could stand around as scenery — the Mirejaw needed its own forceAggro override, since it tracks aggro in a private `mode`). Length comes from new content first; the bar grew only enough to fit it, staying under the 4600 an earlier pass rejected as a marathon. All five attacks now demand a dodge, with the Death Roll the designated outrunnable one.",
   },
 ];
 

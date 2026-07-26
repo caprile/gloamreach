@@ -342,6 +342,11 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   // Handle to the current wind-up pulse tween so it can be stopped/reset
   // cleanly without killTweensOf() clobbering the HP-bar hit-feedback shake.
   private windupTween?: Phaser.Tweens.Tween;
+  // Stage 1 of the wind-up tell (see playWindupTell). Held separately so every
+  // site that cancels a wind-up kills BOTH stages — a surviving pop tween would
+  // re-start the grow after the attack was already abandoned, leaving the
+  // creature stuck oversized.
+  private windupPopTween?: Phaser.Tweens.Tween;
   // True for a humanoid sprite (see EnemyConfig.upright) — applyFacing mirrors
   // via flipX instead of rotating.
   private upright = false;
@@ -1061,14 +1066,45 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   // baseScale by endWindupTell at the strike.
   protected playWindupTell(windupMs: number, color = 0xffd24a, punchScale = 1.18): void {
     this.windupTween?.stop();
+    this.windupPopTween?.stop();
     this.setScale(this.baseScale);
     const punch = this.baseScale * punchScale;
-    this.windupTween = this.scene.tweens.add({
+
+    // Two stages, because ONE eased grow could not be read at gameplay scale.
+    //
+    // the user, twice: the attack animations "don't feel like they match the
+    // attack" and are "really hard to understand when he's attacking". Looking at
+    // the actual strips explains why — several creatures (Mosswretch, Murkling,
+    // Duskrunner) barely change silhouette across their whole attack, so the
+    // sprite animation cannot carry "I am winding up" at 20-40px on screen. That
+    // makes this tell the thing doing the work, and it was doing it badly: with
+    // Quad.easeIn almost all of the growth happened in the last fraction of the
+    // wind-up, so for most of the window there was nothing visible to react to.
+    //
+    // Stage 1 is a fast pop the moment the attack commits — an unmistakable
+    // "it started" beat that does not depend on the sprite's own frames.
+    // Stage 2 then grows steadily (linear, not eased-in) across the remaining
+    // window, so the swing reads as building the whole time rather than
+    // arriving all at once. The snap-back in endWindupTell still reads as the
+    // release, unchanged.
+    const popMs = Math.min(110, windupMs * 0.25);
+    const pop = this.baseScale * (1 + (punchScale - 1) * 0.45);
+    this.windupPopTween = this.scene.tweens.add({
       targets: this,
-      scaleX: punch,
-      scaleY: punch,
-      duration: windupMs,
-      ease: "Quad.easeIn",
+      scaleX: pop,
+      scaleY: pop,
+      duration: popMs,
+      ease: "Back.easeOut",
+      onComplete: () => {
+        if (this.depleted || !this.active) return;
+        this.windupTween = this.scene.tweens.add({
+          targets: this,
+          scaleX: punch,
+          scaleY: punch,
+          duration: Math.max(1, windupMs - popMs),
+          ease: "Linear",
+        });
+      },
     });
     this.setTint(color);
   }
@@ -1078,6 +1114,8 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   protected endWindupTell(): void {
     this.windupTween?.stop();
     this.windupTween = undefined;
+    this.windupPopTween?.stop();
+    this.windupPopTween = undefined;
     this.setScale(this.baseScale);
     this.applyHpTint();
   }
@@ -1213,6 +1251,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   // A subclass with an extra meter (poise) overrides this and calls super.
   destroy(fromScene?: boolean): void {
     this.windupTween?.stop();
+    this.windupPopTween?.stop();
     this.healthBarBg.destroy();
     this.healthBarFill.destroy();
     // Sibling GameObject, same as the bars — a despawn path that forgot these

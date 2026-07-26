@@ -35,6 +35,12 @@ const ELITE_KEY: Record<string, string> = {
   gremling_weak: "gremling_elite",
 };
 
+// Rim colour + how hard it is blended over the creature's own edge pixels.
+// Bright gold: it is the one accent already in the elite palette, so the outline
+// reads as part of the same treatment rather than a sticker on top of it.
+const RIM_COLOR: [number, number, number] = [0xff, 0xe0, 0x70];
+const RIM_STRENGTH = 0.8;
+
 /** Rec. 601 luma of pixel `i`, 0..1 — how light the source pixel reads. */
 function luma(px: Uint8ClampedArray, i: number): number {
   return (0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2]) / 255;
@@ -134,6 +140,47 @@ export function recolourToElite(scene: Phaser.Scene, srcKey: string, dstKey: str
     px[i + 1] = g;
     px[i + 2] = b;
   }
+  // --- Gold rim light -------------------------------------------------------
+  //
+  // The crimson ramp is a HUE shift, so it only says "elite" on a creature that
+  // wasn't already warm. Measured across the roster, the shift it actually
+  // achieves is 96 degrees on a green Mirejaw but 8 on a Hexling and ZERO on a
+  // Sandmaw — both of which are red to begin with, which is exactly why the user
+  // could not tell those two apart from their normal versions.
+  //
+  // A rim is hue-INDEPENDENT: it marks the silhouette itself, so it reads the
+  // same on a red desert worm as on a green gator, and it keeps the roster's
+  // "every elite looks the same kind of different" convention rather than giving
+  // warm creatures a bespoke palette. Only outer edges are lit (an opaque pixel
+  // orthogonally touching a transparent one), so on an animation STRIP each
+  // frame gets its own outline and no false edge appears between frames.
+  const rim = new Uint8Array(w * h);
+  const alphaAt = (x: number, y: number): number =>
+    x < 0 || y < 0 || x >= w || y >= h ? 0 : px[(y * w + x) * 4 + 3];
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      if (px[(y * w + x) * 4 + 3] < 20) continue;
+      if (
+        alphaAt(x - 1, y) < 20 ||
+        alphaAt(x + 1, y) < 20 ||
+        alphaAt(x, y - 1) < 20 ||
+        alphaAt(x, y + 1) < 20
+      ) {
+        rim[y * w + x] = 1;
+      }
+    }
+  }
+  const [rr, rg, rb] = RIM_COLOR;
+  for (let k = 0; k < rim.length; k++) {
+    if (!rim[k]) continue;
+    const i = k * 4;
+    // Blended rather than replaced, so the outline still follows the creature's
+    // own shading instead of flattening the silhouette into a solid ring.
+    px[i] = Math.round(px[i] * (1 - RIM_STRENGTH) + rr * RIM_STRENGTH);
+    px[i + 1] = Math.round(px[i + 1] * (1 - RIM_STRENGTH) + rg * RIM_STRENGTH);
+    px[i + 2] = Math.round(px[i + 2] * (1 - RIM_STRENGTH) + rb * RIM_STRENGTH);
+  }
+
   ctx.putImageData(img, 0, 0);
   canvas.refresh();
 

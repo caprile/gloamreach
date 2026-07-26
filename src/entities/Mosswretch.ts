@@ -100,14 +100,32 @@ export class Mosswretch extends Enemy {
   // Set the frame the burst resolves; drained by the scene (consumeSporeCloud).
   private pendingCloud: { x: number; y: number } | null = null;
 
-  constructor(scene: Phaser.Scene, cfg: { x: number; y: number; elite?: boolean; spawnling?: boolean }) {
+  constructor(
+    scene: Phaser.Scene,
+    cfg: { x: number; y: number; elite?: boolean; spawnling?: boolean; eliteParent?: boolean },
+  ) {
     const elite = cfg.elite ?? false;
     const spawnling = cfg.spawnling ?? false;
+    // An elite husk now comes apart into elite-GRADE Mosslings (the user: "elite
+    // tree guys need to drop elite mosslings"). Deliberately a separate flag from
+    // `elite` rather than just passing elite through: it buys the stats, scale and
+    // colour of an elite, but NOT elite status itself. That keeps both existing
+    // guards intact — a spawnling still drops no trophy, and still scores as a
+    // normal kill — so splitting an elite can't become a trophy or points fountain.
+    const eliteSpawn = spawnling && (cfg.eliteParent ?? false);
+    const spawnHp = SPAWNLING_HP_FRAC * (eliteSpawn ? ELITE.hp : 1);
+    const spawnDmg = SPAWNLING_DMG_FRAC * (eliteSpawn ? ELITE.damage : 1);
     super(scene, {
       x: cfg.x,
       y: cfg.y,
       texture: elite ? "mosswretch_elite" : "mosswretch",
-      displayName: spawnling ? "Mossling" : elite ? "Elite Mosswretch" : "Mosswretch",
+      displayName: spawnling
+        ? eliteSpawn
+          ? "Elite Mossling"
+          : "Mossling"
+        : elite
+          ? "Elite Mosswretch"
+          : "Mosswretch",
       // A husk of dead wood and living moss comes apart into exactly that —
       // reusing existing keys rather than inventing a bespoke drop for it.
       // A spawnling is a scrap of the parent, not a second full creature — a
@@ -126,12 +144,12 @@ export class Mosswretch extends Enemy {
               { resource: "wood", min: 1, max: 2 },
             ],
       maxHealth: spawnling
-        ? Math.max(1, Math.round(MAX_HEALTH * SPAWNLING_HP_FRAC))
+        ? Math.max(1, Math.round(MAX_HEALTH * spawnHp))
         : elite
           ? Math.round(MAX_HEALTH * ELITE.hp)
           : MAX_HEALTH,
       biteDamage: spawnling
-        ? Math.round(SMASH_DAMAGE * SPAWNLING_DMG_FRAC)
+        ? Math.round(SMASH_DAMAGE * spawnDmg)
         : elite
           ? Math.round(SMASH_DAMAGE * ELITE.damage)
           : SMASH_DAMAGE,
@@ -144,14 +162,20 @@ export class Mosswretch extends Enemy {
       barScale: spawnling ? 0.7 : 1.3,
     });
     this.isSpawnling = spawnling;
-    const scale = spawnling ? SPAWNLING_SCALE : elite ? ELITE.scale : S.scale;
+    const scale = spawnling
+      ? SPAWNLING_SCALE * (eliteSpawn ? ELITE.scale : 1)
+      : elite
+        ? ELITE.scale
+        : S.scale;
     this.setScale(scale); // looms over the rest of the roster
     this.baseScale = scale;
     if (spawnling) {
-      this.speedMult = SPAWNLING_SPEED_MULT;
+      this.speedMult = SPAWNLING_SPEED_MULT * (eliteSpawn ? ELITE.speed : 1);
       // A paler, sicklier green so a spawnling reads as a fragment at a glance
-      // rather than looking like a distant full-size Mosswretch.
-      this.setTint(0xa8c98a);
+      // rather than looking like a distant full-size Mosswretch. An elite-grade
+      // one takes the roster's crimson/gold elite tint instead, so a dangerous
+      // split is readable at the moment it happens.
+      this.setTint(eliteSpawn ? 0xd98a5a : 0xa8c98a);
     } else if (elite) {
       this.speedMult = ELITE.speed;
     }

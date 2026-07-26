@@ -37,7 +37,12 @@ const CATEGORIES: { id: RecipeCategory; label: string }[] = [
 // the detail column having room for the quantity slider plus its "Max" button,
 // so the panel is sized to those and nothing else. Descriptions and cost lines
 // already word-wrap against PANEL_W, so they reflow rather than clip.
-const PANEL_W = 480;
+// 480 -> 552 (the user: "some names are cut off in the crafting menu like the
+// effigies"). The panel is right-anchored, so the extra width grows leftward
+// into open screen with nothing to collide with, and PANEL_W and LIST_COL_W
+// grow by the SAME 72px — which leaves the detail column's width, and therefore
+// every wrap point in it, exactly as it was.
+const PANEL_W = 552;
 // A FLOOR, not the height: the panel now sizes itself to the space between its
 // top margin and the bottom HUD (see panelH in the constructor). The old fixed
 // 440 was authored when the Armor/Weapons tabs held a handful of recipes each;
@@ -55,8 +60,11 @@ const SCROLL_STEP = ROW_H * 3;
 // placeholder art it read as a coloured smudge rather than a picture of the
 // thing. 32 is the authored icon size — 1:1, no resampling at all.
 const LIST_ICON = 32;
-// Widened to keep the same room for names now that the icon is 14px bigger.
-const LIST_COL_W = 204;
+// Widened to keep the same room for names now that the icon is 14px bigger,
+// then again (204 -> 276) to fit the longest real recipe name — "Effigy of the
+// Duneshaper" needs ~268px including the 32px icon. The ellipsis truncation
+// below stays as a backstop for anything longer still.
+const LIST_COL_W = 276;
 const DETAIL_GAP = 20;
 const MARGIN_RIGHT = 16;
 // Stacks below the top-right MinimapUI panel (+ the stat-points badge that
@@ -194,6 +202,12 @@ export class CraftingMenu {
     this.render();
   }
 
+  // Left edge of the panel — so anything else anchored to the right screen edge
+  // (HintUI) can step aside instead of covering the Craft button.
+  get left(): number {
+    return this.panelX;
+  }
+
   isOpen(): boolean {
     return this.open;
   }
@@ -314,10 +328,24 @@ export class CraftingMenu {
 
     // Only the rows inside the viewport are created (a long Armor tab would
     // otherwise run straight out the bottom of the panel).
-    this.maxListScroll = Math.max(0, recipes.length * ROW_H - this.listViewH);
+    //
+    // Both bounds are kept on WHOLE rows because nothing clips this list — the
+    // rows are plain scrollFactor(0) objects, and a geometry mask would clip
+    // rendering but not input (a row hidden behind the tabs would still eat
+    // clicks meant for them). So instead of clipping a partial row, we never
+    // draw one:
+    //   * maxListScroll rounds UP to a row multiple. The wheel already steps in
+    //     whole rows, so an unrounded max left every row sitting a fraction of a
+    //     row high at the bottom of the scroll range — which is how the top row
+    //     ended up drawn over the category tabs.
+    //   * lastRow counts only FULLY visible rows (floor), where a ceil here
+    //     deliberately included the partly-visible one, and that is what ran out
+    //     of the panel's bottom edge.
+    const visibleRows = Math.max(1, Math.floor(this.listViewH / ROW_H));
+    this.maxListScroll = Math.max(0, (recipes.length - visibleRows) * ROW_H);
     this.listScroll = Phaser.Math.Clamp(this.listScroll, 0, this.maxListScroll);
     const firstRow = Math.floor(this.listScroll / ROW_H);
-    const lastRow = Math.min(recipes.length - 1, Math.ceil((this.listScroll + this.listViewH) / ROW_H));
+    const lastRow = Math.min(recipes.length - 1, firstRow + visibleRows - 1);
 
     if (recipes.length === 0) {
       const t = this.scene.add.text(x0, listTop, "No known recipes yet.", {

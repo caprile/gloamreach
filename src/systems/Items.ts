@@ -28,6 +28,13 @@ export interface ItemDef {
   armorSlot?: EquipSlot; // set for armor items — drag-onto-slot or right-click equips it
   armorType?: ArmorType; // set for armor items — which armor skill a kill grants XP to
   armorDefense?: number; // base (tier-0) flat damage reduction — see ArmorUpgrades.armorDefenseForTier
+  // Negates HAND_OFFSET's held tilt for this item. The on-screen angle of a held
+  // item is the art's own lean PLUS that tilt, so an icon that leans the opposite
+  // way to the roster has the tilt add to its lean instead of cancelling it, and
+  // stands upright in the hand. Set it when an icon's rest angle fights the
+  // default carry — the pickaxes need it after their art was reoriented
+  // (art/tools/rotate.mjs).
+  heldTiltMirrored?: boolean;
   stats?: ItemStat[];
   // World-placed items (campfires, building pieces) skip the backpack
   // entirely — crafting one enters placement mode instead. Per-item, not
@@ -97,6 +104,7 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     maxStack: 1,
     hotbarable: true,
     tool: "stone_pickaxe",
+    heldTiltMirrored: true, // icon mirrored on disk — see the field's comment
     stats: [
       { label: "Type", value: "Pickaxe" },
       { label: "Gather", value: "Stone" },
@@ -720,6 +728,15 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     hotbarable: true,
     edible: { hpPerSec: 3, durationMs: 26000 },
   },
+  fireroasted_toad_legs: {
+    key: "fireroasted_toad_legs",
+    name: "Fire-Roasted Toad Legs",
+    description: "Roasted until the blight cooks clean out of them. Lean, quick energy. Right-click to eat.",
+    texture: "icon_fireroasted_toad_legs",
+    maxStack: 99,
+    hotbarable: true,
+    edible: { hpPerSec: 2.5, durationMs: 30000 },
+  },
   mossbound_mirejaw: {
     key: "mossbound_mirejaw",
     name: "Mossbound Mirejaw",
@@ -729,11 +746,14 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     hotbarable: true,
     edible: { hpPerSec: 3.5, durationMs: 34000 },
   },
-  lilygilded_feast: {
-    key: "lilygilded_feast",
-    name: "Lily-Gilded Feast",
-    description: "A whole spread of mire game dressed with lilies. Right-click to eat.",
-    texture: "icon_lilygilded_feast",
+  // Replaced the Lily-Gilded Feast (2026-07-26). That dish cost 2 Mirejaw Meat,
+  // which made the bayou's whole menu lean on one animal; this one is built on
+  // toad legs instead so the two food sources each anchor their own dishes.
+  mirelight_platter: {
+    key: "mirelight_platter",
+    name: "Mirelight Platter",
+    description: "Toad legs and lily hearts laid over steamed moss. Right-click to eat.",
+    texture: "icon_mirelight_platter",
     maxStack: 99,
     hotbarable: true,
     edible: { hpPerSec: 4, durationMs: 36000 },
@@ -901,7 +921,7 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     hotbarable: false,
     armorSlot: "helmet",
     armorType: "light_armor",
-    armorDefense: 4,
+    armorDefense: 5,
     stats: [
       { label: "Type", value: "Armor (Head)" },
       { label: "Armor Type", value: "Light" },
@@ -917,7 +937,7 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     hotbarable: false,
     armorSlot: "chest",
     armorType: "light_armor",
-    armorDefense: 4,
+    armorDefense: 5,
     stats: [
       { label: "Type", value: "Armor (Chest)" },
       { label: "Armor Type", value: "Light" },
@@ -933,7 +953,7 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     hotbarable: false,
     armorSlot: "legs",
     armorType: "light_armor",
-    armorDefense: 4,
+    armorDefense: 5,
     stats: [
       { label: "Type", value: "Armor (Legs)" },
       { label: "Armor Type", value: "Light" },
@@ -1001,7 +1021,7 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     hotbarable: false,
     armorSlot: "helmet",
     armorType: "light_armor",
-    armorDefense: 7,
+    armorDefense: 8,
     stats: [
       { label: "Type", value: "Armor (Head)" },
       { label: "Armor Type", value: "Light" },
@@ -1017,7 +1037,7 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     hotbarable: false,
     armorSlot: "chest",
     armorType: "light_armor",
-    armorDefense: 7,
+    armorDefense: 8,
     stats: [
       { label: "Type", value: "Armor (Chest)" },
       { label: "Armor Type", value: "Light" },
@@ -1033,7 +1053,12 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     hotbarable: false,
     armorSlot: "legs",
     armorType: "light_armor",
-    armorDefense: 7, // 7→8: keeps base Emberhide > a fully-upgraded (Lvl 3) Duskhide (7)
+    // 2026-07-26: Duskhide's base went 4->5 to kill a cross-biome regression
+    // (a freshly forged Duskhide set was 12 armor against a fully-upgraded
+    // biome-1 Gremlin set's 13 — arriving in the badlands made you WORSE). That
+    // pushes Duskhide Lvl 3 to 7/piece, so Emberhide's base goes 7->8 to keep the
+    // long-standing rule that a base Ember piece still beats a maxed Duskhide one.
+    armorDefense: 8,
     stats: [
       { label: "Type", value: "Armor (Legs)" },
       { label: "Armor Type", value: "Light" },
@@ -1695,6 +1720,14 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
     name: "Mirejaw Meat",
     description: "A heavy cut of pale reptile tail. Rank raw, but it firms up beautifully over a fire.",
     texture: "icon_mirejaw_meat",
+    maxStack: 99,
+    hotbarable: false,
+  },
+  blighttoad_legs: {
+    key: "blighttoad_legs",
+    name: "Blighttoad Legs",
+    description: "Meaty hind legs off a blighttoad. The blight sits in the glands, not the meat — cook them through and they are perfectly good.",
+    texture: "icon_blighttoad_legs",
     maxStack: 99,
     hotbarable: false,
   },

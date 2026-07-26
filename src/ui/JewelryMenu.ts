@@ -541,7 +541,11 @@ export class JewelryMenu {
     this.rows.push(box);
 
     const chevron = collapsed ? "▸" : "▾";
-    const label = group.tier === 0 ? "Rings & Amulets" : "Ability Jewelry";
+    // Both tiers ARE rings and amulets, so "Rings & Amulets" vs "Ability
+    // Jewelry" read as overlapping categories rather than a progression
+    // (the user: "'ability jewlry' contains rings and amulets. confusing").
+    // Naming them by what they DO makes the split self-explanatory.
+    const label = group.tier === 0 ? "Passive Rings & Amulets" : "Ability Rings & Amulets";
     this.mask(this.addText(x + 10, screenY + 7, `${chevron} ${label}`, 13, "#e8ecf2"));
 
     const n = this.craftableCountForTier(group.tier);

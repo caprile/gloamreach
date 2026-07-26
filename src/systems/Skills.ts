@@ -101,6 +101,22 @@ export function dashIframeBonusMs(skills: Skills): number {
   return Math.min(LIGHT_ARMOR_IFRAME_CAP_MS, skills.get("light_armor") * LIGHT_ARMOR_IFRAME_MS_PER_LEVEL);
 }
 
+// light_armor's SECOND axis: dash DISTANCE. The i-frame window above caps at
+// level 20 (+100ms), so on a skill that runs to 100 the other 80 levels bought
+// literally nothing — the user finished a run at Light Armor 57 with 37 dead
+// levels behind him, which is what prompted this. Distance is the right partner
+// for the i-frame window (both are "the dodge got better") and, unlike a longer
+// invulnerable window, it stays counterable by walls and positioning rather than
+// making attacks ignorable.
+//
+// +0.4%/level, capped at +40%, so it is still growing at the level-100 soft cap.
+// Multiplies alongside the Emberblink/Mireblink set bonus rather than replacing it.
+const LIGHT_ARMOR_DASH_DIST_PER_LEVEL = 0.004;
+const LIGHT_ARMOR_DASH_DIST_CAP = 0.4;
+export function dashDistanceMult(skills: Skills): number {
+  return 1 + Math.min(LIGHT_ARMOR_DASH_DIST_CAP, skills.get("light_armor") * LIGHT_ARMOR_DASH_DIST_PER_LEVEL);
+}
+
 // running also reduces sprint stamina drain: -1%/level, capped at -40%.
 const RUNNING_DRAIN_REDUCTION_PER_LEVEL = 0.01;
 const RUNNING_DRAIN_REDUCTION_CAP = 0.4;
@@ -151,7 +167,11 @@ export function skillImpactDescription(skill: SkillType, skills: Skills): string
   if (skill === "light_armor") {
     const level = skills.get("light_armor");
     const bonus = dashIframeBonusMs(skills);
-    return `+5ms dash i-frames per level (cap +100ms) — dodge window ${150 + bonus}ms at Lvl ${level}`;
+    const dist = Math.round((dashDistanceMult(skills) - 1) * 100);
+    return (
+      `+5ms dash i-frames (cap +100ms) & +0.4% dash distance (cap +40%) per level — ` +
+      `dodge window ${150 + bonus}ms, dash distance +${dist}% at Lvl ${level}`
+    );
   }
   if (skill === "chopping") {
     const pct = Math.round(choppingBonusChance(skills) * 100);

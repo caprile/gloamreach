@@ -65,11 +65,20 @@ export class Blighttoad extends Enemy {
       y: cfg.y,
       texture: elite ? "blighttoad_elite" : "blighttoad",
       displayName: elite ? "Elite Blighttoad" : "Blighttoad",
+      // The bayou's SECOND food source (the user: "make another enemy drop food
+      // like the mosslings or the frogs"). Frog legs are the flavour hook the
+      // gator meat can't give — "safe once it's cooked properly" for the biome's
+      // poison carrier — so bayou cooking stops being three variations of
+      // meat-on-a-stick.
       loot: elite
-        ? [{ resource: "blight_gland", min: 2, max: 3 }]
+        ? [
+            { resource: "blight_gland", min: 2, max: 3 },
+            { resource: "blighttoad_legs", min: 2, max: 3 },
+          ]
         : [
             { resource: "gravemark_rubbing", min: 1, max: 1, chance: 0.06 },
             { resource: "blight_gland", min: 1, max: 1 },
+            { resource: "blighttoad_legs", min: 1, max: 2 },
           ],
       maxHealth: elite ? Math.round(MAX_HEALTH * ELITE.hp) : MAX_HEALTH,
       biteDamage: elite ? Math.round(BITE_DAMAGE * ELITE.damage) : BITE_DAMAGE,

@@ -61,6 +61,7 @@ import {
   weaponSkillDamageMultiplier,
   runningSprintMultiplier,
   dashIframeBonusMs,
+  dashDistanceMult,
   sprintStaminaDrainMult,
   choppingBonusChance,
   miningBonusChance,
@@ -125,7 +126,21 @@ import { toolUpgradesForItem, TOOL_UPGRADES } from "../systems/ToolUpgrades";
 import { EventLog } from "../systems/EventLog";
 import { Biome, type ZoneType } from "../systems/Biome";
 import { Equipment, EQUIP_SLOTS, ABILITY_SLOT_IDS, slotGroup, type EquipSlot, type EquippedItem } from "../systems/Equipment";
-import { activeSets, setById, type SetId } from "../systems/SetBonuses";
+import {
+  activeSets,
+  setById,
+  type SetId,
+  SET_THORNS_FIRE_DAMAGE,
+  SET_MOLTEN_DAMAGE_REDUCTION,
+  SET_EMBERBLINK_DASH_MULT,
+  SET_EMBERBLINK_BURST_RADIUS,
+  SET_EMBERBLINK_BURST_DAMAGE,
+  SET_GLOAM_BULWARK_DAMAGE_REDUCTION,
+  SET_GLOAM_THORNS_FIRE_DAMAGE,
+  SET_MIREBLINK_DASH_MULT,
+  SET_MIREBLINK_BURST_RADIUS,
+  SET_MIREBLINK_BURST_DAMAGE,
+} from "../systems/SetBonuses";
 import {
   augmentEffect,
   augmentsForItem,
@@ -365,21 +380,10 @@ const RANGED_FIRE_SLOW_MS = 350;
 // for this much fire damage (thorns), and ALL incoming damage is cut by a flat
 // fraction — a pure heavy-tank identity (the knockback-immunity that used to be
 // this set's other half was dropped per playtest, decision 2).
-const SET_THORNS_FIRE_DAMAGE = 9;
-const SET_MOLTEN_DAMAGE_REDUCTION = 0.15; // 15% off every hit (physical/magic/fire) while the full set is worn
-// Emberblink (Emberhide light): dash burst distance multiplier + the fire nova
-// that erupts at the landing point.
-const SET_EMBERBLINK_DASH_MULT = 1.6;
-const SET_EMBERBLINK_BURST_RADIUS = 95;
-const SET_EMBERBLINK_BURST_DAMAGE = 16;
-// Bayou reforges of both sets (biome 3 Phase 3) - same two mechanics, turned up.
+// The magnitudes for all four bonuses now live in SetBonuses.ts (imported
+// above) so the tooltips can quote them; the hook points below are unchanged.
 // Read through moltenDamageReduction()/emberblinkDashMult() so the Ember and
 // Gloam tiers can never both apply (the stronger one wins).
-const SET_GLOAM_BULWARK_DAMAGE_REDUCTION = 0.22;
-const SET_GLOAM_THORNS_FIRE_DAMAGE = 15;
-const SET_MIREBLINK_DASH_MULT = 1.9;
-const SET_MIREBLINK_BURST_RADIUS = 120;
-const SET_MIREBLINK_BURST_DAMAGE = 26;
 // --- Activated-ability tuning (B3-P2a). First-pass/tunable. ---
 const ABILITY_BLINK_DISTANCE = 220; // px teleported toward aim
 const ABILITY_BLINK_IFRAME_MS = 250; // untouchable window on blink (> the 150ms dash)
@@ -1109,7 +1113,8 @@ export class MainScene extends Phaser.Scene {
   // to dryingRacks, same "image + live state" pairing shape.
   private gremlinShacks: GremlinShack[] = [];
   private chestMenu!: ChestMenu;
-  private openChest: ItemContainer | null = null; // the shack.loot.items currently bound to chestMenu
+  private openChest: ItemContainer | null = null; // the loot.items currently bound to chestMenu
+  private openChestTitle = ""; // header for the above — set per container by openChestMenu
   private hoveredShack: GremlinShack | null = null;
   // Boss Altar + Gremlin King — altarPosition is chosen once in create(),
   // before spawnGremlinShacks() runs, so the shack/decoration/enemy density
@@ -2066,7 +2071,7 @@ export class MainScene extends Phaser.Scene {
 
     // Contextual hints (tip popups) + pause menu (Esc). The hint UI just
     // renders whatever HintManager decides to surface.
-    this.hintUI = new HintUI(this);
+    this.hintUI = new HintUI(this, () => (this.craftingMenu?.isOpen() ? this.craftingMenu.left : null));
     this.hints.onShow((text, _id, kind) => this.hintUI.show(text, kind));
     this.pauseMenu = new PauseMenuUI(this);
     this.welcomeUI = new WelcomeUI(this);
@@ -2307,7 +2312,9 @@ export class MainScene extends Phaser.Scene {
     // Relic move-speed bonus (M-RL) + Fleetfoot on-kill burst ADD into the move
     // bucket (2026-07-15), applied to walk & sprint alike in Player.update.
     // Emberblink set bonus (Emberhide light set) lengthens the dash burst only.
-    const dashDistMult = this.emberblinkDashMult();
+    // Light Armor's own dash-distance axis multiplies alongside it — see
+    // Skills.dashDistanceMult for why that skill needed a second axis at all.
+    const dashDistMult = this.emberblinkDashMult() * dashDistanceMult(this.skills);
     // Movement locks while the inventory search box is focused, so WASD routes
     // to the text field instead of walking the player.
     const inputEnabled = !this.inventoryMenu.isSearchFocused();
@@ -2433,7 +2440,10 @@ export class MainScene extends Phaser.Scene {
     this.updateAttackRangeRing();
 
     if (this.placementMode) this.updatePlacementGhost();
-    else if (!this.anyMenuOpen() && !this.worldMapUI.isOpen()) this.updateHover();
+    else if (!this.anyMenuOpen() && !this.worldMapUI.isOpen()) {
+      this.updateHover();
+      this.updateHeldInteract();
+    }
     this.updateMagnet(delta);
     this.updateEnemies(delta);
     this.updateRespawns(delta);
@@ -2984,7 +2994,7 @@ export class MainScene extends Phaser.Scene {
     // stone_axe) shows its upgraded art on the player, not the base icon.
     const iconTexture =
       def && (def.tool || def.weapon) ? this.tieredStationTexture(stack!.key, stack?.tier ?? 0) : null;
-    this.player.setEquippedIcon(iconTexture);
+    this.player.setEquippedIcon(iconTexture, def?.heldTiltMirrored ?? false);
     // Held light source (M-DN) — a Torch (future Lantern) casts light around
     // the player at night. Data-driven per item key so a bigger-radius upgrade
     // just adds a row here. 0 = no light emitted.
@@ -3721,7 +3731,7 @@ export class MainScene extends Phaser.Scene {
       // the log/HUD-sync to the slot-machine reveal landing (announceRoll).
       roll: (trophyKey) => this.rollRelic(trophyKey, false),
       announceRoll: (result) => this.announceRelicResult(result),
-      refine: (recipeId) => this.refineTrophies(recipeId),
+      refine: (recipeId, runs) => this.refineTrophies(recipeId, runs),
       forgeTier: () => (this.openForge?.getData("tier") as number | undefined) ?? 0,
       convert: (id, runs) => this.convertShards(id, runs),
       resolveFamilyChoice: (keepNew) => this.resolveRelicFamilyChoice(keepNew),
@@ -3935,34 +3945,45 @@ export class MainScene extends Phaser.Scene {
   // inputCount raw trophies of the recipe's rarity — drawn greedily across the
   // eligible species — plus shardCount Gloam Shards, and grants 1 refined
   // trophy. Called at the ProgressBar's completion from the forge menu.
-  private refineTrophies(recipeId: string): void {
+  // `runs` is the "Refine All" batch size. Affordability is re-checked each run so a
+  // stale count can never overdraw, and the batch emits ONE toast rather than one
+  // per trophy — the same rule the batched shard conversion follows.
+  private refineTrophies(recipeId: string, runs = 1): void {
     const recipe = REFINE_RECIPES.find((r) => r.id === recipeId);
     if (!recipe) return;
     // Gated on Relic Forge Lvl 2 (the menu already hides refine rows below it;
     // re-guard defensively). nobuildcost skips the tier gate + the inputs.
-    if (!this.devNoBuildCost) {
-      if (((this.openForge?.getData("tier") as number | undefined) ?? 0) < 1) return;
-      if (!canAffordRefine(recipe, (k) => this.backpack.count(k))) return;
+    if (!this.devNoBuildCost && ((this.openForge?.getData("tier") as number | undefined) ?? 0) < 1) return;
 
-      let remaining = recipe.inputCount;
-      for (const key of refinableTrophyKeys(recipe.inputRarity, recipe.tier)) {
-        if (remaining <= 0) break;
-        const take = Math.min(remaining, this.backpack.count(key));
-        if (take > 0) {
-          this.backpack.removeCount(key, take);
-          remaining -= take;
+    let made = 0;
+    for (let i = 0; i < Math.max(1, runs); i++) {
+      if (!this.devNoBuildCost) {
+        if (!canAffordRefine(recipe, (k) => this.backpack.count(k))) break;
+
+        let remaining = recipe.inputCount;
+        for (const key of refinableTrophyKeys(recipe.inputRarity, recipe.tier)) {
+          if (remaining <= 0) break;
+          const take = Math.min(remaining, this.backpack.count(key));
+          if (take > 0) {
+            this.backpack.removeCount(key, take);
+            remaining -= take;
+          }
         }
+        this.backpack.removeCount(recipe.shardKey, recipe.shardCount);
       }
-      this.backpack.removeCount(recipe.shardKey, recipe.shardCount);
-    }
 
-    const leftover = this.addToBackpack(recipe.output, 1);
-    if (leftover > 0) {
-      this.spawnLooseDrop(recipe.output, leftover, this.player.x, this.player.y, DROPPED_ITEM_MAGNET_COOLDOWN_MS);
-      this.eventLog.add("info", "Backpack full — the refined trophy landed on the floor");
+      const leftover = this.addToBackpack(recipe.output, 1);
+      if (leftover > 0) {
+        this.spawnLooseDrop(recipe.output, leftover, this.player.x, this.player.y, DROPPED_ITEM_MAGNET_COOLDOWN_MS);
+        this.eventLog.add("info", "Backpack full — the refined trophy landed on the floor");
+      }
+      made++;
     }
+    if (made === 0) return;
+
     const def = itemDef(recipe.output);
-    this.eventLog.add("recipe", `Refined into ${def?.name ?? recipe.output}`, def?.texture);
+    const name = def?.name ?? recipe.output;
+    this.eventLog.add("recipe", made > 1 ? `Refined into ${made}x ${name}` : `Refined into ${name}`, def?.texture);
     this.sfx.craft();
     this.afterRelicChange();
   }
@@ -4065,20 +4086,24 @@ export class MainScene extends Phaser.Scene {
       backpack: this.backpack,
       skills: this.skills,
       chest: () => this.openChest,
+      chestTitle: () => this.openChestTitle,
       beginDrag: (c, i, p) => this.beginItemDrag(c, i, p),
       isDragging: () => this.dragSource !== null,
     });
   }
 
-  // Opens the shared ChestMenu bound to any LootContainer (Gremlin Shack chest
-  // or Duskrunner Warren cache) — rolls its table lazily on first open.
-  private openChestMenu(loot: LootContainer, table: LootRollEntry[]): void {
+  // Opens the shared ChestMenu bound to any LootContainer (Gremlin Shack chest,
+  // Warren cache, crypt chest, shrine bowl, lodge hut) — rolls its table lazily
+  // on first open. `title` names the container in the menu header; every caller
+  // passes its own, since the header used to be hardcoded to the shack.
+  private openChestMenu(loot: LootContainer, table: LootRollEntry[], title: string): void {
     this.craftingMenu.close();
     this.inventoryMenu.close();
     this.closeUpgradeMenu();
     this.closeRelicForgeMenu();
     this.rollContainerLoot(loot, table);
     this.openChest = loot.items;
+    this.openChestTitle = title;
     this.chestMenu.openMenu();
   }
 
@@ -5858,7 +5883,12 @@ export class MainScene extends Phaser.Scene {
     // ore on the map — add bunches in dangerous areas") — poison fog and the
     // haunted boneyard are the bayou's two hazard zones, so a Bog Ore hunt now
     // pulls the player toward the parts of the swamp that actually bite back.
-    scatter({ texture: "bog_ore_node", resource: "bog_ore", displayName: "Bog Ore", action: "mine", amountMin: 3, amountMax: 5, health: 3, count: 24, minToolTier: 1 });
+    // count 24 -> 40 (2026-07-26). 24 nodes x 3-5 was ~96 ore for a whole bayou,
+    // and it gates every Gloamsteel ingot — the user finished a run with 50 unspent
+    // Moonsilver (the ingot's OTHER input, which comes from crypt vaults) and no
+    // bog ore left, weapons unmaxed and nothing spare for gem-setting. Moonsilver
+    // supply is what shows the shortfall is here rather than in the recipe.
+    scatter({ texture: "bog_ore_node", resource: "bog_ore", displayName: "Bog Ore", action: "mine", amountMin: 3, amountMax: 5, health: 3, count: 40, minToolTier: 1 });
     const BOG_ORE_CLUSTERS = 10;
     for (let c = 0; c < BOG_ORE_CLUSTERS; c++) {
       const zone = c % 2 === 0 ? "miasma" : "bonemire";
@@ -7673,7 +7703,13 @@ export class MainScene extends Phaser.Scene {
     }
 
     const arena = layout.vault;
-    const boss = new Miretyrant(this, { x: arena.cx, y: arena.cy });
+    // The Gloamtide sweeps the whole room, so the boss needs the room — every
+    // other attack it owns is anchored on itself and needs nothing.
+    const boss = new Miretyrant(this, {
+      x: arena.cx,
+      y: arena.cy,
+      arena: { x: arena.x, y: arena.y, w: arena.w, h: arena.h },
+    });
     this.miretyrant = boss;
     lair.boss = boss;
     this.addDungeonEnemy(lair, boss);
@@ -7748,6 +7784,14 @@ export class MainScene extends Phaser.Scene {
             ? new Murkling(this, { x, y, elite: true })
             : new Blighttoad(this, { x, y, elite: true });
       this.addDungeonEnemy(lair, add);
+      // Come up already hunting (the user: "the spawns should auto aggro to you —
+      // I noticed they still have to be close to aggro and sometimes don't").
+      // They surface at the ARENA EDGE, deliberately away from the player, which
+      // is exactly the distance their own aggro radius may never close while
+      // you're busy with the boss — so a wave could stand around being scenery.
+      // Mirejaw needs its own forceAggro override for this (it tracks aggro in a
+      // private `mode`); the frogs drive the base state and work as-is.
+      add.forceAggro(this.time.now);
       lair.adds.push(add);
       spawned++;
     }
@@ -9390,6 +9434,31 @@ export class MainScene extends Phaser.Scene {
   }
 
   // Left-click action on the currently hovered, in-reach node (or enemy/rack).
+  // Hold-to-repeat for left click (the user: "hold left click should work on stuff
+  // like fighting / chopping / mining"). Every action reached here is already
+  // rate-limited by its own cooldown — weapon cooldown for attacks, lastToolHitAt
+  // for swings, which is why the gather path's throttle comment already said
+  // "holding/spamming LMB". Only the input repeat was missing.
+  //
+  // DELIBERATELY narrow: it re-runs tryInteract only when the hovered thing is an
+  // enemy, a smashable den or a resource node. Everything else tryInteract can do
+  // is one-shot and would misbehave on repeat — a chest would reopen every frame,
+  // and eating from the hotbar (which fires on open ground with no node hovered)
+  // would swallow the whole stack in a fraction of a second.
+  private updateHeldInteract(): void {
+    if (this.isDead || this.runOver || this.isPaused) return;
+    const pointer = this.input.activePointer;
+    if (!pointer.leftButtonDown()) return;
+    if (this.dragSource !== null || this.contextMenu.isOpen()) return;
+    if (this.pointerOverHud(pointer)) return;
+
+    const repeatable =
+      this.hoveredEnemy !== null ||
+      (this.hoveredDen !== null && this.hoveredDen.phase === "attackable") ||
+      this.hoveredNode !== null;
+    if (repeatable) this.tryInteract();
+  }
+
   private tryInteract(): void {
     if (this.hoveredEnemy) {
       this.tryAttackEnemy(this.hoveredEnemy);
@@ -9410,14 +9479,14 @@ export class MainScene extends Phaser.Scene {
       const inReach =
         Phaser.Math.Distance.Between(this.player.x, this.player.y, this.hoveredShack.x, this.hoveredShack.y) <=
         REACH;
-      if (inReach) this.openChestMenu(this.hoveredShack.loot, GREMLIN_SHACK_LOOT_TABLE);
+      if (inReach) this.openChestMenu(this.hoveredShack.loot, GREMLIN_SHACK_LOOT_TABLE, "Gremlin Shack Chest");
       return;
     }
     if (this.hoveredDen) {
       const den = this.hoveredDen;
       if (den.phase === "looted") {
         const inReach = Phaser.Math.Distance.Between(this.player.x, this.player.y, den.target.x, den.target.y) <= REACH;
-        if (inReach) this.openChestMenu(den.loot, DUSKRUNNER_WARREN_LOOT_TABLE);
+        if (inReach) this.openChestMenu(den.loot, DUSKRUNNER_WARREN_LOOT_TABLE, "Duskrunner Warren Cache");
       } else if (den.phase === "attackable") {
         this.tryAttackDen(den);
       }
@@ -9433,20 +9502,24 @@ export class MainScene extends Phaser.Scene {
     }
     if (this.hoveredCryptChest) {
       const crypt = this.hoveredCryptChest;
-      if (this.promptForCryptChest(crypt)) this.openChestMenu(crypt.loot, CRYPT_LOOT_TABLE);
+      if (this.promptForCryptChest(crypt)) this.openChestMenu(crypt.loot, CRYPT_LOOT_TABLE, "Crypt Reliquary");
       return;
     }
     if (this.hoveredShrine) {
       const shrine = this.hoveredShrine;
       if (!this.promptForShrine(shrine)) return;
       if (shrine.phase === "dormant") this.kindleShrine(shrine);
-      else this.openChestMenu(shrine.loot, SUNKEN_SHRINE_LOOT_TABLE);
+      else this.openChestMenu(shrine.loot, SUNKEN_SHRINE_LOOT_TABLE, "Sunken Shrine Bowl");
       return;
     }
     if (this.hoveredLodgeHut) {
       const { lodge, hut } = this.hoveredLodgeHut;
       if (this.promptForLodgeHut(hut, lodge)) {
-        this.openChestMenu(hut.loot, hut.chief ? LODGE_CHIEF_LOOT_TABLE : LODGE_HUT_LOOT_TABLE);
+        this.openChestMenu(
+          hut.loot,
+          hut.chief ? LODGE_CHIEF_LOOT_TABLE : LODGE_HUT_LOOT_TABLE,
+          hut.chief ? "Chieftain's Hut" : "Drowned Lodge Hut",
+        );
       }
       return;
     }
@@ -10547,7 +10620,7 @@ export class MainScene extends Phaser.Scene {
       const d = 26 + Math.random() * 14;
       const x = parent.x + Math.cos(ang) * d;
       const y = parent.y + Math.sin(ang) * d;
-      const m = new Mosswretch(this, { x, y, spawnling: true });
+      const m = new Mosswretch(this, { x, y, spawnling: true, eliteParent: parent.elite });
       if (inDungeon && this.activeDungeon) {
         this.addDungeonEnemy(this.activeDungeon, m);
       } else {
@@ -10713,6 +10786,66 @@ export class MainScene extends Phaser.Scene {
         (this.equippedWeaponAugment.critMultBonus ?? 0),
     );
   }
+  // Headroom left on a stat's capped axis, for the Character menu's Stats tab.
+  //
+  // the user's actual complaint after a full Vagabond run wasn't that stats are
+  // weak, it's "not knowing whether I have points left — i.e. whether a relic is
+  // making me hit the soft cap". statAxisSaturated only speaks up once an axis is
+  // ALREADY dead, which is too late to plan around, and it never says which
+  // source consumed the budget. This returns both, pre-formatted so the menu
+  // stays presentation-only: `summary` rides on the existing "Now:" line and
+  // `sources` is the hover breakdown.
+  //
+  // Only Strength/Agility are covered. Their ceilings depend on the live build
+  // (weapon base + relics + gear augment), which is exactly what makes them
+  // impossible to reason about from the sheet. Endurance/Vitality/Intelligence
+  // have uncapped axes, and Wisdom's cooldown cap is self-contained in
+  // Progression and already annotated there.
+  statAxisHeadroom(stat: StatType): { summary: string; sources: string } | null {
+    const weapon = this.equippedWeapon;
+    if (!weapon) return null;
+    const pct = (v: number) => `${(v * 100).toFixed(1)}%`;
+    const mult = (v: number) => `${v.toFixed(2)}x`;
+
+    if (stat === "agility") {
+      const parts = [
+        { name: "weapon base", v: weaponBaseCritChance(weapon) },
+        { name: "Agility", v: this.progression.critChanceBonus() },
+        { name: "relics", v: this.relics.critChanceBonus() },
+        { name: "gem", v: (this.equippedWeaponAugment.critChancePct ?? 0) / 100 },
+      ];
+      const raw = parts.reduce((a, b) => a + b.v, 0);
+      const per = this.progression.critChancePerPoint();
+      return {
+        summary: this.axisSummary(pct(Math.min(raw, CRIT_CHANCE_CAP)), pct(CRIT_CHANCE_CAP), CRIT_CHANCE_CAP - raw, per),
+        sources: parts.filter((p) => p.v > 0).map((p) => `${p.name} ${pct(p.v)}`).join("  ·  "),
+      };
+    }
+    if (stat === "strength") {
+      const parts = [
+        { name: "weapon base", v: weaponBaseCritMult(weapon) },
+        { name: "Strength", v: this.progression.critMultBonus() },
+        { name: "relics", v: this.relics.critDamageBonus() },
+        { name: "gem", v: this.equippedWeaponAugment.critMultBonus ?? 0 },
+      ];
+      const raw = parts.reduce((a, b) => a + b.v, 0);
+      const per = this.progression.critMultPerPoint();
+      return {
+        summary: this.axisSummary(mult(Math.min(raw, CRIT_MULT_CAP)), mult(CRIT_MULT_CAP), CRIT_MULT_CAP - raw, per),
+        sources: parts.filter((p) => p.v > 0).map((p) => `${p.name} +${mult(p.v)}`).join("  ·  "),
+      };
+    }
+    return null;
+  }
+
+  // "59.0% of 60.0% cap (~1 pt left)". Points-left floors, so it never promises
+  // a point that would be partly wasted, and reads "0 pts" rather than a
+  // negative when relics have already pushed the axis over on their own.
+  private axisSummary(current: string, cap: string, remaining: number, perPoint: number): string {
+    const left = perPoint > 0 ? Math.max(0, Math.floor(remaining / perPoint)) : 0;
+    return `${current} of ${cap} cap (~${left} pt${left === 1 ? "" : "s"} left)`;
+  }
+
   // Roll whether one hit of `weapon` crits (M-SS). Uses Math.random — combat crit
   // isn't seeded. Shared by melee (rolled at hit) and ranged (rolled at fire).
   private rollCrit(weapon: WeaponType): boolean {
@@ -12084,6 +12217,7 @@ export class MainScene extends Phaser.Scene {
       // fixed point threshold would be wrong the moment the player switches
       // weapons or relics. Unarmed has no crit to cap.
       axisSaturated: (stat) => this.statAxisSaturated(stat),
+      axisHeadroom: (stat) => this.statAxisHeadroom(stat),
     });
   }
 

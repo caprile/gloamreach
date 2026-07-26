@@ -9,6 +9,11 @@ export interface ChestMenuDeps {
   skills: Skills;
   // The chest currently open (null when the menu is closed).
   chest: () => ItemContainer | null;
+  // Display name of the open container. This menu is shared by every lootable
+  // in the game (shack chest, Warren cache, crypt chest, shrine bowl, lodge
+  // huts), so the header can't be a constant — it read "Gremlin Shack Chest"
+  // over a Duskrunner cache.
+  chestTitle: () => string;
   beginDrag: (container: ItemContainer, index: number, pointer: Phaser.Input.Pointer) => void;
   isDragging: () => boolean;
 }
@@ -143,7 +148,7 @@ export class ChestMenu {
     const chest = this.deps.chest();
     if (!chest) return;
 
-    this.addText(this.panelX + 16, this.panelY + 14, "Gremlin Shack Chest", 16, "#ffffff");
+    this.addText(this.panelX + 16, this.panelY + 14, this.deps.chestTitle(), 16, "#ffffff");
     const descText = this.scene.add
       .text(this.panelX + 16, this.panelY + 38, "Loot recovered from the shack's guards.", {
         fontFamily: "monospace",

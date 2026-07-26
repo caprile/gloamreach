@@ -130,6 +130,7 @@ fixed destination level.
 | Campfire | Lvl 2 | Stone Hearth | 4 Twine, 13 Stone | Better campfire dishes |
 | Campfire | Lvl 3 | Sunsteel Grill | 3 Sunsteel Ingot, 8 Clay, 7 Stone | Better campfire dishes |
 | Campfire | Lvl 4 | Emberforge Hearth | 3 Embersteel Ingot, 13 Stone | Best campfire dishes |
+| Campfire | Lvl 5 | Mirelight Hearth | 3 Gloamsteel Ingot, 15 Stone | Unlocks bayou dishes |
 | Relic Forge | Lvl 2 | Gloam Conduit | 10 Stone, 1 Gloam Shard | Unlocks the Refine tab |
 | Relic Forge | Lvl 3 | Ember Kiln | 3 Embersteel Ingot, 13 Stone | Unlocks Gloam → Ember conversion (Convert tab) |
 | Relic Forge | Lvl 4 | Mire Crucible | 3 Gloamsteel Ingot, 16 Stone | Unlocks Ember → Mire conversion + tier-3 refining |
@@ -393,9 +394,10 @@ that spend a plentiful earlier-biome leftover (boar_meat).
 | Emberbloom Broth | Lvl 3 | 2 Emberbloom, 1 Sunfruit, 1 Gloamcap | Emberbloom Broth | +2.5 HP/s for 34s |
 | Sunscorch Feast | Lvl 4 | 1 Shishkabob, 2 Duskrunner Meat, 1 Gloamcap, 1 Sunfruit | Sunscorch Feast | +3.5 HP/s for 30s |
 | Ember-Glazed Skewer | Lvl 4 | 1 Shishkabob, 1 Duskrunner Meat, 1 Emberbloom, 1 Boar Meat | Ember-Glazed Skewer | +3.5 HP/s for 28s |
-| Seared Mirejaw Tail | Lvl 3 | 1 Shishkabob, 1 Mirejaw Meat | Seared Mirejaw Tail | +3 HP/s for 26s |
-| Mossbound Mirejaw | Lvl 4 | 1 Shishkabob, 1 Mirejaw Meat, 2 Swamp Moss | Mossbound Mirejaw | +3.5 HP/s for 34s |
-| Lily-Gilded Feast | Lvl 4 | 1 Shishkabob, 2 Mirejaw Meat, 2 Water Lily, 1 Swamp Moss | Lily-Gilded Feast | +4 HP/s for 36s |
+| Seared Mirejaw Tail | Lvl 5 | 1 Shishkabob, 1 Mirejaw Meat | Seared Mirejaw Tail | +3 HP/s for 26s |
+| Fire-Roasted Toad Legs | Lvl 5 | 1 Shishkabob, 2 Blighttoad Legs | Fire-Roasted Toad Legs | +2.5 HP/s for 30s |
+| Mossbound Mirejaw | Lvl 5 | 1 Shishkabob, 1 Mirejaw Meat, 2 Swamp Moss | Mossbound Mirejaw | +3.5 HP/s for 34s |
+| Mirelight Platter | Lvl 5 | 1 Shishkabob, 2 Blighttoad Legs, 2 Water Lily, 1 Swamp Moss | Mirelight Platter | +4 HP/s for 36s |
 
 The three bayou dishes close a real gap: `mirejaw_meat` shipped in Phase 4b marked
 "cooking recipes land later" and that never happened, so the deepest biome had no

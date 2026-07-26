@@ -22,7 +22,14 @@ export const KILL_POINTS: Record<KillCategory, number> = {
 export const COMPLETION_BONUS = 2000;
 // Speed multiplier on the completion bonus: full MAX at/under the "par" time,
 // decaying toward 1x as the run drags on.
-export const SPEED_TARGET_MS = 10 * 60 * 1000; // 10 min par time
+// 10 min -> 90 min (2026-07-26). The multiplier can only exceed 1x BELOW par, and
+// a full three-biome run takes 70-100 minutes, so a 10-minute par made this a dead
+// term: all five of the user's recorded wins (69:56 through 98:17) scored exactly
+// x1.00, leaving score ~80% flat kill points — the opposite of the "reward going
+// fast" intent it was built for. At 90 min the real range finally spans something
+// (69:56 -> x1.29, 77:26 -> x1.16, 98:17 -> x1.00) and a genuinely fast 30-minute
+// run can still reach the 3x cap.
+export const SPEED_TARGET_MS = 90 * 60 * 1000; // 90 min par time
 export const MAX_SPEED_MULT = 3;
 
 // Completion-bonus multiplier for a run of the given length. Faster = higher,

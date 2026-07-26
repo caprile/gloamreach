@@ -66,6 +66,15 @@ export const STATION_UPGRADES: StationUpgradeDef[] = [
     deltaLabel: "Best campfire dishes",
   },
   {
+    id: "mirelight_hearth",
+    name: "Mirelight Hearth",
+    description: "Gloamsteel plate and a bed of mire-coals, hot enough for bayou game.",
+    appliesToItemKey: "campfire",
+    resultTier: 4,
+    costs: { gloamsteel_ingot: 3, stone: 15 },
+    deltaLabel: "Unlocks bayou dishes",
+  },
+  {
     id: "gloam_conduit",
     name: "Gloam Conduit",
     description: "A gloam-shard conduit set into the forge. Unlocks trophy refinement.",

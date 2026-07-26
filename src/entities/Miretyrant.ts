@@ -30,7 +30,7 @@ const S = enemyStat("miretyrant");
 // contract checkPlayerHit() already uses, which is what gets the adds terrain
 // collision, crypt navigation and containment for free.
 export type MiretyrantState = "idle" | "telegraphing" | "executing" | "recovering" | "staggered";
-export type MiretyrantAttack = "chomp" | "sweep" | "slam" | "roll";
+export type MiretyrantAttack = "chomp" | "sweep" | "slam" | "roll" | "surge";
 
 // 3200 -> 4600. the user cleared the whole bayou and killed this in EMBERSTEEL
 // gear — a full tier below the bayou set it is meant to gate — and called the
@@ -56,6 +56,7 @@ const ATTACK_COOLDOWN_MS = 720;
 const RETURN_HOME_EPS = 20;
 
 // Phase gates (fraction of max HP).
+const SURGE_HP = 0.82; // + gloamtide (the room-wide sweep) — the earliest gate
 const PHASE2_HP = 0.65; // + death roll
 const PHASE3_HP = 0.35; // + enrage timing, and the bellow interval halves
 // Ceiling on any single hit, as a share of max HP. This is the boss the guard
@@ -111,6 +112,31 @@ const ROLL_DAMAGE = S.attacks[3].damage;
 const ROLL_KNOCKBACK = 200;
 const ROLL_HIT_INTERVAL_MS = 420; // it can catch you more than once if you run with it
 
+// --- Gloamtide (phase 2) — a wall of mire that crosses the WHOLE arena. ---
+// the user: "a move that is a dungeon room wide VERY fast sweep horizontally,
+// signaled of course but still requiring fast dodging, that you have to deal
+// with while fighting adds."
+//
+// Every other attack in the kit is anchored on the boss, so the dodge is always
+// measured against where IT is standing. This one is anchored on the ROOM: a
+// full-height wall sweeps from one side to the other, and the only safe ground
+// is a single gap in it. That makes it the one attack you cannot answer by
+// spacing yourself relative to the boss — you have to read the gap and get to
+// it, through whatever the last bellow left on the floor, which is exactly the
+// "deal with it while fighting adds" ask.
+//
+// The wall is genuinely faster than a sprint, so outrunning it sideways is not
+// an option: the counterplay is the gap (or a dash through it on i-frames). The
+// long telegraph is what keeps that fair.
+const SURGE_TELEGRAPH_MS = 1000; // long — you must cross the room during it
+const SURGE_TRAVEL_MS = 560; // very fast once it goes
+const SURGE_RECOVER_MS = 1050; // the biggest punish window in the kit
+const SURGE_WALL_HALF = 46; // half-thickness of the wall
+const SURGE_GAP_HALF = 86; // half-height of the safe opening
+const SURGE_EDGE_INSET = 40; // keeps the gap off the arena wall
+const SURGE_DAMAGE = S.attacks[1].damage; // shares the tail sweep's weight
+const SURGE_KNOCKBACK = 260;
+
 // --- Bellow (adds) — on its own clock, see the file header. ---
 // Escalating SCRIPTED waves (the user, playtest: "spawn alligators instead of
 // the frog dudes... fighting strong adds the whole time"): the first couple of
@@ -130,6 +156,7 @@ function telegraphMsFor(a: MiretyrantAttack): number {
     case "sweep": return SWEEP_TELEGRAPH_MS;
     case "slam": return SLAM_TELEGRAPH_MS;
     case "roll": return ROLL_TELEGRAPH_MS;
+    case "surge": return SURGE_TELEGRAPH_MS;
   }
 }
 function recoverMsFor(a: MiretyrantAttack): number {
@@ -138,6 +165,7 @@ function recoverMsFor(a: MiretyrantAttack): number {
     case "sweep": return SWEEP_RECOVER_MS;
     case "slam": return SLAM_RECOVER_MS;
     case "roll": return ROLL_RECOVER_MS;
+    case "surge": return SURGE_RECOVER_MS;
   }
 }
 
@@ -178,8 +206,20 @@ export class Miretyrant extends Enemy {
   private poiseBarBg: Phaser.GameObjects.Rectangle;
   private poiseBarFill: Phaser.GameObjects.Rectangle;
   private telegraphGfx: Phaser.GameObjects.Graphics;
+  // The arena rect, handed in by MainScene (which owns the dungeon layout). Only
+  // the Gloamtide needs it — every other attack is anchored on the boss itself,
+  // which is exactly what makes this one different.
+  private arena: { x: number; y: number; w: number; h: number } | null = null;
+  // Gloamtide state, all locked at telegraph start so the wall can never re-aim.
+  private surgeFromX = 0;
+  private surgeToX = 0;
+  private surgeGapY = 0;
+  private surgeElapsed = 0;
 
-  constructor(scene: Phaser.Scene, cfg: { x: number; y: number }) {
+  constructor(
+    scene: Phaser.Scene,
+    cfg: { x: number; y: number; arena?: { x: number; y: number; w: number; h: number } },
+  ) {
     super(scene, {
       x: cfg.x,
       y: cfg.y,
@@ -203,7 +243,8 @@ export class Miretyrant extends Enemy {
     // Big-boss pacing guards (base Enemy, off by default). See
     // Enemy.maxHitFraction — this boss is the reason both exist.
     this.maxHitFraction = BOSS_MAX_HIT_FRACTION;
-    this.phaseGates = [PHASE2_HP, PHASE3_HP];
+    this.arena = cfg.arena ?? null;
+    this.phaseGates = [SURGE_HP, PHASE2_HP, PHASE3_HP];
     this.setScale(MIRETYRANT_SCALE);
     // See GremlinKing: baseScale is the resting size a scale tween returns to,
     // and this boss never set it either. Inert for combat (no reachBonus reads,
@@ -382,6 +423,10 @@ export class Miretyrant extends Enemy {
   // distance, the sweep/slam punish standing next to it.
   private pickAttack(dist: number): MiretyrantAttack {
     const pool: MiretyrantAttack[] = ["chomp", "sweep", "slam"];
+    // The Gloamtide covers the whole room, so it needs the arena rect to exist
+    // and is never filtered by range below — distance from the boss is exactly
+    // the thing it does not care about.
+    if (this.arena && this.health <= this.maxHealth * SURGE_HP) pool.push("surge");
     if (this.health <= this.maxHealth * PHASE2_HP) pool.push("roll");
     const far = dist > SWEEP_RADIUS;
     const weighted = pool.filter((a) => {
@@ -423,6 +468,23 @@ export class Miretyrant extends Enemy {
     } else if (attack === "roll" || attack === "sweep") {
       this.attackAngle = Phaser.Math.Angle.Between(this.x, this.y, playerX, playerY);
       this.faceAngle(this.attackAngle);
+    } else if (attack === "surge" && this.arena) {
+      const a = this.arena;
+      // Sweep TOWARD the player's side of the room, so the wall always has real
+      // ground to cross rather than spawning on top of them. Both edges are set
+      // outside the room so the wall is fully formed as it enters.
+      const fromLeft = playerX >= a.x + a.w / 2;
+      this.surgeFromX = fromLeft ? a.x - SURGE_WALL_HALF : a.x + a.w + SURGE_WALL_HALF;
+      this.surgeToX = fromLeft ? a.x + a.w + SURGE_WALL_HALF : a.x - SURGE_WALL_HALF;
+      // The gap is placed AWAY from where the player is standing right now —
+      // otherwise the safe spot is wherever they already are and the attack is
+      // free. Making them move is the whole point.
+      const lo = a.y + SURGE_EDGE_INSET + SURGE_GAP_HALF;
+      const hi = a.y + a.h - SURGE_EDGE_INSET - SURGE_GAP_HALF;
+      const mid = a.y + a.h / 2;
+      this.surgeGapY = Phaser.Math.Clamp(playerY < mid ? hi : lo, lo, hi);
+      this.surgeElapsed = 0;
+      this.applyFacing(this.surgeToX - this.x, 0);
     }
   }
 
@@ -463,6 +525,14 @@ export class Miretyrant extends Enemy {
         this.currentStateDurationMs = SWEEP_IMPACT_MS;
         break;
       }
+      case "surge": {
+        // The boss stays planted and the ROOM does the attacking — it is the
+        // one thing in the kit that isn't a swing.
+        body.setVelocity(0, 0);
+        this.surgeElapsed = 0;
+        this.currentStateDurationMs = SURGE_TRAVEL_MS;
+        break;
+      }
       default: {
         body.setVelocity(0, 0);
         this.currentStateDurationMs = SLAM_IMPACT_MS;
@@ -471,8 +541,24 @@ export class Miretyrant extends Enemy {
     }
   }
 
+  // Where the Gloamtide's wall is right now, 0..1 across its travel. Shared by
+  // the hit test and the draw so what you see is exactly what hits you.
+  private surgeWallX(): number {
+    const t = Phaser.Math.Clamp(this.surgeElapsed / SURGE_TRAVEL_MS, 0, 1);
+    return this.surgeFromX + (this.surgeToX - this.surgeFromX) * t;
+  }
+
   private updateExecuting(delta: number, playerX: number, playerY: number, now: number): void {
     const body = this.body as Phaser.Physics.Arcade.Body;
+    if (this.currentAttack === "surge") {
+      this.surgeElapsed += delta;
+      this.drawSurge(this.surgeWallX(), 1);
+      if (this.surgeElapsed >= SURGE_TRAVEL_MS) {
+        this.telegraphGfx.clear();
+        this.beginRecover(now);
+      }
+      return;
+    }
     if (this.currentAttack === "chomp") {
       if (!this.lungeLanded) {
         this.lungeElapsed += delta;
@@ -536,6 +622,32 @@ export class Miretyrant extends Enemy {
     this.poise = Math.min(MIRETYRANT_MAX_POISE, this.poise + POISE_REGEN_PER_SEC * (delta / 1000));
   }
 
+  // The wall + its gap. `intensity` scales opacity so the telegraph reads as a
+  // warning and the live wall reads as the attack — the standing "under your
+  // feet = it hasn't happened yet, over your head = it's happening" split can't
+  // apply here (this one IS ground-level), so opacity carries it instead.
+  private drawSurge(wallX: number, intensity: number): void {
+    const a = this.arena;
+    if (!a) return;
+    const g = this.telegraphGfx;
+    g.clear();
+    g.setDepth(this.depth + 0.5);
+    const swamp = 0x5fbf87;
+    const topH = this.surgeGapY - SURGE_GAP_HALF - a.y;
+    const botY = this.surgeGapY + SURGE_GAP_HALF;
+    const botH = a.y + a.h - botY;
+    g.fillStyle(swamp, 0.16 * intensity + 0.22 * intensity);
+    if (topH > 0) g.fillRect(wallX - SURGE_WALL_HALF, a.y, SURGE_WALL_HALF * 2, topH);
+    if (botH > 0) g.fillRect(wallX - SURGE_WALL_HALF, botY, SURGE_WALL_HALF * 2, botH);
+    g.lineStyle(2, swamp, 0.6 * intensity);
+    if (topH > 0) g.strokeRect(wallX - SURGE_WALL_HALF, a.y, SURGE_WALL_HALF * 2, topH);
+    if (botH > 0) g.strokeRect(wallX - SURGE_WALL_HALF, botY, SURGE_WALL_HALF * 2, botH);
+    // Mark the gap itself — the safe ground is the information that matters, and
+    // an unmarked hole in a wall reads as "the wall didn't render" at a glance.
+    g.lineStyle(2, 0xd8f0c0, 0.5 * intensity);
+    g.strokeRect(wallX - SURGE_WALL_HALF, this.surgeGapY - SURGE_GAP_HALF, SURGE_WALL_HALF * 2, SURGE_GAP_HALF * 2);
+  }
+
   private drawTelegraph(now: number): void {
     const g = this.telegraphGfx;
     g.clear();
@@ -567,6 +679,13 @@ export class Miretyrant extends Enemy {
         );
         g.lineStyle(2, swamp, 0.55);
         g.strokeCircle(ex, ey, CHOMP_RADIUS);
+        break;
+      }
+      case "surge": {
+        // Slide the preview in from the start edge as the telegraph runs, so the
+        // direction it will travel is unmistakable before it moves.
+        const lead = this.surgeFromX + (this.surgeToX - this.surgeFromX) * 0.08 * frac;
+        this.drawSurge(lead, 0.35 + 0.65 * frac);
         break;
       }
       case "sweep": {
@@ -644,6 +763,16 @@ export class Miretyrant extends Enemy {
       if (now - this.lastRollHitAt < ROLL_HIT_INTERVAL_MS) return null;
       this.lastRollHitAt = now;
       return { damage: ROLL_DAMAGE, knockback: ROLL_KNOCKBACK };
+    }
+
+    if (this.currentAttack === "surge") {
+      // Anchored on the ROOM, not the boss, so `dist` is irrelevant here. Caught
+      // if you are inside the wall's thickness and NOT inside the gap.
+      if (this.hasHitThisAttack || !this.arena) return null;
+      if (Math.abs(playerX - this.surgeWallX()) > SURGE_WALL_HALF) return null;
+      if (Math.abs(playerY - this.surgeGapY) <= SURGE_GAP_HALF) return null;
+      this.hasHitThisAttack = true;
+      return { damage: SURGE_DAMAGE, knockback: SURGE_KNOCKBACK };
     }
 
     if (this.hasHitThisAttack) return null;

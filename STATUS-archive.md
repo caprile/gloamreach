@@ -10107,3 +10107,154 @@ fetch. Only the attack strip is new — nothing else could regress.
 Verified live: all 11 touched textures load at the expected sizes, the 19 animated creatures
 register idle/walk/attack, elites derive correctly from the new art (including the recoloured
 animation strips), and a spawned Mirejaw was caught mid-lunge with its jaws open.
+
+### Ground texturing + biome blending (2026-07-25, Opus)
+
+The last non-reversible piece of the art migration, and the one the user deliberately queued
+last: the ground is *generated*, not a sprite, so the override layer can't reach it.
+
+**The constraint that shaped everything.** The ground has always been a per-pixel COLOUR
+field — `worldBiomeColorAt` composites base + biome blobs + features into one number. That
+gives correct, smoothly-blended colour at any world size but can never carry pixel-art
+detail: outside the forest it is baked into 4096 texels stretched over a 28000px world,
+about 7 world px per texel, and a world-sized TileSprite is ~3GB (it OOMed once already).
+So the plan's two candidate routes were "replace the bake with tile stamping" or "keep the
+colour and overlay a texture", and the second is what shipped — but as a **moving chunk of
+real 32px tiles at 1:1**, not a flat detail wash.
+
+**`src/ui/GroundDetailUI.ts`** keeps a 2304px chunk of stamped tiles around the player
+(double-buffered, snapped to a 576px grid, ~21,000 stamps rebuilt over 9 frames at ~2.5ms
+each). Cost is constant at any world size, which is the same reason the camera-locked
+`ground_speckle` layer it replaces existed. It is **purely additive**: tiles draw
+semi-transparently over the colour field, so every biome boundary, POI floor stamp, minimap
+colour and map reveal still reads the exact same source. It also means one clay tile serves
+the whole badlands palette instead of needing a tile per colour.
+
+**`src/systems/ground.ts`** (Phaser-free) owns the material vocabulary — 10 materials, their
+variant counts, per-material opacity and placeholder colours — and **`WorldBiomes.worldGroundMaterialAt`**
+answers which one covers a point, built from the same fields in the same priority order as
+the colour so texture and colour can never disagree about where a creek or a mesa is.
+Placeholder tiles are still generated in BootScene, so the layer works with no art at all.
+
+**Three things the user's live feedback changed mid-build:**
+
+1. **"The woods river doesn't look like a river."** Correct — the "shallow creek water over
+   pebbles" prompt had come back as bare grey gravel with no water in it at all. Re-rolled
+   with an explicit ripples/caustics/flowing prompt and took the blue-water candidates,
+   toned 0.82.
+2. **"Some of the blending between areas isn't great."** Colour blends across a seam and a
+   tile can't — a cell is one material or the other, and a smooth curve cut that way is a
+   staircase. Fixed with **two probes per cell**: a jittered primary (so the edge dithers
+   into an interlocking band rather than running along cell lines) and a far-flung secondary
+   that reaches across the seam and lays the neighbour on at half strength. One mechanism
+   softens every boundary in the world — blob borders, creek banks, mesa edges — with no
+   per-boundary code.
+3. **"Can't the tiles be smaller, to give easier blending of curved lines?"** Yes, without
+   halving the ground's pixel resolution against every other sprite: the art stays 32px and
+   is carved into quadrant frames (`src/art/groundFrames.ts`), stamped on a **16px** grid.
+   A cell keeps the quadrant and variant its 32px block would have used, so four cells of
+   one material reassemble that tile pixel-for-pixel — only the material *decision* gets
+   finer, which is exactly where the resolution was wanted.
+
+**Two new art tools, both from bugs this pass hit.**
+`check-seam.mjs` scores how well a tile actually TILES, by comparing its wrap edges to its
+own interior steps. That caught `ground_grass_1` at **x10.8** — a hard horizontal line every
+32px across the whole forest that looked perfect in a viewer. Roughly a third of every
+tiles-pro batch fails it. `seamless.mjs` then *repairs* a marginal wrap instead of re-rolling
+for one: it measures the edge difference, halves it, and fades that correction inward, so
+the texture's own detail is untouched and only the low-frequency drift that IS the seam goes
+away. Repaired tiles score x0.00. Without it the bayou would have been stuck with its
+third-choice mud, since only one muck candidate in 32 wrapped cleanly.
+
+**One regression caught in verification:** the War Camp's packed-dirt floor and the Gloaming
+Vein's blighted floor are stamped into the colour bake, so the new layer painted grass
+texture straight back over them and the camp stopped reading as a cleared campground. The
+layer now takes a **material callback** rather than the `WorldBiomes` instance — POI floors
+are the scene's knowledge, not the world map's, so `MainScene.groundMaterialAt` composes the
+two. (The badlands POI decals needed nothing: those are real decal objects at depth -7,
+above this layer.)
+
+**Verified live** (`preview_eval` + screenshots): quadrant frames registered on real art;
+sprinting 300 frames never leaves the chunk uncovered; a cross-world teleport rebuilds in
+the SAME frame (a blink stays on the cheap path, so the two are distinguished by whether
+the chunk still covers the camera, not by distance); a crypt entry is outside the world
+circle so the layer correctly draws nothing underground; camp/vein floors resolve to their
+own materials with the surrounding forest unaffected. `tsc` clean, no console errors.
+
+**Removed:** the `ground_speckle` layer and texture, plus the `syncCameras` special case it
+needed. Its own comment said it existed because the outer world had no detail — keeping it
+would only have put a second 32px grain pattern over the first.
+
+**Not done, deliberately:** the tiles are static, so water does not animate. Ground
+animation belongs with the ambient-prop animation pass, not here.
+
+### Ground follow-ups: projectile art, picked states, and the attack-FX split (2026-07-25, Opus)
+
+Three playtest notes off the ground pass, plus the start of the attack-FX phase.
+
+**Gremlin projectiles had no art** — literally: `gremlin_rock` was a plain grey 6x6 `fillRect`.
+It, the slingshot pellet, the Duneshaper's gloam bolt and the Hexling's physical side-bolt now
+have real art. Real art is still pinned back to the placeholder footprint but no longer all the
+way: 6px was hard to pick out even against flat ground and could vanish outright into the
+texture that just landed, so art draws at **1.8x** the old footprint while the **collision body
+stays pinned exactly** (`Projectile.PROJECTILE_ART_SCALE`). Two gotchas worth keeping: Arcade's
+`setSize` takes UNSCALED units, so the sprite scale has to be divided back out or the body
+silently shrinks (it came out 3x3 instead of 6x6 first try); and the integer-scale rule that
+governs icons does not apply here, because every projectile is drawn rotated to its travel angle
+and is already off the pixel grid.
+
+**The picked states had no rule behind them.** the user: "the picked mushroom art makes no sense
+— think about how you pick stuff in real life." `gloamcap_picked` was a single LARGER purple
+mushroom, so picking a cluster grew one. The rule, now in `art/README.md`: take a PART off a
+plant (berries, fruit, a bloom) and the plant stays minus what you took; take the WHOLE plant (a
+mushroom, a mat of moss) and nothing is left growing — and since these nodes regrow, what remains
+is a ground disturbance rather than a plant. Gloamcap is now snapped stems in disturbed soil;
+dustbloom is its leaves without the flower instead of the dead twig it had. Also learned:
+**negative prompts don't work** — "a shrub with no flower on it" came back with a flower;
+describing only what should be present did not.
+
+**Attack FX — the indicator/attack split, which is structural rather than per-boss.** the user,
+mid-pass: *"I want it to be clear what is the attack indicator vs the actual attack sprite —
+they can't look the same."* He was right that art alone would have made it worse: the
+Cinderwrought's cone telegraph and its cone impact were the same wedge in the same orange, one
+brighter. `src/systems/depth.ts` now owns the rule — **`TELEGRAPH_DEPTH`** (flat on the ground,
+UNDER every entity, outline-led, translucent, never textured) and **`ATTACK_FX_DEPTH`** (a real
+art sprite ABOVE the entities, opaque, short-lived). "Under your feet = it hasn't happened yet;
+over your head = it's happening." Applied in one pass to every telegraph in the game
+(`Enemy.drawArea*` plus the six bespoke boss/enemy graphics), so the whole roster reads
+consistently rather than one boss at a time.
+
+Two impact sprites are wired as the exemplars: the **Gloamwarden's crystal eruption** and the
+**Gremlin King's smash**, both scaled with `scaleToLongest` against the radius `checkPlayerHit`
+actually uses, so what you see is what hits, and both torn down on the DESPAWN path as well as
+death (the bug that stranded HP bars).
+
+**Perf, same session: "a little hitchy while running around at 100 run skill"** (the user). Not a
+stall — the frame budget being tipped over the line. Measured while sprinting at the Running-100
+ceiling (~264px/s): the game was already spending ~11.8ms of its 16.7ms, and a chunk-rebuild
+slice cost ~3.4ms at p95, pushing the 95th-percentile frame to **16.1ms** with occasional 30ms
+frames. Rebuilds happen most often exactly when you're running, which is why it showed up there.
+Fixed by thinning the slices (`ROWS_PER_FRAME` 8 -> 5): p95 **16.1 -> 15.1ms**, worst frame
+**30.4 -> 20.2ms**, chunk slice **3.4 -> 1.9ms**. The floor on thinness is that the rebuild must
+OUTRUN the player — a build starts 288px from the old chunk's centre and the old chunk stops
+covering the camera at 452px, so there is ~620ms at full sprint to finish, and a 29-frame build
+(~365ms) fits with room. Verified over 12s of diagonal sprinting: **zero** falls back to the
+synchronous path. Worth knowing for later: most of the frame is the game itself, not the ground
+layer, which now adds ~1.4ms at p95.
+
+**Bug, same session: a mini-boss health bar stayed pinned to the top of the screen after you ran
+away** (the user). Every boss leashes on how far IT has travelled from ITS OWN spawn, which never
+trips for one that can't close the distance — a crypt warden held back by a wall, or any boss you
+simply walked away from and left standing at home. Reproduced at 4243px with the warden still
+reporting aggro. Fixed as a DISPLAY concern rather than by touching five AI state machines: the
+bar now also requires the boss within `BOSS_BAR_MAX_DIST` (1000px, comfortably past the ~735px
+visible corner so it can't flicker at the screen edge). One gate covers big bosses and
+mini-bosses alike, the aggro state is untouched, and walking back brings the bar straight back.
+
+**Not done, deliberately:** the Cinderwrought's cinder cone stays procedural. `create_map_object`
+resists top-down fire — a "top-down fan of fire" returns a side-on campfire, a "triangular wedge
+of flame from above" returns a flat triangle, and the one generation that did produce real flame
+tongues came with a torch handle attached. Its flickering two-wedge fire already differs from its
+own telegraph, and it now differs by depth too, so it is not urgent. Remaining in this phase: the
+cone, the Duneshaper/Hexling impacts (moved above the entities but still procedural), and the
+8 ability cast FX families, which all still tint the same `light_soft` gradient.

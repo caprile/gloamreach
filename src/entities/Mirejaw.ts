@@ -158,15 +158,18 @@ export class Mirejaw extends Enemy {
       displayName: elite ? "Elite Mirejaw" : "Mirejaw",
       // The ONLY Mirehide source in the game (locked) + the bayou's food drop,
       // mirroring how Duskrunner meat feeds the badlands.
+      // Meat yield raised 2026-07-26 (the user: "the aligators should drop more
+      // meat"). A gator is the biggest thing in the bayou and was dropping 1-2,
+      // the same as a Duskrunner — and it is one of only two bayou food sources.
       loot: elite
         ? [
             { resource: "mirehide", min: 3, max: 4 },
-            { resource: "mirejaw_meat", min: 2, max: 3 },
+            { resource: "mirejaw_meat", min: 4, max: 6 },
           ]
         : [
             { resource: "gravemark_rubbing", min: 1, max: 1, chance: 0.06 },
             { resource: "mirehide", min: 1, max: 2 },
-            { resource: "mirejaw_meat", min: 1, max: 2 },
+            { resource: "mirejaw_meat", min: 2, max: 4 },
           ],
       maxHealth: elite ? Math.round(MAX_HEALTH * ELITE.hp) : MAX_HEALTH,
       biteDamage: elite ? Math.round(CHOMP_DAMAGE * ELITE.damage) : CHOMP_DAMAGE,
@@ -292,6 +295,17 @@ export class Mirejaw extends Enemy {
     this.mode = "hunting";
     this.setAlpha(1);
     this.startPursuit(this.scene.time.now);
+  }
+
+  // A Mirejaw tracks aggro in its own `mode`, so the base implementation — which
+  // only sets `state` — would leave it lurking with its ambush AI still running.
+  // Overriding is the documented pattern for any subclass with a private mode
+  // field (see Enemy.forceAggro's contract). Used by the Miretyrant's bellow so a
+  // summoned gator comes up hunting instead of waiting to be walked into.
+  forceAggro(now: number): void {
+    if (this.depleted) return;
+    super.forceAggro(now);
+    if (this.mode !== "hunting") this.surface();
   }
 
   // Back under the water after losing the player — it re-arms as an ambush

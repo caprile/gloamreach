@@ -43,10 +43,27 @@ export class HintUI {
   private hideEvent?: Phaser.Time.TimerEvent;
   private slideTween?: Phaser.Tweens.Tween;
 
-  constructor(scene: Phaser.Scene) {
+  // Left edge of any open right-hand panel the card must not cover, or null when
+  // nothing is in the way. The card rests against the right edge, which is
+  // exactly where the crafting panel lives — so a tip firing mid-craft sat on
+  // top of the Craft button (the user). Supplied by the scene because HintUI has
+  // no business knowing which menus exist.
+  private obstacleLeft?: () => number | null;
+
+  constructor(scene: Phaser.Scene, obstacleLeft?: () => number | null) {
     this.scene = scene;
+    this.obstacleLeft = obstacleLeft;
     this.restX = scene.scale.width - RIGHT_MARGIN - CARD_W;
     this.centerY = Math.round(scene.scale.height * 0.42);
+  }
+
+  // Where the card should come to rest right now — shifted left of an open
+  // panel, never past the screen edge. Recomputed per hint rather than cached,
+  // since a menu can open or close between two tips.
+  private currentRestX(): number {
+    const obstacle = this.obstacleLeft?.() ?? null;
+    if (obstacle === null) return this.restX;
+    return Math.max(RIGHT_MARGIN, Math.min(this.restX, obstacle - CARD_W - 12));
   }
 
   show(text: string, kind: HintKind = "tutorial"): void {
@@ -113,7 +130,7 @@ export class HintUI {
     this.objects = [box, accent, header, body];
 
     // Slide the whole group in together by tweening a shared x delta.
-    const dx = this.restX - startX;
+    const dx = this.currentRestX() - startX;
     this.slideTween = this.scene.tweens.add({
       targets: { t: 0 },
       t: 1,

@@ -43,7 +43,7 @@ export interface RelicForgeMenuDeps {
   // Refine raw trophies + Gloam Shards into a refined trophy (Gloaming Vein
   // loop). The scene consumes inputs + grants the output + logs. Called at the
   // ProgressBar's completion (commit-at-end).
-  refine: (recipeId: string) => void;
+  refine: (recipeId: string, runs?: number) => void;
   // The open forge's upgrade tier (0 = Lvl 1). The Refine tab is gated on
   // tier >= 1 (Relic Forge Lvl 2, the Gloam Conduit upgrade); the Convert tab
   // on tier >= 2 (Relic Forge Lvl 3, the Ember Kiln upgrade).
@@ -653,13 +653,46 @@ export class RelicForgeMenu {
     this.rows.push(btn);
     this.addText(bx + btnW / 2, by + btnH / 2, isBusyRow ? "Refining…" : "Refine", 12, can && !isBusyRow ? "#e6b8f0" : "#6a7280", 0.5, 0.5);
 
+    // "Refine All" (the user's ask) — mirrors the Convert tab's batch button.
+    // Bounded by BOTH inputs: a stack of trophies with two shards left can only
+    // run once. One bar covers the batch; deps.refine loops at commit.
+    const allRuns = Math.min(
+      Math.floor(owned / recipe.inputCount),
+      Math.floor(shards / recipe.shardCount),
+    );
+    const canAll = (this.deps.noBuildCost() ? allRuns > 0 : allRuns > 1) && !this.refineBusy && !this.busy;
+    const abW = 96;
+    const abX = bx - abW - 8;
+    const allBtn = this.scene.add
+      .rectangle(abX, by, abW, btnH, canAll ? 0x2a2333 : 0x14181f, 0.95)
+      .setOrigin(0, 0)
+      .setStrokeStyle(1, canAll ? 0xc264d8 : 0x3a4250)
+      .setScrollFactor(0)
+      .setDepth(DEPTH_ITEM)
+      .setInteractive({ useHandCursor: canAll })
+      .on("pointerdown", () => {
+        if (canAll) this.beginRefine(recipe.id, abX, by, abW, btnH, allRuns);
+      });
+    this.rows.push(allBtn);
+    this.addText(
+      abX + abW / 2,
+      by + btnH / 2,
+      allRuns > 1 ? `All (${allRuns})` : "All",
+      12,
+      canAll ? "#e6b8f0" : "#6a7280",
+      0.5,
+      0.5,
+    );
+
     // Re-pin the progress bar over the busy row after this render pass.
     if (isBusyRow) this.refineBar.setPosition(bx, by).setSize(btnW, btnH);
   }
 
   // Commit-at-end: nothing is consumed until the bar fills (deps.refine runs in
   // onComplete). Closing the menu mid-bar cancels cleanly.
-  private beginRefine(recipeId: string, bx: number, by: number, bw: number, bh: number): void {
+  // `runs` lets one bar cover a whole batch (the "All" button), exactly as
+  // beginConvert does — sitting through a bar per refine is the complaint.
+  private beginRefine(recipeId: string, bx: number, by: number, bw: number, bh: number, runs = 1): void {
     if (this.refineBusy || this.busy) return;
     this.refineBusy = true;
     this.refineBusyId = recipeId;
@@ -669,7 +702,7 @@ export class RelicForgeMenu {
       onComplete: () => {
         this.refineBusy = false;
         this.refineBusyId = null;
-        this.deps.refine(recipeId); // consume inputs + grant output + log (its refresh re-renders)
+        this.deps.refine(recipeId, runs); // consume inputs + grant output + log (its refresh re-renders)
         if (this.open) this.render();
       },
     });

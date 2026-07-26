@@ -363,7 +363,7 @@ const RANGED_WEAPONS: Partial<Record<WeaponType, RangedWeaponConfig>> = {
   // Each keeps its own arrow TEXTURE (a gloamsteel bow still visibly looses a
   // gloamsteel shaft) now that the arrow ITEM behind it is gone.
   sunsteel_warbow: { projectileSpeed: 600, maxRangePx: 380, ammo: "none", projectileTexture: "arrow_projectile" },
-  embersteel_warbow: { projectileSpeed: 640, maxRangePx: 400, ammo: "none", projectileTexture: "arrow_projectile" },
+  embersteel_warbow: { projectileSpeed: 640, maxRangePx: 400, ammo: "none", projectileTexture: "ember_arrow_projectile" },
   gloamsteel_warbow: { projectileSpeed: 680, maxRangePx: 420, ammo: "none", projectileTexture: "gloam_arrow_projectile" },
 };
 

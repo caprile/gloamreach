@@ -83,6 +83,9 @@ export class Cragscale extends Enemy {
   private rollAngle = 0;
   private rollTraveled = 0;
   private rollHit = false;
+  // Where the roll launched from — the lane's fixed anchor (see startRoll).
+  private rollOriginX = 0;
+  private rollOriginY = 0;
   private rollCooldownUntil = 0;
   // Roll-lane telegraph (2026-07-24, the user: "anything that has an invisible
   // radius like the spinny guys in badlands needs to show the radius somehow when
@@ -198,6 +201,12 @@ export class Cragscale extends Enemy {
     this.attackPhase = "windup";
     this.attackStartedAt = now;
     this.rollAngle = Phaser.Math.Angle.Between(this.x, this.y, playerX, playerY);
+    // The lane is drawn from where the roll STARTS, not from wherever the
+    // Cragscale currently is — it keeps drawing through the moving `strike`
+    // phase, so a live anchor made the whole lane (near edge and far end alike)
+    // slide forward with it and the landing spot ran away from the player.
+    this.rollOriginX = this.x;
+    this.rollOriginY = this.y;
     this.faceAngle(this.rollAngle);
     this.playWindupTell(ROLL_WINDUP_MS, 0xd6a24a); // sandy tuck-in tell
     this.rollTraveled = 0;
@@ -259,10 +268,15 @@ export class Cragscale extends Enemy {
     return false;
   }
 
-  // Draw the roll's hit lane on the ground — a capsule-ish quad from the
-  // Cragscale forward along the locked rollAngle, ROLL_MAX_DIST long and
+  // Draw the roll's hit lane on the ground — a capsule-ish quad from the roll's
+  // LAUNCH POINT forward along the locked rollAngle, ROLL_MAX_DIST long and
   // 2×ROLL_HIT_RADIUS wide, plus a rounded cap at the far end. This is the
   // "show the radius" telegraph; it's translucent and sits under the sprite.
+  //
+  // Anchored to rollOriginX/Y, NOT this.x/this.y: it keeps drawing through the
+  // moving `strike` phase, so a live anchor slid the entire lane along with the
+  // Cragscale and the far cap — the spot the player is trying to leave — kept
+  // projecting a full ROLL_MAX_DIST ahead of it. The path is the path.
   private drawRollLane(alpha: number): void {
     const g = this.telegraphGfx;
     g.clear();
@@ -273,14 +287,16 @@ export class Cragscale extends Enemy {
     const py = dx;
     const hw = ROLL_HIT_RADIUS + this.reachBonus();
     const len = ROLL_MAX_DIST;
-    const ax = this.x + px * hw;
-    const ay = this.y + py * hw;
-    const bx = this.x - px * hw;
-    const by = this.y - py * hw;
-    const cx = this.x + dx * len - px * hw;
-    const cy = this.y + dy * len - py * hw;
-    const ex = this.x + dx * len + px * hw;
-    const ey = this.y + dy * len + py * hw;
+    const ox = this.rollOriginX;
+    const oy = this.rollOriginY;
+    const ax = ox + px * hw;
+    const ay = oy + py * hw;
+    const bx = ox - px * hw;
+    const by = oy - py * hw;
+    const cx = ox + dx * len - px * hw;
+    const cy = oy + dy * len - py * hw;
+    const ex = ox + dx * len + px * hw;
+    const ey = oy + dy * len + py * hw;
     g.fillStyle(0xd6603a, alpha);
     g.fillPoints([
       new Phaser.Geom.Point(ax, ay),
@@ -288,7 +304,7 @@ export class Cragscale extends Enemy {
       new Phaser.Geom.Point(cx, cy),
       new Phaser.Geom.Point(bx, by),
     ], true);
-    g.fillCircle(this.x + dx * len, this.y + dy * len, hw); // rounded far cap
+    g.fillCircle(ox + dx * len, oy + dy * len, hw); // rounded far cap
     g.lineStyle(2, 0xff7a44, Math.min(1, alpha + 0.3));
     g.strokePoints([
       new Phaser.Geom.Point(ax, ay),

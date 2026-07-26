@@ -2,10 +2,27 @@
 
 ## Current State
 
-_Living snapshot — edit in place, never append._ Last shipped: **perf pass — static zone decals
-baked, frame time 12.7 -> 5.0ms** (2026-07-25, Opus). Before it, same day: the ground texturing
-phase plus projectile art, the picked-state rule and the attack-FX indicator/attack split
-(`.claude/plans/art-textures-lighting-3-biomes.md`).
+_Living snapshot — edit in place, never append._ Last shipped: **the Vagabond-win playtest batch**
+(2026-07-26, Opus) — ~30 items across 4 batches off the user's 77:26 victory, plan + locked
+decisions in `.claude/plans/vagabond-win-playtest-batch.md`. Before it: the perf pass (static zone
+decals baked, frame 12.7 -> 5.0ms) and the ground-texturing phase.
+
+**In progress / next.** One item from that batch is deliberately UNSHIPPED and needs the user's
+call: the **Active Effects column**. He locked "replace the Combat column", but the column has only
+**190px** below its header while a unified list runs to ~1720px — it has to move to the wide tab
+area instead. Note `STATS_H = 150` is already fiction; today's Combat block ends at 860 against an
+830 panel bottom, so that overflow predates this work. Also still open from his dump: the
+**attack-FX art phase** (Cinderwrought's cone, Gloamwarden's spikes, the Duneshaper's missing VFX),
+**on-theme inventory/crafting menu art**, and a **unique in-game cursor** — his stated order.
+
+**Three findings from that batch worth carrying forward.** (1) **Skills were mostly inert** — 4 of
+11 did anything for a real end-game build, and Light Armor had been capped since level 20 of 100;
+it now has a second axis (dash distance), and the Stats tab shows live cap headroom with the
+sources, because his actual complaint was visibility, not power. (2) **The score's speed multiplier
+was dead** — par was 10 minutes against 70-100 minute runs, so every win scored x1.00; par is 90
+now. (3) **A hue-shift recolour cannot mark an elite whose base is already red** — the Sandmaw's
+elite was literally the same hue as its base, which is why elites now carry a hue-independent gold
+rim.
 
 **Frame budget is healthy again**: median 5.0ms / p95 6.8ms of 16.7ms while sprinting at the
 Running-100 ceiling, no frames over 20ms. The cause was 103,082 `Graphics` fill commands
@@ -325,6 +342,113 @@ touches no combat numbers.
 
 > Older entries in STATUS-archive.md.
 
+### Vagabond-win playtest batch — 4 batches, ~30 items (2026-07-26, Opus)
+
+Off the user's 77:26 Vagabond victory (476 kills, 133 elite, 3 boss, level 25, score 10890). Plan +
+locked decisions: `.claude/plans/vagabond-win-playtest-batch.md`. Every design fork was locked via
+`AskUserQuestion` BEFORE any code changed, at his explicit request.
+
+**The numbers review he asked for first.** Skills were the weakest system: only 4 of 11 did anything
+for his build, and his single largest investment — **Light Armor 57 — had been capped since level
+20**, because its one effect (dash i-frames, +5ms/level, cap +100ms) tops out there. Pierce 40 was
+dead because he finished on a magic weapon (weapon skills are per-damage-type, so the swap threw that
+investment away). Stats: **crit chance 59% against a hard 60% cap**, and the Vagabond's x1.5 Agility
+potency meant saturation at ~52 points, not 100 — he effectively had five stats. And the score's
+**speed multiplier was a dead mechanic**: `clamp(10min/elapsed,1,3)` can only exceed 1 BELOW par, so
+all five recorded wins (69:56-98:17) scored exactly x1.00 and score was ~80% flat kill points.
+
+**Batch 1 — bugs/UI.** Crafting list overflow + tab overlap: two causes in the row-windowing math —
+the wheel steps in whole rows but `maxListScroll` was not a row multiple (so at the bottom of the
+range every row sat a fraction high and the top one drew over the tabs), and `lastRow` used `ceil`,
+including a partly-visible row nothing clipped. Fixed by never drawing a partial row rather than
+adding a geometry mask, because **a mask clips rendering but not input** — a row hidden behind the
+tabs would still eat clicks meant for them. Panel + list column both +72px so "Effigy of the
+Duneshaper" fits (detail column byte-identical). Per-container chest titles (six lootables shared one
+hardcoded "Gremlin Shack Chest"). **Stat headroom display** — the real answer to his skills
+complaint, which was visibility rather than power: Strength/Agility rows now show
+`59.0% of 60.0% cap (~1 pt left)` with a hover breakdown naming the sources, so equipping a Mythic
+crit relic visibly drops headroom 65 -> 40 points. Hint card steps left of an open crafting panel.
+Mirehide Leggings "missing art" was a **broken asset**: 2 distinct colours, max luminance 8 — a flat
+black silhouette, so brightening could not recover detail that was never there; regenerated. Refine
+All (bounded by BOTH inputs, re-checked per run). Specials hover numbers: **25 of 25 now show
+figures, 21 were missing** — `Tooltip` had a `passive` branch but no `grantsAbility` branch (the whole
+ability roster hovered blank), and four epic uniques had their magnitudes as private MainScene
+consts, so nothing player-facing COULD quote them; those ten constants moved into `SetBonuses.ts` and
+the text is derived from them.
+
+**Batch 2 — combat readability.** **Hold left-click to attack/chop/mine**: every action reached was
+already cooldown-gated (the gather path's throttle comment literally said "holding/spamming LMB") —
+only the input repeat was missing. Deliberately narrow: repeats only for enemy / smashable den /
+resource node, because a chest would reopen every frame and eating-from-hotbar would swallow a stack
+in under a second (verified: 10 food, 2s held on open ground, 0 eaten). **Cragscale telegraph** was
+the one lane that followed its creature — its bespoke `drawRollLane` re-anchored to the live sprite
+every frame DURING the roll, so the far cap kept projecting ahead of it; now locked to the launch
+point. Audited the rest of the roster: every other telegraph either anchors to a locked point or only
+draws while stationary. **Wind-up tells reworked** — the user flagged the attack animations twice as
+unreadable, and inspecting the strips showed why: Mosswretch/Murkling/Duskrunner barely change
+silhouette across their whole attack, so the sprite cannot carry the read at 20-40px. That makes the
+tell the load-bearing signal, and it used `Quad.easeIn` — at 69ms into a 600ms wind-up the scale
+change was **1.002** (invisible). Now a fast commit-pop then a linear grow: **1.089 at the same
+moment**, climbing steadily to 1.18. Both tween stages are cancelled at every abandon site, verified
+against the stuck-oversized risk (0 of 1184 live enemies).
+
+**Batch 3 — balance/economy, all 8.** Score par 10 -> 90 min (his runs now span x1.29 -> x1.00).
+Agility 0.45 -> 0.3%/pt — the rate slowed against the SAME ceiling per the standing rule, so a
+x1.5-potency build with a Mythic relic caps at point 91 instead of ~52, and neutral play never caps.
+**Light Armor got its second axis: dash DISTANCE** (+0.4%/level to +40%), so levels 20-100 finally
+pay; the i-frame cap is deliberately unchanged, since a 400ms invulnerable window would make attacks
+ignorable. Duskhide 4->5 and Emberhide 7->8 armor: **Duskhide Lvl 1 was 12 against a fully-upgraded
+Gremlin set's 13** — arriving in the badlands made you worse; now 15 vs 13, with the "base Ember beats
+maxed Duskhide" rule preserved. bog_ore 24 -> 40 nodes (he finished with 50 unspent Moonsilver and no
+ore — the ingot's other input is what proved the shortfall is here). Mirejaw meat 1-2 -> 2-4 (elite
+4-6); **Blighttoad is the second bayou food source** (Blighttoad Legs), so the menu is 4 dishes, two
+per animal, all behind a new **Campfire Lvl 5 (Mirelight Hearth)** — the Lily-Gilded Feast (2 gator
+meat) is retired, and its orphaned lily-platter art was renamed onto the replacement rather than
+dropped to a placeholder. **Elite Mosswretches spawn Elite Mosslings** (x1.5 HP/damage, bigger,
+crimson) but deliberately keep `elite: false`, because an existing guard says a spawnling must not
+drop a trophy and elite status also drives 30-point kill scoring — stats and look without a
+trophy/points fountain.
+
+**Batch 4 — Miretyrant.** **Bellow adds now force-aggro on spawn**: they surface at the arena edge,
+deliberately away from the player, which is exactly the distance their own radius may never close
+while you fight the boss. **Mirejaw needed its own `forceAggro` override** — it tracks aggro in a
+private `mode`, so the base call would set `state: chasing` while leaving it lurking (the documented
+trap). **New attack: the Gloamtide** — a full-height wall of mire crossing the WHOLE arena in 560ms
+behind a 1000ms telegraph, with one 172px gap. It is the only attack anchored on the ROOM rather than
+the boss, so spacing against the Miretyrant does nothing; direction and gap lock at telegraph start,
+and the gap is placed away from where the player stood, so the safe spot is never where they already
+are. New phase gate at 82% introduces it (pool now 3 -> 4 -> 5 attacks). HP 3600 -> 4200 only — an
+earlier pass had cut 4600 -> 3600 as a marathon, so length comes from new content first. Dodge audit
+passed with no changes: all five attacks demand a dodge, the Death Roll being the designated
+outrunnable one.
+
+**Elite readability.** the user: Hexlings and Sandmaws were indistinguishable from their elites.
+Measured the cause — the elite recolour is a HUE shift, and **Sandmaw's elite was literally the same
+hue as its base (14 deg -> 14 deg)**, Hexling 8 deg, Duskrunner 7 deg, against Mirejaw's 96 deg. A hue
+shift cannot say "elite" on a creature that is already red. Fixed with a **gold rim light** on the
+silhouette — hue-independent, derived from the base's own pixels (so it works on animation strips and
+any future creature for free) and keeping the roster convention that every elite looks the same kind
+of different. Base-vs-elite distance: Sandmaw 57 -> 77, Hexling 55 -> 99, Duskrunner 59 -> 118.
+
+**Art.** Ember Brand and Gloam Brand are staffs now (his objection was conceptual — a magic weapon
+should not look like a sword — so leaving the higher tier as the odd sword out would have read as an
+oversight). Embersteel Pike regenerated as an ornate ember/gold polearm. **Embersteel bow got its own
+arrow**: projectile textures were already per-weapon data, it just shared the plain steel one. Worth
+remembering — I first built it procedurally on the strength of a STATUS note saying projectiles are
+deliberately placeholder, but **that note is about the tiny 6x6 ones; arrows have real art** in
+`art/sprites/world/`, so the 20x8 stub rendered as a block beside a 96x9 arrow. Caught by looking,
+not by reasoning. Held tools also carry head-down now: the pickaxe icon was rotated 90 CW on disk (so
+hotbar/inventory/hand all move together) with `ItemDef.heldTiltMirrored` negating the tilt to keep
+the ~45-degree pose. New `art/tools/mirror.mjs` + `rotate.mjs`.
+
+**NOT shipped — the Active Effects column.** Built it, then measured: the column header sits at
+y=640 with **190px to the panel bottom**, the weapon block alone needs ~200, and a unified list with
+8 relic channels ran to y=1720 — 46 objects off the panel and off the screen. Reverted rather than
+ship that. Note `STATS_H = 150` is already fiction: today's Combat block ends at 860 against an 830
+panel bottom. The unified list needs the wide tab area, which is the user's call.
+
+`RECIPES.md` + dashboard (Enemies tab, Miretyrant) updated.
+
 ### Perf pass: the frame was 5ms of static ground decals (2026-07-25, Opus)
 
 Ran a real profile instead of guessing, and the answer was nothing I expected. Frame time at the
@@ -362,154 +486,3 @@ little hitchy while running around at 100 run skill". That was real and worth ke
 3.4 -> 1.9ms at p95), though it is now a rounding error next to the decal fix. Its own floor is
 documented in the class: the rebuild must outrun the player or `update()` falls back to a full
 synchronous rebuild.
-
-### Ground follow-ups: projectile art, picked states, and the attack-FX split (2026-07-25, Opus)
-
-Three playtest notes off the ground pass, plus the start of the attack-FX phase.
-
-**Gremlin projectiles had no art** — literally: `gremlin_rock` was a plain grey 6x6 `fillRect`.
-It, the slingshot pellet, the Duneshaper's gloam bolt and the Hexling's physical side-bolt now
-have real art. Real art is still pinned back to the placeholder footprint but no longer all the
-way: 6px was hard to pick out even against flat ground and could vanish outright into the
-texture that just landed, so art draws at **1.8x** the old footprint while the **collision body
-stays pinned exactly** (`Projectile.PROJECTILE_ART_SCALE`). Two gotchas worth keeping: Arcade's
-`setSize` takes UNSCALED units, so the sprite scale has to be divided back out or the body
-silently shrinks (it came out 3x3 instead of 6x6 first try); and the integer-scale rule that
-governs icons does not apply here, because every projectile is drawn rotated to its travel angle
-and is already off the pixel grid.
-
-**The picked states had no rule behind them.** the user: "the picked mushroom art makes no sense
-— think about how you pick stuff in real life." `gloamcap_picked` was a single LARGER purple
-mushroom, so picking a cluster grew one. The rule, now in `art/README.md`: take a PART off a
-plant (berries, fruit, a bloom) and the plant stays minus what you took; take the WHOLE plant (a
-mushroom, a mat of moss) and nothing is left growing — and since these nodes regrow, what remains
-is a ground disturbance rather than a plant. Gloamcap is now snapped stems in disturbed soil;
-dustbloom is its leaves without the flower instead of the dead twig it had. Also learned:
-**negative prompts don't work** — "a shrub with no flower on it" came back with a flower;
-describing only what should be present did not.
-
-**Attack FX — the indicator/attack split, which is structural rather than per-boss.** the user,
-mid-pass: *"I want it to be clear what is the attack indicator vs the actual attack sprite —
-they can't look the same."* He was right that art alone would have made it worse: the
-Cinderwrought's cone telegraph and its cone impact were the same wedge in the same orange, one
-brighter. `src/systems/depth.ts` now owns the rule — **`TELEGRAPH_DEPTH`** (flat on the ground,
-UNDER every entity, outline-led, translucent, never textured) and **`ATTACK_FX_DEPTH`** (a real
-art sprite ABOVE the entities, opaque, short-lived). "Under your feet = it hasn't happened yet;
-over your head = it's happening." Applied in one pass to every telegraph in the game
-(`Enemy.drawArea*` plus the six bespoke boss/enemy graphics), so the whole roster reads
-consistently rather than one boss at a time.
-
-Two impact sprites are wired as the exemplars: the **Gloamwarden's crystal eruption** and the
-**Gremlin King's smash**, both scaled with `scaleToLongest` against the radius `checkPlayerHit`
-actually uses, so what you see is what hits, and both torn down on the DESPAWN path as well as
-death (the bug that stranded HP bars).
-
-**Perf, same session: "a little hitchy while running around at 100 run skill"** (the user). Not a
-stall — the frame budget being tipped over the line. Measured while sprinting at the Running-100
-ceiling (~264px/s): the game was already spending ~11.8ms of its 16.7ms, and a chunk-rebuild
-slice cost ~3.4ms at p95, pushing the 95th-percentile frame to **16.1ms** with occasional 30ms
-frames. Rebuilds happen most often exactly when you're running, which is why it showed up there.
-Fixed by thinning the slices (`ROWS_PER_FRAME` 8 -> 5): p95 **16.1 -> 15.1ms**, worst frame
-**30.4 -> 20.2ms**, chunk slice **3.4 -> 1.9ms**. The floor on thinness is that the rebuild must
-OUTRUN the player — a build starts 288px from the old chunk's centre and the old chunk stops
-covering the camera at 452px, so there is ~620ms at full sprint to finish, and a 29-frame build
-(~365ms) fits with room. Verified over 12s of diagonal sprinting: **zero** falls back to the
-synchronous path. Worth knowing for later: most of the frame is the game itself, not the ground
-layer, which now adds ~1.4ms at p95.
-
-**Bug, same session: a mini-boss health bar stayed pinned to the top of the screen after you ran
-away** (the user). Every boss leashes on how far IT has travelled from ITS OWN spawn, which never
-trips for one that can't close the distance — a crypt warden held back by a wall, or any boss you
-simply walked away from and left standing at home. Reproduced at 4243px with the warden still
-reporting aggro. Fixed as a DISPLAY concern rather than by touching five AI state machines: the
-bar now also requires the boss within `BOSS_BAR_MAX_DIST` (1000px, comfortably past the ~735px
-visible corner so it can't flicker at the screen edge). One gate covers big bosses and
-mini-bosses alike, the aggro state is untouched, and walking back brings the bar straight back.
-
-**Not done, deliberately:** the Cinderwrought's cinder cone stays procedural. `create_map_object`
-resists top-down fire — a "top-down fan of fire" returns a side-on campfire, a "triangular wedge
-of flame from above" returns a flat triangle, and the one generation that did produce real flame
-tongues came with a torch handle attached. Its flickering two-wedge fire already differs from its
-own telegraph, and it now differs by depth too, so it is not urgent. Remaining in this phase: the
-cone, the Duneshaper/Hexling impacts (moved above the entities but still procedural), and the
-8 ability cast FX families, which all still tint the same `light_soft` gradient.
-
-### Ground texturing + biome blending (2026-07-25, Opus)
-
-The last non-reversible piece of the art migration, and the one the user deliberately queued
-last: the ground is *generated*, not a sprite, so the override layer can't reach it.
-
-**The constraint that shaped everything.** The ground has always been a per-pixel COLOUR
-field — `worldBiomeColorAt` composites base + biome blobs + features into one number. That
-gives correct, smoothly-blended colour at any world size but can never carry pixel-art
-detail: outside the forest it is baked into 4096 texels stretched over a 28000px world,
-about 7 world px per texel, and a world-sized TileSprite is ~3GB (it OOMed once already).
-So the plan's two candidate routes were "replace the bake with tile stamping" or "keep the
-colour and overlay a texture", and the second is what shipped — but as a **moving chunk of
-real 32px tiles at 1:1**, not a flat detail wash.
-
-**`src/ui/GroundDetailUI.ts`** keeps a 2304px chunk of stamped tiles around the player
-(double-buffered, snapped to a 576px grid, ~21,000 stamps rebuilt over 9 frames at ~2.5ms
-each). Cost is constant at any world size, which is the same reason the camera-locked
-`ground_speckle` layer it replaces existed. It is **purely additive**: tiles draw
-semi-transparently over the colour field, so every biome boundary, POI floor stamp, minimap
-colour and map reveal still reads the exact same source. It also means one clay tile serves
-the whole badlands palette instead of needing a tile per colour.
-
-**`src/systems/ground.ts`** (Phaser-free) owns the material vocabulary — 10 materials, their
-variant counts, per-material opacity and placeholder colours — and **`WorldBiomes.worldGroundMaterialAt`**
-answers which one covers a point, built from the same fields in the same priority order as
-the colour so texture and colour can never disagree about where a creek or a mesa is.
-Placeholder tiles are still generated in BootScene, so the layer works with no art at all.
-
-**Three things the user's live feedback changed mid-build:**
-
-1. **"The woods river doesn't look like a river."** Correct — the "shallow creek water over
-   pebbles" prompt had come back as bare grey gravel with no water in it at all. Re-rolled
-   with an explicit ripples/caustics/flowing prompt and took the blue-water candidates,
-   toned 0.82.
-2. **"Some of the blending between areas isn't great."** Colour blends across a seam and a
-   tile can't — a cell is one material or the other, and a smooth curve cut that way is a
-   staircase. Fixed with **two probes per cell**: a jittered primary (so the edge dithers
-   into an interlocking band rather than running along cell lines) and a far-flung secondary
-   that reaches across the seam and lays the neighbour on at half strength. One mechanism
-   softens every boundary in the world — blob borders, creek banks, mesa edges — with no
-   per-boundary code.
-3. **"Can't the tiles be smaller, to give easier blending of curved lines?"** Yes, without
-   halving the ground's pixel resolution against every other sprite: the art stays 32px and
-   is carved into quadrant frames (`src/art/groundFrames.ts`), stamped on a **16px** grid.
-   A cell keeps the quadrant and variant its 32px block would have used, so four cells of
-   one material reassemble that tile pixel-for-pixel — only the material *decision* gets
-   finer, which is exactly where the resolution was wanted.
-
-**Two new art tools, both from bugs this pass hit.**
-`check-seam.mjs` scores how well a tile actually TILES, by comparing its wrap edges to its
-own interior steps. That caught `ground_grass_1` at **x10.8** — a hard horizontal line every
-32px across the whole forest that looked perfect in a viewer. Roughly a third of every
-tiles-pro batch fails it. `seamless.mjs` then *repairs* a marginal wrap instead of re-rolling
-for one: it measures the edge difference, halves it, and fades that correction inward, so
-the texture's own detail is untouched and only the low-frequency drift that IS the seam goes
-away. Repaired tiles score x0.00. Without it the bayou would have been stuck with its
-third-choice mud, since only one muck candidate in 32 wrapped cleanly.
-
-**One regression caught in verification:** the War Camp's packed-dirt floor and the Gloaming
-Vein's blighted floor are stamped into the colour bake, so the new layer painted grass
-texture straight back over them and the camp stopped reading as a cleared campground. The
-layer now takes a **material callback** rather than the `WorldBiomes` instance — POI floors
-are the scene's knowledge, not the world map's, so `MainScene.groundMaterialAt` composes the
-two. (The badlands POI decals needed nothing: those are real decal objects at depth -7,
-above this layer.)
-
-**Verified live** (`preview_eval` + screenshots): quadrant frames registered on real art;
-sprinting 300 frames never leaves the chunk uncovered; a cross-world teleport rebuilds in
-the SAME frame (a blink stays on the cheap path, so the two are distinguished by whether
-the chunk still covers the camera, not by distance); a crypt entry is outside the world
-circle so the layer correctly draws nothing underground; camp/vein floors resolve to their
-own materials with the surrounding forest unaffected. `tsc` clean, no console errors.
-
-**Removed:** the `ground_speckle` layer and texture, plus the `syncCameras` special case it
-needed. Its own comment said it existed because the outer world had no detail — keeping it
-would only have put a second 32px grain pattern over the first.
-
-**Not done, deliberately:** the tiles are static, so water does not animate. Ground
-animation belongs with the ambient-prop animation pass, not here.

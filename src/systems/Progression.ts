@@ -41,7 +41,7 @@ const STAT_DESCRIPTIONS: Record<StatType, string> = {
   endurance: "+3 max Stamina & +1.5% stamina regen per point",
   vitality: "+4 max HP & +1% healing received per point",
   strength: "+0.015x crit damage per point (all weapons)",
-  agility: "+0.45% crit chance per point (all weapons)",
+  agility: "+0.3% crit chance per point (all weapons)",
   intelligence: "+1% skill XP gain per point",
   wisdom: "+2% buff/food duration & -0.5% ability cooldown per point",
 };
@@ -144,7 +144,15 @@ const VITALITY_HEALING_PCT_PER_POINT = 0.01; // +1% -> +100% at the cap
 // 1.5x base weapon (earlier on a 1.8x pike or with a crit-damage relic, which is
 // why MainScene's live critCapped check — not this constant — gates allocation).
 const STRENGTH_CRIT_MULT_PER_POINT = 0.015;
-const AGILITY_CRIT_CHANCE_PER_POINT = 0.0045; // +0.45% -> saturates 60% cap near the point cap
+// 0.0045 -> 0.003 (2026-07-26). At 0.45%/point a HIGH-POTENCY class saturated the
+// 60% cap at roughly HALF the point cap: the user's x1.5-Agility Vagabond finished a
+// run at 59% of 60 with 50 points spent, i.e. ~52 points was the whole stat, leaving
+// him effectively five stats instead of six. Per the standing rule the ceiling is NOT
+// raised (damage is already high) — the rate is slowed so the cap arrives near the
+// point cap instead of far short of it. At x1.5 potency with a Mythic crit relic that
+// now lands around point 87; at neutral potency with no relic it never caps at all,
+// which is the intended "still growing at point 99".
+const AGILITY_CRIT_CHANCE_PER_POINT = 0.003;
 const INT_XP_PCT_PER_POINT = 0.01; // +1% -> +100% at the cap, closing the XP loop
 const WISDOM_BUFF_DURATION_PCT_PER_POINT = 0.02; // +2% buff/food duration
 // Wisdom's SECOND axis. Buff duration alone was invisible in play (the user, at 55
@@ -261,6 +269,17 @@ export class PlayerProgression {
   // Strength's additive crit-multiplier contribution (e.g. 0.4 = +0.4x).
   critMultBonus(): number {
     return this.stats.strength * STRENGTH_CRIT_MULT_PER_POINT * this.potency("strength");
+  }
+
+  // What ONE more point on each crit axis would actually add, potency included.
+  // Exposed so the Stats tab can turn remaining cap headroom into "~N points
+  // left" rather than only announcing the axis once it's already dead — the
+  // constants stay private here, which is why this isn't computed at the UI.
+  critChancePerPoint(): number {
+    return AGILITY_CRIT_CHANCE_PER_POINT * this.potency("agility");
+  }
+  critMultPerPoint(): number {
+    return STRENGTH_CRIT_MULT_PER_POINT * this.potency("strength");
   }
   // Vitality amplifies ALL healing received (food/Comfort/kill-heal) — NOT
   // passive regen (there is none). Multiplier, e.g. 1.15 at 10 Vitality.

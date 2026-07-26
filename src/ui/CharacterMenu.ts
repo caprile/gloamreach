@@ -38,7 +38,13 @@ export interface CharacterMenuDeps {
   // True when `stat`'s only axis is already saturated against the live build, so
   // further points are dead. Owned by the scene (needs weapon/relic context).
   axisSaturated?: (stat: StatType) => boolean;
+  // How much room is left on `stat`'s capped axis, and what's using it up.
+  // axisSaturated is a cliff — it only fires once the axis is already dead. This
+  // is the approach to that cliff, so a player can see a relic eating their crit
+  // budget before they spend into it. Null for stats with no build-dependent cap.
+  axisHeadroom?: (stat: StatType) => { summary: string; sources: string } | null;
 }
+
 
 const PANEL_W = 460;
 const PANEL_H = 520;
@@ -386,7 +392,31 @@ export class CharacterMenu {
         : stat === "wisdom" && p.wisdomAbilityCdrCapped()
           ? "  (cooldown maxed)"
           : "";
-    this.text(x0, y + 31, `Now: ${statTotalEffect(stat, p)}${note}`, 11, "#e3b25a");
+    const nowLine = this.text(x0, y + 31, `Now: ${statTotalEffect(stat, p)}${note}`, 11, "#e3b25a");
+
+    // Approach-to-the-cap readout, appended to the same line rather than given
+    // its own — the stat rows are on a fixed 52px pitch with three lines already,
+    // and a fourth would need the whole panel to grow. Only Strength/Agility
+    // return anything (see MainScene.statAxisHeadroom); suppressed once the row
+    // already says MAXED/CAPPED, which is the stronger statement.
+    const headroom = !atCap && !axisDead ? (this.deps.axisHeadroom?.(stat) ?? null) : null;
+    if (headroom) {
+      const tail = this.text(x0 + nowLine.width + 8, y + 31, headroom.summary, 11, "#9aa4b5");
+      // The per-source breakdown answers "is a RELIC eating my crit budget?",
+      // which is the question that prompted all of this. On hover, via the same
+      // invisible hit-rect + shared tooltip the Skills tab rows use.
+      const hit = this.scene.add
+        .rectangle(tail.x, tail.y - 2, tail.width, tail.height + 4, 0x000000, 0)
+        .setOrigin(0, 0)
+        .setScrollFactor(0)
+        .setDepth(DEPTH_TEXT)
+        .setInteractive({ useHandCursor: false })
+        .on("pointerover", () => {
+          this.tooltip.setText(headroom.sources).setPosition(x0, y + 46).setVisible(true);
+        })
+        .on("pointerout", () => this.tooltip.setVisible(false));
+      this.rows.push(hit);
+    }
 
     // Allocation buttons, right-aligned: [ + ] and a batch [ +5 ] (a 100-point
     // stat is a lot of individual clicks). Both grey out and no-op together, and
