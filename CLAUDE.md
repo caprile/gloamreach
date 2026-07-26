@@ -2423,6 +2423,13 @@ interaction, verify in the live preview rather than just type-checking:
 - One milestone/feature per chat session — start a fresh session (this file auto-loads)
   rather than continuing a long thread, to keep context small and cheap.
 - Comments should explain *why*, not *what* — keep them light, per general code style.
+- **Never write the maintainer's first name into the repo.** This repo is public (it hosts
+  the playable build at `caprile.github.io/gloamreach`), and design decisions get attributed
+  in-repo by convention — plan files, `STATUS.md`, code comments, dashboard notes. Attribute
+  to **"the user"** instead ("locked with the user", "the user's call", "(the user)"), in
+  commit messages too. Getting this wrong once already cost a full `git-filter-repo` history
+  rewrite across 259 commits plus a force-push of every branch (2026-07-26). The GitHub
+  handle `caprile` and the noreply commit email are fine — those are already public.
 - No new npm dependencies without a clear reason; the placeholder-art approach means we
   don't need an asset pipeline yet.
 - **Keep `RECIPES.md` in sync.** Whenever `Recipes.ts`, `ArmorUpgrades.ts`,
