@@ -1,6 +1,6 @@
 import Phaser from "phaser";
 import type { IncomingDamageType } from "../systems/Weapons";
-import { artScale } from "../art/overrides";
+import { artScale, placeholderDims } from "../art/overrides";
 
 // Generic reusable projectile — first ranged-attack primitive in the game
 // (Gremlin's rock throw). Not Gremlin-specific: the Slingshot is expected to
@@ -61,6 +61,9 @@ export interface ProjectileHost {
 }
 
 export class Projectile extends Phaser.Physics.Arcade.Sprite {
+  // How much bigger than its placeholder footprint real projectile art is
+  // drawn. Visual only — the collision body stays pinned to the placeholder.
+  private static readonly PROJECTILE_ART_SCALE = 1.8;
   readonly damage: number;
   readonly sourceIsPlayer: boolean;
   readonly isCrit: boolean;
@@ -84,10 +87,24 @@ export class Projectile extends Phaser.Physics.Arcade.Sprite {
   constructor(scene: Phaser.Scene, cfg: ProjectileConfig) {
     super(scene, cfg.x, cfg.y, cfg.texture);
     // Projectiles are the smallest sprites in the game (a gremlin rock is 6x6)
-    // and PixelLab's canvas floor is 32px, so real art would arrive five times
-    // oversized and read as a boulder in flight. Also note rotationOffset
-    // below: replacement art must keep the placeholder's facing.
-    this.setScale(artScale(scene, cfg.texture));
+    // and PixelLab's canvas floor is 32px, so real art arrives five times
+    // oversized. It's pulled back to the placeholder's footprint — but not all
+    // the way: 6px was hard to pick out even against flat ground, and once the
+    // ground carried real texture an incoming rock could vanish into it. Art is
+    // drawn at PROJECTILE_ART_SCALE of the old footprint so the threat reads,
+    // while the COLLISION body stays pinned to the placeholder size below, so
+    // nothing about hit behaviour changes — the same footprint-pinning rule the
+    // creature roster follows, and a projectile that looks slightly bigger than
+    // it hits is forgiving rather than unfair.
+    //
+    // Integer scaling doesn't apply here the way it does to icons: every
+    // projectile is drawn rotated to its travel angle, so it is already
+    // resampled off the pixel grid.
+    //
+    // Note artAngleOffset below: replacement art must keep the placeholder's
+    // facing.
+    const pinned = artScale(scene, cfg.texture);
+    this.setScale(pinned === 1 ? 1 : pinned * Projectile.PROJECTILE_ART_SCALE);
     this.damage = cfg.damage;
     this.sourceIsPlayer = cfg.sourceIsPlayer;
     this.isCrit = cfg.isCrit ?? false;
@@ -104,6 +121,17 @@ export class Projectile extends Phaser.Physics.Arcade.Sprite {
     this.artAngleOffset = cfg.artAngleOffset ?? 0;
     scene.add.existing(this);
     scene.physics.add.existing(this);
+    // Pin the body to the placeholder footprint. The Arcade body is sized from
+    // the display size at creation, so without this the art-legibility scale
+    // above would silently widen every projectile's hitbox.
+    const was = placeholderDims(cfg.texture);
+    if (was) {
+      const body = this.body as Phaser.Physics.Arcade.Body;
+      // setSize takes UNSCALED units — Arcade multiplies by the sprite's scale —
+      // so dividing it back out is what makes the body land on the placeholder's
+      // real pixel size rather than a fraction of it.
+      body.setSize(was.w / this.scaleX, was.h / this.scaleY, true);
+    }
     this.setRotation(cfg.angle + (cfg.artAngleOffset ?? 0));
   }
 

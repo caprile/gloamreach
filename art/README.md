@@ -132,6 +132,27 @@ The world ground is its own system — see `src/systems/ground.ts` and
 - `*_picked` harvested-flora states and `*_shielded` node states are *state*
   variants — these do need art, but only a small delta from the base.
 
+### `_picked` states: depict what harvesting actually did (the user, 2026-07-25)
+
+There are two kinds of harvest and they must not look alike:
+
+- **You took a part off the plant** (berries, fruit, a bloom): the plant STAYS,
+  minus what you took, and may look a little shrivelled. `blackberry_bush`,
+  `sunfruit_cactus`, `water_lily` (flower off the pad), `emberbloom` and
+  `dustbloom` are all this kind.
+- **You took the whole plant** (a mushroom, a mat of moss): nothing is left
+  growing. Since these nodes are `persistent` and regrow, the picked state is a
+  small **ground disturbance** — soil, snapped stems, a bare patch — not a plant.
+  `gloamcap` and `swamp_moss` are this kind.
+
+The failure this rule exists to prevent: `gloamcap_picked` shipped as a single
+LARGER purple mushroom, so picking a cluster of mushrooms grew one. Ask what the
+player's hands just did before writing the prompt.
+
+Negative prompts do not work here. "a shrub with no flower on it" came back with
+a flower; describing only what should be present ("leaves and bare cut stalks")
+is what produces the missing-part state.
+
 **5. Creatures face RIGHT.** Facing is `flipX` at runtime; facing is visual only
 (attacks use distance math). See the enemy-art convention notes.
 
