@@ -37,4 +37,9 @@ export function ysortDepth(y: number): number {
 export const TELEGRAPH_DEPTH = -5;
 
 // Impact art. Above every world entity, below the fixed HUD (2600+).
-export const ATTACK_FX_DEPTH = 2500;
+//
+// 2560, not 2500: ysortDepth tops out at 2520 for an entity at the very bottom
+// of the 28000px world, so 2500 would have let one draw OVER the hit that just
+// landed on it — the exact confusion this whole split exists to prevent, just
+// rare enough to never show up in a playtest near the centre of the map.
+export const ATTACK_FX_DEPTH = 2560;

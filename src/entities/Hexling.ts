@@ -1,5 +1,6 @@
 import Phaser from "phaser";
-import { ATTACK_FX_DEPTH, TELEGRAPH_DEPTH } from "../systems/depth";
+import { TELEGRAPH_DEPTH } from "../systems/depth";
+import { burstFx } from "../art/attackFx";
 import { Enemy } from "./Enemy";
 import type { DamageType } from "../systems/Weapons";
 import type { ProjectileConfig, ProjectileHost } from "./Projectile";
@@ -247,13 +248,14 @@ export class Hexling extends Enemy {
       if (elapsed >= FLAME_TELEGRAPH_MS) {
         this.flameState = "impact";
         this.flameStartAt = now;
+        this.telegraphGfx.clear(); // the warning is done the instant the hit lands
+        this.spawnFlameFx();
       }
       return;
     }
     // impact — the detonation; checkPlayerHit (queried by the scene this frame)
     // deals the magic damage. After the brief window, blink away and go on
     // cooldown so a flame strike always ends with the mage repositioning.
-    this.drawFlameImpact();
     if (elapsed >= FLAME_IMPACT_MS) {
       this.flameState = "none";
       this.telegraphGfx.clear();
@@ -280,15 +282,12 @@ export class Hexling extends Enemy {
     }
   }
 
-  private drawFlameImpact(): void {
-    const g = this.telegraphGfx;
-    g.clear();
-    g.setDepth(ATTACK_FX_DEPTH);
+  // One detonation sprite per circle, fired once when the impact window opens.
+  // They outlive the 240ms hit window slightly so the burst is legible — the
+  // hazard is the telegraph's job, and it has already been cleared.
+  private spawnFlameFx(): void {
     for (const c of this.flameCircles) {
-      g.fillStyle(0xffd23a, 0.85);
-      g.fillCircle(c.x, c.y, FLAME_RADIUS * 0.55);
-      g.fillStyle(0xff5a1e, 0.5);
-      g.fillCircle(c.x, c.y, FLAME_RADIUS);
+      burstFx(this.scene, "fx_flame_burst", c.x, c.y, FLAME_RADIUS, FLAME_IMPACT_MS + 200);
     }
   }
 

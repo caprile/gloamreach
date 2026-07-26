@@ -1,5 +1,6 @@
 import Phaser from "phaser";
-import { ATTACK_FX_DEPTH, TELEGRAPH_DEPTH } from "../systems/depth";
+import { TELEGRAPH_DEPTH } from "../systems/depth";
+import { burstFx, coneFx } from "../art/attackFx";
 import { Enemy } from "./Enemy";
 import type { DamageType } from "../systems/Weapons";
 import type { ProjectileConfig, ProjectileHost } from "./Projectile";
@@ -175,6 +176,7 @@ export class Duneshaper extends Enemy {
   private attackAngle = 0;
   // AoE circle sets for spikes / barrage — locked at telegraph start.
   private zoneCircles: { x: number; y: number }[] = [];
+  private lanceFx?: Phaser.GameObjects.Image;
   // Nova detonates around the boss's post-blink position.
   private hasHitThisAttack = false;
 
@@ -445,16 +447,23 @@ export class Duneshaper extends Enemy {
         this.currentStateDurationMs = BARRAGE_IMPACT_MS;
         break;
     }
+    this.spawnExecuteFx();
   }
 
   private updateExecuting(now: number): void {
-    this.drawExecute(now);
+    // The lance is the one attack whose heading keeps moving after it fires, so
+    // it's also the one whose sprite has to be steered — everything else was
+    // spawned whole at beginExecute. `active` guards the frame after the tween
+    // has already destroyed it.
+    if (this.lanceFx?.active) this.lanceFx.setRotation(this.lanceAngleAt(now));
     if (now >= this.stateEnteredAt + this.currentStateDurationMs) this.beginRecover(now);
   }
 
   private beginRecover(now: number): void {
     this.tyrantState = "recovering";
     this.stateEnteredAt = now;
+    this.lanceFx = undefined; // its own tween destroys it; don't hold a dead ref
+
     this.currentStateDurationMs = recoverMsFor(this.currentAttack!) * (this.enraged ? ENRAGE_RECOVER_MULTIPLIER : 1);
     (this.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0);
     this.telegraphGfx.clear();
@@ -573,32 +582,40 @@ export class Duneshaper extends Enemy {
     }
   }
 
-  private drawExecute(now: number): void {
-    const g = this.telegraphGfx;
-    g.clear();
-    g.setDepth(ATTACK_FX_DEPTH);
-    const frac = Phaser.Math.Clamp((now - this.stateEnteredAt) / Math.max(1, this.currentStateDurationMs), 0, 1);
-    if (this.currentAttack === "lance") {
-      const flick = 0.85 + 0.15 * Math.sin(frac * Math.PI * 6);
-      const a = this.lanceAngleAt(now);
-      this.fillWedge(g, a, LANCE_HALF_ANGLE, LANCE_RANGE, 0xb060ff, 0.5 * flick);
-      this.fillWedge(g, a, LANCE_HALF_ANGLE * 0.5, LANCE_RANGE, 0xffe0ff, 0.6 * flick);
-    } else if (this.currentAttack === "spikes" || this.currentAttack === "barrage") {
-      const magic = this.currentAttack === "barrage";
-      const r0 = magic ? BARRAGE_CIRCLE_RADIUS : SPIKES_RADIUS;
-      const a = 0.8 * (1 - frac);
-      for (const c of this.zoneCircles) {
-        g.fillStyle(magic ? 0xff7a3a : 0xd8a860, a);
-        g.fillCircle(c.x, c.y, r0);
-        g.fillStyle(magic ? 0xffe08a : 0xf0d090, a * 0.8);
-        g.fillCircle(c.x, c.y, r0 * 0.55);
-      }
-    } else if (this.currentAttack === "nova") {
-      const a = 0.7 * (1 - frac);
-      g.fillStyle(0x9a5ee8, a);
-      g.fillCircle(this.x, this.y, NOVA_RADIUS);
-      g.fillStyle(0xe0c0ff, a * 0.8);
-      g.fillCircle(this.x, this.y, NOVA_RADIUS * 0.6);
+  // Each attack's own impact art, fired once at execute. The kit's split between
+  // PHYSICAL sand spikes and MAGIC everything-else is carried by the art too —
+  // stone shards vs violet/fire bursts — so the type that decides whether armor
+  // helps is readable in the moment, not just in the damage number.
+  private spawnExecuteFx(): void {
+    switch (this.currentAttack) {
+      case "spikes":
+        for (const c of this.zoneCircles) {
+          burstFx(this.scene, "fx_sand_spikes", c.x, c.y, SPIKES_RADIUS, SPIKES_IMPACT_MS + 200);
+        }
+        break;
+      case "barrage":
+        for (const c of this.zoneCircles) {
+          burstFx(this.scene, "fx_flame_burst", c.x, c.y, BARRAGE_CIRCLE_RADIUS, BARRAGE_IMPACT_MS + 200);
+        }
+        break;
+      case "nova":
+        burstFx(this.scene, "fx_gloam_nova", this.x, this.y, NOVA_RADIUS, NOVA_IMPACT_MS + 240);
+        break;
+      case "lance":
+        // Kept in a field: the beam sweeps ±20° while it fires, so this one has
+        // to be re-aimed each frame (updateExecuting). The tween still owns its
+        // lifetime, so a death mid-lance can't strand it.
+        this.lanceFx = coneFx(
+          this.scene,
+          "fx_gloam_lance",
+          this.x,
+          this.y,
+          this.attackAngle,
+          LANCE_RANGE,
+          LANCE_HALF_ANGLE,
+          LANCE_IMPACT_MS,
+        );
+        break;
     }
   }
 

@@ -1,5 +1,6 @@
 import Phaser from "phaser";
-import { ATTACK_FX_DEPTH, TELEGRAPH_DEPTH } from "../systems/depth";
+import { TELEGRAPH_DEPTH } from "../systems/depth";
+import { coneFx } from "../art/attackFx";
 import { Enemy } from "./Enemy";
 import type { IncomingDamageType } from "../systems/Weapons";
 import { enemyStat } from "../systems/enemyStats";
@@ -256,10 +257,10 @@ export class Cinderwrought extends Enemy {
     this.attackAngle = Phaser.Math.Angle.Between(this.x, this.y, playerX, playerY);
     this.faceAngle(this.attackAngle);
     this.currentStateDurationMs = this.currentAttack === "cone" ? CONE_IMPACT_MS : HAMMER_IMPACT_MS;
+    this.spawnExecuteFx();
   }
 
   private updateExecuting(now: number): void {
-    this.drawExecute(now);
     if (now >= this.stateEnteredAt + this.currentStateDurationMs) this.beginRecover(now);
   }
 
@@ -334,24 +335,26 @@ export class Cinderwrought extends Enemy {
     }
   }
 
-  // The execute-phase visual: a bright burst of the attack's shape at full reach,
-  // in the LOCKED direction.
-  private drawExecute(now: number): void {
-    const g = this.telegraphGfx;
-    g.clear();
-    g.setDepth(ATTACK_FX_DEPTH);
-    const frac = Phaser.Math.Clamp((now - this.stateEnteredAt) / Math.max(1, this.currentStateDurationMs), 0, 1);
+  // The execute-phase visual: one art sprite of the attack's shape at full
+  // reach, in the LOCKED direction. Fire-and-forget — the direction can't change
+  // once execute begins, so nothing needs to track the boss, and the sprite
+  // survives its own death/despawn to finish rather than being stranded by it.
+  private spawnExecuteFx(): void {
     if (this.currentAttack === "cone") {
-      // A rolling flame cone: two stacked wedges (outer glow + hot core) that
-      // flicker over the impact window.
-      const flick = 0.85 + 0.15 * Math.sin(frac * Math.PI * 6);
-      this.fillWedge(g, this.attackAngle, CONE_HALF_ANGLE, CONE_RANGE, 0xff6a1a, 0.5 * flick);
-      this.fillWedge(g, this.attackAngle, CONE_HALF_ANGLE * 0.6, CONE_RANGE * 0.9, 0xffd060, 0.55 * flick);
+      coneFx(this.scene, "fx_fire_cone", this.x, this.y, this.attackAngle, CONE_RANGE, CONE_HALF_ANGLE, CONE_IMPACT_MS);
     } else {
-      // Hammer impact: the front wedge flashes bright then fades over the beat.
-      const a = 0.75 * (1 - frac);
-      this.fillWedge(g, this.attackAngle, HAMMER_HALF_ARC, HAMMER_RANGE, 0xffb050, a);
-      this.fillWedge(g, this.attackAngle, HAMMER_HALF_ARC * 0.7, HAMMER_RANGE, 0xfff0c0, a * 0.8);
+      coneFx(
+        this.scene,
+        "fx_hammer_arc",
+        this.x,
+        this.y,
+        this.attackAngle,
+        HAMMER_RANGE,
+        HAMMER_HALF_ARC,
+        // The strike window is a 150ms beat, too short to see the crush land —
+        // the art outlives the hitbox on purpose.
+        HAMMER_IMPACT_MS + 220,
+      );
     }
   }
 

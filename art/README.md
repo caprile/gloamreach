@@ -39,9 +39,24 @@ decals deliberately skip trimming, which is how the signal was lost.
 
 So `art/tools/check-alpha.mjs` makes it explicit, and `fetch-raw.sh` runs it on
 every download. Four solid corners is expected for a **tile** and a bug for
-anything else. Fix it with `adjust.mjs --feather 0.5` (a deterministic radial
-alpha falloff) rather than re-rolling and hoping — and a soft edge is what a
-ground decal wants regardless, since a hard-edged blob reads as a sticker.
+anything else. This is not rare — 3 of the 8 attack-FX generations came back
+opaque too, and the viewer made every one of them look fine.
+
+There are two repairs, and which one is right depends on the SHAPE:
+
+- **`adjust.mjs --feather 0.5`** fades alpha with *radius*. Right for a round
+  ground stain (a soft edge is what a decal wants anyway — a hard-edged blob
+  reads as a sticker), wrong for anything that isn't a disc.
+- **`dekey.mjs [--tol N]`** removes a flat background by *colour*, flood-filling
+  inward from the corners. Right for a crescent, a beam, a wedge — art whose own
+  body sits out at large radius and would be eaten by a feather.
+
+Two things `dekey` learned the hard way. It floods from the edges rather than
+matching globally, because a global key dissolved a crescent's dark stone bands
+(they happened to sit within tolerance of the grey fill). And **tolerance is
+per-image**: measure the actual palette before guessing. A grey background at
+rgb(72,72,72) sat only ~22 away from the art's own darkest band, so `--tol 40`
+leaked straight through it and `--tol 14` was correct.
 
 **3. Don't pre-scale.** `pixelArt: true` and the camera's `WORLD_ZOOM` (1.5)
 handle magnification. Author at native size.
@@ -151,15 +166,50 @@ So the split is STRUCTURAL, roster-wide, and lives in `src/systems/depth.ts`:
 "Under your feet = it hasn't happened yet; over your head = it's happening"
 is learnable in one fight and holds for every enemy and boss.
 
-Two things to keep doing when adding one: the attack sprite is scaled with
-`scaleToLongest` against the radius `checkPlayerHit` actually uses, so what you
-see is what hits; and it must be destroyed on the DESPAWN path as well as death,
-or a culled enemy strands its effect in the world forever.
+Both spawners live in `src/art/attackFx.ts` and cover the whole roster, because
+every area attack in the game is one of two shapes:
 
-Prompting note: `create_map_object` resists top-down fire. "A top-down fan of
-fire" returns a side-on campfire and "a triangular wedge of flame from above"
-returns a flat triangle. Describing the parts ("many separate licking flame
-tongues and embers, fanning out wide") is what finally produced fire.
+- **`burstFx`** — a radial impact centred on a point (slam, nova, eruption,
+  flame circle). Sized so the art's edge IS the damage radius. It takes an
+  `overshoot` for art whose rim is wispy spray, but that defaults to **1:1 on
+  purpose**: a burst drawn wider than it hits teaches the wrong radius, and the
+  player pays for that on the next dodge.
+- **`coneFx`** — a directional fan reaching along a locked heading (cone,
+  hammer arc, beam, tail sweep). Art is authored **apex-left, pointing +x**; the
+  origin is pinned there and `rotation` aims it. Width and height are set
+  independently, since a wedge's footprint is range x chord and no single
+  generated canvas aspect matches every attack.
+
+Both are **fire-and-forget**: the sprite is not parented to the enemy and its own
+tween destroys it, so an enemy that dies or is culled mid-attack cannot strand
+it. That is the failure the older held-sprite versions in `Gloamwarden` and
+`GremlinKing` need explicit teardown for — prefer these unless the effect must
+track something that keeps moving (the Duneshaper's lance sweeps while it fires,
+so it is the one exception).
+
+Two sprites deliberately have more than one consumer: `fx_flame_burst` plays for
+the Hexling's flame strike and the Duneshaper's sunscorch barrage, and
+`fx_sand_spikes` for the Sandmaw's eruption and the Duneshaper's sand spikes.
+Two attacks that look like the same event *should* share art; what stays
+per-attack is the footprint, and that comes from the caller's own radius.
+`fx_mire_splash` goes further and is **tinted crimson** for the Sanguinarch's
+blood slam — one impact shape, two very different rooms.
+
+Prompting note: `create_map_object` refuses to draw a **top-down cone of fire**,
+and has now failed five distinct ways — "spraying fan from a narrow point" adds a
+**torch handle**; "triangular sheet" returns a triangle **tiled with identical
+droplets**; the word **"fan"** returns a literal folding hand fan; "spreading
+wide from a point" returns a **sunrise poster** with rays; and "dragon's fire
+breath" returns a **flaming dragon head on a stick**. Composing the cone offline
+from the (good) top-down flame burst also fails — the burst's spiky ring is too
+distinctive to tile, so it reads as a cluster of little suns.
+
+So `fx_fire_cone` is the one FX key with **no real art**, and its BootScene
+fallback is what ships: a scalloped wedge whose leading edge is cut into flame
+tongues. Everything is wired through the normal key, so dropping a
+`fx_fire_cone.png` in later needs no code change. Radial top-down fire is fine —
+`fx_flame_burst` came out well first try; it is specifically the *directional*
+cone the generator won't do.
 
 ### `_picked` states: depict what harvesting actually did (the user, 2026-07-25)
 

@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import { Enemy } from "./Enemy";
+import { burstFx } from "../art/attackFx";
 import type { IncomingDamageType } from "../systems/Weapons";
 import { enemyStat } from "../systems/enemyStats";
 
@@ -290,6 +291,10 @@ export class Sanguinarch extends Enemy {
       } else if (this.attackPhase === "strike") {
         if (!this.slamHit) {
           this.slamHit = true;
+          // Gore, not muck: the splash art is shared with the Miretyrant's slam
+          // and recoloured here, which is what burstFx's tint hook is for — one
+          // impact shape, two very different rooms.
+          burstFx(this.scene, "fx_mire_splash", this.x, this.y, SLAM_RADIUS, SLAM_STRIKE_MS + 240, { tint: 0xff4a6a });
           if (Phaser.Math.Distance.Between(this.x, this.y, playerX, playerY) <= SLAM_RADIUS) {
             this.pendingHit = { damage: SLAM_DAMAGE, knockback: SLAM_KNOCKBACK };
           }

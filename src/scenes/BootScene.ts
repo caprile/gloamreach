@@ -84,6 +84,65 @@ export class BootScene extends Phaser.Scene {
     g.lineStyle(6, 0xfff0c0, 0.8);
     g.strokeCircle(75, 75, 68);
     g.generateTexture("fx_slam_impact", 150, 150);
+
+    // Radial bursts. Each is one shared sprite with more than one consumer —
+    // the flame burst plays for the Hexling's flame strike AND the Duneshaper's
+    // sunscorch barrage, the sand spikes for the Sandmaw's eruption AND the
+    // Duneshaper's sand spikes. Two attacks that look like the same event
+    // SHOULD share art; what must stay per-attack is the footprint, and that
+    // comes from the caller's own radius (see art/attackFx.ts).
+    this.radialBurst(g, "fx_flame_burst", [0xff5a1e, 0xffb03a, 0xffe9a8]);
+    this.radialBurst(g, "fx_sand_spikes", [0x8a6a45, 0xc9a24a, 0xe8d6a8]);
+    this.radialBurst(g, "fx_gloam_nova", [0x7a3ec8, 0xb060ff, 0xe6cbff]);
+    this.radialBurst(g, "fx_mire_splash", [0x3d5c40, 0x6ea884, 0xbfe6c8]);
+
+    // Directional fans. Authored apex-LEFT / pointing +x, because attackFx's
+    // coneFx pins the origin there and rotates to the attack's heading.
+    this.directionalFan(g, "fx_fire_cone", [0xff4a12, 0xff8a2a, 0xffe08a]);
+    this.directionalFan(g, "fx_hammer_arc", [0x6a4030, 0xff8a30, 0xffe0a0]);
+    this.directionalFan(g, "fx_mire_wave", [0x2f4a34, 0x6ea884, 0xbfe6c8]);
+    this.directionalFan(g, "fx_gloam_lance", [0x7a3ec8, 0xb060ff, 0xffe0ff]);
+  }
+
+  // Three concentric rings, darkest outside — enough to read as an impact at a
+  // glance while the real art is what actually ships.
+  private radialBurst(g: Phaser.GameObjects.Graphics, key: string, colors: number[]): void {
+    g.clear();
+    const c = 80;
+    colors.forEach((color, i) => {
+      g.fillStyle(color, 0.85 - i * 0.05);
+      g.fillCircle(c, c, 78 - i * 24);
+    });
+    g.generateTexture(key, 160, 160);
+  }
+
+  // A wedge filling the canvas from the left edge's midpoint, so the placeholder
+  // occupies the same box the real art's footprint is scaled into.
+  //
+  // The leading edge is scalloped into tongues rather than cut straight. This is
+  // not decoration: `fx_fire_cone` is the one FX key with no real art (the
+  // generator will not draw a top-down cone of fire — see art/README.md), so
+  // this IS the shipping cone, and a flat triangle reads as a UI shape rather
+  // than something burning.
+  private directionalFan(g: Phaser.GameObjects.Graphics, key: string, colors: number[]): void {
+    g.clear();
+    const w = 240;
+    const h = 320;
+    const steps = 15;
+    colors.forEach((color, i) => {
+      const shrink = 1 - i * 0.26;
+      g.fillStyle(color, 0.82 - i * 0.04);
+      g.beginPath();
+      g.moveTo(0, h / 2);
+      for (let s = 0; s <= steps; s++) {
+        const t = s / steps;
+        const tongue = s % 2 === 0 ? 1 : 0.84;
+        g.lineTo(w * tongue, h / 2 + (t - 0.5) * h * shrink);
+      }
+      g.closePath();
+      g.fillPath();
+    });
+    g.generateTexture(key, w, h);
   }
 
   // Fallback ground-material tiles (see src/systems/ground.ts). Real 32x32 pixel

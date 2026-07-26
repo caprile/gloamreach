@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import { ATTACK_FX_DEPTH, TELEGRAPH_DEPTH } from "../systems/depth";
 import { scaleToLongest } from "../art/overrides";
+import { burstFx } from "../art/attackFx";
 import { Enemy } from "./Enemy";
 import { enemyStat } from "../systems/enemyStats";
 
@@ -313,6 +314,10 @@ export class Gloamwarden extends Enemy {
           this.smashLanded = true;
           this.stateEnteredAt = now;
           this.currentStateDurationMs = SMASH_IMPACT_MS;
+          // The leap's landing had a telegraph but no hit — it read as the boss
+          // simply arriving somewhere. (GremlinKing's smash has had this since
+          // the split; this is the same event on the same radius.)
+          burstFx(this.scene, "fx_slam_impact", this.smashTargetX, this.smashTargetY, SMASH_RADIUS, SMASH_IMPACT_MS + 200);
         }
         return;
       }

@@ -2,18 +2,22 @@
 
 ## Current State
 
-_Living snapshot — edit in place, never append._ Last shipped: **the Vagabond-win playtest batch**
-(2026-07-26, Opus) — ~30 items across 4 batches off the user's 77:26 victory, plan + locked
-decisions in `.claude/plans/vagabond-win-playtest-batch.md`. Before it: the perf pass (static zone
-decals baked, frame 12.7 -> 5.0ms) and the ground-texturing phase.
+_Living snapshot — edit in place, never append._ Last shipped: **attack-FX art across the whole
+roster** (2026-07-26, Opus) — the first of the three items in the user's stated order. Ten attacks
+now show a real art sprite when they hit, via two shared spawners in `src/art/attackFx.ts`
+(`burstFx` / `coneFx`), plus two bosses that previously had a telegraph and then no visible hit at
+all. Before it: the Vagabond-win playtest batch (~30 items, plan in
+`.claude/plans/vagabond-win-playtest-batch.md`), the perf pass (12.7 -> 5.0ms frames) and the
+ground-texturing phase.
 
-**In progress / next.** One item from that batch is deliberately UNSHIPPED and needs the user's
-call: the **Active Effects column**. He locked "replace the Combat column", but the column has only
-**190px** below its header while a unified list runs to ~1720px — it has to move to the wide tab
-area instead. Note `STATS_H = 150` is already fiction; today's Combat block ends at 860 against an
-830 panel bottom, so that overflow predates this work. Also still open from his dump: the
-**attack-FX art phase** (Cinderwrought's cone, Gloamwarden's spikes, the Duneshaper's missing VFX),
-**on-theme inventory/crafting menu art**, and a **unique in-game cursor** — his stated order.
+**In progress / next.** Next in the user's stated order: **on-theme inventory/crafting menu art**
+(`create_ui_asset` for panel/slot frames, buttons, tabs), then a **unique in-game cursor**
+(`input.setDefaultCursor`, worth a hover/attack variant given the game is mouse-driven). One item
+from the Vagabond batch is still deliberately UNSHIPPED and needs the user's call: the **Active
+Effects column**. He locked "replace the Combat column", but the column has only **190px** below its
+header while a unified list runs to ~1720px — it has to move to the wide tab area instead. Note
+`STATS_H = 150` is already fiction; today's Combat block ends at 860 against an 830 panel bottom, so
+that overflow predates this work.
 
 **Three findings from that batch worth carrying forward.** (1) **Skills were mostly inert** — 4 of
 11 did anything for a real end-game build, and Light Armor had been capped since level 20 of 100;
@@ -65,14 +69,15 @@ the user's call on elites: the recolour is "good for now". Bespoke elite art is 
 pass, and since `eliteVariants.ts` skips any elite key that was itself overridden, dropping in a
 real `<name>_elite.png` simply wins.
 
-**Next, in the user's stated order:** (1) **AOE / attack FX art** — the Cinderwrought's cinder
-cone, the Gloamwarden's ground spikes and the rest of the telegraph footprints, all currently
-procedural `Graphics`; (2) **on-theme inventory and crafting menu art** (`create_ui_asset` for
-panel/slot frames, buttons, tabs); (3) a **unique in-game cursor** (`input.setDefaultCursor`,
-worth a hover/attack variant given the game is mouse-driven). Also
-still open from the user's earlier notes: a stouter/gobliny gremlin (the humanoid rig reads too
-human; custom proportions came out worse, so it needs a different approach) and the ~19 ambient
-props that need regenerating as objects to animate.
+**Attack-FX art is DONE** (item 1 of the user's order) — ten attacks plus two previously-invisible
+boss hits now spawn real art through `src/art/attackFx.ts`. The one exception is `fx_fire_cone`,
+which has no real art on purpose: the generator failed five distinct ways on a top-down cone of
+fire, so a scalloped generated wedge ships and a PNG can be dropped in later with no code change.
+**Next: (2) on-theme inventory and crafting menu art** (`create_ui_asset` for panel/slot frames,
+buttons, tabs); **(3) a unique in-game cursor** (`input.setDefaultCursor`, worth a hover/attack
+variant given the game is mouse-driven). Also still open from the user's earlier notes: a
+stouter/gobliny gremlin (the humanoid rig reads too human; custom proportions came out worse, so it
+needs a different approach) and the ~19 ambient props that need regenerating as objects to animate.
 
 **Still placeholder, deliberately:** the tiny 6×6 projectiles (`gremlin_rock`, `pellet_projectile`,
 `gloam_bolt` — a 32px generation downscaled to 6px is mush; the procedural dot is better). Ground
@@ -342,6 +347,64 @@ touches no combat numbers.
 
 > Older entries in STATUS-archive.md.
 
+### Attack-FX art: impacts across the whole roster (2026-07-26, Opus)
+
+The first of the three items in the user's stated order. The telegraph/attack depth split shipped
+last session with only two impacts wired to art (the Gremlin King's smash, the Gloamwarden's
+eruption); everything else still drew its *hit* as translucent `Graphics`. This finishes the pass.
+
+**`src/art/attackFx.ts` — two spawners cover the roster**, because every area attack in the game is
+one of two shapes: `burstFx` (radial impact centred on a point) and `coneFx` (directional fan along
+a locked heading, art authored apex-left/pointing +x). Both size the art against the radius or range
+`checkPlayerHit` actually uses, and both are **fire-and-forget** — the sprite isn't parented to the
+enemy and its own tween destroys it, so an enemy that dies or is culled mid-attack can't strand it.
+That is the exact failure the older held-sprite versions need explicit teardown for. The Duneshaper's
+lance is the one exception (it sweeps ±20° *while* it fires, so it's held in a field and re-aimed each
+frame — with an `active` guard, since its tween may already have destroyed it).
+
+**Ten attacks wired**, 8 new sprites: Cinderwrought **cone** + **hammer arc**; Duneshaper **nova**,
+**sand spikes**, **sunscorch barrage**, **gloamfire lance**; Hexling **flame strike** (3 circles);
+Sandmaw **eruption**; Miretyrant **slam** + **tail sweep**. Two more had a telegraph and then no
+visible hit at all, which read as the boss simply arriving somewhere — the **Gloamwarden's leaping
+smash** and the **Sanguinarch's slam** — both one line each now that the helpers exist.
+
+**Sprites are shared where the EVENT is the same, not where the enemy is.** `fx_flame_burst` plays
+for the Hexling's flame and the Duneshaper's barrage; `fx_sand_spikes` for the Sandmaw's eruption and
+the Duneshaper's spikes; `fx_mire_splash` is **tinted crimson** for the Sanguinarch's blood slam. What
+stays per-attack is the footprint, which comes from the caller's own radius.
+
+**Three corrections found by measuring rather than looking.** (1) `ATTACK_FX_DEPTH` was **2500**, but
+`ysortDepth` tops out at **2520** for an entity at the bottom of the 28000px world — so an entity
+could draw *over* the hit that just landed on it, which is the confusion the whole split exists to
+prevent. Now 2560 (still under the 2600 HUD floor). (2) The burst helper shipped with a 1.15
+**overshoot**; that draws a wider radius than it hits, which teaches the wrong dodge, so the default
+is 1:1 (verified live: the nova's final half-width is exactly its 132px damage radius). (3) `coneFx`
+clamps its half-angle at 90° for sizing — past that a wedge's chord *shrinks* while the arc widens, so
+the raw sine drew the Miretyrant's 240° tail sweep narrower than a 180° one. Also migrated the
+Miretyrant's and Sandmaw's telegraphs off `this.depth + 0.5` onto `TELEGRAPH_DEPTH`: they were
+warnings drawn *above* entities, against the rule.
+
+**`fx_fire_cone` is the one key with no real art, deliberately.** `create_map_object` will not draw a
+top-down cone of fire and failed five distinct ways (torch handle / triangle tiled with identical
+droplets / a literal folding hand fan / a sunrise poster / a flaming dragon head on a stick).
+Composing it offline from the good top-down flame burst also failed — the burst's spiky ring is too
+distinctive to tile and reads as a cluster of little suns; that composer was deleted rather than left
+as dead tooling. So the BootScene fallback is what ships, improved into a **scalloped wedge** whose
+leading edge is cut into flame tongues. It's wired through the normal key, so a PNG later needs no
+code change. Radial top-down fire is fine — it is specifically the *directional* cone.
+
+**New `art/tools/dekey.mjs`.** 3 of 8 generations came back on a solid background again (the POI
+decals did it last pass). `--feather` is the wrong repair for anything that isn't a disc — it fades
+alpha with radius and eats a crescent's own body — so this keys on colour, flood-filling inward from
+the corners. Global matching was tried first and dissolved the crescent's dark stone bands, and
+tolerance turned out to be per-image: a grey background sat only ~22 from the art's darkest band, so
+`--tol 40` leaked through it and 14 was correct.
+
+Verified live via `preview_eval` + screenshots: all 10 FX keys resolve to real-art dimensions, every
+spawner produces the right texture at the right footprint and rotation, the nova's final size matches
+its damage radius exactly, the sweep clamps to 330px, and no console errors. `tsc` clean. No
+`RECIPES.md` change.
+
 ### Vagabond-win playtest batch — 4 batches, ~30 items (2026-07-26, Opus)
 
 Off the user's 77:26 Vagabond victory (476 kills, 133 elite, 3 boss, level 25, score 10890). Plan +
@@ -448,41 +511,3 @@ ship that. Note `STATS_H = 150` is already fiction: today's Combat block ends at
 panel bottom. The unified list needs the wide tab area, which is the user's call.
 
 `RECIPES.md` + dashboard (Enemies tab, Miretyrant) updated.
-
-### Perf pass: the frame was 5ms of static ground decals (2026-07-25, Opus)
-
-Ran a real profile instead of guessing, and the answer was nothing I expected. Frame time at the
-Running-100 sprint ceiling went **12.7 -> 5.0ms median**, p95 **15.1 -> 6.8ms**, render **5.9 ->
-2.4ms**, and frames over 20ms went to **zero**. The frame budget went from ~90% used to ~30%.
-
-**The profile, and three wrong guesses on the way** (worth recording, because each felt obvious):
-scene logic was only 2.93ms of an 8.87ms frame — **render was 5.69ms**, so the game was
-render-bound, not logic-bound. Then: hiding each stacked full-screen ground layer changed nothing
-(so not fill rate / overdraw); hiding all 259 per-enemy `telegraphGfx` and the 54 off-screen lodge
-plank tilesprites saved 0.16ms (so not un-culled Graphics per se); and tightening
-`STREAM_MARGIN` from 900 to 100 removed ~480 objects for 0.4ms (so not the streaming margin
-either, and that margin is *not* the problem it looked like). Only a random-half bisection found
-it: hiding **Graphics** took render from 5.90 to **0.76ms**.
-
-**The cause:** `drawZoneFloor` drew each macro-zone's ground decal as a live `Graphics` — 11
-stacked translucent blobs x ~39 outline segments = **~1,390 draw commands each**, and with 10
-badlands + 62 bayou zones that was **103,082 fill commands re-tessellated and re-uploaded every
-single frame**, on screen or not. Phaser re-processes a Graphics command buffer every frame no
-matter what, and this artwork is drawn once at world-gen and never changes again. It was 5.1ms of
-a 9.9ms frame — by far the largest single cost in the game.
-
-**The fix:** bake each decal to a texture once and use an `Image`. 103,082 commands -> **2,849**.
-The trap to remember is memory: the largest zone is ~780px in radius, so 72 at 1:1 would be
-roughly **400MB** of texture. They're baked at a **quarter** resolution and scaled back up with
-LINEAR filtering — invisible on a soft translucent stain, and 31.4MB. Verified visually at normal
-zoom in both a bayou miasma zone and a badlands boulderfield: identical soft organic blob.
-
-**Standing lesson: a static `Graphics` is a per-frame cost, not a one-off.** Anything drawn once
-and never changed should be baked to a texture — and the bigger the shape, the more it wants
-baking at reduced resolution rather than 1:1.
-
-Also this session, before the profile: `GroundDetailUI.ROWS_PER_FRAME` 8 -> 5 off the user's "a
-little hitchy while running around at 100 run skill". That was real and worth keeping (chunk slice
-3.4 -> 1.9ms at p95), though it is now a rounding error next to the decal fix. Its own floor is
-documented in the class: the rebuild must outrun the player or `update()` falls back to a full
-synchronous rebuild.

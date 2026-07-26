@@ -1,4 +1,6 @@
 import Phaser from "phaser";
+import { ATTACK_FX_DEPTH, TELEGRAPH_DEPTH } from "../systems/depth";
+import { burstFx, coneFx } from "../art/attackFx";
 import { Enemy } from "./Enemy";
 import { enemyStat } from "../systems/enemyStats";
 
@@ -539,6 +541,7 @@ export class Miretyrant extends Enemy {
         break;
       }
     }
+    if (this.currentAttack === "sweep" || this.currentAttack === "slam") this.spawnImpactFx();
   }
 
   // Where the Gloamtide's wall is right now, 0..1 across its travel. Shared by
@@ -583,8 +586,7 @@ export class Miretyrant extends Enemy {
       }
       return;
     }
-    // Sweep / slam: rooted, hazard drawn for the impact window.
-    this.drawImpact(now, playerX, playerY);
+    // Sweep / slam: rooted for the impact window; the art was spawned at execute.
     if (now >= this.stateEnteredAt + this.currentStateDurationMs) this.beginRecover(now);
   }
 
@@ -631,7 +633,7 @@ export class Miretyrant extends Enemy {
     if (!a) return;
     const g = this.telegraphGfx;
     g.clear();
-    g.setDepth(this.depth + 0.5);
+    g.setDepth(ATTACK_FX_DEPTH);
     const swamp = 0x5fbf87;
     const topH = this.surgeGapY - SURGE_GAP_HALF - a.y;
     const botY = this.surgeGapY + SURGE_GAP_HALF;
@@ -651,7 +653,7 @@ export class Miretyrant extends Enemy {
   private drawTelegraph(now: number): void {
     const g = this.telegraphGfx;
     g.clear();
-    g.setDepth(this.depth + 0.5);
+    g.setDepth(TELEGRAPH_DEPTH);
     const frac = Phaser.Math.Clamp(
       this.currentStateDurationMs > 0 ? (now - this.stateEnteredAt) / this.currentStateDurationMs : 1,
       0,
@@ -724,27 +726,31 @@ export class Miretyrant extends Enemy {
     }
   }
 
-  // Execute-phase hazard visual for the rooted attacks.
-  private drawImpact(now: number, _playerX: number, _playerY: number): void {
-    const g = this.telegraphGfx;
-    g.clear();
-    g.setDepth(this.depth + 0.5);
-    const frac = Phaser.Math.Clamp((now - this.stateEnteredAt) / Math.max(1, this.currentStateDurationMs), 0, 1);
+  // Impact art for the rooted attacks, fired once when the strike window opens.
+  // The sweep keeps a wedge silhouette rather than a splash: its ±120° arc means
+  // the SAFE side is a narrow slice behind the boss, and a round splash would
+  // paint over the one piece of ground the dodge depends on.
+  private spawnImpactFx(): void {
     if (this.currentAttack === "sweep") {
-      g.fillStyle(0x8fe0b0, 0.5 * (1 - frac) + 0.2);
-      g.slice(this.x, this.y, SWEEP_RADIUS, this.attackAngle - SWEEP_HALF_ANGLE, this.attackAngle + SWEEP_HALF_ANGLE);
-      g.fillPath();
+      coneFx(
+        this.scene,
+        "fx_mire_wave",
+        this.x,
+        this.y,
+        this.attackAngle,
+        SWEEP_RADIUS,
+        SWEEP_HALF_ANGLE,
+        SWEEP_IMPACT_MS + 200,
+      );
       return;
     }
-    // Slam: a muck shockwave ring expanding to the true radius.
-    g.lineStyle(8, 0x6ea884, 0.8 * (1 - frac) + 0.2);
-    g.strokeCircle(this.x, this.y, SLAM_RADIUS * Math.min(1, 0.4 + frac * 1.4));
+    burstFx(this.scene, "fx_mire_splash", this.x, this.y, SLAM_RADIUS, SLAM_IMPACT_MS + 260);
   }
 
   private drawRoll(): void {
     const g = this.telegraphGfx;
     g.clear();
-    g.setDepth(this.depth + 0.5);
+    g.setDepth(ATTACK_FX_DEPTH);
     g.fillStyle(0x6ea884, 0.35);
     g.fillCircle(this.x, this.y, ROLL_RADIUS);
   }

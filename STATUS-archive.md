@@ -10258,3 +10258,41 @@ tongues came with a torch handle attached. Its flickering two-wedge fire already
 own telegraph, and it now differs by depth too, so it is not urgent. Remaining in this phase: the
 cone, the Duneshaper/Hexling impacts (moved above the entities but still procedural), and the
 8 ability cast FX families, which all still tint the same `light_soft` gradient.
+
+### Perf pass: the frame was 5ms of static ground decals (2026-07-25, Opus)
+
+Ran a real profile instead of guessing, and the answer was nothing I expected. Frame time at the
+Running-100 sprint ceiling went **12.7 -> 5.0ms median**, p95 **15.1 -> 6.8ms**, render **5.9 ->
+2.4ms**, and frames over 20ms went to **zero**. The frame budget went from ~90% used to ~30%.
+
+**The profile, and three wrong guesses on the way** (worth recording, because each felt obvious):
+scene logic was only 2.93ms of an 8.87ms frame — **render was 5.69ms**, so the game was
+render-bound, not logic-bound. Then: hiding each stacked full-screen ground layer changed nothing
+(so not fill rate / overdraw); hiding all 259 per-enemy `telegraphGfx` and the 54 off-screen lodge
+plank tilesprites saved 0.16ms (so not un-culled Graphics per se); and tightening
+`STREAM_MARGIN` from 900 to 100 removed ~480 objects for 0.4ms (so not the streaming margin
+either, and that margin is *not* the problem it looked like). Only a random-half bisection found
+it: hiding **Graphics** took render from 5.90 to **0.76ms**.
+
+**The cause:** `drawZoneFloor` drew each macro-zone's ground decal as a live `Graphics` — 11
+stacked translucent blobs x ~39 outline segments = **~1,390 draw commands each**, and with 10
+badlands + 62 bayou zones that was **103,082 fill commands re-tessellated and re-uploaded every
+single frame**, on screen or not. Phaser re-processes a Graphics command buffer every frame no
+matter what, and this artwork is drawn once at world-gen and never changes again. It was 5.1ms of
+a 9.9ms frame — by far the largest single cost in the game.
+
+**The fix:** bake each decal to a texture once and use an `Image`. 103,082 commands -> **2,849**.
+The trap to remember is memory: the largest zone is ~780px in radius, so 72 at 1:1 would be
+roughly **400MB** of texture. They're baked at a **quarter** resolution and scaled back up with
+LINEAR filtering — invisible on a soft translucent stain, and 31.4MB. Verified visually at normal
+zoom in both a bayou miasma zone and a badlands boulderfield: identical soft organic blob.
+
+**Standing lesson: a static `Graphics` is a per-frame cost, not a one-off.** Anything drawn once
+and never changed should be baked to a texture — and the bigger the shape, the more it wants
+baking at reduced resolution rather than 1:1.
+
+Also this session, before the profile: `GroundDetailUI.ROWS_PER_FRAME` 8 -> 5 off the user's "a
+little hitchy while running around at 100 run skill". That was real and worth keeping (chunk slice
+3.4 -> 1.9ms at p95), though it is now a rounding error next to the decal fix. Its own floor is
+documented in the class: the rebuild must outrun the player or `update()` falls back to a full
+synchronous rebuild.

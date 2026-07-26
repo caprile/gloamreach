@@ -1,5 +1,7 @@
 import Phaser from "phaser";
+import { TELEGRAPH_DEPTH } from "../systems/depth";
 import { Enemy } from "./Enemy";
+import { burstFx } from "../art/attackFx";
 import { enemyStat } from "../systems/enemyStats";
 
 // Combat stats from the Phaser-free source of truth (also read by the balancing
@@ -143,6 +145,8 @@ export class Sandmaw extends Enemy {
           this.stateStartAt = now;
           this.eruptHit = false;
           this.endWindupTell(); // snap the load-up scale back — reads as the burst releasing
+          this.telegraphGfx.clear(); // the warning is over the instant the burst is real
+          burstFx(this.scene, "fx_sand_spikes", this.x, this.y, BURST_RADIUS, ERUPT_STRIKE_MS + 220);
         }
         return false;
       }
@@ -152,7 +156,6 @@ export class Sandmaw extends Enemy {
         // Animate the sand/stone spikes shooting up over the strike window. The
         // AoE hit itself is dealt via checkPlayerHit(), queried by the scene this
         // same window. Just hold and time out into the punish window.
-        this.drawEruptionSpikes(elapsed / ERUPT_STRIKE_MS);
         if (elapsed >= ERUPT_STRIKE_MS) {
           this.mode = "exposed";
           this.stateStartAt = now;
@@ -211,46 +214,13 @@ export class Sandmaw extends Enemy {
   private drawTremor(frac01: number): void {
     const g = this.telegraphGfx;
     g.clear();
-    g.setDepth(this.depth + 0.5);
+    g.setDepth(TELEGRAPH_DEPTH);
     const f = Phaser.Math.Clamp(frac01, 0, 1);
     const r = BURST_RADIUS * (0.4 + 0.6 * f);
     g.fillStyle(0xc9a24a, 0.1 + 0.24 * f);
     g.fillCircle(this.x, this.y, r);
     g.lineStyle(2, 0xe0b060, 0.5 + 0.35 * f);
     g.strokeCircle(this.x, this.y, BURST_RADIUS);
-  }
-
-  // The eruption's execute-phase visual: a ring of sand/stone spikes violently
-  // bursting up around the Sandmaw (mirrors the Gloamwarden's crystal-spike
-  // eruption, but sand/stone-colored + centered on itself rather than a locked
-  // ground spot). frac01 ramps 0→1 over ERUPT_STRIKE_MS; spikes shoot up fast
-  // (rise clamps early) then hold for the rest of the window.
-  private drawEruptionSpikes(frac01: number): void {
-    const g = this.telegraphGfx;
-    g.clear();
-    g.setDepth(this.depth + 0.5);
-    const f = Phaser.Math.Clamp(frac01, 0, 1);
-    const rise = Math.min(1, f * 2.4); // spikes snap up in the first ~40% of the window
-    // Lingering dust wash under the spikes, fading as they settle.
-    g.fillStyle(0xc9a24a, 0.3 * (1 - f * 0.55));
-    g.fillCircle(this.x, this.y, BURST_RADIUS);
-    // Ring of jagged sand/stone spikes around the burst edge.
-    const count = 9;
-    for (let i = 0; i < count; i++) {
-      const a = (i / count) * Math.PI * 2 + (i % 2) * 0.36;
-      const dd = BURST_RADIUS * (0.45 + 0.5 * ((i % 3) / 2));
-      const sx = this.x + Math.cos(a) * dd;
-      const sy = this.y + Math.sin(a) * dd;
-      const hgt = (15 + (i % 3) * 9) * rise;
-      const w = 5 + (i % 2) * 2;
-      g.fillStyle(0x8a6a45, 0.92); // dark stone base
-      g.fillTriangle(sx - w, sy + 4, sx + w, sy + 4, sx, sy - hgt);
-      g.fillStyle(0xe8d6a8, 0.85); // pale sand highlight sliver
-      g.fillTriangle(sx - w * 0.4, sy + 2, sx + w * 0.4, sy + 2, sx, sy - hgt * 0.9);
-    }
-    // Central plume erupting straight out of the mound.
-    g.fillStyle(0xcbb488, 0.95);
-    g.fillTriangle(this.x - 7, this.y + 5, this.x + 7, this.y + 5, this.x, this.y - 28 * rise);
   }
 
   // Queried each frame by MainScene.updateEnemies() (like the bosses / Hexling
