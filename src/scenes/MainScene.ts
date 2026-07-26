@@ -184,6 +184,7 @@ import {
   type EffectAxisView,
 } from "../ui/InventoryMenu";
 import { HotbarUI } from "../ui/HotbarUI";
+import { installCursors } from "../ui/cursor";
 import { EventLogUI } from "../ui/EventLogUI";
 import { KeybindsUI } from "../ui/KeybindsUI";
 import { MinimapUI, PANEL_W as MINIMAP_W, PANEL_H as MINIMAP_H, MARGIN as MINIMAP_MARGIN } from "../ui/MinimapUI";
@@ -1837,6 +1838,16 @@ export class MainScene extends Phaser.Scene {
     // every object to exactly one of them each frame (see its note).
     this.uiCam = this.cameras.add(0, 0, this.cameras.main.width, this.cameras.main.height);
     this.uiCam.setName("ui");
+
+    // The game's own pointer, replacing the OS arrow (src/ui/cursor.ts). The
+    // click jab plays for anything the player can actually act on: a world
+    // target that produced a prompt, or any interactive UI element.
+    installCursors(
+      this,
+      () =>
+        this.promptText.visible ||
+        this.input.hitTestPointer(this.input.activePointer).length > 0,
+    );
 
     // Reach preview ring — only drawn while a tool/weapon is equipped, kept
     // just above the ground and below entities (Milestone F).
@@ -9188,10 +9199,8 @@ export class MainScene extends Phaser.Scene {
                                       : null;
     if (prompt) {
       this.promptText.setText(prompt).setColor(this.promptColorFor()).setVisible(true);
-      this.input.setDefaultCursor("pointer");
     } else {
       this.promptText.setVisible(false);
-      this.input.setDefaultCursor("default");
     }
     this.updateHoverHighlight(prompt);
   }
@@ -12586,7 +12595,6 @@ export class MainScene extends Phaser.Scene {
     this.placementGhost?.destroy();
     this.placementGhost = null;
     this.placementHintText.setVisible(false);
-    this.input.setDefaultCursor("default");
   }
 
   // Cursor's world position, clamped to PLACEMENT_RADIUS of the player so a
@@ -12609,7 +12617,6 @@ export class MainScene extends Phaser.Scene {
     this.placementGhost.setPosition(pos.x, pos.y);
     const name = itemDef(outputKey(this.placementMode.recipe))?.name ?? "item";
     this.placementHintText.setText(`[LMB] Place ${name}   [RMB] Cancel`).setVisible(true);
-    this.input.setDefaultCursor("pointer");
   }
 
   // LMB while in placement mode: deducts cost and spawns the world object,

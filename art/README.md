@@ -492,6 +492,39 @@ attractive, seventy of them tiled across a backpack grid is a mess. The kit's
 plain riveted socket, scaled down, was the right answer. Judge a slot asset by
 imagining the whole grid, not the single sprite.
 
+## The cursor (`cursor`)
+
+`src/ui/cursor.ts`. One icon everywhere — a gauntleted pointing hand — built
+from a texture key like everything else, so `art/sprites/ui/cursor.png` replaces
+the generated placeholder with no code change.
+
+Three properties are enforced in code rather than painted into the PNG, so that
+redrawing the cursor can't silently lose them:
+
+- **A pale 1px rim traced around the silhouette.** The art is a dark gauntlet
+  and it crosses near-black menu panels, unlit crypt floors and the night
+  overlay as often as grass; without the rim it vanishes on all three. The art's
+  own dark outline stays inside it, so the cursor carries a light edge and a
+  dark edge at once and can't lose contrast against anything. This is why OS
+  cursors are shaped this way.
+- **The hotspot is measured from the art's alpha** — the leftmost solid pixel of
+  the topmost row that has any, which for a hand pointing up-left is the
+  fingertip. A hotspot that disagrees with the visible point makes every click
+  feel slightly off, and hardcoding it breaks the moment the art is redrawn.
+- **The click jab is anchored on that same tip**, so all three animation frames
+  report an identical hotspot and a click during the animation lands exactly
+  where a click before it would have.
+
+Authored at a normal cursor footprint (14x21 after `trim.mjs`) and shipped 1:1.
+**x2 was tried and rejected as oversized** — a cursor renders at its image's
+natural size, so the art's own dimensions are the setting.
+
+There is deliberately no hover variant. An earlier pass swapped three cursors
+(pointer / hand / reticle) off the same prompt state that drives the hover
+highlight; the bottom-right prompt and the hover outline already say what's
+under the pointer, and a third signal flickering between three shapes reads as
+noise. The cursor only responds to a CLICK on something interactible.
+
 ## Scope
 
 | Category | Count | Animation |

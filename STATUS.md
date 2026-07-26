@@ -2,20 +2,32 @@
 
 ## Current State
 
-_Living snapshot — edit in place, never append._ Last shipped: **menu chrome art** (2026-07-26,
-Opus) — item 2 of the user's stated order. Every panel and slot in the game now wears a real
+_Living snapshot — edit in place, never append._ Last shipped: **the custom cursor** (2026-07-26,
+Opus) — item 3 and the last of the user's stated art order. One icon (a gauntleted pointing hand)
+everywhere, with a short jab animation when you click something interactible. Before it, same day:
+**menu chrome art** — item 2 of that order. Every panel and slot in the game now wears a real
 blackened-iron frame with a violet gloam inlay, applied through one shared layer
 (`src/ui/frames.ts`) rather than by rewriting thirty menus. Before it, same day: the Inventory's
 **Active Effects tab** (one combined number per stat with its contributions indented under it,
 replacing the Combat block and the relic effects list) and **attack-FX art across the whole
 roster** (`src/art/attackFx.ts`).
 
-**In progress / next.** Next in the user's stated order: **(3) a unique in-game cursor**
-(`input.setDefaultCursor`, worth a hover/attack variant given the game is mouse-driven). Menu
-**buttons and tabs are deliberately still flat** — the agreed scope was frames + slots, and the
-generated kit's button/tab pieces are already downloaded (`art/work/kit_1.png`, `kit_3.png`) if
-that's wanted next. Also still open from earlier notes: a stouter/gobliny gremlin, and the ~19
-ambient props that need regenerating as objects before they can animate.
+**In progress / next.** the user's three-item art order is **done** (attack FX, menu chrome,
+cursor). Nothing is queued behind it. Still open from earlier notes: menu **buttons and tabs are
+deliberately still flat** (the agreed chrome scope was frames + slots; the generated kit's
+button/tab pieces are already downloaded in `art/work/` if that's wanted), a stouter/gobliny
+gremlin, and the ~19 ambient props that need regenerating as objects before they can animate. The
+oldest outstanding non-art item is still **a playtest at the post-flat-armor combat numbers**.
+
+**The cursor's three rules live in code, not in the PNG** (`src/ui/cursor.ts`), so redrawing the
+art can't silently lose them: a pale 1px rim traced around the silhouette (the art is a dark
+gauntlet and it crosses near-black panels, unlit crypts and the night overlay — it would vanish on
+all three, and the art's own dark outline stays inside the rim so it has a light edge and a dark
+edge at once); the hotspot measured from the art's alpha rather than hardcoded; and the click jab
+anchored on that same tip so every frame reports an identical hotspot and clicks can't drift
+mid-animation. **There is deliberately no hover variant** — an earlier pass swapped three cursors
+off the existing prompt state, and since the bottom-right prompt and the hover outline already say
+what's under the pointer, a third signal changing shape was noise.
 
 **The menu-chrome rule: chrome sits BESIDE the rectangle, never replaces it.** A menu's
 `add.rectangle` owns its fill, alpha, hit area and — for slots — a stroke encoding state. The art
@@ -363,6 +375,47 @@ touches no combat numbers.
 ## Recent Entries
 
 > Older entries in STATUS-archive.md.
+
+### Custom cursor: one icon, with a click jab (2026-07-26, Opus)
+
+Item 3 of the user's order, and reworked twice mid-session off his feedback — worth recording,
+because both corrections were about restraint rather than about the art.
+
+**Shipped first, then cut back:** three cursors (arrow / gauntlet / attack reticle) driven by the
+prompt state `updateHover` already computes. the user's call was **"only a single icon, with a
+clicky animation when you click on something that is interactible"**, and he's right — the
+bottom-right prompt and the hover outline already report what's under the pointer, so a third
+signal that changes SHAPE is noise competing with two that already work. He also picked the
+gauntlet ("I like the finger one") over the arrow I'd have defaulted to, and called the x2 scale
+too big. It ships as one 14x21 hand at 1:1.
+
+**The jab is the whole interaction.** Two frames (0.78 then 0.92 scale, 70/80ms) and back — the
+hand shrinks toward its own fingertip and springs out. Gated on the same "is there anything here"
+question the rest of the UI asks: a world target that produced a prompt, or any interactive UI
+element under the pointer (`hitTestPointer`). Driven by wall-clock timers rather than the scene
+clock, because menus stay usable while the run is paused and a cursor frozen mid-press on the
+pause menu's own buttons would be a visible bug.
+
+**the user's third note — "make sure it is easily readable everywhere" — is why the outline exists**
+and why it lives in `cursor.ts` rather than in the PNG: a dark gauntlet dragged across near-black
+menu panels, unlit crypt floors and the night overlay would vanish on all three. A 1px pale rim is
+traced around the silhouette at build time, and since the art keeps its own dark outline inside it,
+the cursor carries a light edge and a dark edge at once. Same reason OS cursors are shaped this
+way. Putting it in code means new cursor art inherits it instead of having to remember it.
+
+**Two things are derived from the art rather than hardcoded**: the hotspot (leftmost solid pixel of
+the topmost row — for a hand pointing up-left that IS the fingertip), and the jab's scaling anchor,
+which is that same point, so all three frames report an identical hotspot and a click during the
+animation lands exactly where a click before it would have. Verified: hotspot 4,1 in every frame.
+
+**One shim, not 76 edits.** `setInteractive({ useHandCursor: true })` stores the literal string
+`"pointer"` on each object and writes it to the canvas on hover, which would have flipped to the OS
+hand over our own menus at all 76 of those call sites. `InputManager.setCursor` translates it once,
+rewriting the object's stored cursor in place.
+
+Verified live: the jab fires over a world prompt and over a real hotbar slot, does NOT fire over
+empty ground, settles back to base, and survives `scene.restart()` without re-registering its
+handler. `tsc` + `npm run build` clean, no console errors.
 
 ### Menu chrome: real frames on every panel and slot (2026-07-26, Opus)
 

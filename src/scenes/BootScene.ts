@@ -197,6 +197,21 @@ export class BootScene extends Phaser.Scene {
 
     border(128, 26, "ui_panel", 0x8a5cd0);
     border(40, 10, "ui_slot", 0x6a4aa0);
+    this.makeCursorTextures(g);
+  }
+
+  // Mouse cursor placeholder (see src/ui/cursor.ts). Drawn pointing UP-LEFT,
+  // because the hotspot is derived from the first solid pixel scanning from the
+  // top-left down — for a pointing hand that pixel is the fingertip.
+  private makeCursorTextures(g: Phaser.GameObjects.Graphics): void {
+    g.clear();
+    g.fillStyle(0x05070a, 1);
+    g.fillTriangle(0, 0, 13, 17, 0, 19);
+    g.fillStyle(0xcfd6e4, 1);
+    g.fillTriangle(2, 3, 10, 15, 2, 16);
+    g.fillStyle(0x8a5cd0, 1);
+    g.fillTriangle(3, 11, 9, 16, 3, 16);
+    g.generateTexture("cursor", 14, 21);
   }
 
   private makeTextures(): void {
