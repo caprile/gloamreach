@@ -10403,3 +10403,159 @@ ship that. Note `STATS_H = 150` is already fiction: today's Combat block ends at
 panel bottom. The unified list needs the wide tab area, which is the user's call.
 
 `RECIPES.md` + dashboard (Enemies tab, Miretyrant) updated.
+
+### Attack-FX art: impacts across the whole roster (2026-07-26, Opus)
+
+The first of the three items in the user's stated order. The telegraph/attack depth split shipped
+last session with only two impacts wired to art (the Gremlin King's smash, the Gloamwarden's
+eruption); everything else still drew its *hit* as translucent `Graphics`. This finishes the pass.
+
+**`src/art/attackFx.ts` — two spawners cover the roster**, because every area attack in the game is
+one of two shapes: `burstFx` (radial impact centred on a point) and `coneFx` (directional fan along
+a locked heading, art authored apex-left/pointing +x). Both size the art against the radius or range
+`checkPlayerHit` actually uses, and both are **fire-and-forget** — the sprite isn't parented to the
+enemy and its own tween destroys it, so an enemy that dies or is culled mid-attack can't strand it.
+That is the exact failure the older held-sprite versions need explicit teardown for. The Duneshaper's
+lance is the one exception (it sweeps ±20° *while* it fires, so it's held in a field and re-aimed each
+frame — with an `active` guard, since its tween may already have destroyed it).
+
+**Ten attacks wired**, 8 new sprites: Cinderwrought **cone** + **hammer arc**; Duneshaper **nova**,
+**sand spikes**, **sunscorch barrage**, **gloamfire lance**; Hexling **flame strike** (3 circles);
+Sandmaw **eruption**; Miretyrant **slam** + **tail sweep**. Two more had a telegraph and then no
+visible hit at all, which read as the boss simply arriving somewhere — the **Gloamwarden's leaping
+smash** and the **Sanguinarch's slam** — both one line each now that the helpers exist.
+
+**Sprites are shared where the EVENT is the same, not where the enemy is.** `fx_flame_burst` plays
+for the Hexling's flame and the Duneshaper's barrage; `fx_sand_spikes` for the Sandmaw's eruption and
+the Duneshaper's spikes; `fx_mire_splash` is **tinted crimson** for the Sanguinarch's blood slam. What
+stays per-attack is the footprint, which comes from the caller's own radius.
+
+**Three corrections found by measuring rather than looking.** (1) `ATTACK_FX_DEPTH` was **2500**, but
+`ysortDepth` tops out at **2520** for an entity at the bottom of the 28000px world — so an entity
+could draw *over* the hit that just landed on it, which is the confusion the whole split exists to
+prevent. Now 2560 (still under the 2600 HUD floor). (2) The burst helper shipped with a 1.15
+**overshoot**; that draws a wider radius than it hits, which teaches the wrong dodge, so the default
+is 1:1 (verified live: the nova's final half-width is exactly its 132px damage radius). (3) `coneFx`
+clamps its half-angle at 90° for sizing — past that a wedge's chord *shrinks* while the arc widens, so
+the raw sine drew the Miretyrant's 240° tail sweep narrower than a 180° one. Also migrated the
+Miretyrant's and Sandmaw's telegraphs off `this.depth + 0.5` onto `TELEGRAPH_DEPTH`: they were
+warnings drawn *above* entities, against the rule.
+
+**`fx_fire_cone` is the one key with no real art, deliberately.** `create_map_object` will not draw a
+top-down cone of fire and failed five distinct ways (torch handle / triangle tiled with identical
+droplets / a literal folding hand fan / a sunrise poster / a flaming dragon head on a stick).
+Composing it offline from the good top-down flame burst also failed — the burst's spiky ring is too
+distinctive to tile and reads as a cluster of little suns; that composer was deleted rather than left
+as dead tooling. So the BootScene fallback is what ships, improved into a **scalloped wedge** whose
+leading edge is cut into flame tongues. It's wired through the normal key, so a PNG later needs no
+code change. Radial top-down fire is fine — it is specifically the *directional* cone.
+
+**New `art/tools/dekey.mjs`.** 3 of 8 generations came back on a solid background again (the POI
+decals did it last pass). `--feather` is the wrong repair for anything that isn't a disc — it fades
+alpha with radius and eats a crescent's own body — so this keys on colour, flood-filling inward from
+the corners. Global matching was tried first and dissolved the crescent's dark stone bands, and
+tolerance turned out to be per-image: a grey background sat only ~22 from the art's darkest band, so
+`--tol 40` leaked through it and 14 was correct.
+
+Verified live via `preview_eval` + screenshots: all 10 FX keys resolve to real-art dimensions, every
+spawner produces the right texture at the right footprint and rotation, the nova's final size matches
+its damage radius exactly, the sweep clamps to 330px, and no console errors. `tsc` clean. No
+`RECIPES.md` change.
+
+### Active Effects tab — one number per stat, sources indented under it (2026-07-26, Opus)
+
+The item held back from the Vagabond batch, unblocked by the user's call: **get rid of the Combat
+and relic stats specifically**. That was the missing piece — the previous attempt failed trying to
+keep the Combat column AND fit a unified list into the 190px under it. Deleting both is what frees
+the space.
+
+**The presentation is the point, and I got it wrong first.** I initially shipped the list grouped by
+SOURCE — a Weapon section, a Relics section, a Worn Gear section. The user corrected it mid-session:
+he wants **one combined number per stat with its contributions indented underneath**. He's right,
+and the reason is the same reason the old panel was bad: a Combat block saying `Damage: 20` beside a
+relic list saying `Damage +10.5%` makes the reader do the multiplication themselves, in two places
+that never even named the stat the same way. Now:
+
+```
+Damage — Blunt                    20
+  • Embersteel Warhammer         +23
+  • Berserker's Mantle        +10.5%
+  • The Vagabond                -25%
+```
+
+**16 axes**, each emitted only when something feeds it: damage, crit chance, crit damage, attack
+stamina, armor, damage taken, max HP, max stamina, move, sprint, HP/kill, skill XP, ability
+cooldown, ability power, bonus gather, light radius, bleed/poison taken. Contributions name the
+actual thing — the weapon, the relic, the class card, the stat, the ring — not a category. Trailing
+**Procs** and **Set Bonuses** blocks keep the list form, since a conditional has no combined number
+to be an addend of.
+
+**Assembled in `MainScene.activeEffects()`, not the menu.** It reads the same helpers combat does,
+so a panel number can't drift from a fight number. That immediately paid for itself: the first cut
+looked up the relic damage channel as `damageMult` (the getter's name) when the channel is
+`damagePct`, so the Damage axis printed the right total with its relic contribution silently
+missing. The lookup is now typed `keyof RelicEffect`, so that class of mistake is a compile error.
+
+**Removed:** the `Combat` block under Equipment and the `Effects` list under the relic slots. The
+relic SLOTS stay — they're the paper doll of what's equipped, which is why they went on the panel.
+
+**Two balanced columns.** The first cut filled column one until it overflowed, which packed it to
+**within 1px of the panel floor** while column two sat a third empty — correct, and permanently one
+relic away from running off the panel. It now estimates every block and splits at the halfway mark:
+a maximal build (every family a Mythic at tier 2, full Embersteel set, three passives, 20 in every
+stat) measures **721 / 729 against an 826 floor**. A block never splits across columns.
+
+Verified live: the maximal build's Damage total reconciles by hand (23 x (1 + 0.105 - 0.25) = 20),
+all three tabs render and are clickable with a real mouse, and the empty state degrades to a
+six-axis baseline that still says "No weapon equipped" / "No armor worn" rather than omitting the
+stat the player opened the tab to check. `tsc` clean, no console errors.
+
+
+### Menu chrome: real frames on every panel and slot (2026-07-26, Opus)
+
+Item 2 of the user's three-item order. He couldn't pick a style from a description ("I'd need to
+see it"), so the direction was locked as **dark iron & gloam-violet** — the option that keeps the
+existing amber selection and violet relic highlights working — and the priority was getting it on
+screen fast rather than getting it perfect on paper.
+
+**The whole pass is one file plus two PNGs.** `src/ui/frames.ts` draws chrome next to the
+rectangles the menus already have, instead of replacing them; the rules and why each is forced are
+in Current State above and `art/README.md`. Call sites are one line: `bindFrame(this.bg, "panel")`
+for a panel, `frameInto(this.rows, box, "slot")` for anything rebuilt per render. **Migrated:**
+Inventory (panel + backpack cells + equipment slots + relic sockets), Hotbar, Crafting, Chest,
+Cooking, Drying Rack (both slot sizes), Jewelry, Relic Forge, Character, Upgrade, Pause, Tooltip,
+plus the Q/E/R ability bar and the buff bar — those two aren't menus, but they sit against the
+hotbar and leaving them flat would have read as a half-finished pass.
+
+**Generation notes** (full recipe in `art/README.md`): `create_ui_asset` will not draw a bare
+frame — it returns a whole title-screen mockup, castle and dragon included. That's fine, since the
+border is the deliverable, and new `art/tools/hollow.mjs` cuts the interior out (with `--corner`
+to spare the thicker riveted corner plates a uniform cut would slice through). Two more tools came
+out of it: `scale.mjs`, which box-averages rather than dropping pixels because the border's
+thickness is a hard requirement (it has to fit inside a 12px content margin) and nearest-neighbour
+eats the one-pixel rivets; and `split.mjs`, which flood-fills a multi-element kit sheet apart —
+one job for a matched set beats three jobs whose styles drift, and the socket that shipped came
+out of the same job as the button and tab.
+
+**A generated slot came back far too decorated** — bright violet corner gems, attractive once and
+a mess tiled seventy times across a backpack grid. The kit's plain riveted socket, scaled down,
+was the answer. **Judge a slot asset by imagining the grid, not the sprite.**
+
+**Two things worth knowing about the follower.** It registers one `POST_UPDATE` listener per Scene
+INSTANCE, and `scene.restart()` reuses the instance — so New Run neither stacks listeners nor
+strands frames. Verified explicitly against the codebase's own restart gotcha: listener count 2
+before and after, nine-slice count 30 before and after. And frames inherit `scrollFactor` from
+their rectangle, so `syncCameras` classifies them as UI automatically — zero unclassified, no
+double-draw.
+
+Verified live: frame tracks a panel moved and resized mid-flight (500x300 -> 512x312 at -6,-6),
+visibility follows the panel exactly, and with only the crafting menu open the visible frame count
+is exactly 22 (18 hotbar + 3 ability + 1 panel) with 8 hidden panel frames parked — no leak per
+repaint. `tsc` + `npm run build` clean, no console errors.
+
+**Buttons and tabs are deliberately untouched** (the agreed scope was frames + slots), and the
+**Tooltip is framed with a bleed** so its border sits almost entirely outside the box — a tooltip
+pops over dense grids hundreds of times a session and can't afford to lose its 8/6px text padding
+to an ornament.
+
+

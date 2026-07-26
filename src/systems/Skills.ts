@@ -72,12 +72,27 @@ export function skillXpToNext(level: number): number {
 
 const WEAPON_SKILL_DAMAGE_PCT_PER_LEVEL = 0.005; // +0.5% weapon damage per level
 
-// The mechanical payoff of leveling a weapon skill (Slash/Blunt/Pierce/Ranged/
-// Magic only — armor/general skills have none). Shown on hover in the
-// Character menu via skillImpactDescription below.
+// The mechanical payoff of leveling a weapon skill (Slash/Blunt/Pierce/Magic —
+// armor/general skills have none). Shown on hover in the Character menu via
+// skillImpactDescription below.
+//
+// RANGED IS DELIBERATELY EXCLUDED and pays out in RANGE instead (see
+// rangedSkillRangeMultiplier). The user, 2026-07-26: "maybe instead of bow
+// skill scaling damage it scales range." A bow already attacks from safety, so
+// stacking damage on top of that made investment in the skill strictly
+// dominant; buying reach instead means the payoff is a longer safe window,
+// which the bow's own movement penalty is there to charge you for.
 export function weaponSkillDamageMultiplier(skill: SkillType, skills: Skills): number {
-  if (!WEAPON_SKILLS.includes(skill)) return 1;
+  if (!WEAPON_SKILLS.includes(skill) || skill === "ranged") return 1;
   return 1 + skills.get(skill) * WEAPON_SKILL_DAMAGE_PCT_PER_LEVEL;
+}
+
+// Ranged's payoff axis. +0.4%/level, so the lvl-100 soft cap is +40% reach —
+// which lands a dedicated archer back at roughly the ranges bows shipped with
+// before this pass, while a fresh one starts a long way short of them.
+const RANGED_SKILL_RANGE_PCT_PER_LEVEL = 0.004;
+export function rangedSkillRangeMultiplier(skills: Skills): number {
+  return 1 + skills.get("ranged") * RANGED_SKILL_RANGE_PCT_PER_LEVEL;
 }
 
 // Sprint speed (multiplies Player's base walk speed while sprinting). Rescaled
@@ -152,6 +167,11 @@ export function miningBonusChance(skills: Skills): number {
 // doing today, not just a generic rate). Live-computed off the real current
 // level/skills instance, not a static per-level rate string.
 export function skillImpactDescription(skill: SkillType, skills: Skills): string {
+  if (skill === "ranged") {
+    const level = skills.get("ranged");
+    const pct = (rangedSkillRangeMultiplier(skills) - 1) * 100;
+    return `+0.4% ranged attack range per level — currently +${pct.toFixed(1)}% at Lvl ${level}`;
+  }
   if (WEAPON_SKILLS.includes(skill)) {
     const level = skills.get(skill);
     const pct = level * WEAPON_SKILL_DAMAGE_PCT_PER_LEVEL * 100;

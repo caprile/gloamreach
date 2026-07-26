@@ -208,8 +208,21 @@ export class HotbarUI {
       const stack = this.hotbar.get(i);
       const isSelected = selected === i;
 
+      // The selected slot gets a warm LIT fill, not just an accent on the edge.
+      // Once the frame art landed, selection was an amber tint on an already
+      // ornate border and stopped reading at a glance (the user: "what is
+      // selected in the hotbar is a little hard to see with the new border") —
+      // the fill belongs to the rectangle under the chrome, so lighting it up is
+      // a signal the art can't drown out.
       const box = this.scene.add
-        .rectangle(x, y, SLOT_SIZE, SLOT_SIZE, isRow2 ? 0x0a0e0a : 0x0a0a0a, 0.8)
+        .rectangle(
+          x,
+          y,
+          SLOT_SIZE,
+          SLOT_SIZE,
+          isSelected ? 0x4a3a12 : isRow2 ? 0x0a0e0a : 0x0a0a0a,
+          isSelected ? 0.95 : 0.8,
+        )
         .setOrigin(0, 0)
         .setStrokeStyle(2, isSelected ? 0xffe08a : isRow2 ? 0x3a4a38 : 0x444a55)
         .setScrollFactor(0)
@@ -246,7 +259,7 @@ export class HotbarUI {
         .text(x + 3, y + 2, `${col + 1}`, {
           fontFamily: "monospace",
           fontSize: "13px",
-          color: isRow2 ? "#e8c040" : "#8a93a3",
+          color: isSelected ? "#ffe08a" : isRow2 ? "#e8c040" : "#8a93a3",
         })
         .setScrollFactor(0)
         .setDepth(2901);

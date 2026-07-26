@@ -301,17 +301,36 @@ The starter launchers (Slingshot/Javelin) are deliberately weak — an opener/
 softener, not a solo tool — with no right-click tier path. The **Warbows** (S8)
 are the forged badlands ranged tier: a real step up in reach and damage, still
 below forged melee since range is the trade. No right-click tier path on the bows
-either — the Sunsteel → Embersteel **reforge** is their upgrade. All feed the
-`ranged` weapon skill via the same `weaponSkillDamageMultiplier` every melee
-weapon uses, so leveling it turns chip damage into real damage over a run.
+either — the Sunsteel → Embersteel **reforge** is their upgrade.
 
-| Weapon | Dmg / Cooldown / Stamina | DPS | Projectile Speed | Range | Firing cost |
+**The `ranged` skill buys REACH, not damage** (2026-07-26) — it is the one weapon
+skill excluded from `weaponSkillDamageMultiplier`, paying out through
+`rangedSkillRangeMultiplier` instead (+0.4%/level, +40% at the level-100 cap).
+
+| Weapon | Dmg / Cooldown / Stamina | DPS | Projectile Speed | Base range (Ranged 100) | Firing cost |
 |---|---|---|---|---|---|
-| Slingshot | 2 / 650ms / 6 | 3.1 | 420 px/s | 260px | None |
-| Javelin | 5 / 900ms / 16 | 5.6 | 300 px/s | 220px | Self — the equipped hotbar stack IS the projectile (1 per throw) |
-| Sunsteel Warbow | 12 / 560ms / 8 | 21.4 | 600 px/s | 380px | None |
-| Embersteel Warbow | 16 / 545ms / 11 | 29.4 | 640 px/s | 400px | None |
-| Gloamsteel Warbow | 21 / 540ms / 12 | 38.9 | 680 px/s | 420px | None |
+| Slingshot | 2 / 650ms / 6 | 3.1 | 420 px/s | 260px (364px) | None |
+| Javelin | 5 / 900ms / 16 | 5.6 | 300 px/s | 220px (308px) | Self — the equipped hotbar stack IS the projectile (1 per throw) |
+| Sunsteel Warbow | 12 / 560ms / 8 | 21.4 | 600 px/s | 300px (420px) | None |
+| Embersteel Warbow | 16 / 545ms / 11 | 29.4 | 640 px/s | 320px (448px) | None |
+| Gloamsteel Warbow | 21 / 540ms / 12 | 38.9 | 680 px/s | 340px (476px) | None |
+
+**Bow governor rework (2026-07-26).** The user, after a Bloodrush + bow run: "insanely
+OP... no idea how to balance bows. The walk-backwards-and-spam-shooting strat is a
+real thing. The range feels pretty crazy, you can kill most enemies before they even
+get close." Damage was left alone — this is the third pass and the previous two were
+both damage passes — and the two levers that actually govern a bow were pulled instead:
+
+- **Base range cut ~20%**, with the Ranged skill growing it back (table above). A
+  dedicated archer ends up near the old 380-420px; a fresh one starts well short of it.
+  Skill investment now buys the safe window rather than stacking damage on top of it.
+- **The post-shot slow got real teeth.** It was 0.72x for a flat 350ms, which is
+  *under* every bow's cooldown, so an unhurried shooter recovered full speed between
+  every shot and the strategy was untouched. Now **0.45x for 85% of the shot's actual
+  cooldown, haste included** (`RANGED_FIRE_SLOW_*` in `MainScene`) — so **firing faster
+  no longer buys more free repositioning**. Under Bloodrush (0.6x) you are slowed for
+  93% of the loop. Attack speed still means more damage; it no longer also means more
+  safety, which is what made that pairing degenerate.
 
 **D3 bow buff (2026-07-23), half-reverted (2026-07-24):** D3 raised bow damage +40% AND cut
 cooldowns -25%. The cooldown half was right and is untouched — the rate of fire genuinely was

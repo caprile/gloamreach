@@ -159,6 +159,15 @@ export class Palewake extends Enemy {
     return this.aggroed;
   }
 
+  // Own aggro field, so the base reset would be a no-op — see Enemy.forceDeaggro.
+  // Mirrors the leash-break branch in update(): drop aggro and fade back to the stalk.
+  forceDeaggro(now: number): void {
+    if (this.depleted) return;
+    this.aggroed = false;
+    this.enterStalking(now, this.spawnX, this.spawnY);
+    super.forceDeaggro(now);
+  }
+
   // Untargetable while stalking — you cannot click or weapon-sweep a shade that
   // isn't really here (the Sandmaw's submerged rule).
   isTargetable(): boolean {

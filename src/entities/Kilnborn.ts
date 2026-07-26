@@ -137,6 +137,16 @@ export class Kilnborn extends Enemy {
     return this.aggroed;
   }
 
+  // Own aggro field, so the base reset would be a no-op — see Enemy.forceDeaggro.
+  // Mirrors the leash-break branch in update(): drop aggro and go back to stoking.
+  forceDeaggro(now: number): void {
+    if (this.depleted) return;
+    this.aggroed = false;
+    this.kilnState = "stoking";
+    this.attackPhase = "none";
+    super.forceDeaggro(now);
+  }
+
   // Venting is this fight's stagger — earned by surviving the backdraft, not by
   // chipping a poise bar. Read by MainScene.staggerMultiplierFor.
   isStaggered(): boolean {

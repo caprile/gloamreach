@@ -59,6 +59,7 @@ import {
   Skills,
   skillDisplayName,
   weaponSkillDamageMultiplier,
+  rangedSkillRangeMultiplier,
   runningSprintMultiplier,
   dashIframeBonusMs,
   dashDistanceMult,
@@ -87,6 +88,7 @@ import {
   weaponAttacksPerSecond,
   damageTypeDisplayName,
   rangedWeaponConfig,
+  type RangedWeaponConfig,
   isRangedWeapon,
   weaponBaseCritChance,
   weaponBaseCritMult,
@@ -126,7 +128,7 @@ import {
 import { toolUpgradesForItem, TOOL_UPGRADES } from "../systems/ToolUpgrades";
 import { EventLog } from "../systems/EventLog";
 import { Biome, type ZoneType } from "../systems/Biome";
-import { Equipment, EQUIP_SLOTS, ABILITY_SLOT_IDS, slotGroup, type EquipSlot, type EquippedItem } from "../systems/Equipment";
+import { Equipment, EQUIP_SLOTS, ABILITY_SLOT_IDS, slotGroup, slotAccepts, type EquipSlot, type EquippedItem } from "../systems/Equipment";
 import {
   activeSets,
   setById,
@@ -373,12 +375,23 @@ const RUNNING_XP_PER_SEC = 20;
 const DASH_STAMINA_COST = 25; // flat cost per dash — 4 dashes per full bar
 const DASH_IFRAME_MS = 150; // outlasts the dash burst itself (Milestone E)
 // Anti-kite governor for ranged weapons (playtest: "ranged feels really safe,
-// bows can just kite"). Firing briefly slows the player so a shot-and-sprint
-// loop can't outrun everything indefinitely — a mild per-shot cost, not a
-// lockout. 350ms is shorter than every bow's own cooldown (540ms+), so a
-// single, unhurried shot still recovers to full speed before the next one.
-const RANGED_FIRE_SLOW_MULT = 0.72; // ~28% slower, per locked playtest decision
-const RANGED_FIRE_SLOW_MS = 350;
+// bows can just kite"). Firing slows the player, so a shot-and-sprint loop
+// can't outrun everything indefinitely.
+//
+// The first cut was a flat 0.72x for 350ms, and it did nothing: 350ms is under
+// every bow's cooldown (540ms+), so an unhurried shooter was always back at
+// full speed before the next shot — the walk-backwards-and-spam strategy the
+// user reported was completely untouched by it, and Bloodrush's 0.6x haste made
+// it worse by firing MORE shots through the same recovery gap.
+//
+// So the window is now a FRACTION OF THE ACTUAL COOLDOWN of the shot that was
+// fired, haste included. That inverts the interaction: firing faster no longer
+// buys more free movement between shots, it keeps you slowed nearly
+// continuously. Attack speed still means more damage — it just stops also
+// meaning more safety, which is what made the bow+Bloodrush pairing degenerate.
+const RANGED_FIRE_SLOW_MULT = 0.45; // heavy — you shuffle while working a bow
+const RANGED_FIRE_SLOW_COOLDOWN_FRAC = 0.85;
+const RANGED_FIRE_SLOW_MIN_MS = 300; // floor, so a very fast launcher still pays something
 // --- Armor set-bonus magnitudes (biome 2 Phase 4 forged gear; see SetBonuses.ts) ---
 // Molten Bulwark (Embersteel heavy): a melee attacker that lands a hit is seared
 // for this much fire damage (thorns), and ALL incoming damage is cut by a flat
@@ -540,6 +553,13 @@ const WOBBLE_MAX = 0.6 + 0.28 + 0.16;
 // this long so it doesn't instantly fly back into the inventory/station that
 // just released it. Manual click-pickup is unaffected.
 const DROPPED_ITEM_MAGNET_COOLDOWN_MS = 1500;
+// Felling a node used to magnet its drops on the very next frame, so the thing
+// you just earned was a blur between the node breaking and the count ticking up
+// (the user: "I barely see what is coming out of the node"). A short beat before
+// the pull starts lets the drop land and read. Much shorter than the
+// player-dropped cooldown above, which exists to stop a dropped stack snapping
+// straight back into your hands, not to make anything legible.
+const HARVEST_MAGNET_DELAY_MS = 550;
 
 // Night light sources (M-DN). A held item emits light of the given world-px
 // radius while it's the selected hotbar item; a future Lantern just adds a row.
@@ -1346,6 +1366,9 @@ export class MainScene extends Phaser.Scene {
   private isDead = false;
   private invulnerableUntil = 0; // this.time.now threshold; incoming damage skipped before this
   private rangedFireSlowUntil = 0; // anti-kite: briefly slowed after firing a ranged weapon
+  // Pre-roll relic snapshot the always-on passive strip renders while a forge
+  // reveal spins, so it can't spoil the outcome (see rollRelic).
+  private relicDisplayHold: RelicGroup[] | null = null;
   private readonly RESPAWN_DELAY_MS = 2000;
   private readonly POST_RESPAWN_INVULN_MS = 1500;
 
@@ -1622,6 +1645,7 @@ export class MainScene extends Phaser.Scene {
     this.cryptEnemies = new Set();
     this.cryptLightPoints = [];
     this.cryptNav = new Map();
+    this.dungeonWedge = new Map();
     this.hoveredCrypt = null;
     this.hoveredCryptExit = null;
     this.hoveredCryptChest = null;
@@ -1665,6 +1689,7 @@ export class MainScene extends Phaser.Scene {
     this.buffs.setMaxBuffs(DEFAULT_MAX_BUFFS);
     this.invulnerableUntil = 0;
     this.rangedFireSlowUntil = 0;
+    this.relicDisplayHold = null;
     // Relic unique-proc state (2026-07-15) — reset per run (scene.restart gotcha).
     this.onslaughtHits = 0;
     this.killMoveBurstUntil = 0;
@@ -3029,7 +3054,8 @@ export class MainScene extends Phaser.Scene {
     this.attackRangeRing.clear();
     if (!this.rangeRingEnabled) return;
     if (!this.equippedTool && !this.equippedWeapon) return;
-    const radius = (this.equippedWeapon && rangedWeaponConfig(this.equippedWeapon)?.maxRangePx) || REACH;
+    const rangedCfg = this.equippedWeapon ? rangedWeaponConfig(this.equippedWeapon) : undefined;
+    const radius = rangedCfg ? this.rangedRange(rangedCfg) : REACH;
     this.attackRangeRing
       .lineStyle(1.5, 0xffffff, 0.25)
       .strokeCircle(this.player.x, this.player.y, radius);
@@ -3270,7 +3296,9 @@ export class MainScene extends Phaser.Scene {
       const armorSlot = this.inventoryMenu.armorSlotAt(pointer.x, pointer.y);
       if (armorSlot !== null) {
         const declared = itemDef(stack.key)?.armorSlot;
-        if (declared && slotGroup(declared) === slotGroup(armorSlot)) {
+        // slotAccepts, not a group comparison: dropping legs on the chest slot
+        // must snap back, not equip.
+        if (declared && slotAccepts(declared, armorSlot)) {
           this.equipArmorFromContainer(src.container, src.index, armorSlot);
         }
         return;
@@ -3792,6 +3820,15 @@ export class MainScene extends Phaser.Scene {
       this.backpack.removeCount(trophyKey, 1);
     }
     this.lastRollTrophyKey = trophyKey;
+    // The deferred (menu) path spins a slot machine over an outcome that is
+    // ALREADY resolved, so RelicManager is mutated here, at the click. The
+    // passive strip along the bottom re-reads the live relic set every frame,
+    // which meant the new relic — name, rarity colour and effect text — appeared
+    // down there while the reel was still spinning and gave the result away (the
+    // user: "effect from relic shows at the bottom before the roll finishes").
+    // Hold the strip on its pre-roll contents until the reveal lands; the forge
+    // menu's own grid already does the same thing with preRollGroups.
+    if (!announce) this.relicDisplayHold = this.relics.groupedForDisplay() as RelicGroup[];
     const result = this.relics.roll(trophyKey);
     // The forge menu defers this to the slot-machine reveal (announce=false) so
     // the log + relic-bar + stat bonuses land at the satisfying moment.
@@ -3822,6 +3859,9 @@ export class MainScene extends Phaser.Scene {
   }
 
   private announceRelicResult(result: RollResult | null): void {
+    // The reveal has landed (or was flushed by closing the menu) — the passive
+    // strip may show the real set again. See rollRelic for why it was held.
+    this.relicDisplayHold = null;
     const tex = this.lastRollTrophyKey ? itemDef(this.lastRollTrophyKey)?.texture : undefined;
     this.recordRelicRollToLog(result);
     // Phase 5 (biome 3): a boss trophy landed on a CHOICE of candidates — there's
@@ -8057,6 +8097,55 @@ export class MainScene extends Phaser.Scene {
   private static readonly HOME_LEASH = 800;
   private static readonly HOME_RETURN_SPEED = 34;
 
+  // A dungeon dweller that is aggro'd, out of its own reach of the player, and
+  // has not moved for this long has wedged on geometry it can't get around.
+  // Reset it rather than leave it as a free target for anything that outranges
+  // it (the user: "can cheese minibosses in dungeons with bow — they get stuck in
+  // the doorway; they should be able to fit and chase you if possible, or
+  // deaggro if they can't get to you"). The crypt wardens make this worse than
+  // an ordinary dweller would: their 900px leash is sized to own a whole vault,
+  // so wedging a few tiles from spawn never trips it.
+  //
+  // Deliberately measured as DISPLACEMENT rather than "is the body blocked":
+  // Arcade zeroes the blocked axis during separation, so a wedged enemy reads as
+  // velocity-0 on most frames and is indistinguishable from one that chose to
+  // stand still. Where it stands over time is not ambiguous.
+  private static readonly DUNGEON_WEDGE_MS = 4000;
+  private static readonly DUNGEON_WEDGE_MOVE_PX = 26;
+  // Below this the enemy is close enough to be fighting, not stuck — a caster
+  // planted at range mid-channel must not read as wedged.
+  private static readonly DUNGEON_WEDGE_MIN_DIST = 200;
+  private dungeonWedge = new Map<Enemy, { x: number; y: number; since: number }>();
+
+  private updateDungeonWedge(enemy: Enemy, now: number): void {
+    const dist = Phaser.Math.Distance.Between(enemy.x, enemy.y, this.player.x, this.player.y);
+    if (
+      !this.cryptEnemies.has(enemy) ||
+      !enemy.isAggro() ||
+      enemy.depleted ||
+      dist < MainScene.DUNGEON_WEDGE_MIN_DIST
+    ) {
+      this.dungeonWedge.delete(enemy);
+      return;
+    }
+    const mark = this.dungeonWedge.get(enemy);
+    if (!mark) {
+      this.dungeonWedge.set(enemy, { x: enemy.x, y: enemy.y, since: now });
+      return;
+    }
+    // Any real movement restarts the window — this only fires on something that
+    // has genuinely stopped making progress, not on something moving slowly.
+    if (Phaser.Math.Distance.Between(enemy.x, enemy.y, mark.x, mark.y) > MainScene.DUNGEON_WEDGE_MOVE_PX) {
+      this.dungeonWedge.set(enemy, { x: enemy.x, y: enemy.y, since: now });
+      return;
+    }
+    if (now - mark.since < MainScene.DUNGEON_WEDGE_MS) return;
+    this.dungeonWedge.delete(enemy);
+    // Bosses regenerate while deaggro'd, so a reset also undoes the chip damage
+    // the cheese earned — the exploit pays nothing rather than paying slowly.
+    enemy.forceDeaggro(now);
+  }
+
   private steerCryptEnemy(enemy: Enemy): void {
     const crypt = this.activeDungeon;
     if (!crypt?.layout || !this.cryptEnemies.has(enemy)) return;
@@ -9264,7 +9353,14 @@ export class MainScene extends Phaser.Scene {
 
     const kind = requiredKind(node.action);
     if (this.equippedTool && toolKind(this.equippedTool) === kind) {
-      return node.action === "chop" ? "[LMB] Chop" : "[LMB] Mine";
+      // Name the node, same as the pickup prompt above — "[LMB] Mine" alone
+      // never said WHAT you were about to mine, which matters once the world
+      // has sunsteel/ember/clay deposits that read alike at a glance. Naming it
+      // reveals nothing the prompt-gating rules protect: the prompt only shows
+      // at all once the right tool KIND is out, and it still never says which
+      // tool or tier the node actually needs.
+      const verb = node.action === "chop" ? "Chop" : "Mine";
+      return `[LMB] ${verb} ${node.displayName}`;
     }
     return null; // no tool of the right kind out → show nothing
   }
@@ -9300,9 +9396,18 @@ export class MainScene extends Phaser.Scene {
   private attackRangeFor(enemy: Enemy): number {
     if (this.equippedWeapon) {
       const ranged = rangedWeaponConfig(this.equippedWeapon);
-      if (ranged) return ranged.maxRangePx;
+      if (ranged) return this.rangedRange(ranged);
     }
     return this.enemyReach(enemy);
+  }
+
+  // A ranged weapon's EFFECTIVE reach: its base maxRangePx grown by the Ranged
+  // skill, which buys range rather than damage now (see Skills.ts). Every
+  // consumer goes through here — the attack gate, the hover prompt, the reach
+  // ring, the projectile's own despawn distance and the stats panel — so a
+  // shot can't be legal at a distance the ring never drew, or vice versa.
+  private rangedRange(cfg: RangedWeaponConfig): number {
+    return cfg.maxRangePx * rangedSkillRangeMultiplier(this.skills);
   }
 
   // Mirrors promptFor()'s gating rules: out of reach -> nothing; no weapon
@@ -9629,14 +9734,14 @@ export class MainScene extends Phaser.Scene {
       this.awardSkillXp(kind === "axe" ? "chopping" : "mining", 30);
       if (!depleted) return; // node survives the hit; stays interactable
 
-      this.spawnLooseDrop(node.resource, node.amount, node.x, node.y);
+      this.spawnLooseDrop(node.resource, node.amount, node.x, node.y, HARVEST_MAGNET_DELAY_MS);
       // Chopping/Mining skill: rolled chance for a bonus +1 drop (M-SS). Routes
       // by tool kind (chop→chopping, mine→mining, incl. cracked Gloam ore).
       // Chopping/Mining skill chance + a Ring-of-the-Forager (B3-P2b) bonus.
       const bonusChance =
         (kind === "axe" ? choppingBonusChance(this.skills) : miningBonusChance(this.skills)) +
         this.equipEffects.gatherBonusChance();
-      if (Math.random() < bonusChance) this.spawnLooseDrop(node.resource, 1, node.x, node.y);
+      if (Math.random() < bonusChance) this.spawnLooseDrop(node.resource, 1, node.x, node.y, HARVEST_MAGNET_DELAY_MS);
       node.deplete();
       this.nodes = this.nodes.filter((n) => n !== node);
       this.hoveredNode = null;
@@ -9955,7 +10060,8 @@ export class MainScene extends Phaser.Scene {
     if (!this.equippedWeapon) return;
     const cfg = rangedWeaponConfig(this.equippedWeapon);
     if (!cfg) return;
-    const inReach = Phaser.Math.Distance.Between(this.player.x, this.player.y, enemy.x, enemy.y) <= cfg.maxRangePx;
+    const maxRange = this.rangedRange(cfg);
+    const inReach = Phaser.Math.Distance.Between(this.player.x, this.player.y, enemy.x, enemy.y) <= maxRange;
     if (!inReach) return;
 
     const cooldownMs = weaponCooldownMs(this.equippedWeapon) * this.attackCooldownMult();
@@ -9976,7 +10082,10 @@ export class MainScene extends Phaser.Scene {
     }
 
     this.lastWeaponHitAt = this.time.now;
-    this.rangedFireSlowUntil = this.time.now + RANGED_FIRE_SLOW_MS; // anti-kite: brief post-shot slow
+    // Anti-kite: the slow covers most of THIS shot's cooldown (haste included),
+    // so firing faster doesn't buy free repositioning — see the constants.
+    this.rangedFireSlowUntil =
+      this.time.now + Math.max(RANGED_FIRE_SLOW_MIN_MS, cooldownMs * RANGED_FIRE_SLOW_COOLDOWN_FRAC);
     this.stamina.spend(staminaCost);
     this.player.playSwing();
     this.player.playEquippedSwing();
@@ -10002,7 +10111,7 @@ export class MainScene extends Phaser.Scene {
       speed: cfg.projectileSpeed,
       damage: dmg,
       texture: cfg.projectileTexture,
-      maxRangePx: cfg.maxRangePx,
+      maxRangePx: maxRange,
       sourceIsPlayer: true,
       isCrit: crit,
       artAngleOffset: cfg.projectileArtAngleOffset,
@@ -11276,6 +11385,7 @@ export class MainScene extends Phaser.Scene {
       // Steering only redirects existing velocity: the AI still sees the real
       // player for every range/attack/give-up decision.
       this.steerCryptEnemy(enemy);
+      this.updateDungeonWedge(enemy, now);
       this.steerEnemyHome(enemy);
       if (bit) {
         // Most melee hits carry no knockback; a telegraphed attack that opts
@@ -13680,7 +13790,8 @@ export class MainScene extends Phaser.Scene {
     // Stamina cost no longer scales with Strength/Agility (retired in M-SS) —
     // only relics discount it now.
     const staminaCost = Math.round(weaponStaminaCost(this.equippedWeapon) * this.relics.staminaCostMult());
-    const attackRange = rangedWeaponConfig(this.equippedWeapon)?.maxRangePx ?? REACH;
+    const statRangedCfg = rangedWeaponConfig(this.equippedWeapon);
+    const attackRange = statRangedCfg ? this.rangedRange(statRangedCfg) : REACH;
     // Crit rollup (M-SS) — the same total-crit helpers the real crit roll uses,
     // so the panel can't drift from actual combat math.
     const critChance = this.critChanceTotal(this.equippedWeapon);
@@ -13823,12 +13934,35 @@ export class MainScene extends Phaser.Scene {
     if (this.character.killHealBonus()) healParts.push({ label: this.character.name(), amount: flat(this.character.killHealBonus()) });
     push("HP per Kill", `${Math.round(this.relics.killHeal() + this.character.killHealBonus())}`, healParts);
 
+    // Mirrors awardSkillXp's ADDITIVE bucket rather than multiplying the three
+    // getters together — the first cut compounded them and also dropped the
+    // Prodigy kill-streak entirely, so the printed total was never the number
+    // the game used.
     const xpParts: { label: string; amount: string }[] = [];
     if (this.progression.xpMult() !== 1)
       xpParts.push({ label: "Intelligence", amount: pct(this.progression.xpMult() - 1) });
     xpParts.push(...relicParts("xpPct"));
+    if (this.xpStreakMult() !== 1) xpParts.push({ label: "Kill streak", amount: pct(this.xpStreakMult() - 1) });
     if (this.character.xpMult() !== 1) xpParts.push(named(this.character.xpMult()));
-    push("Skill XP", pct(this.progression.xpMult() * this.relics.xpMult() * this.character.xpMult() - 1), xpParts);
+    const xpBucket =
+      (this.progression.xpMult() - 1) +
+      (this.relics.xpMult() - 1) +
+      (this.xpStreakMult() - 1) +
+      (this.character.xpMult() - 1);
+    push("Skill XP", pct(xpBucket), xpParts);
+
+    // The class's PER-SKILL affinity is its own axis, not a contribution to the
+    // bucket above — it multiplies outside it (see awardSkillXp) and there is no
+    // single number for it, since each skill has its own rate.
+    // Label kept SHORT: the total is right-aligned against the axis column, so a
+    // long label ("The Vagabond — Skill XP Affinity") runs straight into it. The
+    // character's name already heads the panel elsewhere; it isn't needed here.
+    const affinities = this.character.skillXpAffinities();
+    push(
+      "Skill XP Affinity",
+      "",
+      affinities.map((a) => ({ label: skillDisplayName(a.skill), amount: pct(a.mult - 1) })),
+    );
 
     // Jewelry channels, driven off the passive record itself so a new channel
     // needs no edit here — only a row in this table.
@@ -13900,15 +14034,13 @@ export class MainScene extends Phaser.Scene {
     const slot = def?.armorSlot;
     if (!slot) return;
 
-    // An item declares a GROUP, not a destination: any special fits any of the
-    // four special slots and any ability item fits any of the three Q/E/R slots
-    // (see EquipSlot). So route to the first FREE slot in the item's group, and
-    // only swap — into the slot the item nominally declares — once the group is
-    // full. Generalised from what used to be a ring1/ring2 special case, which
-    // was the only pair that could do this.
-    const group = slotGroup(slot);
-    const explicit = requestedSlot && slotGroup(requestedSlot) === group ? requestedSlot : undefined;
-    const targetSlot: EquipSlot = explicit ?? this.equipment.firstFreeIn(group) ?? slot;
+    // A special or ability item declares a GROUP, not a destination: any
+    // special fits any of the four special slots and any ability item fits any
+    // of the three Q/E/R slots, so those route to the first FREE slot in the
+    // group and only swap once it's full. GEAR is grouped but NOT
+    // interchangeable — see slotAccepts/targetSlotFor in Equipment.ts.
+    const explicit = requestedSlot && slotAccepts(slot, requestedSlot) ? requestedSlot : undefined;
+    const targetSlot: EquipSlot = explicit ?? this.equipment.targetSlotFor(slot);
     const previous = this.equipment.get(targetSlot);
     this.equipment.set(targetSlot, { key: stack.key, tier: stack.tier ?? 0, upgrades: stack.upgrades });
     container.set(index, null);
@@ -14290,7 +14422,9 @@ export class MainScene extends Phaser.Scene {
   // relics carry live count/cooldown state) + one per active armor set-bonus.
   private passiveEntries(): PassiveEntry[] {
     const entries: PassiveEntry[] = [];
-    for (const group of this.relics.groupedForDisplay() as RelicGroup[]) {
+    // relicDisplayHold pins this to the pre-roll set while a forge reveal is
+    // spinning, so the strip can't spoil the result (see rollRelic).
+    for (const group of this.relicDisplayHold ?? (this.relics.groupedForDisplay() as RelicGroup[])) {
       const def = group.def;
       const entry: PassiveEntry = {
         key: `relic:${group.id}@${group.powerTier}`,

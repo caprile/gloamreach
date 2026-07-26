@@ -121,6 +121,8 @@ export class RelicForgeMenu {
   // The slot-machine spin/reveal; `busy` blocks a second roll mid-spin.
   private revealFx: RelicRevealFx;
   private busy = false;
+  // A committed roll whose reveal hasn't landed yet — flushed by close().
+  private pendingRoll: RollResult | null = null;
   // Snapshot of the owned-relic grid as it was BEFORE the in-flight roll. The
   // roll mutates RelicManager immediately (so an interrupted spin can't change
   // the outcome), but the grid must keep showing the pre-roll set until the
@@ -187,6 +189,16 @@ export class RelicForgeMenu {
     // A boss trophy's pick is resolved by auto-taking the FIRST candidate. The
     // trophy is already spent and the roll is a guaranteed Mythic — declining it
     // the way an ambiguous family conflict declines would silently burn it.
+    // Closing mid-spin: the roll is already committed, so announce it now rather
+    // than letting it vanish with the cancelled tween — otherwise the log line
+    // never fires and the scene's spoiler hold (relicDisplayHold) never clears.
+    // Announced BEFORE the pending-pick handling below so lastResult is set for it.
+    if (this.pendingRoll) {
+      const flushed = this.pendingRoll;
+      this.pendingRoll = null;
+      this.lastResult = flushed;
+      this.deps.announceRoll(flushed);
+    }
     if (this.candidatesPending()) this.deps.commitCandidate(this.lastResult!.candidates![0]);
     else if (this.choicePending()) this.deps.resolveFamilyChoice(false);
     this.open = false;
@@ -239,11 +251,16 @@ export class RelicForgeMenu {
     const result = this.deps.roll(trophyKey);
     this.busy = true;
     this.lastResult = null;
+    // Held so closing the menu mid-spin can still flush the announce (see
+    // close()) — revealFx.stop() kills the tween without running its callback,
+    // and the roll is already committed by this point.
+    this.pendingRoll = result;
     this.render(); // clear any prior result line + grey the buttons under the scrim
     const bounds = { x: this.panelX, y: this.panelY, w: this.panelW, h: this.panelH };
     this.revealFx.spin(bounds, result, () => {
       this.busy = false;
       this.preRollGroups = null;
+      this.pendingRoll = null;
       this.lastResult = result;
       this.deps.announceRoll(result);
       if (this.open) this.render();

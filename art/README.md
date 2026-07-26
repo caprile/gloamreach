@@ -485,6 +485,11 @@ create_ui_asset  elements ["panel"], 512x512, no_background
   "button", "tab"]`) into its pieces by flood fill. One job for a matched set is
   both cheaper and safer than three jobs whose styles can drift — the slot
   socket that shipped came out of the same job as the button and tab.
+- **`recolor.mjs`** shifts one hue band of a PNG (leaving alpha, silhouette and
+  the near-black outline alone) — how a tier variant gets made when the
+  generator won't draw the object. It skips near-greyscale pixels, whose hue is
+  noise, so a wooden haft survives a recolour aimed at a stone head. See the
+  known-hard-prompt note above for the case that forced it.
 
 **A generated slot is far more decorated than a slot should be.** The first
 48x48 socket came back with bright violet corner gems; one of those is
@@ -607,6 +612,14 @@ added after the first four came back with per-icon outline hues.
   no second head" didn't land it. `icon_stone_axe` ships as the best of three.
   Expect the same fight on the rest of the axe ladder; if it matters, hand-edit
   the PNG rather than spending five generations on it.
+  **Confirmed again on `icon_stone_pickaxe_t1` (2026-07-26)**, which shipped as a
+  horizontal hammer and drew a playtest complaint. Four more rerolls — naming the
+  diagonal explicitly, naming the corners the head and haft should occupy, and
+  swapping to `high top-down` — all came back horizontal and hammer-shaped. The
+  fix was **`recolor.mjs`**: take the BASE icon, whose silhouette already reads
+  correctly, and recolour just its head. **For a tier variant of a hard-to-draw
+  tool, recolour the base rather than reroll** — the independent-generation rule
+  below assumes the generator will draw the object at all.
 - Output is genuinely clean pixel art — hard alpha (zero semi-transparent
   pixels, so no matte halo over the baked ground) and tight palettes (15-48
   colours at 32×32). No post-processing step is needed.

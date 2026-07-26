@@ -565,6 +565,26 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     this.aggroImmuneUntil = 0;
   }
 
+  // Abandon an engagement this enemy physically cannot reach — see
+  // MainScene.updateDungeonWedge, which calls this when something has been
+  // aggro'd and pinned against dungeon geometry with a player it can never
+  // touch. Without it a warden wedged in a doorway is a free target for anything
+  // that outranges it (the user: "can cheese minibosses in dungeons with bow,
+  // they get stuck in doorway — they should be able to fit and chase you if
+  // possible or deaggro if they can't get to you").
+  //
+  // Same override contract as forceAggro()/isAggro(): a subclass tracking aggro
+  // in its OWN field must override this to flip that field, or the reset is a
+  // silent no-op for it.
+  forceDeaggro(now: number): void {
+    if (this.depleted) return;
+    this.state = "idle";
+    // Post-giveup immunity is the point, not a side effect: without it the
+    // enemy re-aggros on the next frame it's in range and wedges straight back.
+    this.enterGivenUpState(now);
+    (this.body as Phaser.Physics.Arcade.Body | undefined)?.setVelocity(0, 0);
+  }
+
   // Resource(s) dropped on death — data-driven per EnemyConfig so MainScene's
   // attack handler doesn't need per-species branching (Boar -> boar_meat,
   // Snake -> leather, ranged Gremlin -> skin + blood, etc.). Each entry is
@@ -612,6 +632,12 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   private attackAnimUntil = 0;
   private static readonly ATTACK_ANIM_MS = 450;
   protected markAttackAnim(): void {
+    // A projectile outlives the thing that fired it, so this can be reached on
+    // an enemy that has already been destroyed — kill a Corpselight while its
+    // orb is mid-flight and the orb still resolves against the player, routing
+    // back through onProjectileHitPlayer(). Phaser clears `scene` on destroy,
+    // so reading the clock there threw and took the whole run down.
+    if (!this.scene) return;
     const now = this.scene.time.now;
     this.attackAnimUntil = Math.max(this.attackAnimUntil, now + Enemy.ATTACK_ANIM_MS);
   }
@@ -637,6 +663,9 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   // counterpart of a melee swing connecting (see markAttackAttempted above).
   // Public because the hit is resolved by the scene's overlap handler, not here.
   onProjectileHitPlayer(now: number): void {
+    // The shooter may already be dead — see markAttackAnim. Bookkeeping on a
+    // corpse is pointless as well as unsafe.
+    if (!this.scene) return;
     this.markAttackLanded(now);
   }
 

@@ -85,6 +85,34 @@ export function slotGroup(slot: EquipSlot): EquipSlotGroup {
   return SLOT_GROUP[slot];
 }
 
+// Whether ANY slot in the group will do for an item that declares one of them.
+//
+// Interchangeability is the point of the group model for specials and
+// abilities — a trinket is a trinket, and for abilities position is only the
+// hotkey. GEAR IS NOT INTERCHANGEABLE: helmet/chest/legs are grouped so the UI
+// can draw them together and so "does this go here?" has one answer, but a
+// helmet is still a helmet. Treating the three as one pool meant equipping
+// routed a second pair of legs into the free chest slot, so you could wear
+// three legs at once and stack their armor (the user).
+const GROUP_INTERCHANGEABLE: Record<EquipSlotGroup, boolean> = {
+  gear: false,
+  special: true,
+  ability: true,
+};
+
+export function groupIsInterchangeable(group: EquipSlotGroup): boolean {
+  return GROUP_INTERCHANGEABLE[group];
+}
+
+// Can an item declaring `declared` be equipped into `target`? The single
+// authority for both the drag path (is this a legal drop?) and the auto-equip
+// path (where does this go?), so the two can't disagree.
+export function slotAccepts(declared: EquipSlot, target: EquipSlot): boolean {
+  const group = slotGroup(declared);
+  if (slotGroup(target) !== group) return false;
+  return groupIsInterchangeable(group) || declared === target;
+}
+
 export function slotsInGroup(group: EquipSlotGroup): EquipSlot[] {
   return EQUIP_SLOTS.filter((s) => s.group === group).map((s) => s.id);
 }
@@ -124,5 +152,15 @@ export class Equipment {
   // path uses this to place an item without the caller naming a slot.
   firstFreeIn(group: EquipSlotGroup): EquipSlot | null {
     return slotsInGroup(group).find((s) => this.slots[s] === null) ?? null;
+  }
+
+  // Where an item declaring `declared` should actually go when the player
+  // hasn't named a destination. Interchangeable groups fill the first free slot
+  // and only swap once full; a fixed group (gear) always uses the item's own
+  // slot, swapping whatever is worn there.
+  targetSlotFor(declared: EquipSlot): EquipSlot {
+    const group = slotGroup(declared);
+    if (!groupIsInterchangeable(group)) return declared;
+    return this.firstFreeIn(group) ?? declared;
   }
 }

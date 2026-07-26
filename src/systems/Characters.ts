@@ -418,6 +418,19 @@ export class RunCharacter {
     return this.def?.affinity?.skillXpMult?.[skill] ?? 1;
   }
 
+  // Every skill this card actually shifts, strongest first. For readouts that
+  // have to SHOW the affinity rather than apply it — the Active Effects panel's
+  // Skill XP axis listed the global xpMult but nothing about the per-skill
+  // affinity, so a Vagabond's +60% Running XP was invisible there (the user:
+  // "effects page doesn't show my exp bonus from class").
+  skillXpAffinities(): { skill: SkillType; mult: number }[] {
+    const map = (this.def?.affinity?.skillXpMult ?? {}) as Partial<Record<SkillType, number>>;
+    return (Object.entries(map) as [SkillType, number][])
+      .filter(([, v]) => v !== 1)
+      .sort((a, b) => Math.abs(b[1] - 1) - Math.abs(a[1] - 1))
+      .map(([skill, mult]) => ({ skill, mult }));
+  }
+
   // Pushed into PlayerProgression once (setStatPotency, from applyCharacter),
   // so every per-point getter AND every stat readout picks it up in one place.
   statPotency(stat: StatType): number {

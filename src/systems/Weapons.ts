@@ -362,9 +362,15 @@ const RANGED_WEAPONS: Partial<Record<WeaponType, RangedWeaponConfig>> = {
   // badlands ranged upgrade. The arrow art points +x, so no artAngleOffset.
   // Each keeps its own arrow TEXTURE (a gloamsteel bow still visibly looses a
   // gloamsteel shaft) now that the arrow ITEM behind it is gone.
-  sunsteel_warbow: { projectileSpeed: 600, maxRangePx: 380, ammo: "none", projectileTexture: "arrow_projectile" },
-  embersteel_warbow: { projectileSpeed: 640, maxRangePx: 400, ammo: "none", projectileTexture: "ember_arrow_projectile" },
-  gloamsteel_warbow: { projectileSpeed: 680, maxRangePx: 420, ammo: "none", projectileTexture: "gloam_arrow_projectile" },
+  //
+  // These are BASE ranges and are ~20% under what they shipped at, because the
+  // Ranged skill now buys reach instead of damage (Skills.rangedSkillRangeMultiplier,
+  // +40% at the level-100 cap) — a maxed archer ends up back around the old
+  // 380/400/420, a fresh one nowhere near. The user, 2026-07-26: "the range
+  // feels pretty crazy, you can kill most enemies before they even get close."
+  sunsteel_warbow: { projectileSpeed: 600, maxRangePx: 300, ammo: "none", projectileTexture: "arrow_projectile" },
+  embersteel_warbow: { projectileSpeed: 640, maxRangePx: 320, ammo: "none", projectileTexture: "ember_arrow_projectile" },
+  gloamsteel_warbow: { projectileSpeed: 680, maxRangePx: 340, ammo: "none", projectileTexture: "gloam_arrow_projectile" },
 };
 
 export function rangedWeaponConfig(weapon: WeaponType): RangedWeaponConfig | undefined {

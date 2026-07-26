@@ -123,6 +123,15 @@ export class Sanguinarch extends Enemy {
     return this.aggroed;
   }
 
+  // Own aggro field, so the base reset would be a no-op — see Enemy.forceDeaggro.
+  // Mirrors the leash-break branch in update().
+  forceDeaggro(now: number): void {
+    if (this.depleted) return;
+    this.aggroed = false;
+    this.enterFrenzy(now);
+    super.forceDeaggro(now);
+  }
+
   // Engorged is this fight's stagger — the player opens it by choosing to bleed,
   // not by chipping a bar. Read by MainScene.staggerMultiplierFor.
   isStaggered(): boolean {

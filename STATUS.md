@@ -2,22 +2,31 @@
 
 ## Current State
 
-_Living snapshot — edit in place, never append._ Last shipped: **the custom cursor** (2026-07-26,
-Opus) — item 3 and the last of the user's stated art order. One icon (a gauntleted pointing hand)
-everywhere, with a short jab animation when you click something interactible. Before it, same day:
-**menu chrome art** — item 2 of that order. Every panel and slot in the game now wears a real
-blackened-iron frame with a violet gloam inlay, applied through one shared layer
-(`src/ui/frames.ts`) rather than by rewriting thirty menus. Before it, same day: the Inventory's
-**Active Effects tab** (one combined number per stat with its contributions indented under it,
-replacing the Combat block and the relic effects list) and **attack-FX art across the whole
-roster** (`src/art/attackFx.ts`).
+_Living snapshot — edit in place, never append._ Last shipped: **an 11-item bayou playtest batch**
+(2026-07-26, Opus) — a run-ending crash (a projectile resolving against the enemy that fired it
+after that enemy died), an equip bug that let three pairs of legs be worn at once, a **bow
+governor rework** (the `ranged` skill now buys REACH not damage; the post-shot slow scales with the
+shot's own cooldown, so attack speed no longer buys safety), a dungeon-boss wedge reset that closes
+the bow-cheese-in-a-doorway exploit, two spoiler/accuracy fixes on readouts, and four small feel
+items. Before it, same day: **the custom cursor**, **menu chrome art**, the Inventory's **Active
+Effects tab**, and **attack-FX art across the whole roster** — the user's three-item art order,
+now complete.
 
-**In progress / next.** the user's three-item art order is **done** (attack FX, menu chrome,
-cursor). Nothing is queued behind it. Still open from earlier notes: menu **buttons and tabs are
+**In progress / next.** Nothing is queued. Open from earlier notes: menu **buttons and tabs are
 deliberately still flat** (the agreed chrome scope was frames + slots; the generated kit's
 button/tab pieces are already downloaded in `art/work/` if that's wanted), a stouter/gobliny
 gremlin, and the ~19 ambient props that need regenerating as objects before they can animate. The
-oldest outstanding non-art item is still **a playtest at the post-flat-armor combat numbers**.
+oldest outstanding non-art item is still **a playtest at the post-flat-armor combat numbers** —
+now also wanting a check on the reworked bow numbers, which are first-pass. **Hitching was
+investigated and not reproduced** (median 3.9-5.0ms, zero frames over 16ms across ~8,000 samples);
+if it persists now the crash is fixed, it needs a repro rather than more synthetic profiling.
+
+**Two rules worth carrying forward from that batch.** (1) **A thrown exception inside the physics
+step costs no measurable frame time** — the frame is fast, it just aborts the rest of the step, so
+entities don't move that frame. It stutters visibly while a frame-time profiler shows nothing;
+don't rule out an exception because the numbers look healthy. (2) **Interchangeability belongs to
+the slot GROUP, not to the equip path** (`Equipment.slotAccepts`) — the group model was written for
+specials and abilities, where any slot will do, and silently applied that to gear.
 
 **The cursor's three rules live in code, not in the PNG** (`src/ui/cursor.ts`), so redrawing the
 art can't silently lose them: a pale 1px rim traced around the silhouette (the art is a dark
@@ -417,155 +426,89 @@ Verified live: the jab fires over a world prompt and over a real hotbar slot, do
 empty ground, settles back to base, and survives `scene.restart()` without re-registering its
 handler. `tsc` + `npm run build` clean, no console errors.
 
-### Menu chrome: real frames on every panel and slot (2026-07-26, Opus)
+### Bayou playtest batch: crash, equip bug, bow governor, 8 fixes (2026-07-26, Opus)
 
-Item 2 of the user's three-item order. He couldn't pick a style from a description ("I'd need to
-see it"), so the direction was locked as **dark iron & gloam-violet** — the option that keeps the
-existing amber selection and violet relic highlights working — and the priority was getting it on
-screen fast rather than getting it perfect on paper.
+Off a bayou run that ended in a hard crash. Eleven items; the user picked the bow direction and
+"all of it, one session" via `AskUserQuestion`.
 
-**The whole pass is one file plus two PNGs.** `src/ui/frames.ts` draws chrome next to the
-rectangles the menus already have, instead of replacing them; the rules and why each is forced are
-in Current State above and `art/README.md`. Call sites are one line: `bindFrame(this.bg, "panel")`
-for a panel, `frameInto(this.rows, box, "slot")` for anything rebuilt per render. **Migrated:**
-Inventory (panel + backpack cells + equipment slots + relic sockets), Hotbar, Crafting, Chest,
-Cooking, Drying Rack (both slot sizes), Jewelry, Relic Forge, Character, Upgrade, Pause, Tooltip,
-plus the Q/E/R ability bar and the buff bar — those two aren't menus, but they sit against the
-hotbar and leaving them flat would have read as a half-finished pass.
+**The crash: a projectile outlives the thing that fired it.** Killing a Corpselight while its orb
+was in flight, then letting that orb hit the player, ran the overlap handler's
+`sourceEnemy.onProjectileHitPlayer()` → `markAttackLanded` → `markAttackAnim`, which reads
+`this.scene.time`. Phaser clears `scene` on destroy, so it threw and took the run down. Guarded at
+both ends (`Enemy.markAttackAnim`, `Enemy.onProjectileHitPlayer`). This is a **structural
+consequence of last session's ranged-deaggro fix** — routing a landed shot back to its shooter
+created a reference from a projectile to an enemy that can die first, which nothing else in the
+codebase does. Verified live: the exact call on a destroyed enemy now returns instead of throwing.
 
-**Generation notes** (full recipe in `art/README.md`): `create_ui_asset` will not draw a bare
-frame — it returns a whole title-screen mockup, castle and dragon included. That's fine, since the
-border is the deliverable, and new `art/tools/hollow.mjs` cuts the interior out (with `--corner`
-to spare the thicker riveted corner plates a uniform cut would slice through). Two more tools came
-out of it: `scale.mjs`, which box-averages rather than dropping pixels because the border's
-thickness is a hard requirement (it has to fit inside a 12px content margin) and nearest-neighbour
-eats the one-pixel rivets; and `split.mjs`, which flood-fills a multi-element kit sheet apart —
-one job for a matched set beats three jobs whose styles drift, and the socket that shipped came
-out of the same job as the button and tab.
+**Gear slots were one shared pool, so you could wear three pairs of legs.** `EquipSlot`'s group
+model (5ar) made equipping route to `firstFreeIn(group)`, which is right for the four specials and
+the three Q/E/R slots and wrong for gear: a helmet is still a helmet. **Interchangeability is now a
+property of the GROUP** (`GROUP_INTERCHANGEABLE`, `slotAccepts`, `Equipment.targetSlotFor`) rather
+than an assumption baked into the equip path, and `slotAccepts` is the single authority for both
+the drag path ("is this a legal drop?") and auto-equip ("where does this go?") so the two can't
+disagree. Verified: a second pair of legs swaps into `legs` instead of filling `chest`, while a
+second ability item still fills `ability2`.
 
-**A generated slot came back far too decorated** — bright violet corner gems, attractive once and
-a mess tiled seventy times across a backpack grid. The kit's plain riveted socket, scaled down,
-was the answer. **Judge a slot asset by imagining the grid, not the sprite.**
+**Bows: the two levers that actually govern a bow, not a third damage pass.** The user, on a
+Bloodrush + bow run: "insanely OP... the walk-backwards-and-spam-shooting strat is a real thing"
+and "the range feels pretty crazy." Damage was left alone deliberately — the two previous passes
+were both damage passes and neither held.
+- **The `ranged` skill now buys REACH instead of damage** (the user's own suggestion) — the one
+  weapon skill excluded from `weaponSkillDamageMultiplier`, paying out via
+  `rangedSkillRangeMultiplier` (+0.4%/lvl, +40% at the cap). Base ranges cut ~20% (380/400/420 →
+  300/320/340), so a maxed archer lands near the old numbers and a fresh one nowhere near.
+  `MainScene.rangedRange()` is the single site every consumer reads — attack gate, hover prompt,
+  reach ring, the projectile's own despawn distance, stats panel — so a shot can never be legal at
+  a distance the ring didn't draw.
+- **The post-shot slow now scales with the shot's own cooldown.** It was 0.72x for a flat 350ms,
+  which is *under* every bow's cooldown (540ms+) — an unhurried shooter recovered full speed
+  between every shot, so the anti-kite governor did nothing to the reported strategy, and haste
+  made it worse by fitting more shots through the same recovery gap. Now **0.45x for 85% of the
+  actual cooldown, haste included**: firing faster no longer buys free repositioning. Measured
+  live — 459ms of a 540ms loop unhasted, 300ms of a 324ms loop (93%) under Bloodrush. Attack speed
+  still means more damage; it no longer also means more safety.
 
-**Two things worth knowing about the follower.** It registers one `POST_UPDATE` listener per Scene
-INSTANCE, and `scene.restart()` reuses the instance — so New Run neither stacks listeners nor
-strands frames. Verified explicitly against the codebase's own restart gotcha: listener count 2
-before and after, nine-slice count 30 before and after. And frames inherit `scrollFactor` from
-their rectangle, so `syncCameras` classifies them as UI automatically — zero unclassified, no
-double-draw.
+**Dungeon minibosses could be bow-cheesed in doorways.** New `Enemy.forceDeaggro(now)` with the
+same override contract as `forceAggro`/`isAggro` (the three wardens drive their own `aggroed`
+field, so they override it), driven by `MainScene.updateDungeonWedge`. **Wedging is measured as
+DISPLACEMENT, not "is the body blocked"** — Arcade zeroes the blocked axis during separation, so a
+wedged enemy reads as velocity-0 on most frames and is indistinguishable from one that chose to
+stand still; where it stands over four seconds is not ambiguous. The reset routes through
+`enterGivenUpState`, whose re-aggro immunity is the point rather than a side effect, and since
+bosses regen while deaggro'd the cheese pays nothing rather than paying slowly. The wardens' own
+900px leash is sized to own a whole vault, which is why wedging a few tiles from spawn never
+tripped it. Verified: a pinned warden resets at exactly 4000ms; one that keeps moving never does.
 
-Verified live: frame tracks a panel moved and resized mid-flight (500x300 -> 512x312 at -6,-6),
-visibility follows the panel exactly, and with only the crafting menu open the visible frame count
-is exactly 22 (18 hotbar + 3 ability + 1 panel) with 8 hidden panel frames parked — no leak per
-repaint. `tsc` + `npm run build` clean, no console errors.
+**Two UI leaks of information the player hadn't earned yet.** The bottom passive strip re-reads the
+live relic set every frame, and a forge roll mutates `RelicManager` at the CLICK (the spin is
+theatre over a known result), so the new relic's name, rarity colour and effect appeared down there
+mid-spin. `relicDisplayHold` pins the strip to its pre-roll snapshot until the reveal lands — the
+forge's own grid already did this, the always-on HUD didn't. Closing the forge mid-spin now flushes
+the announce too, since `revealFx.stop()` kills the tween without running its callback, which would
+have stranded the hold forever. Separately the **Active Effects "Skill XP" axis computed its total
+as a PRODUCT while the game uses an additive bucket, and dropped the Prodigy streak entirely** — it
+now mirrors `awardSkillXp` exactly. The class's **per-skill affinity** was missing altogether (the
+user: "effects page doesn't show my exp bonus from class") and is its own row, because it
+multiplies *outside* that bucket and has no single number.
 
-**Buttons and tabs are deliberately untouched** (the agreed scope was frames + slots), and the
-**Tooltip is framed with a bleed** so its border sits almost entirely outside the box — a tooltip
-pops over dense grids hundreds of times a session and can't afford to lose its 8/6px text padding
-to an ornament.
+**Four smaller ones.** The selected hotbar slot gets a **lit warm fill**, not just an accent on the
+edge — once the frame art landed, selection was an amber tint on an already ornate border. Chop/mine
+prompts **name the node** ("[LMB] Mine Boulder"), which reveals nothing the prompt-gating rules
+protect since the prompt only appears once the right tool KIND is out. Node drops carry a **550ms
+magnet delay** so you see what came out. And `icon_stone_pickaxe_t1` was a horizontal hammer:
+**four rerolls all drifted the same way**, confirming the README's known-hard-prompt note for picks
+and axes, so it's now derived from the base icon — whose silhouette already reads correctly — by a
+new reusable **`art/tools/recolor.mjs`** (hue-selective, skips near-greyscale pixels so a wooden
+haft survives a recolour aimed at a stone head). **For a tier variant of a hard-to-draw tool,
+recolour the base rather than reroll.**
 
-### Active Effects tab — one number per stat, sources indented under it (2026-07-26, Opus)
+**Hitching: not reproduced, and the profile is healthy.** ~8,000 sampled frames across idle, a long
+continuous traverse through fresh bayou terrain, and POI clusters: median 3.9-5.0ms, p99 6.2-6.5ms,
+**zero frames over 16ms**. The likeliest culprit is the crash bug itself, and the experiment that
+suggests it is worth keeping: a throw inside the physics step costs **no measurable frame time**
+(median 4ms with and without), because the frame is fast — it just aborts the rest of the step, so
+the player and enemies don't move that frame. **That stutters visibly while a frame-time profiler
+shows nothing**, and a bow killing casters at range hits that path constantly. If it persists now
+the throw is gone, it needs a repro rather than more synthetic profiling.
 
-The item held back from the Vagabond batch, unblocked by the user's call: **get rid of the Combat
-and relic stats specifically**. That was the missing piece — the previous attempt failed trying to
-keep the Combat column AND fit a unified list into the 190px under it. Deleting both is what frees
-the space.
-
-**The presentation is the point, and I got it wrong first.** I initially shipped the list grouped by
-SOURCE — a Weapon section, a Relics section, a Worn Gear section. The user corrected it mid-session:
-he wants **one combined number per stat with its contributions indented underneath**. He's right,
-and the reason is the same reason the old panel was bad: a Combat block saying `Damage: 20` beside a
-relic list saying `Damage +10.5%` makes the reader do the multiplication themselves, in two places
-that never even named the stat the same way. Now:
-
-```
-Damage — Blunt                    20
-  • Embersteel Warhammer         +23
-  • Berserker's Mantle        +10.5%
-  • The Vagabond                -25%
-```
-
-**16 axes**, each emitted only when something feeds it: damage, crit chance, crit damage, attack
-stamina, armor, damage taken, max HP, max stamina, move, sprint, HP/kill, skill XP, ability
-cooldown, ability power, bonus gather, light radius, bleed/poison taken. Contributions name the
-actual thing — the weapon, the relic, the class card, the stat, the ring — not a category. Trailing
-**Procs** and **Set Bonuses** blocks keep the list form, since a conditional has no combined number
-to be an addend of.
-
-**Assembled in `MainScene.activeEffects()`, not the menu.** It reads the same helpers combat does,
-so a panel number can't drift from a fight number. That immediately paid for itself: the first cut
-looked up the relic damage channel as `damageMult` (the getter's name) when the channel is
-`damagePct`, so the Damage axis printed the right total with its relic contribution silently
-missing. The lookup is now typed `keyof RelicEffect`, so that class of mistake is a compile error.
-
-**Removed:** the `Combat` block under Equipment and the `Effects` list under the relic slots. The
-relic SLOTS stay — they're the paper doll of what's equipped, which is why they went on the panel.
-
-**Two balanced columns.** The first cut filled column one until it overflowed, which packed it to
-**within 1px of the panel floor** while column two sat a third empty — correct, and permanently one
-relic away from running off the panel. It now estimates every block and splits at the halfway mark:
-a maximal build (every family a Mythic at tier 2, full Embersteel set, three passives, 20 in every
-stat) measures **721 / 729 against an 826 floor**. A block never splits across columns.
-
-Verified live: the maximal build's Damage total reconciles by hand (23 x (1 + 0.105 - 0.25) = 20),
-all three tabs render and are clickable with a real mouse, and the empty state degrades to a
-six-axis baseline that still says "No weapon equipped" / "No armor worn" rather than omitting the
-stat the player opened the tab to check. `tsc` clean, no console errors.
-
-### Attack-FX art: impacts across the whole roster (2026-07-26, Opus)
-
-The first of the three items in the user's stated order. The telegraph/attack depth split shipped
-last session with only two impacts wired to art (the Gremlin King's smash, the Gloamwarden's
-eruption); everything else still drew its *hit* as translucent `Graphics`. This finishes the pass.
-
-**`src/art/attackFx.ts` — two spawners cover the roster**, because every area attack in the game is
-one of two shapes: `burstFx` (radial impact centred on a point) and `coneFx` (directional fan along
-a locked heading, art authored apex-left/pointing +x). Both size the art against the radius or range
-`checkPlayerHit` actually uses, and both are **fire-and-forget** — the sprite isn't parented to the
-enemy and its own tween destroys it, so an enemy that dies or is culled mid-attack can't strand it.
-That is the exact failure the older held-sprite versions need explicit teardown for. The Duneshaper's
-lance is the one exception (it sweeps ±20° *while* it fires, so it's held in a field and re-aimed each
-frame — with an `active` guard, since its tween may already have destroyed it).
-
-**Ten attacks wired**, 8 new sprites: Cinderwrought **cone** + **hammer arc**; Duneshaper **nova**,
-**sand spikes**, **sunscorch barrage**, **gloamfire lance**; Hexling **flame strike** (3 circles);
-Sandmaw **eruption**; Miretyrant **slam** + **tail sweep**. Two more had a telegraph and then no
-visible hit at all, which read as the boss simply arriving somewhere — the **Gloamwarden's leaping
-smash** and the **Sanguinarch's slam** — both one line each now that the helpers exist.
-
-**Sprites are shared where the EVENT is the same, not where the enemy is.** `fx_flame_burst` plays
-for the Hexling's flame and the Duneshaper's barrage; `fx_sand_spikes` for the Sandmaw's eruption and
-the Duneshaper's spikes; `fx_mire_splash` is **tinted crimson** for the Sanguinarch's blood slam. What
-stays per-attack is the footprint, which comes from the caller's own radius.
-
-**Three corrections found by measuring rather than looking.** (1) `ATTACK_FX_DEPTH` was **2500**, but
-`ysortDepth` tops out at **2520** for an entity at the bottom of the 28000px world — so an entity
-could draw *over* the hit that just landed on it, which is the confusion the whole split exists to
-prevent. Now 2560 (still under the 2600 HUD floor). (2) The burst helper shipped with a 1.15
-**overshoot**; that draws a wider radius than it hits, which teaches the wrong dodge, so the default
-is 1:1 (verified live: the nova's final half-width is exactly its 132px damage radius). (3) `coneFx`
-clamps its half-angle at 90° for sizing — past that a wedge's chord *shrinks* while the arc widens, so
-the raw sine drew the Miretyrant's 240° tail sweep narrower than a 180° one. Also migrated the
-Miretyrant's and Sandmaw's telegraphs off `this.depth + 0.5` onto `TELEGRAPH_DEPTH`: they were
-warnings drawn *above* entities, against the rule.
-
-**`fx_fire_cone` is the one key with no real art, deliberately.** `create_map_object` will not draw a
-top-down cone of fire and failed five distinct ways (torch handle / triangle tiled with identical
-droplets / a literal folding hand fan / a sunrise poster / a flaming dragon head on a stick).
-Composing it offline from the good top-down flame burst also failed — the burst's spiky ring is too
-distinctive to tile and reads as a cluster of little suns; that composer was deleted rather than left
-as dead tooling. So the BootScene fallback is what ships, improved into a **scalloped wedge** whose
-leading edge is cut into flame tongues. It's wired through the normal key, so a PNG later needs no
-code change. Radial top-down fire is fine — it is specifically the *directional* cone.
-
-**New `art/tools/dekey.mjs`.** 3 of 8 generations came back on a solid background again (the POI
-decals did it last pass). `--feather` is the wrong repair for anything that isn't a disc — it fades
-alpha with radius and eats a crescent's own body — so this keys on colour, flood-filling inward from
-the corners. Global matching was tried first and dissolved the crescent's dark stone bands, and
-tolerance turned out to be per-image: a grey background sat only ~22 from the art's darkest band, so
-`--tol 40` leaked through it and 14 was correct.
-
-Verified live via `preview_eval` + screenshots: all 10 FX keys resolve to real-art dimensions, every
-spawner produces the right texture at the right footprint and rotation, the nova's final size matches
-its damage radius exactly, the sweep clamps to 330px, and no console errors. `tsc` clean. No
-`RECIPES.md` change.
+`tsc` clean, no console errors. `RECIPES.md` ranged-weapon table + `art/README.md` updated.
