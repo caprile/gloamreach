@@ -1990,9 +1990,26 @@ below.**
    animations even if ambient" — which **reverses the original "~327 of 377 never animate"**. It
    decides a tool at generation time: a `create_map_object` result can never be animated, so the
    ~19 identified ambient movers (flames, crystals, reeds, banners) get regenerated as objects
-   during the animation pass. **Ground texturing + biome blending is its own phase, deliberately
-   LAST** (the user) — it's the one part of the migration that is *not* per-asset reversible, since
-   the ground is generated rather than a sprite.
+   during the animation pass. **Ground texturing + biome blending — SHIPPED**
+   (2026-07-25), the last and only non-reversible phase (the ground is generated, not a sprite,
+   so the override layer can't reach it). The colour bake is untouched and still owns every biome
+   boundary and POI floor stamp; real 32px tiles are stamped semi-transparently over it by
+   **`src/ui/GroundDetailUI.ts`**, a 2304px chunk kept around the player — constant cost at any
+   world size, which is the whole reason for the design (a world-sized texture OOMs, and the outer
+   colour overlay is ~7 world px per texel, so a moving chunk is the only way to get 1:1 pixel art
+   onto the ground). `src/systems/ground.ts` owns the 10-material vocabulary and
+   `WorldBiomes.worldGroundMaterialAt` mirrors the colour compositor's priority order, so texture
+   and colour can never disagree about where a creek or a mesa is. Four rules worth carrying
+   forward: **boundaries are softened by a per-cell two-probe dither** (a jittered primary plus a
+   far-flung secondary laid on at half strength — one mechanism covers blob seams, creek banks and
+   mesa edges alike, with no per-boundary code); the art is **authored at 32px but stamped on a
+   16px grid** via quadrant frames, so material edges curve without halving the ground's pixel
+   resolution against every other sprite; **a tile that looks perfect often does not tile** —
+   `art/tools/check-seam.mjs` catches it (about a third of every batch, invisibly) and
+   `art/tools/seamless.mjs` repairs a wrap rather than re-rolling for one; and **a POI floor baked
+   into the colour layer must ALSO be a material**, or this layer paints grass straight back over
+   it (`MainScene.groundMaterialAt` — the War Camp regressed exactly this way). The old
+   `ground_speckle` grain layer is gone; it existed only because the outer world had no detail.
    **Phase 4 (player rig) + the creature roster shipped** (2026-07-25, same day). Five survivors
    with 4-direction idle + walk, themed on their starting ability (`src/art/playerRig.ts`); all 14
    common creatures and all 8 bosses with real art, **19 of 22 animated** idle/walk/attack
@@ -2021,8 +2038,7 @@ below.**
    Kilnborn `hurricane-kick`, Gremlin King `two-footed-jump`, …) — the original recipe's blanket
    "humanoids use `cross-punch`" is what made the roster feel repetitive. Full mapping table +
    both lessons in `art/README.md`.
-   **Next, in the user's stated order:** ground/backdrop texturing + biome blending (the last
-   non-reversible phase) → **AOE/attack FX art** (Cinderwrought's cinder cone, Gloamwarden's ground
+   **Next, in the user's stated order:** **AOE/attack FX art** (Cinderwrought's cinder cone, Gloamwarden's ground
    spikes, telegraph footprints — all procedural `Graphics` today) → **on-theme inventory/crafting
    menu art** (`create_ui_asset`) → a **unique in-game cursor** (`input.setDefaultCursor`).
 

@@ -91,6 +91,44 @@ chest, entrance) are ordinary props.
   needs — do **not** run `trim.mjs` on a tile, it would crop the bleed.
 - `outline_mode: "segmentation"` avoids the per-tile outline that makes a tiled
   surface read as a grid of separate stamps.
+- **A tile that looks perfect may not actually tile — always run
+  `art/tools/check-seam.mjs`.** Roughly a THIRD of every batch comes back with a
+  mismatched wrap edge, and it is invisible in a viewer showing one copy: the
+  first ground grass tile scored **x10.8** and drew a hard horizontal line every
+  32px across the whole forest. The tool compares each wrap edge to the tile's
+  own interior steps, so it reports a ratio (x1 = seamless, >= x2 = a visible
+  grid) rather than an absolute that would depend on how busy the texture is.
+- **Repair a marginal wrap with `art/tools/seamless.mjs` instead of re-rolling.**
+  It halves the edge difference and fades that correction inward, so only the
+  low-frequency drift that IS the seam is removed and the texture's own detail is
+  untouched. Repaired tiles score x0.00. Without it the bayou would have shipped
+  its third-choice mud — exactly one muck candidate in 32 wrapped cleanly, and
+  re-rolling for wrap quality loses the tile you actually wanted.
+
+### Ground tiles (the `ground_*` materials)
+
+The world ground is its own system — see `src/systems/ground.ts` and
+`src/ui/GroundDetailUI.ts`. Three things to know before adding to it:
+
+- **Materials, not places.** A tile belongs to a *material* (`grass`,
+  `forest_floor`, `creek`, `clay`, `sand`, `rock`, `muck`, `swamp_water`, `peat`,
+  `silt`), and `GROUND_VARIANTS` says how many variants each has. Add a variant
+  by dropping `art/sprites/ground/ground_<material>_<n>.png` and bumping that
+  count; BootScene generates a flat placeholder for every key, so a missing file
+  degrades rather than breaks.
+- **Tiles are drawn semi-transparently over a colour field**, at the per-material
+  opacity in `GROUND_ALPHA`. That is why one clay tile serves the whole badlands
+  palette. It also means a tile that is too bright or too saturated washes the
+  biome's identity out — `adjust.mjs --mul` is the fix, and the forest water
+  needed 0.82.
+- **Authored at 32px, stamped at 16px.** The layer carves each tile into quadrant
+  frames and stamps those on a finer grid so material boundaries can curve. Art
+  must therefore be exactly 32x32; a different size still carves up (the quadrant
+  size is read from the real texture) but the quadrants stop lining up with the
+  32px block, so same-material neighbours no longer reassemble the source tile.
+- **Prompt for the SURFACE, not the scene.** "Shallow creek water over pebbles"
+  came back as bare grey gravel with no water in it. Naming the water's own
+  features — ripples, caustics, highlights, flowing — is what produced water.
 - `*_picked` harvested-flora states and `*_shielded` node states are *state*
   variants — these do need art, but only a small delta from the base.
 

@@ -3,6 +3,13 @@ import { applyTextureOverrides, queueTextureOverrides } from "../art/overrides";
 import { buildCreatureAnimations, queueCreatureRig } from "../art/creatureRig";
 import { deriveEliteTextures, eliteKeyFor } from "../art/eliteVariants";
 import { buildPlayerAnimations, queuePlayerRig } from "../art/playerRig";
+import { registerGroundTileFrames } from "../art/groundFrames";
+import {
+  GROUND_MATERIALS,
+  GROUND_PLACEHOLDER_COLOR,
+  GROUND_VARIANTS,
+  groundTextureKey,
+} from "../systems/ground";
 
 // The BootScene runs first. It generates placeholder textures in code (so the
 // game needs zero image files to run), then hands off to MainScene.
@@ -33,6 +40,9 @@ export class BootScene extends Phaser.Scene {
     // would otherwise keep a placeholder elite. Re-derive those from the real
     // pixels now that they exist.
     deriveEliteTextures(this, report.applied);
+    // Also after overrides: an override swaps the whole Texture, discarding any
+    // frames carved into the placeholder.
+    registerGroundTileFrames(this);
     // Rig strips are their own texture keys rather than overrides, so they
     // don't collide with generation — but the animations still have to exist
     // before MainScene builds a Player.
@@ -41,6 +51,28 @@ export class BootScene extends Phaser.Scene {
     // recoloured from the same base the still elite came from.
     buildCreatureAnimations(this, eliteKeyFor);
     this.scene.start("MainScene");
+  }
+
+  // Fallback ground-material tiles (see src/systems/ground.ts). Real 32x32 pixel
+  // art overrides these one file at a time, exactly like every other texture —
+  // so the ground detail layer works with no art on disk at all, just flatter.
+  // Each variant is seeded off its own index so the variant machinery is visibly
+  // doing something even on placeholders.
+  private makeGroundMaterialTiles(g: Phaser.GameObjects.Graphics): void {
+    for (const m of GROUND_MATERIALS) {
+      const base = GROUND_PLACEHOLDER_COLOR[m];
+      for (let v = 0; v < GROUND_VARIANTS[m]; v++) {
+        g.clear();
+        g.fillStyle(base, 1);
+        g.fillRect(0, 0, 32, 32);
+        const rnd = new Phaser.Math.RandomDataGenerator([`${m}:${v}`]);
+        for (let i = 0; i < 14; i++) {
+          g.fillStyle(rnd.pick([0x000000, 0xffffff]), rnd.realInRange(0.06, 0.16));
+          g.fillRect(rnd.between(0, 30), rnd.between(0, 30), rnd.between(1, 3), rnd.between(1, 3));
+        }
+        g.generateTexture(groundTextureKey(m, v), 32, 32);
+      }
+    }
   }
 
   private makeTextures(): void {
@@ -56,38 +88,7 @@ export class BootScene extends Phaser.Scene {
     g.fillRect(24, 5, 2, 2);
     g.generateTexture("grass", 32, 32);
 
-    // Generic ground SPECKLE tile (32x32, mostly transparent) — a few low-alpha
-    // dark + light pixels that read as fine grain over ANY ground color. The
-    // forest gets its texture from the opaque `grass` tile above; the outer world
-    // (badlands/dunes/base) is a single smooth stretched overlay with no detail,
-    // so this is tiled crisply (NEAREST) over the whole world via a camera-locked
-    // TileSprite in MainScene to give it the same speckled look. Neutral b/w
-    // specks so one tile works on dusty clay, sand, and grass alike.
-    g.clear();
-    const darkSpecks: Array<[number, number, number]> = [
-      [3, 5, 2],
-      [17, 3, 2],
-      [26, 12, 2],
-      [9, 20, 3],
-      [21, 25, 2],
-      [13, 29, 2],
-    ];
-    for (const [x, y, s] of darkSpecks) {
-      g.fillStyle(0x000000, 0.16);
-      g.fillRect(x, y, s, s);
-    }
-    const lightSpecks: Array<[number, number, number]> = [
-      [7, 9, 2],
-      [24, 6, 2],
-      [15, 16, 2],
-      [29, 22, 2],
-      [4, 27, 2],
-    ];
-    for (const [x, y, s] of lightSpecks) {
-      g.fillStyle(0xffffff, 0.13);
-      g.fillRect(x, y, s, s);
-    }
-    g.generateTexture("ground_speckle", 32, 32);
+    this.makeGroundMaterialTiles(g);
 
     // Player (20x20) — a front-facing little adventurer in a blue tunic. The
     // sprite orientation is static (facing is tracked only to offset the equipped

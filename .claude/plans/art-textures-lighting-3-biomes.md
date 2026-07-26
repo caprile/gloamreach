@@ -280,24 +280,24 @@ Two items added to the arc after the creature pass, both queued behind the groun
 
 - Per-gem crypt doorway colour needs the theme threaded into `cryptLightPoints`
   (currently `{x,y}[]`); it uses a generic gloam violet for now.
-- **Ground texturing + biome blending is its own phase, deliberately LAST** (the user,
-  2026-07-25: *"something else I want to figure out at some point after all of the
-  models and things are done is the background texturing and blending / biome backs"*).
-  Props first, ground after — the ground is the one asset every other asset composites
-  over, so its palette should be chosen against finished art rather than placeholders.
-  It is also the only part of the migration that is **not** per-asset reversible: the
-  override layer swaps a texture key, but the ground is *generated*, not a sprite.
-  `buildBiomeTexture()` blends per-pixel colour from `Biome.forestWeight`/`creekWeight`
-  and `badlandsGroundColorAt`, and `bakeOuterOverlay` stretches one 4096² RenderTexture
-  over the whole 28000px world. Two viable routes when it starts:
-  - **Tiles** — `create_topdown_tileset`'s `lower`/`upper`/`transition` endpoints map
-    cleanly onto the existing weight functions, but adopting them means replacing
-    per-pixel blending with discrete tile stamping (a real rewrite of the bake, and
-    `feedback_phaser_world_sized_tilesprite_oom` bounds how big any of it can be).
-  - **Texture overlay** — keep the current colour blend as the base and multiply a
-    tiling detail texture over it, which preserves every existing biome boundary and
-    the war-camp/POI floor decals for far less risk.
-  Blending between biomes is the harder half: `WorldBiomes.seedCoverage` already gives
-  organic blob edges, so the seam work is about making two ground *textures* meet, not
-  about the shapes.
+- **Ground texturing + biome blending — DONE (2026-07-25).** Was deliberately last,
+  being the only part of the migration that is *not* per-asset reversible (the
+  ground is generated, not a sprite). Of the two routes sketched here, the
+  **texture overlay** won — but as a moving chunk of real 32px tiles at 1:1
+  (`src/ui/GroundDetailUI.ts`), not a flat detail wash. The colour bake is
+  untouched and still owns every biome boundary, POI floor stamp and map colour;
+  the tiles only supply grain. `src/systems/ground.ts` holds the material
+  vocabulary and `WorldBiomes.worldGroundMaterialAt` mirrors the colour
+  compositor's priority order so the two can never disagree.
+  - Tiles route rejected for the reason noted here: it means replacing per-pixel
+    blending with discrete stamping, i.e. a real rewrite of the bake.
+  - Boundaries: a per-cell **two-probe** dither (jittered primary + a far-flung
+    secondary laid on at half strength) softens every seam in the world at once.
+  - Resolution: art stays 32px and is carved into quadrant frames stamped on a
+    **16px** grid, so boundaries curve without halving the ground's pixel
+    resolution against every other sprite.
+  - New tooling: `check-seam.mjs` (a third of every tiles-pro batch does not
+    actually tile) and `seamless.mjs` (repair a wrap instead of re-rolling).
+  - Not done: the tiles are static, so water does not animate. That belongs with
+    the ambient-prop animation pass.
 - `pixelArt: true` is already set, so loaded PNGs stay crisp with no extra work.

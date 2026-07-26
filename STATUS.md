@@ -2,11 +2,23 @@
 
 ## Current State
 
-_Living snapshot — edit in place, never append._ Last shipped: **creature art pass 2 — gator
-Mirejaw, ghost Corpselight, per-creature attack animations** (2026-07-25, Opus)
-(`.claude/plans/art-textures-lighting-3-biomes.md`).
+_Living snapshot — edit in place, never append._ Last shipped: **ground texturing + biome
+blending** (2026-07-25, Opus) (`.claude/plans/art-textures-lighting-3-biomes.md`).
 
-**The art migration now covers everything except the ground.** Icons (181), world props/flora/
+**The art migration now covers every surface in the game.** The GROUND was the last piece and
+the only non-reversible one — it is generated, not a sprite, so the override layer can't reach
+it. It is now real 32px pixel art: `src/ui/GroundDetailUI.ts` keeps a 2304px chunk of stamped
+tiles around the player (constant cost at any world size) drawn *over* the existing colour
+field, which still owns every biome boundary and POI floor stamp. 10 materials across the three
+biomes, 28 tiles. the user's three live notes all landed: real water in the forest creek, a
+two-probe dither that softens every material boundary in the world at once, and a 16px stamp
+grid carved out of the 32px art so boundaries curve without halving the ground's pixel
+resolution. Two new tools came out of it — `check-seam.mjs` (a third of every tiles-pro batch
+does not actually tile, invisibly) and `seamless.mjs` (repairs a wrap instead of re-rolling for
+one). The `ground_speckle` grain layer is gone: it existed only because the outer world had no
+detail.
+
+Before that: icons (181), world props/flora/
 ore/POI structures/crypt tiles/map markers/ability icons (182), the **player rig** (5 survivors,
 4-direction idle + walk, themed on their starting ability, `src/art/playerRig.ts`), and the
 **creature roster** — all 14 common creatures plus all 8 bosses, **19 of 22 animated**
@@ -20,7 +32,7 @@ table lives in `art/README.md`.
 worm and a floating wisp fit neither the humanoid nor the quadruped skeleton. The first two are
 ambushers whose read is stillness; the Corpselight already hovers via `bobPhase` in code.
 **Deliberately still placeholder:** the tiny 6x6 projectiles (a 32px generation downscaled to 6px
-is mush) and the ground itself. **No player attack animation** — both generation routes were tried
+is mush). **No player attack animation** — both generation routes were tried
 and rejected; the body pulses and the held item lunges instead. **No weapon-in-hand sprites** — the
 plan's anchor needed a per-frame hand joint the API doesn't expose.
 
@@ -28,20 +40,18 @@ the user's call on elites: the recolour is "good for now". Bespoke elite art is 
 pass, and since `eliteVariants.ts` skips any elite key that was itself overridden, dropping in a
 real `<name>_elite.png` simply wins.
 
-**Next, in the user's stated order:** (1) **ground/backdrop texturing + biome blending** —
-deliberately last of the asset work, being the one part of the migration that is *not* per-asset
-reversible (the ground is generated, not a sprite); (2) **AOE / attack FX art** — the
-Cinderwrought's cinder cone, the Gloamwarden's ground spikes and the rest of the telegraph
-footprints, all currently procedural `Graphics`; (3) **on-theme inventory and crafting menu art**
-(`create_ui_asset` for panel/slot frames, buttons, tabs); (4) a **unique in-game cursor**
-(`input.setDefaultCursor`, worth a hover/attack variant given the game is mouse-driven). Also
+**Next, in the user's stated order:** (1) **AOE / attack FX art** — the Cinderwrought's cinder
+cone, the Gloamwarden's ground spikes and the rest of the telegraph footprints, all currently
+procedural `Graphics`; (2) **on-theme inventory and crafting menu art** (`create_ui_asset` for
+panel/slot frames, buttons, tabs); (3) a **unique in-game cursor** (`input.setDefaultCursor`,
+worth a hover/attack variant given the game is mouse-driven). Also
 still open from the user's earlier notes: a stouter/gobliny gremlin (the humanoid rig reads too
 human; custom proportions came out worse, so it needs a different approach) and the ~19 ambient
 props that need regenerating as objects to animate.
 
 **Still placeholder, deliberately:** the tiny 6×6 projectiles (`gremlin_rock`, `pellet_projectile`,
-`gloam_bolt` — a 32px generation downscaled to 6px is mush; the procedural dot is better), and the
-**ground itself**, which is its own final phase (see below).
+`gloam_bolt` — a 32px generation downscaled to 6px is mush; the procedural dot is better). Ground
+tiles are static, so water does not animate — that belongs with the ambient-prop animation pass.
 
 **The last playtest pass fixed a bug worth remembering.** All 8 POI ground decals came back
 **fully opaque** despite the prompt asking for transparency, drawing a light rectangle behind every
@@ -307,6 +317,86 @@ touches no combat numbers.
 
 > Older entries in STATUS-archive.md.
 
+### Ground texturing + biome blending (2026-07-25, Opus)
+
+The last non-reversible piece of the art migration, and the one the user deliberately queued
+last: the ground is *generated*, not a sprite, so the override layer can't reach it.
+
+**The constraint that shaped everything.** The ground has always been a per-pixel COLOUR
+field — `worldBiomeColorAt` composites base + biome blobs + features into one number. That
+gives correct, smoothly-blended colour at any world size but can never carry pixel-art
+detail: outside the forest it is baked into 4096 texels stretched over a 28000px world,
+about 7 world px per texel, and a world-sized TileSprite is ~3GB (it OOMed once already).
+So the plan's two candidate routes were "replace the bake with tile stamping" or "keep the
+colour and overlay a texture", and the second is what shipped — but as a **moving chunk of
+real 32px tiles at 1:1**, not a flat detail wash.
+
+**`src/ui/GroundDetailUI.ts`** keeps a 2304px chunk of stamped tiles around the player
+(double-buffered, snapped to a 576px grid, ~21,000 stamps rebuilt over 9 frames at ~2.5ms
+each). Cost is constant at any world size, which is the same reason the camera-locked
+`ground_speckle` layer it replaces existed. It is **purely additive**: tiles draw
+semi-transparently over the colour field, so every biome boundary, POI floor stamp, minimap
+colour and map reveal still reads the exact same source. It also means one clay tile serves
+the whole badlands palette instead of needing a tile per colour.
+
+**`src/systems/ground.ts`** (Phaser-free) owns the material vocabulary — 10 materials, their
+variant counts, per-material opacity and placeholder colours — and **`WorldBiomes.worldGroundMaterialAt`**
+answers which one covers a point, built from the same fields in the same priority order as
+the colour so texture and colour can never disagree about where a creek or a mesa is.
+Placeholder tiles are still generated in BootScene, so the layer works with no art at all.
+
+**Three things the user's live feedback changed mid-build:**
+
+1. **"The woods river doesn't look like a river."** Correct — the "shallow creek water over
+   pebbles" prompt had come back as bare grey gravel with no water in it at all. Re-rolled
+   with an explicit ripples/caustics/flowing prompt and took the blue-water candidates,
+   toned 0.82.
+2. **"Some of the blending between areas isn't great."** Colour blends across a seam and a
+   tile can't — a cell is one material or the other, and a smooth curve cut that way is a
+   staircase. Fixed with **two probes per cell**: a jittered primary (so the edge dithers
+   into an interlocking band rather than running along cell lines) and a far-flung secondary
+   that reaches across the seam and lays the neighbour on at half strength. One mechanism
+   softens every boundary in the world — blob borders, creek banks, mesa edges — with no
+   per-boundary code.
+3. **"Can't the tiles be smaller, to give easier blending of curved lines?"** Yes, without
+   halving the ground's pixel resolution against every other sprite: the art stays 32px and
+   is carved into quadrant frames (`src/art/groundFrames.ts`), stamped on a **16px** grid.
+   A cell keeps the quadrant and variant its 32px block would have used, so four cells of
+   one material reassemble that tile pixel-for-pixel — only the material *decision* gets
+   finer, which is exactly where the resolution was wanted.
+
+**Two new art tools, both from bugs this pass hit.**
+`check-seam.mjs` scores how well a tile actually TILES, by comparing its wrap edges to its
+own interior steps. That caught `ground_grass_1` at **x10.8** — a hard horizontal line every
+32px across the whole forest that looked perfect in a viewer. Roughly a third of every
+tiles-pro batch fails it. `seamless.mjs` then *repairs* a marginal wrap instead of re-rolling
+for one: it measures the edge difference, halves it, and fades that correction inward, so
+the texture's own detail is untouched and only the low-frequency drift that IS the seam goes
+away. Repaired tiles score x0.00. Without it the bayou would have been stuck with its
+third-choice mud, since only one muck candidate in 32 wrapped cleanly.
+
+**One regression caught in verification:** the War Camp's packed-dirt floor and the Gloaming
+Vein's blighted floor are stamped into the colour bake, so the new layer painted grass
+texture straight back over them and the camp stopped reading as a cleared campground. The
+layer now takes a **material callback** rather than the `WorldBiomes` instance — POI floors
+are the scene's knowledge, not the world map's, so `MainScene.groundMaterialAt` composes the
+two. (The badlands POI decals needed nothing: those are real decal objects at depth -7,
+above this layer.)
+
+**Verified live** (`preview_eval` + screenshots): quadrant frames registered on real art;
+sprinting 300 frames never leaves the chunk uncovered; a cross-world teleport rebuilds in
+the SAME frame (a blink stays on the cheap path, so the two are distinguished by whether
+the chunk still covers the camera, not by distance); a crypt entry is outside the world
+circle so the layer correctly draws nothing underground; camp/vein floors resolve to their
+own materials with the surrounding forest unaffected. `tsc` clean, no console errors.
+
+**Removed:** the `ground_speckle` layer and texture, plus the `syncCameras` special case it
+needed. Its own comment said it existed because the outer world had no detail — keeping it
+would only have put a second 32px grain pattern over the first.
+
+**Not done, deliberately:** the tiles are static, so water does not animate. Ground
+animation belongs with the ambient-prop animation pass, not here.
+
 ### Creature art pass 2 — gator Mirejaw, ghost Corpselight, per-creature attacks (2026-07-25, Opus)
 
 Three playtest notes off the animated roster, all art-layer only — **no code changed**, `tsc`
@@ -402,117 +492,3 @@ Crafting 620 → 480, sized to the tab strip and the quantity slider.
 **Idle wandering calmed**: rest 4-9s against a 1-2.5s stroll, and past 90px from
 spawn the next stroll aims home, so creatures hover their anchor instead of
 random-walking off it.
-
-### Art arc — creature roster begun: elite derivation + footprint pinning (2026-07-25, Opus)
-
-Two structural pieces landed before any creature art, plus the first 8 sprites
-(boar, snake, gremlin, gremling, duskrunner, cragscale, hexling, sandmaw).
-
-**`src/art/eliteVariants.ts` closes the `*_elite` trap** README rule 4a warned
-about. BootScene *generates* each `<name>_elite` by re-running the same draw
-helper with a crimson palette — that's generation, not derivation, and it
-happens before `applyTextureOverrides`, so real art for `boar` would have left
-`boar_elite` a placeholder blob. The recolour now runs after overrides on the
-base's own pixels, which keeps what the roster convention already claims (every
-elite is its base silhouette in crimson/gold, identical across three biomes) and
-makes it free forever. Luminance is normalised per-sprite and lifted with a
-gamma before ramping: straight luma bunches a creature into one band (a brown
-boar sits near 0.4 everywhere), so the body mass came out near-black and nothing
-reached the gold. Verified against the hand-drawn elites for four creatures.
-
-**Creature footprints are pinned, decided with the user via `AskUserQuestion`.**
-The common roster is 14-32px against PixelLab's 32px canvas floor, so real art
-is bigger — and `enemyReach()` gives the player more reach against physically
-bigger enemies, so the art pass would have quietly buffed the player against
-every common enemy at once while their own flat melee constants didn't grow
-back. the user chose "grow the art, keep the reach". Implemented as **two**
-pinned values rather than the single re-baselined constant the option
-described, because growth isn't uniform (murkling +9 radius vs cragscale +2, so
-one constant can only approximate it): `Enemy`'s constructor pins the physics
-**body** from `placeholderDims`, and `enemyReach` measures the same footprint.
-Both matter — the body sets the minimum centre-to-centre distance a collider
-allows, so pinning only the reach would have made enemies *harder* to hit, not
-neutral. Both read one source, so they can't drift. Creatures now look bigger
-than they hit.
-
-Verified live: with no art on disk, byte-for-byte unchanged. With art, every
-creature's body stayed at its placeholder size and reach stayed at its exact
-pre-art value (boar 64, cragscale 65, hexling 66; elite boar 68) while frames
-grew. **The elite path is why `placeholderDims` learned to strip `_elite`** —
-a derived elite has no placeholder entry of its own, exactly like a `_v2` prop.
-
-### Art arc Phase 4 — player rig: 5 survivors, idle + walk (2026-07-25, Opus)
-
-All five survivors have real art and 4-direction idle/walk animations, themed on
-their starting ability (the user, mid-session): violet gloam for the Gloamstep
-band (Vagabond wrist, Warden gauntlet) and the cracked Gloam focus (Ashcaller
-orb, Ascetic palms), blood-red for the Reaver's Bloodpact shroud. The accent is
-the part that reads at 48px — the trinket itself is 2-3 pixels.
-
-**`src/art/playerRig.ts`** is a second loader beside `overrides.ts`, because an
-animation is many frames under one logical name and a flat texture swap can't
-express that. Layout is the whole contract:
-`art/rig/<characterId>/<anim>_<dir>_f<count>.png`, a horizontal strip whose
-frame COUNT is in the filename and whose frame WIDTH is derived after load — so
-a strip carries its own metadata and there is no manifest to drift. Frames are
-sliced onto the strip's own texture (`load.spritesheet` needs the frame width up
-front, which isn't knowable until the image loads). A character with no folder
-keeps its placeholder, so this stays per-character and reversible.
-
-`Player.setCharacter(id)` is called from `applyCharacter`. Animation state is
-driven from **`preUpdate` off body velocity**, not `update()`'s return value —
-`update()` early-returns during a dash and while frozen, and the sprite still
-has to animate through both. The physics body is pinned at **18px** regardless
-of the 48px canvas (`setSize(…, true)` recentres it), so reach, hover and
-targeting math never see the bigger sprite.
-
-**Two bugs the user caught, one hiding behind the other.** He reported the
-character turning when he *released* a key rather than when he pressed one.
-The first cause was real and pre-existing: facing broke diagonal ties by always
-preferring vertical, so adding a direction to one already held did nothing and
-the turn only happened on release. Facing is now **most-recently-pressed wins**
-(`heldOrder`), falling back to whatever is still held. He then reported it again
-on the Ashcaller — which was a *different* defect with the same symptom:
-`syncRigAnimation` recorded "I'm walking now" even when that animation didn't
-exist, so a survivor with idle-but-no-walk art was stranded on its last frame
-until release dropped it back to an animation that does exist. Missing art now
-resolves down the chain to idle in the correct facing, and the guard compares
-against what is actually **playing** rather than the state last wanted.
-**The lesson: verify a fix against the case that was reported, not a case that
-happens to work** — the Vagabond had full art and looked fine.
-
-**Generation findings** (full detail in `art/README.md`): standard mode beats v3
-(1 generation vs 2, 48px vs 60px, and 8 directions the game's 4-way facing can't
-use); there are **8 job slots and a character create needs the queue empty** —
-it fails *instantly* with "heavy load" whenever anything else runs, unbilled and
-unqueued, which reads as an outage rather than a cap.
-
-**No attack animation ships.** Both routes were generated and rejected: the v3
-custom swing gave five near-identical frames then invented a white blade, and
-the `cross-punch` template re-poses the character into profile with a different
-palette, so it visibly transforms mid-swing. `playSwing` now plays a
-squash-and-stretch pulse for a rigged survivor instead of the placeholder's
-25-degree rotate (fine on a 20px blob, reads as a detailed character toppling
-over) — deliberately **scale, not a positional lunge**, since x/y *is* the
-Arcade body's position and tweening it would fight velocity and the world clamp.
-Direction is carried by the equipped item's existing lunge, which is a plain
-Image and free to move.
-
-**Weapon-in-hand sprites are not built and the plan entry is amended.** Anchoring
-per-archetype weapon art needs a per-frame hand joint, and this MCP exposes no
-`animate-with-skeleton`/keypoint output — the plan's anchor mechanism doesn't
-exist. `Player.equippedIcon` instead sits at a per-facing hand offset and draws
-*behind* the body when facing away.
-
-**Tooling:** `art/tools/png.mjs` (the codec, extracted — trim and adjust each had
-their own copy and a third was about to appear), `sheet.mjs` (strip + contact
-sheet), `fetch-rig.sh` (one command from a finished PixelLab character to the
-game's layout, deleting any stale strip for the same anim+direction first — the
-frame count is in the filename, so a re-fetch at a different count would
-otherwise leave two strips claiming one animation). A **dev-only screenshot
-bridge** in `vite.config.ts` (`POST /__shot/<path>.png`, `apply: "serve"`) lets
-the page write a PNG to disk: a WebGL canvas can't be read back with `drawImage`
-after the frame, and this arc has twice shipped art that passed every non-visual
-check. Scratch captures go to the gitignored `art/_shots/` — **not** under
-`art/rig/` or `art/sprites/`, both of which are globbed eagerly and would bundle
-them.

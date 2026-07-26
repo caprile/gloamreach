@@ -9897,3 +9897,117 @@ generations vs 1, so animatable props stay on the cheap path until the animation
 renaming in a later code pass), more decoration variety generally, and `boulder_v2`/`rock_v2` lost
 to a PixelLab queue stall that pinned jobs at `95%` for 25+ min while still holding concurrency
 slots — reported upstream.
+
+### Art arc — creature roster begun: elite derivation + footprint pinning (2026-07-25, Opus)
+
+Two structural pieces landed before any creature art, plus the first 8 sprites
+(boar, snake, gremlin, gremling, duskrunner, cragscale, hexling, sandmaw).
+
+**`src/art/eliteVariants.ts` closes the `*_elite` trap** README rule 4a warned
+about. BootScene *generates* each `<name>_elite` by re-running the same draw
+helper with a crimson palette — that's generation, not derivation, and it
+happens before `applyTextureOverrides`, so real art for `boar` would have left
+`boar_elite` a placeholder blob. The recolour now runs after overrides on the
+base's own pixels, which keeps what the roster convention already claims (every
+elite is its base silhouette in crimson/gold, identical across three biomes) and
+makes it free forever. Luminance is normalised per-sprite and lifted with a
+gamma before ramping: straight luma bunches a creature into one band (a brown
+boar sits near 0.4 everywhere), so the body mass came out near-black and nothing
+reached the gold. Verified against the hand-drawn elites for four creatures.
+
+**Creature footprints are pinned, decided with the user via `AskUserQuestion`.**
+The common roster is 14-32px against PixelLab's 32px canvas floor, so real art
+is bigger — and `enemyReach()` gives the player more reach against physically
+bigger enemies, so the art pass would have quietly buffed the player against
+every common enemy at once while their own flat melee constants didn't grow
+back. the user chose "grow the art, keep the reach". Implemented as **two**
+pinned values rather than the single re-baselined constant the option
+described, because growth isn't uniform (murkling +9 radius vs cragscale +2, so
+one constant can only approximate it): `Enemy`'s constructor pins the physics
+**body** from `placeholderDims`, and `enemyReach` measures the same footprint.
+Both matter — the body sets the minimum centre-to-centre distance a collider
+allows, so pinning only the reach would have made enemies *harder* to hit, not
+neutral. Both read one source, so they can't drift. Creatures now look bigger
+than they hit.
+
+Verified live: with no art on disk, byte-for-byte unchanged. With art, every
+creature's body stayed at its placeholder size and reach stayed at its exact
+pre-art value (boar 64, cragscale 65, hexling 66; elite boar 68) while frames
+grew. **The elite path is why `placeholderDims` learned to strip `_elite`** —
+a derived elite has no placeholder entry of its own, exactly like a `_v2` prop.
+
+### Art arc Phase 4 — player rig: 5 survivors, idle + walk (2026-07-25, Opus)
+
+All five survivors have real art and 4-direction idle/walk animations, themed on
+their starting ability (the user, mid-session): violet gloam for the Gloamstep
+band (Vagabond wrist, Warden gauntlet) and the cracked Gloam focus (Ashcaller
+orb, Ascetic palms), blood-red for the Reaver's Bloodpact shroud. The accent is
+the part that reads at 48px — the trinket itself is 2-3 pixels.
+
+**`src/art/playerRig.ts`** is a second loader beside `overrides.ts`, because an
+animation is many frames under one logical name and a flat texture swap can't
+express that. Layout is the whole contract:
+`art/rig/<characterId>/<anim>_<dir>_f<count>.png`, a horizontal strip whose
+frame COUNT is in the filename and whose frame WIDTH is derived after load — so
+a strip carries its own metadata and there is no manifest to drift. Frames are
+sliced onto the strip's own texture (`load.spritesheet` needs the frame width up
+front, which isn't knowable until the image loads). A character with no folder
+keeps its placeholder, so this stays per-character and reversible.
+
+`Player.setCharacter(id)` is called from `applyCharacter`. Animation state is
+driven from **`preUpdate` off body velocity**, not `update()`'s return value —
+`update()` early-returns during a dash and while frozen, and the sprite still
+has to animate through both. The physics body is pinned at **18px** regardless
+of the 48px canvas (`setSize(…, true)` recentres it), so reach, hover and
+targeting math never see the bigger sprite.
+
+**Two bugs the user caught, one hiding behind the other.** He reported the
+character turning when he *released* a key rather than when he pressed one.
+The first cause was real and pre-existing: facing broke diagonal ties by always
+preferring vertical, so adding a direction to one already held did nothing and
+the turn only happened on release. Facing is now **most-recently-pressed wins**
+(`heldOrder`), falling back to whatever is still held. He then reported it again
+on the Ashcaller — which was a *different* defect with the same symptom:
+`syncRigAnimation` recorded "I'm walking now" even when that animation didn't
+exist, so a survivor with idle-but-no-walk art was stranded on its last frame
+until release dropped it back to an animation that does exist. Missing art now
+resolves down the chain to idle in the correct facing, and the guard compares
+against what is actually **playing** rather than the state last wanted.
+**The lesson: verify a fix against the case that was reported, not a case that
+happens to work** — the Vagabond had full art and looked fine.
+
+**Generation findings** (full detail in `art/README.md`): standard mode beats v3
+(1 generation vs 2, 48px vs 60px, and 8 directions the game's 4-way facing can't
+use); there are **8 job slots and a character create needs the queue empty** —
+it fails *instantly* with "heavy load" whenever anything else runs, unbilled and
+unqueued, which reads as an outage rather than a cap.
+
+**No attack animation ships.** Both routes were generated and rejected: the v3
+custom swing gave five near-identical frames then invented a white blade, and
+the `cross-punch` template re-poses the character into profile with a different
+palette, so it visibly transforms mid-swing. `playSwing` now plays a
+squash-and-stretch pulse for a rigged survivor instead of the placeholder's
+25-degree rotate (fine on a 20px blob, reads as a detailed character toppling
+over) — deliberately **scale, not a positional lunge**, since x/y *is* the
+Arcade body's position and tweening it would fight velocity and the world clamp.
+Direction is carried by the equipped item's existing lunge, which is a plain
+Image and free to move.
+
+**Weapon-in-hand sprites are not built and the plan entry is amended.** Anchoring
+per-archetype weapon art needs a per-frame hand joint, and this MCP exposes no
+`animate-with-skeleton`/keypoint output — the plan's anchor mechanism doesn't
+exist. `Player.equippedIcon` instead sits at a per-facing hand offset and draws
+*behind* the body when facing away.
+
+**Tooling:** `art/tools/png.mjs` (the codec, extracted — trim and adjust each had
+their own copy and a third was about to appear), `sheet.mjs` (strip + contact
+sheet), `fetch-rig.sh` (one command from a finished PixelLab character to the
+game's layout, deleting any stale strip for the same anim+direction first — the
+frame count is in the filename, so a re-fetch at a different count would
+otherwise leave two strips claiming one animation). A **dev-only screenshot
+bridge** in `vite.config.ts` (`POST /__shot/<path>.png`, `apply: "serve"`) lets
+the page write a PNG to disk: a WebGL canvas can't be read back with `drawImage`
+after the frame, and this arc has twice shipped art that passed every non-visual
+check. Scratch captures go to the gitignored `art/_shots/` — **not** under
+`art/rig/` or `art/sprites/`, both of which are globbed eagerly and would bundle
+them.

@@ -206,6 +206,8 @@ import { RunCharacter, type CharacterDef } from "../systems/Characters";
 import { TipsUI } from "../ui/TipsUI";
 import { DayNight } from "../systems/DayNight";
 import { NightOverlayUI, type ScreenLight } from "../ui/NightOverlayUI";
+import { GroundDetailUI } from "../ui/GroundDetailUI";
+import type { GroundMaterial } from "../systems/ground";
 import {
   RelicManager,
   TROPHY_ROLL,
@@ -311,6 +313,10 @@ const ALTAR_CLEAR_RADIUS = 1400;
 // palisade so clustered-node jitter (±40px, see scatterClustered) can never
 // land a bush/tree inside the wall.
 const WAR_CAMP_RADIUS = 230; // palisade wall radius
+// Radius of the Gloaming Vein's blighted floor stamp. Module-level because the
+// ground DETAIL layer draws over the colour bake and so has to know about the
+// same floor, and two copies of the number would drift.
+const VEIN_FLOOR_OUTER = 150;
 const WAR_CAMP_CLEAR_RADIUS = 300; // resource-node/enemy spawn exclusion edge
 // The camp is a big, deliberately-clumped POI (breadcrumb prop trail runs
 // 500-1050px out) — using fog's plain REVEAL_RADIUS (260px) for "discovered"
@@ -1421,11 +1427,10 @@ export class MainScene extends Phaser.Scene {
   // the current held-light-source radius (Torch, future Lantern) in world px.
   private dayNight!: DayNight;
   private nightOverlay!: NightOverlayUI;
-  // Camera-locked speckle overlay: a viewport-sized TileSprite (constant memory —
-  // a world-sized one OOMs) tiling `ground_speckle`, its tilePosition synced to
-  // the camera scroll each frame so the specks read as world-locked ground grain
-  // over the smooth outer overlay. See buildSpeckleLayer / syncSpeckleLayer.
-  private speckleLayer!: Phaser.GameObjects.TileSprite;
+  // Real pixel-art ground tiles, stamped in a chunk that follows the player (see
+  // GroundDetailUI). Drawn over the colour field, which still owns every biome
+  // boundary — this layer only supplies grain.
+  private groundDetail!: GroundDetailUI;
   // Zoom-1 HUD camera paired with the zoomed main/world camera (see setupCameras).
   private uiCam!: Phaser.Cameras.Scene2D.Camera;
   private wasNight = false;
@@ -1788,13 +1793,22 @@ export class MainScene extends Phaser.Scene {
     // playable area reads as a round island, not an invisible wall in open grass.
     this.drawWorldBoundary();
 
-    // Fine ground grain over the WHOLE world (the outer badlands/dunes overlay is
-    // a single smooth stretched texture with no detail; this gives it the same
-    // speckle the forest gets from its `grass` tile). A camera-locked, viewport-
-    // sized TileSprite — its tilePosition follows the camera scroll so the specks
-    // sit still in world space, at constant GPU cost (a world-sized tilesprite
-    // would OOM). Subtle enough to layer harmlessly over the forest + void too.
-    this.buildSpeckleLayer();
+    // Real pixel-art ground detail: a chunk of 32px tiles kept around the player
+    // and stamped over the colour field above (depth -8.9, above every colour
+    // layer and below all Y-sorted world entities). This replaced a camera-
+    // locked `ground_speckle` tilesprite that existed for exactly one reason —
+    // the outer world was a smooth stretched overlay with no detail — so keeping
+    // it would only have put a second 32px grain pattern over the first. The
+    // player always starts at world centre, so the first chunk can be built here
+    // with the rest of the ground rather than waiting for the Player to exist.
+    this.groundDetail = new GroundDetailUI(this, (x, y) => this.groundMaterialAt(x, y), {
+      depth: -8.9,
+      worldCx: WORLD_CX,
+      worldCy: WORLD_CY,
+      worldRadius: WORLD_RADIUS,
+      x: WORLD_CX,
+      y: WORLD_CY,
+    });
 
     // Physics/camera bounds are the bounding square; the player is additionally
     // clamped to the world CIRCLE each frame (clampPlayerToWorld).
@@ -2273,7 +2287,7 @@ export class MainScene extends Phaser.Scene {
       this.updateTreeOcclusion(delta);
       this.updateMapReveal();
       this.bossHealthUI.update(this.engagedBigBoss() ?? this.engagedMiniBoss());
-      this.syncSpeckleLayer();
+      this.syncGroundLayers();
       return;
     }
 
@@ -2427,7 +2441,7 @@ export class MainScene extends Phaser.Scene {
     this.updateShackGlows();
     this.bossHealthUI.update(this.engagedBigBoss() ?? this.engagedMiniBoss());
     this.updateCraftingMenuWorkbenchProximity();
-    this.syncSpeckleLayer();
+    this.syncGroundLayers();
   }
 
   // Advance fog-of-war + both map views. ExploredMap is the single consumer of
@@ -4739,7 +4753,6 @@ export class MainScene extends Phaser.Scene {
       const vlx = this.veinPosition.x - BIOME_ORIGIN_X; // vein in local region coords
       const vly = this.veinPosition.y - BIOME_ORIGIN_Y;
       const VEIN_FLOOR_SOFT = 40;
-      const VEIN_FLOOR_OUTER = 150;
       const VEIN_CORE = 70;
       const minPx = Math.max(0, Math.floor((vlx - VEIN_FLOOR_OUTER) / step) * step);
       const maxPx = Math.min(BIOME_SIZE, Math.ceil((vlx + VEIN_FLOOR_OUTER) / step) * step);
@@ -4801,26 +4814,31 @@ export class MainScene extends Phaser.Scene {
   // centre, not a point you can be "far from" — never park those.
   private static readonly STREAM_MAX_SIZE = 900;
 
-  // Camera-locked ground-grain overlay (see the speckleLayer field note). Sized to
-  // the camera viewport and pinned with scrollFactor(0), so its canvas stays
-  // small no matter how big the world is; syncSpeckleLayer() offsets tilePosition
-  // by the camera scroll each frame so the specks appear fixed to the ground.
-  // Depth -8.8 sits above every ground layer (overlay -9.5 / grass -9.4 / forest
-  // bake -9 / void ring) and below all Y-sorted world entities (positive depths).
-  private buildSpeckleLayer(): void {
-    const cam = this.cameras.main;
-    this.speckleLayer = this.add
-      .tileSprite(0, 0, cam.width, cam.height, "ground_speckle")
-      .setOrigin(0, 0)
-      .setScrollFactor(0)
-      .setDepth(-8.8);
-    this.syncSpeckleLayer();
+  // Which ground material covers a point, for the detail layer.
+  //
+  // Mostly just the world's own answer, but the two POI floors that are stamped
+  // into the COLOUR bake — the War Camp's packed dirt and the Gloaming Vein's
+  // blighted crystal — have to be repeated here. The detail layer draws over
+  // that bake, so a camp left on the default material gets grass texture laid
+  // back over its dirt and stops reading as a cleared campground. (The badlands
+  // POI decals need no such thing: those are real decal objects at depth -7,
+  // above this layer.)
+  private groundMaterialAt(x: number, y: number): GroundMaterial {
+    const altar = this.altarPosition;
+    if (altar && Phaser.Math.Distance.Between(x, y, altar.x, altar.y) < WAR_CAMP_RADIUS) {
+      return "clay"; // trampled, cracked earth
+    }
+    const vein = this.veinPosition;
+    if (vein && Phaser.Math.Distance.Between(x, y, vein.x, vein.y) < VEIN_FLOOR_OUTER) {
+      return "rock"; // broken crystalline ground
+    }
+    return this.worldBiomes.worldGroundMaterialAt(x, y);
   }
 
-  private syncSpeckleLayer(): void {
-    const cam = this.cameras.main;
-    // Specks stay locked to world coords: shift the tiling by the camera scroll.
-    this.speckleLayer.setTilePosition(cam.scrollX, cam.scrollY);
+  // The ground detail chunk follows the player, so it advances from update()
+  // (and its dead-player twin) rather than being a create()-time bake.
+  private syncGroundLayers(): void {
+    this.groundDetail.update(this.player.x, this.player.y);
   }
 
   // DISPLAY-LIST STREAMING. The world had grown to ~17,000 display objects (5000+
@@ -4920,9 +4938,6 @@ export class MainScene extends Phaser.Scene {
   // flickers and I see a flash of another view" on every equip/place — the
   // 36-object hotbar rebuild landing after the sync. PRE_RENDER is the last
   // hook before the renderer walks the display list, so it catches everything.
-  // Exception: the speckle ground-grain tilesprite is scrollFactor 0 but is a
-  // world UNDERLAY (depth < 0) that must zoom with and sit beneath the world, so
-  // it stays on the world camera.
   private syncCameras(): void {
     if (!this.uiCam) return;
     const wBit = this.cameras.main.id;
@@ -4933,7 +4948,7 @@ export class MainScene extends Phaser.Scene {
         scrollFactorX?: number;
         cameraFilter: number;
       };
-      const isUI = o.scrollFactorX === 0 && o !== this.speckleLayer;
+      const isUI = o.scrollFactorX === 0;
       if (isUI) {
         o.cameraFilter = (o.cameraFilter | wBit) & ~uBit; // hide from world cam
       } else {

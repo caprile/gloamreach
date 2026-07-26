@@ -1,9 +1,10 @@
 import Phaser from "phaser";
 import { Biome } from "./Biome";
-import { blendColors, mottleColor } from "./colorUtil";
+import { blendColors, mottleColor, valueNoise2D } from "./colorUtil";
 import { forestTerrainColorAt } from "./ExploredMap";
 import { badlandsGroundColorAt } from "./Badlands";
-import { bayouGroundColorAt } from "./Bayou";
+import { bayouGroundColorAt, BAYOU_SHALLOW_W } from "./Bayou";
+import type { GroundMaterial } from "./ground";
 
 // The patchwork world map (biome-2 Phase 0). Decides WHICH biome type covers each
 // world point, Valheim-style: a universal base layer with biome "blobs" painted on
@@ -280,6 +281,57 @@ export class WorldBiomes {
     // + tiled grass sprite untouched.
     if (discC <= 0.5) color = mottleColor(color, x, y, 0.1);
     return color;
+  }
+
+  // The ground MATERIAL at a point — the texture counterpart to
+  // worldBiomeColorAt, and deliberately built from the same fields in the same
+  // priority order so texture and colour can never disagree about where a creek
+  // or a mesa is. See src/systems/ground.ts for why detail is a separate layer.
+  //
+  // The difference is that colour BLENDS across a boundary and a tile can't: a
+  // cell is one material or the other. Rather than dither here, the caller
+  // jitters the sample point per cell, which ragged-edges every boundary in the
+  // world at once (blob seams, creek banks, mesa edges) with no per-boundary
+  // code. So a plain 0.5 threshold is the right cut here.
+  worldGroundMaterialAt(x: number, y: number): GroundMaterial {
+    const r = Math.hypot(x - this.cx, y - this.cy);
+    // Base layer (open wilds between blobs): grass near the middle, dusty out.
+    let mat: GroundMaterial = this.baseGrade(r) > 0.5 ? "sand" : "grass";
+
+    if (this.coverageAt(x, y, "badlands") > 0.5) {
+      const mesa = this.outerFeature.forestWeight(x, y);
+      const ravine = this.outerFeature.creekWeight(x, y);
+      mat = mesa > 0.45 ? "rock" : ravine > 0.4 ? "sand" : "clay";
+    }
+    if (this.coverageAt(x, y, "bayou") > 0.5) {
+      // Water first so it always wins — same reason bayouGroundColorAt draws it
+      // last, and it reads off the SAME threshold that drives the movement
+      // penalty, so what looks like water is water.
+      if (this.outerFeature.creekWeight(x, y) >= BAYOU_SHALLOW_W) mat = "swamp_water";
+      else if (this.outerFeature.forestWeight(x, y) > 0.45) mat = "peat"; // cypress hammock
+      else if (valueNoise2D(x + 640, y - 1180, 120) > 0.68) mat = "silt"; // mirrors the silt crust in the colour
+      else mat = "muck";
+    }
+    // Forest last, so the protected centre chunk always wins (as in the colour).
+    const forestC = Math.max(this.forestCoverage(r), this.coverageAt(x, y, "forest"));
+    if (forestC > 0.5) {
+      const creek = this.forest.creekWeight(x, y);
+      const woods = this.forest.forestWeight(x, y);
+      // Outer forest BLOBS have no creek of their own (the crisp creek belongs
+      // to the centre chunk's Biome), so they resolve to woods/grass only.
+      const blobOnly = this.forestCoverage(r) <= 0.5;
+      const outerWoods = this.outerFeature.forestWeight(x, y);
+      mat = blobOnly
+        ? outerWoods > 0.45
+          ? "forest_floor"
+          : "grass"
+        : creek > 0.4
+          ? "creek"
+          : woods > 0.5
+            ? "forest_floor"
+            : "grass";
+    }
+    return mat;
   }
 
   // Which biome the player is standing in (for the HUD label + discovery toast).
