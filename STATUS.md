@@ -2,9 +2,16 @@
 
 ## Current State
 
-_Living snapshot — edit in place, never append._ Last shipped: **ground follow-ups — projectile
-art, picked-state rule, and the attack-FX indicator/attack split** (2026-07-25, Opus)
+_Living snapshot — edit in place, never append._ Last shipped: **perf pass — static zone decals
+baked, frame time 12.7 -> 5.0ms** (2026-07-25, Opus). Before it, same day: the ground texturing
+phase plus projectile art, the picked-state rule and the attack-FX indicator/attack split
 (`.claude/plans/art-textures-lighting-3-biomes.md`).
+
+**Frame budget is healthy again**: median 5.0ms / p95 6.8ms of 16.7ms while sprinting at the
+Running-100 ceiling, no frames over 20ms. The cause was 103,082 `Graphics` fill commands
+re-tessellated every frame for 72 static zone-floor decals; they are baked textures now. **A
+static Graphics is a per-frame cost, not a one-off** — bake anything drawn once, at reduced
+resolution if it is large.
 
 **The art migration now covers every surface in the game.** The GROUND was the last piece and
 the only non-reversible one — it is generated, not a sprite, so the override layer can't reach
@@ -318,6 +325,44 @@ touches no combat numbers.
 
 > Older entries in STATUS-archive.md.
 
+### Perf pass: the frame was 5ms of static ground decals (2026-07-25, Opus)
+
+Ran a real profile instead of guessing, and the answer was nothing I expected. Frame time at the
+Running-100 sprint ceiling went **12.7 -> 5.0ms median**, p95 **15.1 -> 6.8ms**, render **5.9 ->
+2.4ms**, and frames over 20ms went to **zero**. The frame budget went from ~90% used to ~30%.
+
+**The profile, and three wrong guesses on the way** (worth recording, because each felt obvious):
+scene logic was only 2.93ms of an 8.87ms frame — **render was 5.69ms**, so the game was
+render-bound, not logic-bound. Then: hiding each stacked full-screen ground layer changed nothing
+(so not fill rate / overdraw); hiding all 259 per-enemy `telegraphGfx` and the 54 off-screen lodge
+plank tilesprites saved 0.16ms (so not un-culled Graphics per se); and tightening
+`STREAM_MARGIN` from 900 to 100 removed ~480 objects for 0.4ms (so not the streaming margin
+either, and that margin is *not* the problem it looked like). Only a random-half bisection found
+it: hiding **Graphics** took render from 5.90 to **0.76ms**.
+
+**The cause:** `drawZoneFloor` drew each macro-zone's ground decal as a live `Graphics` — 11
+stacked translucent blobs x ~39 outline segments = **~1,390 draw commands each**, and with 10
+badlands + 62 bayou zones that was **103,082 fill commands re-tessellated and re-uploaded every
+single frame**, on screen or not. Phaser re-processes a Graphics command buffer every frame no
+matter what, and this artwork is drawn once at world-gen and never changes again. It was 5.1ms of
+a 9.9ms frame — by far the largest single cost in the game.
+
+**The fix:** bake each decal to a texture once and use an `Image`. 103,082 commands -> **2,849**.
+The trap to remember is memory: the largest zone is ~780px in radius, so 72 at 1:1 would be
+roughly **400MB** of texture. They're baked at a **quarter** resolution and scaled back up with
+LINEAR filtering — invisible on a soft translucent stain, and 31.4MB. Verified visually at normal
+zoom in both a bayou miasma zone and a badlands boulderfield: identical soft organic blob.
+
+**Standing lesson: a static `Graphics` is a per-frame cost, not a one-off.** Anything drawn once
+and never changed should be baked to a texture — and the bigger the shape, the more it wants
+baking at reduced resolution rather than 1:1.
+
+Also this session, before the profile: `GroundDetailUI.ROWS_PER_FRAME` 8 -> 5 off the user's "a
+little hitchy while running around at 100 run skill". That was real and worth keeping (chunk slice
+3.4 -> 1.9ms at p95), though it is now a rounding error next to the decal fix. Its own floor is
+documented in the class: the rebuild must outrun the player or `update()` falls back to a full
+synchronous rebuild.
+
 ### Ground follow-ups: projectile art, picked states, and the attack-FX split (2026-07-25, Opus)
 
 Three playtest notes off the ground pass, plus the start of the attack-FX phase.
@@ -468,52 +513,3 @@ would only have put a second 32px grain pattern over the first.
 
 **Not done, deliberately:** the tiles are static, so water does not animate. Ground
 animation belongs with the ambient-prop animation pass, not here.
-
-### Creature art pass 2 — gator Mirejaw, ghost Corpselight, per-creature attacks (2026-07-25, Opus)
-
-Three playtest notes off the animated roster, all art-layer only — **no code changed**, `tsc`
-clean, and every fix is a PNG swap the existing loaders pick up.
-
-**1. "The alligator looks like a dog."** It did. The Mirejaw was a quadruped `create_character`
-whose description ("gloam-gator") never named the anatomy that makes a gator a gator, and the
-skeleton — which controls the pose but not the shape — filled in a retriever. Regenerated as
-**Mirejaw v2** (`lion` template) with the anatomy spelled out: *huge long flat toothy snout, body
-pressed low and flat to the ground on short splayed legs, very long thick tapering tail, no fur*.
-One generation, unmistakably an alligator. **The lesson is cheap to reuse:** the skeleton is the
-pose, the description is the animal.
-
-**2. "It should be biting, not clawing."** The old attack was a paw-swipe. The quadruped set has
-`jump-attack` — a lunging strike with the jaws open — which is both the right verb and a match for
-the Mirejaw's actual in-game Lunge. Verified frame-by-frame and live: it now closes and chomps.
-The Miretyrant was checked too and left alone; its custom attack already turns front-on and opens
-its jaws.
-
-**3. "The Corpselight used to be a cool ghost, now it's a humanoid."** Also correct, and
-structural rather than a bad roll: a humanoid `create_character` **always has legs**, so a legless
-floating swamp-haunt could never come out of that path. It now ships as a **static
-`create_map_object`** — a tattered shroud under a glowing wisp-head, matching the placeholder
-the user liked — and its three strips were deleted. Nothing was lost: `Corpselight.bobPhase`
-already rides rotation for a hover, so it reads as floating with no animation at all, and a walk
-cycle on a thing with no legs was the wrong ask from the start. Joins snake and sandmaw as
-**deliberately static** (so: **19 of 22 animated**, 3 static by design). Two variants were
-generated and the narrower shroud-plus-flame-head one was installed as the closer match to the
-old art; the broader hooded version is the alternative if the user prefers it.
-
-**4. "The attack animations feel a bit repetitive."** The cause was a single line in the original
-recipe: *humanoids use `cross-punch`*. Twelve visually distinct creatures all threw the same
-punch. Each now plays the attack it actually performs — **`throw-object`** for the Gremlin (which
-closes the standing "the ranged gremlin needs a real rock-throw" backlog item),
-**`pull-heavy-object`** for the Palewake's drain tether, **`hurricane-kick`** for the Kilnborn's
-radial backdraft, **`two-footed-jump`** for the Gremlin King's leaping smash, and so on; the full
-table is in `art/README.md`. Murkling deliberately keeps `cross-punch` as the swarm baseline —
-it's no longer the shared default, just one creature's attack. Cost was **~12 generations total**
-(a template animation is 1 generation and only one direction is generated), which is why this was
-worth doing properly rather than tolerating.
-
-**Process note worth keeping:** re-fetching a creature rewrites *all three* strips plus the static
-sprite from whichever direction is passed, so idle/walk were backed up and restored after each
-fetch. Only the attack strip is new — nothing else could regress.
-
-Verified live: all 11 touched textures load at the expected sizes, the 19 animated creatures
-register idle/walk/attack, elites derive correctly from the new art (including the recoloured
-animation strips), and a spawned Mirejaw was caught mid-lunge with its jaws open.

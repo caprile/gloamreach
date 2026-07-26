@@ -1737,6 +1737,26 @@ below.**
    as a build input — it is dev-server-only, so that leak cost the dashboard's dev page load,
    not the shipped bundle. All numbers first-pass/tunable. See `STATUS.md`.
 
+5at. **Perf pass — static zone decals were 5ms of the frame** (2026-07-25, Opus, no plan file).
+   Off the user's "a little hitchy while running around at 100 run skill". Profiling (not guessing)
+   took the frame from **12.7 -> 5.0ms median / 15.1 -> 6.8ms p95** while sprinting at the
+   Running-100 ceiling, render **5.9 -> 2.4ms**, frames over 20ms to zero. **The cause:
+   `MainScene.drawZoneFloor` drew each macro-zone's ground decal as a live `Graphics`** — 11
+   stacked translucent blobs x ~39 outline segments = ~1,390 commands each, x 72 zones (10
+   badlands + 62 bayou) = **103,082 fill commands re-tessellated and re-uploaded EVERY FRAME**,
+   on screen or not, for artwork drawn once at world-gen that never changes. Now baked to a
+   texture per zone and drawn as an `Image` (103,082 -> 2,849 commands). **Standing lesson: a
+   static `Graphics` is a per-frame cost, not a one-off** — bake anything drawn once and never
+   changed. **And bake LARGE shapes at reduced resolution**: at 1:1 these 72 decals would have
+   been ~400MB of texture, so they bake at a quarter and scale up with LINEAR filtering (invisible
+   on a soft translucent stain; 31.4MB). Three wrong guesses on the way, each worth not repeating:
+   it was NOT fill rate/overdraw (hiding each stacked full-screen ground layer changed nothing),
+   NOT the un-culled per-enemy `telegraphGfx` (hiding all 259 plus 54 off-screen lodge tilesprites
+   saved 0.16ms), and NOT the `STREAM_MARGIN` (900 -> 100 removed ~480 objects for 0.4ms). Only a
+   random-half bisection localised it. Also: `GroundDetailUI.ROWS_PER_FRAME` 8 -> 5, whose floor is
+   that the chunk rebuild must OUTRUN the player or `update()` falls back to a full synchronous
+   rebuild.
+
 5aq. **B4-P6 — Display-list streaming (perf), culled-enemy drift, playtest fixes** (no plan
    file — a fix batch; built on Opus). Two structural findings worth carrying forward.
    **(1) The render list, not the game logic, is the frame-rate ceiling.** The world had

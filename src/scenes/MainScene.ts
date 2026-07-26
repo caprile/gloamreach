@@ -1155,6 +1155,8 @@ export class MainScene extends Phaser.Scene {
   // avoid them). currentRegenMult caches this frame's HP-regen multiplier
   // from environmentEffectAt (dormant in biome 2 — wired for biome-3 miasma). All
   // reset per run (scene.restart field-init gotcha).
+  // Sequential key counter for the baked zone-floor textures (see drawZoneFloor).
+  private zoneFloorSeq = 0;
   private badlandsZones: BadlandsZone[] = [];
   // Biome-3 miasma zones (see BayouZone) — the bayou's environmental hazard.
   private bayouZones: BayouZone[] = [];
@@ -1592,6 +1594,7 @@ export class MainScene extends Phaser.Scene {
     this.veinRespawnAt = null;
     this.veinDiscoveredOnMap = false;
     this.veinLightPoints = [];
+    this.zoneFloorSeq = 0;
     this.badlandsZones = [];
     this.bayouZones = [];
     this.obstaclePositions = [];
@@ -6232,18 +6235,44 @@ export class MainScene extends Phaser.Scene {
   // The zone's ground decal, drawn as a soft-edged ORGANIC blob that follows the
   // wobbly zoneEdge outline (not a scaled circle), so the area itself reads as
   // non-circular. Layered translucent fills give the soft radial look the old
-  // texture had. One Graphics per zone at depth -7 (above the ground overlay).
+  // texture had.
+  //
+  // BAKED to a texture rather than left as a live Graphics, which is what it used
+  // to be. A Graphics re-tessellates and re-uploads its whole command buffer
+  // EVERY frame, on screen or not — and these are the largest command buffers in
+  // the game (11 stacked blobs x ~39 outline segments = ~1,390 commands each).
+  // With 72 zones across the badlands and bayou that was 100,000 fill commands
+  // per frame, measured at 5.1ms of a 9.9ms frame — by far the single biggest
+  // cost in the game, for artwork that is drawn once at world-gen and never
+  // changes again. As one baked Image each it is 72 batched quads, and the
+  // command buffers are gone.
+  //
+  // Baked at a fraction of world resolution and scaled back up: these are soft
+  // translucent gradients, so the resolution is invisible, and full-res would be
+  // ruinous — the largest zone is ~780px in radius, so 72 of them at 1:1 would be
+  // roughly 400MB of texture memory. At a quarter it's ~25MB, and LINEAR
+  // filtering keeps the upscale smooth (a soft stain wants smooth, not crisp).
+  private static readonly ZONE_FLOOR_BAKE_SCALE = 0.25;
+
   private drawZoneFloor(z: ZoneShape, base: number, core: number): void {
-    const gfx = this.add.graphics().setDepth(-7);
     const STEP = 0.16; // angular sampling of the outline
+    // Bake in LOCAL coords around the blob's own centre, so the texture is only
+    // as big as the blob (world coords would need a texture the size of the map).
+    let maxEdge = 0;
+    for (let a = 0; a < Math.PI * 2; a += STEP) maxEdge = Math.max(maxEdge, this.zoneEdge(z, a));
+    const k = MainScene.ZONE_FLOOR_BAKE_SCALE;
+    const size = Math.max(8, Math.ceil(maxEdge * 2 * k) + 2);
+    const c = size / 2;
+
+    const gfx = this.make.graphics({}, false); // offscreen; never on the display list
     const blob = (scale: number, color: number, alpha: number) => {
       gfx.fillStyle(color, alpha);
       gfx.beginPath();
       let first = true;
       for (let a = 0; a < Math.PI * 2; a += STEP) {
-        const e = this.zoneEdge(z, a) * scale;
-        const px = z.x + Math.cos(a) * e;
-        const py = z.y + Math.sin(a) * e;
+        const e = this.zoneEdge(z, a) * scale * k;
+        const px = c + Math.cos(a) * e;
+        const py = c + Math.sin(a) * e;
         if (first) {
           gfx.moveTo(px, py);
           first = false;
@@ -6256,6 +6285,18 @@ export class MainScene extends Phaser.Scene {
     };
     for (let s = 7; s >= 1; s--) blob(s / 7, base, 0.06); // outer fade to the wobbly edge
     for (let s = 4; s >= 1; s--) blob((s / 4) * 0.6, core, 0.07); // denser core
+
+    // Keys are per-run sequential, and scene.restart() reruns create() with the
+    // TextureManager intact, so an existing key has to go first.
+    const key = `zone_floor_${this.zoneFloorSeq++}`;
+    if (this.textures.exists(key)) this.textures.remove(key);
+    gfx.generateTexture(key, size, size);
+    gfx.destroy();
+    this.textures.get(key).setFilter(Phaser.Textures.FilterMode.LINEAR);
+    this.add
+      .image(z.x, z.y, key)
+      .setDisplaySize(size / k, size / k)
+      .setDepth(-7);
   }
 
   // Boulderfield: several rock RIDGE-LINES (barriers with walkable gaps) plus

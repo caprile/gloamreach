@@ -10058,3 +10058,52 @@ Crafting 620 → 480, sized to the tab strip and the quantity slider.
 **Idle wandering calmed**: rest 4-9s against a 1-2.5s stroll, and past 90px from
 spawn the next stroll aims home, so creatures hover their anchor instead of
 random-walking off it.
+
+### Creature art pass 2 — gator Mirejaw, ghost Corpselight, per-creature attacks (2026-07-25, Opus)
+
+Three playtest notes off the animated roster, all art-layer only — **no code changed**, `tsc`
+clean, and every fix is a PNG swap the existing loaders pick up.
+
+**1. "The alligator looks like a dog."** It did. The Mirejaw was a quadruped `create_character`
+whose description ("gloam-gator") never named the anatomy that makes a gator a gator, and the
+skeleton — which controls the pose but not the shape — filled in a retriever. Regenerated as
+**Mirejaw v2** (`lion` template) with the anatomy spelled out: *huge long flat toothy snout, body
+pressed low and flat to the ground on short splayed legs, very long thick tapering tail, no fur*.
+One generation, unmistakably an alligator. **The lesson is cheap to reuse:** the skeleton is the
+pose, the description is the animal.
+
+**2. "It should be biting, not clawing."** The old attack was a paw-swipe. The quadruped set has
+`jump-attack` — a lunging strike with the jaws open — which is both the right verb and a match for
+the Mirejaw's actual in-game Lunge. Verified frame-by-frame and live: it now closes and chomps.
+The Miretyrant was checked too and left alone; its custom attack already turns front-on and opens
+its jaws.
+
+**3. "The Corpselight used to be a cool ghost, now it's a humanoid."** Also correct, and
+structural rather than a bad roll: a humanoid `create_character` **always has legs**, so a legless
+floating swamp-haunt could never come out of that path. It now ships as a **static
+`create_map_object`** — a tattered shroud under a glowing wisp-head, matching the placeholder
+the user liked — and its three strips were deleted. Nothing was lost: `Corpselight.bobPhase`
+already rides rotation for a hover, so it reads as floating with no animation at all, and a walk
+cycle on a thing with no legs was the wrong ask from the start. Joins snake and sandmaw as
+**deliberately static** (so: **19 of 22 animated**, 3 static by design). Two variants were
+generated and the narrower shroud-plus-flame-head one was installed as the closer match to the
+old art; the broader hooded version is the alternative if the user prefers it.
+
+**4. "The attack animations feel a bit repetitive."** The cause was a single line in the original
+recipe: *humanoids use `cross-punch`*. Twelve visually distinct creatures all threw the same
+punch. Each now plays the attack it actually performs — **`throw-object`** for the Gremlin (which
+closes the standing "the ranged gremlin needs a real rock-throw" backlog item),
+**`pull-heavy-object`** for the Palewake's drain tether, **`hurricane-kick`** for the Kilnborn's
+radial backdraft, **`two-footed-jump`** for the Gremlin King's leaping smash, and so on; the full
+table is in `art/README.md`. Murkling deliberately keeps `cross-punch` as the swarm baseline —
+it's no longer the shared default, just one creature's attack. Cost was **~12 generations total**
+(a template animation is 1 generation and only one direction is generated), which is why this was
+worth doing properly rather than tolerating.
+
+**Process note worth keeping:** re-fetching a creature rewrites *all three* strips plus the static
+sprite from whichever direction is passed, so idle/walk were backed up and restored after each
+fetch. Only the attack strip is new — nothing else could regress.
+
+Verified live: all 11 touched textures load at the expected sizes, the 19 animated creatures
+register idle/walk/attack, elites derive correctly from the new art (including the recoloured
+animation strips), and a spawned Mirejaw was caught mid-lunge with its jaws open.
