@@ -1,0 +1,338 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Gloamreach — Key Art</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Jacquard+12&family=Silkscreen:wght@400;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+  /* One 1600x1000 (8:5) landscape image. Deliberately almost no small text:
+     anything under ~34px source is unreadable once a phone scales this to 390px
+     wide, so the art, the title and the biome names carry it at thumbnail size
+     and the smaller labels are desktop-only detail. */
+  :root {
+    --ink: #0a0d17;
+    --panel-edge: #2a3252;
+    --gloam: #a78bff;
+    --ember: #e29a3d;
+    --bone: #e9e1cc;
+    --dim: #99a0b4;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 1600px; background: var(--ink); }
+  body {
+    height: 1000px; overflow: hidden;
+    font-family: "IBM Plex Sans", system-ui, sans-serif;
+    color: var(--bone);
+  }
+  img { image-rendering: pixelated; display: block; }
+  .z2 { zoom: 2; }
+  .z3 { zoom: 3; }
+  .z4 { zoom: 4; }
+
+  /* ---------- hero ---------- */
+  .hero { position: relative; height: 300px; overflow: hidden; }
+  .hero canvas { position: absolute; inset: 0; width: 1600px; height: 300px; }
+  .hero .fade {
+    position: absolute; inset: 0;
+    background: linear-gradient(180deg, rgba(10,13,23,0.10) 0%, rgba(10,13,23,0.50) 66%, var(--ink) 100%);
+  }
+  .hero .inner { position: absolute; inset: 0; text-align: center; padding-top: 26px; }
+  .eyebrow {
+    font-family: "Silkscreen", monospace; font-size: 22px; letter-spacing: 10px;
+    color: var(--ember);
+    text-shadow: 0 0 22px rgba(226,154,61,0.55), 0 2px 5px rgba(0,0,0,0.9);
+  }
+  h1 {
+    font-family: "Jacquard 12", serif; font-weight: 400;
+    font-size: 176px; line-height: 0.92; margin-top: 2px; color: #d3c4ff;
+    text-shadow: 0 0 40px rgba(167,139,255,0.55), 0 0 110px rgba(107,79,200,0.5),
+                 0 5px 0 #241a4a, 0 10px 28px rgba(0,0,0,0.9);
+  }
+  .genre {
+    margin-top: 6px; font-size: 33px; font-weight: 500; color: #dfe3ee;
+    text-shadow: 0 2px 10px rgba(0,0,0,0.95);
+  }
+  .genre b { color: var(--ember); font-weight: 600; }
+
+  /* ---------- biomes ---------- */
+  .biomes {
+    height: 384px; padding: 0 30px;
+    display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 18px;
+  }
+  .bio {
+    position: relative; border: 1px solid var(--panel-edge); border-radius: 4px;
+    overflow: hidden;
+  }
+  .bio canvas { position: absolute; inset: 0; width: 501px; height: 384px; }
+  .bio .cap {
+    position: absolute; left: 0; right: 0; top: 0; padding: 18px 16px 30px;
+    background: linear-gradient(180deg, rgba(8,10,18,0.92) 0%, rgba(8,10,18,0.72) 60%, rgba(8,10,18,0) 100%);
+    text-align: center; z-index: 2;
+  }
+  .bio h4 { font-family: "Silkscreen", monospace; font-weight: 400; font-size: 34px; }
+  .bio .sub {
+    font-family: "IBM Plex Mono", monospace; font-size: 19px;
+    letter-spacing: 1px; color: #b6bccb; margin-top: 8px;
+  }
+  .bio .dio {
+    position: absolute; left: 8px; right: 8px; bottom: 20px;
+    display: flex; align-items: flex-end; justify-content: center; gap: 8px;
+    overflow: hidden;
+  }
+  .bio .dio img { filter: drop-shadow(0 5px 8px rgba(0,0,0,0.6)); }
+  .b1 h4 { color: #93d47d; }
+  .b2 h4 { color: #e89a63; }
+  .b3 h4 { color: #83d6c5; }
+
+  /* ---------- survivors ---------- */
+  .cast {
+    height: 232px; padding: 10px 30px 0;
+    display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px;
+  }
+  .surv { text-align: center; }
+  .surv .art {
+    /* the strip is 4 frames wide, so this MUST anchor at 0 0 — "center" lands
+       between frames and draws two survivors in the one slot */
+    width: 192px; height: 192px; margin: 0 auto;
+    background-repeat: no-repeat; background-position: 0 0;
+    image-rendering: pixelated;
+    filter: drop-shadow(0 8px 12px rgba(0,0,0,0.6));
+  }
+  .surv h5 {
+    font-family: "Silkscreen", monospace; font-weight: 400;
+    font-size: 21px; letter-spacing: 0.5px; color: var(--gloam); margin-top: 2px;
+  }
+
+  /* ---------- stats ---------- */
+  .statrow {
+    height: 84px; margin: 0 30px;
+    border-top: 1px solid var(--panel-edge);
+    display: flex; justify-content: space-evenly; align-items: center;
+  }
+  .stat { text-align: center; }
+  .stat .n {
+    font-family: "Silkscreen", monospace; font-size: 40px; color: var(--bone);
+    font-variant-numeric: tabular-nums; line-height: 1;
+  }
+  .stat .n.em { color: var(--ember); text-shadow: 0 0 18px rgba(226,154,61,0.5); }
+  .stat .t {
+    font-family: "IBM Plex Mono", monospace; font-size: 17px; letter-spacing: 2px;
+    color: var(--dim); margin-top: 7px;
+  }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <canvas id="key" width="3200" height="612"></canvas>
+  <div class="fade"></div>
+  <div class="inner">
+    <div class="eyebrow">BUILD UPDATE</div>
+    <h1>Gloamreach</h1>
+    <div class="genre">a top-down survival action-RPG &mdash; three biomes, <b>one life</b></div>
+  </div>
+</div>
+
+<div class="biomes">
+  <div class="bio b1">
+    <canvas id="bio1" width="1002" height="768"></canvas>
+    <div class="cap"><h4>VERDANT WOODS</h4><div class="sub">where every run starts</div></div>
+    <div class="dio" id="dio1"></div>
+  </div>
+  <div class="bio b2">
+    <canvas id="bio2" width="1002" height="768"></canvas>
+    <div class="cap"><h4>SUNSCORCH BADLANDS</h4><div class="sub">packs, casters, ambushes</div></div>
+    <div class="dio" id="dio2"></div>
+  </div>
+  <div class="bio b3">
+    <canvas id="bio3" width="1002" height="768"></canvas>
+    <div class="cap"><h4>DUSKMIRE BAYOU</h4><div class="sub">poison water, buried doors</div></div>
+    <div class="dio" id="dio3"></div>
+  </div>
+</div>
+
+<div class="cast">
+  <div class="surv"><div class="art" id="rig-vagabond"></div><h5>VAGABOND</h5></div>
+  <div class="surv"><div class="art" id="rig-reaver"></div><h5>REAVER</h5></div>
+  <div class="surv"><div class="art" id="rig-ashcaller"></div><h5>ASHCALLER</h5></div>
+  <div class="surv"><div class="art" id="rig-warden"></div><h5>WARDEN</h5></div>
+  <div class="surv"><div class="art" id="rig-ascetic"></div><h5>ASCETIC</h5></div>
+</div>
+
+<div class="statrow">
+  <div class="stat"><div class="n">3</div><div class="t">BIOMES</div></div>
+  <div class="stat"><div class="n">22</div><div class="t">CREATURES</div></div>
+  <div class="stat"><div class="n">8</div><div class="t">BOSSES</div></div>
+  <div class="stat"><div class="n">18</div><div class="t">DUNGEONS</div></div>
+  <div class="stat"><div class="n">5</div><div class="t">SURVIVORS</div></div>
+  <div class="stat"><div class="n em">1</div><div class="t">LIFE</div></div>
+</div>
+
+<script>
+const W = "../art/sprites/world/";
+
+["vagabond", "reaver", "ashcaller", "warden", "ascetic"].forEach((name) => {
+  const el = document.getElementById("rig-" + name);
+  el.style.backgroundImage = `url(../art/rig/${name}/idle_south_f4.png)`;
+  el.style.backgroundSize = "768px 192px";   /* 4x of the 192x48 four-frame strip */
+});
+
+function dio(id, list) {
+  const host = document.getElementById(id);
+  list.forEach(([file, scale]) => {
+    const img = document.createElement("img");
+    img.src = W + file + ".png";
+    img.className = "z" + scale;
+    host.appendChild(img);
+  });
+}
+dio("dio1", [["tree", 3], ["boar", 3], ["gremlin", 3]]);
+dio("dio2", [["badlands_mesa_spire", 3], ["cragscale", 3], ["hexling", 3]]);
+dio("dio3", [["bayou_reeds", 3], ["mirejaw", 3], ["blighttoad", 3]]);
+
+/* backdrops: skies + horizon silhouettes only; every creature above is real art */
+function scene(canvasId, cfg) {
+  const cv = document.getElementById(canvasId);
+  if (!cv) return;
+  const ctx = cv.getContext("2d");
+  const Wd = cv.width, H = cv.height, G = cfg.grid;
+  const px = (x, y, w, h, c) => { ctx.fillStyle = c; ctx.fillRect(x * G, y * G, w * G, h * G); };
+  const cols = Math.ceil(Wd / G), rows = Math.ceil(H / G);
+  let seed = cfg.seed;
+  const rnd = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
+
+  const grad = ctx.createLinearGradient(0, 0, 0, H);
+  cfg.sky.forEach(([stop, c]) => grad.addColorStop(stop, c));
+  ctx.fillStyle = grad; ctx.fillRect(0, 0, Wd, H);
+
+  for (let i = 0; i < cfg.stars; i++) {
+    const x = Math.floor(rnd() * cols), y = Math.floor(rnd() * rows * 0.55);
+    px(x, y, 1, 1, rnd() > 0.8 ? cfg.moteBright : cfg.mote);
+  }
+
+  if (cfg.orb) {
+    const [ox, oy, r, c, glow] = cfg.orb;
+    const rg = ctx.createRadialGradient(ox * G, oy * G, r * G * 0.4, ox * G, oy * G, r * G * 3.2);
+    rg.addColorStop(0, glow); rg.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = rg; ctx.fillRect(0, 0, Wd, H);
+    for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
+      if (dx * dx + dy * dy <= r * r) px(ox + dx, oy + dy, 1, 1, c);
+    }
+    for (let i = 0; i < 5; i++) {
+      const a = rnd() * Math.PI * 2, d = rnd() * r * 0.6;
+      px(Math.floor(ox + Math.cos(a) * d), Math.floor(oy + Math.sin(a) * d), 1, 1, cfg.orbCrater);
+    }
+  }
+
+  cfg.layers.forEach((layer) => {
+    const baseRow = Math.floor(rows * layer.base);
+    px(0, baseRow, cols, rows - baseRow, layer.color);
+    if (layer.kind === "trees") {
+      for (let x = 0; x < cols; x += 1 + Math.floor(rnd() * 3)) {
+        const h = layer.min + Math.floor(rnd() * layer.vary);
+        for (let i = 0; i < h; i++) {
+          const w = Math.max(1, Math.round((h - i) * 0.9));
+          px(x - Math.floor(w / 2), baseRow - 1 - i, w, 1, layer.color);
+        }
+      }
+    } else if (layer.kind === "mesa") {
+      let x = 0;
+      while (x < cols) {
+        const w = 6 + Math.floor(rnd() * 10), h = layer.min + Math.floor(rnd() * layer.vary);
+        px(x, baseRow - h, w, h, layer.color);
+        px(x + 1, baseRow - h - 1, w - 2, 1, layer.color);
+        x += w + 2 + Math.floor(rnd() * 8);
+      }
+    } else if (layer.kind === "deadtrees") {
+      for (let x = 2; x < cols; x += 4 + Math.floor(rnd() * 6)) {
+        const h = layer.min + Math.floor(rnd() * layer.vary);
+        px(x, baseRow - h, 1, h, layer.color);
+        for (let b = 0; b < 3; b++) {
+          const by = baseRow - h + 1 + Math.floor(rnd() * (h * 0.6));
+          const bw = 1 + Math.floor(rnd() * 2);
+          px(rnd() > 0.5 ? x + 1 : x - bw, by, bw, 1, layer.color);
+        }
+      }
+    }
+  });
+
+  if (cfg.ground) {
+    const [frac, c1, c2] = cfg.ground;
+    const gy = Math.floor(rows * frac);
+    px(0, gy, cols, rows - gy, c1);
+    for (let i = 0; i < cols * 2.2; i++) {
+      px(Math.floor(rnd() * cols), gy + Math.floor(rnd() * (rows - gy)), 1 + Math.floor(rnd() * 2), 1, c2);
+    }
+  }
+
+  (cfg.mist || []).forEach(([frac, c]) => {
+    ctx.fillStyle = c; ctx.fillRect(0, H * frac, Wd, G * 2.2);
+  });
+
+  for (let i = 0; i < cfg.foreMotes; i++) {
+    const x = rnd() * Wd, y = H * 0.4 + rnd() * H * 0.55;
+    ctx.fillStyle = rnd() > 0.6 ? cfg.moteBright : cfg.mote;
+    ctx.globalAlpha = 0.45 + rnd() * 0.5;
+    ctx.fillRect(x, y, G * 0.7, G * 0.7);
+    ctx.globalAlpha = 1;
+  }
+}
+
+scene("key", {
+  grid: 16, seed: 71,
+  sky: [[0, "#0a0c1a"], [0.42, "#171436"], [0.74, "#2b1e52"], [1, "#3a2a63"]],
+  stars: 210, mote: "#5a4d9a", moteBright: "#b9a5ff",
+  orb: [168, 8, 6, "#d9ccff", "rgba(167,139,255,0.30)"], orbCrater: "#b3a2e8",
+  layers: [
+    { kind: "trees", base: 0.70, color: "#332a63", min: 4, vary: 5 },
+    { kind: "trees", base: 0.85, color: "#211a49", min: 5, vary: 6 },
+    { kind: "trees", base: 1.0, color: "#100d2b", min: 6, vary: 7 },
+  ],
+  mist: [[0.66, "rgba(140,116,230,0.16)"]],
+  foreMotes: 90,
+});
+
+scene("bio1", {
+  grid: 16, seed: 5,
+  sky: [[0, "#0e2018"], [0.55, "#1a3524"], [1, "#26492c"]],
+  stars: 20, mote: "#6fae7d", moteBright: "#c2eec9",
+  layers: [
+    { kind: "trees", base: 0.52, color: "#17311f", min: 4, vary: 4 },
+    { kind: "trees", base: 0.68, color: "#0f2417", min: 5, vary: 5 },
+  ],
+  ground: [0.88, "#2c4a2c", "#3b5f38"],
+  mist: [[0.52, "rgba(140,206,122,0.09)"]],
+  foreMotes: 26,
+});
+
+scene("bio2", {
+  grid: 16, seed: 23,
+  sky: [[0, "#33150f"], [0.5, "#652b18"], [1, "#9a4f24"]],
+  stars: 12, mote: "#c98a5a", moteBright: "#ffcf9e",
+  orb: [10, 9, 4, "#ffce8a", "rgba(255,180,100,0.32)"], orbCrater: "#f0b26a",
+  layers: [
+    { kind: "mesa", base: 0.62, color: "#4a2018", min: 4, vary: 5 },
+    { kind: "mesa", base: 0.78, color: "#2e120e", min: 3, vary: 4 },
+  ],
+  ground: [0.88, "#6b3a22", "#83492a"],
+  mist: [[0.62, "rgba(226,154,61,0.11)"]],
+  foreMotes: 22,
+});
+
+scene("bio3", {
+  grid: 16, seed: 47,
+  sky: [[0, "#0a1618"], [0.55, "#102a2a"], [1, "#193a37"]],
+  stars: 26, mote: "#4f8a80", moteBright: "#9fe8d8",
+  layers: [
+    { kind: "deadtrees", base: 0.58, color: "#132726", min: 5, vary: 4 },
+    { kind: "deadtrees", base: 0.74, color: "#0a1716", min: 4, vary: 4 },
+  ],
+  ground: [0.88, "#1c3a31", "#27543f"],
+  mist: [[0.56, "rgba(127,208,192,0.09)"], [0.70, "rgba(167,139,255,0.07)"]],
+  foreMotes: 30,
+});
+</script>
+</body>
+</html>
