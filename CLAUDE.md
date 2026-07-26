@@ -2038,7 +2038,24 @@ below.**
    Kilnborn `hurricane-kick`, Gremlin King `two-footed-jump`, …) — the original recipe's blanket
    "humanoids use `cross-punch`" is what made the roster feel repetitive. Full mapping table +
    both lessons in `art/README.md`.
-   **Next, in the user's stated order:** **AOE/attack FX art** (Cinderwrought's cinder cone, Gloamwarden's ground
+   **The attack-FX phase has STARTED**, and its first outcome is a rule rather than
+   art: an **attack INDICATOR and the ATTACK ITSELF must never be mistakable for one another**
+   (the user — the Cinderwrought's cone telegraph and its cone impact were the same wedge in
+   the same orange, one brighter). Colour can't carry the distinction, since an attack is drawn
+   in its element's own hue, so the split is STRUCTURAL and lives in `src/systems/depth.ts`:
+   **`TELEGRAPH_DEPTH`** (flat on the ground, UNDER every entity, outline-led, translucent,
+   never a textured sprite) vs **`ATTACK_FX_DEPTH`** (a real art sprite ABOVE the entities,
+   opaque, short-lived) — "under your feet = it hasn't happened yet; over your head = it's
+   happening." Applied roster-wide in one pass (`Enemy.drawArea*` plus the six bespoke boss
+   graphics). Two habits to keep when adding an impact sprite: scale it with `scaleToLongest`
+   against the radius `checkPlayerHit` actually uses, so what you see is what hits; and destroy
+   it on the DESPAWN path as well as death, or a culled enemy strands it forever. Also:
+   **projectile art draws at 1.8x its placeholder footprint while the collision body stays
+   pinned** (`Projectile.PROJECTILE_ART_SCALE`) — 6px was invisible against real ground; note
+   Arcade's `setSize` takes UNSCALED units. And **`_picked` flora states must depict what
+   harvesting did**: a part taken off a plant leaves the plant, a whole plant taken leaves
+   ground disturbance (picking a mushroom cluster used to grow one bigger mushroom).
+   **Next, in the user's stated order:** finish **AOE/attack FX art** (Cinderwrought's cinder cone, Gloamwarden's ground
    spikes, telegraph footprints — all procedural `Graphics` today) → **on-theme inventory/crafting
    menu art** (`create_ui_asset`) → a **unique in-game cursor** (`input.setDefaultCursor`).
 

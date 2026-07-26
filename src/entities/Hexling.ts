@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { ATTACK_FX_DEPTH, TELEGRAPH_DEPTH } from "../systems/depth";
 import { Enemy } from "./Enemy";
 import type { DamageType } from "../systems/Weapons";
 import type { ProjectileConfig, ProjectileHost } from "./Projectile";
@@ -268,7 +269,7 @@ export class Hexling extends Enemy {
   private drawFlameTelegraph(frac01: number): void {
     const g = this.telegraphGfx;
     g.clear();
-    g.setDepth(this.depth + 0.5);
+    g.setDepth(TELEGRAPH_DEPTH);
     const f = Phaser.Math.Clamp(frac01, 0, 1);
     for (const c of this.flameCircles) {
       const r = FLAME_RADIUS * (0.5 + 0.5 * f);
@@ -282,7 +283,7 @@ export class Hexling extends Enemy {
   private drawFlameImpact(): void {
     const g = this.telegraphGfx;
     g.clear();
-    g.setDepth(this.depth + 0.5);
+    g.setDepth(ATTACK_FX_DEPTH);
     for (const c of this.flameCircles) {
       g.fillStyle(0xffd23a, 0.85);
       g.fillCircle(c.x, c.y, FLAME_RADIUS * 0.55);

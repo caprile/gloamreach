@@ -1,4 +1,6 @@
 import Phaser from "phaser";
+import { ATTACK_FX_DEPTH, TELEGRAPH_DEPTH } from "../systems/depth";
+import { scaleToLongest } from "../art/overrides";
 import { Enemy } from "./Enemy";
 import { enemyStat } from "../systems/enemyStats";
 
@@ -410,6 +412,7 @@ export class GremlinKing extends Enemy {
         if (dist <= SMASH_LAND_EPS || this.smashElapsed >= SMASH_LEAP_MS) {
           body.setVelocity(0, 0);
             this.smashLanded = true;
+          this.spawnSmashFx();
           // The impact/strike window: hold planted briefly so checkPlayerHit
           // (called the same frame from MainScene) can register the AoE.
           this.stateEnteredAt = now;
@@ -449,10 +452,30 @@ export class GremlinKing extends Enemy {
     this.poise = Math.min(BOSS_MAX_POISE, this.poise + POISE_REGEN_PER_SEC * (delta / 1000));
   }
 
+  // The moment of impact, as distinct from the ring that warned about it: a
+  // one-shot sprite ABOVE the world that punches out and fades. See
+  // TELEGRAPH_DEPTH in systems/depth.ts — the warning is flat on the ground and
+  // the hit is not, so the two can never be read as the same thing.
+  private spawnSmashFx(): void {
+    const fx = this.scene.add
+      .image(this.smashTargetX, this.smashTargetY, "fx_slam_impact")
+      .setDepth(ATTACK_FX_DEPTH);
+    const full = scaleToLongest(this.scene, "fx_slam_impact", SMASH_RADIUS * 2.1);
+    fx.setScale(full * 0.5);
+    this.scene.tweens.add({
+      targets: fx,
+      scale: full,
+      alpha: 0,
+      duration: SMASH_IMPACT_MS + 160,
+      ease: "Cubic.easeOut",
+      onComplete: () => fx.destroy(),
+    });
+  }
+
   private drawTelegraph(now: number): void {
     const g = this.telegraphGfx;
     g.clear();
-    g.setDepth(this.depth + 0.5);
+    g.setDepth(TELEGRAPH_DEPTH);
     const frac = Phaser.Math.Clamp(
       this.currentStateDurationMs > 0 ? (now - this.stateEnteredAt) / this.currentStateDurationMs : 1,
       0,

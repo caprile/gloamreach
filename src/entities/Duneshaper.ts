@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { ATTACK_FX_DEPTH, TELEGRAPH_DEPTH } from "../systems/depth";
 import { Enemy } from "./Enemy";
 import type { DamageType } from "../systems/Weapons";
 import type { ProjectileConfig, ProjectileHost } from "./Projectile";
@@ -537,7 +538,7 @@ export class Duneshaper extends Enemy {
   private drawTelegraph(now: number): void {
     const g = this.telegraphGfx;
     g.clear();
-    g.setDepth(this.depth + 0.5);
+    g.setDepth(TELEGRAPH_DEPTH);
     const frac = Phaser.Math.Clamp(
       this.currentStateDurationMs > 0 ? (now - this.stateEnteredAt) / this.currentStateDurationMs : 1,
       0,
@@ -575,7 +576,7 @@ export class Duneshaper extends Enemy {
   private drawExecute(now: number): void {
     const g = this.telegraphGfx;
     g.clear();
-    g.setDepth(this.depth + 0.5);
+    g.setDepth(ATTACK_FX_DEPTH);
     const frac = Phaser.Math.Clamp((now - this.stateEnteredAt) / Math.max(1, this.currentStateDurationMs), 0, 1);
     if (this.currentAttack === "lance") {
       const flick = 0.85 + 0.15 * Math.sin(frac * Math.PI * 6);

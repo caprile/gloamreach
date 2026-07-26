@@ -3,7 +3,7 @@ import type { ResourceType } from "../systems/Inventory";
 import type { IncomingDamageType } from "../systems/Weapons";
 import { creatureAnimKey, hasCreatureRig, type CreatureAnim } from "../art/creatureRig";
 import { placeholderDims } from "../art/overrides";
-import { ysortDepth } from "../systems/depth";
+import { TELEGRAPH_DEPTH, ysortDepth } from "../systems/depth";
 
 export type EnemyState = "idle" | "chasing";
 
@@ -868,7 +868,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   private areaTelegraph(): Phaser.GameObjects.Graphics {
     if (!this.areaTelegraphGfx) this.areaTelegraphGfx = this.scene.add.graphics();
     this.areaTelegraphGfx.clear();
-    this.areaTelegraphGfx.setDepth(this.depth + 0.5);
+    this.areaTelegraphGfx.setDepth(TELEGRAPH_DEPTH);
     return this.areaTelegraphGfx;
   }
 

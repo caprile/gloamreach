@@ -53,6 +53,39 @@ export class BootScene extends Phaser.Scene {
     this.scene.start("MainScene");
   }
 
+  // Attack-IMPACT sprites (see TELEGRAPH_DEPTH in systems/depth.ts for why the
+  // indicator and the attack must not look alike). These are the fallbacks: real
+  // art in art/sprites/fx overrides them like any other texture, so the game
+  // still runs with no art files at all — just flatter.
+  //
+  // Each is authored pointing +x / centred on its origin, matching how the
+  // attack that plays it is rotated and scaled.
+  private makeAttackFxTextures(g: Phaser.GameObjects.Graphics): void {
+    // Gloam spikes — a radial burst of crystal shards.
+    g.clear();
+    for (let i = 0; i < 9; i++) {
+      const a = (i / 9) * Math.PI * 2;
+      const d = 26 + (i % 3) * 14;
+      const cx = 80 + Math.cos(a) * d;
+      const cy = 80 + Math.sin(a) * d;
+      g.fillStyle(0x8a4ed8, 0.92);
+      g.fillTriangle(cx - 7, cy + 6, cx + 7, cy + 6, cx, cy - (26 + (i % 3) * 10));
+    }
+    g.fillStyle(0xd6b0ff, 0.95);
+    g.fillTriangle(72, 88, 88, 88, 80, 36);
+    g.generateTexture("fx_gloam_spikes", 160, 160);
+
+    // Slam impact — a scorched radial shockwave.
+    g.clear();
+    g.fillStyle(0xff8a30, 0.5);
+    g.fillCircle(75, 75, 74);
+    g.fillStyle(0xffd070, 0.55);
+    g.fillCircle(75, 75, 50);
+    g.lineStyle(6, 0xfff0c0, 0.8);
+    g.strokeCircle(75, 75, 68);
+    g.generateTexture("fx_slam_impact", 150, 150);
+  }
+
   // Fallback ground-material tiles (see src/systems/ground.ts). Real 32x32 pixel
   // art overrides these one file at a time, exactly like every other texture —
   // so the ground detail layer works with no art on disk at all, just flatter.
@@ -89,6 +122,7 @@ export class BootScene extends Phaser.Scene {
     g.generateTexture("grass", 32, 32);
 
     this.makeGroundMaterialTiles(g);
+    this.makeAttackFxTextures(g);
 
     // Player (20x20) — a front-facing little adventurer in a blue tunic. The
     // sprite orientation is static (facing is tracked only to offset the equipped

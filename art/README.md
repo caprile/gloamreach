@@ -132,6 +132,35 @@ The world ground is its own system — see `src/systems/ground.ts` and
 - `*_picked` harvested-flora states and `*_shielded` node states are *state*
   variants — these do need art, but only a small delta from the base.
 
+### Attack FX: the indicator and the attack must not look alike (the user, 2026-07-25)
+
+A player who reads a warning as a hit, or a hit as a warning, dodges the wrong
+thing. Colour can't carry that distinction on its own — an attack is drawn in its
+element's hue, so a same-hue warning beside it reads as more of the same. Before
+this, the Cinderwrought's cone telegraph and its cone impact were literally the
+same wedge in the same orange, one brighter.
+
+So the split is STRUCTURAL, roster-wide, and lives in `src/systems/depth.ts`:
+
+- **`TELEGRAPH_DEPTH`** — the indicator draws flat on the ground UNDER every
+  entity, outline-led and translucent, never a textured sprite. It is a boundary
+  marker, and it is what `Enemy.drawAreaCircle/Wedge/Lane` produce.
+- **`ATTACK_FX_DEPTH`** — the attack itself is a real art sprite ABOVE the
+  entities, opaque and short-lived.
+
+"Under your feet = it hasn't happened yet; over your head = it's happening"
+is learnable in one fight and holds for every enemy and boss.
+
+Two things to keep doing when adding one: the attack sprite is scaled with
+`scaleToLongest` against the radius `checkPlayerHit` actually uses, so what you
+see is what hits; and it must be destroyed on the DESPAWN path as well as death,
+or a culled enemy strands its effect in the world forever.
+
+Prompting note: `create_map_object` resists top-down fire. "A top-down fan of
+fire" returns a side-on campfire and "a triangular wedge of flame from above"
+returns a flat triangle. Describing the parts ("many separate licking flame
+tongues and embers, fanning out wide") is what finally produced fire.
+
 ### `_picked` states: depict what harvesting actually did (the user, 2026-07-25)
 
 There are two kinds of harvest and they must not look alike:

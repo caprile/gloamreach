@@ -1,4 +1,6 @@
 import Phaser from "phaser";
+import { ATTACK_FX_DEPTH, TELEGRAPH_DEPTH } from "../systems/depth";
+import { scaleToLongest } from "../art/overrides";
 import { Enemy } from "./Enemy";
 import { enemyStat } from "../systems/enemyStats";
 
@@ -108,6 +110,9 @@ export class Gloamwarden extends Enemy {
   private poiseBarBg: Phaser.GameObjects.Rectangle;
   private poiseBarFill: Phaser.GameObjects.Rectangle;
   private telegraphGfx: Phaser.GameObjects.Graphics;
+  // The eruption's impact sprite, alive only for its impact window.
+  private eruptFx?: Phaser.GameObjects.Image;
+  private eruptFxScale = 1;
 
   constructor(scene: Phaser.Scene, cfg: { x: number; y: number }) {
     super(scene, {
@@ -324,6 +329,7 @@ export class Gloamwarden extends Enemy {
     this.stateEnteredAt = now;
     this.currentStateDurationMs = recoverMsFor(this.currentAttack!);
     this.telegraphGfx.clear();
+    this.clearEruptionFx();
     (this.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0);
   }
 
@@ -349,7 +355,7 @@ export class Gloamwarden extends Enemy {
   private drawTelegraph(now: number): void {
     const g = this.telegraphGfx;
     g.clear();
-    g.setDepth(this.depth + 0.5);
+    g.setDepth(TELEGRAPH_DEPTH);
     const frac = Phaser.Math.Clamp(
       this.currentStateDurationMs > 0 ? (now - this.stateEnteredAt) / this.currentStateDurationMs : 1,
       0,
@@ -384,29 +390,34 @@ export class Gloamwarden extends Enemy {
     }
   }
 
-  // The eruption's execute-phase visual: full-height crystal spikes bursting up
-  // at the locked spot (drawn during the impact window, not the telegraph).
+  // The eruption's execute-phase visual: crystal spikes bursting up at the
+  // locked spot. This is the ATTACK, not the warning, so it is a real sprite
+  // above the entities rather than another translucent shape on the ground —
+  // see TELEGRAPH_DEPTH in systems/depth.ts. The telegraph that preceded it is
+  // cleared here so the two are never on screen together.
   private drawEruptionSpikes(now: number): void {
-    const g = this.telegraphGfx;
-    g.clear();
-    g.setDepth(this.depth + 0.5);
+    this.telegraphGfx.clear();
     const frac = Phaser.Math.Clamp((now - this.stateEnteredAt) / Math.max(1, this.currentStateDurationMs), 0, 1);
-    const tx = this.eruptTargetX;
-    const ty = this.eruptTargetY;
-    // Spikes shoot up fast then hold.
-    const rise = Math.min(1, frac * 3);
-    g.fillStyle(0x8a4ed8, 0.9);
-    for (let i = 0; i < 7; i++) {
-      const a = (i / 7) * Math.PI * 2;
-      const dd = ERUPT_RADIUS * (0.3 + 0.6 * ((i % 3) / 2));
-      const sx = tx + Math.cos(a) * dd;
-      const sy = ty + Math.sin(a) * dd;
-      const hgt = (18 + (i % 3) * 8) * rise;
-      g.fillTriangle(sx - 5, sy + 4, sx + 5, sy + 4, sx, sy - hgt);
+    if (this.eruptFx) {
+      // Spikes shoot up fast then hold, so the scale punches out early.
+      const rise = Math.min(1, frac * 3);
+      this.eruptFx.setScale(this.eruptFxScale * (0.35 + 0.65 * rise)).setAlpha(1 - Math.max(0, frac - 0.7) / 0.3);
+      return;
     }
-    // Bright central spike.
-    g.fillStyle(0xd6b0ff, 0.95);
-    g.fillTriangle(tx - 6, ty + 5, tx + 6, ty + 5, tx, ty - 30 * rise);
+    const fx = this.scene.add
+      .image(this.eruptTargetX, this.eruptTargetY, "fx_gloam_spikes")
+      .setDepth(ATTACK_FX_DEPTH);
+    // The art is authored to fill its canvas; scale it so the visible burst
+    // matches the radius checkPlayerHit actually uses.
+    this.eruptFxScale = scaleToLongest(this.scene, "fx_gloam_spikes", ERUPT_RADIUS * 2.2);
+    this.eruptFx = fx.setScale(this.eruptFxScale * 0.35);
+  }
+
+  // Drop the eruption sprite when the attack window ends (also on death, via
+  // destroy) — it is a one-shot effect, not persistent state.
+  private clearEruptionFx(): void {
+    this.eruptFx?.destroy();
+    this.eruptFx = undefined;
   }
 
   // Queried each frame by MainScene.updateEnemies() (like GremlinKing) — area
@@ -443,12 +454,22 @@ export class Gloamwarden extends Enemy {
     this.currentAttack = null;
     (this.body as Phaser.Physics.Arcade.Body).setVelocity(0, 0);
     this.telegraphGfx.clear();
+    this.clearEruptionFx();
+  }
+
+  // Both teardown paths, not just death: a despawn (dawn cull, a reset) would
+  // otherwise strand the impact sprite in the world forever — the same bug the
+  // HP bars had.
+  destroy(fromScene?: boolean): void {
+    this.clearEruptionFx();
+    super.destroy(fromScene);
   }
 
   playDeathFeedback(onComplete: () => void): void {
     this.poiseBarBg.destroy();
     this.poiseBarFill.destroy();
     this.telegraphGfx.destroy();
+    this.clearEruptionFx();
     super.playDeathFeedback(onComplete);
   }
 }

@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { ATTACK_FX_DEPTH, TELEGRAPH_DEPTH } from "../systems/depth";
 import { Enemy } from "./Enemy";
 import type { SwingConfig } from "./Enemy";
 import { enemyStat } from "../systems/enemyStats";
@@ -265,7 +266,7 @@ export class Cragscale extends Enemy {
   private drawRollLane(alpha: number): void {
     const g = this.telegraphGfx;
     g.clear();
-    g.setDepth(this.depth - 0.5);
+    g.setDepth(TELEGRAPH_DEPTH);
     const dx = Math.cos(this.rollAngle);
     const dy = Math.sin(this.rollAngle);
     const px = -dy; // perpendicular

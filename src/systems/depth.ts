@@ -16,3 +16,25 @@ export const WORLD_DEPTH_SCALE = 0.09;
 export function ysortDepth(y: number): number {
   return y * WORLD_DEPTH_SCALE;
 }
+
+// An attack INDICATOR (the telegraph footprint drawn during a wind-up) and the
+// ATTACK ITSELF must never be mistakable for one another — a player reading a
+// warning as a hit, or a hit as a warning, is the difference between dodging and
+// eating it. Colour alone can't carry that: an attack is drawn in its element's
+// own hue, so a same-hue warning next to it reads as "more of the same thing".
+//
+// So the split is STRUCTURAL, and applies to the whole roster at once:
+//
+//   INDICATOR  — flat on the ground, UNDER every entity, outline-led and
+//                translucent, never a textured sprite. It is a boundary marker.
+//   THE ATTACK — a real art sprite ABOVE the entities, opaque and short-lived.
+//
+// "Under your feet = it hasn't happened yet; over your head = it's happening" is
+// learnable in one fight and holds for every enemy and boss.
+//
+// The value sits above every ground layer (the bakes and POI decals run
+// -9.5..-6) and below every entity (ysortDepth is >= 0 for all world y).
+export const TELEGRAPH_DEPTH = -5;
+
+// Impact art. Above every world entity, below the fixed HUD (2600+).
+export const ATTACK_FX_DEPTH = 2500;

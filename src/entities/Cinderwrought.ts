@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { ATTACK_FX_DEPTH, TELEGRAPH_DEPTH } from "../systems/depth";
 import { Enemy } from "./Enemy";
 import type { IncomingDamageType } from "../systems/Weapons";
 import { enemyStat } from "../systems/enemyStats";
@@ -302,7 +303,7 @@ export class Cinderwrought extends Enemy {
   private drawTelegraph(playerX: number, playerY: number, now: number): void {
     const g = this.telegraphGfx;
     g.clear();
-    g.setDepth(this.depth + 0.5);
+    g.setDepth(TELEGRAPH_DEPTH);
     const frac = Phaser.Math.Clamp(
       this.currentStateDurationMs > 0 ? (now - this.stateEnteredAt) / this.currentStateDurationMs : 1,
       0,
@@ -338,7 +339,7 @@ export class Cinderwrought extends Enemy {
   private drawExecute(now: number): void {
     const g = this.telegraphGfx;
     g.clear();
-    g.setDepth(this.depth + 0.5);
+    g.setDepth(ATTACK_FX_DEPTH);
     const frac = Phaser.Math.Clamp((now - this.stateEnteredAt) / Math.max(1, this.currentStateDurationMs), 0, 1);
     if (this.currentAttack === "cone") {
       // A rolling flame cone: two stacked wedges (outer glow + hot core) that

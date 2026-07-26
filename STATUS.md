@@ -2,8 +2,9 @@
 
 ## Current State
 
-_Living snapshot — edit in place, never append._ Last shipped: **ground texturing + biome
-blending** (2026-07-25, Opus) (`.claude/plans/art-textures-lighting-3-biomes.md`).
+_Living snapshot — edit in place, never append._ Last shipped: **ground follow-ups — projectile
+art, picked-state rule, and the attack-FX indicator/attack split** (2026-07-25, Opus)
+(`.claude/plans/art-textures-lighting-3-biomes.md`).
 
 **The art migration now covers every surface in the game.** The GROUND was the last piece and
 the only non-reversible one — it is generated, not a sprite, so the override layer can't reach
@@ -317,6 +318,55 @@ touches no combat numbers.
 
 > Older entries in STATUS-archive.md.
 
+### Ground follow-ups: projectile art, picked states, and the attack-FX split (2026-07-25, Opus)
+
+Three playtest notes off the ground pass, plus the start of the attack-FX phase.
+
+**Gremlin projectiles had no art** — literally: `gremlin_rock` was a plain grey 6x6 `fillRect`.
+It, the slingshot pellet, the Duneshaper's gloam bolt and the Hexling's physical side-bolt now
+have real art. Real art is still pinned back to the placeholder footprint but no longer all the
+way: 6px was hard to pick out even against flat ground and could vanish outright into the
+texture that just landed, so art draws at **1.8x** the old footprint while the **collision body
+stays pinned exactly** (`Projectile.PROJECTILE_ART_SCALE`). Two gotchas worth keeping: Arcade's
+`setSize` takes UNSCALED units, so the sprite scale has to be divided back out or the body
+silently shrinks (it came out 3x3 instead of 6x6 first try); and the integer-scale rule that
+governs icons does not apply here, because every projectile is drawn rotated to its travel angle
+and is already off the pixel grid.
+
+**The picked states had no rule behind them.** the user: "the picked mushroom art makes no sense
+— think about how you pick stuff in real life." `gloamcap_picked` was a single LARGER purple
+mushroom, so picking a cluster grew one. The rule, now in `art/README.md`: take a PART off a
+plant (berries, fruit, a bloom) and the plant stays minus what you took; take the WHOLE plant (a
+mushroom, a mat of moss) and nothing is left growing — and since these nodes regrow, what remains
+is a ground disturbance rather than a plant. Gloamcap is now snapped stems in disturbed soil;
+dustbloom is its leaves without the flower instead of the dead twig it had. Also learned:
+**negative prompts don't work** — "a shrub with no flower on it" came back with a flower;
+describing only what should be present did not.
+
+**Attack FX — the indicator/attack split, which is structural rather than per-boss.** the user,
+mid-pass: *"I want it to be clear what is the attack indicator vs the actual attack sprite —
+they can't look the same."* He was right that art alone would have made it worse: the
+Cinderwrought's cone telegraph and its cone impact were the same wedge in the same orange, one
+brighter. `src/systems/depth.ts` now owns the rule — **`TELEGRAPH_DEPTH`** (flat on the ground,
+UNDER every entity, outline-led, translucent, never textured) and **`ATTACK_FX_DEPTH`** (a real
+art sprite ABOVE the entities, opaque, short-lived). "Under your feet = it hasn't happened yet;
+over your head = it's happening." Applied in one pass to every telegraph in the game
+(`Enemy.drawArea*` plus the six bespoke boss/enemy graphics), so the whole roster reads
+consistently rather than one boss at a time.
+
+Two impact sprites are wired as the exemplars: the **Gloamwarden's crystal eruption** and the
+**Gremlin King's smash**, both scaled with `scaleToLongest` against the radius `checkPlayerHit`
+actually uses, so what you see is what hits, and both torn down on the DESPAWN path as well as
+death (the bug that stranded HP bars).
+
+**Not done, deliberately:** the Cinderwrought's cinder cone stays procedural. `create_map_object`
+resists top-down fire — a "top-down fan of fire" returns a side-on campfire, a "triangular wedge
+of flame from above" returns a flat triangle, and the one generation that did produce real flame
+tongues came with a torch handle attached. Its flickering two-wedge fire already differs from its
+own telegraph, and it now differs by depth too, so it is not urgent. Remaining in this phase: the
+cone, the Duneshaper/Hexling impacts (moved above the entities but still procedural), and the
+8 ability cast FX families, which all still tint the same `light_soft` gradient.
+
 ### Ground texturing + biome blending (2026-07-25, Opus)
 
 The last non-reversible piece of the art migration, and the one the user deliberately queued
@@ -445,50 +495,3 @@ fetch. Only the attack strip is new — nothing else could regress.
 Verified live: all 11 touched textures load at the expected sizes, the 19 animated creatures
 register idle/walk/attack, elites derive correctly from the new art (including the recoloured
 animation strips), and a spawned Mirejaw was caught mid-lunge with its jaws open.
-
-### Creature animation + the UI slim-down (2026-07-25, Opus)
-
-**20 of 22 creatures animated** (96 animations) via `src/art/creatureRig.ts`.
-Snake and Sandmaw stay static on purpose — neither fits the humanoid or
-quadruped skeleton, and both are ambushers whose read is stillness.
-
-**Route:** `create_character`, not objects. `create_1_direction_object` was
-piloted and rejected — 25 generations each, a 64-candidate review per creature,
-loose style match. A character is 1 generation, and quadrupeds have a real
-`attack-right` template. **Only ONE direction is generated**, and it is a
-per-ANIMATION choice: **idle faces front, movement and attacks face side-on.**
-A profile throws away the ears/face/held item that identify a humanoid; a
-front-facing walk cycle moonwalks. Template sets differ per skeleton and have to
-be read per creature (cat has no attack — the toad's is `jump`).
-
-**Bugs the real art exposed, all invisible under symmetric placeholders:**
-
-- **`applyFacing` takes a VELOCITY.** Ten call sites passed a unit vector, which
-  is under its near-stopped threshold, so facing never updated and the creature
-  kept its constructor's random `flipX` forever. `faceAngle()` — the documented
-  fix — was broken the same way: it forwarded a unit vector into
-  `applyUprightFacing`, which has its own `|vx| > 3` guard. Fixing the ten sites
-  first and measuring **no change** is what surfaced the second layer.
-- **Bosses never played their attack animation.** They resolve damage through
-  `checkPlayerHit()` and never touch the shared `attackPhase`, so `isAttacking()`
-  was always false. Now marked at `beginExecute`. `markAttackAnim()` takes no
-  `now` — a window stamped on a caller's clock and compared against
-  `scene.time.now` never expires.
-- **Bosses recovered facing away.** A travelling attack (leap/charge/roll)
-  carries the boss PAST the player and `updateRecovering` couldn't see the
-  player at all, so it spent its whole punish window staring the wrong way.
-  **The measurement mattered**: assuming a stationary boss reported a vague
-  9/40, while checking against its ACTUAL relative position each frame localised
-  it to executing 19/28 and recovering 9/29. Recovering and idle now measure 0.
-- **HP bars sat over the sprite** — `BAR_OFFSET_Y` was a flat 16px from the
-  sprite's CENTRE, fine at 14-32px and wrong at 48-68px. Now derived from the
-  sprite's own height; the two boss poise bars follow the same value.
-
-**Panels slimmed off the play area** (placement clicks were landing on the
-inventory): Q/E/R stacked, Destroy under the last special, Combat under
-Equipment, Relics moved to a tab — 1166 → 774 wide against a player at 960.
-Crafting 620 → 480, sized to the tab strip and the quantity slider.
-
-**Idle wandering calmed**: rest 4-9s against a 1-2.5s stroll, and past 90px from
-spawn the next stroll aims home, so creatures hover their anchor instead of
-random-walking off it.
