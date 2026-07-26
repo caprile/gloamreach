@@ -2085,7 +2085,7 @@ export class MainScene extends Phaser.Scene {
 
     // Contextual hints (tip popups) + pause menu (Esc). The hint UI just
     // renders whatever HintManager decides to surface.
-    this.hintUI = new HintUI(this, () => (this.craftingMenu?.isOpen() ? this.craftingMenu.left : null));
+    this.hintUI = new HintUI(this);
     this.hints.onShow((text, _id, kind) => this.hintUI.show(text, kind));
     this.pauseMenu = new PauseMenuUI(this);
     this.welcomeUI = new WelcomeUI(this);
@@ -2285,6 +2285,11 @@ export class MainScene extends Phaser.Scene {
     // reads it. Runs even while frozen (below) — a paused frame still renders,
     // and the whole point is to keep the render list small at all times.
     this.updateSceneStreaming();
+
+    // Hints hold themselves off screen while any panel/overlay is up. Ticked
+    // before the freeze returns below so a tip also steps aside for the
+    // pause/run-end screens, not just the in-game menus.
+    this.hintUI.tick(this.isPaused || this.runOver || this.anyMenuOpen() || this.worldMapUI.isOpen());
 
     // Run ended (death/win screen up) — freeze the whole world sim + input. The
     // RunEndUI is tween/pointer-driven, so it stays live regardless.
@@ -9788,7 +9793,7 @@ export class MainScene extends Phaser.Scene {
   // AI's aggro flag alone. Every boss leashes on how far IT has travelled from
   // ITS OWN spawn — which never trips for one that can't close the distance: a
   // crypt warden held back by a wall, or any boss you simply walked away from
-  // and left standing at home. the user saw the result as a mini-boss health bar
+  // and left standing at home. The user saw the result as a mini-boss health bar
   // still pinned to the top of the screen thousands of pixels later.
   //
   // Gating on distance to the player fixes every boss at once and can't
@@ -11202,7 +11207,7 @@ export class MainScene extends Phaser.Scene {
       // nothing drifts while an enemy sits out frames. A culled enemy simply
       // resumes when the player comes back into range.
       // HARD INVARIANT: nothing that wasn't placed underground may BE
-      // underground. the user found forest gremlins wandering around inside the
+      // underground. The user found forest gremlins wandering around inside the
       // crypts — the CRYPT_REALM pocket sits in the dead corner of the world
       // SQUARE, so it is inside `collideWorldBounds` even though it is outside
       // the world circle the player is clamped to, and a creature drifting far

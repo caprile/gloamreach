@@ -6,11 +6,15 @@ import type { HintKind } from "../systems/Hints";
 // the right edge at mid-height — clear of the minimap (top-right), the hotbar
 // + hover prompt (bottom), and the log/keybinds column (top-left).
 //
+// A tip never shares the screen with an open menu at all — see tick(). The
+// earlier attempt (draw over the menus, stepping left of the crafting panel to
+// clear the Craft button) just moved the card into the middle of the play area
+// between the two panels, which was worse.
+//
 // Flat scrollFactor(0) GameObjects (no Container — same input/hit-test
-// constraint the other menus document). Depth sits above every menu (the
-// crafting/inventory panels top out at 3001) so a tip firing while a menu is
-// open is never hidden behind it (playtest) — but below the pause overlay
-// (3500), the one screen where a tip popping up would be truly out of place.
+// constraint the other menus document). Depth still sits above the menu panels
+// (3001) so nothing can clip it during the frame a menu opens, and below the
+// pause overlay (3500).
 const DEPTH_BOX = 3200;
 const DEPTH_TEXT = 3201;
 const CARD_W = 264;
@@ -42,33 +46,38 @@ export class HintUI {
   private displaying = false;
   private hideEvent?: Phaser.Time.TimerEvent;
   private slideTween?: Phaser.Tweens.Tween;
+  private fadeTween?: Phaser.Tweens.Tween;
+  // The entry currently on screen, kept so a menu opening mid-tip can put it
+  // back at the front of the queue rather than burning it.
+  private current?: { text: string; kind: HintKind };
 
-  // Left edge of any open right-hand panel the card must not cover, or null when
-  // nothing is in the way. The card rests against the right edge, which is
-  // exactly where the crafting panel lives — so a tip firing mid-craft sat on
-  // top of the Craft button (the user). Supplied by the scene because HintUI has
-  // no business knowing which menus exist.
-  private obstacleLeft?: () => number | null;
-
-  constructor(scene: Phaser.Scene, obstacleLeft?: () => number | null) {
+  constructor(scene: Phaser.Scene) {
     this.scene = scene;
-    this.obstacleLeft = obstacleLeft;
     this.restX = scene.scale.width - RIGHT_MARGIN - CARD_W;
     this.centerY = Math.round(scene.scale.height * 0.42);
-  }
-
-  // Where the card should come to rest right now — shifted left of an open
-  // panel, never past the screen edge. Recomputed per hint rather than cached,
-  // since a menu can open or close between two tips.
-  private currentRestX(): number {
-    const obstacle = this.obstacleLeft?.() ?? null;
-    if (obstacle === null) return this.restX;
-    return Math.max(RIGHT_MARGIN, Math.min(this.restX, obstacle - CARD_W - 12));
   }
 
   show(text: string, kind: HintKind = "tutorial"): void {
     this.queue.push({ text, kind });
     if (!this.displaying) this.advance();
+  }
+
+  // Called every frame with "is a menu/overlay up right now". A tip has no home
+  // on screen while a panel is open — the right edge is the crafting menu and
+  // stepping left of it drops the card into the middle of the play area, which
+  // is worse (the user). So a tip simply waits: it re-queues if one is already
+  // showing when a menu opens, and surfaces once the menus are closed again.
+  tick(blocked: boolean): void {
+    if (blocked) {
+      if (this.displaying) {
+        if (this.current !== undefined) this.queue.unshift(this.current);
+        this.current = undefined;
+        this.clear();
+        this.displaying = false;
+      }
+      return;
+    }
+    if (!this.displaying && this.queue.length > 0) this.advance();
   }
 
   private advance(): void {
@@ -78,6 +87,7 @@ export class HintUI {
       return;
     }
     this.displaying = true;
+    this.current = next;
     this.display(next.text, next.kind);
   }
 
@@ -130,7 +140,7 @@ export class HintUI {
     this.objects = [box, accent, header, body];
 
     // Slide the whole group in together by tweening a shared x delta.
-    const dx = this.currentRestX() - startX;
+    const dx = this.restX - startX;
     this.slideTween = this.scene.tweens.add({
       targets: { t: 0 },
       t: 1,
@@ -151,15 +161,17 @@ export class HintUI {
   }
 
   private fadeOut(): void {
+    this.current = undefined;
     if (this.objects.length === 0) {
       this.advance();
       return;
     }
-    this.scene.tweens.add({
+    this.fadeTween = this.scene.tweens.add({
       targets: this.objects,
       alpha: 0,
       duration: FADE_MS,
       onComplete: () => {
+        this.fadeTween = undefined;
         this.clear();
         this.advance();
       },
@@ -173,6 +185,11 @@ export class HintUI {
   private clear(): void {
     this.slideTween?.remove();
     this.slideTween = undefined;
+    // Killed here as well as on its own completion: a menu opening mid-fade
+    // clears the card out from under this tween, and its onComplete would
+    // otherwise advance the queue and pop the next tip up over the menu.
+    this.fadeTween?.remove();
+    this.fadeTween = undefined;
     this.hideEvent?.remove();
     this.hideEvent = undefined;
     for (const o of this.objects) o.destroy();
