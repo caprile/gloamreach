@@ -12,7 +12,7 @@ anchor mechanism doesn't exist). Phase 3 before it left forest, badlands and bay
 crypt tiles and objects across four themes, all 12 map markers, all 11 ability icons and the larger
 projectiles. **381 real assets** (181 icons + 160 world + 40 rig strips).
 
-**The creature roster is DONE** — all 14 common creatures across three biomes plus all 8 bosses,
+**The creature roster is DONE and 20 of 22 are ANIMATED** — all 14 common creatures across three biomes plus all 8 bosses,
 with the 14 elites deriving from them automatically. **403 real assets** (363 sprites + 40 rig
 strips); every override key resolves and no filename is unmatched. the user's call: the recoloured
 elites are "good for now" — bespoke elite art (something beyond "is now red") is a possible later
@@ -290,6 +290,53 @@ touches no combat numbers.
 ## Recent Entries
 
 > Older entries in STATUS-archive.md.
+
+### Creature animation + the UI slim-down (2026-07-25, Opus)
+
+**20 of 22 creatures animated** (96 animations) via `src/art/creatureRig.ts`.
+Snake and Sandmaw stay static on purpose — neither fits the humanoid or
+quadruped skeleton, and both are ambushers whose read is stillness.
+
+**Route:** `create_character`, not objects. `create_1_direction_object` was
+piloted and rejected — 25 generations each, a 64-candidate review per creature,
+loose style match. A character is 1 generation, and quadrupeds have a real
+`attack-right` template. **Only ONE direction is generated**, and it is a
+per-ANIMATION choice: **idle faces front, movement and attacks face side-on.**
+A profile throws away the ears/face/held item that identify a humanoid; a
+front-facing walk cycle moonwalks. Template sets differ per skeleton and have to
+be read per creature (cat has no attack — the toad's is `jump`).
+
+**Bugs the real art exposed, all invisible under symmetric placeholders:**
+
+- **`applyFacing` takes a VELOCITY.** Ten call sites passed a unit vector, which
+  is under its near-stopped threshold, so facing never updated and the creature
+  kept its constructor's random `flipX` forever. `faceAngle()` — the documented
+  fix — was broken the same way: it forwarded a unit vector into
+  `applyUprightFacing`, which has its own `|vx| > 3` guard. Fixing the ten sites
+  first and measuring **no change** is what surfaced the second layer.
+- **Bosses never played their attack animation.** They resolve damage through
+  `checkPlayerHit()` and never touch the shared `attackPhase`, so `isAttacking()`
+  was always false. Now marked at `beginExecute`. `markAttackAnim()` takes no
+  `now` — a window stamped on a caller's clock and compared against
+  `scene.time.now` never expires.
+- **Bosses recovered facing away.** A travelling attack (leap/charge/roll)
+  carries the boss PAST the player and `updateRecovering` couldn't see the
+  player at all, so it spent its whole punish window staring the wrong way.
+  **The measurement mattered**: assuming a stationary boss reported a vague
+  9/40, while checking against its ACTUAL relative position each frame localised
+  it to executing 19/28 and recovering 9/29. Recovering and idle now measure 0.
+- **HP bars sat over the sprite** — `BAR_OFFSET_Y` was a flat 16px from the
+  sprite's CENTRE, fine at 14-32px and wrong at 48-68px. Now derived from the
+  sprite's own height; the two boss poise bars follow the same value.
+
+**Panels slimmed off the play area** (placement clicks were landing on the
+inventory): Q/E/R stacked, Destroy under the last special, Combat under
+Equipment, Relics moved to a tab — 1166 → 774 wide against a player at 960.
+Crafting 620 → 480, sized to the tab strip and the quantity slider.
+
+**Idle wandering calmed**: rest 4-9s against a 1-2.5s stroll, and past 90px from
+spawn the next stroll aims home, so creatures hover their anchor instead of
+random-walking off it.
 
 ### Art arc — creature roster begun: elite derivation + footprint pinning (2026-07-25, Opus)
 
