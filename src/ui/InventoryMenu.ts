@@ -105,6 +105,9 @@ export interface InventoryMenuDeps {
   upgradeReady: (key: string, tier: number, appliedIds?: string[]) => boolean;
 }
 
+/** Backpack biome filters, plus the Relics view that replaces the grid. */
+type InventoryTab = ItemBiome | "all" | "relics";
+
 export const PANEL_X = 16;
 export const PANEL_Y = 48;
 // Bumped 46->70 for the real-art migration: icons are authored at 32x32, and
@@ -133,7 +136,12 @@ export const BACKPACK_ROWS = 10;
 // realistically overflow it. The 6x6 grid is just the on-screen viewport into
 // this flat container; tabs/sections/scroll organize the rest.
 export const BACKPACK_CAPACITY = 240;
-const ARMOR_COLS = 3;
+// Two columns, not three. The third existed only to lay Q/E/R out as a ROW
+// under the paper doll; stacking those vertically instead removes a whole
+// column from the panel's width, which is what stopped the inventory reaching
+// across the player (the user: "the inventory menu now overlaps with the player
+// area", and placement clicks were landing on the panel).
+const ARMOR_COLS = 2;
 // 64 = exactly 2x the 32x32 authored icon size, so every source pixel becomes
 // a clean 2x2 block instead of an uneven smear. Padding is only 6px per side
 // because showing off the art is the whole point of the bump.
@@ -190,61 +198,53 @@ const ARMOR_LAYOUT: Record<EquipSlot, { col: number; row: number }> = {
   helmet: { col: 0, row: 0 },
   chest: { col: 0, row: 1 },
   legs: { col: 0, row: 2 },
+  ability1: { col: 0, row: 3 },
+  ability2: { col: 0, row: 4 },
+  ability3: { col: 0, row: 5 },
   special1: { col: 1, row: 0 },
   special2: { col: 1, row: 1 },
   special3: { col: 1, row: 2 },
   special4: { col: 1, row: 3 },
-  ability1: { col: 0, row: 4 },
-  ability2: { col: 1, row: 4 },
-  ability3: { col: 2, row: 4 },
 };
 const ARMOR_ROWS_MAX = Math.max(...Object.values(ARMOR_LAYOUT).map((p) => p.row)) + 1;
 const ARMOR_H = ARMOR_ROWS_MAX * ARMOR_ROW_PITCH - GAP;
 
-// Combat-stats column: a 3rd side-by-side section, right of Equipment —
-// live "what am I currently equipped with" summary (damage/attack speed/
-// attack stamina/armor), computed by MainScene.combatStats().
-const STATS_GAP = 24;
-const STATS_X = ARMOR_X + ARMOR_W + STATS_GAP;
-const STATS_Y = ARMOR_Y;
-const STATS_W = 176;
-
-// Relics column: a 4th side-by-side section, right of Combat — one fixed slot
-// per relic family (8 total, 2x4), paper-doll style like Equipment so owned
-// relics are visible without opening the Relic Forge menu or squinting at the
-// HUD bar.
-const RELICS_GAP = 24;
-const RELICS_X = STATS_X + STATS_W + RELICS_GAP;
-const RELICS_Y = STATS_Y;
-const RELICS_COLS = 2;
-const RELICS_W = RELICS_COLS * SLOT + (RELICS_COLS - 1) * GAP;
-
-// Aggregated "all relic effects" list, stacked below the 8 relic slots in the
-// Relics column. Sized for the realistic worst case (~9 distinct active
-// channels — one relic per family, and the crit family feeds only one crit
-// channel) so the panel never clips it.
-const RELIC_GRID_ROWS = Math.ceil(8 / RELICS_COLS); // 4
-const RELIC_GRID_H = RELIC_GRID_ROWS * SLOT + (RELIC_GRID_ROWS - 1) * GAP;
-const RELIC_FX_Y = RELICS_Y + RELIC_GRID_H + 16; // "Effects" header baseline
-const RELIC_FX_ROW_H = 17;
-const RELIC_FX_MAX_ROWS = 9;
-const RELIC_FX_BOTTOM = RELIC_FX_Y + 18 + RELIC_FX_MAX_ROWS * RELIC_FX_ROW_H;
-
-export const PANEL_W = RELICS_X + RELICS_W - PANEL_X + 12;
-// Tall enough for whichever column reaches lowest — the backpack grid (now 15
-// rows), or the relic-effects list under the Relics column. NOTE: because the
-// backpack is much taller than the Equipment/Combat/Relics columns, the lower-
-// right area of the panel (below RELIC_FX_BOTTOM) is intentionally left EMPTY
-// for now — reserved for a future run/character/set-bonus readout (deferred).
-export const PANEL_H = Math.max(BACKPACK_Y + BACKPACK_H + 20, RELIC_FX_BOTTOM + 8) - PANEL_Y;
-
-// Trash drop target: sits below the armor grid, in the panel's otherwise-
-// empty lower-right corner. Dragging a stack here permanently deletes it (see
+// Trash drop target: directly under the last special, continuing that column
+// rather than sitting off on its own — it's a slot-shaped target, so it reads
+// as part of the paper doll. Dragging a stack here permanently deletes it (see
 // MainScene.destroyStack) — distinct from dragging out to the game world,
 // which drops it as a recoverable loose pickup instead.
-const TRASH_SIZE = 46;
-const TRASH_X = ARMOR_X;
-const TRASH_Y = ARMOR_Y + ARMOR_H + 24;
+const TRASH_SIZE = SLOT;
+const TRASH_ROW = Math.max(...Object.values(ARMOR_LAYOUT).filter((p) => p.col === 1).map((p) => p.row)) + 1;
+const TRASH_X = ARMOR_X + (SLOT + GAP);
+const TRASH_Y = ARMOR_Y + TRASH_ROW * ARMOR_ROW_PITCH;
+
+// Combat stats now sit UNDER the equipment grid instead of beside it — the
+// side-by-side column cost 200px of width for a handful of short text rows,
+// and width is the scarce axis (the panel has to stay clear of the player).
+const STATS_X = ARMOR_X;
+const STATS_Y = ARMOR_Y + ARMOR_H + 26;
+const STATS_W = 200;
+const STATS_H = 150;
+
+// Relics moved out of the panel entirely and onto their own backpack TAB
+// (the user). They were a 4th side-by-side column purely so equipped relics
+// were visible at a glance; as a tab they keep that while costing no width.
+// The tab reuses the backpack's whole grid area, so the 8 family slots get a
+// roomier 4-wide layout than the old 2-wide column.
+const RELICS_COLS = 4;
+const RELICS_X = BACKPACK_X;
+const RELICS_Y = BP_GRID_TOP;
+const RELIC_GRID_ROWS = Math.ceil(8 / RELICS_COLS); // 2
+const RELIC_GRID_H = RELIC_GRID_ROWS * SLOT + (RELIC_GRID_ROWS - 1) * GAP;
+const RELICS_W = RELICS_COLS * SLOT + (RELICS_COLS - 1) * GAP;
+const RELIC_FX_Y = RELICS_Y + RELIC_GRID_H + 20; // "Effects" header baseline
+const RELIC_FX_ROW_H = 17;
+
+export const PANEL_W = ARMOR_X + Math.max(ARMOR_W, STATS_W) - PANEL_X + 12;
+// The backpack column is the tallest thing in the panel, so it alone sets the
+// height; Equipment + Combat stacked still finish well above it.
+export const PANEL_H = Math.max(BACKPACK_Y + BACKPACK_H + 20, STATS_Y + STATS_H) - PANEL_Y;
 
 // Top-left grid inventory (Tab). Renders the backpack ItemContainer as a grid
 // plus worn-equipment placeholders. Slots are drag sources (and the whole
@@ -272,7 +272,7 @@ export class InventoryMenu {
   private relicTipBg?: Phaser.GameObjects.Rectangle;
   private relicTipText?: Phaser.GameObjects.Text;
   // Tabbed-by-biome view state.
-  private activeTab: ItemBiome | "all" = "all";
+  private activeTab: InventoryTab = "all";
   private search = "";
   private searchFocused = false;
   private scrollY = 0; // px offset into the (possibly taller-than-viewport) grid
@@ -552,22 +552,25 @@ export class InventoryMenu {
     if (!keepTooltip) this.hideTooltip();
     const x0 = PANEL_X + 12;
 
+    const relicTab = this.activeTab === "relics";
     this.addText(x0, PANEL_Y + 10, "Inventory", 15, "#ffffff");
-    this.addText(BACKPACK_X, PANEL_Y + 36, "Backpack", 12, "#8a93a3");
-    this.renderSortButton();
+    this.addText(BACKPACK_X, PANEL_Y + 36, relicTab ? "Relics" : "Backpack", 12, "#8a93a3");
+    if (!relicTab) this.renderSortButton();
     this.addText(ARMOR_X, PANEL_Y + 36, "Equipment", 12, "#8a93a3");
-    this.addText(STATS_X, PANEL_Y + 36, "Combat", 12, "#8a93a3");
-    this.addText(RELICS_X, PANEL_Y + 36, "Relics", 12, "#8a93a3");
     this.renderTabs();
-    this.renderSearch();
-    this.renderBackpackGrid();
+    // The relics tab takes over the backpack's whole area, so its search box
+    // and grid are skipped rather than drawn underneath.
+    if (relicTab) {
+      this.renderRelics(RELICS_X, RELICS_Y);
+      this.renderRelicEffects(RELICS_X, RELIC_FX_Y);
+    } else {
+      this.renderSearch();
+      this.renderBackpackGrid();
+    }
     this.renderArmor(ARMOR_X, ARMOR_Y);
     this.renderTrash();
+    this.addText(STATS_X, STATS_Y - 18, "Combat", 12, "#8a93a3");
     this.renderCombatStats(STATS_X, STATS_Y);
-    this.renderRelics(RELICS_X, RELICS_Y);
-    // RELIC_FX_Y is already an absolute Y (built from RELICS_Y, which includes
-    // PANEL_Y) — pass it straight through, matching how PANEL_H reserves space.
-    this.renderRelicEffects(RELICS_X, RELIC_FX_Y);
   }
 
   // Aggregated "all relic effects" — one row per active channel with its grand
@@ -891,13 +894,16 @@ export class InventoryMenu {
   }
 
   private renderTabs(): void {
-    const tabs: (ItemBiome | "all")[] = ["all", ...this.presentBiomes()];
+    // "Relics" is a peer of the biome tabs rather than a column of its own —
+    // it swaps what the backpack area shows, not what it filters.
+    const tabs: InventoryTab[] = ["all", ...this.presentBiomes(), "relics"];
     if (!tabs.includes(this.activeTab)) this.activeTab = "all";
-    const labels: Record<ItemBiome | "all", string> = {
+    const labels: Record<InventoryTab, string> = {
       all: "All",
       forest: "Forest",
       badlands: "Badlands",
       bayou: "Bayou",
+      relics: "Relics",
     };
     let x = BACKPACK_X;
     for (const tab of tabs) {

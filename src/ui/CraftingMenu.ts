@@ -32,7 +32,12 @@ const CATEGORIES: { id: RecipeCategory; label: string }[] = [
 // detail panel off the bottom of a fixed-height panel. PANEL_W bumped
 // accordingly; LIST_COL_W is the list column's width before the detail
 // column starts.
-const PANEL_W = 620;
+// 620 left ~295px of dead space between the end of the "Misc" tab and the
+// panel's right edge (the user). The real floors are the tab strip (~325px) and
+// the detail column having room for the quantity slider plus its "Max" button,
+// so the panel is sized to those and nothing else. Descriptions and cost lines
+// already word-wrap against PANEL_W, so they reflow rather than clip.
+const PANEL_W = 480;
 // A FLOOR, not the height: the panel now sizes itself to the space between its
 // top margin and the bottom HUD (see panelH in the constructor). The old fixed
 // 440 was authored when the Armor/Weapons tabs held a handful of recipes each;
