@@ -212,7 +212,7 @@ export class Duneshaper extends Enemy {
     this.setScale(DUNESHAPER_SCALE);
 
     const barX = cfg.x - POISE_BAR_W / 2;
-    const barY = cfg.y - Enemy.BAR_OFFSET_Y + POISE_BAR_OFFSET_Y;
+    const barY = cfg.y - this.barOffsetY + POISE_BAR_OFFSET_Y;
     this.poiseBarBg = scene.add.rectangle(barX, barY, POISE_BAR_W, POISE_BAR_H, 0x1a1030, 0.85).setOrigin(0, 0.5);
     this.poiseBarFill = scene.add.rectangle(barX, barY, POISE_BAR_W, POISE_BAR_H, 0xc79cf0, 1).setOrigin(0, 0.5);
     this.telegraphGfx = scene.add.graphics();
@@ -221,7 +221,7 @@ export class Duneshaper extends Enemy {
   preUpdate(time: number, delta: number): void {
     super.preUpdate(time, delta);
     const barX = this.x - POISE_BAR_W / 2;
-    const barY = this.y - Enemy.BAR_OFFSET_Y + POISE_BAR_OFFSET_Y;
+    const barY = this.y - this.barOffsetY + POISE_BAR_OFFSET_Y;
     const aggro = this.isAggro();
     this.poiseBarBg.setPosition(barX, barY).setDepth(this.depth + 1).setVisible(aggro);
     this.poiseBarFill.setPosition(barX, barY).setDepth(this.depth + 1).setVisible(aggro);

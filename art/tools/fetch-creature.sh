@@ -1,12 +1,22 @@
 #!/usr/bin/env bash
 # Pull a finished PixelLab character into the game's CREATURE rig layout.
 #
-#   art/tools/fetch-creature.sh <pixellab-character-id> <textureKey>
-#   e.g. art/tools/fetch-creature.sh 44a670c2-... boar
+#   art/tools/fetch-creature.sh <pixellab-character-id> <textureKey> [direction]
+#   e.g. art/tools/fetch-creature.sh 44a670c2-... boar east
 #
-# Creatures are drawn facing RIGHT and mirrored with flipX at runtime, so only
-# the EAST direction is kept — the other three are downloaded by the archive
-# and ignored. Each animation becomes one horizontal strip:
+# Only ONE direction is kept; the others come down in the archive and are
+# ignored. Which one depends on the creature's shape, and it matters a lot:
+#
+#   quadrupeds -> east   a boar reads side-on, and a front-facing one is a blob
+#   humanoids  -> south  a profile hides the ears, face and held item that make
+#                        a gremlin a gremlin — it came out as a generic green
+#                        man. Front-facing is also how the placeholders were
+#                        drawn, so the roster stays consistent.
+#
+# flipX still mirrors at runtime; on a front-facing sprite that reads as the
+# creature turning, which is what the placeholders always did.
+#
+# Each animation becomes one horizontal strip:
 #
 #   art/creatures/<textureKey>_<anim>_f<frameCount>.png
 #
@@ -15,9 +25,10 @@
 # static sprite, so the still and the animation can never be different art.
 set -euo pipefail
 
-[ $# -eq 2 ] || { echo "usage: fetch-creature.sh <pixellab-character-id> <textureKey>" >&2; exit 1; }
+[ $# -ge 2 ] || { echo "usage: fetch-creature.sh <pixellab-character-id> <textureKey> [direction]" >&2; exit 1; }
 PL_ID="$1"
 KEY="$2"
+DIR="${3:-east}"
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 OUT="$ROOT/art/creatures"
@@ -29,9 +40,14 @@ unzip -qo "$TMP/char.zip" -d "$TMP/x"
 SRC="$(find "$TMP/x" -maxdepth 1 -mindepth 1 -type d | head -1)"
 mkdir -p "$OUT" "$ROOT/art/sprites/world"
 
-for dir in "$SRC"/animations/*/east/; do
+for dir in "$SRC"/animations/*/"$DIR"/; do
   [ -d "$dir" ] || continue
   anim="$(basename "$(dirname "$dir")")"
+  # A character with two animations of the same NAME (e.g. an east `attack`
+  # kept alongside a new south one) gets a group-id suffix on the folder —
+  # `attack-902741fb`. The rig parses `<key>_<anim>_f<n>`, so strip it back to
+  # the bare name.
+  anim="${anim%%-*}"
   frames=("$dir"frame_*.png)
   # Drop any earlier strip for this anim first — the frame count is in the
   # filename, so a re-fetch at a different count would leave BOTH on disk and
@@ -45,6 +61,6 @@ done
 # character's full canvas. Trimming only the still would make the creature
 # visibly jump size the moment it moves. Transparent padding costs nothing to
 # draw, and the body/reach footprint is pinned separately anyway.
-if [ -f "$SRC/rotations/east.png" ]; then
-  cp "$SRC/rotations/east.png" "$ROOT/art/sprites/world/$KEY.png"
+if [ -f "$SRC/rotations/$DIR.png" ]; then
+  cp "$SRC/rotations/$DIR.png" "$ROOT/art/sprites/world/$KEY.png"
 fi

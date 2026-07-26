@@ -348,14 +348,36 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   // GremlinKing's poise bar) consistently against these same constants.
   protected static readonly BAR_W = 22;
   protected static readonly BAR_H = 3;
-  protected static readonly BAR_OFFSET_Y = 16; // px above the sprite's center
+  // Gap between the top of the sprite and the bar. This used to be a flat
+  // distance from the sprite's CENTRE (16px), which worked only because every
+  // creature was 14-32px tall — real art is 48-68px, and a fixed centre offset
+  // put the bar straight through the creature's face. Measuring from the top
+  // edge instead means a bar always clears its own sprite, whatever size the
+  // art is.
+  protected static readonly BAR_GAP = 4;
   // Per-instance bar size (2026-07-15): mini-bosses pass cfg.barScale so their
   // HP + poise bars are big/overhead and readable over a 1.7–1.8× sprite instead
   // of the tiny shared 22×3. Default 1 = every regular enemy is unchanged. A
   // subclass drawing a second bar (poise) reads these instead of the statics.
   protected readonly barW: number;
   protected readonly barH: number;
-  protected readonly barOffsetY: number;
+  private readonly barScale: number;
+
+  /**
+   * How far above the sprite's centre the HP bar sits — enough to clear the
+   * top of the sprite as actually drawn, plus a small gap.
+   *
+   * Computed rather than fixed so it tracks the art: a creature that got real
+   * (larger) art, or an elite scaled up, pushes its own bar up by exactly the
+   * amount it grew. Uses baseScale, not the live scale, so a wind-up pulse
+   * doesn't make the bar bob.
+   *
+   * Subclasses that draw a second bar (poise) offset from this one, so they
+   * follow automatically.
+   */
+  protected get barOffsetY(): number {
+    return (this.height * this.baseScale) / 2 + Enemy.BAR_GAP * this.barScale;
+  }
 
   // The texture this enemy was BUILT from. Held separately because playing an
   // animation swaps `texture.key` to the strip's key, and several things key
@@ -404,9 +426,9 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     }
 
     const scale = cfg.barScale ?? 1;
+    this.barScale = scale;
     this.barW = Enemy.BAR_W * scale;
     this.barH = scale > 1 ? Math.round(Enemy.BAR_H * scale) : Enemy.BAR_H;
-    this.barOffsetY = Enemy.BAR_OFFSET_Y * scale;
     const barX = cfg.x - this.barW / 2;
     const barY = cfg.y - this.barOffsetY;
     this.healthBarBg = scene.add

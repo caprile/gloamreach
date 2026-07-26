@@ -186,7 +186,7 @@ export class GremlinKing extends Enemy {
     // gameplay hit-checks here use plain x/y distance math, not body bounds.
 
     const barX = cfg.x - Enemy.BAR_W / 2;
-    const barY = cfg.y - Enemy.BAR_OFFSET_Y + POISE_BAR_OFFSET_Y;
+    const barY = cfg.y - this.barOffsetY + POISE_BAR_OFFSET_Y;
     this.poiseBarBg = scene.add
       .rectangle(barX, barY, Enemy.BAR_W, Enemy.BAR_H, 0x1a1f2a, 0.85)
       .setOrigin(0, 0.5);
@@ -199,7 +199,7 @@ export class GremlinKing extends Enemy {
   preUpdate(time: number, delta: number): void {
     super.preUpdate(time, delta);
     const barX = this.x - Enemy.BAR_W / 2;
-    const barY = this.y - Enemy.BAR_OFFSET_Y + POISE_BAR_OFFSET_Y;
+    const barY = this.y - this.barOffsetY + POISE_BAR_OFFSET_Y;
     const aggro = this.isAggro();
     this.poiseBarBg.setPosition(barX, barY).setDepth(this.depth + 1).setVisible(aggro);
     this.poiseBarFill.setPosition(barX, barY).setDepth(this.depth + 1).setVisible(aggro);
