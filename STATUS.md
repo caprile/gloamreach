@@ -12,18 +12,6 @@ off weapon damage** onto status resistance, a **9th relic family (`warding`)**, 
 and the **debuff status icons sized up** 26 → 42px.
 
 **In progress / next.**
-**Debuff durations were raised to a 5-10s band the same day** (the user: "I think the debuffs aren't
-long enough"), after checking what resistance actually delivers: at **Magic 20 + an Uncommon warding
-relic at Tier 2 the total cut is only 25%** (10% + 10×1.5), so a debuff sits near its base value for
-most of a run — the 75% floor is a very-late-game ceiling, not the norm. Root **5s** / Disarm **6s** /
-Silence **6s** / Enfeeble **10s**, ordered by how much each takes away rather than uniformly: root is
-lowest because it is the only one that stops you *avoiding* damage, enfeeble highest because it never
-takes control away at all. **The Mirejaw death roll is a deliberate exception at 1.2s/tick** — that
-attack's entire counterplay is breaking away mid-roll, and a 5s root on tick 1 would pin you through
-the whole roll plus ~4s past it, converting an escapable move into a guaranteed 3 ticks and roughly
-doubling a *common* enemy's output. `DR_WINDOW_MS` went 12s → 18s alongside: the window has to
-outlast the longest debuff or the ladder only bites during overlaps.
-
 - **The next playtest is the important one, and it now carries two changes at once.** (1) Removing
   the Bulwark hit cap was a large lethality jump the user accepted deliberately ("dodging is the
   mechanic"): the Miretyrant goes from 34 to **165** per connect on a 260-HP build, i.e. **2
@@ -46,13 +34,26 @@ outlast the longest debuff or the ladder only bites during overlaps.
   gremlin, and the ~19 ambient props needing regeneration as objects before they can animate.
 
 **The debuff system's load-bearing rule is diminishing returns, not duration.** Per-application
-length is close to irrelevant against a swarm: four attackers landing a 1.5s root on their own
-cadences produce ~100% uptime no matter how short any single one is. `PlayerDebuffs` therefore runs
-a per-kind ladder — 100% → 50% → 25% → **fully immune** inside a 12s window — and that is what makes
-hard lockouts safe to ship in a hardcore one-life run. **Terrain is undispellable structurally, not
+length is close to irrelevant against a swarm: four attackers landing a root on their own cadences
+produce ~100% uptime no matter how short any single one is. `PlayerDebuffs` therefore runs a per-kind
+ladder — 100% → 50% → 25% → **fully immune** inside an 18s window — and that is what makes hard
+lockouts safe to ship in a hardcore one-life run. **Terrain is undispellable structurally, not
 by a flag**: terrain effects never enter the manager (they are recomputed per frame from
 `environmentEffectAt`), so a cleanse cannot reach them and a miasma re-arms poison on the very next
 frame. Verified live.
+
+**Durations sit in a 5-10s band, ordered by how much each debuff takes away** (raised from 0.9-6s the
+same day — the user: "I think the debuffs aren't long enough"), sized against what resistance
+actually delivers: at **Magic 20 + an Uncommon warding relic at Tier 2 the total cut is only 25%**
+(10% + 10×1.5), so a debuff sits near its base value for most of a run — the 75% floor is a
+very-late-game ceiling, not the norm. Root **5s** (lowest: the only one that stops you *avoiding*
+damage) / Disarm **6s** / Silence **6s** / Enfeeble **10s** (highest: it never takes control away, so
+it can only be felt by outlasting several swing cycles). `DEBUFF_BASE_MS` records the band as
+reference only and is deliberately not read by the enemies, so per-attack numbers stay bespoke while a
+deviation stays visible. **The Mirejaw death roll is the one deliberate exception, at 1.2s/tick** —
+that attack's entire counterplay is breaking away mid-roll, and a 5s root on tick 1 would pin you
+through the whole roll plus ~4s past it, converting an escapable move into a guaranteed 3 ticks and
+roughly doubling a *common* enemy's output.
 
 **Two rules worth carrying forward from the previous batch.** (1) **A thrown exception inside the
 physics step costs no measurable frame time** — the frame is fast, it just aborts the rest of the
