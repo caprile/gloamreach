@@ -254,28 +254,40 @@ Tuned so a base (Lvl 1) ember weapon out-damages a fully-upgraded (Lvl 3) steel
 one. Stamina costs were also bumped so each tier is a clear step up (the user):
 starter < Sunsteel < Ember. AOE arc widths in `Weapons.ts` `WEAPON_ARC`.
 
+Re-synced against `Weapons.ts` 2026-07-26 — every row below had drifted (arcs,
+stamina costs and three damage numbers were all stale).
+
 | Weapon | Dmg / Cooldown / Stamina | Damage Type | Arc (½angle / range / falloff) |
 |---|---|---|---|
-| Sunsteel Warhammer | 17 / 800ms / 22 | Blunt | 55° / 62 / 0.75 (widest sweeper) |
-| Sunsteel Longsword | 14 / 480ms / 15 | Slash | 30° / 40 / 0.55 |
-| Sunsteel Pike | 15 / 620ms / 18 | Pierce | 40° / 56 / 0.65 |
-| Embersteel Warhammer | 23 / 800ms / 27 | Blunt | 58° / 66 / 0.78 |
-| Embersteel Longsword | 19 / 470ms / 18 | Slash | 32° / 42 / 0.58 |
-| Embersteel Pike | 20 / 610ms / 22 | Pierce | 42° / 58 / 0.68 |
-| Ember Brand | 17 / 520ms / 19 | **Magic** | 45° / 52 / 0.6 (fire washes over foes) |
-| Gloamsteel Warhammer | 30 / 800ms / 31 | Blunt | 44° / 54 / 0.58 |
-| Gloamsteel Longsword | 25 / 470ms / 21 | Slash | 64° / 74 / 0.8 |
-| Gloamsteel Pike | 32 / 610ms / 25 | Pierce | 24° / 38 / 0.44 |
-| Gloamdrinker | 19 / 560ms / 20 | **Magic** | 34° / 46 / 0.5 — **12% lifelink on every hit** |
-| Gloam Brand | 23 / 520ms / 22 | **Magic** | 46° / 54 / 0.62 |
+| Sunsteel Warhammer | 17 / 800ms / 15 | Blunt | 40° / 48 / 0.55 |
+| Sunsteel Longsword | 14 / 480ms / 11 | Slash | 60° / 66 / 0.75 (sweeper) |
+| Sunsteel Pike | 19 / 620ms / 13 | Pierce | 20° / 34 / 0.4 |
+| Embersteel Warhammer | 23 / 800ms / 19 | Blunt | 42° / 50 / 0.55 |
+| Embersteel Longsword | 19 / 470ms / 13 | Slash | 62° / 70 / 0.78 |
+| Embersteel Pike | 25 / 610ms / 15 | Pierce | 22° / 36 / 0.42 |
+| Ember Brand | 17 / 520ms / 14 | **Magic** | 45° / 52 / 0.6 + **burst r68 ×0.45** |
+| Gloamsteel Warhammer | 30 / 800ms / 22 | Blunt | 44° / 54 / 0.58 |
+| Gloamsteel Longsword | 25 / 470ms / 15 | Slash | 64° / 74 / 0.8 |
+| Gloamsteel Pike | 32 / 610ms / 18 | Pierce | 24° / 38 / 0.44 |
+| Gloamdrinker | 19 / 560ms / 14 | **Magic** | 34° / 46 / 0.5 + burst r72 ×0.4 — **8% lifelink on every hit** |
+| Gloam Brand | 22 / 520ms / 16 | **Magic** | 46° / 54 / 0.62 + **burst r82 ×0.55** |
+| Mirebronze Warhammer | 26 / 800ms / 20 | Blunt | 43° / 52 / 0.57 |
+| Mirebronze Longsword | 22 / 470ms / 17 | Slash | 63° / 72 / 0.79 |
+| Mirebronze Pike | 28 / 610ms / 18 | Pierce | 23° / 37 / 0.43 |
 
-The **Ember Brand** is the first magic weapon (rare-ore-exclusive). Its raw 17 is
-mid-pack (DPS ≈ the Embersteel Pike on a neutral target), but `magic` type routes
-through enemy resistances — **neutral** vs most badlands beasts, **resisted**
-(~×0.4–0.5) by the gloam-casters (Hexlings / the Duneshaper). A sidegrade with an
-upside, not flatly best — and it finally gives the `magic` weapon skill a real XP
-source. (No current badlands enemy is *weak* to magic, so it never crits the
-resist layer super-effective — a hook for a future magic-vulnerable enemy.)
+A **magic weapon** trades single-target DPS for an on-hit BURST: a detonation
+centred on the struck target dealing a fraction of that hit to everything nearby.
+That trade is the whole identity, so the brands must sit *under* the pike and
+sword on raw DPS — the Gloam Brand went 29 → 22 on 2026-07-26 because it had
+quietly become the tier's single-target leader (55.8 DPS vs the pike's 52.5) while
+ALSO owning the crowd clear. The drawback it was originally written against —
+being resisted ~×0.4–0.5 by the gloam-casters — stopped existing when enemy
+resistances were removed roster-wide on 2026-07-24, and nothing had re-priced it.
+
+**The burst is computed off the PRE-CRIT hit.** It used to inherit the crit-boosted
+number, so at a 55% crit chance every other swing detonated for ~3× and deleted
+whole packs. Crit is the single-target reward; the burst pays a flat rate.
+The brands are also the `magic` weapon skill's only XP source.
 
 ## Tool Upgrades (`src/systems/ToolUpgrades.ts`)
 
@@ -674,7 +686,7 @@ Common/Uncommon = flat stat; Rare/Mythic = **Uncommon's stat (plateau) + a proc*
 |---|---|---|---|---|
 | **Damage** | Warrior's Charm +4% | Warrior's Idol +7% | Onslaught Totem +7% · every 5th hit +100% dmg | Berserker's Mantle +7% · every 4th hit +100% |
 | **Move** | Swift Charm +4% | Swift Idol +7% | Fleetfoot Totem +7% · on kill +25% move 2.5s | Windwalker's Mantle +7% · +35% move 3.5s + refunds dash |
-| **Defense** | Stoneskin Charm −4% taken | Ironhide Idol −7% | Aegis Totem −7% · negate next hit /8s | Bulwark Mantle −7% · negate /6s + cap any hit at 30% max HP |
+| **Defense** | Stoneskin Charm −4% taken | Ironhide Idol −7% | Aegis Totem −7% · banks 1 hit-negate, regained per 10s **un-hit** | Bulwark Mantle −7% · banks **2** hit-negates, one regained per 10s **un-hit** |
 | **Stamina** | Tireless Charm −6% cost | Tireless Idol −10% | Second Wind Totem −10% · on kill restore 25% max stam | Perpetual Mantle −10% · restore 40% + 2s free attacks |
 | **Lifesteal** | Bloodroot Charm +1 HP/kill | Sanguine Idol +2 HP/kill | Reaper Totem +2 · leech 2% of dmg dealt | Bloodlord's Mantle +2 · leech 4% + overheal → shield (≤15% max HP) |
 | **Vitality** | Stout Charm +8% max HP | Vigor Idol +12% | Titan Totem +12% · heal 25% max HP below 25% HP (60s cd) | Colossus Mantle +12% · survive one fatal hit/run → 40% HP |
@@ -683,6 +695,20 @@ Common/Uncommon = flat stat; Rare/Mythic = **Uncommon's stat (plateau) + a proc*
 
 A dual-stat relic (e.g. War Totem) claims one **primary** family; its secondary
 stat only matters when comparing against a same-family contender.
+
+**Defense reworked 2026-07-26.** Bulwark Mantle used to also **cap any single hit
+at 30% of max HP** — cut, per the user: "I don't like that effect of hard capping
+attacks, it makes scaling weird to scale off player HP." It was worse than weird:
+the cap ran *before* flat armor, so armor bit into the already-capped number and
+**every big-boss attack in the game collapsed to the same ~34 damage** on a
+44-armor build (a Miretyrant chomp landed 34 instead of 165), and it got stronger
+the more armor you wore. The replacement is HP-independent: the negate now **banks
+charges**, and the recharge clock **restarts on every hit you take** — so charges
+only return once you have been left alone for a full window. That makes the Mythic
+an answer to a *burst* (a boss combo, a swarm landing twice) rather than a free hit
+on a metronome. The reset rule applies to the Rare too, deliberately: they share one
+`UniqueKind`, and a guaranteed-every-8s Rare would otherwise beat the Mythic in
+exactly the sustained fights the Mythic is for.
 
 ---
 

@@ -429,6 +429,13 @@ const BAYOU: EnemyStat[] = [
       { name: "Tail sweep", damage: 210, cls: "physical", kind: "aoe", intervalMs: 1100 },
       { name: "Slam", damage: 255, cls: "physical", kind: "aoe", intervalMs: 1100 },
       { name: "Death roll", damage: 200, cls: "physical", kind: "aoe", intervalMs: 1100 },
+      // Gorge Heave (2026-07-26) — the SPACING attack (the user: "I want
+      // miretyrant to push you away like a knockback out of melee range that you
+      // have to dodge"). Deliberately the smallest number in the kit: the payload
+      // is a 620-speed shove that clears melee range, and the cost is the walk
+      // back through whatever the last bellow left standing. ~35 net through a
+      // full Gloamsteel set, i.e. roughly a third of a chomp.
+      { name: "Gorge heave (knockback)", damage: 130, cls: "physical", kind: "aoe", intervalMs: 1100 },
     ],
     poise: 800, poiseRegenPerSec: 28, elite: null, // resistances removed (2026-07-24 pt2)
   },

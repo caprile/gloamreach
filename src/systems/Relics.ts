@@ -206,7 +206,7 @@ export interface RelicEffect {
 export type UniqueKind =
   | "onslaught" // damage: every Nth hit deals +bonusPct
   | "killrush" // move: on kill, movePct burst for ms (+ dash refund)
-  | "guardian" // defense: negate next hit every cooldownMs (+ hit cap)
+  | "guardian" // defense: bank `charges` hit-negates, one recharging per cooldownMs OUT of combat
   | "secondwind" // stamina: on kill restore restorePct of max stam (+ free-attack window)
   | "leech" // lifesteal: heal healPct of damage dealt (+ overheal shield)
   | "undying" // vitality: low-HP emergency heal (+ once-per-run revive)
@@ -265,7 +265,7 @@ export const RELIC_DEFS: Record<string, RelicDef> = {
   // --- rare (Uncommon's stat + a family proc) ---
   relic_war_totem: { id: "relic_war_totem", name: "Onslaught Totem", rarity: "rare", family: "damage", effect: { damagePct: 7 }, unique: { kind: "onslaught", params: { interval: 5, bonusPct: 100 } } },
   relic_phantom_totem: { id: "relic_phantom_totem", name: "Fleetfoot Totem", rarity: "rare", family: "move", effect: { moveSpeedPct: 7 }, unique: { kind: "killrush", params: { movePct: 25, ms: 2500, dashRefund: 0 } } },
-  relic_aegis_totem: { id: "relic_aegis_totem", name: "Aegis Totem", rarity: "rare", family: "defense", effect: { damageTakenPct: -7 }, unique: { kind: "guardian", params: { cooldownMs: 8000, capPct: 0 } } },
+  relic_aegis_totem: { id: "relic_aegis_totem", name: "Aegis Totem", rarity: "rare", family: "defense", effect: { damageTakenPct: -7 }, unique: { kind: "guardian", params: { cooldownMs: 10000, charges: 1 } } },
   relic_endless_totem: { id: "relic_endless_totem", name: "Second Wind Totem", rarity: "rare", family: "stamina", effect: { staminaCostPct: -10 }, unique: { kind: "secondwind", params: { restorePct: 25, freeMs: 0 } } },
   relic_reaper_totem: { id: "relic_reaper_totem", name: "Reaper Totem", rarity: "rare", family: "lifesteal", effect: { killHeal: 2 }, unique: { kind: "leech", params: { healPct: 2, shieldPct: 0 } } },
   relic_titan_totem: { id: "relic_titan_totem", name: "Titan Totem", rarity: "rare", family: "vitality", effect: { maxHpPct: 12 }, unique: { kind: "undying", params: { lowHpHealPct: 25, thresholdPct: 25, cooldownMs: 60000 } } },
@@ -275,7 +275,7 @@ export const RELIC_DEFS: Record<string, RelicDef> = {
   // --- mythic (Uncommon's stat + a spicier version of the family proc) ---
   relic_avatars_mantle: { id: "relic_avatars_mantle", name: "Berserker's Mantle", rarity: "mythic", family: "damage", effect: { damagePct: 7 }, unique: { kind: "onslaught", params: { interval: 4, bonusPct: 100 } } },
   relic_windwalkers_mantle: { id: "relic_windwalkers_mantle", name: "Windwalker's Mantle", rarity: "mythic", family: "move", effect: { moveSpeedPct: 7 }, unique: { kind: "killrush", params: { movePct: 35, ms: 3500, dashRefund: 1 } } },
-  relic_undying_heart: { id: "relic_undying_heart", name: "Bulwark Mantle", rarity: "mythic", family: "defense", effect: { damageTakenPct: -7 }, unique: { kind: "guardian", params: { cooldownMs: 6000, capPct: 30 } } },
+  relic_undying_heart: { id: "relic_undying_heart", name: "Bulwark Mantle", rarity: "mythic", family: "defense", effect: { damageTakenPct: -7 }, unique: { kind: "guardian", params: { cooldownMs: 10000, charges: 2 } } },
   relic_perpetual_mantle: { id: "relic_perpetual_mantle", name: "Perpetual Mantle", rarity: "mythic", family: "stamina", effect: { staminaCostPct: -10 }, unique: { kind: "secondwind", params: { restorePct: 40, freeMs: 2000 } } },
   relic_bloodlords_mantle: { id: "relic_bloodlords_mantle", name: "Bloodlord's Mantle", rarity: "mythic", family: "lifesteal", effect: { killHeal: 2 }, unique: { kind: "leech", params: { healPct: 4, shieldPct: 15 } } },
   relic_colossus_mantle: { id: "relic_colossus_mantle", name: "Colossus Mantle", rarity: "mythic", family: "vitality", effect: { maxHpPct: 12 }, unique: { kind: "undying", params: { revivePct: 40 } } },
@@ -645,7 +645,9 @@ export function uniqueText(def: RelicDef, powerTier = 1): string {
     case "killrush":
       return `on kill +${pct(p.movePct)}% move ${sec(p.ms)}s${p.dashRefund ? " + refunds dash" : ""}`;
     case "guardian":
-      return `negate the next hit every ${sec(p.cooldownMs)}s${p.capPct ? `, cap any hit at ${pct(p.capPct)}% max HP` : ""}`;
+      return p.charges > 1
+        ? `holds ${p.charges} hit-negates; regains one per ${sec(p.cooldownMs)}s WITHOUT being hit`
+        : `negates a hit; regains it after ${sec(p.cooldownMs)}s WITHOUT being hit`;
     case "secondwind":
       return `on kill restore ${pct(p.restorePct)}% max stamina${p.freeMs ? ` + ${sec(p.freeMs)}s free attacks` : ""}`;
     case "leech":

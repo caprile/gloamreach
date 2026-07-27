@@ -480,6 +480,14 @@ const SPORE_CLOUD_RADIUS = 85;
 const SPORE_CLOUD_SLOW_MULT = 0.6;
 const SPORE_CLOUD_POISON_DPS = 5;
 const SPORE_CLOUD_MS = 6000;
+// Overlapping clouds STACK their poison (the user: "multiple poison clouds
+// should stack poison — the ones that enemies drop it REALLY making it so you
+// can't stand there"). foldSporeCloud used to take max(), so standing in ten
+// clouds cost exactly what standing in one did and a Mosswretch pack could never
+// actually deny ground. Capped so a big pack denies the ground rather than
+// deleting you in it — the environmental slot is a refresh-don't-stack sustain
+// (see Poison.ts), so this cap is the only bound on the rate.
+const SPORE_CLOUD_MAX_STACK = 4;
 // Concurrent FOOD buffs allowed by default (Comfort/Bedroll is exempt — see
 // Buffs.ts COMFORT_BUFF_ID). A run character's modifier may override it
 // (Characters.ts `maxBuffs`) — the Ashcaller's "buff master" identity raises it.
@@ -559,7 +567,10 @@ const DROPPED_ITEM_MAGNET_COOLDOWN_MS = 1500;
 // the pull starts lets the drop land and read. Much shorter than the
 // player-dropped cooldown above, which exists to stop a dropped stack snapping
 // straight back into your hands, not to make anything legible.
-const HARVEST_MAGNET_DELAY_MS = 550;
+// 550 -> 1000 (the user: "when you mine/break something I want it to lay on the
+// ground for a sec before you insta pick it up"). Also now applied to KILL loot,
+// which had no delay at all.
+const HARVEST_MAGNET_DELAY_MS = 1000;
 
 // Night light sources (M-DN). A held item emits light of the given world-px
 // radius while it's the selected hotbar item; a future Lantern just adds a row.
@@ -1376,7 +1387,13 @@ export class MainScene extends Phaser.Scene {
   private onslaughtHits = 0; // Onslaught (damage): attack counter for the every-Nth-hit bonus
   private killMoveBurstUntil = 0; // Fleetfoot (move): burst end timestamp
   private killMoveBurstPct = 0; //   ...and its move-speed bonus as a fraction (0.25 = +25%)
-  private guardianReadyAt = 0; // Guardian (defense): next time the hit-negate is ready
+  // Guardian (defense): banked hit-negates. `guardianCharges` is -1 until the
+  // first relic read seeds it to the relic's max, so equipping one mid-run starts
+  // you full rather than empty. `guardianRechargeAt` is pushed forward by EVERY
+  // incoming hit (see applyDamageToPlayer), so charges only come back out of
+  // combat — that is what stops this being flat passive mitigation.
+  private guardianCharges = -1;
+  private guardianRechargeAt = 0;
   private freeAttackUntil = 0; // Second Wind (stamina, Mythic): zero-cost attacks until this ts
   private playerShield = 0; // Leech (lifesteal, Mythic): overheal-banked absorb, consumed before HP
   private undyingReadyAt = 0; // Undying (vitality, Rare): next time the low-HP emergency heal is ready
@@ -1694,7 +1711,8 @@ export class MainScene extends Phaser.Scene {
     this.onslaughtHits = 0;
     this.killMoveBurstUntil = 0;
     this.killMoveBurstPct = 0;
-    this.guardianReadyAt = 0;
+    this.guardianCharges = -1;
+    this.guardianRechargeAt = 0;
     this.freeAttackUntil = 0;
     this.playerShield = 0;
     this.undyingReadyAt = 0;
@@ -2437,6 +2455,7 @@ export class MainScene extends Phaser.Scene {
     // no-regen zone (Phase 1, biome-3 miasma) the buff still ticks down but heals
     // nothing.
     if (this.buffs.tick(delta, this.health, this.currentRegenMult).healed) this.refreshHealthBar();
+    this.tickGuardianRecharge();
     this.buffBarUI.sync(this.buffs.active());
     this.statusBarUI.sync(this.statusEffects());
     this.passiveBarUI.sync(this.passiveEntries());
@@ -6583,18 +6602,23 @@ export class MainScene extends Phaser.Scene {
     y: number,
     base: { moveMult: number; regenMult: number; poisonDps?: number },
   ): { moveMult: number; regenMult: number; poisonDps?: number } {
-    let inCloud = false;
+    // COUNT the overlapping clouds rather than stopping at the first: the poison
+    // scales with how many you're standing in (capped), so a Mosswretch pack
+    // layering clouds genuinely takes the ground away. The slow and the regen
+    // suppression stay flat — those are binary "you are in fog" states, and
+    // compounding the slow would pin you in place with no counterplay.
+    let stacks = 0;
     for (const c of this.sporeClouds) {
       if (Phaser.Math.Distance.Between(x, y, c.x, c.y) <= SPORE_CLOUD_RADIUS) {
-        inCloud = true;
-        break;
+        stacks += 1;
+        if (stacks >= SPORE_CLOUD_MAX_STACK) break;
       }
     }
-    if (!inCloud) return base;
+    if (stacks === 0) return base;
     return {
       moveMult: Math.min(base.moveMult, SPORE_CLOUD_SLOW_MULT),
       regenMult: Math.min(base.regenMult, POISON_REGEN_MULT),
-      poisonDps: Math.max(base.poisonDps ?? 0, SPORE_CLOUD_POISON_DPS),
+      poisonDps: Math.max(base.poisonDps ?? 0, SPORE_CLOUD_POISON_DPS * stacks),
     };
   }
 
@@ -9853,9 +9877,16 @@ export class MainScene extends Phaser.Scene {
 
     // Primary hit.
     const critP = this.rollCrit(this.equippedWeapon);
-    const primaryDmg =
-      normalHit * (1 + onsBonus + (critP ? this.critBonus(this.equippedWeapon) : 0)) * this.staggerMultiplierFor(enemy);
-    this.resolveWeaponHit(enemy, primaryDmg, dmgType, critP, true);
+    const staggerP = this.staggerMultiplierFor(enemy);
+    const primaryDmg = normalHit * (1 + onsBonus + (critP ? this.critBonus(this.equippedWeapon) : 0)) * staggerP;
+    // What the on-hit burst detonates for: the same hit WITHOUT its crit bonus.
+    // The burst used to inherit `finalDmg`, so a crit multiplied the whole
+    // detonation — at a 55% crit chance that was a coin-flip to delete every
+    // enemy in the radius, every swing (the user: "brand + crit insta kills
+    // stuff with 0 downside"). Crit is a SINGLE-TARGET reward; the burst is the
+    // weapon's own crowd payload and now pays a flat rate.
+    const burstBase = normalHit * (1 + onsBonus) * staggerP;
+    this.resolveWeaponHit(enemy, primaryDmg, dmgType, critP, true, "Weapon (direct)", burstBase);
 
     // AOE arc sweep (Biome 2 Phase 1, locked decision 6): wide weapons also hit
     // other live enemies within `range` and within ±halfAngle of the swing
@@ -10141,6 +10172,10 @@ export class MainScene extends Phaser.Scene {
     // is exactly why the breakdown is worth having: a single swing can report
     // as five separate hits and the player has no way to see that ratio live.
     source: "Weapon (direct)" | "Arc sweep" | "Ranged" = "Weapon (direct)",
+    // Pre-crit damage for the on-hit burst, when the caller wants the
+    // detonation sized off something other than the hit itself. Absent = the
+    // hit's own final damage (the ranged path, which carries no burst anyway).
+    burstBase?: number,
   ): void {
     // Waking on hit is handled by takeHit() itself — the base Enemy.takeHit()
     // flips idle->chasing for state-field enemies, and Boar/Snake/RangedGremlin/
@@ -10228,7 +10263,7 @@ export class MainScene extends Phaser.Scene {
     // Magic's crowd answer (see WEAPON_ON_HIT_BURST). Fires from the PRIMARY hit
     // only — `isBurstSource` is false for the arc sweep, the burst's own victims
     // and the crit splash, so a detonation can never chain into another one.
-    if (isBurstSource) this.applyWeaponBurst(enemy, finalDmg, dmgType);
+    if (isBurstSource) this.applyWeaponBurst(enemy, (burstBase ?? dmg) * resistMult, dmgType);
     if (!depleted) return;
     this.resolveKill(enemy);
   }
@@ -10248,6 +10283,7 @@ export class MainScene extends Phaser.Scene {
       const dealt = splash * resistMult;
       const eff: DamageEffectiveness = resistMult > 1.001 ? "weak" : resistMult < 0.999 ? "resist" : "normal";
       const depleted = other.takeHit(dealt);
+      this.runLog.recordDamageDealt("Weapon burst", dealt);
       this.spawnDamageNumber(other.x, other.y, Math.round(dealt), false, eff);
       if (depleted) this.resolveKill(other);
     }
@@ -10305,6 +10341,7 @@ export class MainScene extends Phaser.Scene {
     const effectiveness: DamageEffectiveness =
       resistMult > 1.001 ? "weak" : resistMult < 0.999 ? "resist" : "normal";
     const depleted = enemy.takeHit(finalDmg);
+    this.runLog.recordDamageDealt("Set bonus", finalDmg);
     this.spawnDamageNumber(enemy.x, enemy.y, Math.round(finalDmg), false, effectiveness);
     if (depleted) this.resolveKill(enemy);
   }
@@ -10555,6 +10592,7 @@ export class MainScene extends Phaser.Scene {
     const finalDmg = dmg * resistMult;
     const effectiveness: DamageEffectiveness = resistMult > 1.001 ? "weak" : resistMult < 0.999 ? "resist" : "normal";
     const depleted = enemy.takeHit(finalDmg);
+    this.runLog.recordDamageDealt("Ability", finalDmg);
     this.spawnDamageNumber(enemy.x, enemy.y, Math.round(finalDmg), false, effectiveness);
     if (depleted) this.resolveKill(enemy);
   }
@@ -10830,7 +10868,11 @@ export class MainScene extends Phaser.Scene {
     const lootMult = enemy.elite ? this.character.eliteLootMult() : 1;
     enemy.playDeathFeedback(() => {
       for (const drop of loot) {
-        this.spawnLooseDrop(drop.resource, Math.round(drop.amount * lootMult), dropX, dropY);
+        // Same beat before the magnet engages that a felled node gets. Kill loot
+        // had NO delay at all, which is where "it insta picks up" is loudest —
+        // mid-fight the drop existed for one frame between the corpse and the
+        // count ticking up, so you never saw what a kill actually gave you.
+        this.spawnLooseDrop(drop.resource, Math.round(drop.amount * lootMult), dropX, dropY, HARVEST_MAGNET_DELAY_MS);
       }
     });
     this.enemies = this.enemies.filter((e) => e !== enemy);
@@ -11054,6 +11096,36 @@ export class MainScene extends Phaser.Scene {
 
   // On-kill relic procs (Fleetfoot burst, Second Wind stamina, Prodigy streak) —
   // called once per kill from resolveKill().
+  // Seed the Guardian charge bank the first time a relic is seen, and clamp it if
+  // the equipped relic changed to one holding fewer charges (a Mythic replaced by
+  // a Rare must not leave you with 2 banked). -1 means "never seeded".
+  private syncGuardianCharges(max: number): void {
+    if (this.guardianCharges < 0) this.guardianCharges = max;
+    else this.guardianCharges = Math.min(this.guardianCharges, max);
+  }
+
+  // Regain one banked negate per cooldown window, but ONLY while un-hit — every
+  // incoming hit pushes `guardianRechargeAt` forward in applyDamageToPlayer. DoT
+  // ticks (bleed/poison) never route through that method, so a lingering wound
+  // from a fight you already walked away from doesn't block the refill; "hit"
+  // here means something actually connected.
+  private tickGuardianRecharge(): void {
+    const guardian = this.relics.unique("guardian");
+    if (!guardian) return;
+    const max = guardian.params.charges;
+    this.syncGuardianCharges(max);
+    if (this.guardianCharges >= max) {
+      // Keep the clock parked while full, so the first hit after a lull doesn't
+      // instantly hand a charge back from time banked doing nothing.
+      this.guardianRechargeAt = this.time.now + guardian.params.cooldownMs;
+      return;
+    }
+    if (this.time.now >= this.guardianRechargeAt) {
+      this.guardianCharges += 1;
+      this.guardianRechargeAt = this.time.now + guardian.params.cooldownMs;
+    }
+  }
+
   private applyOnKillRelicProcs(): void {
     const now = this.time.now;
     const fr = this.relics.unique("killrush");
@@ -11143,6 +11215,7 @@ export class MainScene extends Phaser.Scene {
       const dealt = splash * resistMult;
       const eff: DamageEffectiveness = resistMult > 1.001 ? "weak" : resistMult < 0.999 ? "resist" : "normal";
       const depleted = other.takeHit(dealt);
+      this.runLog.recordDamageDealt("Crit splash", dealt);
       this.spawnDamageNumber(other.x, other.y, Math.round(dealt), false, eff);
       if (u.params.slowMs && slowFactor < 1) other.applySlow(slowFactor, u.params.slowMs, now);
       if (depleted) this.resolveKill(other);
@@ -11437,6 +11510,7 @@ export class MainScene extends Phaser.Scene {
           | {
               damage: number;
               knockback?: number;
+              knockbackMs?: number;
               dmgType?: IncomingDamageType;
               bleed?: { dmgPerSec: number; durationMs: number };
             }
@@ -11444,7 +11518,9 @@ export class MainScene extends Phaser.Scene {
         if (areaHit) {
           this.applyDamageToPlayer(
             areaHit.damage,
-            areaHit.knockback ? { fromX: enemy.x, fromY: enemy.y, speed: areaHit.knockback } : undefined,
+            areaHit.knockback
+              ? { fromX: enemy.x, fromY: enemy.y, speed: areaHit.knockback, ms: areaHit.knockbackMs }
+              : undefined,
             areaHit.dmgType,
             areaHit.bleed,
             undefined,
@@ -11647,7 +11723,7 @@ export class MainScene extends Phaser.Scene {
   // slam attack passes one.
   private applyDamageToPlayer(
     amount: number,
-    knockback?: { fromX: number; fromY: number; speed: number },
+    knockback?: { fromX: number; fromY: number; speed: number; ms?: number },
     dmgType?: IncomingDamageType,
     bleed?: { dmgPerSec: number; durationMs: number },
     poison?: { dmgPerSec: number; durationMs: number },
@@ -11659,16 +11735,34 @@ export class MainScene extends Phaser.Scene {
     if (this.isDead) return;
     if (this.time.now < this.invulnerableUntil) return;
 
-    // Guardian relic (defense): fully negate this hit if the negate is off
-    // cooldown. Consumes it + starts a brief grace so a multi-hit frame can't
-    // burn it twice. No damage, no bleed.
+    // Guardian relic (defense): spend a banked charge to fully negate this hit.
+    //
+    // Getting hit ALWAYS pushes the recharge clock out, whether or not a charge
+    // was there to spend — so charges refill only once you have been left alone
+    // for the full window. That is the whole design: the Mythic answers a burst
+    // (a boss combo, a swarm landing twice inside one window) rather than paying
+    // out a free hit on a metronome, which is what made the old version flat
+    // passive mitigation you never had to play around.
+    //
+    // It deliberately replaces a "cap any hit at 30% of max HP" clause (the user:
+    // "I don't like that effect of hard capping attacks - it makes scaling weird
+    // to scale off player HP"). That cap was also applied PRE-armor, so flat
+    // armor bit into the already-capped number and every big-boss attack in the
+    // game collapsed to the same ~34 damage.
     const guardian = this.relics.unique("guardian");
-    if (guardian && this.time.now >= this.guardianReadyAt) {
-      this.guardianReadyAt = this.time.now + guardian.params.cooldownMs;
-      this.invulnerableUntil = Math.max(this.invulnerableUntil, this.time.now + 150);
-      this.sfx.hit();
-      this.spawnFeedbackText(this.player.x, this.player.y, "Blocked!");
-      return;
+    if (guardian) {
+      this.syncGuardianCharges(guardian.params.charges);
+      const hadCharge = this.guardianCharges > 0;
+      // Reset BEFORE the early return, so a negated hit counts as being hit.
+      this.guardianRechargeAt = this.time.now + guardian.params.cooldownMs;
+      if (hadCharge) {
+        this.guardianCharges -= 1;
+        // Brief grace so one multi-hit frame can't burn the whole bank.
+        this.invulnerableUntil = Math.max(this.invulnerableUntil, this.time.now + 150);
+        this.sfx.hit();
+        this.spawnFeedbackText(this.player.x, this.player.y, "Blocked!");
+        return;
+      }
     }
 
     this.sfx.hit();
@@ -11704,14 +11798,7 @@ export class MainScene extends Phaser.Scene {
     // The run character's modifier scales incoming damage BEFORE the reduction
     // bucket — it's a property of the run, not another stackable resistance, so
     // a +25%-damage-taken card can't be cancelled out by the 75% reduction cap.
-    let relicAdjusted = amount * this.character.damageTakenMult() * (1 - reductionPct);
-    // Guardian Mythic: cap any single hit at capPct% of max HP (post-%, pre-armor).
-    if (guardian && guardian.params.capPct) {
-      relicAdjusted = Math.min(
-        relicAdjusted,
-        this.health.max * (guardian.params.capPct / 100) * powerTierMult(guardian.powerTier),
-      );
-    }
+    const relicAdjusted = amount * this.character.damageTakenMult() * (1 - reductionPct);
     let reduced: number;
     if (dmgType && bypassesArmor(dmgType)) {
       // Magic/fire bypass the flat-armor term. Heavy armor's skill gives partial
@@ -11761,12 +11848,15 @@ export class MainScene extends Phaser.Scene {
     // Knockback (bite shove, boss slam) always applies now — Molten Bulwark's
     // old knockback-immunity was traded for the flat damage reduction above
     // (decision 2), so the heavy set is pure mitigation, not a stance anchor.
+    //
+    // Routed through Player.applyKnockback, which opens a window where input is
+    // ignored — previously this set a velocity that Player.update() overwrote on
+    // the next frame, so no knockback in the game actually moved anyone. Default
+    // 160ms keeps every existing number a shove rather than a launch; an attack
+    // whose PAYLOAD is displacement (the Miretyrant's heave) asks for longer.
     if (knockback) {
       const angle = Phaser.Math.Angle.Between(knockback.fromX, knockback.fromY, this.player.x, this.player.y);
-      const body = this.player.body as Phaser.Physics.Arcade.Body;
-      body.setVelocity(Math.cos(angle) * knockback.speed, Math.sin(angle) * knockback.speed);
-      // Brief impulse, not a sustained shove — matches dash's own short-burst feel.
-      this.time.delayedCall(150, () => body.setVelocity(0, 0));
+      this.player.applyKnockback(angle, knockback.speed, knockback.ms ?? 160);
     }
     // Undying Mythic can save one fatal hit per run before the death path fires.
     if (died && !this.devGodMode && !this.tryUndyingRevive()) this.onPlayerDeath();
@@ -14445,9 +14535,16 @@ export class MainScene extends Phaser.Scene {
       } else if (kind === "guardian") {
         const u = this.relics.unique("guardian");
         if (u) {
-          const remaining = Math.max(0, this.guardianReadyAt - this.time.now);
-          entry.cooldown01 = u.params.cooldownMs > 0 ? 1 - remaining / u.params.cooldownMs : 1;
-          entry.ready = remaining <= 0; // block is armed
+          // Show the BANK (2/2), not just an armed/not flag — with charges the
+          // useful question is how many hits you can still eat, and the sweep
+          // below it is progress toward the next one.
+          const max = u.params.charges;
+          const held = Math.max(0, this.guardianCharges);
+          entry.count = { cur: held, max };
+          const remaining = Math.max(0, this.guardianRechargeAt - this.time.now);
+          entry.cooldown01 =
+            held >= max ? 1 : u.params.cooldownMs > 0 ? 1 - remaining / u.params.cooldownMs : 1;
+          entry.ready = held > 0; // at least one block is banked
         }
       }
       entries.push(entry);

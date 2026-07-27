@@ -32,7 +32,7 @@ const S = enemyStat("miretyrant");
 // contract checkPlayerHit() already uses, which is what gets the adds terrain
 // collision, crypt navigation and containment for free.
 export type MiretyrantState = "idle" | "telegraphing" | "executing" | "recovering" | "staggered";
-export type MiretyrantAttack = "chomp" | "sweep" | "slam" | "roll" | "surge";
+export type MiretyrantAttack = "chomp" | "sweep" | "slam" | "roll" | "surge" | "heave";
 
 // 3200 -> 4600. The user cleared the whole bayou and killed this in EMBERSTEEL
 // gear — a full tier below the bayou set it is meant to gate — and called the
@@ -139,6 +139,31 @@ const SURGE_EDGE_INSET = 40; // keeps the gap off the arena wall
 const SURGE_DAMAGE = S.attacks[1].damage; // shares the tail sweep's weight
 const SURGE_KNOCKBACK = 260;
 
+// --- Gorge Heave — the SPACING attack: it throws you out of melee. ---
+// the user: "I want miretyrant to push you away like a knockback out of melee
+// range that you have to dodge."
+//
+// The kit's other four are all "does this hurt me", answered by leaving. This
+// one inverts the bruiser's own premise: it wants you close, and this is how it
+// decides when you are ALLOWED to be. Damage is deliberately the smallest in the
+// kit — the payload is the displacement, and what it really costs you is the
+// re-approach, made through whatever the last bellow left standing.
+//
+// Dodging it means being outside HEAVE_RADIUS when it lands (or dashing on
+// i-frames), and dodging it is what keeps you in position to punish the longest
+// recovery in the kit bar the surge. Eat it and the punish window is spent
+// walking back. The radius is deliberately well past melee reach so simply
+// standing on the boss can never be safe.
+const HEAVE_TELEGRAPH_MS = 660;
+const HEAVE_IMPACT_MS = 200;
+const HEAVE_RECOVER_MS = 900;
+const HEAVE_RADIUS = 190;
+const HEAVE_DAMAGE = S.attacks[4].damage;
+const HEAVE_KNOCKBACK = 620;
+// Long enough for the shove to actually clear melee range (620px/s x 0.3s
+// ~= 186px, roughly the radius itself) rather than nudge you.
+const HEAVE_KNOCKBACK_MS = 300;
+
 // --- Bellow (adds) — on its own clock, see the file header. ---
 // Escalating SCRIPTED waves (the user, playtest: "spawn alligators instead of
 // the frog dudes... fighting strong adds the whole time"): the first couple of
@@ -159,6 +184,7 @@ function telegraphMsFor(a: MiretyrantAttack): number {
     case "slam": return SLAM_TELEGRAPH_MS;
     case "roll": return ROLL_TELEGRAPH_MS;
     case "surge": return SURGE_TELEGRAPH_MS;
+    case "heave": return HEAVE_TELEGRAPH_MS;
   }
 }
 function recoverMsFor(a: MiretyrantAttack): number {
@@ -168,6 +194,7 @@ function recoverMsFor(a: MiretyrantAttack): number {
     case "slam": return SLAM_RECOVER_MS;
     case "roll": return ROLL_RECOVER_MS;
     case "surge": return SURGE_RECOVER_MS;
+    case "heave": return HEAVE_RECOVER_MS;
   }
 }
 
@@ -424,7 +451,10 @@ export class Miretyrant extends Enemy {
   // Phase-gated pool, weighted by range so the kit reads: the chomp/roll close
   // distance, the sweep/slam punish standing next to it.
   private pickAttack(dist: number): MiretyrantAttack {
-    const pool: MiretyrantAttack[] = ["chomp", "sweep", "slam"];
+    // The heave is in the base pool, not phase-gated: "it decides when you're
+    // allowed to be in melee" has to be true from the first exchange, or the
+    // fight teaches the wrong spacing for its first two thirds.
+    const pool: MiretyrantAttack[] = ["chomp", "sweep", "slam", "heave"];
     // The Gloamtide covers the whole room, so it needs the arena rect to exist
     // and is never filtered by range below — distance from the boss is exactly
     // the thing it does not care about.
@@ -434,7 +464,9 @@ export class Miretyrant extends Enemy {
     const weighted = pool.filter((a) => {
       if (a === this.lastAttack && pool.length > 1) return false;
       // Standing off? The reaching attacks only. In your face? Anything.
-      if (far && (a === "sweep" || a === "slam")) return false;
+      // The heave is boss-centred like sweep/slam, and pointless at range —
+      // there is nothing to throw out of melee if you are already out of it.
+      if (far && (a === "sweep" || a === "slam" || a === "heave")) return false;
       return true;
     });
     const choices = weighted.length > 0 ? weighted : pool;
@@ -493,7 +525,9 @@ export class Miretyrant extends Enemy {
   private updateTelegraphing(playerX: number, playerY: number, now: number): void {
     // The committed attacks keep their locked heading (that's what makes them
     // dodgeable); the slam is boss-centred, so it can keep watching you.
-    if (this.currentAttack === "slam") this.applyFacing(playerX - this.x, playerY - this.y);
+    if (this.currentAttack === "slam" || this.currentAttack === "heave") {
+      this.applyFacing(playerX - this.x, playerY - this.y);
+    }
     this.drawTelegraph(now);
     if (now >= this.stateEnteredAt + this.currentStateDurationMs) this.beginExecute(now);
   }
@@ -535,13 +569,20 @@ export class Miretyrant extends Enemy {
         this.currentStateDurationMs = SURGE_TRAVEL_MS;
         break;
       }
+      case "heave": {
+        body.setVelocity(0, 0);
+        this.currentStateDurationMs = HEAVE_IMPACT_MS;
+        break;
+      }
       default: {
         body.setVelocity(0, 0);
         this.currentStateDurationMs = SLAM_IMPACT_MS;
         break;
       }
     }
-    if (this.currentAttack === "sweep" || this.currentAttack === "slam") this.spawnImpactFx();
+    if (this.currentAttack === "sweep" || this.currentAttack === "slam" || this.currentAttack === "heave") {
+      this.spawnImpactFx();
+    }
   }
 
   // Where the Gloamtide's wall is right now, 0..1 across its travel. Shared by
@@ -715,6 +756,29 @@ export class Miretyrant extends Enemy {
         g.strokeCircle(this.x, this.y, ROLL_RADIUS);
         break;
       }
+      case "heave": {
+        // Reads as an OUTWARD shove rather than a slam: the ring is drawn at
+        // full size from the start (this is a boundary to get outside of, not a
+        // circle closing on you) with spokes racing outward through it, so it
+        // can't be mistaken for the slam's growing-circle tell.
+        g.fillStyle(0x4c7a5c, 0.08 + 0.16 * frac);
+        g.fillCircle(this.x, this.y, HEAVE_RADIUS);
+        g.lineStyle(3, swamp, 0.45 + 0.4 * frac);
+        g.strokeCircle(this.x, this.y, HEAVE_RADIUS);
+        g.lineStyle(2, 0xd8f0c0, 0.35 + 0.4 * frac);
+        for (let i = 0; i < 8; i++) {
+          const a = (i / 8) * Math.PI * 2;
+          const inner = HEAVE_RADIUS * (0.25 + 0.6 * frac);
+          const outer = Math.min(HEAVE_RADIUS, inner + HEAVE_RADIUS * 0.22);
+          g.lineBetween(
+            this.x + Math.cos(a) * inner,
+            this.y + Math.sin(a) * inner,
+            this.x + Math.cos(a) * outer,
+            this.y + Math.sin(a) * outer,
+          );
+        }
+        break;
+      }
       default: {
         const r = SLAM_RADIUS * (0.5 + 0.5 * frac);
         g.fillStyle(0x4c7a5c, 0.12 + 0.26 * frac);
@@ -744,6 +808,13 @@ export class Miretyrant extends Enemy {
       );
       return;
     }
+    if (this.currentAttack === "heave") {
+      // Same splash art, sized to the heave's own (larger) radius — see the
+      // standing rule: scale an impact sprite against the radius checkPlayerHit
+      // actually uses, so what you see is what hits.
+      burstFx(this.scene, "fx_mire_splash", this.x, this.y, HEAVE_RADIUS, HEAVE_IMPACT_MS + 300);
+      return;
+    }
     burstFx(this.scene, "fx_mire_splash", this.x, this.y, SLAM_RADIUS, SLAM_IMPACT_MS + 260);
   }
 
@@ -757,7 +828,10 @@ export class Miretyrant extends Enemy {
 
   // Queried each frame by MainScene.updateEnemies() (the boss contract) — area
   // damage carries knockback, which the base bite bool can't express.
-  checkPlayerHit(playerX: number, playerY: number): { damage: number; knockback?: number } | null {
+  checkPlayerHit(
+    playerX: number,
+    playerY: number,
+  ): { damage: number; knockback?: number; knockbackMs?: number } | null {
     if (this.tyrantState !== "executing") return null;
     const dist = Phaser.Math.Distance.Between(this.x, this.y, playerX, playerY);
 
@@ -796,6 +870,11 @@ export class Miretyrant extends Enemy {
         if (delta > SWEEP_HALF_ANGLE) return null;
         this.hasHitThisAttack = true;
         return { damage: SWEEP_DAMAGE, knockback: SWEEP_KNOCKBACK };
+      }
+      case "heave": {
+        if (dist > HEAVE_RADIUS) return null;
+        this.hasHitThisAttack = true;
+        return { damage: HEAVE_DAMAGE, knockback: HEAVE_KNOCKBACK, knockbackMs: HEAVE_KNOCKBACK_MS };
       }
       default: {
         if (dist > SLAM_RADIUS) return null;

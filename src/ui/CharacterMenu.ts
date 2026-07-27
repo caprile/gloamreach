@@ -208,14 +208,16 @@ export class CharacterMenu {
 
     this.text(x0, y, def.name, 15, "#ffffff");
     y += 22;
-    this.text(x0, y, def.blurb, 11, "#8a93a3");
-    y += 26;
+    // Every line below is DATA (a blurb, a modifier line, a derived affinity
+    // line) rather than layout-authored copy, so each wraps to the panel and
+    // advances by its own MEASURED height — a fixed step would re-create the
+    // overlap one wrapped line lower down instead of at the blurb.
+    y += this.text(x0, y, def.blurb, 11, "#8a93a3", 0, 0, this.wrapTo(x0)).height + 10;
 
     this.text(x0, y, `Trait — ${def.modifier.name}`, 12, "#e3b25a");
     y += 20;
     for (const line of [...def.modifier.boons, ...def.modifier.banes]) {
-      this.text(x0 + 8, y, line, 12, "#c8d0dc");
-      y += 18;
+      y += this.text(x0 + 8, y, line, 12, "#c8d0dc", 0, 0, this.wrapTo(x0 + 8)).height + 4;
     }
     y += 10;
 
@@ -224,8 +226,7 @@ export class CharacterMenu {
       this.text(x0, y, "Affinities", 12, "#e3b25a");
       y += 20;
       for (const line of [...boons, ...banes]) {
-        this.text(x0 + 8, y, line, 12, "#c8d0dc");
-        y += 18;
+        y += this.text(x0 + 8, y, line, 12, "#c8d0dc", 0, 0, this.wrapTo(x0 + 8)).height + 4;
       }
     }
   }
@@ -457,13 +458,29 @@ export class CharacterMenu {
     color: string,
     originX = 0,
     originY = 0,
+    // Wrap width in px. Off by default (every other caller writes short,
+    // hand-sized lines), but any line that comes from DATA rather than the
+    // layout — a class blurb, a derived affinity line — has no width budget the
+    // layout can rely on and must pass one (the user: "class description
+    // overlaps class box"). Callers use `wrapTo()` for the panel's own margin.
+    wrapWidth?: number,
   ): Phaser.GameObjects.Text {
     const t = this.scene.add
-      .text(x, y, str, { fontFamily: "monospace", fontSize: `${size + 1}px`, color })
+      .text(x, y, str, {
+        fontFamily: "monospace",
+        fontSize: `${size + 1}px`,
+        color,
+        ...(wrapWidth ? { wordWrap: { width: wrapWidth } } : {}),
+      })
       .setOrigin(originX, originY)
       .setScrollFactor(0)
       .setDepth(DEPTH_TEXT);
     this.rows.push(t);
     return t;
+  }
+
+  // Space left from an x position to the panel's right margin.
+  private wrapTo(x: number): number {
+    return this.panelX + PANEL_W - 16 - x;
   }
 }

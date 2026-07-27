@@ -152,7 +152,14 @@ const WEAPON_DAMAGE: Record<WeaponType, number> = {
   gloamsteel_sword: 25,
   gloamsteel_pike: 32,
   gloamsteel_warbow: 21,
-  gloam_brand: 29,
+  // 29 -> 22. The brand was written as a sidegrade whose cost was being shrugged
+  // off (x0.4-0.5) by the gloam casters — but enemy resistances were deleted
+  // roster-wide on 2026-07-24, so the cost silently stopped existing while the
+  // compensation stayed. At 29/520ms it had the HIGHEST single-target DPS in its
+  // tier (55.8 vs the pike's 52.5 and sword's 53.2) on top of a 46-degree arc AND
+  // the on-hit burst. The user: "shouldn't do more dmg than the pike." 22/520ms
+  // = 42.3 DPS, clearly under both, which is what the crowd burst is paid for.
+  gloam_brand: 22,
   // Deliberately BELOW the Gloam Brand: its per-hit lifelink is the payoff,
   // so it trades raw numbers for sustain rather than adding both.
   gloamdrinker: 19,
@@ -463,12 +470,18 @@ export interface WeaponBurst {
   tint: number; // detonation colour
 }
 
+// Sizing rule (2026-07-26): a burst must not out-reach the swing that triggers
+// it by more than its own arc. The player's melee reach is REACH 64, so a 118px
+// burst measured from the TARGET covered ~182px from the player — wider than the
+// Gloam Nova ability, which costs a 10-second cooldown. Both brands are pulled
+// back to roughly their own arc range plus a margin (the user: "the brand
+// weapons maybe feel a bit too big on the AOE").
 const WEAPON_ON_HIT_BURST: Partial<Record<WeaponType, WeaponBurst>> = {
-  // The fire brand: a wide, showy wash of flame. Its 45-degree arc already
-  // sweeps, so the burst is what makes it hit things the arc missed.
-  ember_brand: { radius: 88, damageFrac: 0.55, tint: 0xff7a1e },
+  // The fire brand: a showy wash of flame. Its 45-degree arc already sweeps, so
+  // the burst is what makes it hit things the arc missed.
+  ember_brand: { radius: 68, damageFrac: 0.45, tint: 0xff7a1e },
   // The bayou brand: bigger and harder, matching its tier.
-  gloam_brand: { radius: 118, damageFrac: 0.8, tint: 0x9a5ce0 },
+  gloam_brand: { radius: 82, damageFrac: 0.55, tint: 0x9a5ce0 },
   // The drinker keeps the tightest burst — every swept target already lifelinks,
   // so a wide detonation would make it the sustain AND the crowd answer.
   gloamdrinker: { radius: 72, damageFrac: 0.4, tint: 0x6fbf4a },

@@ -19,7 +19,21 @@ export const KILL_POINTS: Record<KillCategory, number> = {
 };
 // Awarded only on a win (killing the final boss). The completion x speed term
 // is meant to dominate the flat kill points.
-export const COMPLETION_BONUS = 2000;
+//
+// 2000 -> 6000 (2026-07-26). It never did dominate: a real 81-minute win scored
+// 10,080 kill points against a 2,219 completion bonus — 82% flat kills, so
+// farming still beat finishing at every realistic length, which is the exact
+// inversion of the intent above. Fixing the par time (10 -> 90 min) revived the
+// multiplier but not the ratio, because even the x3 cap only reached 6,000
+// against those same 10,080. Sized from the crossover instead: a 45-minute run
+// killing ~250 things must beat a 90-minute run killing ~550, which needs the
+// bonus above ~4,830. At 6,000 the fast run scores ~17.3k to the slow run's
+// ~16.1k, and the x3 cap is worth 18,000 on its own.
+//
+// NOTE: this changes what a score MEANS, so entries already in the local
+// high-score table are not comparable to new ones ([ Clear ] on the run-end
+// screen resets it).
+export const COMPLETION_BONUS = 6000;
 // Speed multiplier on the completion bonus: full MAX at/under the "par" time,
 // decaying toward 1x as the run drags on.
 // 10 min -> 90 min (2026-07-26). The multiplier can only exceed 1x BELOW par, and

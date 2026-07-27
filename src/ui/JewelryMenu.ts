@@ -4,7 +4,7 @@ import { itemDef } from "../systems/Items";
 import { JEWELRY_RECIPES, canAffordJewelry, type JewelryRecipe } from "../systems/Jewelry";
 import { describePassive } from "../systems/EquipmentEffects";
 import { stationDisplayName } from "../systems/StationUpgrades";
-import { ABILITY_DEFS, SLOT_ABILITY_KEY } from "../systems/Abilities";
+import { ABILITY_DEFS } from "../systems/Abilities";
 import { MAX_AUGMENTS_PER_ITEM, describeAugmentEffect, type GearAugmentDef } from "../systems/GearAugments";
 import type { Skills } from "../systems/Skills";
 import { Tooltip } from "./Tooltip";
@@ -248,16 +248,20 @@ export class JewelryMenu {
 
   // The short effect line under a recipe row: ability specials advertise what
   // they grant; passive jewelry shows its augment/utility bonuses.
-  // Which hotkey an ability-granting design will occupy, derived from the item's
-  // own equip slot rather than written out per recipe (so it can't drift). The
-  // recipe list previously said only "Gloamstep Band" with no hint that it fills
-  // Q, which made the whole Q/E/R layout unreadable at craft time (the user:
-  // "it isn't clear in the gemcrafter bench what item gives you what hotkey slot").
+  // A badge marking an ability-granting design, so the Q/E/R layout is readable
+  // at craft time (the user: "it isn't clear in the gemcrafter bench what item
+  // gives you what hotkey slot").
+  //
+  // It reads "Q/E/R", not a single letter. It USED to derive one key from the
+  // item's own `armorSlot` — correct back when a slot was a fixed destination,
+  // but the group model made the three ability slots interchangeable and every
+  // ability item declares `ability1`, so the badge said "Q" on all eleven of
+  // them (the user: "some of the ability rings and amulets have a Q next to
+  // them. doesn't make sense"). Which key an ability ends up on is the player's
+  // arrangement, so the honest badge names the group, not a position.
   private abilityKeyLabel(outputKey: string): string {
     const def = itemDef(outputKey);
-    if (!def?.grantsAbility || !def.armorSlot) return "";
-    const key = SLOT_ABILITY_KEY[def.armorSlot];
-    return key ? key.toUpperCase() : "";
+    return def?.grantsAbility ? "Q/E/R" : "";
   }
 
   private effectLine(outputKey: string): string {
@@ -597,20 +601,21 @@ export class JewelryMenu {
 
     const nameText = this.addText(x + 52, y + 10, recipe.name, 14, canCraft ? "#e8ecf2" : "#8a93a3");
     this.mask(nameText);
-    // Hotkey badge for ability-granting designs — the one thing the list was
-    // missing that made Q/E/R planning possible.
+    // Ability badge — the one thing the list was missing that made Q/E/R
+    // planning possible. Sized off the label so widening it can't clip.
     const hotkey = this.abilityKeyLabel(recipe.output);
     if (hotkey) {
       const bx = x + 52 + nameText.width + 8;
+      const bw = hotkey.length * 8 + 12;
       const badge = this.scene.add
-        .rectangle(bx, y + 10, 20, 18, 0x2a2333, 0.95)
+        .rectangle(bx, y + 10, bw, 18, 0x2a2333, 0.95)
         .setOrigin(0, 0)
         .setStrokeStyle(1, 0xc9a86a)
         .setScrollFactor(0)
         .setDepth(DEPTH_ITEM);
       this.mask(badge);
       this.rows.push(badge);
-      this.mask(this.addText(bx + 10, y + 12, hotkey, 12, "#e8c98a", 0.5, 0));
+      this.mask(this.addText(bx + bw / 2, y + 12, hotkey, 12, "#e8c98a", 0.5, 0));
     }
 
     const parts = Object.entries(recipe.inputs).map(([key, need]) => {

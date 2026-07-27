@@ -38,6 +38,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   private spaceKey: Phaser.Input.Keyboard.Key;
   private lastDashAt = -Infinity;
   private dashingUntil = 0;
+  private knockbackUntil = 0;
   private sprintLocked = false; // stamina ran out mid-sprint; needs shift release+re-press
   private facing: Facing = "down";
   // Movement keys in the order they were pressed, so the newest one drives
@@ -204,6 +205,14 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       return { moving: true, sprinting: false, dashStarted: false, facing: this.facing };
     }
 
+    // Being shoved — same deal as a dash in flight: Arcade carries the velocity
+    // and input is ignored until it expires. Checked AFTER the dash so a dash
+    // already in the air still finishes; a dash STARTED during the window is
+    // blocked, which is the point of a knockback.
+    if (now < this.knockbackUntil) {
+      return { moving: true, sprinting: false, dashStarted: false, facing: this.facing };
+    }
+
     // Input disabled (e.g. typing in the inventory search box): hold still and
     // read no movement keys, so WASD routes to the text field, not the player.
     if (!inputEnabled) {
@@ -292,6 +301,21 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   // (Mythic) relic's on-kill dash refund.
   resetDashCooldown(): void {
     this.lastDashAt = 0;
+  }
+
+  // Get shoved. Opens a window during which update() surrenders the body to
+  // Arcade, exactly like a dash in flight — WITHOUT it, knockback was purely
+  // cosmetic across the whole game: every source set a velocity, and update()
+  // overwrote it on the very next frame (setVelocity(0,0) when idle, the input
+  // vector when moving), so the impulse never survived long enough to move
+  // anyone. It was a known-deferred limitation since the souls-like pass; the
+  // Miretyrant's heave is an attack whose entire payload is the displacement,
+  // which is what forces the fix. Every existing knockback number becomes real
+  // at once, which is what those numbers always meant.
+  applyKnockback(angle: number, speed: number, durationMs: number): void {
+    const body = this.body as Phaser.Physics.Arcade.Body;
+    body.setVelocity(Math.cos(angle) * speed, Math.sin(angle) * speed);
+    this.knockbackUntil = this.scene.time.now + durationMs;
   }
 
   getFacing(): Facing {
