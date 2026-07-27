@@ -2,6 +2,7 @@ import Phaser from "phaser";
 import { Enemy } from "./Enemy";
 import type { SwingConfig } from "./Enemy";
 import { enemyStat } from "../systems/enemyStats";
+import type { DebuffKind } from "../systems/PlayerDebuffs";
 
 // Combat stats from the Phaser-free source of truth (also read by the balancing
 // dashboard — tune there). attacks[0] = chomp, attacks[1] = lunge.
@@ -122,6 +123,10 @@ const DEATHROLL_BLEED_MS = 3000;
 const DEATHROLL_RECOVER_MS = 1000; // dizzy and beached afterwards
 const DEATHROLL_COOLDOWN_MS = S.attacks[2].intervalMs;
 const DEATHROLL_SPIN_RAD_PER_SEC = 15; // the visual: it barrel-rolls
+// Root per landed tick. Deliberately SHORTER than the 360ms between ticks, so a
+// clean escape between thrashes is real rather than theoretical — the pressure
+// comes from being re-rooted while you stay in the grip, not from one long lock.
+const DEATHROLL_ROOT_MS = 900;
 
 export class Mirejaw extends Enemy {
   private mode: MirejawMode = "lurk";
@@ -463,12 +468,21 @@ export class Mirejaw extends Enemy {
   checkPlayerHit(_playerX: number, _playerY: number): {
     damage: number;
     bleed?: { dmgPerSec: number; durationMs: number };
+    debuff?: { kind: DebuffKind; durationMs: number; magnitude?: number };
   } | null {
     if (!this.pendingRollHit) return null;
     this.pendingRollHit = false;
     return {
       damage: this.rollTickDamage,
       bleed: { dmgPerSec: DEATHROLL_BLEED_DPS, durationMs: DEATHROLL_BLEED_MS },
+      // ROOT — the bayou debuff system's teacher for it, and the one debuff this
+      // attack could only ever have been: a death roll is already a LATCHED grip
+      // that plants the gator in place and re-checks you at 62px every tick, so
+      // being held there is what the animation has always depicted. Short, and
+      // re-applied per tick rather than once for the whole roll, so breaking
+      // away between thrashes genuinely cuts your losses (the diminishing-returns
+      // ladder in PlayerDebuffs is what stops the 3 ticks becoming a 3x lock).
+      debuff: { kind: "root", durationMs: DEATHROLL_ROOT_MS },
     };
   }
 

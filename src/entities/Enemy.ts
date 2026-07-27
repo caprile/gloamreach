@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import type { ResourceType } from "../systems/Inventory";
 import type { IncomingDamageType } from "../systems/Weapons";
+import type { DebuffKind } from "../systems/PlayerDebuffs";
 import { creatureAnimKey, hasCreatureRig, type CreatureAnim } from "../art/creatureRig";
 import { placeholderDims } from "../art/overrides";
 import { TELEGRAPH_DEPTH, ysortDepth } from "../systems/depth";
@@ -335,6 +336,15 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   // dose is DISCRETE and stacks (PoisonManager.apply), unlike the miasma's
   // sustained environmental slot. The Blighttoad is the first user.
   pendingPoison: { dmgPerSec: number; durationMs: number } | null = null;
+  // A player DEBUFF (root/disarm/silence/enfeeble) to apply when the current
+  // attack connects — the exact same contract as pendingBleed/pendingPoison
+  // above (read + cleared by MainScene.updateEnemies on the landing frame), and
+  // that is the point: riding the shared i-frame guard is what makes every
+  // debuff dodgeable at the source. A dashed-through Mirejaw death roll roots
+  // nothing. `magnitude` is only read by enfeeble (fraction of damage lost).
+  // null = no debuff, which is every attack in the game except the four the
+  // bayou roster carries.
+  pendingDebuff: { kind: DebuffKind; durationMs: number; magnitude?: number } | null = null;
   // The unscaled/base display scale to restore after a wind-up scale-pulse.
   // Elites bump this to their own scale so the pulse throbs around the right
   // size (see each subclass's elite branch).

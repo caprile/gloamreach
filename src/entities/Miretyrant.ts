@@ -3,6 +3,7 @@ import { ATTACK_FX_DEPTH, TELEGRAPH_DEPTH } from "../systems/depth";
 import { burstFx, coneFx } from "../art/attackFx";
 import { Enemy } from "./Enemy";
 import { enemyStat } from "../systems/enemyStats";
+import type { DebuffKind } from "../systems/PlayerDebuffs";
 
 // Combat stats from the Phaser-free source of truth (also read by the balancing
 // dashboard — tune there). attacks[0]=chomp, [1]=sweep, [2]=slam, [3]=roll.
@@ -163,6 +164,10 @@ const HEAVE_KNOCKBACK = 620;
 // Long enough for the shove to actually clear melee range (620px/s x 0.3s
 // ~= 186px, roughly the radius itself) rather than nudge you.
 const HEAVE_KNOCKBACK_MS = 300;
+// Disarm carried by a landed heave. Kept under HEAVE_RECOVER_MS (900) so the
+// boss's own punish window always outlasts it — you get thrown and silenced-of-
+// weapon, but the opening you were owed is still there when you get back.
+const HEAVE_DISARM_MS = 1800;
 
 // --- Bellow (adds) — on its own clock, see the file header. ---
 // Escalating SCRIPTED waves (the user, playtest: "spawn alligators instead of
@@ -831,7 +836,12 @@ export class Miretyrant extends Enemy {
   checkPlayerHit(
     playerX: number,
     playerY: number,
-  ): { damage: number; knockback?: number; knockbackMs?: number } | null {
+  ): {
+    damage: number;
+    knockback?: number;
+    knockbackMs?: number;
+    debuff?: { kind: DebuffKind; durationMs: number; magnitude?: number };
+  } | null {
     if (this.tyrantState !== "executing") return null;
     const dist = Phaser.Math.Distance.Between(this.x, this.y, playerX, playerY);
 
@@ -874,7 +884,21 @@ export class Miretyrant extends Enemy {
       case "heave": {
         if (dist > HEAVE_RADIUS) return null;
         this.hasHitThisAttack = true;
-        return { damage: HEAVE_DAMAGE, knockback: HEAVE_KNOCKBACK, knockbackMs: HEAVE_KNOCKBACK_MS };
+        return {
+          damage: HEAVE_DAMAGE,
+          knockback: HEAVE_KNOCKBACK,
+          knockbackMs: HEAVE_KNOCKBACK_MS,
+          // DISARM — the bayou debuff system's teacher for it, and the only
+          // place in the game it appears. Losing your weapon is the harshest of
+          // the four, so it belongs on the one fight built entirely out of long
+          // telegraphs (660ms here) rather than on anything that can swarm you.
+          //
+          // It also lands on precisely the right attack: the heave already
+          // exists to THROW YOU OUT of melee, so being unable to swing on the
+          // way back in extends what the attack was always saying. The window
+          // is under the heave's own recovery, so the boss can't chain it.
+          debuff: { kind: "disarm", durationMs: HEAVE_DISARM_MS },
+        };
       }
       default: {
         if (dist > SLAM_RADIUS) return null;

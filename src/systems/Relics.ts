@@ -77,8 +77,32 @@ export function rarityIcon(r: RelicRarity): string {
 // family (Phase 5's higher-tier-replaces model, locked decision 7). A relic
 // with a secondary stat still claims one primary family; the secondary stat
 // only matters for the dominance comparison when a new roll contests the slot.
-export type RelicFamily = "damage" | "move" | "defense" | "stamina" | "lifesteal" | "vitality" | "crit" | "xp";
-export const RELIC_FAMILIES: RelicFamily[] = ["damage", "move", "defense", "stamina", "lifesteal", "vitality", "crit", "xp"];
+//
+// `warding` (the 9th) is the relic half of the bayou debuff system's counterplay
+// — deliberately its OWN family rather than folded into `defense`, because
+// status resistance and damage reduction answer different problems and folding
+// them together would have meant one slot could never buy both.
+export type RelicFamily =
+  | "damage"
+  | "move"
+  | "defense"
+  | "stamina"
+  | "lifesteal"
+  | "vitality"
+  | "crit"
+  | "xp"
+  | "warding";
+export const RELIC_FAMILIES: RelicFamily[] = [
+  "damage",
+  "move",
+  "defense",
+  "stamina",
+  "lifesteal",
+  "vitality",
+  "crit",
+  "xp",
+  "warding",
+];
 const RELIC_FAMILY_NAMES: Record<RelicFamily, string> = {
   damage: "Damage",
   move: "Move Speed",
@@ -88,6 +112,7 @@ const RELIC_FAMILY_NAMES: Record<RelicFamily, string> = {
   vitality: "Vitality",
   crit: "Crit",
   xp: "XP",
+  warding: "Warding",
 };
 export function relicFamilyName(f: RelicFamily): string {
   return RELIC_FAMILY_NAMES[f];
@@ -190,6 +215,11 @@ export interface RelicEffect {
   // MainScene's crit roll.
   critChancePct?: number;
   critDamagePct?: number;
+  // Bayou debuff system: shortens incoming root/disarm/silence/enfeeble AND
+  // thins incoming bleed/poison doses. Summed additively with the equipment
+  // passive and the Magic skill at MainScene's single statusResistMult() choke
+  // point, so all three read as one stat to the player.
+  statusResistPct?: number;
 }
 
 // --- Unique effects (bespoke Rare/Mythic procs) ---
@@ -211,7 +241,8 @@ export type UniqueKind =
   | "leech" // lifesteal: heal healPct of damage dealt (+ overheal shield)
   | "undying" // vitality: low-HP emergency heal (+ once-per-run revive)
   | "critsplash" // crit: crits splash splashPct within radius (+ slow)
-  | "xpstreak"; // xp: chained kills ramp XP up to maxPct
+  | "xpstreak" // xp: chained kills ramp XP up to maxPct
+  | "wardbreak"; // warding: auto-cleanse the moment a debuff lands, on a cooldown
 
 export interface RelicUnique {
   kind: UniqueKind;
@@ -251,6 +282,7 @@ export const RELIC_DEFS: Record<string, RelicDef> = {
   relic_stout_charm: { id: "relic_stout_charm", name: "Stout Charm", rarity: "common", family: "vitality", effect: { maxHpPct: 8 } },
   relic_keen_charm: { id: "relic_keen_charm", name: "Keen Charm", rarity: "common", family: "crit", effect: { critChancePct: 3 } },
   relic_scholars_charm: { id: "relic_scholars_charm", name: "Scholar's Charm", rarity: "common", family: "xp", effect: { xpPct: 8 } },
+  relic_warding_charm: { id: "relic_warding_charm", name: "Warding Charm", rarity: "common", family: "warding", effect: { statusResistPct: 6 } },
 
   // --- uncommon (modestly bigger flat stat — the number PLATEAUS here) ---
   relic_warriors_idol: { id: "relic_warriors_idol", name: "Warrior's Idol", rarity: "uncommon", family: "damage", effect: { damagePct: 7 } },
@@ -261,6 +293,7 @@ export const RELIC_DEFS: Record<string, RelicDef> = {
   relic_vigor_idol: { id: "relic_vigor_idol", name: "Vigor Idol", rarity: "uncommon", family: "vitality", effect: { maxHpPct: 12 } },
   relic_savage_idol: { id: "relic_savage_idol", name: "Savage Idol", rarity: "uncommon", family: "crit", effect: { critChancePct: 5 } },
   relic_scholars_idol: { id: "relic_scholars_idol", name: "Scholar's Idol", rarity: "uncommon", family: "xp", effect: { xpPct: 14 } },
+  relic_warding_idol: { id: "relic_warding_idol", name: "Wardstone Idol", rarity: "uncommon", family: "warding", effect: { statusResistPct: 10 } },
 
   // --- rare (Uncommon's stat + a family proc) ---
   relic_war_totem: { id: "relic_war_totem", name: "Onslaught Totem", rarity: "rare", family: "damage", effect: { damagePct: 7 }, unique: { kind: "onslaught", params: { interval: 5, bonusPct: 100 } } },
@@ -271,6 +304,10 @@ export const RELIC_DEFS: Record<string, RelicDef> = {
   relic_titan_totem: { id: "relic_titan_totem", name: "Titan Totem", rarity: "rare", family: "vitality", effect: { maxHpPct: 12 }, unique: { kind: "undying", params: { lowHpHealPct: 25, thresholdPct: 25, cooldownMs: 60000 } } },
   relic_deadeye_totem: { id: "relic_deadeye_totem", name: "Deadeye Totem", rarity: "rare", family: "crit", effect: { critChancePct: 5 }, unique: { kind: "critsplash", params: { splashPct: 35, radius: 70, slowPct: 0, slowMs: 0 } } },
   relic_sage_totem: { id: "relic_sage_totem", name: "Sage Totem", rarity: "rare", family: "xp", effect: { xpPct: 14 }, unique: { kind: "xpstreak", params: { perKillPct: 8, maxPct: 50, windowMs: 4000 } } },
+  // wardbreak: a free automatic cleanse the instant anything locks you down,
+  // then a long cooldown. Conditional like every other Rare/Mythic proc — it
+  // answers the FIRST lockout of a fight, not all of them.
+  relic_unbroken_totem: { id: "relic_unbroken_totem", name: "Unbroken Totem", rarity: "rare", family: "warding", effect: { statusResistPct: 10 }, unique: { kind: "wardbreak", params: { cooldownMs: 20000, graceMs: 600 } } },
 
   // --- mythic (Uncommon's stat + a spicier version of the family proc) ---
   relic_avatars_mantle: { id: "relic_avatars_mantle", name: "Berserker's Mantle", rarity: "mythic", family: "damage", effect: { damagePct: 7 }, unique: { kind: "onslaught", params: { interval: 4, bonusPct: 100 } } },
@@ -281,6 +318,7 @@ export const RELIC_DEFS: Record<string, RelicDef> = {
   relic_colossus_mantle: { id: "relic_colossus_mantle", name: "Colossus Mantle", rarity: "mythic", family: "vitality", effect: { maxHpPct: 12 }, unique: { kind: "undying", params: { revivePct: 40 } } },
   relic_assassins_mantle: { id: "relic_assassins_mantle", name: "Assassin's Mantle", rarity: "mythic", family: "crit", effect: { critChancePct: 5 }, unique: { kind: "critsplash", params: { splashPct: 50, radius: 90, slowPct: 30, slowMs: 1500 } } },
   relic_enlightened_mantle: { id: "relic_enlightened_mantle", name: "Enlightened Mantle", rarity: "mythic", family: "xp", effect: { xpPct: 14 }, unique: { kind: "xpstreak", params: { perKillPct: 10, maxPct: 90, windowMs: 5000 } } },
+  relic_unshackled_mantle: { id: "relic_unshackled_mantle", name: "Unshackled Mantle", rarity: "mythic", family: "warding", effect: { statusResistPct: 10 }, unique: { kind: "wardbreak", params: { cooldownMs: 11000, graceMs: 1200 } } },
 };
 
 // Relic ids grouped by rarity (the roll pools). Built once from the def table.
@@ -624,6 +662,7 @@ function scaledEffectText(def: RelicDef, powerTier: number): string {
   if (e.critChancePct) parts.push(`+${pct(e.critChancePct)}% crit chance`);
   if (e.critDamagePct) parts.push(`+${(0.01 * e.critDamagePct * m).toFixed(2)}x crit damage`);
   if (e.xpPct) parts.push(`+${pct(e.xpPct)}% skill XP`);
+  if (e.statusResistPct) parts.push(`-${pct(e.statusResistPct)}% debuff duration & bleed/poison`);
   const base = parts.join(", ");
   const uq = uniqueText(def, powerTier);
   return uq ? (base ? `${base} · ${uq}` : uq) : base;
@@ -660,6 +699,9 @@ export function uniqueText(def: RelicDef, powerTier = 1): string {
       return `melee crits splash ${pct(p.splashPct)}% within ${p.radius}px${p.slowPct ? ` + ${pct(p.slowPct)}% slow ${sec(p.slowMs)}s` : ""}`;
     case "xpstreak":
       return `chained kills ramp +${pct(p.perKillPct)}%/kill up to +${pct(p.maxPct)}% XP`;
+    // Cooldown is a DISCRETE param (not tier-scaled), same as guardian's.
+    case "wardbreak":
+      return `automatically strips a debuff the moment it lands (every ${sec(p.cooldownMs)}s)`;
   }
 }
 
@@ -691,6 +733,7 @@ const EFFECT_DISPLAY: { key: keyof RelicEffect; label: string; fmt: (v: number) 
   { key: "maxHp", label: "Max HP", fmt: (v) => `+${Math.round(v)}` }, // legacy flat channels
   { key: "maxStamina", label: "Max Stam.", fmt: (v) => `+${Math.round(v)}` },
   { key: "xpPct", label: "Skill XP", fmt: (v) => `+${fmtPct(v)}%` },
+  { key: "statusResistPct", label: "Status Resist", fmt: (v) => `-${fmtPct(v)}%` },
 ];
 
 // One aggregated channel: the grand total (formatted) + which relics feed it.
@@ -994,6 +1037,13 @@ export class RelicManager {
   }
   killHeal(): number {
     return this.sumEffect("killHeal");
+  }
+  // Returned as a raw PERCENT (not a multiplier) because MainScene sums the
+  // three status-resistance sources — relics, the equipment passive and the
+  // Magic skill — into one additive bucket before converting. See
+  // MainScene.statusResistMult().
+  statusResistPct(): number {
+    return this.sumEffect("statusResistPct");
   }
   maxHpBonus(): number {
     return Math.round(this.sumEffect("maxHp"));

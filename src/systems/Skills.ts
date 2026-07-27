@@ -82,9 +82,28 @@ const WEAPON_SKILL_DAMAGE_PCT_PER_LEVEL = 0.005; // +0.5% weapon damage per leve
 // stacking damage on top of that made investment in the skill strictly
 // dominant; buying reach instead means the payoff is a longer safe window,
 // which the bow's own movement penalty is there to charge you for.
+// MAGIC IS ALSO EXCLUDED and pays out in STATUS RESISTANCE instead (see
+// magicSkillStatusResistPct). The user, 2026-07-26, while speccing the bayou
+// debuff system: "maybe magic skill does something with this instead of magic
+// damage?" It fits both ways — the bayou's debuffs are gloam-flavoured (and
+// poison is already a subtype of magic), so attunement to that magic resisting
+// it is the natural read — and it is deliberately ALSO a Gloam/Ember Brand
+// nerf, which lines up with the standing "brand + crit insta kills stuff with 0
+// downside" complaint. Magic weapons now scale on gear and stats alone.
 export function weaponSkillDamageMultiplier(skill: SkillType, skills: Skills): number {
-  if (!WEAPON_SKILLS.includes(skill) || skill === "ranged") return 1;
+  if (!WEAPON_SKILLS.includes(skill) || skill === "ranged" || skill === "magic") return 1;
   return 1 + skills.get(skill) * WEAPON_SKILL_DAMAGE_PCT_PER_LEVEL;
+}
+
+// Magic's payoff axis: shortens every incoming DEBUFF and thins every incoming
+// bleed/poison DOSE. Returned as a PERCENT (0-40) because MainScene sums the
+// three resistance sources additively into one bucket before converting — see
+// MainScene.statusResistMult(). -0.5%/level, capped at -40%, so it is still
+// growing at the level-100 soft cap per the standing stat-curve rule.
+const MAGIC_SKILL_STATUS_RESIST_PER_LEVEL = 0.5;
+const MAGIC_SKILL_STATUS_RESIST_CAP = 40;
+export function magicSkillStatusResistPct(skills: Skills): number {
+  return Math.min(MAGIC_SKILL_STATUS_RESIST_CAP, skills.get("magic") * MAGIC_SKILL_STATUS_RESIST_PER_LEVEL);
 }
 
 // Ranged's payoff axis. +0.4%/level, so the lvl-100 soft cap is +40% reach —
@@ -171,6 +190,14 @@ export function skillImpactDescription(skill: SkillType, skills: Skills): string
     const level = skills.get("ranged");
     const pct = (rangedSkillRangeMultiplier(skills) - 1) * 100;
     return `+0.4% ranged attack range per level — currently +${pct.toFixed(1)}% at Lvl ${level}`;
+  }
+  if (skill === "magic") {
+    const level = skills.get("magic");
+    const pct = magicSkillStatusResistPct(skills);
+    return (
+      `-0.5% debuff duration & bleed/poison taken per level (cap -40%) — ` +
+      `currently -${pct.toFixed(1)}% at Lvl ${level}. Does NOT scale magic weapon damage.`
+    );
   }
   if (WEAPON_SKILLS.includes(skill)) {
     const level = skills.get(skill);

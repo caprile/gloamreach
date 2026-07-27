@@ -67,6 +67,7 @@ import {
   choppingBonusChance,
   miningBonusChance,
   heavyArmorMagicMitigation,
+  magicSkillStatusResistPct,
   SKILL_TYPES,
   type SkillType,
 } from "../systems/Skills";
@@ -161,6 +162,7 @@ import { ProcessingStation, PROCESS_RECIPES, SMELT_RECIPES, SECONDARY_SIDES, typ
 import { BuffManager } from "../systems/Buffs";
 import { BleedManager } from "../systems/Bleed";
 import { PoisonManager } from "../systems/Poison";
+import { DEBUFF_DEFS, DEBUFF_KINDS, PlayerDebuffs, type DebuffKind } from "../systems/PlayerDebuffs";
 import { COOK_RECIPES, type CookRecipe } from "../systems/Cooking";
 import { CraftingMenu } from "../ui/CraftingMenu";
 import { ContextMenu, type ContextMenuItem } from "../ui/ContextMenu";
@@ -440,6 +442,11 @@ const ABILITY_SNARE_MS = 2600;
 // attackCooldownMult() choke point every attack path already reads.
 const ABILITY_HASTE_MULT = 0.6; // 0.6x cooldown = ~1.67x attacks/sec
 const ABILITY_HASTE_MS = 6000;
+// Fenwash (cleanse) — how long you stay un-debuffable after the strip. Short:
+// long enough that the creature which debuffed you cannot immediately re-apply,
+// far too short to be played as a damage-immunity window (it blocks debuffs
+// only — every hit still lands for full).
+const FENWASH_WARD_MS = 1200;
 // Crit (M-SS) soft caps on the COMBINED total (weapon base + Strength/Agility
 // stats + relic crit channels). Applied in critChanceTotal()/critMultTotal().
 const CRIT_CHANCE_CAP = 0.6;
@@ -1362,6 +1369,17 @@ export class MainScene extends Phaser.Scene {
   private buffs = new BuffManager();
   private bleed = new BleedManager();
   private poison = new PoisonManager();
+  // Bayou debuffs (root/disarm/silence/enfeeble) — capability locks, kept in
+  // their own manager rather than folded into the DoT managers above because
+  // their design problem is UPTIME, not stacking damage. See PlayerDebuffs.ts.
+  private debuffs = new PlayerDebuffs();
+  // World-space FX following the player, one per active debuff kind. Created on
+  // demand and destroyed the moment the debuff lapses, so nothing lingers.
+  private debuffFx = new Map<DebuffKind, Phaser.GameObjects.Image>();
+  // Wardbreak (warding relic): next time the automatic cleanse can fire.
+  private wardbreakReadyAt = 0;
+  // Throttle for the "you are disarmed/silenced" nudge.
+  private debuffWarnUntil = 0;
   private buffBarUI!: BuffBarUI;
   private statusBarUI!: StatusBarUI;
   // This frame's environmental movement multiplier (<1 = slowed). Cached beside
@@ -1698,6 +1716,12 @@ export class MainScene extends Phaser.Scene {
     this.health = new Health();
     this.bleed = new BleedManager();
     this.poison = new PoisonManager();
+    // Per the scene.restart() field-initializer gotcha: every per-run field is
+    // rebuilt here, never left to its declaration.
+    this.debuffs = new PlayerDebuffs();
+    for (const fx of this.debuffFx.values()) fx.destroy();
+    this.debuffFx.clear();
+    this.wardbreakReadyAt = 0;
     this.buffs = new BuffManager();
     // Comfort's "Resting" buff is exempt from this cap entirely (Buffs.ts
     // COMFORT_BUFF_ID) — it never has to fight a food buff for a slot. A run
@@ -2404,7 +2428,7 @@ export class MainScene extends Phaser.Scene {
       // the zone self-cleaning: stop re-arming and it lapses on its own.
       // Mireborn Cloak (B4-P2) thins the environmental dose too, not just
       // creature bites — the cloak's whole flavour is living in the poison.
-      this.poison.sustain(env.poisonDps * this.equipEffects.statusResistMult(), 900);
+      this.poison.sustain(env.poisonDps * this.statusResistMult(), 900);
       this.hints.trigger("poisoned");
     }
     // Anti-kite: briefly slower right after firing a ranged weapon. A separate
@@ -2412,14 +2436,21 @@ export class MainScene extends Phaser.Scene {
     // actual speed calc so the terrain tooltip (currentEnvMoveMult) isn't misled
     // into blaming the ground for it.
     const rangedFireSlow = this.time.now < this.rangedFireSlowUntil ? RANGED_FIRE_SLOW_MULT : 1;
+    // ROOT hook. Reuses the two gates Player.update already has rather than
+    // adding a movement branch: inputEnabled false zeroes the velocity (the
+    // same path a focused search box uses) and canDash false blocks the burst.
+    // Attacking is deliberately untouched — root pins you, it doesn't disarm
+    // you, and keeping those two genuinely different is what stops the roster's
+    // debuffs reading as degrees of one effect.
+    const rooted = this.debuffs.has("root");
     const frame = this.player.update(
       delta,
       canSprint,
-      canDash,
+      canDash && !rooted,
       sprintMultiplier,
       moveMult,
       dashDistMult,
-      inputEnabled,
+      inputEnabled && !rooted,
       env.moveMult * rangedFireSlow,
     );
     this.clampPlayerToWorld();
@@ -2485,6 +2516,7 @@ export class MainScene extends Phaser.Scene {
       this.spawnPlayerDamageNumber(poisonDmg, "poison");
       if (diedOfPoison && !this.devGodMode && !this.tryUndyingRevive()) this.onPlayerDeath();
     }
+    this.updateDebuffs(delta);
     const bleedDmg = this.bleed.tick(delta);
     if (bleedDmg > 0 && !this.isDead) {
       // DEV god mode: same floor-at-1-HP guard applyDamageToPlayer() uses —
@@ -3564,6 +3596,7 @@ export class MainScene extends Phaser.Scene {
     this.recomputeSetBonuses();
     this.recomputeAbilities();
     this.equipEffects.recompute(this.equipment);
+    this.syncDebuffResistances();
     this.reconcileBackpackDiscovery();
     this.inventoryMenu.refresh();
     // The "upgrade ready" glyphs depend on backpack materials, which this move
@@ -4012,6 +4045,9 @@ export class MainScene extends Phaser.Scene {
   // re-syncing; a consumed trophy also changed backpack/hotbar counts.
   private afterRelicChange(): void {
     this.syncStatBonuses();
+    // The warding family feeds the same resistance bucket gear does, so a relic
+    // swap has to re-push it exactly like an equipment change.
+    this.syncDebuffResistances();
     this.relicForgeMenu.refresh();
     this.passiveBarUI.sync(this.passiveEntries());
     this.inventoryMenu.refresh();
@@ -9830,6 +9866,16 @@ export class MainScene extends Phaser.Scene {
   // range-gated) depending on the equipped weapon.
   private tryAttackEnemy(enemy: Enemy): void {
     if (enemy.depleted || !this.equippedWeapon) return;
+    // DISARM hook. Gathering is deliberately still allowed (tryInteract's tool
+    // path is untouched) — "disarmed" is about your weapon, and letting the
+    // player keep chopping keeps it from reading as a generic input freeze.
+    // Unlike the cooldown/stamina guards below this is NOT a silent fail: every
+    // one of those has a visible cause on the HUD, and a debuff the player may
+    // not have noticed does not.
+    if (this.debuffs.has("disarm")) {
+      this.warnBlockedByDebuff("disarm");
+      return;
+    }
     if (isRangedWeapon(this.equippedWeapon)) this.tryRangedAttack(enemy);
     else this.tryMeleeAttack(enemy);
   }
@@ -10424,6 +10470,7 @@ export class MainScene extends Phaser.Scene {
         cooldownMs: (def?.cooldownMs ?? 0) * this.equipEffects.abilityCooldownMult(),
         cooldownRemainingMs: def ? Math.max(0, this.abilityReadyAt[key] - now) : 0,
         active,
+        silenced: this.debuffs.has("silence"),
       };
     });
   }
@@ -10441,6 +10488,13 @@ export class MainScene extends Phaser.Scene {
     if (this.isDead || this.isPaused || this.runOver || this.anyMenuOpen()) return;
     const id = this.abilityByKey[key];
     if (!id) return; // nothing equipped in that slot
+    // SILENCE hook. Sits ahead of the cooldown check on purpose — a silenced
+    // cast must not consume the cooldown, and the player needs to be told why
+    // the key did nothing (the ability bar greys out for the same reason).
+    if (this.debuffs.has("silence")) {
+      this.warnBlockedByDebuff("silence");
+      return;
+    }
     if (this.time.now < this.abilityReadyAt[key]) return; // still on cooldown
     const def = ABILITY_DEFS[id];
     this.castAbility(id);
@@ -10483,7 +10537,27 @@ export class MainScene extends Phaser.Scene {
       case "haste":
         this.castBloodrush(power, def.activeMs ?? 0);
         break;
+      case "cleanse":
+        this.castFenwash(power);
+        break;
     }
+  }
+
+  // Fenwash — the bayou debuff system's active counterplay. Strips control AND
+  // DoTs; terrain is untouched because terrain was never in PlayerDebuffs to
+  // begin with (a miasma re-arms poison via sustain() on the very next frame,
+  // which is the intended lesson: move first, then cleanse).
+  //
+  // The short ward window afterwards is what stops the enemy still standing on
+  // you from undoing the cast on the frame it completes — without it the button
+  // reads as doing nothing in exactly the situation you pressed it.
+  private castFenwash(power: number): void {
+    this.debuffs.dispel(this.time.now, FENWASH_WARD_MS * power);
+    this.bleed.clear();
+    this.poison.clear();
+    this.playCleanseFx();
+    this.spawnFeedbackText(this.player.x, this.player.y, "Cleansed!");
+    this.refreshHealthBar();
   }
 
   // How long the given family's active window runs, for the HUD's active glow.
@@ -11036,11 +11110,145 @@ export class MainScene extends Phaser.Scene {
   // add here.
   private damageBonusMult(dmgType: DamageType): number {
     return (
-      1 +
-      (weaponSkillDamageMultiplier(dmgType, this.skills) - 1) +
-      (this.relics.damageMult() - 1) +
-      (this.character.damageDealtMult() - 1)
+      (1 +
+        (weaponSkillDamageMultiplier(dmgType, this.skills) - 1) +
+        (this.relics.damageMult() - 1) +
+        (this.character.damageDealtMult() - 1)) *
+      // ENFEEBLE hook. Applied as a TRUE multiplier outside the additive bonus
+      // bucket, deliberately: folding -30% into that bucket would let a couple
+      // of damage relics erase the debuff entirely, which is the same reasoning
+      // that keeps class skill-XP affinity outside the additive XP bucket.
+      this.debuffs.damageMult()
     );
+  }
+
+  // Advance the debuff clocks, fire the one-shot feedback for anything that
+  // just landed, and keep the world-space FX glued to the player.
+  private updateDebuffs(delta: number): void {
+    // Refreshed every frame rather than only on the gear/relic push sites: the
+    // Magic skill is one of the three resistance sources and it levels DURING
+    // combat, so a push-only model would run a stale multiplier until the next
+    // time the player happened to swap something. Allocation-free, unlike the
+    // immunity set (which genuinely only changes on equip/relic events).
+    this.debuffs.setResistMult(this.statusResistMult());
+    this.debuffs.tick(delta);
+
+    // Wardbreak (warding Rare/Mythic): the automatic cleanse. Checked before
+    // the landed-this-frame feedback so a wardbroken debuff never gets a
+    // callout for something the player never actually suffered.
+    const ward = this.relics.unique("wardbreak");
+    if (ward && this.debuffs.any() && this.time.now >= this.wardbreakReadyAt) {
+      const cleared = this.debuffs.dispel(this.time.now, ward.params.graceMs);
+      if (cleared.length > 0) {
+        this.wardbreakReadyAt = this.time.now + ward.params.cooldownMs;
+        this.debuffs.drainJustApplied(); // suppress the callout for what it ate
+        this.spawnFeedbackText(this.player.x, this.player.y, "Warded!");
+        this.playCleanseFx();
+      }
+    }
+
+    for (const kind of this.debuffs.drainJustApplied()) {
+      const def = DEBUFF_DEFS[kind];
+      // Enfeeble is the one that never takes control away, so it gets the
+      // status icon but not the shout — reserving the callout for the three
+      // lockouts is what keeps the shout meaningful.
+      if (kind !== "enfeeble") this.spawnFeedbackText(this.player.x, this.player.y - 18, def.callout);
+      this.cameras.main.shake(120, 0.003);
+    }
+
+    // One FX sprite per active kind, created/destroyed as the set changes.
+    for (const kind of DEBUFF_KINDS) {
+      const active = this.debuffs.has(kind);
+      const existing = this.debuffFx.get(kind);
+      if (active && !existing) {
+        const def = DEBUFF_DEFS[kind];
+        const img = this.add
+          .image(this.player.x, this.player.y, def.fx)
+          // Root reads as something on the GROUND holding you, so it draws under
+          // the player; the other three are things happening TO you and draw
+          // over. Both stay inside the world's compressed Y-sort band.
+          .setDepth(kind === "root" ? ysortDepth(this.player.y) - 1 : ysortDepth(this.player.y) + 1)
+          .setAlpha(0.9);
+        this.tweens.add({
+          targets: img,
+          alpha: { from: 0.55, to: 1 },
+          duration: 520,
+          yoyo: true,
+          repeat: -1,
+        });
+        this.debuffFx.set(kind, img);
+      } else if (!active && existing) {
+        // The tween is killed explicitly — an infinite tween outlives its target
+        // otherwise (the standing Phaser leak rule).
+        this.tweens.killTweensOf(existing);
+        existing.destroy();
+        this.debuffFx.delete(kind);
+      }
+    }
+    for (const [kind, img] of this.debuffFx) {
+      const overhead = kind === "silence" || kind === "disarm";
+      img.setPosition(this.player.x, this.player.y + (kind === "root" ? 8 : overhead ? -26 : 0));
+      img.setDepth(kind === "root" ? ysortDepth(this.player.y) - 1 : ysortDepth(this.player.y) + 1);
+      if (kind === "root") img.rotation += delta / 900;
+    }
+  }
+
+  // Told, not silently ignored: every other guard on these paths (cooldown,
+  // stamina, out of reach) has a visible cause on the HUD, and a debuff the
+  // player may not have registered does not. Throttled so holding the mouse
+  // down doesn't spam a column of text.
+  private warnBlockedByDebuff(kind: DebuffKind): void {
+    if (this.time.now < this.debuffWarnUntil) return;
+    this.debuffWarnUntil = this.time.now + 900;
+    this.spawnFeedbackText(this.player.x, this.player.y - 18, DEBUFF_DEFS[kind].callout);
+  }
+
+  // A brief pale flash on the player — shared by Fenwash and the wardbreak relic
+  // so both cleanses read identically.
+  private playCleanseFx(): void {
+    const ring = this.add
+      .image(this.player.x, this.player.y, "fx_debuff_cleanse")
+      .setDepth(ysortDepth(this.player.y) + 2)
+      .setAlpha(0.95);
+    this.tweens.add({
+      targets: ring,
+      scale: { from: 0.5, to: 2.1 },
+      alpha: { from: 0.95, to: 0 },
+      duration: 420,
+      onComplete: () => ring.destroy(),
+    });
+  }
+
+  // THE status-resistance choke point. Three sources — the equipment passive,
+  // the Magic skill and the warding relic family — summed ADDITIVELY into one
+  // bucket, exactly like the damage-reduction bucket, so all three read to the
+  // player as one stat called "status resist" and none of them multiplies the
+  // others into runaway territory.
+  //
+  // The result scales BOTH an incoming bleed/poison dose AND an incoming
+  // debuff's duration. One number, two applications: a second "debuff duration"
+  // stat next to a "dose" stat would have been a distinction nobody could act
+  // on differently.
+  //
+  // Floored at 0.25, mirroring EquipmentEffects' own clamp — no combination may
+  // turn status effects off entirely.
+  private statusResistMult(): number {
+    const pct =
+      this.equipEffects.statusResistTotalPct() +
+      magicSkillStatusResistPct(this.skills) +
+      this.relics.statusResistPct();
+    return Math.max(0.25, 1 - pct / 100);
+  }
+
+  // Push the combined resistance + the union of every immunity source into the
+  // debuff manager. Called from the same places equipment/relic state changes
+  // already refresh derived stats, so nothing polls per frame.
+  private syncDebuffResistances(): void {
+    this.debuffs.setResistMult(this.statusResistMult());
+    this.debuffs.setImmunities([
+      ...this.equipEffects.debuffImmunities(),
+      ...this.character.debuffImmunities(),
+    ]);
   }
 
   // Onslaught (damage relic): count each attack; every Nth adds a FLAT bonus to
@@ -11234,6 +11442,7 @@ export class MainScene extends Phaser.Scene {
     this.health.takeDamage(this.health.max - healTo);
     this.bleed.clear();
     this.poison.clear();
+    this.debuffs.clear(); // capability locks never survive a death/revive either
     this.playerShield = 0;
     this.invulnerableUntil = this.time.now + this.POST_RESPAWN_INVULN_MS;
     this.refreshHealthBar();
@@ -11472,9 +11681,11 @@ export class MainScene extends Phaser.Scene {
           enemy.pendingBleed ?? undefined,
           enemy.pendingPoison ?? undefined,
           enemy.displayName,
+          enemy.pendingDebuff ?? undefined,
         );
         enemy.pendingBleed = null; // consumed this frame
         enemy.pendingPoison = null;
+        enemy.pendingDebuff = null;
         // Molten Bulwark (Embersteel heavy set): a melee attacker that lands a
         // hit is seared. Only the contact-bite path (this branch) procs it —
         // ranged projectiles never touch the plate. Note dealSetBonusDamage may
@@ -11513,6 +11724,7 @@ export class MainScene extends Phaser.Scene {
               knockbackMs?: number;
               dmgType?: IncomingDamageType;
               bleed?: { dmgPerSec: number; durationMs: number };
+              debuff?: { kind: DebuffKind; durationMs: number; magnitude?: number };
             }
           | null;
         if (areaHit) {
@@ -11525,6 +11737,7 @@ export class MainScene extends Phaser.Scene {
             areaHit.bleed,
             undefined,
             enemy.displayName,
+            areaHit.debuff,
           );
         }
       }
@@ -11731,6 +11944,12 @@ export class MainScene extends Phaser.Scene {
     // AFTER every reduction, so it reports what actually cost you HP rather than
     // the attack's paper number — which is the only version worth balancing on.
     sourceLabel?: string,
+    // A player debuff carried by this attack (bayou roster only). LAST so no
+    // existing call site moves. Rides the same i-frame + guardian-negate guards
+    // as the hit itself, which is the whole reason it lives here rather than
+    // being applied by the enemy directly: a dashed-through attack debuffs
+    // nothing.
+    debuff?: { kind: DebuffKind; durationMs: number; magnitude?: number },
   ): void {
     if (this.isDead) return;
     if (this.time.now < this.invulnerableUntil) return;
@@ -11771,7 +11990,7 @@ export class MainScene extends Phaser.Scene {
     // The Mireborn Cloak (B4-P2 epic passive) thins the DOSE rather than the
     // duration, so a resisted wound still reads as a wound on the status bar —
     // it just costs less. Same treatment for poison below.
-    const statusMult = this.equipEffects.statusResistMult();
+    const statusMult = this.statusResistMult();
     if (bleed) {
       this.bleed.apply(bleed.dmgPerSec * statusMult, bleed.durationMs);
       this.hints.trigger("bled");
@@ -11782,6 +12001,13 @@ export class MainScene extends Phaser.Scene {
     if (poison) {
       this.poison.apply(poison.dmgPerSec * statusMult, poison.durationMs);
       this.hints.trigger("poisoned");
+    }
+    // Bayou debuffs. PlayerDebuffs owns the diminishing-returns ladder and the
+    // resistance scaling, so all this site does is hand it the attack's numbers;
+    // it returns false when the application was fully diminished/immune/resisted
+    // away, which is what suppresses the callout and FX.
+    if (debuff && this.debuffs.apply(debuff.kind, debuff.durationMs, debuff.magnitude ?? 0, this.time.now)) {
+      this.hints.trigger("debuffed");
     }
     // Additive damage-reduction bucket (2026-07-15): the relic %-reduction and
     // Molten Bulwark's flat % (Embersteel heavy set) ADD into one reduction,
@@ -11880,6 +12106,7 @@ export class MainScene extends Phaser.Scene {
     this.buffs.clear();
     this.bleed.clear();
     this.poison.clear();
+    this.debuffs.clear(); // capability locks never survive a death/revive either
     this.buffBarUI.sync(this.buffs.active());
     this.statusBarUI.sync(this.statusEffects());
     this.eventLog.add("combat", "You died...");
@@ -12140,6 +12367,7 @@ export class MainScene extends Phaser.Scene {
     this.buffs.clear();
     this.bleed.clear();
     this.poison.clear();
+    this.debuffs.clear(); // capability locks never survive a death/revive either
     this.playerShield = 0;
     this.buffBarUI.sync(this.buffs.active());
     this.statusBarUI.sync(this.statusEffects());
@@ -14072,7 +14300,7 @@ export class MainScene extends Phaser.Scene {
       {
         key: "statusResistPct",
         label: "Bleed/Poison Taken",
-        total: pct(this.equipEffects.statusResistMult() - 1),
+        total: pct(this.statusResistMult() - 1),
         fmt: (v) => `-${v}%`,
       },
     ];
@@ -14447,6 +14675,20 @@ export class MainScene extends Phaser.Scene {
         color: 0xd42a2a,
         remainingMs: this.bleed.remainingMs(),
         durationMs: BLEED_METER_FULL_MS,
+      });
+    }
+    // Bayou debuffs. Listed BEFORE the terrain rows so the things actively
+    // stopping you sit leftmost — the icons are read left-to-right under
+    // pressure, and a lockout matters more than the ground being slow.
+    for (const d of this.debuffs.active()) {
+      out.push({
+        id: `debuff:${d.kind}`,
+        name: d.def.name,
+        icon: d.def.icon,
+        detail: d.def.detail(d.magnitude),
+        color: d.def.color,
+        remainingMs: d.remainingMs,
+        durationMs: d.durationMs,
       });
     }
     // Conditional (no timer): true exactly while you're standing in it.

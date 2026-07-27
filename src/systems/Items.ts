@@ -1298,6 +1298,21 @@ export const ITEM_DEFS: Record<string, ItemDef> = {
       { label: "Grants", value: "Mire Snare" },
     ],
   },
+  special_fenwash_sigil: {
+    key: "special_fenwash_sigil",
+    name: "Fenwash Sigil",
+    description:
+      "A disc of bog-silver scoured clean by running water. Whatever the mire puts into you, it takes back out. Grants Fenwash.",
+    texture: "ability_fenwash",
+    maxStack: 1,
+    hotbarable: false,
+    armorSlot: "ability1",
+    grantsAbility: "fenwash",
+    stats: [
+      { label: "Type", value: "Ability (any Q/E/R slot)" },
+      { label: "Grants", value: "Fenwash" },
+    ],
+  },
   special_bloodrush_fang: {
     key: "special_bloodrush_fang",
     name: "Quickening Fang",

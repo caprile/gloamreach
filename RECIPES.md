@@ -466,6 +466,7 @@ ability sits on is your arrangement, not a property of the item.
 | Bloodpact Shroud | Lvl 2 | 3 Moonsilver, 1 Blood Gem | Ability | Grants Bloodpact |
 | Snarebound Idol | Lvl 2 | 3 Moonsilver, 1 Gloam Gem, 2 Mirehide | Ability | Grants **Mire Snare** — roots everything within 240px for 2.6s |
 | Quickening Fang | Lvl 2 | 3 Moonsilver, 1 Blood Gem, 2 Mirejaw Meat | Ability | Grants **Bloodrush** — −40% weapon cooldown for 6s |
+| Fenwash Sigil | Lvl 2 | 3 Moonsilver, 1 Gloam Gem, 3 Blight Gland | Ability | Grants **Fenwash** — strips every debuff + all bleed/poison, wards 1.2s |
 
 The last two are the AOE-root and attack-speed abilities the user asked for. They're
 **craftable rather than found-only epics** on purpose: burying a requested ability
@@ -518,12 +519,12 @@ counter guarantees a base-rarity success after N misses. A separate **power tier
 (biome depth) multiplies a relic's numbers (`POWER_TIER_MULT` ×1.0/1.5/2.25/…) and
 **always equals the trophy's tier**. Relics are run-length passives (reset on New
 Run), shown in the bottom-left HUD relic bar **and** on a dedicated **Relics
-column** in the Inventory panel (Tab) — 8 fixed slots, one per family, so owned
+column** in the Inventory panel (Tab) — 9 fixed slots, one per family, so owned
 relics don't require opening the Relic Forge or squinting at the HUD strip.
 
-**Family loadout, not stacking.** Every relic belongs to one of 8
-**families** (`damage`/`move`/`defense`/`stamina`/`lifesteal`/`vitality`/`crit`/`xp`)
-and a player holds **at most one relic per family** (8 relics max). Rolling into a
+**Family loadout, not stacking.** Every relic belongs to one of 9
+**families** (`damage`/`move`/`defense`/`stamina`/`lifesteal`/`vitality`/`crit`/`xp`/`warding`)
+and a player holds **at most one relic per family** (9 relics max). Rolling into a
 family already owned resolves by **rarity, then power tier** (2026-07-15 redesign —
 each family has exactly one curated relic per rarity, so a higher rarity is always
 a strict upgrade):
@@ -585,9 +586,9 @@ dungeon phases will source.
 | **Boss** (bespoke `outcomeOdds`) | — | — | — | 100% | 0% | — |
 
 **S4 (2026-07-15) relic economy rework:**
-- The full **8×4 relic matrix** is filled — every family
-  (damage/move/defense/stamina/lifesteal/vitality/crit/xp) now has a
-  Common/Uncommon/Rare/Mythic (32 relics; damage keeps two mythics).
+- The full **9×4 relic matrix** is filled — every family
+  (damage/move/defense/stamina/lifesteal/vitality/crit/xp/warding) now has a
+  Common/Uncommon/Rare/Mythic (36 relics; damage keeps two mythics).
 - **Main-boss trophies guarantee a Mythic** of the boss's tier (bespoke
   `outcomeOdds` = 100% Mythic). The **Boss Trophy** (Gremlin King) → Mythic
   Tier 1; the **Tyrant Trophy** (Duneshaper) → Mythic Tier 2 (×1.5). Mini-bosses
@@ -692,6 +693,7 @@ Common/Uncommon = flat stat; Rare/Mythic = **Uncommon's stat (plateau) + a proc*
 | **Vitality** | Stout Charm +8% max HP | Vigor Idol +12% | Titan Totem +12% · heal 25% max HP below 25% HP (60s cd) | Colossus Mantle +12% · survive one fatal hit/run → 40% HP |
 | **Crit** | Keen Charm +3% chance | Savage Idol +5% chance | Deadeye Totem +5% · melee crits splash 35% within 70px (ranged excluded) | Assassin's Mantle +5% · melee splash 50% within 90px + 30% slow 1.5s (ranged excluded) |
 | **XP** | Scholar's Charm +8% | Scholar's Idol +14% | Sage Totem +14% · streak +8%/kill up to +50% (4s) | Enlightened Mantle +14% · +10%/kill up to +90% (5s) |
+| **Warding** | Warding Charm −6% | Wardstone Idol −10% | Unbroken Totem −10% · auto-strips a debuff the moment it lands (20s cd) | Unshackled Mantle −10% · same, every 11s + a longer ward |
 
 A dual-stat relic (e.g. War Totem) claims one **primary** family; its secondary
 stat only matters when comparing against a same-family contender.

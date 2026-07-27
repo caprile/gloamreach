@@ -18,8 +18,16 @@ export interface StatusEffect {
   durationMs?: number;
 }
 
-const ICON = 26;
-const GAP = 6;
+// 26 -> 42 (the user, 2026-07-26: "the status debuffs are kinda small today").
+// Two reasons beyond preference: the status art is authored at 32px, so a 26px
+// box was rendering it OVERSIZED and clipped by its own frame; and the bayou
+// debuff system means this row now carries lockouts you must react to, not just
+// DoT tickers you can note in passing. 42 fits the 32px art with a real margin.
+const ICON = 42;
+const GAP = 8;
+// The art is 32px; anything larger (or a future 16px icon) is fitted to the box
+// rather than trusted to be the right size.
+const ICON_ART_BOX = 32;
 // Sits in the same HUD band as the buff bar (2803/2804) — see BuffBarUI's note
 // on clearing WORLD_H so world objects never draw over it.
 const DEPTH_ICON = 2803;
@@ -125,26 +133,27 @@ export class StatusBarUI {
         .image(x + ICON / 2, y + ICON / 2 - 1, eff.icon)
         .setScrollFactor(0)
         .setDepth(DEPTH_ICON);
+      icon.setScale(Math.min(ICON_ART_BOX / (icon.width || 1), ICON_ART_BOX / (icon.height || 1)));
       let meterBg: Phaser.GameObjects.Rectangle | undefined;
       let meter: Phaser.GameObjects.Rectangle | undefined;
       let timeText: Phaser.GameObjects.Text | undefined;
       if (timed) {
         meterBg = this.scene.add
-          .rectangle(x + 2, y + ICON - 4, ICON - 4, 3, 0x000000, 0.6)
+          .rectangle(x + 3, y + ICON - 6, ICON - 6, 4, 0x000000, 0.6)
           .setOrigin(0, 0)
           .setScrollFactor(0)
           .setDepth(DEPTH_BAR);
         meter = this.scene.add
-          .rectangle(x + 2, y + ICON - 4, ICON - 4, 3, eff.color, 1)
+          .rectangle(x + 3, y + ICON - 6, ICON - 6, 4, eff.color, 1)
           .setOrigin(0, 0)
           .setScrollFactor(0)
           .setDepth(DEPTH_BAR);
         // Seconds remaining, readable at a glance without hovering — a DoT's
         // remaining time is the one number you actually act on.
         timeText = this.scene.add
-          .text(x + ICON - 2, y + 1, "", {
+          .text(x + ICON - 3, y + 1, "", {
             fontFamily: "monospace",
-            fontSize: "12px",
+            fontSize: "15px",
             fontStyle: "bold",
             color: "#ffe0e0",
             stroke: "#000000",

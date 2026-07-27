@@ -35,6 +35,7 @@ export type HintId =
   | "crypt_dark"
   | "bled"
   | "poisoned"
+  | "debuffed"
   | "magic_damage";
 
 export type HintKind = "tutorial" | "hint";
@@ -92,6 +93,15 @@ const HINT_DEFS: Record<HintId, HintEntry> = {
   poisoned: {
     kind: "tutorial",
     text: "You're poisoned — it ticks through armor like magic, and your healing is halved until it wears off. Get clear of the fumes.",
+  },
+  // Deliberately does NOT name which enemy did it or which debuff you have —
+  // the status icon and the callout already say that. This teaches the CLASS of
+  // problem and points at the two answers (dodge the tell; the mire can be
+  // washed off), per the standing "teach the mechanic, never hand-hold the
+  // solution" rule.
+  debuffed: {
+    kind: "tutorial",
+    text: "The mire got into you — that debuff came from an attack you could have dodged. Watch the wind-up. Some gear, relics and skills shorten them; some things can wash them off entirely.",
   },
   magic_damage: {
     kind: "tutorial",

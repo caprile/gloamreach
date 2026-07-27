@@ -68,6 +68,16 @@ export const JEWELRY_RECIPES: JewelryRecipe[] = [
     inputs: { moonsilver: 3, gem_gloam: 1, mirehide: 2 },
     requiredStationTier: 1,
   },
+  // The dispel. Gated on gem_gloam like the snare (the bayou's own gem answers
+  // the bayou's own debuffs) but costs blight glands on top — you pay in the
+  // stuff that poisons you.
+  {
+    id: "special_fenwash_sigil",
+    name: "Fenwash Sigil",
+    output: "special_fenwash_sigil",
+    inputs: { moonsilver: 3, gem_gloam: 1, blight_gland: 3 },
+    requiredStationTier: 1,
+  },
   {
     id: "special_bloodrush_fang",
     name: "Quickening Fang",

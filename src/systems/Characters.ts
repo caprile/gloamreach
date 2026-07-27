@@ -42,6 +42,7 @@
 import { statDisplayName, type StatType } from "./Progression";
 import { skillDisplayName, type SkillType } from "./Skills";
 import type { EquipSlot } from "./Equipment";
+import type { DebuffKind } from "./PlayerDebuffs";
 
 // Every field is optional and defaults to neutral (1x, or 0). Keep this list to
 // axes with a single existing choke point in MainScene — a new field means a new
@@ -75,6 +76,11 @@ export interface RunModifier {
   maxBuffs?: number; // Buffs.setMaxBuffs — overrides the default 3
   attackSpeedMult?: number; // multiplies weapon COOLDOWN, so >1 is SLOWER
   eliteLootMult?: number; // multiplies an elite's rolled drop amounts
+  // Hard immunity to specific bayou debuffs — the class-feature half of the
+  // "some things just say Cannot be Enfeebled" counterplay (locked with the
+  // user). A SET union at MainScene.syncDebuffResistances, not another scalar,
+  // so it stays outside this file's one-hook-per-field rule for multipliers.
+  debuffImmunity?: DebuffKind[];
 }
 
 // B4-P3 — the CLASS identity axis, separate from RunModifier's flat identity.
@@ -247,11 +253,17 @@ export const CHARACTER_DEFS: CharacterDef[] = [
     // the card now has two distinct ways of being hard to kill.
     modifier: {
       name: "Ironbound",
-      boons: ["-15% damage taken"],
+      boons: ["-15% damage taken", "Cannot be Disarmed"],
       banes: ["+20% attack stamina cost", "-13% attack speed"],
       damageTakenMult: 0.85,
       staminaCostMult: 1.2,
       attackSpeedMult: 1.15, // multiplies cooldown -> slower swings
+      // The roster's one hard debuff immunity, and it belongs on this card:
+      // "Ironbound" is literally a grip that doesn't fail, and disarm is the
+      // harshest of the four. Narrow on purpose — only the Miretyrant's Gorge
+      // Heave applies disarm — so it reads as a boss-fight answer rather than a
+      // blanket immunity, which is what keeps it from flattening the system.
+      debuffImmunity: ["disarm"],
     },
     // The only gathering affinity on the roster — it fits "comes prepared", and
     // per the drop lock it can only ever be an upside on those two skills.
@@ -360,6 +372,11 @@ export class RunCharacter {
   private flat(field: keyof RunModifier): number {
     const v = this.def?.modifier[field];
     return typeof v === "number" ? v : 0;
+  }
+
+  // Debuff kinds this run is outright immune to (empty for most cards).
+  debuffImmunities(): DebuffKind[] {
+    return this.def?.modifier.debuffImmunity ?? [];
   }
 
   damageDealtMult(): number {

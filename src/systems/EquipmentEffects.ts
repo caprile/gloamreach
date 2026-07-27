@@ -1,5 +1,6 @@
 import { EQUIP_SLOTS, type Equipment } from "./Equipment";
 import { itemDef } from "./Items";
+import { DEBUFF_DEFS, type DebuffKind } from "./PlayerDebuffs";
 
 // Jewelry (ring/amulet) passive effects — Biome-3 Phase 2b. DELIBERATELY a
 // different layer from relics: relics own the raw-% COMBAT-STAT layer (and
@@ -24,10 +25,24 @@ export interface EquipPassive {
   // B4-P2: status (bleed/poison) mitigation. A genuinely new axis — nothing in
   // the game owned status resistance before, so it doesn't collide with the
   // relic combat-stat layer OR with heavy armor's magic/fire mitigation.
-  statusResistPct?: number; // reduce incoming bleed/poison dose (30 = -30%)
+  //
+  // WIDENED by the bayou debuff system: the same percentage now also shortens
+  // incoming root/disarm/silence/enfeeble. One number, two applications — a
+  // second "debuff duration" stat next to it would have been a distinction
+  // players have no way to act on differently.
+  statusResistPct?: number; // reduce incoming bleed/poison dose AND debuff duration (30 = -30%)
+  // Hard immunity to specific debuff kinds ("Cannot be Enfeebled"). Locked with
+  // the user as a counterplay flavour distinct from the percentage above:
+  // resistance is a dial every build turns, an immunity is a build-defining
+  // answer to one specific thing. Kept OUT of the numeric CHANNELS sum below —
+  // it's a set union, not an addition.
+  debuffImmunity?: DebuffKind[];
 }
 
-const CHANNELS: (keyof EquipPassive)[] = [
+// Only the NUMERIC channels — debuffImmunity is a set union, handled separately.
+type NumericChannel = Exclude<keyof EquipPassive, "debuffImmunity">;
+
+const CHANNELS: NumericChannel[] = [
   "abilityCooldownPct",
   "abilityPowerPct",
   "gatherBonusPct",
@@ -47,12 +62,13 @@ export function describePassive(p: EquipPassive): string[] {
   if (p.abilityPowerPct) out.push(`+${p.abilityPowerPct}% ability power`);
   if (p.gatherBonusPct) out.push(`+${p.gatherBonusPct}% bonus-gather chance`);
   if (p.lightRadiusPct) out.push(`Sheds light; +${p.lightRadiusPct}% light radius`);
-  if (p.statusResistPct) out.push(`-${p.statusResistPct}% bleed/poison taken`);
+  if (p.statusResistPct) out.push(`-${p.statusResistPct}% bleed/poison taken & debuff duration`);
+  for (const k of p.debuffImmunity ?? []) out.push(`Cannot be ${DEBUFF_DEFS[k].name}`);
   return out;
 }
 
 export class EquipmentEffects {
-  private sums: Record<keyof EquipPassive, number> = {
+  private sums: Record<NumericChannel, number> = {
     abilityCooldownPct: 0,
     abilityPowerPct: 0,
     gatherBonusPct: 0,
@@ -60,15 +76,26 @@ export class EquipmentEffects {
     statusResistPct: 0,
   };
 
+  // Kinds the equipped set makes the player outright immune to (union, not sum).
+  private immunities = new Set<DebuffKind>();
+
   // Sum the `passive` records of every equipped item. Additive across pieces.
   recompute(equipment: Equipment): void {
     for (const k of CHANNELS) this.sums[k] = 0;
+    this.immunities.clear();
     for (const { id } of EQUIP_SLOTS) {
       const eq = equipment.get(id);
       const p = eq ? itemDef(eq.key)?.passive : undefined;
       if (!p) continue;
-      for (const k of CHANNELS) this.sums[k] += p[k] ?? 0;
+      for (const k of CHANNELS) this.sums[k] += (p[k] as number | undefined) ?? 0;
+      for (const k of p.debuffImmunity ?? []) this.immunities.add(k);
     }
+  }
+
+  // Union of every equipped piece's hard immunities — merged with the relic and
+  // run-character sources at MainScene's single push site.
+  debuffImmunities(): DebuffKind[] {
+    return [...this.immunities];
   }
 
   // --- aggregate getters (read at the ability + utility hook points) ---
@@ -102,7 +129,18 @@ export class EquipmentEffects {
   // Scales an incoming bleed/poison dose. Floored at 0.25 so no stack of gear
   // can make status effects a non-mechanic — same "never zero it out" instinct
   // as the ability-cooldown clamp above.
+  //
+  // NOTE: MainScene no longer reads this directly — since the bayou debuff
+  // system there are three resistance sources (gear, the Magic skill, the
+  // warding relic family) and they are summed as PERCENTAGES before a single
+  // conversion in MainScene.statusResistMult(). Applying this multiplier and
+  // then multiplying the others in would compound them. Kept for the
+  // gear-only view (menus/dashboard).
   statusResistMult(): number {
     return Math.max(0.25, 1 - this.sums.statusResistPct / 100);
+  }
+  // The raw gear-side percentage, for that shared additive bucket.
+  statusResistTotalPct(): number {
+    return this.sums.statusResistPct;
   }
 }

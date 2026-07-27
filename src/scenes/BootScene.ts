@@ -3390,6 +3390,50 @@ export class BootScene extends Phaser.Scene {
     g.fillRect(2, 10, 18, 3);
     g.generateTexture("icon_status_noregen", SICON, SICON);
 
+    // --- bayou debuff system: the four capability locks ---
+    // Each is one unmistakable silhouette, and each says what it TAKES: a
+    // shackle (your feet), a snapped blade (your weapon), a barred mouth (your
+    // voice), a cracked arm (your strength).
+
+    g.clear(); // Rooted — a shackle ring with a chain link
+    g.fillStyle(0x7a9b3a, 1);
+    g.fillCircle(11, 13, 8);
+    g.fillStyle(0x14200c, 1);
+    g.fillCircle(11, 13, 4.5); // the ring's hole
+    g.fillStyle(0x9fc45a, 1);
+    g.fillRect(9, 1, 4, 6); // chain link rising off it
+    g.fillRect(7, 3, 8, 2);
+    g.generateTexture("icon_status_root", SICON, SICON);
+
+    g.clear(); // Disarmed — a snapped blade, the tip falling away
+    g.fillStyle(0xc06a2a, 1);
+    g.fillRect(9, 11, 4, 10); // hilt + lower blade, still held
+    g.fillRect(6, 15, 10, 2); // crossguard
+    g.fillStyle(0xe8a15a, 1);
+    g.fillTriangle(13, 2, 19, 7, 14, 10); // the broken-off tip, tumbling
+    g.generateTexture("icon_status_disarm", SICON, SICON);
+
+    g.clear(); // Silenced — a rune barred through
+    g.fillStyle(0x8a5cc4, 1);
+    g.fillCircle(11, 11, 7.5);
+    g.fillStyle(0x1a0f26, 1);
+    g.fillCircle(11, 11, 4); // hollow rune
+    g.fillStyle(0xd8c0f0, 1);
+    g.fillRect(2, 9.5, 18, 3); // the bar — "no casting"
+    g.generateTexture("icon_status_silence", SICON, SICON);
+
+    g.clear(); // Enfeebled — a cracked arm: strength failing, not gone
+    g.fillStyle(0x5f8f6a, 1);
+    g.fillRect(5, 8, 12, 6); // upper arm
+    g.fillCircle(16, 11, 4); // fist
+    g.fillStyle(0x1a2a1e, 1); // the crack running through it
+    g.fillTriangle(8, 8, 11, 11, 8, 14);
+    g.fillTriangle(11, 8, 13, 11, 11, 14);
+    g.fillStyle(0x9fc4aa, 0.8);
+    g.fillCircle(4, 17, 2); // sloughing wisps
+    g.fillCircle(8, 19, 1.4);
+    g.generateTexture("icon_status_enfeeble", SICON, SICON);
+
     g.clear(); // Sunfruit icon — a red fruit with a green nub
     g.fillStyle(0xd83a3a, 1);
     g.fillCircle(12, 13, 8);
@@ -4205,6 +4249,69 @@ export class BootScene extends Phaser.Scene {
     g.fillRect(12, 4, 5, 2); // blood at the root
     g.fillRect(13, 8, 2, 6); // channel down the middle
     g.generateTexture("ability_haste", ICON, ICON);
+
+    g.clear(); // Fenwash — clean water sluicing a stain out of a disc
+    g.fillStyle(0xb8c8d0, 1);
+    g.fillCircle(12, 12, 9); // the bog-silver disc
+    g.fillStyle(0x7e909c, 1);
+    g.fillCircle(12, 12, 6);
+    g.fillStyle(0x5a7a4a, 0.85); // the mire's stain, being carried off
+    g.fillCircle(15, 15, 3);
+    g.fillCircle(17, 18, 1.6);
+    g.fillStyle(0xdff2ff, 1); // the wash: bright water running across it
+    g.fillTriangle(4, 6, 20, 4, 8, 14);
+    g.fillRect(5, 9, 9, 2);
+    g.generateTexture("ability_fenwash", ICON, ICON);
+
+    // === bayou debuff system — world FX worn by the player while debuffed ===
+    // Bigger than an icon and drawn in world space: these exist so the debuff is
+    // visible ON THE CHARACTER, not only in the HUD corner (the user: "maybe
+    // even FX on the player when they are under these effects").
+    const DFX = 44;
+
+    g.clear(); // Root — a shackle ring of thorned roots around the feet
+    g.lineStyle(3, 0x7a9b3a, 0.95);
+    g.strokeCircle(22, 22, 17);
+    g.lineStyle(2, 0x4f7a3a, 0.9);
+    g.strokeCircle(22, 22, 12);
+    g.fillStyle(0x9fc45a, 1);
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2;
+      g.fillCircle(22 + Math.cos(a) * 17, 22 + Math.sin(a) * 17, 2.6); // the barbs
+    }
+    g.generateTexture("fx_debuff_root", DFX, DFX);
+
+    g.clear(); // Disarm — a snapped blade hanging over the head
+    g.fillStyle(0xc06a2a, 0.95);
+    g.fillRect(19, 20, 6, 16);
+    g.fillRect(13, 26, 18, 3);
+    g.fillStyle(0xe8a15a, 0.95);
+    g.fillTriangle(24, 4, 36, 12, 26, 18); // the tip, spun off
+    g.generateTexture("fx_debuff_disarm", DFX, DFX);
+
+    g.clear(); // Silence — a barred rune over the head
+    g.lineStyle(3, 0x8a5cc4, 0.95);
+    g.strokeCircle(22, 22, 13);
+    g.fillStyle(0xd8c0f0, 0.95);
+    g.fillRect(5, 20, 34, 4); // the bar
+    g.generateTexture("fx_debuff_silence", DFX, DFX);
+
+    g.clear(); // Enfeeble — sickly wisps sloughing off the body
+    g.fillStyle(0x5f8f6a, 0.55);
+    g.fillCircle(22, 22, 16);
+    g.fillStyle(0x9fc4aa, 0.8);
+    g.fillCircle(10, 14, 3.4);
+    g.fillCircle(33, 17, 2.6);
+    g.fillCircle(16, 33, 2.2);
+    g.fillCircle(30, 31, 3);
+    g.generateTexture("fx_debuff_enfeeble", DFX, DFX);
+
+    g.clear(); // Cleanse — the expanding pale ring both cleanses share
+    g.lineStyle(4, 0xdff2ff, 1);
+    g.strokeCircle(22, 22, 18);
+    g.lineStyle(2, 0x9fd8f0, 0.85);
+    g.strokeCircle(22, 22, 12);
+    g.generateTexture("fx_debuff_cleanse", DFX, DFX);
 
     g.clear(); // Spirit Lance — a pale beam driven point-first
     g.fillStyle(0x8c7fc0, 0.55);

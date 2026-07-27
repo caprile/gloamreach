@@ -29,7 +29,9 @@ export type AbilityId =
   | "aegis"
   // Craftable control/tempo pair (Gemwright's Table).
   | "mire_snare"
-  | "bloodrush";
+  | "bloodrush"
+  // The bayou debuff system's active counterplay (Gemwright's Table).
+  | "fenwash";
 
 // Which EFFECT the dispatcher runs. Several ids can share one family at
 // different `power` — adding a variant is then pure data.
@@ -41,7 +43,8 @@ export type AbilityFamily =
   | "lance"
   | "aegis"
   | "snare" // AOE root — pins what's on you (vs gravebind, which PULLS then slows)
-  | "haste"; // timed attack-speed window
+  | "haste" // timed attack-speed window
+  | "cleanse"; // strip your OWN debuffs + DoTs (never terrain — see PlayerDebuffs)
 
 // The three live ability keys. T is reserved for a 4th slot later (not rendered
 // yet) — keep this list and the SLOT_ABILITY_KEY map the single source of truth.
@@ -196,6 +199,25 @@ export const ABILITY_DEFS: Record<AbilityId, AbilityDef> = {
     activeMs: 6000,
     icon: "ability_haste",
   },
+  // The bayou debuff system's ACTIVE counterplay. Craftable rather than
+  // found-only for the same reason as the pair above: the whole point of a
+  // dispel is that a player who has met the debuffs can go answer them, and an
+  // epic-drop gate reproduces the "I never found one" problem.
+  //
+  // It clears CONTROL + DoTs but never terrain — standing in a miasma re-arms
+  // poison the very next frame, which is structural (terrain never enters
+  // PlayerDebuffs) rather than a special case here.
+  fenwash: {
+    id: "fenwash",
+    family: "cleanse",
+    power: 1,
+    name: "Fenwash",
+    description:
+      "Strips every root, disarm, silence and enfeeble, plus all bleed and poison, and wards you for 1.2s. Standing in a miasma re-poisons you immediately — move first.",
+    cooldownMs: 18000,
+    icon: "ability_fenwash",
+  },
+
   aegis: {
     id: "aegis",
     family: "aegis",

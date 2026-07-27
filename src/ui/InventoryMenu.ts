@@ -6,7 +6,7 @@ import { itemDef, itemBiome, itemCategory, type ItemBiome, type ItemCategory } f
 import type { Skills } from "../systems/Skills";
 import type { PlayerProgression } from "../systems/Progression";
 import type { WeaponType } from "../systems/Weapons";
-import { RARITY_COLOR, rarityIcon, rarityName, relicEffectText, relicFamilyName, uniqueText, type RelicEffectSummary, type RelicFamilySlot, type RelicGroup } from "../systems/Relics";
+import { RARITY_COLOR, RELIC_FAMILIES, rarityIcon, rarityName, relicEffectText, relicFamilyName, uniqueText, type RelicEffectSummary, type RelicFamilySlot, type RelicGroup } from "../systems/Relics";
 import { appliedAugmentIds, isAugmentableItem, MAX_AUGMENTS_PER_ITEM } from "../systems/GearAugments";
 import { bindFrame, frameInto } from "./frames";
 import { Tooltip } from "./Tooltip";
@@ -247,12 +247,16 @@ const EQUIP_COL_MIN_W = 200;
 // Relics moved out of the panel entirely and onto their own backpack TAB
 // (the user). They were a 4th side-by-side column purely so equipped relics
 // were visible at a glance; as a tab they keep that while costing no width.
-// The tab reuses the backpack's whole grid area, so the 8 family slots get a
+// The tab reuses the backpack's whole grid area, so the family slots get a
 // roomier 4-wide layout than the old 2-wide column.
+//
+// Row count is DERIVED from RELIC_FAMILIES, not hardcoded — this was a literal
+// `8` until the bayou debuff system added `warding` as a 9th family, which
+// would have silently clipped the new slot off the grid.
 const RELICS_COLS = 4;
 const RELICS_X = BACKPACK_X;
 const RELICS_Y = BP_GRID_TOP;
-const RELIC_GRID_ROWS = Math.ceil(8 / RELICS_COLS); // 2
+const RELIC_GRID_ROWS = Math.ceil(RELIC_FAMILIES.length / RELICS_COLS);
 const RELIC_GRID_H = RELIC_GRID_ROWS * SLOT + (RELIC_GRID_ROWS - 1) * GAP;
 const RELICS_W = RELICS_COLS * SLOT + (RELICS_COLS - 1) * GAP;
 const RELIC_FX_ROW_H = 17;

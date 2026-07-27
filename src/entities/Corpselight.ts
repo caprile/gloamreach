@@ -3,6 +3,7 @@ import { Enemy } from "./Enemy";
 import type { SwingConfig } from "./Enemy";
 import type { ProjectileConfig, ProjectileHost } from "./Projectile";
 import { enemyStat } from "../systems/enemyStats";
+import type { DebuffKind } from "../systems/PlayerDebuffs";
 
 // Combat stats from the Phaser-free source of truth (also read by the balancing
 // dashboard — tune there). attacks[0] = homing orb.
@@ -118,6 +119,10 @@ const COLLAPSE_WINDUP_MS = 560; // the tell — you can be clear before it lands
 const COLLAPSE_SLAM_RADIUS = 104;
 const COLLAPSE_SLAM_DAMAGE = S.attacks[2].damage; // magic AoE — bypasses armor
 const COLLAPSE_SLAM_KNOCKBACK = 150;
+// Silence window. Short — the point is to cost you the escape ability you were
+// about to press as the husk stands up in your face, not to lock you out of a
+// whole fight.
+const COLLAPSE_SILENCE_MS = 2200;
 // Dissolve: a smaller gloam puff as the body comes apart back into light.
 const DISSOLVE_MS = 420;
 const DISSOLVE_PUFF_RADIUS = 84;
@@ -157,7 +162,7 @@ export class Corpselight extends Enemy {
   private readonly collapseSlamDamage: number;
   private readonly dissolvePuffDamage: number;
   // Set the frame a transform's AoE resolves; drained by checkPlayerHit().
-  private pendingAreaHit: { damage: number; radius: number; knockback: number } | null = null;
+  private pendingAreaHit: { damage: number; radius: number; knockback: number; silence?: boolean } | null = null;
 
   constructor(scene: Phaser.Scene, cfg: { x: number; y: number; elite?: boolean }) {
     const elite = cfg.elite ?? false;
@@ -335,6 +340,13 @@ export class Corpselight extends Enemy {
         damage: this.collapseSlamDamage,
         radius: COLLAPSE_SLAM_RADIUS,
         knockback: COLLAPSE_SLAM_KNOCKBACK,
+        // SILENCE — the bayou debuff system's teacher for it. Only the COLLAPSE
+        // carries it, never the dissolve puff: the collapse is the haunt
+        // snuffing its own light out on top of you, which is exactly the moment
+        // to smother the player's gloam too. It has a 560ms tell and only fires
+        // when you close to melee, so walking the wisp down at range never eats
+        // one — closing carelessly does.
+        silence: true,
       };
     }
     // Become the husk.
@@ -426,11 +438,17 @@ export class Corpselight extends Enemy {
     damage: number;
     knockback?: number;
     dmgType: "magic";
+    debuff?: { kind: DebuffKind; durationMs: number; magnitude?: number };
   } | null {
     if (!this.pendingAreaHit) return null;
     const h = this.pendingAreaHit;
     this.pendingAreaHit = null;
-    return { damage: h.damage, knockback: h.knockback || undefined, dmgType: "magic" };
+    return {
+      damage: h.damage,
+      knockback: h.knockback || undefined,
+      dmgType: "magic",
+      debuff: h.silence ? { kind: "silence", durationMs: COLLAPSE_SILENCE_MS } : undefined,
+    };
   }
 
   // Whether the creature is in a corporeal (husk / mid-collapse) form right now

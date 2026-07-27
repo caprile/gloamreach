@@ -53,6 +53,12 @@ const SMASH_SWING: SwingConfig = {
   tell: { punchScale: 1.4, color: 0x8fd06a, rearBackSpeed: 46 },
   knockback: 300,
 };
+// Enfeeble carried by a landed smash. Long-ish, because unlike a lockout this
+// one never stops you playing — it just makes the fight take longer, so it has
+// to outlast the swing cycle to be felt at all. -30% is deliberately under the
+// damage swing a single crit already produces.
+const SMASH_ENFEEBLE_MS = 6000;
+const SMASH_ENFEEBLE_MAG = 0.3;
 
 // --- C2 (2026-07-23): the SPORE BURST and the death-spawn ---
 //
@@ -268,6 +274,17 @@ export class Mosswretch extends Enemy {
       if (this.isAttacking() || dist <= SMASH_SWING.reach + this.reachBonus()) {
         const hit = this.tickMeleeSwing(body, playerX, playerY, now, SMASH_SWING);
         if (hit) {
+          // ENFEEBLE — the bayou debuff system's teacher for it. It goes on the
+          // SMASH rather than the spore cloud on purpose: the cloud is routed
+          // through environmentEffectAt, which makes it terrain, and terrain is
+          // deliberately undispellable (locked). Putting it on the overhead also
+          // means the counterplay is the one the creature is already built
+          // around — bait the 780ms wind-up out and you never take it.
+          //
+          // Read: the wretch caves your guard in, so you hit softer until you
+          // shake it off. Scene-side it multiplies the same additive damage
+          // bucket every other source uses.
+          this.pendingDebuff = { kind: "enfeeble", durationMs: SMASH_ENFEEBLE_MS, magnitude: SMASH_ENFEEBLE_MAG };
           this.markAttackLanded(now);
           return true;
         }

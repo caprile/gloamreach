@@ -2,31 +2,43 @@
 
 ## Current State
 
-_Living snapshot — edit in place, never append._ Last shipped: **Ashcaller-run review + balance
-batch** (2026-07-26, Opus) — off the user's 81:06 / 547-kill / level-27 win with the complaint that
-he "was basically never threatened" and that "brand + crit insta kills stuff with 0 downside." Both
-were traced to specific arithmetic rather than vibes (see the entry below). Shipped: **Bulwark
-Mantle's hit cap replaced with banked negate charges** that only recharge while un-hit, the **Gloam
-Brand re-priced** (it had silently become its tier's single-target DPS leader *and* owned the crowd
-clear), the **on-hit burst no longer inherits crit**, **knockback made real for the first time**,
-a new **Miretyrant "Gorge Heave"** spacing attack, the **score formula's kill-vs-speed inversion**,
-**four confirmed UI/feel bugs**, and the **run summary's missing damage sources**.
+_Living snapshot — edit in place, never append._ Last shipped: **the bayou debuff system**
+(2026-07-26, Opus) — the deferred item below, now built. Four enemy-applied player debuffs
+(**Root / Disarm / Silence / Enfeeble**), the first thing in the game that stops the player *doing*
+something rather than only damaging or slowing them, plus the counterplay the user asked for in the
+same breath: an active **dispel** (Fenwash), a passive **status-resistance** stat with three
+sources, and per-item/class **hard immunities**. Also in this pass: the **Magic skill repurposed
+off weapon damage** onto status resistance, a **9th relic family (`warding`)**, on-player **FX**,
+and the **debuff status icons sized up** 26 → 42px.
 
 **In progress / next.**
-- **The next playtest is the important one.** Removing the hit cap is a large lethality jump the
-  user accepted deliberately ("dodging is the mechanic"): the Miretyrant goes from 34 to **165** per
-  connect on a 260-HP build, i.e. **2 connects**. `enemyStats.ts` sized those numbers for a
-  "~450-500 HP endgame pool" that no class actually reaches — the cap had been papering over that
-  mismatch, and it is now exposed. If 2 connects reads as unfair rather than demanding, the fix is
-  to re-sight the four Miretyrant numbers against a realistic pool, NOT to bring the cap back.
-- **Deferred by the user's own scoping: the bayou debuff system** (dispel / disarm / silence /
-  root as enemy-applied player debuffs). **No player-side debuff state exists at all** — this is a
-  new mechanic, best as its own session.
+- **The next playtest is the important one, and it now carries two changes at once.** (1) Removing
+  the Bulwark hit cap was a large lethality jump the user accepted deliberately ("dodging is the
+  mechanic"): the Miretyrant goes from 34 to **165** per connect on a 260-HP build, i.e. **2
+  connects**. `enemyStats.ts` sized those numbers for a "~450-500 HP endgame pool" that no class
+  actually reaches — the cap had been papering over that mismatch and it is now exposed. If 2
+  connects reads as unfair rather than demanding, re-sight the four Miretyrant numbers against a
+  realistic pool; do NOT bring the cap back. (2) On top of that the bayou now takes control away
+  from you. **All the debuff numbers are first-pass.** The knob to reach for first is duration, not
+  the diminishing-returns ladder — the ladder is what makes a swarm survivable at all.
+- **The Magic skill no longer scales magic weapon damage** (locked with the user: "maybe magic skill
+  does something with this instead of magic damage?"). That is deliberately also a Gloam/Ember Brand
+  nerf, aligned with the standing "brand + crit insta kills stuff with 0 downside" complaint — but
+  it is an untested nerf to a weapon line the user actually plays, so watch it.
 - Also open from his dump: the **Mirejaw is deliberately targetable while lurking** at `alpha 0.4`
   (its stated contrast against the Sandmaw), which reads as sniping something invisible at 380px
   bow range — needs a design call, not a fix.
 - Older, still open: menu **buttons and tabs are deliberately still flat**, a stouter/gobliny
   gremlin, and the ~19 ambient props needing regeneration as objects before they can animate.
+
+**The debuff system's load-bearing rule is diminishing returns, not duration.** Per-application
+length is close to irrelevant against a swarm: four attackers landing a 1.5s root on their own
+cadences produce ~100% uptime no matter how short any single one is. `PlayerDebuffs` therefore runs
+a per-kind ladder — 100% → 50% → 25% → **fully immune** inside a 12s window — and that is what makes
+hard lockouts safe to ship in a hardcore one-life run. **Terrain is undispellable structurally, not
+by a flag**: terrain effects never enter the manager (they are recomputed per frame from
+`environmentEffectAt`), so a cleanse cannot reach them and a miasma re-arms poison on the very next
+frame. Verified live.
 
 **Two rules worth carrying forward from the previous batch.** (1) **A thrown exception inside the
 physics step costs no measurable frame time** — the frame is fast, it just aborts the rest of the
@@ -96,6 +108,93 @@ detail.
 ## Recent Entries
 
 > Older entries in STATUS-archive.md.
+
+### Bayou debuff system (2026-07-26, Opus)
+
+Plan: `.claude/plans/bayou-debuff-system.md`. The item deferred out of the Ashcaller batch, built as
+its own session because **no player-side debuff state existed at all** — the game had DoTs
+(`Bleed`/`Poison`) and terrain conditionals, but nothing that could stop the player acting.
+
+**Four forks were locked with the user before any code** (`AskUserQuestion` + two follow-ups):
+the roster is Root/Disarm/Silence/Enfeeble with **Sap cut** ("i'm not sure I like sap"); counterplay
+is **both** an active dispel and a passive resistance, **plus** per-item flags that read "Cannot be
+Enfeebled"; resistance lives in **three** places — the existing equipment passive, a **relic
+family**, and a **skill**, specifically Magic *"instead of magic damage"*; and the dispel clears
+**control + DoTs but never terrain**. He then added two display asks mid-session: on-player FX, and
+bigger status icons.
+
+**`src/systems/PlayerDebuffs.ts`** (framework-free, like Health/Stamina/Bleed) is deliberately
+separate from the DoT managers: a DoT's design problem is stacking damage, a lockout's is **uptime**,
+and only the second needs a diminishing-returns ladder. One slot per kind (refresh-don't-stack), a
+per-kind DR ladder (100/50/25/immune inside 12s), resistance scaling duration at apply time, an
+immunity set, and `dispel()`.
+
+**Each debuff has exactly one hook, all at existing choke points** — no new movement/attack
+branches. Root reuses `Player.update`'s `inputEnabled` + `canDash` args; Disarm early-returns in
+`tryAttackEnemy`; Silence early-returns in `tryCastAbility` **ahead of the cooldown check**, so a
+silenced press never burns the cooldown; Enfeeble multiplies `damageBonusMult()`. Root deliberately
+leaves attacking alone and Disarm deliberately leaves movement alone — keeping those genuinely
+different is what stops the four reading as degrees of one effect. Two more deliberate choices:
+Enfeeble is applied as a **true multiplier outside** the additive damage bucket (folding −30% in as
+an additive term would let a couple of damage relics erase it, the same reasoning that keeps class
+skill-XP affinity out of the additive XP bucket), and each blocked action now **says so** — every
+other guard on those paths (cooldown, stamina, reach) has a visible cause on the HUD and a debuff
+the player may not have registered does not.
+
+**Delivery rides the existing `pendingBleed`/`pendingPoison` contract** (new `Enemy.pendingDebuff`
++ a `debuff?` field on the `checkPlayerHit` return), so debuffs inherit the i-frame guard —
+**a dashed-through attack applies nothing**, verified. One clear teacher each, all on already-
+telegraphed attacks: **Mirejaw** death roll → Root 0.9s per tick (a latched grip already plants you;
+shorter than the 360ms between ticks so escaping between thrashes is real); **Mosswretch** smash →
+Enfeeble −30%/6s (on the smash, *not* the spore cloud — the cloud routes through
+`environmentEffectAt`, which makes it terrain, and terrain is undispellable); **Corpselight**
+collapse slam → Silence 2.2s (only the collapse, never the dissolve puff); **Miretyrant** Gorge
+Heave → Disarm 1.8s, the only disarm in the game, on the one fight built out of long telegraphs,
+and on precisely the attack that already exists to throw you *out* of melee.
+
+**Counterplay.** **Fenwash** (new `cleanse` ability family, craftable at the Gemwright's Table like
+Mire Snare/Bloodrush — a *requested* ability behind an epic-drop roll reproduces the "I never found
+one" problem) strips all four plus bleed/poison and wards 1.2s, so the creature standing on you
+cannot undo the cast on the completion frame. Resistance is one **`MainScene.statusResistMult()`
+choke point** summing three sources additively (floored at 0.25): the gear passive, the Magic skill
+(−0.5%/lvl, cap −40%), and the new **`warding` relic family** — its own family rather than folded
+into `defense`, since status resistance and damage reduction answer different problems and folding
+them would mean one slot could never buy both. Its Rare/Mythic carry a `wardbreak` proc that
+auto-strips the first lockout on a cooldown. Hard immunities come from `EquipPassive.debuffImmunity`
+and `RunModifier.debuffImmunity`; the **Warden** gets "Cannot be Disarmed" — narrow on purpose (one
+attack in the game applies disarm), so it reads as a boss-fight answer rather than flattening the
+system.
+
+**Two knock-ons worth knowing.** The Magic skill **no longer scales magic weapon damage** at all —
+taken as written, and noted to the user as also being a Gloam/Ember Brand nerf. And
+`InventoryMenu`'s relic grid had a literal `RELIC_GRID_ROWS = Math.ceil(8 / RELICS_COLS)`, which
+would have silently clipped the 9th family off the panel; it is derived from `RELIC_FAMILIES.length`
+now.
+
+**Display**: the debuff rows reuse the already-generic `StatusBarUI` (its own note predicted "adding
+a future debuff = one more row" — this is the first real user of that), listed **before** the terrain
+rows so lockouts sit leftmost. Icons went **26 → 42px** — the user asked, and the status art is
+authored at 32px, so a 26px box had been rendering it oversized and clipped by its own frame.
+Per-debuff world FX follow the player (root ring under the feet, silence/disarm glyphs overhead,
+enfeeble wisps), a callout fires for the three lockouts but not Enfeeble (reserving the shout for
+losing control keeps it meaningful), and the **Q/E/R bar greys to the silence violet** — matching the
+status icon's accent, and distinct from the cooldown sweep because "re-arming" and "cannot cast at
+all" are different problems.
+
+**Verified live** (`preview_eval`, zero console errors): the DR ladder measured exactly
+2000/1000/500/blocked; resistance 0.5 halving duration; Magic 0→40→100 giving ×1.0/0.8/0.6 (cap
+correct); relic 10% + skill 10% → ×0.8 additive; immunity a hard no-op with Root still landing on the
+same Warden; Root flipping both `canDash`/`inputEnabled` false through a spy on the real
+`Player.update` call; a silenced cast not burning its cooldown while an unsilenced one fires; a real
+club swing dealing 2.3 → **0** disarmed → 2.3 cleared; enfeeble 2.25 → 1.59 (×0.705) through a real
+swing; the dispel clearing control+DoTs; **standing in a simulated miasma re-poisoning one frame
+after a cleanse while the terrain slow was never removed at all**; dash i-frames negating a debuff;
+wardbreak stripping on the next frame, going on cooldown, and a second debuff correctly sticking
+inside it; all 10 new textures present; FX sprites created/destroyed with the debuff set; and the
+Mosswretch driving its real 780ms smash into a live enfeeble at frame 32. `tsc` clean.
+`RECIPES.md` (jewelry row, warding relic row, 8→9 families) and the dashboard's manually-mirrored
+Enemies tab both updated — the Miretyrant's Gorge Heave was missing from it entirely and is now
+listed.
 
 ### Ashcaller-run review + balance batch (2026-07-26, Opus)
 

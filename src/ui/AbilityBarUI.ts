@@ -20,6 +20,10 @@ const LABEL_H = 18;
 const EMPTY_BORDER = 0x3a4150;
 const READY_BORDER = 0x8fb4ff;
 const ACTIVE_BORDER = 0xff5a6a;
+// Matches DEBUFF_DEFS.silence's accent, so the ability bar and the status icon
+// naming the cause are visibly the same colour.
+const SILENCED_BORDER = 0x8a5cc4;
+const SILENCED_TINT = 0x9a8ab0;
 
 // One Q/E/R ability slot's live state, rebuilt each frame by MainScene. An
 // empty slot (no granting item equipped) still renders — a dim frame with its
@@ -33,6 +37,11 @@ export interface AbilityBarEntry {
   cooldownMs: number;
   cooldownRemainingMs: number; // 0 = ready
   active?: boolean; // in its active window (e.g. Bloodpact lifelink) — glows
+  // SILENCED (bayou debuff system): the whole bar is locked out. Rendered as a
+  // desaturated icon + a violet border rather than the cooldown sweep, because
+  // "on cooldown" and "you cannot cast at all" are different problems and a
+  // player mid-fight has to tell them apart at a glance.
+  silenced?: boolean;
 }
 
 interface Slot {
@@ -209,13 +218,21 @@ export class AbilityBarUI {
       if (!s) continue;
       const equipped = !!e.abilityId;
       if (equipped && e.texture) {
-        s.icon.setVisible(true).setTexture(e.texture).setAlpha(1);
+        // Greyed + dimmed while silenced — the icon itself carries the state,
+        // so the lockout is legible even at the edge of vision.
+        s.icon.setVisible(true).setTexture(e.texture).setAlpha(e.silenced ? 0.35 : 1);
+        s.icon.setTint(e.silenced ? SILENCED_TINT : 0xffffff);
         this.fitIcon(s.icon);
       } else {
         s.icon.setVisible(false);
       }
-      // Border / glow: active window (crimson) > ready (blue) > empty (dim).
-      if (e.active) {
+      // Border / glow: silenced (violet) > active window (crimson) > ready
+      // (blue) > empty (dim). Silence wins because it overrides all of them —
+      // an ability in its active window still cannot be recast while locked.
+      if (e.silenced) {
+        this.setSlotBorder(s, SILENCED_BORDER);
+        s.glow.setFillStyle(SILENCED_BORDER, 0.22);
+      } else if (e.active) {
         this.setSlotBorder(s, ACTIVE_BORDER);
         s.glow.setFillStyle(ACTIVE_BORDER, 0.3);
       } else if (equipped) {
