@@ -53,11 +53,12 @@ const SMASH_SWING: SwingConfig = {
   tell: { punchScale: 1.4, color: 0x8fd06a, rearBackSpeed: 46 },
   knockback: 300,
 };
-// Enfeeble carried by a landed smash. Long-ish, because unlike a lockout this
-// one never stops you playing — it just makes the fight take longer, so it has
-// to outlast the swing cycle to be felt at all. -30% is deliberately under the
-// damage swing a single crit already produces.
-const SMASH_ENFEEBLE_MS = 6000;
+// Enfeeble carried by a landed smash — the TOP of the 5-10s band
+// (DEBUFF_BASE_MS), and the longest debuff in the game on purpose: unlike the
+// three lockouts it never stops you playing, so it can only be felt by
+// outlasting several swing cycles. 6s -> 10s (2026-07-26) with the band.
+// -30% is deliberately under the damage swing a single crit already produces.
+const SMASH_ENFEEBLE_MS = 10000;
 const SMASH_ENFEEBLE_MAG = 0.3;
 
 // --- C2 (2026-07-23): the SPORE BURST and the death-spawn ---

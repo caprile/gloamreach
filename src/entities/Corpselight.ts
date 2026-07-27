@@ -119,10 +119,13 @@ const COLLAPSE_WINDUP_MS = 560; // the tell — you can be clear before it lands
 const COLLAPSE_SLAM_RADIUS = 104;
 const COLLAPSE_SLAM_DAMAGE = S.attacks[2].damage; // magic AoE — bypasses armor
 const COLLAPSE_SLAM_KNOCKBACK = 150;
-// Silence window. Short — the point is to cost you the escape ability you were
-// about to press as the husk stands up in your face, not to lock you out of a
-// whole fight.
-const COLLAPSE_SILENCE_MS = 2200;
+// Silence window — the canonical 6s (DEBUFF_BASE_MS). Was 2.2s; raised
+// 2026-07-26 with the whole band, because at 2.2s it reliably expired before the
+// husk had finished standing up, so it cost you nothing you were actually going
+// to press. At 6s it costs you the escape you wanted AND the one you'd have
+// reached for next — while still leaving you free to dodge the husk on foot,
+// which is why this one can afford to sit mid-band.
+const COLLAPSE_SILENCE_MS = 6000;
 // Dissolve: a smaller gloam puff as the body comes apart back into light.
 const DISSOLVE_MS = 420;
 const DISSOLVE_PUFF_RADIUS = 84;

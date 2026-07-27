@@ -12,6 +12,18 @@ off weapon damage** onto status resistance, a **9th relic family (`warding`)**, 
 and the **debuff status icons sized up** 26 → 42px.
 
 **In progress / next.**
+**Debuff durations were raised to a 5-10s band the same day** (the user: "I think the debuffs aren't
+long enough"), after checking what resistance actually delivers: at **Magic 20 + an Uncommon warding
+relic at Tier 2 the total cut is only 25%** (10% + 10×1.5), so a debuff sits near its base value for
+most of a run — the 75% floor is a very-late-game ceiling, not the norm. Root **5s** / Disarm **6s** /
+Silence **6s** / Enfeeble **10s**, ordered by how much each takes away rather than uniformly: root is
+lowest because it is the only one that stops you *avoiding* damage, enfeeble highest because it never
+takes control away at all. **The Mirejaw death roll is a deliberate exception at 1.2s/tick** — that
+attack's entire counterplay is breaking away mid-roll, and a 5s root on tick 1 would pin you through
+the whole roll plus ~4s past it, converting an escapable move into a guaranteed 3 ticks and roughly
+doubling a *common* enemy's output. `DR_WINDOW_MS` went 12s → 18s alongside: the window has to
+outlast the longest debuff or the ladder only bites during overlaps.
+
 - **The next playtest is the important one, and it now carries two changes at once.** (1) Removing
   the Bulwark hit cap was a large lethality jump the user accepted deliberately ("dodging is the
   mechanic"): the Miretyrant goes from 34 to **165** per connect on a 260-HP build, i.e. **2
@@ -19,8 +31,10 @@ and the **debuff status icons sized up** 26 → 42px.
   actually reaches — the cap had been papering over that mismatch and it is now exposed. If 2
   connects reads as unfair rather than demanding, re-sight the four Miretyrant numbers against a
   realistic pool; do NOT bring the cap back. (2) On top of that the bayou now takes control away
-  from you. **All the debuff numbers are first-pass.** The knob to reach for first is duration, not
-  the diminishing-returns ladder — the ladder is what makes a swarm survivable at all.
+  from you, for 5-10s at a time. **All the debuff numbers are first-pass.** The knob to reach for
+  first is duration, not the diminishing-returns ladder — the ladder is what makes a swarm survivable
+  at all. The Miretyrant's 6s disarm is the single harshest number in the batch and the most likely
+  to need pulling back.
 - **The Magic skill no longer scales magic weapon damage** (locked with the user: "maybe magic skill
   does something with this instead of magic damage?"). That is deliberately also a Gloam/Ember Brand
   nerf, aligned with the standing "brand + crit insta kills stuff with 0 downside" complaint — but
@@ -144,12 +158,11 @@ the player may not have registered does not.
 **Delivery rides the existing `pendingBleed`/`pendingPoison` contract** (new `Enemy.pendingDebuff`
 + a `debuff?` field on the `checkPlayerHit` return), so debuffs inherit the i-frame guard —
 **a dashed-through attack applies nothing**, verified. One clear teacher each, all on already-
-telegraphed attacks: **Mirejaw** death roll → Root 0.9s per tick (a latched grip already plants you;
-shorter than the 360ms between ticks so escaping between thrashes is real); **Mosswretch** smash →
-Enfeeble −30%/6s (on the smash, *not* the spore cloud — the cloud routes through
+telegraphed attacks: **Mirejaw** death roll → Root (a latched grip already plants you; kept short so escaping
+between thrashes stays real); **Mosswretch** smash → Enfeeble −30% (on the smash, *not* the spore cloud — the cloud routes through
 `environmentEffectAt`, which makes it terrain, and terrain is undispellable); **Corpselight**
-collapse slam → Silence 2.2s (only the collapse, never the dissolve puff); **Miretyrant** Gorge
-Heave → Disarm 1.8s, the only disarm in the game, on the one fight built out of long telegraphs,
+collapse slam → Silence (only the collapse, never the dissolve puff); **Miretyrant** Gorge
+Heave → Disarm, the only disarm in the game, on the one fight built out of long telegraphs,
 and on precisely the attack that already exists to throw you *out* of melee.
 
 **Counterplay.** **Fenwash** (new `cleanse` ability family, craftable at the Gemwright's Table like

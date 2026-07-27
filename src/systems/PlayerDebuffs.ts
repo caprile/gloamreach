@@ -20,6 +20,30 @@ export type DebuffKind = "root" | "disarm" | "silence" | "enfeeble";
 
 export const DEBUFF_KINDS: DebuffKind[] = ["root", "disarm", "silence", "enfeeble"];
 
+// CANONICAL BASE DURATIONS — reference only, deliberately NOT read by the
+// enemies (per the standing "don't fold per-enemy combat stats into one shared
+// config table" rule, each attack owns its own constant). This exists so a
+// future author adding a debuff source knows what "standard" means and any
+// deviation is a visible decision rather than a drift.
+//
+// Raised into a 5-10s band 2026-07-26 (the user: "I think the debuffs aren't
+// long enough... every debuff should be 5-10 to start"), sized against the
+// resistance actually available: at Magic 20 + an Uncommon warding relic at
+// Tier 2 the total cut is only 25%, so these stay near their base values for
+// most of a run — the 75% floor is a very-late-game ceiling, not the norm.
+//
+// The band is ordered by how much each one takes away, not uniformly: ROOT sits
+// at the bottom because it is the only debuff that stops you AVOIDING damage
+// (the other three leave you dodging), and ENFEEBLE sits at the top because it
+// never takes control away at all — it just makes the fight longer, so it has to
+// outlast a swing cycle to be felt.
+export const DEBUFF_BASE_MS: Record<DebuffKind, number> = {
+  root: 5000,
+  disarm: 6000,
+  silence: 6000,
+  enfeeble: 10000,
+};
+
 export interface DebuffDef {
   kind: DebuffKind;
   name: string;
@@ -87,7 +111,13 @@ export const DEBUFF_DEFS: Record<DebuffKind, DebuffDef> = {
 const DR_FACTORS = [1, 0.5, 0.25, 0];
 // Measured from the last application (not from expiry) so a long debuff doesn't
 // pay for its own duration twice.
-const DR_WINDOW_MS = 12000;
+//
+// 12s -> 18s when the base durations were raised to the 5-10s band
+// (2026-07-26). The window has to meaningfully OUTLAST the longest debuff or the
+// ladder only ever bites during overlapping applications: at 12s a 10s enfeeble
+// left just 2s of memory after expiry, so re-applying 3s later paid full price
+// again. 18s leaves 8s of real memory on the longest one and 13s on a root.
+const DR_WINDOW_MS = 18000;
 // Below this an application isn't worth the HUD churn — it reads as a flicker.
 const MIN_EFFECTIVE_MS = 120;
 

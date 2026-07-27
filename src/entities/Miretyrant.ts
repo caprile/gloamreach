@@ -164,10 +164,18 @@ const HEAVE_KNOCKBACK = 620;
 // Long enough for the shove to actually clear melee range (620px/s x 0.3s
 // ~= 186px, roughly the radius itself) rather than nudge you.
 const HEAVE_KNOCKBACK_MS = 300;
-// Disarm carried by a landed heave. Kept under HEAVE_RECOVER_MS (900) so the
-// boss's own punish window always outlasts it — you get thrown and silenced-of-
-// weapon, but the opening you were owed is still there when you get back.
-const HEAVE_DISARM_MS = 1800;
+// Disarm carried by a landed heave — the canonical 6s (DEBUFF_BASE_MS). Was
+// 1.8s; raised 2026-07-26 with the whole band.
+//
+// An earlier note here claimed it was "kept under HEAVE_RECOVER_MS (900) so the
+// boss's punish window outlasts it" — that was never true even at 1.8s, and it
+// is emphatically not the design now. The heave exists to THROW YOU OUT of
+// melee, so the disarm is meant to cover the trip back in: you lose the punish
+// window this heave bought you, and the counterplay is to not eat the 660ms
+// telegraph in the first place (or to burn Fenwash). It is still the harshest
+// debuff in the game, which is exactly why it lives on the one fight built out
+// of long tells rather than on anything that can swarm you.
+const HEAVE_DISARM_MS = 6000;
 
 // --- Bellow (adds) — on its own clock, see the file header. ---
 // Escalating SCRIPTED waves (the user, playtest: "spawn alligators instead of

@@ -123,10 +123,17 @@ const DEATHROLL_BLEED_MS = 3000;
 const DEATHROLL_RECOVER_MS = 1000; // dizzy and beached afterwards
 const DEATHROLL_COOLDOWN_MS = S.attacks[2].intervalMs;
 const DEATHROLL_SPIN_RAD_PER_SEC = 15; // the visual: it barrel-rolls
-// Root per landed tick. Deliberately SHORTER than the 360ms between ticks, so a
-// clean escape between thrashes is real rather than theoretical — the pressure
-// comes from being re-rooted while you stay in the grip, not from one long lock.
-const DEATHROLL_ROOT_MS = 900;
+// Root per landed tick — THE DELIBERATE EXCEPTION to the 5s canonical root
+// duration (see DEBUFF_BASE_MS). Locked with the user 2026-07-26 when the band
+// was raised: this attack's entire counterplay is "break away mid-roll to cut
+// your losses", and a 5s root applied on tick 1 pins you through the whole roll,
+// turning an escapable attack into a guaranteed 3 ticks plus ~4s helpless
+// afterwards — roughly doubling the real output of a COMMON enemy's signature
+// move. So the roll keeps a short GRIP instead: long enough that escaping costs
+// you a beat, short enough that escaping exists.
+//
+// Any other/future root source should use the full 5s.
+const DEATHROLL_ROOT_MS = 1200;
 
 export class Mirejaw extends Enemy {
   private mode: MirejawMode = "lurk";
