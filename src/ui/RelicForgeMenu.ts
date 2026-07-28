@@ -99,8 +99,19 @@ const REFINE_BAR_MS = 650;
 
 // Boss-trophy candidate cards (Phase 5) — full panel width, stacked, so each
 // has room for its effect line + what it would displace.
+//
+// CARD_H is the FLOOR, not the height: a Mythic's effect text is long enough to
+// wrap past the card and past the panel (the user: "mythic relic pick one
+// description extends past the menu"), so each card measures its own wrapped
+// effect line and grows — see candidateCardHeights(). A fixed height would just
+// move the overflow from one card to the stack below it.
 const CARD_H = 54;
 const CARD_GAP = 6;
+// Card internals, shared by the measure pass and the draw pass so the two can't
+// disagree about how tall a card needs to be.
+const CARD_PAD_X = 10;
+const CARD_EFFECT_Y = 24; // effect text's offset from the card top
+const CARD_FOOTER_H = 21; // gap + the "Replaces …" line + bottom padding
 
 // The Relic Forge station menu (M-RL, reworked in Phase 5): a probabilistic
 // roll — 1 trophy per attempt, success chance by rarity, failure consumes the
@@ -419,10 +430,12 @@ export class RelicForgeMenu {
     let resultBlockH: number;
     if (!this.lastResult) resultBlockH = 24;
     else if (this.candidatesPending())
-      // 22px "Choose your relic" header + the card stack (the trailing CARD_GAP
-      // is slack), then 30 so the grid's own header (drawn at gridTop-22) clears
-      // the last card instead of sitting on top of it.
-      resultBlockH = 22 + this.lastResult!.candidates!.length * (CARD_H + CARD_GAP) + 30;
+      // 22px "Choose your relic" header + the card stack (each card's own
+      // measured height, since a long Mythic effect line wraps), then 30 so the
+      // grid's own header (drawn at gridTop-22) clears the last card instead of
+      // sitting on top of it.
+      resultBlockH =
+        22 + this.candidateCardHeights().reduce((sum, h) => sum + h + CARD_GAP, 0) + 30;
     else if (conflict?.verdict === "choice") resultBlockH = 134;
     else if (conflict) resultBlockH = 64;
     else resultBlockH = 46;
@@ -829,11 +842,13 @@ export class RelicForgeMenu {
     this.addText(x, y, "Choose your relic — one only.", 13, "#e6b8f0");
 
     const cardW = this.panelW - 32;
+    const heights = this.candidateCardHeights();
+    let cardY = y + 22;
     this.lastResult!.candidates!.forEach((id, i) => {
       const def = RELIC_DEFS[id];
-      const cardY = y + 22 + i * (CARD_H + CARD_GAP);
+      const cardH = heights[i];
       const box = this.scene.add
-        .rectangle(x, cardY, cardW, CARD_H, 0x14181f, 0.95)
+        .rectangle(x, cardY, cardW, cardH, 0x14181f, 0.95)
         .setOrigin(0, 0)
         .setStrokeStyle(1, RARITY_COLOR[def.rarity])
         .setScrollFactor(0)
@@ -844,14 +859,52 @@ export class RelicForgeMenu {
         .on("pointerdown", () => this.pickCandidate(id));
       this.rows.push(box);
 
-      this.addText(x + 10, cardY + 6, def.name, 13, rarityHex(def.rarity));
-      this.addText(x + cardW - 10, cardY + 7, relicFamilyName(def.family), 10, "#8a93a3", 1);
-      this.addText(x + 10, cardY + 24, relicEffectText(def, tier), 10, "#c9d1d9");
+      this.addText(x + CARD_PAD_X, cardY + 6, def.name, 13, rarityHex(def.rarity));
+      this.addText(x + cardW - CARD_PAD_X, cardY + 7, relicFamilyName(def.family), 10, "#8a93a3", 1);
+      const effect = this.addText(
+        x + CARD_PAD_X,
+        cardY + CARD_EFFECT_Y,
+        relicEffectText(def, tier),
+        10,
+        "#c9d1d9",
+        0,
+        0,
+        this.candidateTextWidth(),
+      );
       // What taking it would cost: the family slot is exclusive, so name the
       // relic it displaces rather than letting the player find out after.
       const owned = this.deps.relics.groupedForDisplay().find((g) => g.family === def.family);
       const line = owned ? `Replaces ${RELIC_DEFS[owned.id].name}` : `Fills your empty ${relicFamilyName(def.family)} slot`;
-      this.addText(x + 10, cardY + 39, line, 9, owned ? "#c8a05a" : "#6a7280");
+      this.addText(x + CARD_PAD_X, cardY + CARD_EFFECT_Y + effect.height + 3, line, 9, owned ? "#c8a05a" : "#6a7280");
+      cardY += cardH + CARD_GAP;
+    });
+  }
+
+  // Wrap width available to a candidate card's body text.
+  private candidateTextWidth(): number {
+    return this.panelW - 32 - CARD_PAD_X * 2;
+  }
+
+  // Each candidate card's height, driven by its own WRAPPED effect line. Called
+  // twice per render — once by renderRoll() to size the panel before it exists,
+  // once by renderCandidateCards() to lay the cards out — so it measures rather
+  // than reading back objects that haven't been created yet. Measuring costs a
+  // throwaway Text per card, which only happens on the rare frame a boss trophy
+  // is waiting to be picked.
+  private candidateCardHeights(): number[] {
+    const tier = this.lastResult!.powerTier ?? 1;
+    return this.lastResult!.candidates!.map((id) => {
+      const probe = this.scene.add
+        .text(0, 0, relicEffectText(RELIC_DEFS[id], tier), {
+          fontFamily: "monospace",
+          fontSize: "11px", // addText draws at size + 1; the effect line is size 10
+          color: "#000000",
+          wordWrap: { width: this.candidateTextWidth() },
+        })
+        .setVisible(false);
+      const h = probe.height;
+      probe.destroy();
+      return Math.max(CARD_H, CARD_EFFECT_Y + h + CARD_FOOTER_H);
     });
   }
 

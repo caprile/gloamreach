@@ -7,6 +7,7 @@ import type { PlayerProgression } from "../systems/Progression";
 import type { WeaponType } from "../systems/Weapons";
 import { appliedAugmentIds, isAugmentableItem, MAX_AUGMENTS_PER_ITEM } from "../systems/GearAugments";
 import { frameInto } from "./frames";
+import { addUpgradeGlow } from "./upgradeGlow";
 import { Tooltip } from "./Tooltip";
 
 // Bumped 40->46 to match the InventoryMenu slot size (S3) — icons render the
@@ -158,18 +159,21 @@ export class HotbarUI {
     this.rows = [];
   }
 
-  // A small gold up-arrow at a slot's top-right corner with a gentle looping
-  // fade, shown when that slot's item has an affordable upgrade ready (S3).
+  // A pulsing gold glow filling the slot, shown when that slot's item has an
+  // affordable upgrade ready (S3). Sits at 2900.5 — above the slot's own
+  // rectangle but UNDER the item icon (2901), so the slot lights up around the
+  // art instead of washing it out. See ui/upgradeGlow.ts for why it replaced
+  // the old corner "▲".
   private addUpgradeArrow(slotX: number, slotY: number): void {
-    const arrow = this.scene.add
-      .text(slotX + SLOT_SIZE - 2, slotY + 1, "▲", { fontFamily: "monospace", fontSize: "16px", color: "#ffd24a" })
-      .setOrigin(1, 0)
-      .setScrollFactor(0)
-      .setDepth(2902);
-    this.rows.push(arrow);
-    this.indicatorTweens.push(
-      this.scene.tweens.add({ targets: arrow, alpha: { from: 1, to: 0.25 }, duration: 620, yoyo: true, repeat: -1 }),
+    const { glow, tween } = addUpgradeGlow(
+      this.scene,
+      slotX + SLOT_SIZE / 2,
+      slotY + SLOT_SIZE / 2,
+      SLOT_SIZE * 1.5,
+      { depth: 2900.5, fixed: true },
     );
+    this.rows.push(glow);
+    this.indicatorTweens.push(tween);
   }
 
 

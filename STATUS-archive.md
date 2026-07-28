@@ -10860,3 +10860,90 @@ reordered between slots.
 **Still open from that batch: a playtest at these numbers**, specifically the Miretyrant fight and
 whether the bayou now out-threatens the badlands. That is independent of the art arc — the art work
 touches no combat numbers.
+
+### Bayou playtest batch: crash, equip bug, bow governor, 8 fixes (2026-07-26, Opus)
+
+Off a bayou run that ended in a hard crash. Eleven items; the user picked the bow direction and
+"all of it, one session" via `AskUserQuestion`.
+
+**The crash: a projectile outlives the thing that fired it.** Killing a Corpselight while its orb
+was in flight, then letting that orb hit the player, ran the overlap handler's
+`sourceEnemy.onProjectileHitPlayer()` → `markAttackLanded` → `markAttackAnim`, which reads
+`this.scene.time`. Phaser clears `scene` on destroy, so it threw and took the run down. Guarded at
+both ends (`Enemy.markAttackAnim`, `Enemy.onProjectileHitPlayer`). This is a **structural
+consequence of last session's ranged-deaggro fix** — routing a landed shot back to its shooter
+created a reference from a projectile to an enemy that can die first, which nothing else in the
+codebase does. Verified live: the exact call on a destroyed enemy now returns instead of throwing.
+
+**Gear slots were one shared pool, so you could wear three pairs of legs.** `EquipSlot`'s group
+model (5ar) made equipping route to `firstFreeIn(group)`, which is right for the four specials and
+the three Q/E/R slots and wrong for gear: a helmet is still a helmet. **Interchangeability is now a
+property of the GROUP** (`GROUP_INTERCHANGEABLE`, `slotAccepts`, `Equipment.targetSlotFor`) rather
+than an assumption baked into the equip path, and `slotAccepts` is the single authority for both
+the drag path ("is this a legal drop?") and auto-equip ("where does this go?") so the two can't
+disagree. Verified: a second pair of legs swaps into `legs` instead of filling `chest`, while a
+second ability item still fills `ability2`.
+
+**Bows: the two levers that actually govern a bow, not a third damage pass.** The user, on a
+Bloodrush + bow run: "insanely OP... the walk-backwards-and-spam-shooting strat is a real thing"
+and "the range feels pretty crazy." Damage was left alone deliberately — the two previous passes
+were both damage passes and neither held.
+- **The `ranged` skill now buys REACH instead of damage** (the user's own suggestion) — the one
+  weapon skill excluded from `weaponSkillDamageMultiplier`, paying out via
+  `rangedSkillRangeMultiplier` (+0.4%/lvl, +40% at the cap). Base ranges cut ~20% (380/400/420 →
+  300/320/340), so a maxed archer lands near the old numbers and a fresh one nowhere near.
+  `MainScene.rangedRange()` is the single site every consumer reads — attack gate, hover prompt,
+  reach ring, the projectile's own despawn distance, stats panel — so a shot can never be legal at
+  a distance the ring didn't draw.
+- **The post-shot slow now scales with the shot's own cooldown.** It was 0.72x for a flat 350ms,
+  which is *under* every bow's cooldown (540ms+) — an unhurried shooter recovered full speed
+  between every shot, so the anti-kite governor did nothing to the reported strategy, and haste
+  made it worse by fitting more shots through the same recovery gap. Now **0.45x for 85% of the
+  actual cooldown, haste included**: firing faster no longer buys free repositioning. Measured
+  live — 459ms of a 540ms loop unhasted, 300ms of a 324ms loop (93%) under Bloodrush. Attack speed
+  still means more damage; it no longer also means more safety.
+
+**Dungeon minibosses could be bow-cheesed in doorways.** New `Enemy.forceDeaggro(now)` with the
+same override contract as `forceAggro`/`isAggro` (the three wardens drive their own `aggroed`
+field, so they override it), driven by `MainScene.updateDungeonWedge`. **Wedging is measured as
+DISPLACEMENT, not "is the body blocked"** — Arcade zeroes the blocked axis during separation, so a
+wedged enemy reads as velocity-0 on most frames and is indistinguishable from one that chose to
+stand still; where it stands over four seconds is not ambiguous. The reset routes through
+`enterGivenUpState`, whose re-aggro immunity is the point rather than a side effect, and since
+bosses regen while deaggro'd the cheese pays nothing rather than paying slowly. The wardens' own
+900px leash is sized to own a whole vault, which is why wedging a few tiles from spawn never
+tripped it. Verified: a pinned warden resets at exactly 4000ms; one that keeps moving never does.
+
+**Two UI leaks of information the player hadn't earned yet.** The bottom passive strip re-reads the
+live relic set every frame, and a forge roll mutates `RelicManager` at the CLICK (the spin is
+theatre over a known result), so the new relic's name, rarity colour and effect appeared down there
+mid-spin. `relicDisplayHold` pins the strip to its pre-roll snapshot until the reveal lands — the
+forge's own grid already did this, the always-on HUD didn't. Closing the forge mid-spin now flushes
+the announce too, since `revealFx.stop()` kills the tween without running its callback, which would
+have stranded the hold forever. Separately the **Active Effects "Skill XP" axis computed its total
+as a PRODUCT while the game uses an additive bucket, and dropped the Prodigy streak entirely** — it
+now mirrors `awardSkillXp` exactly. The class's **per-skill affinity** was missing altogether (the
+user: "effects page doesn't show my exp bonus from class") and is its own row, because it
+multiplies *outside* that bucket and has no single number.
+
+**Four smaller ones.** The selected hotbar slot gets a **lit warm fill**, not just an accent on the
+edge — once the frame art landed, selection was an amber tint on an already ornate border. Chop/mine
+prompts **name the node** ("[LMB] Mine Boulder"), which reveals nothing the prompt-gating rules
+protect since the prompt only appears once the right tool KIND is out. Node drops carry a **550ms
+magnet delay** so you see what came out. And `icon_stone_pickaxe_t1` was a horizontal hammer:
+**four rerolls all drifted the same way**, confirming the README's known-hard-prompt note for picks
+and axes, so it's now derived from the base icon — whose silhouette already reads correctly — by a
+new reusable **`art/tools/recolor.mjs`** (hue-selective, skips near-greyscale pixels so a wooden
+haft survives a recolour aimed at a stone head). **For a tier variant of a hard-to-draw tool,
+recolour the base rather than reroll.**
+
+**Hitching: not reproduced, and the profile is healthy.** ~8,000 sampled frames across idle, a long
+continuous traverse through fresh bayou terrain, and POI clusters: median 3.9-5.0ms, p99 6.2-6.5ms,
+**zero frames over 16ms**. The likeliest culprit is the crash bug itself, and the experiment that
+suggests it is worth keeping: a throw inside the physics step costs **no measurable frame time**
+(median 4ms with and without), because the frame is fast — it just aborts the rest of the step, so
+the player and enemies don't move that frame. **That stutters visibly while a frame-time profiler
+shows nothing**, and a bow killing casters at range hits that path constantly. If it persists now
+the throw is gone, it needs a repro rather than more synthetic profiling.
+
+`tsc` clean, no console errors. `RECIPES.md` ranged-weapon table + `art/README.md` updated.

@@ -91,6 +91,13 @@ const SPAWNLING_SCALE = 0.58;
 const SPAWNLING_HP_FRAC = 0.16;
 const SPAWNLING_DMG_FRAC = 0.42;
 const SPAWNLING_SPEED_MULT = 1.9; // still not fast, but no longer strollable-away-from
+// HP, damage, scale and speed were all re-sized for a spawnling; the SHOVE was
+// not, so a knee-high fragment hit you with the full 300 of a looming husk's
+// overhead smash — and three of them land it on overlapping beats (the user:
+// "little dudes knockback is too much"). 0.3 keeps a readable shove without the
+// pinball. Applied as a per-instance copy of the swing config rather than a
+// second module const, so the two variants can never drift apart.
+const SPAWNLING_KNOCKBACK_FRAC = 0.3;
 
 export class Mosswretch extends Enemy {
   private wanderTgt: { x: number; y: number } | null = null;
@@ -99,6 +106,9 @@ export class Mosswretch extends Enemy {
   // spawns more on its own death — that's the recursion guard, and it's also
   // just correct: there's nothing left to come apart.
   readonly isSpawnling: boolean;
+  // This instance's smash. Identical to SMASH_SWING for a full husk; a spawnling
+  // gets the same swing with a scaled-down shove (SPAWNLING_KNOCKBACK_FRAC).
+  private readonly smashSwing: SwingConfig;
   // --- spore burst state ---
   private sporeCooldownUntil = 0;
   private sporeWindupEndsAt = 0;
@@ -169,6 +179,9 @@ export class Mosswretch extends Enemy {
       barScale: spawnling ? 0.7 : 1.3,
     });
     this.isSpawnling = spawnling;
+    this.smashSwing = spawnling
+      ? { ...SMASH_SWING, knockback: Math.round(SMASH_SWING.knockback! * SPAWNLING_KNOCKBACK_FRAC) }
+      : SMASH_SWING;
     const scale = spawnling
       ? SPAWNLING_SCALE * (eliteSpawn ? ELITE.scale : 1)
       : elite
@@ -272,8 +285,8 @@ export class Mosswretch extends Enemy {
         this.startSporeBurst(now);
         return false;
       }
-      if (this.isAttacking() || dist <= SMASH_SWING.reach + this.reachBonus()) {
-        const hit = this.tickMeleeSwing(body, playerX, playerY, now, SMASH_SWING);
+      if (this.isAttacking() || dist <= this.smashSwing.reach + this.reachBonus()) {
+        const hit = this.tickMeleeSwing(body, playerX, playerY, now, this.smashSwing);
         if (hit) {
           // ENFEEBLE — the bayou debuff system's teacher for it. It goes on the
           // SMASH rather than the spore cloud on purpose: the cloud is routed

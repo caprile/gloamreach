@@ -2,16 +2,26 @@
 
 ## Current State
 
-_Living snapshot — edit in place, never append._ Last shipped: **the bayou debuff system**
-(2026-07-26, Opus) — the deferred item below, now built. Four enemy-applied player debuffs
-(**Root / Disarm / Silence / Enfeeble**), the first thing in the game that stops the player *doing*
-something rather than only damaging or slowing them, plus the counterplay the user asked for in the
-same breath: an active **dispel** (Fenwash), a passive **status-resistance** stat with three
-sources, and per-item/class **hard immunities**. Also in this pass: the **Magic skill repurposed
-off weapon damage** onto status resistance, a **9th relic family (`warding`)**, on-player **FX**,
-and the **debuff status icons sized up** 26 → 42px.
+_Living snapshot — edit in place, never append._ Last shipped: **the latest-run playtest batch**
+(2026-07-27, Opus) — seven small fixes off the user's run notes: pickup delay 1000 → **400ms**
+(and the reason it felt inconsistent — a manual click has always ignored the cooldown entirely),
+the **bone knife icon** rotated upright (the only inverted weapon icon of 26), **Duskrunner
+deaggro** 620 → **280** (the "really hard to deaggro" lock produced an enemy that never let go at
+all), **Mossling knockback** scaled to the fragment it is (300 → 90; it had inherited its parent's
+full shove), the upgrade **"▲" replaced by a shared pulsing glow** in all three places it appears,
+the Upgrade menu's **stale "Requires a nearby Workbench"** line now clearing live like the crafting
+menu's always has, and the **Mythic pick-one cards** now measuring their own wrapped height. Before
+that: **the bayou debuff system** (2026-07-26) — four enemy-applied player debuffs (**Root / Disarm
+/ Silence / Enfeeble**), the first thing in the game that stops the player *doing* something rather
+than only damaging or slowing them, plus its counterplay (an active **dispel**, a passive
+**status-resistance** stat, per-item/class **hard immunities**), the **Magic skill repurposed off
+weapon damage** onto status resistance, and a **9th relic family (`warding`)**.
 
 **In progress / next.**
+- **Not reproduced, needs a screenshot: "class description overlaps class box."** Measured every
+  text object on both candidate screens for all five survivors — the picker cards clear their
+  borders by 16-74px, the Character menu (K) Class tab by 171-212px. The tightest case (Ashcaller /
+  Warden in the picker, 16px) may be what reads as touching. Deliberately not padded on a guess.
 - **The next playtest is the important one, and it now carries two changes at once.** (1) Removing
   the Bulwark hit cap was a large lethality jump the user accepted deliberately ("dodging is the
   mechanic"): the Miretyrant goes from 34 to **165** per connect on a 260-HP build, i.e. **2
@@ -123,6 +133,70 @@ detail.
 ## Recent Entries
 
 > Older entries in STATUS-archive.md.
+
+### Latest-run playtest batch: pickup delay, deaggro, upgrade glow (2026-07-27, Opus)
+
+No plan file — a fix batch off the user's run notes, triaged by quizzing him on the ambiguous
+items first (two of the nine turned out to be things I'd have guessed wrong).
+
+**Shipped, each with a named cause.**
+
+1. **Item pickup delay** — `HARVEST_MAGNET_DELAY_MS` 1000 -> **400**. The 1000 was set last
+   batch off the opposite complaint ("I want it to lay on the ground for a sec"), and overshot.
+   The *inconsistency* he also reported has a real cause worth recording: **a manual click
+   ignores the magnet cooldown entirely**, so clicking a drop is always instant while walking
+   over the same drop waited a full second. Audited every `spawnLooseDrop` call site — only the
+   two node-harvest sites and kill loot are "earned" drops; the other 16 are player-initiated
+   (dropping a stack, a destroyed station, crafting overflow) and correctly keep the longer
+   1500ms cooldown, which exists so a dropped stack can't snap straight back into your hands.
+   Verified live: a felled tree's drops now report exactly 400ms.
+2. **Knife upside down when equipped** — the art, not the code. Every weapon icon is drawn with
+   the blade/head at the TOP; `icon_bone_knife.png` was the only one drawn point-down, so the
+   held sprite (which draws the icon texture directly) looked wrong. Rotated 180° with
+   `art/tools/rotate.mjs`. **Audited all 26 weapon icons** with a top-vs-bottom
+   luminance/width probe — the knife was the only inverted one (the pickaxe is head-down by
+   design and already has its `tiltMirrored` special case).
+3. **Duskrunners never deaggroing** — `DEAGGRO_RADIUS` 620 -> **280** (its pre-badlands value).
+   620 came from a locked "really hard to deaggro" request, but at chase speed 92 — near the
+   player's walk — "lets go most of a screen away" means never lets go: they stayed glued
+   across the badlands and followed into other biomes. 280 puts it back with the rest of the
+   melee roster (Boar 230, Cragscale 240) while its speed still makes breaking away cost a
+   sprint or a dash. Verified: drops aggro at 400px, holds at 200px.
+4. **Mossling knockback** — a Mosswretch spawnling had HP, damage, scale and speed all
+   re-sized for a fragment but inherited the parent's **full 300 shove**, and three of them
+   land it on overlapping beats. Now a per-instance copy of the swing config at 0.3x (**90**);
+   the full husk is untouched at 300. A per-instance config rather than a second module const
+   so the two can't drift.
+5. **Upgrade indicator** — the gold **"▲"** is gone from all three places it appeared
+   (inventory slot, hotbar slot, placed station) in favour of a pulsing gold glow, now shared
+   from `src/ui/upgradeGlow.ts` so the signal is identical everywhere and re-tunable in one
+   place. In slots it sits UNDER the item icon so the slot lights up around the art; on a
+   station it draws over at a dimmer peak, because **placed station images carry no depth of
+   their own** (they're added at depth 0), so there is no "just behind it" slot that isn't
+   also under the ground layers.
+6. **Upgrade menu's stale "Requires a nearby Workbench"** — `CraftingMenu` has always
+   re-rendered on a proximity flip; `UpgradeMenu` never did, so the warning stuck until you
+   closed and reopened it. Both now hang off the same per-frame check. Verified live: the line
+   clears the moment you step into range.
+7. **Mythic pick-one description running past the menu** — the candidate card's effect text had
+   no wrap width, and `CARD_H` was a fixed 54. Wrapping alone would have pushed the overflow
+   into the card below, so each card now **measures its own wrapped effect line** and grows,
+   with the panel height computed from the same measure pass. Verified with the longest effect
+   string in the game (101 chars): it wraps to 2 lines, its card grows 57 -> 69px, and content
+   stays inside the card and the panel.
+
+**Not reproduced: "class description overlaps class box."** Measured every text object against
+its container on both candidate screens, for all five survivors: the run-start picker cards
+clear by 16-74px and the Character menu (K) Class tab by 171-212px. The tightest case — the
+Ashcaller/Warden cards in the picker — sits 16px above its border, which at a glance reads as
+touching, so that may be what he saw. Left alone rather than padded speculatively; needs a
+screenshot.
+
+**The hint he flagged was `totem_ready`**, and on his own follow-up it did clear — the card
+holds 8s then fades over 1.4s, which was itself raised from a "tips vanish too fast" complaint.
+No change; noted in case it comes up again.
+
+`tsc` clean, zero console errors, everything above verified live in the browser preview.
 
 ### Bayou debuff system (2026-07-26, Opus)
 
@@ -349,89 +423,3 @@ Verified live: the jab fires over a world prompt and over a real hotbar slot, do
 empty ground, settles back to base, and survives `scene.restart()` without re-registering its
 handler. `tsc` + `npm run build` clean, no console errors.
 
-### Bayou playtest batch: crash, equip bug, bow governor, 8 fixes (2026-07-26, Opus)
-
-Off a bayou run that ended in a hard crash. Eleven items; the user picked the bow direction and
-"all of it, one session" via `AskUserQuestion`.
-
-**The crash: a projectile outlives the thing that fired it.** Killing a Corpselight while its orb
-was in flight, then letting that orb hit the player, ran the overlap handler's
-`sourceEnemy.onProjectileHitPlayer()` → `markAttackLanded` → `markAttackAnim`, which reads
-`this.scene.time`. Phaser clears `scene` on destroy, so it threw and took the run down. Guarded at
-both ends (`Enemy.markAttackAnim`, `Enemy.onProjectileHitPlayer`). This is a **structural
-consequence of last session's ranged-deaggro fix** — routing a landed shot back to its shooter
-created a reference from a projectile to an enemy that can die first, which nothing else in the
-codebase does. Verified live: the exact call on a destroyed enemy now returns instead of throwing.
-
-**Gear slots were one shared pool, so you could wear three pairs of legs.** `EquipSlot`'s group
-model (5ar) made equipping route to `firstFreeIn(group)`, which is right for the four specials and
-the three Q/E/R slots and wrong for gear: a helmet is still a helmet. **Interchangeability is now a
-property of the GROUP** (`GROUP_INTERCHANGEABLE`, `slotAccepts`, `Equipment.targetSlotFor`) rather
-than an assumption baked into the equip path, and `slotAccepts` is the single authority for both
-the drag path ("is this a legal drop?") and auto-equip ("where does this go?") so the two can't
-disagree. Verified: a second pair of legs swaps into `legs` instead of filling `chest`, while a
-second ability item still fills `ability2`.
-
-**Bows: the two levers that actually govern a bow, not a third damage pass.** The user, on a
-Bloodrush + bow run: "insanely OP... the walk-backwards-and-spam-shooting strat is a real thing"
-and "the range feels pretty crazy." Damage was left alone deliberately — the two previous passes
-were both damage passes and neither held.
-- **The `ranged` skill now buys REACH instead of damage** (the user's own suggestion) — the one
-  weapon skill excluded from `weaponSkillDamageMultiplier`, paying out via
-  `rangedSkillRangeMultiplier` (+0.4%/lvl, +40% at the cap). Base ranges cut ~20% (380/400/420 →
-  300/320/340), so a maxed archer lands near the old numbers and a fresh one nowhere near.
-  `MainScene.rangedRange()` is the single site every consumer reads — attack gate, hover prompt,
-  reach ring, the projectile's own despawn distance, stats panel — so a shot can never be legal at
-  a distance the ring didn't draw.
-- **The post-shot slow now scales with the shot's own cooldown.** It was 0.72x for a flat 350ms,
-  which is *under* every bow's cooldown (540ms+) — an unhurried shooter recovered full speed
-  between every shot, so the anti-kite governor did nothing to the reported strategy, and haste
-  made it worse by fitting more shots through the same recovery gap. Now **0.45x for 85% of the
-  actual cooldown, haste included**: firing faster no longer buys free repositioning. Measured
-  live — 459ms of a 540ms loop unhasted, 300ms of a 324ms loop (93%) under Bloodrush. Attack speed
-  still means more damage; it no longer also means more safety.
-
-**Dungeon minibosses could be bow-cheesed in doorways.** New `Enemy.forceDeaggro(now)` with the
-same override contract as `forceAggro`/`isAggro` (the three wardens drive their own `aggroed`
-field, so they override it), driven by `MainScene.updateDungeonWedge`. **Wedging is measured as
-DISPLACEMENT, not "is the body blocked"** — Arcade zeroes the blocked axis during separation, so a
-wedged enemy reads as velocity-0 on most frames and is indistinguishable from one that chose to
-stand still; where it stands over four seconds is not ambiguous. The reset routes through
-`enterGivenUpState`, whose re-aggro immunity is the point rather than a side effect, and since
-bosses regen while deaggro'd the cheese pays nothing rather than paying slowly. The wardens' own
-900px leash is sized to own a whole vault, which is why wedging a few tiles from spawn never
-tripped it. Verified: a pinned warden resets at exactly 4000ms; one that keeps moving never does.
-
-**Two UI leaks of information the player hadn't earned yet.** The bottom passive strip re-reads the
-live relic set every frame, and a forge roll mutates `RelicManager` at the CLICK (the spin is
-theatre over a known result), so the new relic's name, rarity colour and effect appeared down there
-mid-spin. `relicDisplayHold` pins the strip to its pre-roll snapshot until the reveal lands — the
-forge's own grid already did this, the always-on HUD didn't. Closing the forge mid-spin now flushes
-the announce too, since `revealFx.stop()` kills the tween without running its callback, which would
-have stranded the hold forever. Separately the **Active Effects "Skill XP" axis computed its total
-as a PRODUCT while the game uses an additive bucket, and dropped the Prodigy streak entirely** — it
-now mirrors `awardSkillXp` exactly. The class's **per-skill affinity** was missing altogether (the
-user: "effects page doesn't show my exp bonus from class") and is its own row, because it
-multiplies *outside* that bucket and has no single number.
-
-**Four smaller ones.** The selected hotbar slot gets a **lit warm fill**, not just an accent on the
-edge — once the frame art landed, selection was an amber tint on an already ornate border. Chop/mine
-prompts **name the node** ("[LMB] Mine Boulder"), which reveals nothing the prompt-gating rules
-protect since the prompt only appears once the right tool KIND is out. Node drops carry a **550ms
-magnet delay** so you see what came out. And `icon_stone_pickaxe_t1` was a horizontal hammer:
-**four rerolls all drifted the same way**, confirming the README's known-hard-prompt note for picks
-and axes, so it's now derived from the base icon — whose silhouette already reads correctly — by a
-new reusable **`art/tools/recolor.mjs`** (hue-selective, skips near-greyscale pixels so a wooden
-haft survives a recolour aimed at a stone head). **For a tier variant of a hard-to-draw tool,
-recolour the base rather than reroll.**
-
-**Hitching: not reproduced, and the profile is healthy.** ~8,000 sampled frames across idle, a long
-continuous traverse through fresh bayou terrain, and POI clusters: median 3.9-5.0ms, p99 6.2-6.5ms,
-**zero frames over 16ms**. The likeliest culprit is the crash bug itself, and the experiment that
-suggests it is worth keeping: a throw inside the physics step costs **no measurable frame time**
-(median 4ms with and without), because the frame is fast — it just aborts the rest of the step, so
-the player and enemies don't move that frame. **That stutters visibly while a frame-time profiler
-shows nothing**, and a bow killing casters at range hits that path constantly. If it persists now
-the throw is gone, it needs a repro rather than more synthetic profiling.
-
-`tsc` clean, no console errors. `RECIPES.md` ranged-weapon table + `art/README.md` updated.

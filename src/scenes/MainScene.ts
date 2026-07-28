@@ -217,6 +217,7 @@ import { RunLog } from "../systems/RunLog";
 import { clearHighScores, recordHighScore } from "../systems/HighScores";
 import type { ScoreEntry } from "../systems/HighScores";
 import { RunHudUI } from "../ui/RunHudUI";
+import { addUpgradeGlow } from "../ui/upgradeGlow";
 import { RunEndUI } from "../ui/RunEndUI";
 import { HintManager } from "../systems/Hints";
 import { SfxPlayer } from "../systems/Sfx";
@@ -577,7 +578,12 @@ const DROPPED_ITEM_MAGNET_COOLDOWN_MS = 1500;
 // 550 -> 1000 (the user: "when you mine/break something I want it to lay on the
 // ground for a sec before you insta pick it up"). Also now applied to KILL loot,
 // which had no delay at all.
-const HARVEST_MAGNET_DELAY_MS = 1000;
+// 1000 -> 400 (the user: "item pickup delay is a littttlllleee bit too long...
+// should also be consistent"). A full second read as a wait rather than a beat,
+// and next to a manual click — which ignores the cooldown entirely and so is
+// always instant — the gap between "I clicked it" and "I walked over it" was the
+// inconsistency. 400ms still lets the drop land and be read.
+const HARVEST_MAGNET_DELAY_MS = 400;
 
 // Night light sources (M-DN). A held item emits light of the given world-px
 // radius while it's the selected hotbar item; a future Lantern just adds a row.
@@ -1304,12 +1310,12 @@ export class MainScene extends Phaser.Scene {
   // at least one defined upgrade (see StationUpgrades.ts) — keyed by the
   // placed Image so it can be moved/updated/destroyed alongside it.
   private placedLabels = new Map<Phaser.GameObjects.Image, Phaser.GameObjects.Text>();
-  // A floating gold "▲" over any placed station that has an affordable,
+  // A pulsing gold halo over any placed station that has an affordable,
   // not-yet-applied upgrade ready (S3) — keyed by the placed Image like
-  // placedLabels, each with its own looping fade tween (killed on destroy).
+  // placedLabels, each with its own looping tween (killed on destroy).
   private placedUpgradeGlyphs = new Map<
     Phaser.GameObjects.Image,
-    { text: Phaser.GameObjects.Text; tween: Phaser.Tweens.Tween }
+    { glow: Phaser.GameObjects.Image; tween: Phaser.Tweens.Tween }
   >();
   private hotbarUI!: HotbarUI;
   private eventLogUI!: EventLogUI;
@@ -2942,11 +2948,18 @@ export class MainScene extends Phaser.Scene {
     return last;
   }
 
-  // While the crafting menu is open, re-render it the instant Workbench
-  // proximity changes (walking in/out of WORKBENCH_RANGE) rather than only
-  // reflecting proximity as of when the menu was opened.
+  // While the crafting OR upgrade menu is open, re-render it the instant
+  // Workbench proximity changes (walking in/out of WORKBENCH_RANGE) rather than
+  // only reflecting proximity as of when the menu was opened.
+  //
+  // The crafting menu has always done this; the upgrade menu never did, so its
+  // "Requires a nearby Workbench" line stuck until you closed and reopened it
+  // (the user: "upgrade 'nearby' workbench warning doesn't go away when you get
+  // near a workbench without re-opening the upgrade menu"). Both are driven off
+  // the same proximity flip, since every workbench gate — plain proximity and
+  // the tier-checked variants — resolves the moment you step into range of one.
   private updateCraftingMenuWorkbenchProximity(): void {
-    if (!this.craftingMenu.isOpen()) {
+    if (!this.craftingMenu.isOpen() && !this.upgradeMenu.isOpen()) {
       this.craftingMenuLastNearWorkbench = null;
       return;
     }
@@ -2954,6 +2967,7 @@ export class MainScene extends Phaser.Scene {
     if (near !== this.craftingMenuLastNearWorkbench) {
       this.craftingMenuLastNearWorkbench = near;
       this.craftingMenu.refresh();
+      this.upgradeMenu.refresh();
     }
   }
 
@@ -13894,7 +13908,7 @@ export class MainScene extends Phaser.Scene {
     const glyph = this.placedUpgradeGlyphs.get(obj);
     if (glyph) {
       glyph.tween.remove();
-      glyph.text.destroy();
+      glyph.glow.destroy();
       this.placedUpgradeGlyphs.delete(obj);
     }
 
@@ -14043,27 +14057,25 @@ export class MainScene extends Phaser.Scene {
       const ready = this.stationHasReadyUpgrade(obj);
       const existing = this.placedUpgradeGlyphs.get(obj);
       if (ready && !existing) {
-        const text = this.add
-          .text(obj.x + obj.displayWidth / 2 + 2, obj.y - obj.displayHeight / 2 - 6, "▲", {
-            fontFamily: "monospace",
-            fontSize: "16px",
-            color: "#ffd24a",
-          })
-          .setOrigin(0, 1)
-          // Above every world object but below the fixed HUD, matching the
-          // placed-label depth convention.
-          .setDepth(2500);
-        const tween = this.tweens.add({
-          targets: text,
-          alpha: { from: 1, to: 0.3 },
-          duration: 620,
-          yoyo: true,
-          repeat: -1,
-        });
-        this.placedUpgradeGlyphs.set(obj, { text, tween });
+        // A pulsing gold halo around the station rather than a "▲" beside it
+        // (the user: "icon for upgrade not super clear ... a glow/pulse might be
+        // good instead of the triangle"). Kept at the old glyph's 2500 — above
+        // every world object but below the fixed HUD — so a tree or camp prop
+        // can't hide it. That means it draws OVER the station art, hence the
+        // dimmer peak: a placed station image carries no depth of its own
+        // (they're added at 0), so there's no "just behind it" slot to use that
+        // wouldn't put the halo under the ground layers.
+        const { glow, tween } = addUpgradeGlow(
+          this,
+          obj.x,
+          obj.y,
+          Math.max(obj.displayWidth, obj.displayHeight) * 2.2,
+          { depth: 2500, maxAlpha: 0.5 },
+        );
+        this.placedUpgradeGlyphs.set(obj, { glow, tween });
       } else if (!ready && existing) {
         existing.tween.remove();
-        existing.text.destroy();
+        existing.glow.destroy();
         this.placedUpgradeGlyphs.delete(obj);
       }
     }

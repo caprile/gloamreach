@@ -9,6 +9,7 @@ import type { WeaponType } from "../systems/Weapons";
 import { RARITY_COLOR, RELIC_FAMILIES, rarityIcon, rarityName, relicEffectText, relicFamilyName, uniqueText, type RelicEffectSummary, type RelicFamilySlot, type RelicGroup } from "../systems/Relics";
 import { appliedAugmentIds, isAugmentableItem, MAX_AUGMENTS_PER_ITEM } from "../systems/GearAugments";
 import { bindFrame, frameInto } from "./frames";
+import { addUpgradeGlow } from "./upgradeGlow";
 import { Tooltip } from "./Tooltip";
 
 export interface ArmorSlotView {
@@ -547,18 +548,18 @@ export class InventoryMenu {
     icon.setDisplaySize(icon.width * s, icon.height * s);
   }
 
-  // A small gold up-arrow at a slot's top-right corner with a gentle looping
-  // fade, shown when that slot's item has an affordable upgrade ready (S3).
+  // A pulsing gold glow filling the slot, shown when that slot's item has an
+  // affordable upgrade ready (S3). Sits at 3001.5 — above the slot's own
+  // rectangle but UNDER the item icon (3002), so the slot lights up around the
+  // art instead of washing it out. See ui/upgradeGlow.ts for why it replaced
+  // the old corner "▲".
   private addUpgradeArrow(slotX: number, slotY: number): void {
-    const arrow = this.scene.add
-      .text(slotX + SLOT - 2, slotY + 1, "▲", { fontFamily: "monospace", fontSize: "16px", color: "#ffd24a" })
-      .setOrigin(1, 0)
-      .setScrollFactor(0)
-      .setDepth(3003);
-    this.rows.push(arrow);
-    this.indicatorTweens.push(
-      this.scene.tweens.add({ targets: arrow, alpha: { from: 1, to: 0.25 }, duration: 620, yoyo: true, repeat: -1 }),
-    );
+    const { glow, tween } = addUpgradeGlow(this.scene, slotX + SLOT / 2, slotY + SLOT / 2, SLOT * 1.5, {
+      depth: 3001.5,
+      fixed: true,
+    });
+    this.rows.push(glow);
+    this.indicatorTweens.push(tween);
   }
 
 

@@ -24,11 +24,15 @@ const S = enemyStat("duskrunner");
 // point-blank bite.
 
 const AGGRO_RADIUS = 160;
-// Very sticky (the user: "duskrunners should be really hard to deaggro"). A pack
-// that's locked on doesn't give up until you're most of a screen away — the
-// swarm's whole identity is the relentless run-down, so kiting has to mean
-// genuinely outrunning them, not strolling just past the old 280px edge.
-const DEAGGRO_RADIUS = 620;
+// Back to normal deaggro rules (the user: "duskrunners not deaggroing" ->
+// "the duskrunners should have normal deaggro rules"). This was raised to 620 to
+// make the pack "really hard to deaggro", but at a chase speed of 92 — near the
+// player's walk — a pack that only lets go most of a screen away never let go at
+// all in practice: it stayed glued through the whole badlands and followed you
+// into other biomes. 280 puts it back in line with the rest of the melee roster
+// (Boar 230, Cragscale 240) while its speed still means breaking away costs a
+// sprint or a dash rather than a stroll.
+const DEAGGRO_RADIUS = 280;
 const CHASE_SPEED = 92; // fast — nearly the player's walk speed, so it runs you down
 const WANDER_SPEED = 22;
 const ANCHOR_LEASH = 90; // den guards: wander stays within this of the den, and returns if pulled out
